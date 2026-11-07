@@ -46,9 +46,11 @@ horizontally on narrow phones to reach every tool. Android's **Close (X)** and
 title, Close, page overview, template/layers, view/input and actions controls;
 Duo places these in its side rail when applicable. In narrow iPhone portrait
 windows, including the folded Duo, the notebook name and location are centered
-above the drawing tools. In wide landscape layouts, the file name and storage
-label are left-aligned. On Duo, the same drawing toolbar and brush icons stay
-available as you change orientation. The swipe-to-add-page control stays inside
+above the drawing tools. In wide iPhone Duo and iPad landscape windows with enough room, the filename
+and storage label sit near the first third of the usable header, and the
+drawing tools sit near the second third. The header leaves space at both
+edges. On Duo, the same drawing toolbar and brush icons stay available as
+you change orientation. The swipe-to-add-page control stays inside
 the area beside the side rail.
 Tap the active brush to open the drawer for brush and ink color choices. The reader accounts
 for space occupied by system activity. Choose **Notebook actions → Hide tools**
@@ -68,7 +70,8 @@ highlighted. Tap that slot again to open the **Writing tools** drawer below it.
 All nine brushes appear in one row on wide screens and in two full-width rows
 of five and four on narrow screens. The ink strip shows the selected brush’s
 colors, and the stroke sample sits next to **Thin**, **Medium**, and **Thick**
-(Highlighter has one **Fixed** width). Tap the opener again, tap outside, or
+(Highlighter has one **Fixed** width). The width buttons show the approximate
+thickness of a horizontal finger stroke for the chosen brush. Tap the opener again, tap outside, or
 start a stroke outside the drawer to close it. That first stroke draws immediately.
 A border and check mark identify the selected color. Colors follow the selected brush's supported palette and
 remain visible in high-contrast mode and while grayscale document preview is on.
@@ -271,8 +274,10 @@ across reopenings. The size remains active while you work in the editor.
 
 ## Saving from Notes Library
 
-Writable notebooks on persistent storage save when you open another document or
-close the library. A failed save keeps the drawing open so you can retry. Session-only
+In wide iPhone Duo and iPad landscape windows, the drawing tools share the row
+with previous and next note when the document pane has room. In smaller panes
+the drawing strip stays just above the paper. Writable notebooks on persistent
+storage save when you open another document or close the library. A failed save keeps the drawing open so you can retry. Session-only
 storage still asks before leaving a dirty drawing. For writable notebooks, use
 **Note actions → Save and Close** to save pending edits and close the library.
 

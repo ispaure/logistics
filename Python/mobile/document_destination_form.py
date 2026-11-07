@@ -34,6 +34,8 @@ def build_destination_form(picker, *, source_label, source_folder):
     operation = picker.operation
     mode, name = operation.mode, operation.filename
     creation, destination_action = operation.creation, operation.destination_action
+    library = mode == 'folder'
+    name_label = 'Library folder name' if library else 'File name'
     roots = list(picker.editor_storage_roots)
     picker.editor_picker_rows = {}
     picker.save_as_storage = toga.Selection(items=roots, style=Pack(height=48))
@@ -45,11 +47,11 @@ def build_destination_form(picker, *, source_label, source_folder):
     from .browser_ui import FileBrowser as NativeBrowser
     picker.editor_browser = NativeBrowser(folder_visible=picker.folder_path_visible, selected=picker.browser_editor_selected, open_folder=picker.browser_editor_folder, navigate=picker.browser_editor_location, open_file=picker.browser_editor_file, contextual_selection=False, preview=False)
     from .filename_input import FilenameInput
-    directory = mode == 'open'
+    directory = mode in ('open', 'folder')
     if getattr(destination_action, 'kind', '') == 'move':
         directory = destination_action.provider.entry(destination_action.path)['directory']
     picker.save_as_name = FilenameInput(value=name, directory=directory,
-                                       placeholder='File name', style=Pack(height=48))
+                                       placeholder=name_label, style=Pack(height=48))
     picker.creation_type = None
     if creation is not None:
         from .document_choices import available_choices
@@ -70,6 +72,8 @@ def build_destination_form(picker, *, source_label, source_folder):
     picker.move_notice = toga.Box(style=Pack(direction=COLUMN, margin_left=12, margin_right=12))
     title = getattr(destination_action, 'title', 'Move') if destination_action is not None else 'New document' if creation is not None else 'Open file' if mode == 'open' else 'Save As'
     primary = getattr(destination_action, 'primary', 'Move here') if destination_action is not None else 'Create here' if creation is not None else 'Open file' if mode == 'open' else 'Save here'
+    if library:
+        title, primary = 'New Notes Library', 'Create library here'
     picker.picker_parent = icon_button('up', 'Parent folder', on_press=picker.parent_editor_folder)
     picker.picker_header = picker.editor_browser.attach_location_header(
         picker.editor_browser.status_label(''), picker.picker_parent)
@@ -93,7 +97,7 @@ def build_destination_form(picker, *, source_label, source_folder):
         toga.Button('Cancel', on_press=picker.hide_new_folder, style=Pack(height=48))], style=Pack(direction=ROW))
     picker.new_folder_form = toga.Box(children=[picker.new_folder_name, folder_actions], style=Pack(
         direction=COLUMN if creation is not None else ROW))
-    name_fields = [toga.Label('Name' if destination_action is not None else 'File name'), picker.save_as_name]
+    name_fields = [toga.Label('Name' if destination_action is not None else name_label), picker.save_as_name]
     location_fields = [picker.picker_destination, picker.save_as_status]
     if creation is not None:
         picker.save_as_name.on_confirm = picker.choose_creation_location

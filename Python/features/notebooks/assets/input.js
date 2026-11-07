@@ -1,3 +1,4 @@
+const fallbackPressure = .5;
 let constantPenPressure = false;
 // Bounded content-free input diagnostics: no coordinates, labels or stroke data.
 const inputTraceCounts = Object.create(null), inputTraceRing = [];
@@ -84,7 +85,9 @@ function sample(event, bounds) {
 }
 
 function coord(e, r = canvas.getBoundingClientRect()) {
-  return [Math.max(0, Math.min(state.width, (e.clientX - r.left) / r.width * state.width)), Math.max(0, Math.min(state.height, (e.clientY - r.top) / r.height * state.height)), e.pointerType === 'pen' ? (constantPenPressure ? .5 : Math.max(0, Math.min(1, e.pressure))) : .5]
+  const pressure = e.pointerType === 'pen' && !constantPenPressure
+    ? Math.max(0, Math.min(1, e.pressure)) : fallbackPressure;
+  return [Math.max(0, Math.min(state.width, (e.clientX - r.left) / r.width * state.width)), Math.max(0, Math.min(state.height, (e.clientY - r.top) / r.height * state.height)), pressure]
 }
 
 function distance(p, a, b) {

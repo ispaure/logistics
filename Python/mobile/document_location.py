@@ -197,7 +197,7 @@ def mount_apple_title(view, controller, title):
                         and tools.stacked_portrait(controller))
     wide_notebook = (tools is not None and not controls and band is None
                      and not getattr(view, '_reader_fullscreen', False) and tools.wide_landscape(controller))
-    leading = compact_tools or wide_notebook
+    leading = not compact_tools if wide_notebook else compact_tools
     if tools is not None and not compact_tools and tools.header is not None:
         tools.close()
     bounds = controller.view.bounds.size
@@ -241,7 +241,7 @@ def mount_apple_title(view, controller, title):
     header = getattr(view, '_document_title_header', None)
     was_mounted = side_title_header(view) is not None
     frame = getattr(view, '_reading_frame_owner', None)
-    if controls or leading or stacked_notebook or (edge and (frame is not None or hasattr(view, '_document_path'))):
+    if controls or compact_tools or wide_notebook or stacked_notebook or (edge and (frame is not None or hasattr(view, '_document_path'))):
         # UIKit owns the side actions, but can reposition its titleView after
         # content layout. Give the actual title its own row above the page.
         if header is None:
@@ -280,6 +280,11 @@ def mount_apple_title(view, controller, title):
                 getattr(view, '_document_title_parent', view).insert(0, header)
             if compact_tools:
                 tools.mount(header, controller)
+            elif wide_notebook:
+                from features.notebooks.mobile.native_tools import LANDSCAPE_INSET
+                header.style.margin_left = header.style.margin_right = LANDSCAPE_INSET
+            elif not controls:
+                header.style.margin_left = header.style.margin_right = 0
             place_title_in_header(header, view._document_title_view, state[1])
         elif was_mounted:
             header.parent.remove(header)

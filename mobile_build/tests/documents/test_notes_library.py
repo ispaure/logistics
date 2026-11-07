@@ -706,7 +706,9 @@ class NotesLibraryTests(unittest.TestCase):
 
     def test_documents_discovers_libraries_two_folders_down_without_reading_notes(self):
         from mobile.notes_discovery import find_libraries
-        (self.root / 'One/Two/.obsidian').mkdir(parents=True)
+        (self.root / 'One/Two').mkdir(parents=True)
+        (self.root / 'One/Two/.noteslibrary').touch()
+        (self.root / 'WrongType/.noteslibrary').mkdir(parents=True)
         (self.root / 'One/Two/TooDeep/.obsidian').mkdir(parents=True)
         (self.root / 'Other/Two/Three/.obsidian').mkdir(parents=True)
         (self.root / '.hidden/.obsidian').mkdir(parents=True)
@@ -717,6 +719,7 @@ class NotesLibraryTests(unittest.TestCase):
         self.assertIn('Vault', found)
         self.assertIn('One/Two', found)
         self.assertNotIn('One/Two/TooDeep', found)
+        self.assertNotIn('WrongType', found)
         self.assertNotIn('.hidden', found)
         self.assertNotIn('Other/Two/Three', found)
         self.assertTrue(all(len(call.args[0].split('/')) <= 2 for call in listing.call_args_list))

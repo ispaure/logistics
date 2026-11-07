@@ -1407,7 +1407,10 @@ class NotesLibraryDesktopTests(QtTestCase):
     def test_marker_file_and_escape_never_open(self):
         with self.temporary_directory() as directory:
             root=Path(directory);(root/'.obsidian').write_text('not directory')
-            self.assertEqual(actions(FolderEntry('Not a vault',local=LocalFolder(root))),[])
+            entry = FolderEntry('Notes', local=LocalFolder(root))
+            self.assertEqual(actions(entry), [])
+            (root / '.noteslibrary').touch()
+            self.assertEqual([command.name for command in actions(entry)], ['Open as Notes Library'])
             (root/'.obsidian').unlink();self.fixture(root)
             window=NotesLibraryWindow(lambda:LocalFiles(root),'Notes')
             window.show();self.wait_until(lambda:not window.progress.busy)

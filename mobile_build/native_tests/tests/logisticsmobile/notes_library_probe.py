@@ -353,6 +353,19 @@ class NotesLibraryProbe(LogisticsMobile):
             await self.wait_js(canvas.panel.web, '!!window.notebookIdle && window.notebookIdle()')
             assert set(self.workspace.sessions) == session_ids
             await capture_window(self, evidence / 'notes-remarkable.png')
+            if self._is_apple():
+                await rotate(self, 'landscape-left')
+                controller = self.native_host.adapter.content_controller(owner.destination)
+                tools = canvas.panel.native_drawing_tools
+                if tools.wide_landscape(controller) and owner._notes_available >= 720 and not owner.sidebar.expanded:
+                    await self.wait_js(canvas.panel.web,
+                        "document.body.classList.contains('native-drawing-tools')")
+                    assert tools.header is owner.secondary and tools.current()
+                    assert owner.back_button.parent is owner.forward_button.parent is tools.header
+                    assert tools.strip.parent is tools.header
+                    await capture_window(self, evidence / 'notes-remarkable-landscape.png')
+                    report['notebook_inline_history_tools'] = True
+                await rotate(self, 'portrait')
             from features.notebooks.notebook import Notebook
             sketch = root / 'Sketch.rmdoc'
             await canvas.panel.perform({'op': 'add-page'})

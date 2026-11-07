@@ -99,9 +99,9 @@ scope and close callbacks to that host. The rail reserves its layout immediately
 after Documents. Home receives the registered page through the launch catalog.
 
 The empty state opens an existing folder through the shared provider picker in
-folder mode. An `.obsidian` marker is needed for automatic browser offers, not for
-explicit folder selection. Identity uses normalized physical roots for ordinary
-local storage and provider/credential context plus contained root for private
+folder mode. Automatic browser offers require a `.noteslibrary` file or an
+`.obsidian` directory. Explicit folder selection accepts unmarked folders. Identity uses normalized physical roots
+for ordinary local storage and provider/credential context plus contained root for private
 storage. Reopens focus a retained or detached session. Library sessions stay out
 of Documents counts and its overlay; their inner document groups stay unchanged.
 
@@ -479,15 +479,18 @@ for lifecycle and cross-platform validation.
 commonUtils owns Documentation Library (`ui.markdown.wiki.WikiPanel` and
 `ui.native.markdown.MarkdownWikiView`): heading-based labels and a navigation-only
 sidebar. Alt/Option enables document editing without enabling tree mutations.
-Logistics owns filename-based notes, provider mutations and Obsidian-folder
-choices under `features/notes_library/`. Desktop folder navigation publishes files directly; Notes Library remains an
-explicit workspace action. Mobile Workspaces also browses directly without a
+Logistics owns filename-based notes, provider mutations and marked folder
+choices under `features/notes_library/`. Desktop folder navigation publishes
+files directly. Notes Library remains an explicit workspace action. Mobile Workspaces also browses directly without a
 mode choice or Notes Library menu entry. The Documents hub owns asynchronous
-`mobile/notes_discovery.py` discovery of `.obsidian` directory markers in Local
-and unlocked LocalCrypt roots, through two child-folder levels. Scans are
-cancellable, generation-checked and bounded by entry/folder limits. They read
+`mobile/notes_discovery.py` discovery of `.noteslibrary` files and `.obsidian`
+directories in ordinary and unlocked LocalCrypt roots, through two child-folder levels. Scans
+are cancellable, generation-checked and bounded by entry/folder limits. They read
 names/metadata only, close scan providers, and create a fresh provider when a
 library is opened. Locked names are never saved to a discovery index.
+Mobile library creation uses the shared destination picker. The selected
+provider creates the folder and empty marker, and removes the new empty
+folder if marker creation fails. Existing folders are preserved.
 
 Notes creation and moves validate containment and provider capabilities in
 `NotesLibrary`. Desktop moves resolve unsaved edits before dispatch; successful

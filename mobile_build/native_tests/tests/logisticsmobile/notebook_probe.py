@@ -61,6 +61,8 @@ class NotebookProbe(LogisticsMobile):
             from .fixtures import capture_window
             from mobile.palette import EINK_CSS
             panel = app.notebook_panel
+            captures = Path(self.paths.cache) / 'notebook-ui'
+            captures.mkdir(exist_ok=True)
             print('Notebook QA: native export failure/cancellation and rotation', flush=True)
             result['export_failures'] = await exercise_mobile(panel)
             from .rotation_checks import rotate
@@ -76,7 +78,6 @@ class NotebookProbe(LogisticsMobile):
                         controller = app.native_host.adapter.content_controller(app.native_host.state.destination)
                         if not tools.wide_landscape(controller):
                             continue
-                        assert panel.view._document_title_state[-1], 'Wide notebook title is not leading'
                         assert await panel.web.evaluate_javascript("!document.querySelector('.quick-choices')")
                         if tools.fits(controller):
                             for _ in range(20):
@@ -84,6 +85,12 @@ class NotebookProbe(LogisticsMobile):
                                     break
                                 await asyncio.sleep(.1)
                             assert tools.current(), tools.observer_exit
+                            assert not panel.view._document_title_state[-1], 'Title is not centered in its slot'
+                            assert tools.header.style.margin_left >= 16 and tools.header.style.margin_right >= 16
+                            if panel.status.text.startswith('Could not '):
+                                assert panel.status.parent is panel.view
+                                assert list(panel.view.children).index(panel.status) > list(panel.view.children).index(tools.header)
+                            await capture_window(self, captures / 'landscape-thirds.png')
                         result['landscape_compact_toolbar'] = True
             assert dimensions[0][0] < dimensions[0][1] and dimensions[1][0] > dimensions[1][1], dimensions
             result['rotation'] = dimensions
@@ -96,8 +103,6 @@ class NotebookProbe(LogisticsMobile):
                 controller = app.native_host.adapter.content_controller(app.native_host.state.destination)
                 assert controller.navigationItem.hidesBackButton, 'UIKit still presents a Back arrow'
             chrome = json.loads(await panel.web.evaluate_javascript(CHROME_CHECKS))
-            captures = Path(self.paths.cache) / 'notebook-ui'
-            captures.mkdir(exist_ok=True)
             await asyncio.sleep(.4)  # Allow the separate WebKit compositor to present the DOM change.
             await capture_window(self, captures / 'top-tools.png')
             await panel.web.evaluate_javascript("document.getElementById('brushToggle').click()")

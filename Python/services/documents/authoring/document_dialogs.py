@@ -85,10 +85,10 @@ class DocumentDialog(Dialog):
 
 
 class LibraryOpenDialog(DocumentDialog):
-    """Two explicit, non-destructive choices for an Obsidian folder."""
+    """Two explicit, non-destructive choices for a marked Notes Library folder."""
     def __init__(self):
-        self.title = 'Open Obsidian folder'
-        self.message = ('This folder contains .obsidian. Open it as a Notes Library '
+        self.title = 'Open Notes Library folder'
+        self.message = ('Open this folder as a Notes Library '
                         'to browse and edit Markdown notes by filename, or browse its files.')
         self.choices = [('Open as Notes Library', 'notes', 0), ('Browse Files', 'files', 1)]
 

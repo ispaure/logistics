@@ -2,7 +2,7 @@
 from pathlib import Path
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.tasks.operation_progress import OperationProgress
-from features.notes_library.notes import operation, vault_root, local_library
+from features.notes_library.notes import LIBRARY_MARKER, operation, vault_root, local_library
 
 
 class NotesFolderOffer(qt.QWidget):
@@ -60,7 +60,8 @@ class NotesFolderOffer(qt.QWidget):
         # The local browser already stats paths during navigation. Avoid a
         # worker/listing for ordinary folders; provider paths must stay decoded.
         if (not self.enabled or location == self.accepted or (provider is not None and not local_library(provider))
-                or (provider is None and not (location / '.obsidian').is_dir())):
+                or (provider is None and not ((location / LIBRARY_MARKER).is_file()
+                                              or (location / '.obsidian').is_dir()))):
             self.resume = None
             self.progress.request_cancel()
             return False
@@ -104,7 +105,7 @@ class NotesFolderOffer(qt.QWidget):
             return
         self.candidate = result[1:3]
         dialog = self.dialog = qt.QMessageBox(self.browser.window())
-        dialog.setWindowTitle('Open Obsidian folder')
+        dialog.setWindowTitle('Open Notes Library folder')
         dialog.setText('Open this folder as a Notes Library or browse its files?')
         notes = dialog.addButton('Open as Notes Library', qt.QMessageBox.ButtonRole.AcceptRole)
         files = dialog.addButton('Browse Files', qt.QMessageBox.ButtonRole.ActionRole)

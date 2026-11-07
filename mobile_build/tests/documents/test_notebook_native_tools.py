@@ -23,7 +23,7 @@ class NativeToolsTests(unittest.IsolatedAsyncioTestCase):
         self.manager = NativeDrawingTools(self.panel)
         self.enterContext(patch.object(self.manager, 'visible', return_value=True))
         self.manager.web = self.panel.web
-        self.manager.header = NS(parent=object())
+        self.manager.header = NS(parent=object(), remove=unittest.mock.Mock())
         self.manager.strip = NS(parent=self.manager.header, _impl=NS(native=NS(hidden=False)))
         self.manager.buttons = {name:NS(enabled=False, _impl=NS(native=NS(hidden=False))) for name in TOOLS}
         self.manager.anchor = lambda name: [100, -48, 44, 48]
@@ -244,7 +244,7 @@ class NativeToolsTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0)
         self.manager.epoch += 1
         self.manager.web = self.panel.web = object()
-        self.manager.header = NS(parent=object())
+        self.manager.header = NS(parent=object(), remove=unittest.mock.Mock())
         self.manager.strip = NS(parent=self.manager.header)
         new_buttons = {name:NS(enabled=False) for name in TOOLS}
         self.manager.buttons = new_buttons
@@ -280,6 +280,14 @@ class NativeToolsMountTests(unittest.TestCase):
         self.assertEqual(len(manager.buttons), 5)
         self.assertEqual([button.style.width for button in manager.buttons.values()], [44] * 5)
         self.assertEqual(header._title_content.style.height, 48)
+        from features.notebooks.mobile.native_tools import LANDSCAPE_INSET
+        leading, title, gap, strip = header.children
+        available = 867 - 2 * LANDSCAPE_INSET
+        self.assertEqual(header.style.margin_left, LANDSCAPE_INSET)
+        self.assertAlmostEqual(leading.style.width + title.style.width / 2, available / 3, delta=1)
+        self.assertAlmostEqual(
+            leading.style.width + title.style.width + gap.style.width + strip.style.width / 2,
+            available * 2 / 3, delta=1)
         self.assertIs(manager.strip.parent, header)
         task = manager.task
         manager.close()
@@ -287,6 +295,21 @@ class NativeToolsMountTests(unittest.TestCase):
         self.assertTrue(task.cancelled())
         self.assertFalse(hasattr(header, '_title_content'))
         self.assertEqual(len(header.children), 0)
+        panel.app.loop.run_until_complete(asyncio.sleep(0))
+
+    def test_retiring_embedded_strip_preserves_note_history_and_actions(self):
+        import toga
+        from mobile_build.tests.support.app import create_app
+        panel = Panel()
+        panel.app = create_app(self)
+        panel.web = NS(evaluate_javascript=AsyncMock())
+        previous, following, actions = toga.Button('Previous'), toga.Button('Next'), toga.Button('Actions')
+        row = toga.Box(children=[previous, following, actions])
+        manager = NativeDrawingTools(panel)
+        manager.mount(row, object(), before=actions)
+        self.assertEqual(list(row.children), [previous, following, manager.strip, actions])
+        manager.close()
+        self.assertEqual(list(row.children), [previous, following, actions])
         panel.app.loop.run_until_complete(asyncio.sleep(0))
 
     def test_narrow_viewport_is_not_eligible_for_native_strip(self):

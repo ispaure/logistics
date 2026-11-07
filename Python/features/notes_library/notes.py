@@ -6,6 +6,7 @@ from threading import RLock
 from services.documents.storage import DocumentResource, DocumentSizeExceeded, document_remote
 from services.documents.access import can_write
 
+LIBRARY_MARKER = '.noteslibrary'
 MARKDOWN = {'.md', '.markdown'}
 TEXT = {'.json', '.jsonc', '.js', '.mjs', '.cjs', '.css', '.txt', '.csv',
         '.yaml', '.yml', '.toml', '.ini', '.xml', '.html', '.py', '.ts'}
@@ -94,8 +95,24 @@ def vault_root(provider, directory, rows):
     if not callable(getattr(provider, 'relative', None)):
         return None
     directory = provider.relative(directory)
-    marker = posixpath.join(directory, '.obsidian')
-    return directory if any(row['path'] == marker and row['directory'] for row in rows) else None
+    marker = posixpath.join(directory, LIBRARY_MARKER)
+    obsidian = posixpath.join(directory, '.obsidian')
+    if any(row['path'] == (obsidian if row['directory'] else marker) for row in rows):
+        return directory
+    return None
+
+
+def create_library(provider, parent, name, *, cancelled=lambda: False):
+    from commonUtils.runtime.resources.paths import resource_name
+    from services.documents.storage import create_marked_document_folder
+
+    name = resource_name(name.strip())
+    if name.startswith('.'):
+        raise ValueError('Choose a folder name that does not start with a dot.')
+    if not local_library(provider):
+        raise ValueError('Choose an on-device location.')
+    folder = posixpath.join(provider.relative(parent), name)
+    return create_marked_document_folder(provider, folder, LIBRARY_MARKER, cancelled=cancelled)
 
 
 class NotesLibrary:
