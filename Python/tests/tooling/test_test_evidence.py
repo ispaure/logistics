@@ -196,3 +196,16 @@ class ReuseSwitchTests(unittest.TestCase):
             # The same flag reaches a separate guest process, without changing its suite list.
             guest_plan = replace(plan, source={}, phases=fresh.phases)
             self.assertTrue(all(not p.reuse_key for p in with_reuse(guest_plan).phases))
+
+    def test_fresh_local_leaves_github_publication_reuse_enabled(self):
+        from build_manager import Plan
+        from logistics_build.manager_journeys import run_values
+        from logistics_build.test_evidence import with_reuse
+        with TemporaryDirectory() as folder:
+            local = Phase('macos', ('python', 'tests.py'), folder, effect='test')
+            github = Phase('release', ('python', 'release.py'), folder, provider='github', effect='publish')
+            source = {'run_overrides': run_values({'testing.reuse_verified_results': 'local-off'})}
+            plan = Plan('Fixture', 'Validate and deliver', source, (local, github), str(Path(folder) / 'workspace'))
+            checked_local, checked_github = with_reuse(plan).phases
+            self.assertEqual(checked_local.environment['LOGISTICS_REUSE_TEST_RESULTS'], 'off')
+            self.assertEqual(checked_github, github)

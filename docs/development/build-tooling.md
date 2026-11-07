@@ -165,7 +165,8 @@ or a successful result. They add no VM polling. Collected reports and bound
 worker receipts remain authoritative.
 
 The workflow-wide choice `testing.reuse_verified_results` is saved per preset,
-with On as the legacy/default choice. Off strips local reuse keys and propagates
+with On as the legacy/default choice. Fresh local tests (`local-off`) forces fresh local
+execution while leaving exact-source GitHub evidence eligible. The debug option (`off`) strips local reuse keys and propagates
 `LOGISTICS_REUSE_TEST_RESULTS=off` into owned guest commands. It also suppresses
 signed export. A new release created with Off has an annotated tag containing
 `Build-Manager-Reuse: off`; the release evidence selector and hosted suite
