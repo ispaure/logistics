@@ -44,6 +44,8 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
     storage_root = None  # Host tests may supply a private fixture directory.
 
     def __init__(self, *args, **kwargs):
+        from .ui_metrics import install_font_units
+        install_font_units()
         super().__init__(*args, **kwargs)
         if type(self._impl).__module__.startswith('toga_iOS.'):
             from .window_scenes import SceneManager

@@ -13,7 +13,7 @@ from .folder_hub_style import (
     SOURCE_LABELS, folder_scroll, source_actions, source_tab, surface, toolbar_button,
 )
 from .folder_tree_view import FolderTreeView
-from .ui_metrics import CAPTION_TEXT, CONTROL_TEXT, TOUCH_TARGET, toga_font_size
+from .ui_metrics import CAPTION_TEXT, CONTROL_TEXT, TOUCH_TARGET
 
 
 def device_label(app):
@@ -31,7 +31,7 @@ def device_label(app):
 def subtab_button(label, *, on_press=None):
     """Keep full captions readable in narrow workspace sidebars."""
     button = toga.Button(label, on_press=on_press,
-                         style=Pack(flex=1, height=TOUCH_TARGET, font_size=toga_font_size(CONTROL_TEXT)))
+                         style=Pack(flex=1, height=TOUCH_TARGET, font_size=CONTROL_TEXT))
     backend = type(button._impl).__module__
     if backend.startswith('toga_iOS.'):
         button._impl.native.titleLabel.numberOfLines = 2
@@ -109,7 +109,7 @@ class WorkspacesScreen:
         selected = getattr(self, 'folder_credential_name', 'All')
         self.folder_credential = toga.Selection(items=list(self.folder_credentials),
             value=selected if selected in self.folder_credentials else 'All',
-            style=Pack(flex=1, height=TOUCH_TARGET, font_size=toga_font_size(CONTROL_TEXT)))
+            style=Pack(flex=1, height=TOUCH_TARGET, font_size=CONTROL_TEXT))
         self.folder_credential.on_change = self.change_folder_credential
         accessible_name(self.folder_credential, 'Credential filter')
         if type(self.folder_credential._impl).__module__.startswith('toga_iOS.'):
@@ -124,13 +124,13 @@ class WorkspacesScreen:
             native.rightView = accessory
             native.rightViewMode = 3  # UITextFieldViewModeAlways
             native.accessibilityHint = 'Opens the list of credentials'
-        self.folder_transfers_button = toga.Button('Transfers', on_press=self.show_transfers, style=Pack(height=TOUCH_TARGET, font_size=toga_font_size(CONTROL_TEXT), flex=1))
+        self.folder_transfers_button = toga.Button('Transfers', on_press=self.show_transfers, style=Pack(height=TOUCH_TARGET, font_size=CONTROL_TEXT, flex=1))
         toolbar_button(self.folder_transfers_button, 'arrow.up.arrow.down')
         self.folder_add_share_button = toga.Button('Add share…', on_press=self.show_smb_connection,
-                                                  style=Pack(height=TOUCH_TARGET, font_size=toga_font_size(CONTROL_TEXT), flex=1))
+                                                  style=Pack(height=TOUCH_TARGET, font_size=CONTROL_TEXT, flex=1))
         toolbar_button(self.folder_add_share_button, 'plus')
         self.folder_add_remote_button = toga.Button('Add Remote…', on_press=self.show_cloud_connections,
-                                                   style=Pack(height=TOUCH_TARGET, font_size=toga_font_size(CONTROL_TEXT), flex=1))
+                                                   style=Pack(height=TOUCH_TARGET, font_size=CONTROL_TEXT, flex=1))
         toolbar_button(self.folder_add_remote_button, 'plus')
         self.folder_loading_status = toga.Label('', style=Pack(font_size=12, margin_bottom=4))
         self.folder_loading_progress = toga.ProgressBar(max=100, value=0, style=Pack(height=4, margin_bottom=8))
@@ -140,7 +140,7 @@ class WorkspacesScreen:
         elif backend.startswith('toga_android.'):
             self.folder_add_share_button._impl.native.setContentDescription('Add SMB / Mac share')
         self.folder_credential_row = toga.Box(children=[surface(toga.Label('Credential',
-                style=Pack(font_size=toga_font_size(CAPTION_TEXT), width=80, margin_right=12)),
+                style=Pack(font_size=CAPTION_TEXT, width=80, margin_right=12)),
                 background='window', foreground='muted', outlined=False),
                 self.folder_credential], style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12))
         self.folder_picker_header = toga.Box(style=Pack(direction=COLUMN))
@@ -262,7 +262,7 @@ class WorkspacesScreen:
                     self.change_folder_source(selected)
             button = toga.Button(SOURCE_LABELS[source], on_press=select_source,
                                  style=Pack(flex=1, height=TOUCH_TARGET,
-                                            font_size=toga_font_size(CONTROL_TEXT), margin=2))
+                                            font_size=CONTROL_TEXT, margin=2))
             backend = type(button._impl).__module__
             if backend.startswith('toga_iOS.'):
                 button._impl.native.titleLabel.numberOfLines = 2

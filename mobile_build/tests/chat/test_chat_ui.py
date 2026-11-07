@@ -70,18 +70,21 @@ class ChatUITests(unittest.TestCase):
 
     def test_markdown_size_updates_chat_without_replacing_the_draft_or_transcript(self):
         from mobile.font_scaling import refresh
+        from toga_dummy.utils import EventLog
         app = self.app
         app.chat_prompt.value = 'Keep my draft'
         app.chat_transcript.evaluate_javascript = AsyncMock()
-        with patch('mobile.font_scaling.native_backend', return_value='toga_iOS.widgets'):
+        with patch('mobile.ui_metrics.native_backend', return_value='toga_iOS.widgets'):
             app.preferences.values['font_size'] = '12'
             app.preferences.values['markdown_font_size'] = '24'
             refresh(app)
             app.loop.run_until_complete(asyncio.sleep(0))
-            self.assertEqual(app.chat_prompt.style.font_size, 18)
+            self.assertEqual(app.chat_prompt.style.font_size, 24)
+            font = EventLog.performed_actions(app.chat_prompt, 'set font')[-1]['font']
+            self.assertEqual(font.size, 18)
             self.assertIn("fontSize='24px'", app.chat_transcript.evaluate_javascript.call_args.args[0])
             app.show_chat()
-            self.assertEqual(app.chat_prompt.style.font_size, 18)
+            self.assertEqual(app.chat_prompt.style.font_size, 24)
         self.assertEqual(app.chat_prompt.value, 'Keep my draft')
 
     def setUp(self):
