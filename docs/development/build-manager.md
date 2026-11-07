@@ -419,8 +419,9 @@ inside a source snapshot. Read-only TestFlight `plan` does not prune outputs.
   grace period. Their operation locks and paused-workflow holds protect installs.
 - On macOS, Xcode DerivedData is identified using `info.plist`'s `WorkspacePath`
   under this checkout's generated build folders. Cache display names alone do
-  not establish ownership. Retain the three newest eligible caches plus caches
-  accessed within one day, subject to a 12 GiB budget. Access within one hour,
+  not establish ownership. The system `/tmp` alias and its resolved path identify
+  the same checkout, snapshot lock and active build. Retain the three newest
+  eligible caches plus caches accessed within one day, subject to a 12 GiB budget. Access within one hour,
   an open Xcode GUI, matching build processes, snapshot locks and pins protect
   caches. Failed process inspection skips Xcode cleanup with a diagnostic.
 - Budgets are soft: newest entries, pins, durable workflow holds and active locks

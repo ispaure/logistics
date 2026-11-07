@@ -9,6 +9,18 @@ import time
 from build_manager.retention import linked, explicitly_pinned
 
 GIB = 1024 ** 3
+TEMP_ALIAS = Path('/tmp')
+
+
+def temporary_path_aliases(path, temp_root):
+    """Return the canonical spelling first, without resolving generated subpaths."""
+    if TEMP_ALIAS == temp_root:
+        return (path,)
+    for prefix in (TEMP_ALIAS, temp_root):
+        if path.is_relative_to(prefix):
+            relative = path.relative_to(prefix)
+            return temp_root / relative, TEMP_ALIAS / relative
+    return (path,)
 
 
 def workspace(path):
@@ -49,7 +61,8 @@ def owned_workspace(project, source):
 
 
 def storage_group(project, *, cache_root=None, processes=None, now=None):
-    project = Path(project).absolute()
+    temp_root = TEMP_ALIAS.resolve()
+    project = temporary_path_aliases(Path(project).absolute(), temp_root)[0]
     cache_root = Path(cache_root) if cache_root is not None else Path.home() / 'Library/Developer/Xcode/DerivedData'
     now = time.time() if now is None else now
     dynamic_processes = processes is None
@@ -57,6 +70,13 @@ def storage_group(project, *, cache_root=None, processes=None, now=None):
         # A failed process inventory is a failed safety check, not an idle host.
         processes = subprocess.check_output(['/bin/ps', '-Ao', 'command='], text=True, timeout=15)
     lines = processes.splitlines()
+
+    def workspace_info(path):
+        info = workspace(path)
+        if info:
+            source, accessed = info
+            return temporary_path_aliases(source, temp_root)[0], accessed
+
     def eligible(path):
         current = lines
         if dynamic_processes:
@@ -66,7 +86,7 @@ def storage_group(project, *, cache_root=None, processes=None, now=None):
                 return False
         gui_open = any('/Xcode.app/Contents/MacOS/Xcode' in line or
                        re.search(r'/Xcode[^/]*\.app/Contents/MacOS/Xcode(?:\s|$)', line) for line in current)
-        info = workspace(path)
+        info = workspace_info(path)
         if not info or gui_open:
             return False
         source, accessed = info
@@ -77,14 +97,14 @@ def storage_group(project, *, cache_root=None, processes=None, now=None):
         # compiler caches. Explicit user pins still protect both.
         if snapshot and snapshot.exists() and explicitly_pinned(snapshot):
             return False
-        scope = str(snapshot) if snapshot else str(source)
+        scopes = tuple(map(str, temporary_path_aliases(snapshot or source, temp_root)))
         if any(('xcodebuild' in line or 'briefcase' in line) and
-               (scope in line or str(path) in line) for line in current):
+               (any(scope in line for scope in scopes) or str(path) in line) for line in current):
             return False
         return True
 
     def lock_path(path):
-        info = workspace(path)
+        info = workspace_info(path)
         snapshot = source_snapshot(project, info[0]) if info else None
         return snapshot.with_suffix('.lock') if snapshot else cache_root / ('.' + path.name + '.retention.lock')
 
