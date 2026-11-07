@@ -226,10 +226,11 @@ def _mount_reader(self, view, controls, comic, neighbors):
         if hasattr(panel, 'webview'):
             from features.books.mobile.pagination import chapter_renderer
             view.page_footer.bind_epub(panel.webview, view.crypt_reader.book, panel.index,
-                chapter_renderer(view.crypt_reader.book, host.preferences.values), self.loop)
+                chapter_renderer(view.crypt_reader.book, host.preferences.values), self.loop,
+                length=panel.chapter.length)
         else:
             view.page_footer.screen_pages_unavailable = True
-        view.page_footer.chapter_progress(0, len(view.crypt_reader.labels), panel.offset, panel.chapter.length)
+        view.page_footer.chapter_progress(panel.index, len(view.crypt_reader.labels), panel.offset, panel.chapter.length)
     footer = view.page_footer.widget
     if view.crypt_reader.book is not None:
         view.crypt_title.style.update(flex=1, width=1, height=48, margin=0)
@@ -402,7 +403,8 @@ def prepare_epub_page(host, controller, view, content):
         if hasattr(view, 'page_footer'):
             from features.books.mobile.pagination import chapter_renderer
             view.page_footer.bind_epub(epub_surface, book, index,
-                chapter_renderer(book, host.preferences.values), controller.loop)
+                chapter_renderer(book, host.preferences.values), controller.loop,
+                length=view.provider_epub_view.chapter.length)
     else:
         bind(host, view.provider_epub_view.text, 'epub')
         if hasattr(view, 'page_footer'):

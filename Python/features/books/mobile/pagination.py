@@ -1,10 +1,11 @@
-"""Count inert chapters in the live reader's exact native column geometry."""
+"""Track layout-independent text progress and native screen-page counts."""
 import asyncio
+from itertools import accumulate
 import json
 from uuid import uuid4
 from weakref import ref
 
-from features.books.locations import LayoutPages
+from features.books.locations import ChapterText, LayoutPages
 from .presentation import wait_chapter_ready
 
 
@@ -21,6 +22,11 @@ class MobilePagination:
     def __init__(self, book, changed):
         self.book_ref, self.changed = ref(book), changed
         self.pages = LayoutPages(len(book.spine))
+        self.text_lengths = [None] * len(book.spine)
+        self.text_starts = None
+        self.text_offset = 0
+        self.text_scan = None
+        self.text_error = False
         self.bridge = self.view = self.render = self.loop = None
         self.chapter = self.page = 0
         self.columns = 1
@@ -32,11 +38,17 @@ class MobilePagination:
     def book(self):
         return self.book_ref()
 
-    def bind(self, view, chapter, render, loop):
+    def bind(self, view, chapter, render, loop, *, length=None, worker=False):
         self.cancel()
         self.view, self.bridge, self.chapter = view, view._chapter_bridge, chapter
         self.render, self.loop = render, loop
         self.page, self.columns = 0, 1
+        self.text_offset = self.bridge.offset
+        if length is not None:
+            self.text_lengths[chapter] = length
+        if self.text_starts is None and not self.text_error:
+            self.text_scan = loop.create_task(self.scan_text(render, worker))
+        self.worker = worker
         self.bridge.on_pagination = self.receive
         self.bridge.pagination_cleanup = self.cancel
         if self.bridge.pagination_state is not None:
@@ -45,6 +57,9 @@ class MobilePagination:
             self.publish()
 
     def cancel(self):
+        if self.text_scan is not None:
+            self.text_scan.cancel()
+            self.text_scan = None
         if self.bridge is not None:
             self.bridge.on_pagination = None
             self.bridge.pagination_cleanup = None
@@ -54,11 +69,31 @@ class MobilePagination:
                 self.bridge.pagination_task = None
         self.bridge = self.view = self.render = None
 
+    async def scan_text(self, render, worker):
+        try:
+            # Let the opening chapter paint before walking the rest of the book.
+            await asyncio.sleep(.15)
+            def length(index):
+                return ChapterText(render(index)).length
+            for index, known in enumerate(self.text_lengths):
+                if known is None:
+                    if worker:
+                        self.text_lengths[index] = await asyncio.to_thread(length, index)
+                    else:
+                        # A private bridge can retire synchronously between chapters.
+                        await asyncio.sleep(.001)
+                        self.text_lengths[index] = length(index)
+            self.text_starts = tuple(accumulate(self.text_lengths, initial=0))
+        except (OSError, ValueError):
+            self.text_error = True
+        self.publish()
+
     def receive(self, value):
         if self.bridge is None or self.bridge.closed:
             return
         changed = self.pages.reset(value['layout'])
         self.page, self.columns = value['index'], value['columns']
+        self.text_offset = self.bridge.offset
         if changed:
             self.visits.previous.clear()
             self.visits.current = (self.chapter, self.page)
@@ -76,25 +111,36 @@ class MobilePagination:
             self.bridge.pagination_task = self.loop.create_task(self.count(self.bridge, self.pages.layout))
 
     def publish(self):
-        value = self.pages.position(self.chapter, self.page, self.columns)
+        value = self.pages.position(self.chapter, self.page, self.columns, include_percent=False)
         if self.error:
             value['text'] = f'Page count unavailable · Chapter {self.chapter + 1} of {len(self.pages.counts)}'
-            value['mobile'] = value['text']
+            value['mobile'] = value['text'].replace(' · ', '\n')
+        if self.text_starts and self.text_starts[-1]:
+            offset = min(max(0, self.text_offset), self.text_lengths[self.chapter])
+            percent = (self.text_starts[self.chapter] + offset) * 100 // self.text_starts[-1]
+            for key in ('text', 'mobile'):
+                value[key] = f'{percent}% · {value[key]}'
         self.changed(value)
+
+    def text_position(self, offset):
+        if offset != self.text_offset:
+            self.text_offset = offset
+            self.publish()
 
     async def count(self, bridge, layout):
         try:
             # Rotation often sends several intermediate viewport sizes.
             await asyncio.sleep(.15)
+            if self.text_scan is not None:
+                await asyncio.shield(self.text_scan)
             for index in range(len(self.pages.counts)):
                 if bridge is not self.bridge or bridge.closed or layout != self.pages.layout:
                     return
                 if self.pages.counts[index] is not None:
                     continue
-                # Preparation is bounded by the chapter renderer and stays in
-                # this owned UI task: no cancelled background worker can retain
-                # private archive text after the reader's synchronous disposal.
-                content = self.render(index)
+                # Only ordinary imports can retain chapter data in a worker
+                # after the owning bridge has been disposed.
+                content = await asyncio.to_thread(self.render, index) if self.worker else self.render(index)
                 if bridge is not self.bridge or bridge.closed or layout != self.pages.layout:
                     return
                 request = uuid4().hex

@@ -205,7 +205,6 @@ class PageFooter:
         self._edge_refresh = DeferredFooterEdges(self)
         self._edge_subscription = None
         self.count, self.rtl = 0, False
-        self.book_boundaries = None
         self.book_seek = None
         self.book_fraction = 0
         self.epub_pagination = None
@@ -310,6 +309,8 @@ class PageFooter:
             pass  # Observing the scheduler must never replace a layout result.
 
     def dispose(self):
+        if self.epub_pagination is not None:
+            self.epub_pagination.cancel()
         self._edge_refresh.close()
         self.edge_timer_diagnostic('retired', self._edge_refresh)
         if self._edge_subscription is not None:
@@ -364,7 +365,7 @@ class PageFooter:
         if comic and self.status is not None and self.status.text.startswith('Page '):
             progress = self.status.text[5:].split(' · Right-to-left')[0]
         if self.unit == 'chapter' and count:
-            self.chapter_progress(index, count, 0, 0)
+            self.chapter_progress(index, count)
         else:
             self.set_progress_text(progress, f'{self.unit.title()} {progress}')
         if self._layout_app is not None:
@@ -384,12 +385,11 @@ class PageFooter:
                 self.epub_pagination.cancel()
             self.epub_pagination = None
             self.epub_book = id(book)
-            self.book_boundaries = None
             self.screen_pages_unavailable = False
         self.book_seek = seek
         accessible_name(self.slider, 'Whole book position')
 
-    def bind_epub(self, view, book, index, render, loop):
+    def bind_epub(self, view, book, index, render, loop, *, length, worker=False):
         self.screen_pages_unavailable = False
         from features.books.mobile.pagination import MobilePagination
         if self.epub_pagination is None or self.epub_pagination.book is not book:
@@ -397,7 +397,7 @@ class PageFooter:
                 self.epub_pagination.cancel()
             self.epub_book = id(book)
             self.epub_pagination = MobilePagination(book, self.show_epub_pages)
-        self.epub_pagination.bind(view, index, render, loop)
+        self.epub_pagination.bind(view, index, render, loop, length=length, worker=worker)
 
     def show_epub_pages(self, position):
         self.book_fraction = position['fraction'] or 0
@@ -406,9 +406,12 @@ class PageFooter:
         self.slider.enabled = position['fraction'] is not None
         self.set_progress_text(position['mobile'], position['text'])
 
-    def chapter_progress(self, index, count, offset, length):
+    def chapter_progress(self, index, count, offset=None, length=None):
         if self.epub_pagination is not None:
-            self.epub_pagination.publish()
+            if offset is None:
+                self.epub_pagination.publish()
+            else:
+                self.epub_pagination.text_position(offset)
         else:
             pending = 'Page count unavailable' if self.screen_pages_unavailable else 'Counting pages…'
             self.show_epub_pages(dict(fraction=None,

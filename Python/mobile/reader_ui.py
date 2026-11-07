@@ -359,7 +359,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         bind(self, self.epub_view, 'epub', web=True)
         from features.books.mobile.pagination import chapter_renderer
         self.page_footer.bind_epub(self.epub_view, reader, index,
-            chapter_renderer(reader, self.preferences.values), self.loop)
+            chapter_renderer(reader, self.preferences.values), self.loop,
+            length=self.epub_text.length, worker=True)
         view = self.epub_view
         return view
 

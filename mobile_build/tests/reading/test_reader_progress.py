@@ -5,7 +5,7 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import toga
 from mobile.reader_controls import PageFooter, page_buttons
@@ -116,30 +116,33 @@ class ReaderProgressTests(unittest.TestCase):
         self.assertFalse(footer.slider.enabled)
 
     def test_book_page_scrub_uses_rendered_counts_and_single_chapter_is_enabled(self):
-        from types import SimpleNamespace
-        from features.books.locations import LayoutPages
+        from features.books.mobile.pagination import MobilePagination
         footer, _ = self.footer(unit='chapter')
         seek = AsyncMock()
-        book = SimpleNamespace(spine=['short', 'long'], resource_sizes={'short': 100, 'long': 300})
+        book = Mock(spine=['short', 'long'])
         footer.set_book(book, seek)
-        pages = LayoutPages(2)
-        pages.reset('portrait'); pages.record(0, 2); pages.record(1, 8)
-        pagination = SimpleNamespace(pages=pages, seek_page=AsyncMock(),
-            publish=lambda: footer.show_epub_pages(pages.position(1, 3)))
+        pagination = MobilePagination(book, footer.show_epub_pages)
+        pagination.chapter, pagination.page = 1, 3
+        pagination.pages.record(0, 2)
+        pagination.pages.record(1, 8)
+        pagination.text_lengths = [150, 250]
+        pagination.text_starts = (0, 150, 400)
+        pagination.seek_page = AsyncMock()
         footer.epub_pagination = pagination
         footer.sync(comic=False, count=2, index=1)
         footer.chapter_progress(1, 2, 50, 100)
         self.assertEqual(footer.slider.value, .6)
-        self.assertEqual(footer.spacer.text, '60% · Page 6 of 10\nChapter 2 of 2')
+        self.assertEqual(footer.spacer.text, '50% · Page 6 of 10\nChapter 2 of 2')
         footer.slider.value = .1
         asyncio.run(footer.release(footer.slider))
         seek.assert_awaited_once_with(0, 0)
         pagination.seek_page.assert_awaited_once_with(0, 1)
-        footer.epub_pagination = None
-        footer.set_book(SimpleNamespace(spine=['one'], resource_sizes={}), seek)
-        pages = LayoutPages(1); pages.reset('portrait'); pages.record(0, 8)
-        footer.epub_pagination = SimpleNamespace(pages=pages,
-            publish=lambda: footer.show_epub_pages(pages.position(0, 3)))
+        single_chapter = Mock(spine=['one'])
+        footer.set_book(single_chapter, seek)
+        pagination = MobilePagination(single_chapter, footer.show_epub_pages)
+        pagination.page = 3
+        pagination.pages.record(0, 8)
+        footer.epub_pagination = pagination
         footer.sync(comic=False, count=1, index=0)
         footer.chapter_progress(0, 1, 50, 100)
         self.assertTrue(footer.slider.enabled)

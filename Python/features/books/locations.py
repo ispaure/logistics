@@ -165,7 +165,7 @@ class LayoutPages:
             result.append(offset / total)
         return result
 
-    def position(self, chapter, page, span=1):
+    def position(self, chapter, page, span=1, *, include_percent=True):
         count = self.counts[chapter] or 1
         page = max(0, min(count - 1, page))
         first, last = page + 1, min(count, page + max(1, span))
@@ -176,10 +176,10 @@ class LayoutPages:
         before, total = sum(self.counts[:chapter]), sum(self.counts)
         first, last = before + first, before + last
         pages = str(first) if first == last else f'{first}–{last}'
-        percent = 100 * last // total
+        prefix = f'{100 * last // total}% · ' if include_percent else ''
         page_text = f'Page {pages} of {total}'
-        return dict(fraction=last / total, text=f'{percent}% · {page_text} · {chapter_text}',
-                    mobile=f'{percent}% · {page_text}\n{chapter_text}')
+        return dict(fraction=last / total, text=f'{prefix}{page_text} · {chapter_text}',
+                    mobile=f'{prefix}{page_text}\n{chapter_text}')
 
     def locate(self, fraction):
         """Map the whole-book track to an exact chapter/local screen page."""

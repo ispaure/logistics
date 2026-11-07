@@ -163,12 +163,14 @@ the timer active. The timer belongs to the open speech panel, is shared by mobil
 EPUB and Markdown read-aloud, and clears when that panel is disposed.
 
 In portrait and landscape, EPUB keeps Previous/Next and whole-book progress in a
-compact footer. The percentage and scrubber use actual screen-page counts across
-the entire book. Two-page spreads show a page range; the percentage is the last
-displayed page divided by the total. The footer shows **Counting pages…** and
-disables seeking until counting finishes. Font and viewport changes trigger a
-recount; saved reading positions still follow the text. Counts are held only for
-the current reader session. On iOS the native top bar centers the book title, with the chapter
+compact footer. The percentage comes from the current text position, so the same
+saved position in the same EPUB gives the same percentage on different screens.
+The reader opens the current chapter while it counts the book's text in the
+background. **Page X of N** and the scrubber use screen pages for the current
+layout. Two-page spreads show a page range. The footer shows **Counting pages…**
+and disables the scrubber until the screen-page count finishes. Font and
+viewport changes recount screen pages while keeping the text position. Counts
+are held for the current reader session. On iOS the native top bar centers the book title, with the chapter
 browser on the left and speech and Actions on the right. **Appearance…**, chapter
 search and **Fullscreen** remain available in Actions. Comics use the same title
 bar and keep their page scrubber; neighboring-comic buttons appear when supported
