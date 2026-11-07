@@ -21,7 +21,7 @@ class RotationScreen:
 
 SETTINGS_SCREENS = (
     ('settings-app', 'App'), ('settings-appearance', 'Appearance'),
-    ('settings-text', 'Text'), ('settings-workspaces', 'Workspaces'),
+    ('settings-text', 'Text'), ('settings-epub', 'EPUB'), ('settings-workspaces', 'Workspaces'),
     ('settings-privacy', 'Privacy & Security'), ('settings-help', 'Help'),
     ('settings-about', 'About'),
 )
