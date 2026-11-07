@@ -74,6 +74,9 @@ class NativeDrawingTools:
             surface(button, foreground='text')
             self.buttons[name] = button
             self.strip.add(button)
+        # Keep both the strip and its flattened iOS button views hidden until
+        # the canvas acknowledges that it has hidden its own controls.
+        self.strip.style.visibility = 'hidden'
         header.add(header._title_content, self.strip)
         self.observer_exit = None
         self.task = panel.app.loop.create_task(self.observe())
@@ -153,22 +156,19 @@ class NativeDrawingTools:
         # Keep observing, with native buttons hidden until a lease is available.
         value = json.loads(raw) if raw is not None else None
         if value is None:
-            self.strip._impl.native.hidden = True
+            self.strip.style.visibility = 'hidden'
             for button in self.buttons.values():
-                # Toga iOS mounts the button views beside the box view.
-                button._impl.native.hidden = True
                 button.enabled = False
             return
         if set(value) != set(TOOLS) or any(set(row) != {'disabled', 'active'}
                 or any(type(item) is not bool for item in row.values()) for row in value.values()):
             raise ValueError('The notebook drawing controls are not ready.')
-        self.strip._impl.native.hidden = False
         surface = panel.app.presentation.surface
         for name, row in value.items():
             button = self.buttons[name]
-            button._impl.native.hidden = False
             button.enabled = not (row['disabled'] or panel.busy or panel.native_input_pending)
             surface(button, background='hover' if row['active'] else 'surface', foreground='text')
+        self.strip.style.visibility = 'visible'
 
     def anchor(self, name):
         native = self.buttons[name]._impl.native
@@ -194,7 +194,7 @@ class NativeDrawingTools:
         epoch = self.epoch
         try:
             # Native attachment can trail logical mounting on the first layout
-            # turn. Keep the untouched buttons disabled until visibility agrees.
+            # turn. Wait for attachment before asking the canvas for the lease.
             loop = asyncio.get_running_loop()
             deadline = loop.time() + 1
             while (self.epoch == epoch and self.owns_strip(panel := self.panel())

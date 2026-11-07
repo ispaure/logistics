@@ -546,9 +546,9 @@ renderEraserChoices();
     if (action === false) { restoreTools(); return null; }
     const hidden = document.body.classList.contains('tools-hidden');
     if (hidden || active !== null || busy) {
-      // A successful heartbeat still owns this row during an edit or hide.
+      // Renew an existing lease without taking over during an edit or hide.
       nativeToolsLease = setTimeout(restoreTools, 1500);
-      if (hidden) return JSON.stringify(null);
+      if (hidden || !document.body.classList.contains('native-drawing-tools')) return JSON.stringify(null);
       return JSON.stringify(Object.fromEntries(['pen','erase','select','undo','redo'].map(name =>
         [name, {disabled:true, active:false}])));
     }

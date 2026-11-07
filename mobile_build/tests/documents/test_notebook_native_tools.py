@@ -24,8 +24,8 @@ class NativeToolsTests(unittest.IsolatedAsyncioTestCase):
         self.enterContext(patch.object(self.manager, 'visible', return_value=True))
         self.manager.web = self.panel.web
         self.manager.header = NS(parent=object())
-        self.manager.strip = NS(parent=self.manager.header, _impl=NS(native=NS(hidden=False)))
-        self.manager.buttons = {name:NS(enabled=False, _impl=NS(native=NS(hidden=False))) for name in TOOLS}
+        self.manager.strip = NS(parent=self.manager.header, style=NS(visibility='hidden'))
+        self.manager.buttons = {name:NS(enabled=False) for name in TOOLS}
         self.manager.anchor = lambda name: [100, -48, 44, 48]
         self.state = {name:dict(disabled=name == 'redo', active=name == 'pen') for name in TOOLS}
 
@@ -88,7 +88,7 @@ class NativeToolsTests(unittest.IsolatedAsyncioTestCase):
                 self.assertTrue(getattr(self.panel, field))
                 setattr(self.panel, field, False)
 
-    async def test_hidden_lease_keeps_strip_mounted_but_hides_flattened_buttons(self):
+    async def test_hidden_lease_keeps_strip_mounted_but_hides_controls(self):
         strip = self.manager.strip
         buttons = self.manager.buttons.copy()
         self.manager.query = AsyncMock(side_effect=[json.dumps(self.state), 'null', None, json.dumps(self.state)])
@@ -98,14 +98,13 @@ class NativeToolsTests(unittest.IsolatedAsyncioTestCase):
             await self.manager.refresh()
             self.assertIs(self.manager.strip, strip)
             self.assertIs(strip.parent, self.manager.header)
-            self.assertTrue(strip._impl.native.hidden)
-            self.assertTrue(all(button._impl.native.hidden and not button.enabled for button in buttons.values()))
+            self.assertEqual(strip.style.visibility, 'hidden')
+            self.assertTrue(all(not button.enabled for button in buttons.values()))
         await self.manager.refresh()
         self.assertIs(self.manager.strip, strip)
-        self.assertFalse(strip._impl.native.hidden)
+        self.assertEqual(strip.style.visibility, 'visible')
         for name, button in buttons.items():
             self.assertIs(self.manager.buttons[name], button)
-            self.assertFalse(button._impl.native.hidden)
             self.assertEqual(button.enabled, not self.state[name]['disabled'])
 
     async def test_new_strip_waits_for_native_attachment_before_querying(self):
@@ -254,6 +253,7 @@ class NativeToolsMountTests(unittest.TestCase):
     def test_real_factory_fits_five44pt_buttons_beside_title_and_retires_task(self):
         import toga
         from toga.style import Pack
+        from toga_dummy.utils import EventLog
         from mobile_build.tests.support.app import create_app
         panel = Panel()
         panel.app = create_app(self)
@@ -276,6 +276,9 @@ class NativeToolsMountTests(unittest.TestCase):
         self.assertEqual([button.style.width for button in manager.buttons.values()], [44] * 5)
         self.assertEqual(header._title_content.style.height, 48)
         self.assertIs(manager.strip.parent, header)
+        self.assertEqual(manager.strip.style.visibility, 'hidden')
+        for button in manager.buttons.values():
+            self.assertTrue(EventLog.performed_actions(button, 'set hidden')[-1]['hidden'])
         task = manager.task
         manager.close()
         panel.app.loop.run_until_complete(asyncio.sleep(0))

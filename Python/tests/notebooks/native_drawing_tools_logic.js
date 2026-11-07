@@ -9,6 +9,13 @@ const context={window:{},document:{body:{classList:{add:n=>classes.add(n),remove
  active:null,busy:false,queue:[],resize:()=>{},dismissToolPanels:()=>{},header:{inert:false},dock:{inert:false},brushToggle:buttons.pen,control:n=>buttons[n],
  setTimeout:(f,ms)=>{f.delay=ms;timers.set(++serial,f);return serial},clearTimeout:id=>timers.delete(id)};
 vm.createContext(context);vm.runInContext(block,context);
+context.active=1;
+assert.equal(JSON.parse(context.window.notebookNativeTools(null)),null);
+assert(!classes.has('native-drawing-tools'));
+context.active=null;context.busy=true;
+assert.equal(JSON.parse(context.window.notebookNativeTools(null)),null);
+assert(!classes.has('native-drawing-tools'));
+context.busy=false;
 let state=JSON.parse(context.window.notebookNativeTools(null));assert(state.redo.disabled);assert(state.pen.active);assert(classes.has('native-drawing-tools'));
 context.window.notebookNativeTools({name:'undo',anchor:[100,-48,44,48]});assert.deepEqual(clicks,['undo']);
 context.window.notebookNativeTools({name:'redo',anchor:[100,-48,44,48]});assert.deepEqual(clicks,['undo']);
