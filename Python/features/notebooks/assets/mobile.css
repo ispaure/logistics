@@ -109,6 +109,10 @@ button{-webkit-appearance:none;appearance:none}
   --notebook-safe-width:calc(100vw - var(--notebook-rail-left) - var(--notebook-rail-right));
   --notebook-tools-shift:calc((var(--notebook-rail-left) - var(--notebook-rail-right)) / 2);
 }
+.notebook-mobile #viewport {
+  padding-left:var(--notebook-rail-left);
+  padding-right:var(--notebook-rail-right);
+}
 .notebook-mobile header.mobile-head {
   position:relative;
   left:var(--notebook-tools-shift);
@@ -148,7 +152,7 @@ button{-webkit-appearance:none;appearance:none}
 
 /* The real horizontal hinge reserves upper settings and lower drawing space. */
 body.notebook-laptop header.mobile-head{max-width:calc(100% - 8px)}
-body.notebook-laptop #viewport{position:fixed;top:var(--fold-bottom);bottom:0;left:0;right:0;padding:4px}
+body.notebook-laptop #viewport{position:fixed;top:var(--fold-bottom);bottom:0;left:0;right:0;padding:4px calc(4px + var(--notebook-rail-right)) 4px calc(4px + var(--notebook-rail-left))}
 #laptopTools{position:fixed;top:var(--notebook-toolbar-bottom);bottom:calc(100% - var(--fold-top));left:0;right:0;overflow:auto;overscroll-behavior:contain;padding:8px 12px;display:grid;grid-template-columns:minmax(300px,2fr) minmax(180px,1fr);gap:16px;background:var(--paper);text-align:left}
 #laptopTools .sheet-panel:first-child{grid-row:span 2;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px 12px;align-content:start}
 #laptopTools .sheet-panel:first-child>h3{margin:0;align-self:end}

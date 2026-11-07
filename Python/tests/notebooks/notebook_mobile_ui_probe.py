@@ -604,6 +604,18 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
             return bounds.right<=innerWidth-84 && [...document.querySelectorAll('#mobileSheet button')]
               .filter(b=>b.getClientRects().length).every(b=>b.getBoundingClientRect().right<=innerWidth-84)})()""")
         view.grab().save(str(output / 'overview-safe-rail.png'))
+        js("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))")
+        view.resize(951, 669)
+        wait(lambda: js("innerWidth===951"))
+        js("resetViewportZoom()")
+        for left, right in ((0, 84), (84, 0), (0, 0)):
+            assert js(f"window.notebookViewportInsets([{left},{right},0])")
+            wait(lambda: js(f"""(() => {{
+                const viewport = $('viewport'), page = $('paperWrap').getBoundingClientRect();
+                const usableLeft = viewport.getBoundingClientRect().left + {left};
+                const usableRight = usableLeft + viewport.clientWidth - {left} - {right};
+                return Math.abs(page.left - usableLeft) < 2 && Math.abs(page.right - usableRight) < 2;
+            }})()"""))
         (output / 'mobile-ui.json').write_text(json.dumps(dict(status='passed', sizes=reports, toolbar=toolbar_reports,
             brush=12, color=6, real_mouse_input=True, undo=True, redo=True,
             focus_mode=True, view_preserved=True, stable_canvas_origin=True, error_visible=True,

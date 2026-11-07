@@ -1,11 +1,12 @@
 $('grayscale').onchange = () => draw();
 let resizeFrame = null, viewportResizePending = false;
-new ResizeObserver(() => {
+function scheduleViewportResize() {
   if (resizeFrame !== null) return;
   resizeFrame = requestAnimationFrame(() => {
     resizeFrame = null;
     if (active === null) resize();
     else viewportResizePending = true
   })
-}).observe($('viewport'));
+}
+new ResizeObserver(scheduleViewportResize).observe($('viewport'));
 render();

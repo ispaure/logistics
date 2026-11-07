@@ -6,9 +6,14 @@ let defaultViewportZoom = true, viewportZoomMemory = null, resetViewportPosition
 function mobileViewport() {
   return document.body.classList.contains('notebook-mobile')
 }
+function viewportCenterX(viewport, box) {
+  const style = getComputedStyle(viewport);
+  return box.left + (viewport.clientWidth + parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)) / 2
+}
 function viewportLayoutKey() {
   const viewport = $('viewport');
-  return [viewport.clientWidth, viewport.clientHeight, innerWidth, innerHeight,
+  const style = getComputedStyle(viewport);
+  return [viewport.clientWidth, viewport.clientHeight, style.paddingLeft, style.paddingRight, innerWidth, innerHeight,
     document.body.classList.contains('notebook-laptop')].join(':')
 }
 function defaultViewportChoice() {
@@ -35,7 +40,7 @@ function rememberViewportZoom() {
   const viewport = $('viewport'), box = viewport.getBoundingClientRect(), rect = canvas.getBoundingClientRect();
   if (!rect.width || !rect.height) return;
   viewportZoomMemory = {layout: viewportLayoutKey(), scale: rect.width / state.width,
-    point: [(box.left + viewport.clientWidth / 2 - rect.left) / rect.width,
+    point: [(viewportCenterX(viewport, box) - rect.left) / rect.width,
       (box.top + viewport.clientHeight / 2 - rect.top) / rect.height]}
 }
 function captureViewportZoom() {
@@ -63,13 +68,13 @@ function prepareViewportZoom() {
 function finishViewportZoom(previous) {
   const viewport = $('viewport'), rect = canvas.getBoundingClientRect(), box = viewport.getBoundingClientRect();
   if (previous) {
-    viewport.scrollLeft += rect.left + previous.point[0] * rect.width - box.left - viewport.clientWidth / 2;
+    viewport.scrollLeft += rect.left + previous.point[0] * rect.width - viewportCenterX(viewport, box);
     viewport.scrollTop += rect.top + previous.point[1] * rect.height - box.top - viewport.clientHeight / 2
   } else if (resetViewportPosition) {
     // Center the canonical Move strip independently of existing ink and the
     // full native page which remains reachable by panning.
     const move = state.move_paper || {x: 291.5, width: 821};
-    viewport.scrollLeft += rect.left + (paperView === 'move' ? move.x + move.width / 2 : state.width / 2) * rect.width / state.width - box.left - viewport.clientWidth / 2;
+    viewport.scrollLeft += rect.left + (paperView === 'move' ? move.x + move.width / 2 : state.width / 2) * rect.width / state.width - viewportCenterX(viewport, box);
     viewport.scrollTop = 0
   }
   resetViewportPosition = false;
@@ -119,7 +124,7 @@ function setZoom(value, anchor = null, paperPoint = null) {
   const viewport = $('viewport'), box = viewport.getBoundingClientRect(), before = canvas.getBoundingClientRect();
   const zoomChanged = ['page', 'fit'].includes(value) ? value !== appliedZoom :
     Math.abs(Number(value) - before.width / state.width) > .0001;
-  const x = anchor?.x ?? box.left + viewport.clientWidth / 2,
+  const x = anchor?.x ?? viewportCenterX(viewport, box),
     y = anchor?.y ?? box.top + viewport.clientHeight / 2;
   const px = paperPoint?.[0] ?? Math.max(0, Math.min(1, (x - before.left) / before.width)),
     py = paperPoint?.[1] ?? Math.max(0, Math.min(1, (y - before.top) / before.height));
