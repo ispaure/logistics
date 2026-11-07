@@ -99,7 +99,7 @@ class ReaderExpansionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             nav.load(0, viewport=(1200, 800), mode='double')
         self.assertEqual(nav.visible, (0,))
-        self.assertEqual(adjacent_comic([('10','comic10.cbz'), ('2','comic2.cbz')], '2', 1), '10')
+        self.assertEqual(adjacent_comic([('10', 'comic10.cbz'), ('2', 'comic2.cbz')], '10', 1), '2')
         self.assertIsNone(adjacent_comic([('2', 'comic2.cbz')], '2', -1))
 
     def test_mobile_auto_follows_orientation_and_spread_navigation(self):
