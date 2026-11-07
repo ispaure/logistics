@@ -52,7 +52,7 @@ class MobileWorkflowTests(unittest.TestCase):
             entry = next(item for item in browser.entries if item.label == filename)
             app.loop.run_until_complete(browser.activate_entry(entry))
             self.assertEqual(app.native_host.state.destination, 'files')
-            owner = app.readers.active if filename.endswith('.cbz') else app.private_sessions.active
+            owner = app.private_sessions.active
             if filename.endswith('.md'):
                 owner.crypt_text.value = '# Unsaved browser draft'
             self.assertTrue(app.routes.back())
@@ -107,13 +107,13 @@ class MobileWorkflowTests(unittest.TestCase):
         browser = app.file_browser
         entry = next(item for item in browser.entries if item.label == 'Comic.cbz')
         app.loop.run_until_complete(browser.activate_entry(entry))
-        owner = app.readers.active
+        owner = app.private_sessions.active
         reader_panel = app.body
-        owner.show_reader_tools()
+        owner.show_private_tools()
         self.assertIsNot(app.body, reader_panel)
         self.assertTrue(app.routes.back())
         self.assertIs(app.body, reader_panel)
-        self.assertIn(owner.library_view, app.body.children)
+        self.assertIn(owner.crypt_view, app.body.children)
         self.assertTrue(app.routes.back())
         self.assertIs(app.body, folder_panel)
         self.assertFalse(hasattr(app, 'book_reader'))
@@ -228,9 +228,10 @@ class MobileWorkflowTests(unittest.TestCase):
                 await tap('Plain.txt')
                 self.assertEqual(app.private_sessions.active.crypt_text.value, 'A plain local text file')
                 await tap('Comic.cbz')
-                self.assertEqual(app.reader_manager().active.book_reader.pages, ['page2.webp', 'page10.webp'])
-                await app.next_book_page()
-                self.assertEqual(app.reader_manager().active.book_record['position'], 1)
+                comic_owner = app.private_sessions.active
+                self.assertEqual(comic_owner.crypt_reader.pages, ['page2.webp', 'page10.webp'])
+                await comic_owner.next_private_page()
+                self.assertEqual(comic_owner.crypt_page.value, comic_owner.crypt_reader.labels[1])
                 await tap('Notes.md')
                 self.assertIs(app.private_sessions.active, text_owner)
                 self.assertEqual(text_owner.crypt_text.value, '# Draft while pulling')

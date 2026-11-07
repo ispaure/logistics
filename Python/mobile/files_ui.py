@@ -208,7 +208,8 @@ class FilesUI:
         self.file_browser.on_item_actions = lambda row: self.file_browser.show_item_menu(self.file_item_commands())
         self.file_browser.navigation_controls.remove(self.file_browser.back_button)
         self.file_password = PasswordInput(placeholder='Inner archive password, when needed', style=Pack(height=48))
-        self.file_name = toga.TextInput(placeholder='New name / folder name', style=Pack(height=48))
+        from .filename_input import FilenameInput
+        self.file_name = FilenameInput(placeholder='New name / folder name', style=Pack(height=48))
         self.file_destination = toga.Selection(items=list(self.file_roots), style=Pack(height=48))
         self.file_target = toga.TextInput(placeholder='Destination path including name', style=Pack(height=48))
         (collection_path(self.private_root)).mkdir(exist_ok=True)
@@ -259,6 +260,8 @@ class FilesUI:
             self.file_browser.location_bar,
             self.file_browser.scroll_container()],
             style=Pack(direction=COLUMN, margin=12, flex=1))
+        from .scroll_edges import fill_bottom
+        fill_bottom(self.files_view, self.file_browser.native_list, self.file_browser._tile_scroll)
         self.files_view._folder_entry_location = location or (self.local_browser_root(), '')
 
     def refresh_file_source_tabs(self):
@@ -325,9 +328,9 @@ class FilesUI:
         box.add(toga.Label(title, style=Pack(font_size=20, margin_bottom=12)))
         if operation in ('new', 'rename'):
             if operation == 'rename' and selected:
-                self.file_name.value = selected['name']
+                self.file_name.set_filename(selected['name'], directory=selected['directory'])
             else:
-                self.file_name.value = ''
+                self.file_name.set_filename('', directory=True)
             self.file_name.placeholder = 'Folder name' if operation == 'new' else 'New name'
             box.add(self.file_name)
             box.add(self.file_commands[3 if operation == 'new' else 4])

@@ -16,7 +16,13 @@ def rect(width=669, height=951, x=0, y=0):
 class BandGeometryTests(unittest.TestCase):
     def test_actual_inner_portrait_moves_controls_into_free_column_with_safe_page_clearance(self):
         value = band.free_top_band(((535, 0, 134, 82),), 669, 82, 5 * 48 + 44 + 32)
-        self.assertEqual(value, dict(left=0, right=535, width=669, row_height=60, reserve=90))
+        self.assertEqual(value, dict(left=0, right=535, width=669, row_height=60, row_top=11, reserve=90))
+
+    def test_lowered_controls_still_avoid_expanded_activity_and_restore(self):
+        regions = ((535, 0, 134, 82), (200, 64, 469, 30))
+        self.assertIsNone(band.free_top_band(regions, 669, 82, 316))
+        normal = band.free_top_band(regions[:1], 669, 82, 316)
+        self.assertEqual(normal['row_top'] + normal['row_height'] / 2, 82 / 2)
 
     def test_missing_full_width_centered_short_or_too_narrow_keeps_existing_chrome(self):
         for regions, width, top, minimum in (((),669,82,316),
@@ -93,6 +99,7 @@ class NativeBandOwnershipTests(unittest.TestCase):
         self.assertEqual([child for child in row.children if child in self.buttons], self.buttons)
         self.assertEqual(state['header'].style.height,90)
         self.assertEqual(row.style.margin_right,142)
+        self.assertEqual(row.style.margin_top,17)
         self.assertTrue(self.navigation.hidden)
         self.assertIsNone(self.view._native_reader_toolbar.parent)
         self.place.assert_called_once_with(row,self.view._document_title_view,'On-device')
@@ -217,7 +224,7 @@ class NotebookClearanceTests(unittest.TestCase):
         regions=((535,0,134,82),)
         geometry=band.free_top_band(regions,669,82,316)
         value=band.notebook_geometry(geometry,regions,(48,256))
-        self.assertEqual(value['reserve'],60)
+        self.assertEqual(value['reserve'],71)
         self.assertGreaterEqual(value['reserve']+value['content_clearance'],geometry['reserve'])
         detached=regions+((535,100,134,30),)
         full=band.free_top_band(detached,669,82,316)
@@ -245,7 +252,7 @@ class NotebookNativeProjectionTests(NativeBandOwnershipTests):
         self.assertEqual(first['header'].style.height,90)
         self.view._notebook_dom_ready=token
         band.project(self.app,self.view,'documents',self.controller)
-        self.assertEqual(self.view._reader_top_band_state['header'].style.height,60)
+        self.assertEqual(self.view._reader_top_band_state['header'].style.height,71)
         self.assertEqual(self.view._reader_top_band_state['buttons'],self.buttons)
         band.restore(self.view)
         self.assertIsNone(self.view._notebook_dom_ready)

@@ -92,6 +92,7 @@ class ControlIconTests(unittest.TestCase):
                 started.set()
                 await release.wait()
             header = ComicHeader(toga.Button('More'), following=next_comic)
+            header.sync(False, True)
             pending = header.following.on_press()
             await started.wait()
             try:

@@ -377,7 +377,8 @@ class TransferFeedbackTests(TestCase):
         folder = app.private_root / 'LocalFiles'
         folder.mkdir(exist_ok=True)
         _, comic = make_books(folder)
-        app.loop.run_until_complete(app.open_download(path=comic))
+        from mobile_build.tests.support.readers import open_legacy_import
+        app.loop.run_until_complete(open_legacy_import(app, comic))
         reader = app.readers.active
         app.transfer_busy = True
         app.set_cloud_busy(True)

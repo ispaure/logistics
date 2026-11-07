@@ -464,7 +464,11 @@ class EditorPicker:
             if self.creation_type is not None:
                 width = (self.name_panel.style.width if paired else
                          self.app.adaptive.content_width(self.app.native_host.state.destination, margin=0))
-                self.creation_formats.fit(compact, visible_height - 120, width)
+                # UIKit location selections also present a keyboard inputView.
+                # Only collapse formats for text entry, not location browsing;
+                # retain the naming-session flag across transient focus loss.
+                format_keyboard = compact and (not apple or self._naming_keyboard_active)
+                self.creation_formats.fit(format_keyboard, visible_height - 120, width)
             # Creation's UIKit completion lives in its native navigation bar.
             # Other picker forms retain their existing short-viewport layout.
             tight = (compact and not paired and visible_height < 220
@@ -538,10 +542,9 @@ class EditorPicker:
         return save_filename(self.save_as_name.value, self.operation.filename, extensions=self.picker_extensions())
 
     def change_creation_type(self, widget=None, **kwargs):
-        from .document_choices import change_creation_suffix
         extension = dict(self.creation_choices)[self.creation_type.value]
         self.operation.filename = 'Untitled.' + extension
-        self.save_as_name.value = change_creation_suffix(self.save_as_name.value, extension)
+        self.save_as_name.set_extension('.' + extension)
         self.creation_formats.update()
         self.sync_notebook_templates()
         self.update_effective_name()

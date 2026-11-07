@@ -312,7 +312,8 @@ class DocumentCreationTests(unittest.TestCase):
         self.assertIn(name, picker.name_view.children)
         self.assertNotIn(picker.save_as_storage, picker.name_panel.children)
         self.assertIs(picker.name_form.content, picker.name_view)
-        self.assertEqual(name.value, 'Keep my name')
+        self.assertEqual(name.value, 'Keep my name.rmdoc')
+        self.assertEqual(name._impl.get_value(), 'Keep my name')
         picker.fit_keyboard(False)
         self.assertIn(picker.creation_formats.tabs, picker.name_content.children)
         self.assertEqual(picker.editor_picker_location, location)
@@ -366,6 +367,34 @@ class DocumentCreationTests(unittest.TestCase):
         self.assertTrue(all(not button.enabled for button in formats.buttons.values()))
         picker._finish_work(work)
         self.assertTrue(formats.change.enabled)
+
+    def test_ios_location_dropdown_preserves_format_cards(self):
+        from types import SimpleNamespace
+        with patch.object(self.app.adaptive, 'content_width', return_value=810):
+            _, picker = self.choose('Dropdown')
+        picker.creation_type.value = 'Markdown (.md)'
+        storage = SimpleNamespace(isFirstResponder=True)
+        name = SimpleNamespace(isFirstResponder=False)
+        with patch.object(type(self.app._impl), '__module__', 'toga_iOS.app'), \
+                patch.object(picker.save_as_storage._impl, 'native', storage, create=True), \
+                patch.object(picker.save_as_name._impl, 'native', name, create=True), \
+                patch.object(self.app.native_host, 'adapter', SimpleNamespace(keyboard_inset=350)):
+            picker.fit_keyboard(True)
+            self.assertFalse(picker.creation_formats.compact)
+            self.assertIn(picker.creation_formats.cards, picker.name_view.children)
+            self.assertIsNone(picker.creation_formats.row.parent)
+            self.assertEqual(picker.destination_filename(), 'Dropdown.md')
+            storage.isFirstResponder = False
+            name.isFirstResponder = True
+            picker.fit_keyboard(True)
+            self.assertTrue(picker.creation_formats.compact)
+            name.isFirstResponder = False
+            picker.fit_keyboard(True)
+            self.assertTrue(picker.creation_formats.compact)
+            storage.isFirstResponder = True
+            picker.fit_keyboard(True)
+            self.assertFalse(picker.creation_formats.compact)
+            self.assertEqual(picker.destination_filename(), 'Dropdown.md')
 
     def test_phone_tabs_switch_format_without_dismissing_keyboard_or_moving_name(self):
         narrow = patch.object(self.app.adaptive, 'content_width', return_value=390)
@@ -472,7 +501,7 @@ class DocumentCreationTests(unittest.TestCase):
         self.assertEqual(picker.effective_name.text, 'Save as: Sketch.rmdoc')
         self.assertIn('Existing.rmdoc', [row['name'] for row in picker.editor_picker_rows.values()])
         self.assertIn('Text.txt', [row['name'] for row in picker.editor_picker_rows.values()])
-        picker.save_as_name.value = 'Invalid.txt'
+        picker.save_as_name.value = 'Invalid/name'
         self.app.loop.run_until_complete(picker.confirm_editor_file())
         self.assertIn('Creation failed:', picker.save_as_status.value)
         self.assertIsInstance(picker.save_as_status.label, __import__('toga').Label)

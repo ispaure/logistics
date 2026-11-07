@@ -78,12 +78,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             self._book_idle.set()
         header = getattr(self, 'comic_header', None)
         if header is not None:
-            from features.comics.mobile.navigation import adjacent_comic
-            records = [(record['id'], record['name']) for record in getattr(self, 'imported_records', ())
-                       if record['kind'] == 'comic']
-            key = self.session.resource
-            header.sync(not busy and adjacent_comic(records, key, -1) is not None,
-                        not busy and adjacent_comic(records, key, 1) is not None)
+            self.comic_controller().sync_comic_neighbors()
         for button in getattr(self, 'library_row_buttons', ()):
             button.enabled = not busy
         if hasattr(self, 'library_folder_list'):

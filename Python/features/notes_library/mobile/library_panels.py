@@ -587,7 +587,8 @@ class LibraryPanels:
     def copy_entry_form(self, path, *, return_side=None):
         from services.documents.mutations import copy_path
         default = posixpath.relpath(copy_path(path, directory=self.library.provider.entry(path)['directory']), self.root or '.')
-        name = toga.TextInput(value=default, style=Pack(height=48))
+        from mobile.filename_input import FilenameInput
+        name = FilenameInput(value=default, directory=self.library.provider.entry(path)['directory'], style=Pack(height=48))
         status = toga.Label('Copy beside the source, or choose another path. Existing files are kept.')
         button = toga.Button('Copy', style=Pack(height=48))
         async def submit(widget=None, **kw):

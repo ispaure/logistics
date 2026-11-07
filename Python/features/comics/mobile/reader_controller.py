@@ -13,6 +13,8 @@ class ComicController:
         "comic_viewport",
         "move_comic",
         "adjacent_book_comic",
+        "refresh_comic_neighbors",
+        "sync_comic_neighbors",
         "previous_comic_file",
         "next_comic_file",
         "watch_comic_layout",
@@ -47,6 +49,45 @@ class ComicController:
 
     def __init__(self, owner):
         self.app = owner
+        self.file_neighbors = (False, False)
+
+    def file_entries(self):
+        """Local imports keep their source folder; cached UUIDs are not siblings."""
+        from mobile.document_sources import folder_location
+        from .navigation import folder_comics
+        from commonUtils.runtime.resources.local import LocalFiles
+        location = folder_location(self.app.app, self.app.session, self.app)
+        if not location or location.get('cached') or 'path' not in location:
+            return None, []
+        path = location['path']
+        rows = LocalFiles(path.parent).list('')
+        return path, folder_comics(rows, path.name)
+
+    def sync_comic_neighbors(self):
+        header = getattr(self.app, 'comic_header', None)
+        if header is not None:
+            header.sync(*(available and not self.book_busy for available in self.file_neighbors))
+
+    async def refresh_comic_neighbors(self):
+        from .navigation import adjacent_comic
+        record = self.book_record
+        self.file_neighbors = (False, False)
+        self.sync_comic_neighbors()
+        if record is None or record['kind'] != 'comic':
+            return None, []
+        token = self.app.workspace.token(self.app.session.id)
+        try:
+            path, entries = await asyncio.to_thread(self.file_entries)
+        except (OSError, ValueError):
+            return None, []
+        if (not self.active_host or self.book_record is None or self.book_record['id'] != record['id']
+                or not self.app.workspace.accepts(token) or self.manager.active is not self.app):
+            return None, []
+        if path is not None:
+            self.file_neighbors = tuple(adjacent_comic(entries, path.name, direction) is not None
+                                        for direction in (-1, 1))
+        self.sync_comic_neighbors()
+        return path, entries
 
     def comic_seam(self):
         return self.format_services.seam(self.book_content)
@@ -117,26 +158,21 @@ class ComicController:
             return
         from features.comics.mobile.navigation import adjacent_comic
 
-        key = self.book_record["id"]
-        records, _ = await asyncio.to_thread(self.library_store.items)
-        if (
-            not self.active_host
-            or self.manager.active is not self.app
-            or self.book_record is None
-            or self.book_record["id"] != key
-        ):
+        path, entries = await self.refresh_comic_neighbors()
+        if path is None:
             return
-        target = adjacent_comic(
-            [(r["id"], r["name"]) for r in records if r["kind"] == "comic"],
-            self.book_record["id"],
-            direction,
-        )
+        target = adjacent_comic(entries, path.name, direction)
         if target is not None:
+            from mobile.document_imports import open_local_document
             immersive = self.reader_immersive
-            if await self.manager.open(
-                target, destination=self.presentation_destination
-            ):
-                self.manager.active.set_reading_mode(immersive)
+            target_path = path.parent / target
+            opened = await open_local_document(self.app.app, target_path,
+                                               destination=self.presentation_destination)
+            if opened:
+                owner = self.app.app.private_sessions.active
+                if owner.crypt_immersive != immersive:
+                    owner.toggle_private_reading_mode()
+                self.manager.close(self.app.session.id)
 
     async def previous_comic_file(self, widget=None, **kwargs):
         await self.adjacent_book_comic(-1)

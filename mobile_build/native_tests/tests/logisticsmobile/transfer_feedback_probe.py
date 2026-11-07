@@ -43,7 +43,9 @@ class TransferFeedbackProbe(LogisticsMobile):
             folder = self.private_root / 'LocalFiles'
             folder.mkdir(exist_ok=True)
             _, comic = make_books(folder)
-            await self.open_download(path=comic)
+            from commonUtils.runtime.resources.documents import LocalDocuments
+            imported = self.reader_manager().catalog.library_store.import_book(LocalDocuments(), comic)
+            assert await self.open_book(imported['id'])
             reader = self.readers.active
             reader.set_reading_mode(False)
             self.transfer_busy = True

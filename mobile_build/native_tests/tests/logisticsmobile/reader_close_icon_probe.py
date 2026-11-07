@@ -54,9 +54,20 @@ class ReaderCloseIconProbe(LogisticsMobile):
         else:
             assert self.native_host.adapter.tabs_hidden()
             nav = self.native_host.adapter.navigation[self.native_host.destinations.index(self.native_host.state.destination)]
-            assert nav.topViewController.navigationItem.hidesBackButton
-            assert nav.topViewController.navigationItem.leadingItemGroups[0].barButtonItems[0] == button._native_reader_close_item
-            assert button._native_reader_close_item.accessibilityLabel == 'Close document'
+            band = getattr(view, '_reader_top_band_state', None)
+            if band is not None:
+                assert button._impl.native.configuration is not None
+                row = band['header'].children[0]
+                assert row.style.margin_top == band['geometry']['row_top'] + 6
+                for action in band['buttons']:
+                    if getattr(action, 'control_icon', '') == 'more':
+                        assert action._impl.native.configuration is not None
+                    if getattr(action, '_toolbar_borderless', False):
+                        assert action._impl.native.configuration is None
+            else:
+                assert nav.topViewController.navigationItem.hidesBackButton
+                assert nav.topViewController.navigationItem.leadingItemGroups[0].barButtonItems[0] == button._native_reader_close_item
+                assert button._native_reader_close_item.accessibilityLabel == 'Close document'
             assert button._impl.native.accessibilityLabel == 'Close document'
             assert button._impl.native.imageForState(0) is not None
         return button
@@ -141,10 +152,11 @@ class ReaderCloseIconProbe(LogisticsMobile):
             fixtures.mkdir(exist_ok=True)
             _, comic = make_books(fixtures)
             assert await self.open_download(path=comic)
-            owner = self.readers.active
-            owner.set_reading_mode(False)
+            owner = self.private_sessions.active
+            if owner.crypt_immersive:
+                owner.toggle_private_reading_mode()
             await asyncio.sleep(1)
-            button = self.assert_close(owner.library_view)
+            button = self.assert_close(owner.crypt_view)
             await self.capture_stage('comic')
             await self.press(button)
             assert owner.session.id not in self.workspace.sessions

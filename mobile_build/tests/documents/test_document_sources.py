@@ -224,8 +224,9 @@ class ReopenSourceTests(IsolatedAsyncioTestCase):
 
     async def test_local_pdf_reopens_from_original_path(self):
         with TemporaryDirectory() as directory:
-            app = SimpleNamespace(require_document_feature=Mock(return_value=True), open_download=AsyncMock(return_value=True))
+            app = SimpleNamespace(require_document_feature=Mock(return_value=True), open_crypt=AsyncMock(return_value=True))
             path = Path(directory) / 'report.pdf'
             path.write_bytes(b'%PDF-1.4')
             self.assertTrue(await reopen_file(app, dict(type='local', path=str(path))))
-            app.open_download.assert_awaited_once_with(path=path, destination=None)
+            self.assertEqual(app.open_crypt.await_args.kwargs['copies'].provider.root, path.parent)
+            self.assertEqual(app.open_crypt.await_args.kwargs['key'], path.name)

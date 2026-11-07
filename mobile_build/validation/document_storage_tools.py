@@ -643,7 +643,7 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
                     (directory / (name + '.png')).write_bytes(screen)
                     emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'rm', 'cache/header-capture.json')
                     emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'touch', 'cache/header-capture-done')
-            if tablet or (device is None and entry_point.endswith(('.document_creation_probe', '.documentation_header_probe', '.android_header_probe', '.lockscreen_probe', '.chat_settings_probe', '.notes_search_probe', '.chat_notes_feedback_probe'))):
+            if tablet or (device is None and entry_point.endswith(('.workspace_edges_probe', '.document_creation_probe', '.documentation_header_probe', '.android_header_probe', '.lockscreen_probe', '.chat_settings_probe', '.notes_search_probe', '.chat_notes_feedback_probe'))):
                 result = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                     'cat', 'cache/creation-orientation'], env=env, capture_output=True, timeout=15)
                 pose = result.stdout.strip()
@@ -843,7 +843,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('mobile-feedback', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('workspace-edges', 'mobile-feedback', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--retain-build', action='store_true', help='Pin this managed QA build for reruns; caller must remove the pin and workspace afterward.')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
@@ -902,6 +902,9 @@ def main():
         creation_profile = dict(bundle='io.github.ispaure.logisticscreationqa',
             entry_point='tests.logisticsmobile.document_creation_probe',
             result_name='document-creation-evidence/result.json') if args.probe == 'creation' else {}
+        if args.probe == 'workspace-edges':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.workspace_edges_probe', result_name='workspace-edges-result.json')
         if args.probe == 'android-header':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.android_header_probe', result_name='android-header-result.json')

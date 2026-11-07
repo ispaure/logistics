@@ -118,10 +118,12 @@ class WorkspacesScreen:
         self.folder_source_tabs.style.margin_bottom = 0
         self.app._files_status_row = toga.Box(children=[self.folder_source_tabs],
             style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12))
+        scroll = folder_scroll(self.folder_list)
         box = toga.Box(children=[self.app._files_status_row, self.folder_local_header, self.folder_picker_header, self.folder_source_actions,
-            self.folder_loading_box,
-            folder_scroll(self.folder_list), self.app.incoming_notice],
+            self.folder_loading_box, self.app.incoming_notice, scroll],
             style=Pack(direction=COLUMN, margin=(8, 16, 12, 16), flex=1))
+        from .scroll_edges import fill_bottom
+        fill_bottom(box, scroll)
         self.update_folder_list(choices)
         host = self.app
         self.register_transfer_status(box, visible_when=lambda: host.folder_source == 'rclone'

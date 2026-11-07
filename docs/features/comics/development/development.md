@@ -125,7 +125,8 @@ archives are written. Individual publication/conflict policy stays with storage.
 
 ## Reader and catalog contracts
 
-Readers sort pages and sibling comics naturally and load without extraction.
+Readers sort archive pages naturally and load without extraction. Mobile sibling
+comic files use case-insensitive alphabetical filename order.
 `pages.natural_key` retains its tagged key contract and delegates filename parsing
 to commonUtils search rules. Decimal runs sort numerically; superscript and
 circled numerals remain text without preventing archive enumeration.
@@ -481,7 +482,10 @@ for failure boundaries and focused/native verification.
 ## Adjacent-volume provider navigation
 
 Mobile folder-backed LocalCrypt and read-only cloud readers list neighboring
-CBZ/ZIP files in the current folder and use natural filename order. Navigation
+CBZ/ZIP files in the current folder and use case-insensitive alphabetical filename
+order. Ordinary local opens also use provider readers directly, without importing
+the source into UUID storage. Legacy imports resolve siblings through their
+original source folder and transition to the direct reader on a successful switch. Navigation
 requires folder-listing access independently of metadata write permission. A
 successful switch retires the outgoing provider session after the new comic is
 published, preserving its session-owned reading position without accumulating
@@ -492,7 +496,7 @@ existing slot and memory limits.
 Provider adapters pass the complete relative document path to `PrivateReader`;
 the display filename remains separate. This applies to archive/page access,
 ComicInfo, EPUB and PDF sources in nested folders. The regression checks in
-`mobile_build/tests/reading/test_comic_file_navigation.py` traverse six naturally
+`mobile_build/tests/reading/test_comic_file_navigation.py` traverse six alphabetically
 ordered volumes forward and backward for LocalCrypt and cloud, including ZIP,
 fullscreen mode, position restoration and corrupt-target recovery. Storage opening checks also
 exercise nested LocalCrypt paths for each supported book format. These are

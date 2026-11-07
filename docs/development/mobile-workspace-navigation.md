@@ -152,6 +152,20 @@ paths; unrelated missing paths keep their original identity.
 
 ## Content geometry across themes
 
+Workspaces trees and local/cloud browser lists fill the bottom of their allocated
+pane on iOS and Android. `scroll_edges.py` keeps final-row clearance inside the
+scrolling content instead of shortening its viewport. iOS transfers the measured
+safe-area and floating-bar clearance into content/scroll-indicator insets;
+Android retains the navigation host's system-bar allocation and uses internal
+list padding. Incoming-file notices appear above the tree. The retained iOS
+sidebar uses the same policy when it moves into its native column wrapper.
+`test_scroll_edges.py` covers rotation and repeated clearance updates;
+`workspace_edges_probe.py` measures native viewport bottoms and final-row access.
+On November 6, 2026, the focused native probe passed on iPhone, iPad, closed/open/
+partially folded Duo simulators and Android phone/tablet emulators, including
+portrait/landscape round trips. Every measured viewport ended at its allocated
+pane bottom; the disposable QA apps and devices were removed afterward.
+
 `appearance._set_android_background` preserves native view padding whenever a
 surface, high-contrast outline or original button background is installed.
 Drawables can otherwise overwrite the control's content insets. Icon-and-title
@@ -448,7 +462,9 @@ including iOS shared Documents and notebook validation followed by retry.
 New Document enters its retained naming form directly; there is no preceding
 format alert. `creation_layout.CreationFormats` presents enabled formats as
 described native buttons on wide layouts and collapses them to a selected-format/Change row
-when the remaining keyboard viewport is too small. Compact layouts instead pin
+when the remaining text-entry keyboard viewport is too small. On iOS, opening
+the location dropdown preserves the format cards even though UIKit presents
+that selector as a keyboard input view. Compact layouts instead pin
 Text, Markdown and reMarkable Notebook tabs above the name form, retaining the
 keyboard and focus when the selected format changes. Width/fold reflow switches
 between tabs and cards without replacing the selected format. Android tab labels
@@ -1879,3 +1895,25 @@ The activity gate requires measured growth and contraction at unchanged window
 dimensions. Native collision checks intersect actual clipping ancestors: UIKit
 retains offscreen tab views when its bar collapses to a destination selector.
 Raw frames and hit-test results remain in the local report for review.
+
+
+## Direct local readers and legacy import cleanup
+
+`mobile.document_imports.open_local_document` delegates ordinary local files to
+`services.documents.mobile_storage.open_provider_document`. Text, Markdown, EPUB,
+comics and PDFs retain the original LocalFiles provider; file opening does not
+create a Library or managed-text import. Explicit legacy imports remain readable.
+
+Reset → Clear cached documents uses `mobile.cached_documents` and the existing
+saved-files screen. The old import index identifies managed-text candidates;
+hashed source references are resolved only within owned local source roots.
+Deletion requires identical source bytes, and checks durable and live edits again
+after confirmation. Missing originals, unique saved changes, recovery drafts and
+standalone documents are retained. Book/comic imports lose their associated
+positions/bookmarks only when their verified duplicate is cleared.
+
+Focused host checks cover cold local/shared-local opens, unopened sibling comics,
+text saves to the original, draft retention, verified cleanup and status-band
+fallback. Native acceptance must also check round Close/More controls, borderless
+disabled file arrows, open-portrait Duo with expanding system activity, rotation,
+and direct-source metadata saves. Host checks do not certify native appearance.

@@ -22,11 +22,11 @@ for imports, limits and current validation status.
 
 ## Native mobile library
 
-To inspect retained imports, open **Settings → Books & Comics → Saved books &
-comics…**. The page shows the file count, total archive/reading-record size and
-per-import sizes, including closed imports. **Delete local copy…** removes the
-import and its reading records after confirmation, leaving its original source
-unchanged. Closing a comic in Open documents only closes the reader. Imported
+To inspect retained imports, open **Settings → Reset → Clear cached documents**. The page shows the file count, total archive/reading-record size and
+per-import sizes, including closed imports. **Clear redundant copies…** removes verified duplicates and their reading records
+after confirmation. Originals, editing drafts, changed copies and imports without
+a verified original are kept. Local comics now open directly from their source
+folder; opening one does not create a private import. Closing a comic in Open documents only closes the reader. Imported
 copies are private app data on iOS and do not appear in Files.
 
 On iOS and Android, **Books & Comics** lists library folders configured by
@@ -103,8 +103,9 @@ reading direction (reversed for manga). If a previous volume is available, the
 hint also offers it: repeat the boundary swipe within 2.5 seconds to open it.
 At the end, the first forward boundary swipe offers the next volume; repeat
 within 2.5 seconds to open it. Without an adjacent volume the hint says so and
-keeps the current comic open. Folder-backed readers choose naturally ordered
-CBZ/ZIP files in the current folder; imports use the imported library's order.
+keeps the current comic open. Folder-backed readers choose CBZ/ZIP files alphabetically by filename in the
+current folder (case-insensitive, so Volume 10 precedes Volume 2). Legacy imported
+readers use their original folder when it is available.
 Hints appear on the internal screen only and clear on navigation or privacy cover.
 
 Previous/Next and swipes advance past the displayed spread, or through each half
@@ -134,9 +135,12 @@ cleanup reloads at the current page with fullscreen preserved. If reloading fail
 reading controls return with the error so you can navigate or close the comic.
 
 Imported reader menus include First/Last page and Previous/Next comic. The page
-selector also supports direct jumps. Neighboring imported comics use natural
-filename order. Provider Previous/Next comic works within the current managed
-folder; standalone encrypted-copy UUID storage has no sibling-folder route.
+selector also supports direct jumps. The top previous/next-file arrows stay visible and grey out at the folder
+boundaries; they are separate from page navigation in the footer. On iOS they
+blend into the header, while Close and More use native round glass controls.
+The Duo header centres in the system status band and still moves back to native
+navigation when Dynamic Island activity leaves too little room. Standalone
+imports without an available source folder have no sibling-folder route.
 
 Ordinary imported comics now have **Edit metadata…**. In the catalogue, select
 imported comic rows and choose **Edit selected comics metadata…** for a batch.
