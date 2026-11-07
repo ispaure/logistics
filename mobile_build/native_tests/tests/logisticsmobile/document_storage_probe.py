@@ -299,9 +299,9 @@ class DocumentStorageProbe(LogisticsMobile):
             self.cloud_crypt_remotes = {remote}
             await asyncio.sleep(.3)
             await self.verify_formats(remote, fixture, report)
-            for location in ('Local', 'LocalCrypt: ' + remote):
+            for location in ('Local', remote + ' - Encrypted Copy'):
                 await self.verify_notebook_deletion(location, report)
-            for location in ('Local', 'LocalCrypt: ' + remote):
+            for location in ('Local', remote + ' - Encrypted Copy'):
                 panel = await self.create_notebook(location, 'Storage acceptance')
                 if location.startswith('LocalCrypt'):
                     assert panel.web.private_configured
