@@ -94,6 +94,22 @@ class ReaderProbe(LogisticsMobile):
         assert installed, f'Trusted reader bridge not installed; base={base!r}'
         await self.settled(owner)
 
+    async def return_from_epub_settings(self, owner, *, native_back=False):
+        origin = owner.presentation_destination
+        assert self.native_host.state.destination == 'settings'
+        assert self.routes.screens['settings'][-1][0] == 'epub-settings'
+        if native_back and self.routes.apple:
+            navigation = self.native_host.adapter.navigation_for('settings')
+            navigation.popViewControllerAnimated(True)
+        else:
+            assert self.routes.back()
+        await self.until(lambda: self.native_host.state.destination == origin
+                         and self.visible_reader() == owner.session.id)
+        await self.until(lambda: not getattr(owner, '_epub_return_pending', False))
+        task = getattr(owner, '_epub_resume_task', None)
+        if task is not None:
+            await task
+
     async def rotate(self, landscape):
         from .rotation_checks import rotate
         await rotate(self, 'landscape-left' if landscape else 'portrait', settle=PROBE_ROTATION_SETTLE)
@@ -222,18 +238,25 @@ class ReaderProbe(LogisticsMobile):
                 await self.settled(owner)
                 cases.append('unicode_search_highlight')
                 expected = owner.epub_offset
-                owner.show_reader_appearance()
-                owner.reader_font.value, owner.reader_margin.value = '20', '24'
-                await owner.apply_reader_appearance()
+                assert owner.show_reader_appearance()
+                await self.return_from_epub_settings(owner, native_back=True)
+                await self.ready(owner)
+                assert owner.epub_offset == expected
+                assert owner.show_reader_appearance()
+                controls = self.routes.body('settings').children[-1].content.epub_controls
+                controls['epub_font_size'].value = '20'
+                controls['reading_margin'].value = '24'
+                await self.return_from_epub_settings(owner, native_back=True)
                 await self.ready(owner)
                 assert owner.epub_offset == expected, (expected, owner.epub_offset)
                 cases.append('appearance_preserves_anchor')
-                owner.show_reader_appearance()
-                owner.reader_appearance.family_choice.value = 'serif'
-                owner.reader_appearance.spacing_choice.value = '200'
-                owner.reader_appearance.width_choice.value = '480'
-                owner.reader_theme.value = 'sepia'
-                await owner.apply_reader_appearance()
+                assert owner.show_reader_appearance()
+                controls = self.routes.body('settings').children[-1].content.epub_controls
+                controls['reading_font'].value = 'serif'
+                controls['line_spacing'].value = 200
+                controls['reading_width'].value = 480
+                controls['reading_theme'].value = 'sepia'
+                await self.return_from_epub_settings(owner, native_back=True)
                 await self.ready(owner)
                 assert owner.epub_offset == expected
                 metrics = await owner.epub_view.evaluate_javascript('JSON.stringify([getComputedStyle(document.body).fontFamily,getComputedStyle(document.body).lineHeight,getComputedStyle(document.body).maxWidth,getComputedStyle(document.body).backgroundColor])')
@@ -341,9 +364,10 @@ class ReaderProbe(LogisticsMobile):
                 await asyncio.sleep(.4)
                 assert panel.offset > 0
                 expected_private = panel.offset
-                private_owner.show_provider_layout()
-                private_owner.provider_font.value = '24'
-                await private_owner.apply_provider_layout()
+                assert private_owner.show_provider_layout()
+                assert private_owner.provider_epub_view is panel
+                self.routes.body('settings').children[-1].content.font_choice.value = '24'
+                await self.return_from_epub_settings(private_owner, native_back=True)
                 panel = private_owner.provider_epub_view
                 await self.until(lambda: panel.webview._chapter_bridge.ready)
                 await asyncio.sleep(.6)

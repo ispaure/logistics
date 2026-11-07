@@ -148,7 +148,7 @@ class ReaderFormatTests(unittest.TestCase):
                 else:
                     self.assertIn('Read aloud…', menu)
                     self.assertIn('bookmark', tools_text)
-                    self.assertIn('reading font size', form)
+                    self.assertIn('epub font size', form)
                     self.assertNotIn('comic page layout', form)
                     self.assertNotIn('Fit comic page', menu)
                     self.assertNotIn('Previous comic', menu)
@@ -160,7 +160,11 @@ class ReaderFormatTests(unittest.TestCase):
                     await app.open_book(record['id'])
                     owner = app.readers.active
                     owner.show_reader_appearance()
-                    check(owner.reader_actions.actions, owner.reader_tools_view, owner.reader_appearance, kind == 'comic')
+                    appearance = (owner.reader_appearance if kind == 'comic'
+                                  else app.routes.body('settings').children[-1])
+                    check(owner.reader_actions.actions, owner.reader_tools_view, appearance, kind == 'comic')
+                    if kind == 'epub':
+                        self.assertTrue(app.routes.back())
                     if kind == 'comic':
                         comic_menu = [title for title, _ in owner.reader_actions.actions]
                         with patch.object(app.main_window, 'dialog', new=AsyncMock()) as dialog, \
@@ -186,8 +190,11 @@ class ReaderFormatTests(unittest.TestCase):
                             self.assertTrue(await app.open_crypt(copies=app.crypt_copies, key=record['id']))
                         provider = app.private_sessions.active
                         provider.show_provider_layout()
-                        check(provider.crypt_actions_menu.actions, provider.crypt_tools_view,
-                              provider.provider_appearance, kind == 'comic')
+                        appearance = (provider.provider_appearance if kind == 'comic'
+                                      else app.routes.body('settings').children[-1])
+                        check(provider.crypt_actions_menu.actions, provider.crypt_tools_view, appearance, kind == 'comic')
+                        if kind == 'epub':
+                            self.assertTrue(app.routes.back())
                         if kind == 'comic':
                             with patch.object(app.main_window, 'dialog', new=AsyncMock()) as dialog, \
                                     patch('mobile.provider_ui.toga.InfoDialog') as info, \

@@ -316,7 +316,7 @@ class ComicSplitTests(unittest.TestCase):
             prefs = Preferences(Path(directory))
             self.assertEqual(prefs.values['comic_layout'], 'single')
             self.assertEqual(prefs.values['comic_split_wide'], 'true')
-            form = ReaderAppearance(prefs.values, lambda widget: None, kind='comic')
+            form = ReaderAppearance(prefs.values, lambda widget: None)
             form.split_wide.value = False
             prefs.save(**form.settings())
             self.assertEqual(Preferences(Path(directory)).values['comic_split_wide'], 'false')

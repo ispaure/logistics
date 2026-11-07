@@ -65,7 +65,7 @@ from **Appearance…**, without an extra frame narrowing the text. The page has 
 top or bottom padding; the header and progress controls provide the separation.
 Chapter headings, paragraphs and quotations use consistent spacing within the page.
 
-Enable **Settings → EPUB → Justify text** or **Appearance… → Justify text** to
+Enable **Settings → EPUB → Justify text** to
 align paragraphs and lists to both edges. The same device preference applies to
 imported and provider-backed rich EPUB readers and defaults to off. It is separate
 from Markdown justification and does not change book files, headings, code blocks
@@ -174,7 +174,7 @@ search and **Fullscreen** remain available in Actions. Comics use the same title
 bar and keep their page scrubber; neighboring-comic buttons appear when supported
 and available. Comics do not show EPUB chapter or read-aloud controls.
 
-**Appearance…** now includes installed local font families, every whole font size
+**Settings → EPUB** includes installed local font families, every whole font size
 from 12–32, line spacing from 100–220%, maximum reading width from 480–1400 pixels
 (or 0 for automatic), margins, and System/Light/Dark/Sepia/Slate themes.
 System, Light and Dark use the app's matching window background and text colours
@@ -183,6 +183,9 @@ surrounding view. Sepia and Slate retain their book colours.
 On a narrow screen, reading width stays
 inside the available pane. These settings are global mobile preferences, do not
 rewrite books, and retain the current logical text anchor when layout changes.
+Changes save as you edit. The reset button beside the font-size picker restores
+the default size of 16. When you open this page from the book’s **Appearance…**
+menu, Back returns to the same passage.
 The default theme is **system**, which follows the device's light/dark mode and
 updates as that mode changes. Explicit Light/Dark/Sepia/Slate choices override it.
 These text controls appear only for EPUBs. Comic appearance shows its page-layout

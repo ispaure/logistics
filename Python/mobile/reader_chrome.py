@@ -274,14 +274,13 @@ class ReaderChrome:
             sync_comic_chrome(self.app, self.app.body)
 
     def show_reader_appearance(self, widget=None, **kwargs):
-        from features.books.mobile.appearance import ReaderAppearance
-        box = ReaderAppearance(self.preferences.values, self.apply_reader_appearance, kind=self.session.kind)
-        self.reader_appearance = box
         if self.session.kind == 'epub':
-            self.reader_font, self.reader_margin = box.font_choice, box.margin_choice
-            self.reader_theme = box.theme_choice
-        else:
-            self.reader_layout = box.layout_choice
+            from .settings.epub import show_from_reader
+            return show_from_reader(self)
+        from features.books.mobile.appearance import ReaderAppearance
+        box = ReaderAppearance(self.preferences.values, self.apply_reader_appearance)
+        self.reader_appearance = box
+        self.reader_layout = box.layout_choice
         self.reader_appearance_status = box.status
         self.show_view(box, reader_route='appearance', title='Reading appearance')
 

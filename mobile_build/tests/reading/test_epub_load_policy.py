@@ -47,3 +47,19 @@ class EpubLoadPolicyTests(unittest.TestCase):
         self.assertFalse(bridge.navigation(
             view, bridge.root + 'next?offset=3&end=1'))
         event.assert_called_once_with('next', 3)
+
+    def test_suspended_and_loading_native_bridge_consumes_turns_without_queuing(self):
+        view = SimpleNamespace(evaluate_javascript=Mock())
+        event = Mock()
+        bridge = ChapterBridge(view, root='https://logistics.invalid/current/', on_event=event)
+        bridge.native_pagination = True
+        self.assertTrue(bridge.turn(1))
+        view.evaluate_javascript.assert_not_called()
+        bridge.loaded(view)
+        bridge.suspend_input()
+        view.evaluate_javascript.reset_mock()
+        self.assertTrue(bridge.turn(1))
+        self.assertTrue(bridge.turn(-1))
+        self.assertFalse(bridge.navigation(view, bridge.root + 'next?offset=3'))
+        view.evaluate_javascript.assert_not_called()
+        event.assert_not_called()

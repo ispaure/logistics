@@ -185,12 +185,19 @@ class ReaderParityUITests(unittest.TestCase):
                 panel.query.value = "chapter"
                 panel.find()
                 panel.seek(7)
-                owner.show_provider_layout()
-                self.assertFalse(hasattr(owner, "provider_epub_view"))
-                owner.provider_font.value = "24"
-                await owner.apply_provider_layout()
-                panel = owner.provider_epub_view
+                self.assertTrue(owner.show_provider_layout())
+                self.assertIs(owner.provider_epub_view, panel)
+                self.assertTrue(app.routes.back())
                 await __import__("asyncio").sleep(0)
+                await owner._epub_resume_task
+                self.assertIs(owner.provider_epub_view, panel)
+                self.assertEqual(panel.offset, 7)
+                self.assertTrue(owner.show_provider_layout())
+                app.routes.body('settings').children[-1].content.font_choice.value = "24"
+                self.assertTrue(app.routes.back())
+                await __import__("asyncio").sleep(0)
+                await owner._epub_resume_task
+                panel = owner.provider_epub_view
                 self.assertIs(owner.provider_epub_view, panel)
                 self.assertEqual(panel.offset, 7)
                 self.assertFalse(owner.page_suspended)

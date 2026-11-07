@@ -623,6 +623,9 @@ class ProviderUI(FilesUI):
         await self.read_crypt_page(**({'preserve_speech': True} if preserve_speech else {}))
 
     async def previous_private_page(self, widget=None, **kwargs):
+        if self.crypt_reader is not None and self.crypt_reader.book is not None:
+            if self.cloud_busy or getattr(self, 'page_suspended', False):
+                return
         document = self.provider_document()
         current = document.capture()
         if not current() or not document.can_start():
@@ -663,6 +666,9 @@ class ProviderUI(FilesUI):
             await self.move_private_page(self.crypt_reader.labels.index(self.crypt_page.value) - 1)
 
     async def next_private_page(self, widget=None, **kwargs):
+        if self.crypt_reader is not None and self.crypt_reader.book is not None:
+            if self.cloud_busy or getattr(self, 'page_suspended', False):
+                return
         if self.crypt_reader is not None and self.crypt_reader.kind == '.pdf':
             target = self.crypt_reader.pdf_navigation.next()
             if target is not None:
@@ -835,15 +841,13 @@ class ProviderUI(FilesUI):
         if (self.crypt_reader is None or self.crypt_reader.editable
                 or (self.crypt_reader.book is None and self.crypt_reader.kind not in {'.cbz', '.zip'})):
             return
+        if self.crypt_reader.book is not None:
+            from .settings.epub import show_from_reader
+            return show_from_reader(self, provider=True)
         from features.books.mobile.appearance import ReaderAppearance
-        kind = 'epub' if self.crypt_reader.book is not None else 'comic'
-        view = ReaderAppearance(self.preferences.values, self.apply_provider_layout, kind=kind)
+        view = ReaderAppearance(self.preferences.values, self.apply_provider_layout)
         self.provider_appearance = view
-        if kind == 'epub':
-            self.provider_font, self.provider_margin = view.font_choice, view.margin_choice
-            self.provider_theme = view.theme_choice
-        else:
-            self.provider_layout = view.layout_choice
+        self.provider_layout = view.layout_choice
         self.show_view(view, route='private:' + self.session.id + ':layout', title='Reading appearance')
 
     async def apply_provider_layout(self, widget=None, **kwargs):

@@ -513,7 +513,12 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             session = self.workspace.sessions.get(key)
             if session is not None and self.workspace.active == key:
                 self.loop.create_task(self.resume_library_session(session))
+        self.schedule_epub_resume()
         return True
+
+    def schedule_epub_resume(self):
+        from .reading.epub_resume import resume_visible_epub
+        self.loop.call_soon(resume_visible_epub, self)
 
     def mark_navigation(self):
         from .markdown_speech import stop_markdown_speech
@@ -548,6 +553,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         if (hasattr(self, 'editor_view') and self.editor_view.session is not None
                 and self.document_view in body.children):
             self.editor_view.session.view['markdown_mode'] = 'edit'
+        self.schedule_epub_resume()
 
     def resize_workspace(self, widget=None, *args, **kwargs):
         from .layout_events import defer_host_resize
@@ -601,7 +607,8 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
                 editor.changed(notify=False)
         self._native_theme_configuration = native_theme_configuration(self)
 
-    def show_view(self, view, *, checkpoint=True, destination=None, route=None, title='', root=False):
+    def show_view(self, view, *, checkpoint=True, destination=None, route=None, title='', root=False,
+                  retain_private=None):
         target = destination or self.native_host.state.destination
         if target == 'settings' and not root and not hasattr(self, 'settings_navigation'):
             self.show_settings(present=False)
@@ -635,7 +642,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         if private is not None:
             owner = private.active
             if owner is None or view not in (getattr(owner, 'crypt_view', None), getattr(owner, 'crypt_metadata_view', None)):
-                private.suspend()
+                private.suspend(except_owner=retain_private)
         if self.adaptive.split is not None and target == 'documents' and not root:
             self.routes.retire_other_presentations(view, target, 'editor' if route == 'preview' else route)
             self.native_host.activate('documents')

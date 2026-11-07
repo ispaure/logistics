@@ -355,6 +355,8 @@ def prepare_epub_page(host, controller, view, content):
     navigation callbacks; the application host supplies typography and drawers.
     Publication, stale-token checks and old-view disposal remain with the caller.
     """
+    from .reading.epub_resume import appearance
+    view._epub_appearance = appearance(host.preferences.values)
     from features.books.mobile.provider_reader import provider_view
     from .page_animation import begin_page_slide, finish_page_slide
     from features.books.mobile.typography import options as typography_options
