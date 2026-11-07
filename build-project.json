@@ -551,10 +551,11 @@
       "default": "on",
       "options": {
         "on": "On \u00b7 run identical host suites once",
-        "off": "Off \u00b7 fresh executions (debug)"
+        "local-off": "Fresh local tests · reuse verified GitHub checks",
+        "off": "Fresh local and GitHub tests (debug)"
       },
       "workflow_option": true,
-      "description": "Saved with this preset. Exact source/environment/toolchain matches only; different OS/native coverage stays separate. Off forces fresh local and hosted release tests."
+      "description": "Saved with this preset. Exact source/environment/toolchain matches only; different OS/native coverage stays separate. Fresh local tests keeps successful exact-source GitHub checks eligible for reuse. The debug option also forces fresh hosted release checks."
     },
     {
       "id": "devices.android_signing",

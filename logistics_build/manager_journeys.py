@@ -37,8 +37,8 @@ def run_values(values):
         raise ValueError('Choose existing iOS signing assets or explicitly authorize provisioning updates.')
     if result.get('testing.manager_source', 'pinned') not in {'pinned', 'working-tree-local'}:
         raise ValueError('Choose pinned or working-tree-local manager source for local tests.')
-    if result.get('testing.reuse_verified_results', 'on') not in {'on', 'off'}:
-        raise ValueError('Choose On or Off for verified test reuse.')
+    if result.get('testing.reuse_verified_results', 'on') not in {'on', 'local-off', 'off'}:
+        raise ValueError('Choose reuse, fresh local tests, or fresh local and GitHub tests.')
     if result.get('testing.github_validation', 'on') not in {'on', 'off'}:
         raise ValueError('Choose On or Off for GitHub release validation.')
     if result.get('devices.android_signing', 'debug') not in {'debug', 'beta'}:

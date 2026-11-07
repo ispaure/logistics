@@ -187,7 +187,7 @@ class ReleaseTestEvidenceTests(unittest.TestCase):
         plan = project.github_plan('Release', 'macos', source, self.base / 'release-work', {},
                                    'HEAD', 'v0.1.0-alpha.1')
         self.assertIn('--no-test-reuse', plan.phases[0].argv)
-        source['run_overrides'] = {}
+        source['run_overrides'] = {'testing.reuse_verified_results': 'local-off'}
         plan = project.github_plan('Release', 'macos', source, self.base / 'release-work', {},
                                    'HEAD', 'v0.1.0-alpha.1')
         self.assertNotIn('--no-test-reuse', plan.phases[0].argv)
