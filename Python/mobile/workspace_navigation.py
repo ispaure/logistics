@@ -100,6 +100,17 @@ def sync_reader_toolbar(app, view, destination=None):
                 app._reader_title_controller = None
                 app._reader_title_state = None
         return
+    status = getattr(view, '_native_reader_status', None)
+    message = status.text if status is not None else ''
+    prompt = message if message.lower().startswith(('save failed', 'cannot ', 'unsaved changes:',
+        'book import failed', 'could not ')) else None
+    drawing_tools = getattr(view, '_native_drawing_tools', None)
+    inline_notice = (drawing_tools is not None and getattr(view, '_notebook_canvas', None) is not None
+                     and prompt is not None and not getattr(view, '_reader_fullscreen', False)
+                     and drawing_tools.wide_landscape(controller))
+    if getattr(view, '_notebook_inline_notice', None) is not None and not inline_notice:
+        detach(view._notebook_inline_notice)
+        view._notebook_inline_notice = None
     if project(app, view, destination, controller):
         band = view._reader_top_band_state
         title = getattr(view, '_native_reader_title', '')
@@ -131,10 +142,8 @@ def sync_reader_toolbar(app, view, destination=None):
         mount_actions(controller, view, buttons)
         projections[key] = state
     app._reader_toolbar_state = state
-    status = getattr(view, '_native_reader_status', None)
-    text = status.text if status is not None else ''
-    prompt = text if text.lower().startswith(('save failed', 'cannot ', 'unsaved changes:',
-        'book import failed', 'could not ')) else None
+    if inline_notice:
+        prompt = None
     if getattr(app, '_reader_toolbar_prompt', None) != (controller.ptr.value, prompt):
         controller.navigationItem.prompt = prompt
         app._reader_toolbar_prompt = (controller.ptr.value, prompt)
@@ -147,6 +156,12 @@ def sync_reader_toolbar(app, view, destination=None):
     controller.navigationItem.title = text
     from .document_location import mount_apple_title
     mount_apple_title(view, controller, text)
+    if inline_notice and status.parent is not view:
+        from features.notebooks.mobile.native_tools import LANDSCAPE_INSET
+        header = view._document_title_header
+        status.style.update(font_size=13, text_align='center', margin=(0, LANDSCAPE_INSET, 6, LANDSCAPE_INSET))
+        view.insert(list(view.children).index(header) + 1, status)
+        view._notebook_inline_notice = status
     app._reader_title_controller = controller
     close = getattr(view, '_reader_close_button', None)
     if close is not None:
