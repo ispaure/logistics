@@ -5,6 +5,12 @@ action area. On iOS, these controls use the native navigation bar. Eligible
 controls move to the side on iPhone Duo and extra actions join the system
 overflow menu. Send and Stop stay beside the message field.
 
+Open **Conversations** to browse chats grouped by the month they were last
+updated. The newest month starts expanded. Tap a month to expand or collapse
+its conversations, then tap a conversation to open it. On a narrow screen the
+browser gives the list the full pane and returns to the transcript when you
+choose a chat.
+
 In Duo laptop posture, the conversation stays above the hinge. The lower screen
 provides a larger draft area, Send/Stop and direct controls for Conversations,
 New conversation and Chat settings. Conversations opens in that lower panel without
@@ -97,7 +103,9 @@ button starts a new conversation. On Android phones, the bottom navigation keeps
 its normal height when the keyboard opens. The transcript shrinks and long drafts
 scroll within a smaller message field, keeping the text and Send button above
 the keyboard. On iOS, destination tabs and their reserved spacing disappear
-while the keyboard is open, then return after dismissal. Completed messages omit visible role headings;
+while the keyboard is open, then return after dismissal. In short keyboard
+layouts, Chat temporarily hides the conversation heading and status to give
+the message field and Send more room. Completed messages omit visible role headings;
 interrupted and incomplete replies keep their status labels. Status appears only for ongoing
 work, feedback or problems. **Export conversation…** is in the **•••** menu. Configuration is scrollable when the keyboard reduces
 the available space. Draft storage and text-only request limits are unchanged.

@@ -12,7 +12,15 @@ the same preference. Markdown heading/code/table proportions match document
 viewers. Chat uses the shared Logistics surface colors for message cards and
 native controls. The active title and model are inside the message pane, while
 compose and settings share the leading action area. Composer clearance follows
-the actual bottom navigation overlap and keyboard-reduced viewport.
+the actual bottom navigation overlap and the physical docked keyboard edge.
+Short keyboard viewports hide the retained heading/setup/status boxes. Removing
+folded-layout tools preserves the mounted composer and its keyboard focus.
+
+The conversation drawer reuses the native recycled tree-row presentation used
+by Notes Library, with smaller icons and a four-point content margin.
+Conversations nest under their last-updated month. The latest month starts
+expanded, and explicit expansion choices survive inventory refreshes. Native
+disclosure callbacks validate current row identity before changing the tree.
 
 Mobile `laptop.py` retains the existing transcript, draft, primary action and
 history controls while allocating them around active horizontal UIKit reserved
@@ -24,9 +32,10 @@ continue through the ordinary chat workspace. No layout transition sends a
 request or rebuilds conversation state.
 
 `test_chat_ui.py` covers retained draft/transcript ownership, history, unfolding,
-keyboard allocation and the existing Send/Stop contracts. The managed
+keyboard allocation, month-tree selection and the existing Send/Stop contracts. The managed
 `document_storage_tools ios --probe chat-laptop` acceptance uses a real UIKit
-keyboard and WebKit transcript, an injected horizontal reserved region, and a
+keyboard across portrait and both landscape rotations, a WebKit transcript,
+an injected horizontal reserved region, and a
 synthetic loopback streaming server. Physical hinge geometry and personal model
 servers are outside that test's scope.
 

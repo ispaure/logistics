@@ -55,6 +55,27 @@ class Probe(LogisticsMobile):
                 self.chat_url.value = url
                 self.chat_model.value = 'fixture-model'
                 self.save_chat_configuration()
+                from .rotation_checks import rotate
+                for orientation in ('portrait', 'landscape-left', 'landscape-right', 'portrait'):
+                    await rotate(self, orientation, settle=.4)
+                    self.show_chat_messages()
+                    self.chat_prompt._impl.native.becomeFirstResponder()
+                    await asyncio.sleep(.7)
+                    self.chat_prompt._impl.native.insertText(' typing')
+                    await asyncio.sleep(.2)
+                    window = self.main_window._impl.native
+                    keyboard = window.convertRect(self.native_host.adapter.keyboard_frame,
+                        fromCoordinateSpace=window.screen.coordinateSpace)
+                    native = self.chat_composer._impl.native
+                    rect = native.convertRect(native.bounds, toView=window)
+                    bottom = float(rect.origin.y + rect.size.height)
+                    assert bottom <= float(keyboard.origin.y) + 1, (orientation, bottom, keyboard)
+                    assert self.chat_prompt._impl.native.isFirstResponder(), orientation
+                    report['samples'].append(dict(name='regular-' + orientation,
+                        composer_bottom=bottom, keyboard_top=float(keyboard.origin.y)))
+                    self.main_window._impl.native.endEditing(True)
+                    await asyncio.sleep(.4)
+                seam = float(workspace.bounds.size.height) * .48
                 with patch('features.lm.mobile.laptop.chat_region', side_effect=geometry):
                     self.render_chat_workspace()
                     await asyncio.sleep(.4)
@@ -90,6 +111,17 @@ class Probe(LogisticsMobile):
                     self.render_chat_workspace()
                     await asyncio.sleep(.3)
                     sample('final-laptop')
+                    self.toggle_chat_conversations()
+                    await asyncio.sleep(.2)
+                    listing = self.chat_conversation_list
+                    assert listing.data[0].folder
+                    listing.tree_actions.toggle(listing.data[0])
+                    await asyncio.sleep(.2)
+                    assert not listing.data[0].tree_expanded
+                    listing.tree_actions.toggle(listing.data[0])
+                    await asyncio.sleep(.2)
+                    assert listing.data[1].key == self.chat_current['id']
+                    self.toggle_chat_conversations()
                     from .fixtures import capture_window
                     await capture_window(self, Path(self.paths.cache) / 'chat-laptop.png')
             report['success'] = True

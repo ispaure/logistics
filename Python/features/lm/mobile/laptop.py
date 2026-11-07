@@ -18,20 +18,27 @@ def chat_region(owner):
 
 
 
-def visible_height(owner, height):
-    """Clip to the docked keyboard even before UIKit settles its safe area."""
+def docked_keyboard_top(owner, native):
+    """Return the physical keyboard edge in the given UIKit view's coordinates."""
     adapter = owner.native_host.adapter
-    if (not type(owner.chat_workspace._impl).__module__.startswith('toga_iOS.')
-            or not getattr(adapter, 'keyboard_visible', False)
-            or getattr(adapter, 'keyboard_frame', None) is None):
-        return height
-    native = owner.chat_workspace._impl.native
+    frame = getattr(adapter, 'keyboard_frame', None)
+    if not getattr(adapter, 'keyboard_visible', False) or frame is None:
+        return None
     window = owner.main_window._impl.native
-    keyboard = window.convertRect(adapter.keyboard_frame, fromCoordinateSpace=window.screen.coordinateSpace)
+    keyboard = window.convertRect(frame, fromCoordinateSpace=window.screen.coordinateSpace)
+    if keyboard.origin.y + keyboard.size.height < window.bounds.size.height - 1:
+        return None
     keyboard = native.convertRect(keyboard, fromView=window)
-    if keyboard.origin.y + keyboard.size.height >= height - 1 and keyboard.size.width >= native.bounds.size.width - 1:
-        return max(0, min(height, float(keyboard.origin.y) - 8))
-    return height
+    if keyboard.origin.x < native.bounds.size.width and keyboard.origin.x + keyboard.size.width > 0:
+        return float(keyboard.origin.y)
+    return None
+
+
+def visible_height(owner, height):
+    """Clip the fold allocation even before UIKit settles its safe area."""
+    native = getattr(owner.chat_workspace._impl, 'native', None)
+    top = docked_keyboard_top(owner, native) if native is not None else None
+    return height if top is None else max(0, min(height, top - 8))
 
 
 def allocation(height, seam, gap, status=0):
@@ -50,11 +57,14 @@ def mount(parent, children):
     if list(parent.children) == children:
         return
     for child in list(parent.children):
-        parent.remove(child)
-    for child in children:
+        if child not in children:
+            parent.remove(child)
+    for index, child in enumerate(children):
+        if index < len(parent.children) and parent.children[index] is child:
+            continue
         if child.parent is not None:
             child.parent.remove(child)
-        parent.add(child)
+        parent.insert(index, child)
 
 
 class LaptopChat:
@@ -88,7 +98,7 @@ class LaptopChat:
             self.saved_drawer = owner.chat_drawer_open
             owner.chat_drawer_open = False
             self.active = True
-        status = 48 if owner.chat_status_box.children else 0
+        status = 48 if owner.chat_status_box.children and not owner.chat_compact_keyboard else 0
         height, seam, band = geometry
         upper, gap, lower, prompt, tools = allocation(visible_height(owner, height), seam, band, status)
         if not tools:

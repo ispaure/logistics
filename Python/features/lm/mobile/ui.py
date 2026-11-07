@@ -1,5 +1,6 @@
 """Native text chat controls; only explicit user actions contact a server."""
 from commonUtils.ui.native.appearance import accessible_name
+from commonUtils.ui.native.forms import FittedLabel, fit_text, group_rows
 from commonUtils.ui.native.password_input import PasswordInput
 import asyncio
 from copy import deepcopy
@@ -7,13 +8,14 @@ import inspect
 import time
 import toga
 from toga.style import Pack
-from toga.style.pack import CENTER, COLUMN, ROW, END
+from toga.style.pack import CENTER, COLUMN, ROW, END, NONE, PACK
 
 from features.lm.domain import build_request, conversation, message, validate_settings
 from features.lm.mobile.storage import ChatStore, DEFAULT_SETTINGS, export_chat
 from features.lm.mobile.transport import ChatClient, ChatCancelled
 from features.lm.mobile.on_device import MODELS, PROVIDERS, configured, platform_provider, client_for
-from features.lm.mobile.presentation import COMPOSER_BOTTOM_GAP, composer_height, transcript_document, transcript_entries, transcript_update
+from features.lm.mobile.presentation import (COMPOSER_BOTTOM_GAP, ConversationTree, composer_height,
+                                           transcript_document, transcript_entries, transcript_update)
 
 
 class ChatTranscript(toga.WebView):
@@ -111,7 +113,6 @@ class ChatUI:
         self.chat_status = toga.MultilineTextInput(readonly=True, style=Pack(height=48, font_size=12))
         self.chat_config_status = toga.MultilineTextInput(readonly=True, style=Pack(height=48, font_size=12))
         self.chat_config_status_box = toga.Box(style=Pack(direction=COLUMN))
-        from commonUtils.ui.native.forms import FittedLabel, group_rows
         def label(text, *, heading=False, field=False):
             control = FittedLabel(text, style=Pack(font_size=16 if heading else 14 if field else 12,
                 font_weight='bold' if heading else 'normal', margin_top=12 if heading else 4))
@@ -185,17 +186,8 @@ class ChatUI:
 
     def _build_chat_workspace(self):
         """Assemble the retained header, conversation drawer and message workspace."""
-        self.chat_title = toga.Label('New conversation', style=Pack(font_weight='bold', font_size=16))
-        self.chat_model_label = toga.Label('', style=Pack(font_size=12))
-        for label in (self.chat_title, self.chat_model_label):
-            backend = type(label._impl).__module__
-            if backend.startswith('toga_iOS.'):
-                label._impl.native.numberOfLines = 1
-                label._impl.native.lineBreakMode = 4
-            elif backend.startswith('toga_android.'):
-                from android.text import TextUtils
-                label._impl.native.setSingleLine(True)
-                label._impl.native.setEllipsize(TextUtils.TruncateAt.END)
+        self.chat_title = FittedLabel('New conversation', style=Pack(font_weight='bold', font_size=16))
+        self.chat_model_label = FittedLabel('', style=Pack(font_size=12))
         self.chat_menu_button = self.presentation.menu_button(self.toggle_chat_conversations, 'Conversations')
         self.chat_header_new = self.presentation.icon_button('compose', 'New conversation', on_press=self.new_chat)
         self.chat_actions_button = self.presentation.icon_button('more', 'Conversation actions')
@@ -209,13 +201,14 @@ class ChatUI:
         elif backend.startswith('toga_android.'):
             self.chat_actions_button._impl.native.setContentDescription('Conversation actions')
         self.chat_conversation_list = self.presentation.summary_list(kind='Conversation',
-            icon_kind='chat', on_select=self._select_conversation_row, style=Pack(flex=1))
+            icon_kind='chat', icon_size=20, on_select=self._select_conversation_row, style=Pack(flex=1))
+        self.chat_tree = ConversationTree(self.chat_conversation_list)
+        self.chat_conversation_list.tree_actions = self.chat_tree
         self.chat_conversation_buttons = []  # Compatibility; rows are recycled natively.
         self.chat_drawer_settings = self.presentation.icon_button('preferences', 'Chat settings',
             on_press=self.show_chat_configuration)
-        sidebar_title = toga.Label('Conversations', style=Pack(font_size=18, font_weight='bold'))
-        self.chat_sidebar_content = sidebar = toga.Box(children=[sidebar_title, self.chat_conversation_list],
-            style=Pack(direction=COLUMN, flex=1, gap=12, margin=12))
+        self.chat_sidebar_content = sidebar = toga.Box(children=[self.chat_conversation_list],
+            style=Pack(direction=COLUMN, flex=1, margin=4))
         self.chat_sidebar = self.presentation.surface(toga.Box(children=[sidebar], style=Pack(direction=COLUMN, flex=1)),
             radius=16, background='surface', outlined=True)
         self.chat_status_box = toga.Box(style=Pack(direction=COLUMN))
@@ -259,6 +252,7 @@ class ChatUI:
             return
         self.update_chat_readiness()
         self.reserve_chat_navigation()
+        self.fit_chat_keyboard()
         if self.laptop.reflow(self):
             self.sync_chat_navigation()
             self.sync_chat_appearance()
@@ -339,8 +333,28 @@ class ChatUI:
         bottom = float(viewport.origin.y + viewport.size.height - container.bottom_inset)
         safe_bottom = float(window.bounds.size.height - window.safeAreaInsets.bottom)
         margin = max(margin, COMPOSER_BOTTOM_GAP + max(0, bottom - safe_bottom))
+        from .laptop import docked_keyboard_top
+        keyboard_top = docked_keyboard_top(self, container.native)
+        if keyboard_top is not None:
+            layout_bottom = float(container.native.bounds.size.height - container.bottom_inset)
+            margin = max(margin, COMPOSER_BOTTOM_GAP + layout_bottom - keyboard_top)
         if self.chat_view.style.margin_bottom != margin:
             self.chat_view.style.margin_bottom = margin
+
+    def chat_available_height(self):
+        container = self.chat_view._impl.container
+        if container is None:
+            return 0
+        return max(0, container.height - self.chat_view.style.margin_top - self.chat_view.style.margin_bottom)
+
+    def fit_chat_keyboard(self):
+        from mobile.keyboard import picker_keyboard_visible
+        keyboard = picker_keyboard_visible(self.app, self.native_host.adapter)
+        self.chat_compact_keyboard = keyboard and self.chat_available_height() < 210
+        display = NONE if self.chat_compact_keyboard else PACK
+        for item in (self.chat_header, self.chat_conversation_heading, self.chat_setup_box, self.chat_status_box):
+            if item.style.display != display:
+                item.style.display = display
 
     def chat_sidebar_width(self):
         return min(320, self.adaptive.content_width('chat') // 3)
@@ -360,8 +374,9 @@ class ChatUI:
         for label, value in ((self.chat_title, title), (self.chat_model_label, identity)):
             if label.style.width != width:
                 label.style.width = width
-            if label.text != value:
+            if getattr(label, '_settings_source_text', None) != value:
                 label.text = value
+            fit_text(label, width)
 
     def resize_chat_composer(self):
         if not hasattr(self, 'chat_messages'):
@@ -370,8 +385,7 @@ class ChatUI:
         inset = max(0, int((width - 780) / 2))
         self.chat_composer.style.margin_left = self.chat_composer.style.margin_right = inset
         self.chat_status_box.style.margin_left = self.chat_status_box.style.margin_right = inset
-        container = self.chat_view._impl.container
-        available_height = container.height if container is not None else 0
+        available_height = self.chat_available_height()
         self.chat_prompt.style.height = composer_height(self.chat_prompt.value, min(width, 780) - 84,
             self.presentation.font_size('markdown'), available_height=available_height or None)
         if self.laptop.active:
@@ -544,7 +558,7 @@ class ChatUI:
             if selected_label is not None:
                 self.chat_selector.value = selected_label
         self.state.loading = False
-        self._project_chat_rows(labels)
+        self.chat_tree.publish(labels, records, self.state.current)
         if warnings:
             self.set_chat_status(f'{len(warnings)} conversation(s) could not be read; originals preserved.')
         if (authoritative and not self.state.busy
@@ -555,26 +569,15 @@ class ChatUI:
             else:
                 self.new_chat()
 
-    def _project_chat_rows(self, labels):
-        """Project a detached inventory while suppressing native selection callbacks."""
-        listing = self.chat_conversation_list
-        listing.updating = True
-        try:
-            listing.data = [dict(title=label, subtitle='', key=key, index=index,
-                folder=False, thumbnail=False, icon=listing.row_icon)
-                for index, (label, key) in enumerate(labels.items())]
-            selected = next((index for index, row in enumerate(listing.data)
-                if self.state.current is not None and row.key == self.state.current['id']), None)
-            listing.select_index(selected)
-        finally:
-            listing.updating = False
-
     def _select_conversation_row(self, widget, **kwargs):
         if widget.updating or self.state.busy:
             return
         row = widget.selection
-        if (row is not None and row.key in self.chat_labels.values()
-                and (self.state.current is None or row.key != self.state.current['id'])):
+        if row is None:
+            return
+        if row.folder:
+            self.chat_tree.toggle(row)
+        elif self.state.current is None or row.key != self.state.current['id']:
             self.open_chat(row.key)
 
     def checkpoint_chat(self):
