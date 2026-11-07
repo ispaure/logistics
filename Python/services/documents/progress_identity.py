@@ -1,7 +1,7 @@
 """Document lookup identity, independent of navigation and access grants."""
 
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from types import SimpleNamespace
 
 from commonUtils.filesystem.local_access import check_local_path
@@ -14,34 +14,35 @@ from .locations import collection_path, selection, shared_documents_path
 
 def local_document_path(private_root, path):
     """Recover an old iOS Documents reference only if its replacement exists."""
-    path = Path(path)
-    if path.exists():
-        return path
+    original = Path(path)
+    if original.is_absolute() and original.exists():
+        return original
     documents = shared_documents_path(private_root)
     if documents is None:
-        return path
-    parts = path.parts
+        return original
+    parts = PurePosixPath(path).parts
     if parts[:3] == ('/', 'private', 'var'):
         parts = ('/', *parts[2:])
     prefix = ('/', 'var', 'mobile', 'Containers', 'Data', 'Application')
     if parts[:len(prefix)] != prefix or len(parts) < 9 or parts[7] != 'Documents':
-        return path
+        return original
     relative = Path(*parts[8:])
-    if '..' in relative.parts:
-        return path
+    if relative.anchor or '..' in relative.parts:
+        return original
     candidate = documents / relative
     if candidate.is_file() and candidate.resolve().is_relative_to(documents.resolve()):
         return candidate
-    return path
+    return original
 
 
 def _local_full_path(provider, path, private_root):
     if provider is None:
-        path = Path(path)
-        if not path.is_absolute():
+        original = Path(path)
+        if original.is_absolute():
+            check_local_path(original)
+        full = local_document_path(private_root, path) if private_root else original
+        if not full.is_absolute():
             raise ValueError('A local document requires an absolute path.')
-        check_local_path(path)
-        full = local_document_path(private_root, path) if private_root else path
         check_local_path(full)
         return full.resolve()
     key = Path(path) if Path(path).is_absolute() else path
