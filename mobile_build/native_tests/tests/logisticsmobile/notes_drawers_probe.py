@@ -148,7 +148,10 @@ class NotesDrawersProbe(NotesInteractionChecks, LogisticsMobile):
         half_span = min(65, float(frame.size.width) * .4)
         (output / 'notes-touch-request.json').write_text(json.dumps(
             dict(points=[center - direction * half_span, y, center + direction * half_span, y])))
-        for _ in range(200):
+        # The simulator driver allows up to 60 seconds per injected touch.
+        # Leave time for the driver's polling interval and loaded QA hosts.
+        deadline = self.loop.time() + 75
+        while self.loop.time() < deadline:
             done = output / 'notes-touch-done'
             if done.exists():
                 done.unlink()
