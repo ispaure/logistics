@@ -1,7 +1,7 @@
 """Home screen construction and retained document overview."""
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN, ROW, CENTER
+from toga.style.pack import COLUMN, ROW, CENTER, START
 
 from .appearance import accessible_name, action_button, surface
 from .hub_controls import HubSections, document_group, empty_document_row, heading
@@ -86,7 +86,7 @@ class HomeScreen:
 
     def _home_document_preview(self, box, title, items, empty, collection):
         header = toga.Box(children=[heading(title), toga.Box(style=Pack(flex=1))],
-                          style=Pack(direction=ROW, align_items=CENTER))
+                          style=Pack(direction=ROW, align_items=START))
         if collection:
             def see_all(widget=None, **kwargs):
                 return self.app.show_documents_hub(collection=collection)
@@ -109,7 +109,15 @@ class HomeScreen:
             self._home_content_state = None
 
     def reflow_home(self):
-        self.home_sections.reflow(self.app, 'home')
+        sections = self.home_sections
+        sections.reflow(self.app, 'home')
+        top = 16
+        if sections.paired and sections.style.direction == ROW:
+            top = sections.content.style.margin_top
+            if self.home_actions.parent is sections.content:
+                top += max((button.style.height for button in self.home_actions.children), default=0)
+                top += self.home_actions.style.margin_top + self.home_actions.style.margin_bottom
+        sections.trailing_content.style.margin_top = top
 
     def new_hub_document(self, widget=None, **kwargs):
         return self.choose_document_type()
