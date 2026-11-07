@@ -112,7 +112,7 @@ class NativeDrawingTools:
             header.style.align_items = 'center'
             header._title_content = toga.Box(style=Pack(flex=1, height=48, margin_left=8, margin_right=8))
             self.title_spacers = (toga.Box(), toga.Box())
-        self.strip = toga.Box(style=Pack(direction=ROW, width=STRIP_WIDTH, height=48))
+        self.strip = toga.Box(style=Pack(direction=ROW, height=48))
         for name in names:
             async def click(widget=None, name=name, **kwargs):
                 await self.activate(name)
@@ -129,6 +129,7 @@ class NativeDrawingTools:
             self.buttons[name] = button
             if button.style.display != 'none':
                 self.strip.add(button)
+        self.strip.style.width = 44 * len(self.strip.children)
         if before is None:
             leading, gap = self.title_spacers
             header.add(leading, header._title_content, gap, self.strip)
