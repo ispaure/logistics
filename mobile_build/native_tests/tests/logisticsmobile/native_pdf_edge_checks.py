@@ -150,8 +150,24 @@ async def exercise_pdf_edge_links(app):
                 location = await point(x)
                 if x != .5:
                     edge(location)
-                await gesture(native, location)
-                await wait(lambda: canvas.return_page is not None, 'Native finger link did not navigate')
+                tap_handler = canvas.on_tap
+                attempt = dict(target=x, point=location, native_size=[native.getWidth(), native.getHeight()],
+                               density=density, taps=[])
+                proof['last_finger_attempt'] = attempt
+
+                def record_tap(image_x, image_y):
+                    sample = dict(image_point=[image_x, image_y], link_alive=canvas.link_alive(),
+                                  provider_busy=owner.cloud_busy)
+                    attempt['taps'].append(sample)
+                    sample['consumed'] = tap_handler(image_x, image_y)
+                    return sample['consumed']
+
+                canvas.on_tap = record_tap
+                try:
+                    await gesture(native, location)
+                    await wait(lambda: canvas.return_page is not None, 'Native finger link did not navigate')
+                finally:
+                    canvas.on_tap = tap_handler
                 assert owner.crypt_reader.pdf_navigation.indices[0] == 2
                 await idle()
                 if x != .5:
