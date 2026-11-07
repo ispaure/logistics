@@ -422,7 +422,10 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
         assert matches, f'{path}: {app.file_status.value}; entries={list(app.file_rows)}'
         app.file_selection.value = matches[0]
     select('source')
-    crypt_label = next(label for label in app.file_roots if label.startswith('LocalCrypt:'))
+    crypt_labels = [label for label, location in app.file_roots.items() if location == remote]
+    assert len(crypt_labels) == 1, dict(remote=remote, roots=list(app.file_roots))
+    crypt_label = crypt_labels[0]
+    assert crypt_label == f'{remote} - Encrypted Copy', crypt_label
     app.file_destination.value = crypt_label
     app.file_target.value = 'imported'
     await app.move_file()
