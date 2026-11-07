@@ -305,14 +305,21 @@ class ChatUITests(unittest.TestCase):
     def test_rotation_header_uses_current_safe_width_instead_of_previous_layout(self):
         app = self.app
         app.chat_drawer_open = True
+        title = 'A long conversation title that needs space to display fully'
+        model = 'model-' + 'x' * 65
+        app.chat_current['title'] = title
+        app.chat_profile['model'] = model
         with patch.object(app.adaptive, 'content_width') as available, patch.object(app.adaptive, 'width') as window:
-            for width in (720, 370, 720, 370):
+            for width in (1000, 720, 370, 1000):
                 available.return_value = window.return_value = width
                 app.update_chat_header()
-                pane_width = width - (240 + 12 if width >= 640 else 0)
+                pane_width = width - (min(320, width // 3) + 12 if width >= 640 else 0)
                 self.assertEqual(app.chat_title.style.width, pane_width - 16)
                 self.assertEqual(app.chat_model_label.style.width, pane_width - 16)
                 self.assertIs(app.chat_title.parent.parent, app.chat_transcript_card)
+                for label, source in ((app.chat_title, title), (app.chat_model_label, 'Server · ' + model)):
+                    self.assertEqual(''.join(label.text.split()), ''.join(source.split()))
+                    self.assertEqual('\n' in label.text, width < 1000)
 
     def test_batched_drafts_never_persist_the_session_api_key(self):
         self.app.chat_key.value = 'SESSION-ONLY-API-KEY-SENTINEL'
@@ -322,24 +329,99 @@ class ChatUITests(unittest.TestCase):
         for path in self.app.private_root.rglob('*.json'):
             self.assertNotIn(b'SESSION-ONLY-API-KEY-SENTINEL', path.read_bytes())
 
+    def test_laptop_tool_removal_keeps_focused_composer_mounted(self):
+        from features.lm.mobile.laptop import mount
+        import toga
+        parent = toga.Box()
+        tools, composer = toga.Box(), toga.Box()
+        parent.add(tools, composer)
+        with patch.object(parent, 'remove', wraps=parent.remove) as remove:
+            mount(parent, [composer])
+        self.assertEqual(list(parent.children), [composer])
+        remove.assert_called_once_with(tools)
+
+    def test_keyboard_edge_accepts_overlapping_docked_but_ignores_floating_keyboard(self):
+        from features.lm.mobile.laptop import docked_keyboard_top
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        def rect(x, y, width, height):
+            return SimpleNamespace(origin=SimpleNamespace(x=x, y=y),
+                                   size=SimpleNamespace(width=width, height=height))
+        window = Mock()
+        window.bounds = rect(0, 0, 800, 600)
+        keyboard = rect(0, 350, 800, 250)
+        window.convertRect.return_value = keyboard
+        native = Mock()
+        native.bounds = rect(0, 0, 400, 600)
+        native.convertRect.return_value = rect(-200, 300, 800, 250)
+        owner = SimpleNamespace(native_host=SimpleNamespace(adapter=SimpleNamespace(
+            keyboard_visible=True, keyboard_frame=keyboard)),
+            main_window=SimpleNamespace(_impl=SimpleNamespace(native=window)))
+        self.assertEqual(docked_keyboard_top(owner, native), 300)
+        window.convertRect.return_value = rect(10, 200, 350, 200)
+        self.assertIsNone(docked_keyboard_top(owner, native))
+        owner.native_host.adapter.keyboard_visible = False
+        self.assertIsNone(docked_keyboard_top(owner, native))
+
+    def test_month_groups_expand_in_place_and_keep_stable_conversation_keys(self):
+        owner = self.app.chat_controller()
+        listing = owner.chat_conversation_list
+        recent = dict(id='1' * 32, title='Recent', updated='2026-11-02T00:00:00+00:00')
+        older = dict(id='2' * 32, title='Older', updated='2026-10-02T00:00:00+00:00')
+        records = [recent, older]
+        owner._publish_chat_inventory(records, [])
+        self.assertEqual([(row.tree_depth, row.tree_expanded) for row in listing.data],
+                         [(0, True), (1, None), (0, False)])
+        old_group = listing.data[2]
+        listing.select_index(2)
+        listing.on_select()
+        self.assertTrue(listing.data[2].tree_expanded)
+        listing.tree_actions.toggle(old_group)
+        self.assertTrue(listing.data[2].tree_expanded)  # Stale native cell.
+        owner._publish_chat_inventory(records, [])
+        self.assertEqual(listing.data[3].key, older['id'])
+        with patch.object(owner, 'open_chat') as open_chat:
+            listing.select_index(3)
+            listing.on_select()
+            open_chat.assert_called_once_with(older['id'])
+        listing.tree_actions.toggle(listing.data[2])
+        self.assertEqual(len(listing.data), 3)
+
+    def test_short_keyboard_viewport_prioritizes_retained_composer(self):
+        from toga.style.pack import NONE, PACK
+        owner = self.app.chat_controller()
+        prompt = owner.chat_prompt
+        prompt.value = 'Visible draft'
+        owner.set_chat_status('Status')
+        compactable = (owner.chat_header, owner.chat_conversation_heading, owner.chat_setup_box, owner.chat_status_box)
+        with patch('mobile.keyboard.picker_keyboard_visible', return_value=True) as keyboard, \
+                patch.object(owner, 'chat_available_height', return_value=130):
+            owner.render_chat_workspace()
+            self.assertTrue(all(item.style.display == NONE for item in compactable))
+            self.assertIs(prompt.parent, owner.chat_composer)
+            self.assertEqual(prompt.value, 'Visible draft')
+            keyboard.return_value = False
+            owner.render_chat_workspace()
+        self.assertTrue(all(item.style.display == PACK for item in compactable))
+
     def test_large_conversation_inventory_uses_one_recycled_control_and_stable_keys(self):
         app = self.app
-        records = [dict(id=f'{index:032x}', title=f'Conversation {index}', updated=str(index))
+        records = [dict(id=f'{index:032x}', title=f'Conversation {index}', updated='2026-11-02T00:00:00+00:00')
                    for index in range(1000)]
         controller = app.chat_controller()
         with patch('features.lm.mobile.ui.toga.Button', side_effect=AssertionError('No per-conversation controls')):
             controller._publish_chat_inventory(records, [])
         listing = app.chat_conversation_list
-        self.assertEqual(len(listing.data), 1000)
+        self.assertEqual(len(listing.data), 1001)
         self.assertEqual(app.chat_conversation_buttons, [])
         self.assertIs(listing.parent, app.chat_sidebar_content)
         with patch.object(controller, 'open_chat') as open_chat:
-            listing.select_index(17)
+            listing.select_index(18)
             listing.on_select()
             open_chat.assert_called_once_with(records[17]['id'])
             open_chat.reset_mock()
             app.set_chat_busy(True)
-            listing.select_index(18)
+            listing.select_index(19)
             listing.on_select()
             open_chat.assert_not_called()
             self.assertFalse(listing.enabled)
@@ -353,12 +435,14 @@ class ChatUITests(unittest.TestCase):
         controller._publish_chat_inventory([dict(id=key, title='Active', updated='0'),
             dict(id='f' * 32, title='Other', updated='1')], [])
         listing = app.chat_conversation_list
+        app.chat_drawer_open = True
         with patch.object(controller, 'open_chat') as open_chat:
             for _ in range(3):
                 controller.select_chat(SimpleNamespace(value='Active'))
                 listing.select_index(0)
                 listing.on_select()
             open_chat.assert_not_called()
+            self.assertTrue(app.chat_drawer_open)
             controller.select_chat(SimpleNamespace(value='Other'))
             open_chat.assert_called_once_with('f' * 32)
         self.assertEqual(app.chat_current['id'], key)

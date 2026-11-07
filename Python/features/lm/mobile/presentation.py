@@ -1,4 +1,5 @@
 """Offline conversation presentation; no server, widget or storage ownership."""
+from datetime import datetime
 from html import escape
 import json
 import math
@@ -16,6 +17,84 @@ html body{font-family:-apple-system,BlinkMacSystemFont,sans-serif;line-height:1.
 #messages code{font-family:ui-monospace,monospace;font-size:.88em}
 #messages pre,#messages table{font-size:1em}
 '''
+
+
+class ConversationTree:
+    """A read-only, month-grouped view of the existing conversation inventory."""
+
+    drag_token = None
+
+    def __init__(self, listing):
+        self.listing = listing
+        self.expanded = {}
+        self.groups = {}
+        self.undated = []
+        self.selected = None
+
+    def publish(self, labels, records, current):
+        months = {record['id']: self.month(record['updated']) for record in records}
+        self.groups = {}
+        self.undated = []
+        for label, key in labels.items():
+            month = months[key]
+            if month is None:
+                self.undated.append((label, key))
+            else:
+                self.groups.setdefault(month, []).append((label, key))
+        self.selected = current['id'] if current is not None else None
+        self.render()
+
+    @staticmethod
+    def month(updated):
+        try:
+            date = datetime.fromisoformat(updated)
+        except ValueError:
+            return None
+        return date.year, date.month
+
+    def render(self):
+        listing = self.listing
+        rows = []
+
+        def row(title, key, depth, expanded=None):
+            rows.append(dict(title=title, key=key, index=len(rows), subtitle='',
+                folder=expanded is not None, thumbnail=False, icon=listing.row_icon,
+                tree_depth=depth, tree_expanded=expanded))
+
+        for index, (month, conversations) in enumerate(self.groups.items()):
+            expanded = self.expanded.get(month, index == 0)
+            row(datetime(*month, 1).strftime('%b %Y'), month, 0, expanded)
+            if expanded:
+                for title, key in conversations:
+                    row(title, key, 1)
+        for title, key in self.undated:
+            row(title, key, 0)
+
+        listing.updating = True
+        try:
+            listing.data = rows
+            listing.select_index(next((entry['index'] for entry in rows
+                                       if entry['key'] == self.selected), None))
+        finally:
+            listing.updating = False
+
+    def current(self, row):
+        listing = self.listing
+        return (listing.enabled and not listing.updating and 0 <= row.index < len(listing.data)
+                and listing.data[row.index] is row)
+
+    def toggle(self, row):
+        if self.current(row) and row.folder:
+            self.expanded[row.key] = not row.tree_expanded
+            self.render()
+
+    def start_drag(self, row):
+        return False
+
+    can_drop = drop = start_drag
+
+    def end_drag(self):
+        pass
 
 
 def composer_height(text, width, font_size=16, *, available_height=None):
