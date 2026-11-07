@@ -110,8 +110,7 @@ def sync_native_host(app, view, destination):
         overview = not sync(app, view) and bool(view._ios_toolbar_buttons())
     elif overview:
         overview = bool(selected(app, view._destination_actions[1]))
-        # Documents commands stay in UIKit's bar for native hit testing.
-        if destination == 'files' and project_header(app, view, destination):
+        if project_header(app, view, destination):
             overview = False
     outer = adapter.outer_navigation
     if not outer.isNavigationBarHidden():
@@ -131,6 +130,9 @@ def project_header(app, view, destination):
     The original buttons and menus move intact. If any target cannot fit, all
     actions return to the adaptive native bar and its existing overflow policy.
     """
+    if destination == 'documents':
+        # Keep Documents commands in the shared native bar so UIKit owns hit testing.
+        return False
     from .ios_toolbar import vertical_edge, system_occlusions
     from .reader_top_band import free_top_band
     controller = app.native_host.adapter.content_controller(destination)

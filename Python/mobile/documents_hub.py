@@ -6,15 +6,15 @@ from toga.style.pack import COLUMN, ROW, CENTER
 from .appearance import accessible_name, batch_surfaces, list_button, surface
 from .control_icons import icon_button, button_icons
 from .hub_controls import PanelGrid, document_list, empty_document_row, text_document_kind
-from .ui_metrics import TOUCH_TARGET, toga_font_size
+from .ui_metrics import TOUCH_TARGET
 
 
 COLLECTIONS = ('Libraries', 'Favourites', 'Open', 'Recent', 'Saved')
 SIDEBAR_WIDTH = 160
 SIDEBAR_BREAKPOINT = 480
 TABS_BREAKPOINT = 300
-COLLECTION_FONT = toga_font_size(13)
-FILENAME_FONT = toga_font_size(15)
+COLLECTION_FONT = 13
+FILENAME_FONT = 15
 
 
 def library_heading_style():
@@ -161,13 +161,13 @@ class DocumentsHub:
             self._document_tab_cells[name] = toga.Box(children=[button, indicator],
                                                      style=Pack(direction=COLUMN))
 
-        title = toga.Label('Documents', style=Pack(font_size=toga_font_size(26), font_weight='bold'))
+        title = toga.Label('Documents', style=Pack(font_size=26, font_weight='bold'))
         self._document_collection_header = toga.Box(children=[title, self.document_views],
                                                     style=Pack(direction=COLUMN))
         self._document_collection_navigation = toga.ScrollContainer(horizontal=False,
             content=self._document_collection_header)
         self._document_collection_title = toga.Label(self.documents_view,
-            style=Pack(font_size=toga_font_size(16), font_weight='bold', margin_bottom=8))
+            style=Pack(font_size=16, font_weight='bold', margin_bottom=8))
         results = toga.Box(children=[self._document_collection_title, self.document_results],
                            style=Pack(direction=COLUMN, margin=(8, 0, 16, 0)))
         self._document_collection_detail = toga.Box(children=[self.app._documents_status_row,
