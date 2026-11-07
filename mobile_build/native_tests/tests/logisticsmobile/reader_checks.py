@@ -433,8 +433,14 @@ async def _exercise_library(app, fixtures, epub, comic, passed):
                        for service in manager.getRunningServices(100).toArray())
     passed.append('native_epub_reader')
     await app.toggle_bookmark()
-    assert app.reader_manager().catalog.library_store.open(record['id'])[0]['epub_bookmarks'] == [
-        dict(path=app.reader_manager().active.book_reader.spine[1], offset=app.reader_manager().active.epub_offset)]
+    expected_bookmark = dict(path=owner.book_reader.spine[1], offset=owner.epub_offset)
+    assert owner._book_progress.pending is None
+    store = app.reader_manager().catalog.library_store
+    _, _, progress, restored = await asyncio.to_thread(store.open_reading, record['id'], app=app)
+    try:
+        assert restored['epub_bookmarks'] == [expected_bookmark]
+    finally:
+        progress.retire()
     passed.append('native_bookmarks')
     record = await asyncio.to_thread(app.reader_manager().catalog.library_store.import_book, LocalDocuments(), comic)
     background_comic = record['id']
@@ -493,7 +499,10 @@ async def _exercise_library(app, fixtures, epub, comic, passed):
         assert app.reader_manager().active.bookmark_button not in app.reader_manager().active.reader_tools_view.content.children
         raw_source = app.reader_manager().active.book_reader.document.source
         owner = app.reader_manager().active
-        assert app.close_session(owner.session.id)
+        assert app.request_reader_close(owner.session.id)
+        if (close_task := getattr(owner, '_exit_task', None)) is not None:
+            await asyncio.wait_for(asyncio.shield(close_task), 30)
+        assert owner.session.id not in app.workspace.sessions
         assert owner.book_reader is None and not owner.book_content.children
         assert raw_source.password is None and not raw_source.cache
         assert app.reader_manager().catalog.library_store.path(protected_record['id'], '.cbz').read_bytes() == original
