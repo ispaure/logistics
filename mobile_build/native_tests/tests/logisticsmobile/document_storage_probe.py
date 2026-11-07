@@ -386,7 +386,7 @@ class DocumentStorageProbe(LogisticsMobile):
                 report['cases'].append('native-decrypted-export-cancel')
                 await picker.show_notebook_destination(panel)
                 await asyncio.sleep(.4)
-                picker.save_as_storage.value = 'Local files'
+                picker.save_as_storage.value = 'Local'
                 await asyncio.sleep(.3)
                 assert await picker.refresh_editor_browser()
                 picker.save_as_name.value = 'Decrypted copy.rmdoc'

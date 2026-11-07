@@ -454,7 +454,7 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
     assert (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None).key == 'saved-as.md', app.save_as_status.value
     await app.show_crypt_save_as()
     app.save_as_name.value = 'local-copy.md'
-    app.save_as_storage.value = 'Local files'
+    app.save_as_storage.value = 'Local'
     original_dialog = app.main_window.dialog
     answered = []
     async def answer_confirmation(dialog, *, title, answer):
@@ -669,7 +669,7 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
     await editor.back_button.on_press()
     assert app.picker_folder.value == ''
     await editor.back_button.on_press()
-    assert app.save_as_storage.value == 'Local files'
+    assert app.save_as_storage.value == 'Local'
     from .mirror_checks import exercise_crypt_mirror
     await exercise_crypt_mirror(app, fixture)
     passed.append('native_localcrypt_read_during_download')

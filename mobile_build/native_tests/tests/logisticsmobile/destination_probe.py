@@ -108,7 +108,7 @@ class DestinationProbe(LogisticsMobile):
                 from mobile.file_operations import FileOperationRequest
                 await picker.show_destination('Move me.txt', FileOperationRequest('move', source, 'Move me.txt'))
                 await asyncio.sleep(.4)
-                await picker.browser_editor_location(('Local files', 'Destination'))
+                await picker.browser_editor_location(('Local', 'Destination'))
                 self.state('move-ui', instructions='Tap Move here.')
                 await self.wait(lambda: (source.root / 'Destination/Move me.txt').is_file())
                 assert (source.root / 'Destination/Move me.txt').read_text() == 'Native move bytes'

@@ -13,14 +13,13 @@ continue, or **Cancel** to return to browsing. Holding an item does not delete i
 
 On iPhone or iPad, choose **Share → Logisticks**, wait for the receiving result,
 then tap **Done**. Open Logisticks and browse **Workspaces → Local → Received Files**.
-**Browse All Files** also shows **Received Files** beside **Local**. In Apple's
-Files app the same folder is **On My iPhone/iPad → Logisticks → Received Files**.
+In Apple's Files app the same folder is **On My iPhone/iPad → Logisticks → Received Files**.
 The share extension saves attachments while the main app is closed; the main app
 publishes complete handoffs into Received Files when opened.
 
 On Android, share one or more files to **Logisticks**, wait for the result, then
-tap **Open Logisticks**. Find them under **Workspaces → Local → Received Files**,
-**Browse All Files → Received Files**, or the **Received Files** browser location.
+tap **Open Logisticks**. Find them under **Workspaces → Local → Received Files**
+or the **Received Files** browser location.
 With a selected collection drive, the folder is `<drive>/Logistics/Received Files`,
 beside `Local` and `LocalCrypt`. With app internal storage selected, it remains
 private to the app. Received Files follows the collection drive; when that drive

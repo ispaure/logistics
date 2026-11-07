@@ -171,6 +171,8 @@ class DestinationWorkflowTests(unittest.TestCase):
         self.app.file_roots['Destination'] = LocalFiles(destination)
         request = FileOperationRequest('move', provider, source.name)
         self.run_async(self.picker.show_destination(source.name, request))
+        self.assertEqual({row.value for row in self.picker.save_as_storage.items},
+                         {'Local', 'Received Files', 'Shared Files', 'Destination'})
         self.picker.save_as_storage.value = 'Destination'
         self.run_async(self.picker._storage_refresh)
         return source, destination
@@ -241,7 +243,7 @@ class DestinationWorkflowTests(unittest.TestCase):
         self.app.file_roots['Shared files'] = SharedFiles(shared)
         self.run_async(self.picker.show_destination(source.name,
             FileOperationRequest('move', provider, source.name)))
-        self.run_async(self.picker.browser_editor_location(('Shared files', 'Movies')))
+        self.run_async(self.picker.browser_editor_location(('Shared Files', 'Movies')))
         local_move_path = MobileLocalFiles.local_move_path
         def iphone_move_path(provider, path):
             # Exercise iOS provider policy while leaving the host's actual
@@ -339,9 +341,9 @@ class DestinationWorkflowTests(unittest.TestCase):
 
     def test_folder_cannot_move_into_its_descendant(self):
         source, _ = self.prepare_move(folder=True)
-        self.picker.save_as_storage.value = 'Local files'
+        self.picker.save_as_storage.value = 'Local'
         self.run_async(self.picker._storage_refresh)
-        self.run_async(self.picker.browser_editor_location(('Local files', 'Source')))
+        self.run_async(self.picker.browser_editor_location(('Local', 'Source')))
         self.picker.save_as_name.value = 'Nested'
         self.run_async(self.picker.confirm_editor_file())
         self.assertTrue((source / 'child.txt').is_file())
