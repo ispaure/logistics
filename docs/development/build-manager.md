@@ -241,7 +241,10 @@ Select an existing normal-user Windows test guest explicitly. The adapter uses
 owned source copies and portable, hash-verified Git/uv archives from
 `logistics_build/build_manager_tools.json`; it never changes global PATH, login policy,
 Developer Mode or signing settings. `vm.windows_prepared_reference` may point to
-an ignored preparation report to reuse that guest's public tools/interpreter.
+an ignored report from standalone preparation to reuse that guest's public tools
+and interpreter. When the runner prepares tools for a single test attempt, it
+removes their downloads, interpreter, environment and caches after retrieving
+the evidence. Ownership records and transport markers remain for reconciliation.
 Preparation alone is not validation. The current catalog targets Windows ARM64
 with Python 3.12.2 AMD64 under x64 emulation; results identify both architectures
 and do not claim native ARM Python or equivalence to hosted x64 hardware.
