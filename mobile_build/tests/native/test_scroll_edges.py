@@ -48,6 +48,24 @@ class ScrollEdgesTests(TestCase):
             self.assertEqual((native.contentInset.top, native.contentInset.left, native.contentInset.right), (3, 4, 5))
             self.assertEqual(native.contentInsetAdjustmentBehavior, 2)
 
+    def test_expanded_notes_drawer_preserves_last_row_clearance_and_resets_when_closed(self):
+        from mobile.notes_drawers import NotesDrawers
+        drawer = NotesDrawers.__new__(NotesDrawers)
+        impl = type('AppleBox', (), {'__module__': 'toga_iOS.widgets.box'})()
+        drawer.sidebar = NS(_impl=impl, style=Pack())
+        native = NS(contentInset=insets(), verticalScrollIndicatorInsets=insets())
+        drawer.set_files_scrolls(NS(_impl=NS(native=native)))
+        drawer.expanded = True
+        with patch.dict('sys.modules', {'rubicon.objc': NS(UIEdgeInsets=insets)}):
+            self.assertTrue(drawer.extend_files_bottom(34))
+            self.assertEqual(drawer.sidebar.style.margin_bottom, -34)
+            self.assertEqual(native.contentInset.bottom, 46)
+            self.assertFalse(drawer.extend_files_bottom(34))
+            drawer.expanded = False
+            self.assertTrue(drawer.extend_files_bottom(34))
+            self.assertEqual(drawer.sidebar.style.margin_bottom, 0)
+            self.assertEqual(native.contentInset.bottom, 12)
+
     def test_android_retains_other_padding_and_places_bottom_space_inside_scroller(self):
         native = Mock()
         native.getPaddingLeft.return_value, native.getPaddingTop.return_value = 8, 6

@@ -10,8 +10,9 @@ Close an open library before turning its feature off. Markdown and embedded text
 editing remain usable with Text Editor disabled. Notebooks controls drawing opens
 and creation separately.
 
-Use Files, Calendar and Links to navigate, and the library's close control to
-leave. Unsaved changes retain their save/discard/cancel choices. Folder-backed
+Use Files, Search, Calendar and Links to navigate, and the library's close
+control to leave. The New Document, New Folder and Collapse All controls appear
+in Files. Unsaved changes retain their save/discard/cancel choices. Folder-backed
 Markdown uses the [shared mobile editing controls](../../text_editor/user_mobile/user_mobile.md).
 
 Markdown callouts such as `[!NOTE]` display as titled panels with their

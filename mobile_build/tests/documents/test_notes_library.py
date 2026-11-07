@@ -70,8 +70,12 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertEqual(row.children[1].browser_entry_kind, 'folder_document')
             button = next(child for child in row.children if hasattr(child, 'vault_path'))
             self.assertEqual(button.vault_path, 'Vault/Projects')
+            self.assertEqual(button.style.font_size, 15)
+            self.assertEqual(row.children[1]._impl._surface_roles[1], 'file_icon')
             await button.on_press()
             self.assertEqual(owner.path, 'Vault/Projects/Projects.md')
+            self.assertEqual(owner.view._native_reader_title_size, 15)
+            self.assertEqual(owner.breadcrumb_metrics.style.font_size, 12)
             owner.dispose()
         self.run_async(exercise())
 

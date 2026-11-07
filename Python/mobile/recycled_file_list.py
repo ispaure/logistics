@@ -15,12 +15,23 @@ def file_list_icon(folder):
 
 
 class RecycledFileList(RecycledList):
-    def __init__(self, *, row_kind='File', icon_kind='documents', icon_size=28, title_lines=1, **kwargs):
+    def __init__(self, *, row_kind='File', icon_kind='documents', icon_size=28, title_lines=1,
+                 row_height=None, body_text=BODY_TEXT, caption_text=CAPTION_TEXT, selection_role='hover', **kwargs):
         self.icon_kind = icon_kind
-        appearance = ListAppearance(palette=android_palette, apple_color=apple_color,
+        if row_height is None:
+            row_height = 64 if title_lines == 2 else TOUCH_TARGET
+
+        def palette(dark):
+            colors = android_palette(dark)
+            return colors if selection_role == 'hover' else {**colors, 'hover': colors[selection_role]}
+
+        def color(role):
+            return apple_color(selection_role if role == 'hover' else role)
+
+        appearance = ListAppearance(palette=palette, apple_color=color,
             high_contrast=eink_enabled, icon=lambda folder: icon('files' if folder else icon_kind),
-            row_height=64 if title_lines == 2 else TOUCH_TARGET, body_text=BODY_TEXT,
-            caption_text=CAPTION_TEXT, icon_size=icon_size, title_lines=title_lines)
+            row_height=row_height,
+            body_text=body_text, caption_text=caption_text, icon_size=icon_size, title_lines=title_lines)
         super().__init__(row_kind=row_kind, appearance=appearance, **kwargs)
         if self.factory.DetailedList.__module__.startswith('toga_android.'):
             from android.graphics import Color

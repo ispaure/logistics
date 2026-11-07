@@ -58,6 +58,7 @@ class AppearanceTests(unittest.TestCase):
 
     def test_accent_spectrum_preserves_selected_saturation_and_semantic_roles(self):
         import colorsys
+        from commonUtils.ui.appearance.colors import argb, contrast_ratio
         from mobile.palette import set_accent, EINK
         before = [dict(colors) for colors in (LIGHT, DARK, EINK)]
         self.addCleanup(set_accent)
@@ -69,12 +70,19 @@ class AppearanceTests(unittest.TestCase):
                 self.assertAlmostEqual(colorsys.rgb_to_hls(*channels)[2], saturation / 100, delta=.01)
                 for colors, original in zip((LIGHT, DARK), before):
                     self.assertEqual(colors['primary'], colors['accent'])
-                    self.assertEqual({key: value for key, value in colors.items() if key not in ('accent', 'primary')},
-                                     {key: value for key, value in original.items() if key not in ('accent', 'primary')})
+                    accent_roles = {'accent', 'primary', 'notes_selection'}
+                    self.assertEqual({key: value for key, value in colors.items() if key not in accent_roles},
+                                     {key: value for key, value in original.items() if key not in accent_roles})
+                    self.assertGreaterEqual(contrast_ratio(argb(colors['text']), argb(colors['notes_selection'])), 4.5)
                 self.assertEqual(EINK, before[2])
         set_accent()
         self.assertEqual(LIGHT['accent'], '#3363cc')
         self.assertEqual(DARK['accent'], '#3363cc')
+        default_selection = LIGHT['notes_selection']
+        set_accent(130, 70)
+        self.assertNotEqual(LIGHT['notes_selection'], default_selection)
+        set_accent()
+        self.assertEqual(LIGHT['notes_selection'], default_selection)
 
     def test_full_saturation_violet_is_not_lightened_in_either_mode(self):
         from mobile.palette import accent_colors

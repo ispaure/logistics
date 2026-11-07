@@ -156,6 +156,7 @@ def sync(app, view, destination):
         if notes_controls:
             from android.graphics import Typeface
             label.setTypeface(label.getTypeface(), Typeface.BOLD)
+            label.setTextSize(getattr(view, '_native_reader_title_size', 17))
         if hasattr(view, '_document_path'):
             from .document_location import bind_android_hold
             adapter._reader_action_bar_fit = fit_document_title(

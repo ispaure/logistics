@@ -211,7 +211,8 @@ def mount_apple_title(view, controller, title):
     changed = getattr(view, '_document_title_state', None) != state
     if changed:
         view._document_title_view = storage_title(title, state[1], state[2], width,
-                                                  leading=leading, bold=bool(notes_controls))
+                                                  leading=leading, bold=bool(notes_controls),
+                                                  title_size=getattr(view, '_native_reader_title_size', 17))
         if hasattr(view, '_document_path'):
             bind_apple_hold(view, view._document_title_view)
         view._document_title_state = state

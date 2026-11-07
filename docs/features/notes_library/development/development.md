@@ -128,6 +128,14 @@ at the end of an overflowing path. `features/notes_library/mobile/breadcrumbs.py
 controls. It defers initial scrolling until native viewport/content measurements
 agree with the current layout; retries are bounded and cancelled for obsolete
 paths or disposal. Once positioned, ordinary user scrolling is left alone.
+Notes Library targets 15 pt/sp for filenames, 13 for tabs and 12 for paths.
+The mobile host converts Toga widget styles to its font units. UIKit and Android
+list adapters receive native sizes directly, and Markdown continues to use the
+reader's own text size. Files and Search share two-line filenames and the same
+selection tint from the Settings accent. Entry artwork keeps the file-icon color.
+New Document, New Folder and Collapse All are mounted only in Files.
+On Duo with a vertical system bar, the expanded Files pane fills the window
+to the bottom. Its lists keep safe-area padding inside their scroll content.
 Short paths are centered in the strip. A touch that starts inside the strip
 belongs to the strip in either direction, including at its scroll limits.
 Android breadcrumb buttons use the measured typeface and explicit spacing rather

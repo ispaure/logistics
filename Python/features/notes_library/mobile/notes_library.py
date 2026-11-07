@@ -67,9 +67,10 @@ class NotesHost:
     batch_rows: Callable = nullcontext
     tree_rows: Callable = lambda owner: None
     audio_output: Callable = lambda: None
+    style_font: Callable = lambda size: size
 
 
-from .library_panels import CAPTION_FONT, CONTROL_FONT, LibraryPanels
+from .library_panels import ENTRY_ICON_SIZE, FILENAME_SIZE, PATH_SIZE, TAB_SIZE, LibraryPanels
 from .library_opening import LibraryDocuments
 
 
@@ -171,7 +172,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         for key, title in (('outgoing', 'Out'), ('incoming', 'Back')):
             def select(widget=None, key=key, **kwargs):
                 self.select_links_tab(key)
-            button = toga.Button(title, on_press=select, style=Pack(flex=1, height=48))
+            button = toga.Button(title, on_press=select,
+                style=Pack(flex=1, height=48, font_size=host.style_font(TAB_SIZE)))
             self.link_tab_buttons[key] = button
             tabs.add(button)
         self.select_links_tab('outgoing')
@@ -291,7 +293,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.secondary.insert(2, self.breadcrumb_scroll)
         self.breadcrumb_scroll.watch_swipes(self.expand_breadcrumbs)
         self.sidebar.breadcrumb_scroll = self.breadcrumb_scroll
-        self.breadcrumb_metrics = toga.Label('', style=Pack(font_size=13))
+        self.breadcrumb_font = host.style_font(PATH_SIZE)
+        self.breadcrumb_metrics = toga.Label('', style=Pack(font_size=self.breadcrumb_font))
         self._breadcrumb_key = None
         self._expanded_breadcrumb_path = None
         self._breadcrumbs_shortened = False
@@ -299,6 +302,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         # Keep the library identity between its pane controls, including when
         # UIKit moves the remaining reader actions to a vertical edge.
         self.view._notes_title_controls = (self.close_button, self.menu, self.links_button)
+        self.view._native_reader_title_size = FILENAME_SIZE
         if host.apple:
             self.view._document_title_controls = (self.menu, self.links_button)
             self.view._document_title_parent = self.article
@@ -395,7 +399,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                                         self.back_button, self.forward_button, self.reader_actions_button),
                                        (*active, False, False, False)):
                 self.host.presentation.surface(button, radius=8,
-                    background='hover' if selected else 'transparent',
+                    background='notes_selection' if selected else 'transparent',
                     foreground='accent' if selected else 'text',
                     outlined=False, eink_selected=selected)
         controls = [button for button in self.secondary.children if button is not self.breadcrumb_scroll]
@@ -473,14 +477,15 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self._breadcrumbs_shortened = labels != names
         for (name, page, folder), label in zip(entries, labels):
             if self.breadcrumbs.children:
-                self.breadcrumbs.add(toga.Label('›', style=Pack(margin_top=12, width=12, font_size=13)))
+                self.breadcrumbs.add(toga.Label('›', style=Pack(margin_top=12, width=12, font_size=self.breadcrumb_font)))
             async def open_folder(widget, path=page, folder=folder, **kwargs):
                 if path:
                     await self.open_note(path)
                 else:
                     await self.reveal_folder(folder)
             button = self.host.list_button(toga.Button(label, on_press=open_folder,
-                style=Pack(height=44, width=max(minimum, measure(label) + 12), font_size=13)))
+                style=Pack(height=44, width=max(minimum, measure(label) + 12),
+                           font_size=self.breadcrumb_font)))
             button._impl._content_inset = 0
             self.host.presentation.surface(button, radius=0, background='transparent', foreground='muted', outlined=False)
             backend = type(button._impl).__module__
@@ -891,7 +896,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             row = old_rows.get(key)
             if row is None:
                 button = self.host.list_button(
-                    toga.Button(label, on_press=choose, style=Pack(height=48, flex=1))
+                    toga.Button(label, on_press=choose,
+                        style=Pack(height=48, flex=1, font_size=self.host.style_font(FILENAME_SIZE)))
                 )
                 self.host.middle_filename(button)
                 # Reserve the row's width for names, keeping its vertical size.
@@ -904,7 +910,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 if directory and not searching:
                     icon_name = 'folder_document' if page is not None else 'folder_hub'
                     entry_icon = self.host.presentation.icon_button(icon_name, toggle_label, on_press=expand)
-                    self.host.presentation.apply_icon(entry_icon, icon_name, toggle_label, size=20)
+                    self.host.presentation.apply_icon(entry_icon, icon_name, toggle_label, size=ENTRY_ICON_SIZE)
                     entry_icon.browser_entry_kind = 'folder_document' if page is not None else 'folder'
                     entry_icon.style.width = 32
                     entry_icon.style.height = 48
@@ -913,7 +919,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                         foreground='file_icon', outlined=False)
                 else:
                     entry_icon = self.host.entry_icon(directory, landing_page=page is not None)
-                    entry_icon.style.width = entry_icon.style.height = 20
+                    entry_icon.style.width = entry_icon.style.height = ENTRY_ICON_SIZE
                     entry_icon.style.margin_left = entry_icon.style.margin_right = 2
                 if hasattr(self, 'file_drag') and self.library.supports('rename'):
                     self.file_drag.bind(entry_icon, path, target=directory)
@@ -952,14 +958,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             button = next(child for child in row.children if hasattr(child, 'vault_path'))
             selected = path == self.selected_path
             if getattr(row, '_notes_selected', None) != selected:
-                self.host.highlight_entry(row, selected)
-                self.host.highlight_entry(button, selected)
-                if not selected:
-                    self.host.presentation.surface(row, radius=0, background='transparent',
-                        outlined=False, eink_outlined=False)
-                    self.host.presentation.surface(button, radius=0, background='transparent',
-                        foreground='text', outlined=False, eink_outlined=False)
-                row._notes_selected = selected
+                self.style_tree_selection(row, button, selected)
             if page is not None:
                 underline_folder_link(button)
             desired.append(row)
@@ -1094,6 +1093,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         for name, button in self.link_tab_buttons.items():
             selected = name == key
             self.host.tab_style(button, selected)
+            self.host.presentation.surface(button, radius=0, background='transparent',
+                foreground='accent' if selected else 'muted', outlined=False)
             label = 'Outgoing links' if name == 'outgoing' else 'Backlinks'
             accessible_name(button, label + (' selected' if selected else ''))
 
@@ -1108,12 +1109,13 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             async def choose(widget=None, target=target, **kwargs):
                 await self.open_note(target)
             relative = PurePosixPath(target).relative_to(self.root or '.')
-            button = self.host.list_button(toga.Button(relative.name, on_press=choose, style=Pack(height=48)))
+            button = self.host.list_button(toga.Button(relative.name, on_press=choose,
+                style=Pack(height=48, font_size=self.host.style_font(FILENAME_SIZE))))
             accessible_name(button, str(relative))
             rows.add(button)
             if names[relative.name.casefold()] > 1:
                 parent = str(relative.parent) if relative.parent != PurePosixPath('.') else 'Library root'
-                hint = toga.Label(parent, style=Pack(font_size=CAPTION_FONT, margin_left=12, margin_bottom=6))
+                hint = toga.Label(parent, style=Pack(font_size=self.breadcrumb_font, margin_left=12, margin_bottom=6))
                 self.host.presentation.surface(hint, radius=0, foreground='muted', background='transparent',
                                                outlined=False)
                 rows.add(hint)

@@ -178,6 +178,7 @@ def speech_presentation(app):
 
 def notes_host(app):
     from ..audio_output import for_app
+    from features.notes_library.mobile.library_panels import ENTRY_ICON_SIZE, FILENAME_SIZE, PATH_SIZE
     from features.notes_library.mobile.notes_library import NotesHost
     from features.notes_library.notes import MAX_NOTE, MAX_RENDERED_HTML, MAX_IMAGE_HTML
     from commonUtils.ui.native.markdown_preview import MarkdownPreviewLimits
@@ -253,7 +254,8 @@ def notes_host(app):
         from ..recycled_file_list import RecycledFileList
         from ..hub_icons import icon
         def row_list(**kwargs):
-            result = RecycledFileList(icon_size=20, title_lines=2, **kwargs)
+            result = RecycledFileList(icon_size=ENTRY_ICON_SIZE, title_lines=2, row_height=56,
+                body_text=FILENAME_SIZE, caption_text=PATH_SIZE, selection_role='notes_selection', **kwargs)
             result.tree_landing_icon = icon('folder_document')
             return result
         return NativeTreeRows(owner, row_list)

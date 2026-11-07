@@ -88,13 +88,16 @@ class NotesDrawers:
             self.view.remove(self.sidebar)
             self.sidebar.style.flex = 1
 
+    def set_files_scrolls(self, *scrolls):
+        self.sidebar._bottom_scrolls = scrolls
+
     def extend_files_bottom(self, extension):
         self.files_bottom_extension = extension
         margin = -extension if self.expanded else 0
         if self.sidebar.style.margin_bottom == margin:
             return False
-        self.sidebar.style.margin_bottom = margin
-        return True
+        from .scroll_edges import sync_bottom
+        return sync_bottom(self.sidebar, inset=-margin)
 
     def toggle(self, widget=None, **kwargs):
         if self.expanded:

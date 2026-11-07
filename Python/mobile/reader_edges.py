@@ -122,11 +122,9 @@ def compact_apple_reader(container):
         extension = 0
         if edge in (1, 2):
             frame = container.native.convertRect(container.native.bounds, toView=window)
-            panel_offset = drawers.view.layout.absolute_content_top - view.layout.absolute_content_top
-            top_gap = max(0, float(frame.origin.y) + container.top_inset + panel_offset)
             bottom_gap = (float(window.bounds.size.height - frame.origin.y - frame.size.height)
                           + container.bottom_inset + view.style.margin_bottom)
-            extension = max(0, round(bottom_gap - top_gap))
+            extension = max(0, round(bottom_gap))
         changed = drawers.extend_files_bottom(extension) or changed
     return changed
 

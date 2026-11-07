@@ -109,7 +109,7 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 title = owner.view._document_title_view
                 assert int(title.font.fontDescriptor.symbolicTraits) & 2, 'Notes title is not bold'
                 assert owner.reader_actions_button._impl._surface_roles[0] == 'transparent'
-                assert owner.menu._impl._surface_roles[0] == ('hover' if owner.sidebar.expanded else 'transparent')
+                assert owner.menu._impl._surface_roles[0] == ('notes_selection' if owner.sidebar.expanded else 'transparent')
                 title_frame = title.convertRect(title.bounds, toView=window)
                 article_frame = owner.web._impl.native.convertRect(owner.web._impl.native.bounds, toView=window)
                 for button in owner.view._document_title_controls:
@@ -142,7 +142,9 @@ class NotesHeaderProbe(NotesDrawersProbe):
                         panel = owner.tree._impl.native
                         frame = panel.convertRect(panel.bounds, toView=window)
                         bottom_gap = window.bounds.size.height - frame.origin.y - frame.size.height
-                        assert abs(frame.origin.y - bottom_gap) <= 2, ('Asymmetric Files panel', frame.origin.y, bottom_gap)
+                        assert abs(bottom_gap) <= 2, ('Files panel stops above window bottom', bottom_gap)
+                        listing = owner.rows.native_list._impl.native
+                        assert listing.contentInset.bottom >= owner.sidebar.files_bottom_extension + 11
                     title_y = float(title_frame.origin.y + title_frame.size.height / 2)
                     assert abs(title_y - float(tabs_frame.origin.y + tabs_frame.size.height / 2)) <= 2
                     await capture_window(self, evidence / ('notes-pane-open-' + orientation + '.png'))
@@ -221,14 +223,16 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 await asyncio.sleep(.3)
                 assert owner.search_rows
                 assert owner.rows_scroll.parent is owner.search_content
-                assert owner.panel_actions.parent is owner.tree
+                assert owner.panel_actions.parent is None
                 await capture_window(self, evidence / ('sidebar-search-' + orientation + '.png'))
                 owner.select_panel_tab('Calendar')
                 await owner.calendar_task
                 await asyncio.sleep(.3)
                 assert owner.panel_body.children == [owner.calendar_scroll]
+                assert owner.panel_actions.parent is None
                 await capture_window(self, evidence / ('sidebar-calendar-' + orientation + '.png'))
                 owner.select_panel_tab('Files')
+                assert owner.panel_actions.parent is owner.tree
                 owner.sidebar.show_detail()
                 await asyncio.sleep(.3)
                 report['samples'].append(dict(orientation=orientation, expanded=owner.sidebar.expanded,
@@ -250,6 +254,7 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 cell = native_list.cellForRowAtIndexPath(NSIndexPath.indexPathForRow(entry.index, inSection=0))
                 label = cell.wrapping_title
                 assert label.numberOfLines == 2
+                assert abs(float(label.font.pointSize) - 15) < .1
                 assert label.frame.size.height > label.font.lineHeight * 1.5, 'Long note title did not wrap'
                 await capture_window(self, evidence / 'notes-files-wrapped-portrait.png')
                 pending = asyncio.create_task(owner.file_actions('Home.md'))

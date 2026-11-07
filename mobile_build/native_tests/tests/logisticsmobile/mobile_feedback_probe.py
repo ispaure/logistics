@@ -113,10 +113,10 @@ class FeedbackProbe(LogisticsMobile):
                 await capture_window(self, output / f'feedback-notes-{orientation}.png')
                 tap(owner.panel_tabs['Search'])
                 await asyncio.sleep(.2)
-                assert owner.panel_tab == 'Search' and owner.panel_actions.parent is owner.tree
+                assert owner.panel_tab == 'Search' and owner.panel_actions.parent is None
                 tap(owner.panel_tabs['Calendar'])
                 await until(lambda: owner.calendar_task is not None and owner.calendar_task.done(), 'Calendar did not load')
-                assert owner.panel_tab == 'Calendar' and owner.panel_actions.parent is owner.tree
+                assert owner.panel_tab == 'Calendar' and owner.panel_actions.parent is None
                 tap(owner.panel_tabs['Files'])
                 report['items']['18'].append(dict(orientation=orientation, pane=pane, commands=[first, last]))
             owner.dispose()
