@@ -154,8 +154,9 @@ class RotationScenarioTests(unittest.TestCase):
                 seen.append(name)
                 if name == 'nested-folder':
                     self.assertTrue(any(row['name'] == 'Note.md' for row in app.file_rows.values()))
-                elif name == 'settings-text':
-                    self.assertEqual(app.settings_navigation.selected, 'Text')
+                elif name in {'settings-text', 'settings-epub'}:
+                    title = 'EPUB' if name == 'settings-epub' else 'Text'
+                    self.assertEqual(app.settings_navigation.selected, title)
                 elif name == 'provider-epub-find':
                     self.assertIsNotNone(app.private_sessions.active.provider_epub_view)
             app.loop.run_until_complete(rotation_screens.visit_screens(app, check))
