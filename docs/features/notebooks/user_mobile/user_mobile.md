@@ -70,7 +70,8 @@ highlighted. Tap that slot again to open the **Writing tools** drawer below it.
 All nine brushes appear in one row on wide screens and in two full-width rows
 of five and four on narrow screens. The ink strip shows the selected brush’s
 colors, and the stroke sample sits next to **Thin**, **Medium**, and **Thick**
-(Highlighter has one **Fixed** width). Tap the opener again, tap outside, or
+(Highlighter has one **Fixed** width). The width buttons show the approximate
+thickness of a horizontal finger stroke for the chosen brush. Tap the opener again, tap outside, or
 start a stroke outside the drawer to close it. That first stroke draws immediately.
 A border and check mark identify the selected color. Colors follow the selected brush's supported palette and
 remain visible in high-contrast mode and while grayscale document preview is on.
