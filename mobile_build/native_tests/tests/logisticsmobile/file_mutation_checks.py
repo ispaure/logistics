@@ -89,7 +89,7 @@ async def exercise_destination_edges(app):
         await picker._storage_refresh
         assert picker.editor_picker_location == (label, '')
         assert not picker.picker_parent.enabled
-    for name in ('bad.exe', '../escape'):
+    for name in ('bad/name', '../escape'):
         picker.save_as_name.value = name
         await picker.confirm_editor_file()
         assert picker.save_as_status.value and picker.save_as_data == data

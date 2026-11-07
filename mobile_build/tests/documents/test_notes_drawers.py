@@ -109,7 +109,7 @@ class NotesDrawerTests(unittest.TestCase):
             self.assertEqual(notes.children[1].text, 'Notes')
             self.assertEqual(notes.children[2].children[0].text, 'No Notes libraries found.')
             original = status._settings_source_text
-            self.assertIn('Unlock LocalCrypt', original)
+            self.assertIn('Unlock encrypted copies', original)
             fit_discovery_status(status, LayoutFrame(300, lambda destination: 240))
             narrow = status._settings_rendered_text
             self.assertGreater(len(narrow.splitlines()), 1)

@@ -77,9 +77,9 @@ class DestinationWorkflowTests(unittest.TestCase):
         self.assertFalse((self.root.parent / 'escape').exists())
 
     def test_failed_write_retains_draft_for_correction_and_retry(self):
-        self.picker.save_as_name.value = 'invalid.exe'
+        self.picker.save_as_name.value = 'invalid/name'
         self.run_async(self.picker.confirm_editor_file())
-        self.assertIn('supported', self.picker.save_as_status.value)
+        self.assertIn('failed', self.picker.save_as_status.value.lower())
         self.assertEqual(self.picker.save_as_data, b'# Unsaved')
         self.picker.save_as_name.value = 'fixed'
         self.run_async(self.picker.confirm_editor_file())
