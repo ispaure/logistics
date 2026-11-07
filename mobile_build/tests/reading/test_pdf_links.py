@@ -75,7 +75,28 @@ class PDFMobileLinkTests(unittest.TestCase):
                 self.assertTrue(await app.open_download(path=path))
                 owner = app.private_sessions.active
                 canvas = owner.crypt_image
-                await canvas.jump_link(2)
+                # A reader progress write owns the document without setting
+                # cloud_busy. The accepted link must wait before selecting.
+                release_progress = asyncio.Event()
+                progress = SimpleNamespace(worker=None, task=None)
+                async def save_progress():
+                    await release_progress.wait()
+                    progress.worker = None
+
+                with patch.object(owner, '_provider_progress', progress, create=True):
+                    progress.worker = progress.task = asyncio.create_task(save_progress())
+                    link = asyncio.create_task(canvas.jump_link(2))
+                    try:
+                        await asyncio.sleep(0)
+                        self.assertFalse(link.done())
+                        self.assertFalse(owner.cloud_busy)
+                        self.assertFalse(owner.provider_document().can_start())
+                        self.assertEqual(owner.crypt_page.value, owner.crypt_reader.labels[0])
+                    finally:
+                        release_progress.set()
+                    # Publication can now capture progress again.
+                    progress.capture = lambda: None
+                    await link
                 self.assertEqual(owner.crypt_reader.pdf_navigation.indices[0], 2)
                 self.assertEqual(canvas.return_page, (0, 2))
                 self.assertEqual(len(canvas.return_box.children), 1)

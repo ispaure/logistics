@@ -1,4 +1,6 @@
 """PDF page gestures and compact navigation controls."""
+import asyncio
+
 import toga
 from commonUtils.ui.native.image_canvas import ImageCanvas
 
@@ -46,10 +48,23 @@ class PDFCanvas(ImageCanvas):
                     return True
         return False
 
+    async def link_navigation_ready(self, owner, reader, page):
+        # Saving reader progress also owns the document briefly, without
+        # setting cloud_busy. Let that save finish before changing selection.
+        progress = getattr(owner, '_provider_progress', None)
+        if progress is not None and progress.worker is not None:
+            await asyncio.wait({progress.task})
+        return (self.link_alive() and self.link_owner is owner and self.link_reader is reader
+                and not owner.cloud_busy and owner.provider_document().can_start()
+                and reader.pdf_navigation.indices[0] == page)
+
     async def jump_link(self, index):
         if not self.link_alive() or self.link_owner.cloud_busy:
             return
-        previous = self.link_reader.pdf_navigation.indices[0]
+        owner, reader = self.link_owner, self.link_reader
+        previous = reader.pdf_navigation.indices[0]
+        if not await self.link_navigation_ready(owner, reader, previous):
+            return
         self.clear_return()
         await self.link_owner.move_private_page(index)
         if self.link_alive() and self.link_reader.pdf_navigation.indices[0] == index and index != previous:
@@ -62,10 +77,12 @@ class PDFCanvas(ImageCanvas):
     async def undo_link(self, widget=None, **kwargs):
         if not self.link_alive() or self.link_owner.cloud_busy or self.return_page is None:
             return
+        owner, reader = self.link_owner, self.link_reader
         previous, target = self.return_page
-        self.clear_return()
-        if self.link_reader.pdf_navigation.indices[0] == target:
-            await self.link_owner.move_private_page(previous)
+        if (await self.link_navigation_ready(owner, reader, target)
+                and self.return_page == (previous, target)):
+            self.clear_return()
+            await owner.move_private_page(previous)
 
     def dispose(self):
         self.clear_return()
