@@ -127,19 +127,24 @@ async def exercise_notebooks(app, *, return_to_home=True):
     assert choices == dict(open=True, brushes=properties['tools'], selected_focused=True), choices
     await panel.web.evaluate_javascript("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))")
     assert await panel.web.evaluate_javascript("document.getElementById('mobileSheet').hidden")
-    async def paper_frame():
-        return await panel.web.evaluate_javascript("JSON.stringify($('paper').getBoundingClientRect().toJSON())")
-
-    paper = await paper_frame()
     for _ in range(3):
-        await panel.web.evaluate_javascript("window.notebookNativeAction('hide-tools')")
-        assert await panel.web.evaluate_javascript("""document.body.classList.contains('tools-hidden') &&
-            [...document.querySelectorAll('button')].filter(b =>
-                b.getClientRects().length && getComputedStyle(b).visibility !== 'hidden').length === 1""")
-        assert await paper_frame() == paper, 'Hiding tools moved the notebook canvas'
-        await panel.web.evaluate_javascript("$('restoreTools').click()")
-        assert await panel.web.evaluate_javascript("!document.body.classList.contains('tools-hidden')")
-        assert await paper_frame() == paper, 'Restoring tools moved the notebook canvas'
+        # A native resize or toolbar lease update may land between separate
+        # WK evaluations. Measure the hide/show effect within one layout turn.
+        visibility = json.loads(await panel.web.evaluate_javascript("""(() => {
+            const frame = () => $('paper').getBoundingClientRect().toJSON();
+            const before = frame();
+            window.notebookNativeAction('hide-tools');
+            const hidden = document.body.classList.contains('tools-hidden');
+            const visibleButtons = [...document.querySelectorAll('button')].filter(button =>
+                button.getClientRects().length && getComputedStyle(button).visibility !== 'hidden');
+            const hiddenFrame = frame();
+            $('restoreTools').click();
+            return JSON.stringify({before, hiddenFrame, restoredFrame:frame(), hidden,
+                onlyRestore:visibleButtons.length === 1 && visibleButtons[0].id === 'restoreTools',
+                restored:!document.body.classList.contains('tools-hidden')});
+        })()"""))
+        assert visibility['hidden'] and visibility['onlyRestore'] and visibility['restored'], visibility
+        assert visibility['before'] == visibility['hiddenFrame'] == visibility['restoredFrame'], visibility
     from .notebook_pointer_checks import exercise_pointer_input
     log(Severity.INFO, 'Native notebook', 'LOGISTICS_NATIVE_DETAIL=notebook:pointer-input')
     pointer_report = await exercise_pointer_input(panel)
