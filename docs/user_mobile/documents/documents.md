@@ -47,7 +47,7 @@ contains Open, New and Search while Unlock remains directly available.
 
 In **New document**, enter a name and choose Plain text, Markdown or Notebook.
 Tap **Choose location** to leave the keyboard and open the folder browser. Select
-a folder in **Local**, **All files**, **Received Files** or an unlocked **LocalCrypt**
+a folder in **Local**, **Shared Files**, **Received Files** or an unlocked **LocalCrypt**
 location. Changing the file type updates a matching document extension; a name
 without an extension receives the selected one. Tap **Create document** to create
 and open the file. On a narrow screen, **Back to name** keeps your chosen folder
@@ -58,15 +58,15 @@ The folder arrow navigates within the browser. Android Back dismisses folder
 entry or search and retraces folder navigation first. At the root it returns
 to naming on a narrow screen or exits when both steps are visible. **Cancel**
 returns directly to the screen where you started. The file is
-created in that folder and appears when you browse it from All files. **Save**
+created in that folder and appears when you browse it from Shared Files. **Save**
 writes edits back to the same file. LocalCrypt files stay encrypted on disk;
 cloud locations are read-only and receive changes through reviewed **Push**.
 New documents do not use the private saved-document store. Existing saved
 documents remain available in Documents.
 
-The folder browser starts at **All files**, the same root as Workspaces’
-**Browse All Files**. Open Local or Received Files to choose a folder; Up returns
-to All files from either collection. To make a subfolder, tap **New folder**,
+The folder browser starts at **Shared Files**, the same shared root as Workspaces.
+Choose **Local** or **Received Files** to browse those folders. Up returns to
+**Shared Files** from either collection. To make a subfolder, tap **New folder**,
 enter its name, then tap **Create folder**. The browser selects the new folder.
 Cancelling the folder entry keeps the current location and your filename.
 On Android this root is a list of locations;

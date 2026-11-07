@@ -290,7 +290,7 @@ class DocumentCreationTests(unittest.TestCase):
             picker.save_as_name.value = 'Cold start'
             app.loop.run_until_complete(picker.choose_creation_location())
         picker = app.editor_picker()
-        self.assertEqual(picker.editor_picker_location, ('All files', ''))
+        self.assertEqual(picker.editor_picker_location, ('Shared Files', ''))
         self.assertIn('Local', [row['name'] for row in picker.editor_picker_rows.values()])
         self.assertFalse(app.cloud_busy)
         self.assertNotEqual(picker.save_as_status.value, 'Loading folder…')
@@ -342,7 +342,7 @@ class DocumentCreationTests(unittest.TestCase):
             picker = app.editor_picker()
             self.assertIs(picker.panel, picker.name_panel)
             self.assertIs(picker.location_panel.parent, picker.creation_layout)
-            self.assertEqual(picker.editor_picker_location, ('All files', ''))
+            self.assertEqual(picker.editor_picker_location, ('Shared Files', ''))
             self.assertIsNone(picker.next_button.parent)
             app.loop.run_until_complete(picker.browser_editor_location(('Local', '')))
             picker.save_as_name.value = 'No extra step'
@@ -426,8 +426,8 @@ class DocumentCreationTests(unittest.TestCase):
 
     def test_creation_starts_at_browse_all_files_and_can_return_from_collections(self):
         _, picker = self.choose('Anywhere', local=False)
-        self.assertEqual(picker.editor_picker_location, ('All files', ''))
-        self.assertEqual(picker.editor_provider('All files').root, device_files(self.root).root)
+        self.assertEqual(picker.editor_picker_location, ('Shared Files', ''))
+        self.assertEqual(picker.editor_provider('Shared Files').root, device_files(self.root).root)
         self.assertFalse(picker.picker_primary.enabled)
         self.assertFalse(picker.picker_new_folder.enabled)
         self.assertEqual(picker.picker_primary.text, 'Create here')
@@ -439,7 +439,7 @@ class DocumentCreationTests(unittest.TestCase):
             self.assertTrue(picker.picker_primary.enabled)
             self.assertTrue(picker.picker_parent.enabled)
             self.app.loop.run_until_complete(picker.parent_editor_folder())
-            self.assertEqual(picker.editor_picker_location, ('All files', ''))
+            self.assertEqual(picker.editor_picker_location, ('Shared Files', ''))
 
     def test_ios_shared_root_and_collection_destinations_publish_documents(self):
         from services.documents.locations import use_shared_local, _shared_local_roots
@@ -451,13 +451,13 @@ class DocumentCreationTests(unittest.TestCase):
         self.addCleanup(_shared_local_roots.pop, self.root)
         (shared / 'Notes').mkdir()
         for label, folder, target in (
-                ('All files', 'Notes', shared / 'Notes/Public.md'),
+                ('Shared Files', 'Notes', shared / 'Notes/Public.md'),
                 ('Local', '', shared / 'Local/Public.md'),
                 ('Received Files', '', inbox_path(self.root) / 'Public.md')):
             with self.subTest(label=label):
                 _, picker = self.choose('Public', 'Markdown (.md)', local=False)
-                path = folder if label == 'All files' else picker.editor_provider(label).root.name
-                self.app.loop.run_until_complete(picker.browser_editor_location(('All files', path)))
+                path = folder if label == 'Shared Files' else picker.editor_provider(label).root.name
+                self.app.loop.run_until_complete(picker.browser_editor_location(('Shared Files', path)))
                 self.assertEqual(picker.editor_picker_location, (label, folder))
                 self.app.loop.run_until_complete(picker.confirm_editor_file())
                 self.assertTrue(target.is_file(), picker.save_as_status.value)
@@ -492,7 +492,7 @@ class DocumentCreationTests(unittest.TestCase):
         before = app.store.documents()
         _, picker = self.choose('First note', 'Markdown (.md)')
         self.assertNotIn('Cloud', picker.editor_storage_roots)
-        self.assertEqual(set(picker.editor_storage_roots), {'Local', 'All files', 'Received Files'})
+        self.assertEqual(set(picker.editor_storage_roots), {'Local', 'Shared Files', 'Received Files'})
         self.assertEqual(app.store.documents(), before)
         picker.picker_folder.value = 'Notes'
         app.loop.run_until_complete(picker.refresh_editor_browser())

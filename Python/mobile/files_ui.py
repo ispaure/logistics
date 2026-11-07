@@ -355,24 +355,29 @@ class FilesUI:
         box.add(toga.Button('Return to files', on_press=self.show_files, style=Pack(height=48, margin_top=12)))
         self.show_view(self.file_operation_view, destination='files', route='file-actions', title='File actions')
 
-    def file_item_commands(self):
-        selected = self.file_rows.get(self.file_selection.value)
+    def file_item_commands(self, *, context=None):
+        if context is None:
+            provider, storage = self.file_provider, self.file_storage.value
+            selected = self.file_rows.get(self.file_selection.value)
+        else:
+            provider, storage, selected = context
         commands = [('New folder…', lambda: self.show_file_actions(operation='new'))]
-        if self.file_storage.value == 'Local files':
+        if storage == 'Local files':
             commands.append(('Pin this folder', self.locations_controller().pin_local_folder))
         if selected:
             commands += [('Open', self.enter_file_folder if selected['directory'] else self.read_managed_file),
                          ('Rename…', lambda: self.show_file_actions(operation='rename')),
                          ('Move…', lambda: self.show_file_actions(operation='move')),
-                         *([('Copy', self.copy_file)] if self.can_copy_file() else []),
+                         *([('Copy', self.copy_file)] if self.can_copy_file(provider) else []),
                          ('Details', self.show_file_details), ('Delete…', self.delete_file)]
-        if isinstance(self.file_provider, LocalFiles) and (not self.file_provider.private or getattr(self.file_provider, 'supports_metadata_collections', False)):
+        if isinstance(provider, LocalFiles) and (not provider.private or getattr(provider, 'supports_metadata_collections', False)):
             commands += [('Edit comics in this folder…', self.edit_local_comic_folder)]
         return commands + [('Archive password…', lambda: self.show_file_actions(operation='password'))]
 
-    def can_copy_file(self):
+    def can_copy_file(self, provider=None):
         from services.documents.storage import document_writable
-        return self.file_provider is not None and document_writable(self.file_provider)
+        provider = self.file_provider if provider is None else provider
+        return provider is not None and document_writable(provider)
 
     async def copy_file(self, widget=None, **kwargs):
         from .file_operations import FileOperationRequest
@@ -583,11 +588,15 @@ class FilesUI:
             return
         try:
             provider, path = self.selected_file()
-        except ValueError as error:
+            revision = provider.entry(path)['revision']
+        except (OSError, ValueError) as error:
             self.file_status.value = str(error)
             return
-        request = FileOperationRequest('delete', provider, path)
-        if not await self.main_window.dialog(toga.ConfirmDialog('Delete permanently', 'Delete this item and all contents? This cannot be undone.')):
+        request = FileOperationRequest('delete', provider, path, expected_revision=revision)
+        from services.documents.storage import display_path
+        if not await self.main_window.dialog(toga.ConfirmDialog(
+                f'Delete {Path(path).name}?',
+                f'{display_path(provider, path)}\n\nThis permanently deletes the selected item and its contents.')):
             return
         if await self.file_operations().run(lambda: request):
             await self.browse_files()

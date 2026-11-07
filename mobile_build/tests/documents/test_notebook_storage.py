@@ -395,6 +395,44 @@ class NotebookStorageTests(unittest.TestCase):
         self.assertEqual(list((self.root / 'notebooks').glob('**/base.rmdoc')), [])
         self.assertIn('draft retained', panel.status.text)
 
+    def test_closed_notebook_rename_reopens_the_file_from_recents(self):
+        from mobile.document_mutations import prepare_document_mutation
+        from mobile.file_operations import FileOperationRequest, retiring_work
+        from threading import Event
+
+        panel = self.create(private=False)
+        resource = panel.document.resource
+        request = FileOperationRequest('rename', resource.provider, resource.path, 'Renamed.rmdoc')
+        self.assertTrue(self.app.close_session(panel.session.id))
+
+        async def rename():
+            plan = await prepare_document_mutation(self.app, request)
+            try:
+                await retiring_work(plan.execute, Event(), completed=plan.apply)
+            finally:
+                plan.release()
+
+        self.run_async(rename())
+        [(session, summary)] = self.app.recent_items()
+        self.assertEqual(summary[0], 'Renamed.rmdoc')
+        [menu_button] = self.app.hub_controller().document_row_menu(session)
+        commands = dict(menu_button.document_actions.raw_actions)
+        self.assertIn('Rename…', commands)
+        self.assertIn('Delete…', commands)
+        self.assertTrue(self.run_async(commands['Document location']()))
+        self.assertEqual(self.app.selected_file()[1], 'Renamed.rmdoc')
+        self.run_async(self.app.recent_opener(session)())
+        reopened = self.app.notebook_panel
+        self.assertEqual(reopened.document.resource.path, 'Renamed.rmdoc')
+        self.stroke(reopened)
+        with patch.object(self.app, 'document_close_dialog', return_value=True) as dialog:
+            self.assertTrue(self.app.request_close_session(reopened.session.id))
+        dialog.assert_called_once()
+        with patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value='cancel')) as confirm:
+            self.assertFalse(self.run_async(reopened.delete_document()))
+        self.assertEqual(confirm.call_args.args[0].title, 'Delete Renamed.rmdoc?')
+        self.assertIn('Renamed.rmdoc', confirm.call_args.args[0].message)
+
     def test_live_notebook_rename_retains_draft_and_saves_only_to_new_name(self):
         from mobile.document_mutations import prepare_document_mutation
         from mobile.file_operations import FileOperationRequest, retiring_work
