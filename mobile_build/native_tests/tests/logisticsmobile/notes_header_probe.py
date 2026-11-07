@@ -66,8 +66,10 @@ class NotesHeaderProbe(NotesDrawersProbe):
             deep.mkdir(parents=True)
             deep_note = deep / 'Deeply nested.md'
             deep_note.write_text('# Deeply nested')
-            owner = await open_vault(self, LocalFiles(root), '', 'files')
-            for orientation in ('portrait', 'landscape-left', 'portrait'):
+            self.show_documents_hub()
+            owner = await open_vault(self, LocalFiles(root), '', 'documents')
+            for orientation in ('landscape-left', 'portrait', 'landscape-right') if drive_touches else (
+                    'portrait', 'landscape-left', 'portrait'):
                 await rotate(self, orientation, settle=.5)
                 assert await owner.open_note('Home.md')
                 await self.check_note_actions(owner, report)
@@ -120,6 +122,7 @@ class NotesHeaderProbe(NotesDrawersProbe):
                     assert title_frame.origin.y <= midpoint <= title_frame.origin.y + title_frame.size.height
                 assert title_frame.origin.y + title_frame.size.height <= article_frame.origin.y
                 assert header.parent is owner.article
+                assert self.native_host.adapter.tabs_hidden(), 'Destination tabs cover the Notes reader'
                 controller = self.native_host.adapter.content_controller(owner.destination)
                 from .fixtures import ios_toolbar_items
                 from mobile.ios_toolbar import vertical_edge
@@ -145,6 +148,8 @@ class NotesHeaderProbe(NotesDrawersProbe):
                         assert abs(bottom_gap) <= 2, ('Files panel stops above window bottom', bottom_gap)
                         listing = owner.rows.native_list._impl.native
                         assert listing.contentInset.bottom >= owner.sidebar.files_bottom_extension + 11
+                        report['duo_files_bottom_gap'] = float(bottom_gap)
+                        report['duo_files_scroll_inset'] = float(listing.contentInset.bottom)
                     title_y = float(title_frame.origin.y + title_frame.size.height / 2)
                     assert abs(title_y - float(tabs_frame.origin.y + tabs_frame.size.height / 2)) <= 2
                     await capture_window(self, evidence / ('notes-pane-open-' + orientation + '.png'))
@@ -164,25 +169,9 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 if drive_touches:
                     assert await owner.open_note(deep_note.relative_to(root).as_posix())
                     await asyncio.sleep(.6)
-                    shortened = owner._breadcrumbs_shortened
-                    if shortened:
-                        await capture_window(self, evidence / ('breadcrumbs-fitted-' + orientation + '.png'))
-                        await self.real_swipe(owner, 1, strip=scroll)
-                        for _ in range(60):
-                            if (not owner._breadcrumbs_shortened and scroll.max_horizontal_position > 20
-                                    and scroll.horizontal_position <= 1):
-                                break
-                            await asyncio.sleep(.05)
-                        assert not owner._breadcrumbs_shortened, 'Horizontal drag did not expand breadcrumb labels'
-                        assert owner.sidebar.side is None
-                        assert scroll.horizontal_position <= 1
-                        if orientation == 'landscape-left':
-                            self.assert_duo_header_clearance(owner, controller, window)
-                        await capture_window(self, evidence / ('breadcrumbs-expanded-' + orientation + '.png'))
-                    else:
-                        self.assert_breadcrumb_end(owner)
+                    self.assert_breadcrumb_end(owner)
                     assert scroll.max_horizontal_position > 20
-                    for direction in ((-1, 1) if shortened else (1, -1)):
+                    for direction in (1, -1):
                         before = scroll.horizontal_position
                         await self.real_swipe(owner, direction, strip=scroll)
                         assert (before - scroll.horizontal_position) * direction > 5, (
@@ -281,6 +270,12 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 await asyncio.sleep(.05)
             else:
                 raise AssertionError('Native Close did not dismiss the library')
+            for _ in range(100):
+                if not self.native_host.adapter.tabs_hidden():
+                    break
+                await asyncio.sleep(.05)
+            else:
+                raise AssertionError('Documents destination bar did not return after Close')
             report['native_breadcrumb_swipes'] = drive_touches
             report['success'] = True
         except Exception:

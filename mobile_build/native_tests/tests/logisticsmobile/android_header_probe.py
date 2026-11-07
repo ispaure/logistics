@@ -48,7 +48,7 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
             report['help'] = json.loads((output / 'documentation-header-result.json').read_text())
             assert report['help']['success'], report['help'].get('error')
             self.routes.back()
-            await self.show_files()
+            self.show_documents_hub()
             root = output / 'Art'
             (root / '.obsidian').mkdir(parents=True, exist_ok=True)
             (root / 'Home.md').write_text('# Home\n\n[[Other]]')
@@ -62,7 +62,7 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
             name = 'Review the complete delivery schedule and documentation notes.md'
             target = (folder / name).relative_to(root).as_posix()
             (folder / name).write_text('# Production planning\n\nA native header fixture.')
-            owner = await open_vault(self, LocalFiles(root), '', 'files')
+            owner = await open_vault(self, LocalFiles(root), '', 'documents')
             assert await owner.open_note('Home.md')
             assert await owner.open_note('Other.md')
             await self.touch_native(owner.back_button._impl.native)
@@ -127,10 +127,11 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                 close_rect = self.native_rect(owner.close_button._impl.native)
                 close = owner.close_button._impl.native
                 icon = owner.close_button._impl._control_drawable.getBounds()
-                bubble = close.getBackground().getDrawable(0).getBounds()
-                assert abs(close.getPaddingStart() + icon.width() / 2 - bubble.exactCenterX()) <= 1
-                assert abs(bubble.exactCenterY() - close_rect[3] / 2) <= 1
-                assert bubble.height() < close_rect[3] and bubble.width() < close_rect[2]
+                from android.view import Gravity, View
+                assert owner.close_button._impl._surface_roles[0] == 'transparent'
+                assert abs(close.getPaddingStart() + icon.width() / 2 - close_rect[2] / 2) <= 1
+                assert label.getGravity() & Gravity.RELATIVE_HORIZONTAL_GRAVITY_MASK == Gravity.START
+                assert self.native_host.adapter.impl.native_navigationview.getVisibility() == View.GONE
                 links_rect = self.native_rect(owner.links_button._impl.native)
                 assert abs(close_rect[0] - rects[0][0]) <= 2, (close_rect, rects[0])
                 assert abs(sum((links_rect[0], links_rect[2])) - sum((rects[-1][0], rects[-1][2]))) <= 2, (
@@ -145,15 +146,6 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                 assert popup is not None and popup.getMenu().size() > 0, 'Actions menu did not open'
                 await self.capture_header(evidence / ('notes-menu-' + orientation + '.png'))
                 popup.dismiss()
-                if owner._breadcrumbs_shortened:
-                    crumb_x, _, crumb_width, _ = self.native_rect(owner.breadcrumbs.children[0]._impl.native)
-                    fraction = (crumb_x + crumb_width / 2 + 65 * density - rects[2][0]) / scroll_width
-                    await self.touch_native(scroll._impl.native, fraction=fraction, swipe=1)
-                    await self.wait_for(lambda: not owner._breadcrumbs_shortened
-                        and scroll.max_horizontal_position > 0,
-                        'Horizontal drag did not expand breadcrumb labels')
-                    assert not owner.sidebar.sidebar_open
-                    await asyncio.sleep(.3)
                 before = scroll.horizontal_position
                 for _ in range(20):
                     if scroll.horizontal_position <= 1:
@@ -197,6 +189,11 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                 report['samples'].append(dict(orientation=orientation, expanded=owner.sidebar.expanded,
                     title_width=titles.getWidth() / density, breadcrumb_width=scroll_width / density,
                     initial_scroll=before, root_swipe=True, root_tap=True, ancestor_tap=True))
+            await self.touch_native(owner.close_button._impl.native)
+            from android.view import View
+            await self.wait_for(lambda: not owner.valid()
+                and self.native_host.adapter.impl.native_navigationview.getVisibility() == View.VISIBLE,
+                'Documents destination bar did not return after Close')
             report['success'] = True
         except Exception:
             report['error'] = traceback.format_exc()

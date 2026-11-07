@@ -136,7 +136,8 @@ selection tint from the Settings accent. Entry artwork keeps the file-icon color
 New Document, New Folder and Collapse All are mounted only in Files.
 On Duo with a vertical system bar, the expanded Files pane fills the window
 to the bottom. Its lists keep safe-area padding inside their scroll content.
-Short paths are centered in the strip. A touch that starts inside the strip
+Short paths are centered in the strip. Long paths retain their full labels
+and start at the last folder. A touch that starts inside the strip
 belongs to the strip in either direction, including at its scroll limits.
 Android breadcrumb buttons use the measured typeface and explicit spacing rather
 than native button insets, so their labels remain intact inside the scrollable path.
