@@ -340,6 +340,12 @@ with one uniform transparency. Swatches composite that alpha over white.
 Reading, moving, copying,
 undo and recovery preserve imported RGBA fields and original scene frames.
 
+Brush color choices share the notebook's saved page-position checkpoint and its
+document identity. The desktop and mobile hosts validate choices against the
+brush palette before updating the checkpoint. LocalCrypt uses credential-bound
+encrypted progress storage. Clearing saved positions also resets these choices
+when reopening a notebook. The choices are separate from native ink and undo.
+
 Thin/Medium/Thick select measured native thickness scales approximately
 0.8705015/1.7410030/2.6115046. Highlighter exposes one Fixed 26-unit width;
 old three-width commands remain accepted as aliases of that fixed size. Fineliner
@@ -656,7 +662,7 @@ The mobile source manifest includes both presentation and icon modules.
 On eligible iOS corner-status layouts, the native projection retains its full
 clearance until the current canvas acknowledges the compact portrait CSS.
 The acknowledgement is tied to the canvas, bridge and geometry epoch. A measured
-256-pixel tool column must avoid every reserved system region. The compact DOM
+352-pixel tool column must avoid every reserved system region. The compact DOM
 row guarantees at least 48 pixels of clearance; Hide tools retains a noninteractive
 spacer so the paper cannot move beneath the status area. Other readers and
 unsupported geometry retain their previous spacing.

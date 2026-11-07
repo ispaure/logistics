@@ -69,7 +69,6 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
     def __init__(self, factory, label, *, remote=False, root=""):
         super().__init__()
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
-        self.library_label = label
         self.setWindowTitle('Notes Library — ' + label)
         self.resize(1000, 750)
         self.init_document(remote=remote)
@@ -80,15 +79,9 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
         self.tree.itemActivated.connect(self.choose)
         self.tree.itemClicked.connect(lambda item, column: self.choose(item)
                                       if not self.tree.rename_click else None)
-        self.search = None
         sidebar = qt.QWidget()
         side = qt.QVBoxLayout(sidebar)
         side.setContentsMargins(0, 0, 0, 0)
-        if not remote:
-            self.search = qt.QLineEdit()
-            self.search.setPlaceholderText('Filter loaded notes')
-            qt.connect_search(self.search, lambda control=self.search: self.filter_search_input(control))
-            side.addWidget(self.search)
         side.addWidget(qt.QLabel('Notes Library · File names'))
         self.note_controls = qt.QWidget()
         note_controls = qt.QHBoxLayout(self.note_controls)
@@ -125,7 +118,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
         self.menu.setText('▤')
         self.menu.setAccessibleName('Browse Notes Library')
         self.menu.hide()
-        self.init_panels(side, self.document_controls)
+        self.init_panels(sidebar, searchable=not remote)
         self.split = qt.QSplitter()
         self.split.addWidget(self.panel_tabs)
         self.split.addWidget(self.document_stack)
@@ -231,7 +224,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
             if kind == 'mutation':
                 # Mutations cancel background readers before dispatch, including
                 # those that fail without changing any files.
-                if self.panel_tabs.currentIndex() == 1:
+                if self.panel_tabs.currentWidget() is self.calendar_panel:
                     self.refresh_calendar()
                 elif self.search is not None and self.search.text():
                     self.filter()
@@ -246,17 +239,19 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
             source, deleted, created = values
             mutation = result
             self.library.connection_index.invalidate()
-            destination = mutation.destination
-            if source is not None or deleted is not None:
+            change = mutation.change
+            destination = change.destination
+            reference_moves = ((None, destination),) if deleted is not None else (
+                change.reference_moves() if source is not None else ())
+            for before, after in reference_moves:
                 try:
                     from desktop.document_catalog import relocate
-                    relocate(self.provider, source, destination, deleted=deleted)
+                    relocate(self.provider, before, after, deleted=deleted)
                 except (OSError, ValueError, PermissionError):
                     mutation.reference_errors.append('Some saved references could not be updated.')
                     self.viewer.status.setText('Files changed; ' + mutation.reference_errors[0])
             if mutation.refresh_errors:
                 self.viewer.status.setText('Files updated; some folders could not refresh. ' + mutation.refresh_errors[0])
-            change = PathChange(source, destination, deleted)
             current = self.history[self.index] if self.index >= 0 else None
             self.history, self.index = change.history(self.history, self.index)
             self.positions = change.positions(self.positions)
@@ -274,7 +269,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
             for folder, rows in mutation.folders:
                 entries, pages = rows
                 self.populate(folder, entries, pages)
-            if self.panel_tabs.currentIndex() == 1:
+            if self.panel_tabs.currentWidget() is self.calendar_panel:
                 self.refresh_calendar()
             if created:
                 self.edit_created = destination
@@ -317,7 +312,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
         self.idle.emit()
 
     def selected_parent(self):
-        tree = self.search_results if self.files_stack.currentWidget() is self.search_results else self.tree
+        tree = self.search_results if self.panel_tabs.currentWidget() is self.search_panel else self.tree
         item = tree.currentItem()
         if item is None:
             return self.library.root
@@ -371,8 +366,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
     def rename_entry(self):
         if self.library is None or self.progress.busy or self.locked:
             return
-        tree = self.search_results if self.files_stack.currentWidget() is self.search_results else self.tree
-        item = tree.currentItem()
+        item = self.tree.currentItem()
         if item is None:
             return
         path, _ = item.data(0, qt.Qt.ItemDataRole.UserRole)
@@ -381,7 +375,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
     def move_entry(self, source, destination):
         if self.library is None or not self.library.supports('rename'):
             return
-        self.mutate(lambda cancelled: self.library.move(source, destination, cancelled=cancelled), source=source)
+        self.mutate(lambda cancelled: self.library.move_with_change(source, destination, cancelled=cancelled), source=source)
 
     def rename_tree_entry(self, source, name):
         if name == PurePosixPath(source).name:
@@ -410,8 +404,9 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
         self.note_controls.setEnabled(False)
         self.viewer.setEnabled(False)
         def run(report, cancelled):
-            destination = work(cancelled)
-            change = PathChange(source, destination, deleted)
+            result = work(cancelled)
+            change = result if isinstance(result, PathChange) else PathChange(source, result, deleted)
+            destination = change.destination
             paths = {change.remap(path) for path in folders} | {self.library.root, str(PurePosixPath(destination).parent)}
             from commonUtils.runtime.operations import OperationCancelled
             rows, errors = [], []
@@ -425,7 +420,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
                 except (OSError, ValueError, OperationCancelled) as error:
                     errors.append(str(error))
             # Once published, retain the new path even if refreshing is cancelled.
-            return MutationResult(destination, rows, errors)
+            return MutationResult(change, rows, errors)
         # The worker returns the authoritative destination, including an added .md.
         self.progress.start(run, message='Updating Notes Library…')
 

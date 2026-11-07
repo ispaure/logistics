@@ -9,8 +9,6 @@ credential admissions, access grants and transfer approval.
 - [Transfer planning, review and execution](transfers.md)
 - [LocalCrypt resources and verified saves](localcrypt.md)
 - [Read-only remote browsing](remote-browsing.md)
-- [Platform parity and migration reference](rclone-parity.md)
-- [Historical implementation records](history/history.md)
 
 For controls and setup, see the [user guide](../user/user.md). Shared APIs belong
 in commonUtils' own documentation; see the repository's

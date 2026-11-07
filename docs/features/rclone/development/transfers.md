@@ -201,4 +201,3 @@ The native service tests cover captured mapping changes, generation revocation,
 storage relocation, cancellation retirement and incomplete approval. Mirror tests
 cover changed records, path/link rejection, crypt preflight and partial transfers.
 Desktop outcome tests distinguish launch acceptance from completed success.
-Use [history](history/history.md) only for earlier implementation context.

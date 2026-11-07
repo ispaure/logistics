@@ -19,7 +19,7 @@ class NotesBreadcrumbTests(QtTestCase):
 
     def make_path(self, breadcrumb_type=NotesBreadcrumbs):
         opened, revealed = [], []
-        owner = SimpleNamespace(library=SimpleNamespace(root=''), library_label='Library',
+        owner = SimpleNamespace(library=SimpleNamespace(root=''),
             folder_pages={}, open_note=opened.append, reveal_folder=revealed.append)
         label = breadcrumb_type(owner)
         font = qt.QFontDatabase.systemFont(qt.QFontDatabase.SystemFont.FixedFont)
@@ -69,6 +69,21 @@ class NotesBreadcrumbTests(QtTestCase):
         label.show_path(path)
         self.app.processEvents()
         self.assertEqual(bar.value(), 0)
+
+    def test_underlined_crumb_starts_at_the_landing_note_name(self):
+        owner, label, _, _, _ = self.make_path()
+        owner.folder_pages['Projects'] = 'Projects/Projects.md'
+        label.show_path('Projects/Plain/Note.md')
+        document = qt.QTextDocument()
+        document.setHtml(label.text())
+        cursor = document.find('Projects')
+        self.assertTrue(cursor.charFormat().fontUnderline())
+        self.assertEqual(cursor.charFormat().anchorHref(), '0')
+        cursor.setPosition(cursor.selectionStart())
+        cursor.movePosition(qt.QTextCursor.MoveOperation.PreviousCharacter, qt.QTextCursor.MoveMode.KeepAnchor)
+        self.assertEqual(cursor.selectedText(), '\u00a0')
+        self.assertFalse(cursor.charFormat().fontUnderline())
+        self.assertFalse(document.find('Plain').charFormat().fontUnderline())
 
     def test_clear_path_retires_ancestor_paths_and_scroll_extent(self):
         _, label, viewport, opened, revealed = self.make_path()

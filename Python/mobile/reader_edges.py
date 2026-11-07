@@ -50,7 +50,72 @@ def footer_touch_extension(view, home):
     return max(0, footer_bottom_extension(view, home) - passive_caption_tail(view))
 
 
-def compact_apple_reader(container):
+def clear_notebook_rail(web):
+    binding = getattr(web, '_notebook_rail_binding', None)
+    if binding is not None:
+        blur, _, _ = binding
+        blur.removeFromSuperview()
+        web._notebook_rail_binding = None
+
+
+def notebook_canvas_edges(view, container, edge, home):
+    """Extend live paper behind the side rail and blur only the rail area."""
+    web = getattr(view, '_notebook_canvas', None)
+    if web is None or web.parent is not view:
+        return False
+    left = float(container.left_inset) if edge == 1 else 0
+    right = float(container.right_inset) if edge == 2 else 0
+    if left or right:
+        from .ios_content_background import reduce_transparency
+        if reduce_transparency():
+            left = right = 0
+    if left or right:
+        layout_notebook_rail(web, container, left, right)
+    else:
+        clear_notebook_rail(web)
+    changed = (web.style.margin_left, web.style.margin_right) != (-left, -right)
+    if changed:
+        web.style.margin_left, web.style.margin_right = -left, -right
+    view._notebook_viewport_insets = (left, right, home)
+    return changed
+
+
+def layout_notebook_rail(web, container, left, right):
+    from rubicon.objc import ObjCClass, ObjCInstance, CGRect, CGPoint
+    from .screen_privacy import native_value
+    native = web._impl.native
+    parent = native_value(native, 'superview')
+    if parent is None:
+        return
+    binding = getattr(web, '_notebook_rail_binding', None)
+    if binding is None:
+        # WebKit owns its scroll-edge effect. A material sibling lets UIKit
+        # blur the live canvas, including DOM scrolling and fresh ink.
+        effect = ObjCClass('UIBlurEffect').effectWithStyle(7)  # System thin material.
+        blur = ObjCClass('UIVisualEffectView').alloc().initWithEffect(effect)
+        blur.userInteractionEnabled = False
+        blur.accessibilityElementsHidden = True
+        mask_view = ObjCClass('UIView').alloc().init()
+        mask = ObjCClass('CAGradientLayer').layer()
+        mask_view.layer.addSublayer(mask)
+        blur.maskView = mask_view
+        binding = web._notebook_rail_binding = (blur, mask_view, mask)
+    blur, mask_view, mask = binding
+    if native_value(blur, 'superview') != parent:
+        parent.insertSubview(blur, aboveSubview=native)
+    frame = native.frame
+    area = container.native.convertRect(container.native.bounds, toView=parent)
+    width = left or right
+    x = area.origin.x if left else area.origin.x + area.size.width - width
+    blur.frame = CGRect((x, frame.origin.y), (width, frame.size.height))
+    mask_view.frame = mask.frame = blur.bounds
+    colors = ObjCClass('UIColor')
+    mask.colors = [ObjCInstance(colors.clearColor.CGColor), ObjCInstance(colors.blackColor.CGColor)]
+    mask.locations = [0, .58]
+    mask.startPoint, mask.endPoint = (CGPoint(1, .5), CGPoint(0, .5)) if left else (CGPoint(0, .5), CGPoint(1, .5))
+
+
+def compact_apple_reader(container, *, notebook=None):
     """The reader owns the title row; keep only the hardware inset above it."""
     if container.content is None:
         return False
@@ -60,7 +125,8 @@ def compact_apple_reader(container):
     from .document_location import side_title_reader
     # Title mounting can precede route_changed, while app.body still points at
     # the previous page. Measure this container's content, never that stale route.
-    reader = side_title_reader(container.content.interface)
+    root = container.content.interface
+    reader = notebook or side_title_reader(root)
     if reader is not None:
         view = reader
     else:
@@ -68,7 +134,8 @@ def compact_apple_reader(container):
         if body is None or not body.children:
             return False
         view = body.children[0]
-        if view._impl.container is not container or page_footer(view) is None:
+        if (view._impl.container is not container
+                or (getattr(view, '_notebook_canvas', None) is None and page_footer(view) is None)):
             return False
     from .screen_privacy import native_value
     window = native_value(container.native, 'window')
@@ -111,6 +178,10 @@ def compact_apple_reader(container):
     home = float(window.safeAreaInsets.bottom)
     extension = footer_bottom_extension(view, home)
     original_bottom = float(container.native.safeAreaInsets.bottom)
+    notebook = getattr(view, '_notebook_canvas', None) is not None
+    if notebook:
+        extension = home
+        changed = notebook_canvas_edges(view, container, edge, home) or changed
     bottom = max(0, original_bottom - extension) if 0 < original_bottom <= home else original_bottom
     if container.bottom_inset != bottom:
         container.bottom_inset = bottom

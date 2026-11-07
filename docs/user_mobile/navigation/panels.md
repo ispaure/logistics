@@ -354,8 +354,8 @@ folders beginning with `legacy-` and credential package names beginning with
 
 Android protects sensitive windows with its secure-window flag. iOS hides content
 for inactive app snapshots and detected recording/mirroring, but cannot prevent
-still screenshots. See the developer [parity review](../../development/mobile-ui-refresh.md#control-icons-and-iosandroid-parity-review-2026-10-15)
-for the implementation boundaries and verification scope.
+still screenshots. See the developer [access and privacy guide](../../development/access-privacy.md)
+for implementation boundaries and verification scope.
 
 ### Android fullscreen comics and developer settings
 

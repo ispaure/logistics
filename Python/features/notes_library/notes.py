@@ -3,7 +3,7 @@ import posixpath
 import os
 from pathlib import PurePosixPath
 from threading import RLock
-from services.documents.storage import DocumentResource, document_remote
+from services.documents.storage import DocumentResource, DocumentSizeExceeded, document_remote
 from services.documents.access import can_write
 
 MARKDOWN = {'.md', '.markdown'}
@@ -18,15 +18,13 @@ MAX_PREVIEW_HTML = 128 * 1024 * 1024  # Room for host links, styling and scripts
 
 
 def breadcrumb_folders(root, path):
-    """Ancestors inside the selected library, including a named library root."""
+    """Ancestors below the selected library root, ordered from outermost."""
     parent = PurePosixPath(path).parent
     boundary = PurePosixPath(root or '.')
     parent.relative_to(boundary)
     folders = []
-    while parent != PurePosixPath('.'):
+    while parent != boundary:
         folders.append(parent.as_posix())
-        if parent == boundary:
-            break
         parent = parent.parent
     return list(reversed(folders))
 
@@ -225,7 +223,7 @@ class NotesLibrary:
             return {folder: path if path in existing else None for folder, path in zip(folders, paths)}
         return {folder: self.folder_page(folder, cancelled=cancelled) for folder in folders}
 
-    def folder_page(self, folder, *, cancelled=lambda: False):
+    def folder_page(self, folder, *, cancelled=lambda: False, strict=False):
         """Probe only the conventional landing note, without listing descendants."""
         folder = self.contained(folder)
         path = self.contained(posixpath.join(folder, PurePosixPath(folder).name + '.md'))
@@ -233,7 +231,11 @@ class NotesLibrary:
             with operation(self.provider, cancelled):
                 info = self.entry(path)
             return None if info.get('directory', False) else path
+        except (FileNotFoundError, NotADirectoryError):
+            return None
         except (OSError, ValueError):
+            if strict:
+                raise
             return None
 
     def read(self, path, *, cancelled=lambda: False):
@@ -241,10 +243,14 @@ class NotesLibrary:
         if PurePosixPath(path).suffix.lower() not in MARKDOWN:
             raise ValueError('Choose a Markdown note.')
         before = self.entry(path)
+        limit_error = f'Markdown source is too large. Notes Library has a {MAX_NOTE / (1024 * 1024):g} MiB source limit.'
         if before['directory'] or not 0 <= before['size'] <= MAX_NOTE + 4096:
-            raise ValueError(f'Note exceeds the {MAX_NOTE / (1024 * 1024):g} MiB source limit.')
-        with DocumentResource(self.provider, path, max_bytes=MAX_NOTE, independent=False) as resource:
-            data = resource.read(cancelled=cancelled)
+            raise DocumentSizeExceeded(limit_error)
+        try:
+            with DocumentResource(self.provider, path, max_bytes=MAX_NOTE, independent=False) as resource:
+                data = resource.read(cancelled=cancelled)
+        except DocumentSizeExceeded as error:
+            raise DocumentSizeExceeded(limit_error) from error
         data.decode('utf-8-sig')
         return data
 
@@ -305,6 +311,14 @@ class NotesLibrary:
         return path
 
     def move(self, source, destination, *, cancelled=lambda: False):
+        return self.move_with_change(source, destination, cancelled=cancelled).destination
+
+    def move_with_change(self, source, destination, *, cancelled=lambda: False):
+        """Publish the move and return the paths needed to reconcile open notes."""
+        from commonUtils.persistence.publication import mutation_lock
+        from services.documents.storage import move_document_resource
+        from .navigation import PathChange
+
         if not self.supports('rename'):
             raise ValueError('This Notes Library cannot move notes.')
         source, destination = self.contained(source), self.contained(destination)
@@ -312,60 +326,104 @@ class NotesLibrary:
             raise ValueError('Cannot move or replace the Notes Library root.')
         if destination == source or destination.startswith(source + '/'):
             raise ValueError('Choose a different destination outside the selected folder.')
-        with operation(self.provider, cancelled):
-            entry = self.entry(source)
-            if not entry['directory'] and PurePosixPath(destination).suffix.lower() != PurePosixPath(source).suffix.lower():
-                raise ValueError('Keep the document filename extension.')
-            from services.documents.storage import move_document_resource
-            move_document_resource(self.provider, source, destination, cancelled=cancelled)
-        return destination
+        old_name, new_name = PurePosixPath(source).name, PurePosixPath(destination).name
+        with mutation_lock:
+            with operation(self.provider, cancelled):
+                directory = self.entry(source)['directory']
+                if not directory and PurePosixPath(destination).suffix.lower() != PurePosixPath(source).suffix.lower():
+                    raise ValueError('Keep the document filename extension.')
+                note = (self.folder_page(source, cancelled=cancelled, strict=True)
+                        if directory and old_name != new_name else None)
+                if note is None:
+                    move_document_resource(self.provider, source, destination, cancelled=cancelled)
+                    return PathChange(source, destination)
+                renamed_note = posixpath.join(source, new_name + '.md')
+                move_document_resource(self.provider, note, renamed_note, cancelled=cancelled)
 
-    def image_source(self, path, *, cancelled=lambda: False, on_video=None, batch=False):
+            # The note rename has committed. Finish or restore it even if the
+            # caller cancels while the pair is being published.
+            try:
+                move_document_resource(self.provider, source, destination)
+            except Exception:
+                try:
+                    move_document_resource(self.provider, renamed_note, note)
+                except Exception as error:
+                    raise OSError('Folder rename failed and its landing note could not be restored. Refresh the folder to check its contents.') from error
+                raise
+        return PathChange(source, destination, landing_note=(note, posixpath.join(destination, new_name + '.md')))
+
+    def _document_media(self, path, *, cancelled=lambda: False):
+        from commonUtils.runtime.operations import check_cancelled
         from services.documents.markdown_media import MarkdownMedia
         path = self.contained(path)
         with self._link_lock:
+            check_cancelled(cancelled)
             if self._links_closed:
                 raise ValueError('Notes Library closed.')
             if path not in self._media:
                 self._media[path] = MarkdownMedia(self.provider, path, root=self.root, entry=self.entry,
                                                  max_image_bytes=MAX_NOTE_IMAGES,
                                                  resolve=lambda target: self.link(path, target)[0])
-            first_suffix = None
-            first_matches = None
-            inventory = None
+            return self._media[path]
 
-            def matches(name, lookup):
-                nonlocal first_suffix, first_matches, inventory
-                if first_suffix is None:
-                    first_matches = lookup(name)
-                    first_suffix = name
-                if inventory is None:
-                    if name == first_suffix:
-                        return first_matches
-                    inventory = self._media_paths(cancelled)
-                return [candidate for candidate in inventory.get(PurePosixPath(name).name, ())
-                        if candidate == name or candidate.endswith('/' + name)]
+    def open_embedded_video(self, path, target, *, cancelled=lambda: False):
+        """Resolve one requested embed and prepare its revocable range stream."""
+        from commonUtils.runtime.operations import check_cancelled
+        from services.documents.markdown_media import video_reference
+        if not video_reference(target):
+            return None
+        requested_cancelled = cancelled
+        cancelled = lambda: self._links_closed or requested_cancelled()
+        check_cancelled(cancelled)
+        with operation(self.provider, cancelled):
+            media = self._document_media(path, cancelled=cancelled)
+            result = media(target, cancelled=cancelled, replace_oldest=True,
+                resolve=lambda reference: self.link(path, reference, cancelled=cancelled)[0])
+        return result[1] if result is not None else None
 
-            return self._media[path].render_source(resolve=lambda target:
-                self.link(path, target, cancelled=cancelled, media_matches=matches if batch else None)[0],
-                on_video=on_video)
+    def image_source(self, path, *, cancelled=lambda: False, on_video=None, batch=False):
+        source = self._document_media(path, cancelled=cancelled)
+        inventory = None
+
+        def matches(name, _lookup):
+            nonlocal inventory
+            if inventory is None:
+                inventory = self._media_paths(cancelled)
+            return [candidate for candidate in inventory.get(PurePosixPath(name).name, ())
+                    if candidate == name or candidate.endswith('/' + name)]
+
+        return source.render_source(resolve=lambda target:
+            self.link(path, target, cancelled=cancelled, media_matches=matches if batch else None)[0],
+            on_video=on_video)
 
     def _media_paths(self, cancelled):
         """Build one bounded, render-local inventory for multiple fallback links."""
         from commonUtils.runtime.operations import check_cancelled
+        requested_cancelled = cancelled
+        cancelled = lambda: self._links_closed or requested_cancelled()
+        recursive = getattr(self.provider, 'search_entries', None)
+        if recursive is not None:
+            names = {}
+            boundary = PurePosixPath(self.root or '.')
+            try:
+                for row in recursive(self.root, cancelled=cancelled, max_entries=10000):
+                    path = PurePosixPath(row['path'])
+                    if not row['directory'] and not any(part.startswith('.') for part in path.relative_to(boundary).parts):
+                        names.setdefault(row['name'], []).append(self.contained(row['path']))
+                return names
+            except (OSError, ValueError):
+                # The per-folder fallback prunes hidden subtrees before listing.
+                check_cancelled(cancelled)
         pending, names, count = [self.root], {}, 0
         while pending:
-            check_cancelled(lambda: self._links_closed or cancelled())
+            check_cancelled(cancelled)
             folder = pending.pop()
-            rows = (self.search_children(folder, cancelled=cancelled)
-                    if hasattr(self.provider, 'indexed_list') else self._link_listing(folder, cancelled))
+            rows = self.search_children(folder, cancelled=cancelled)
             count += len(rows)
             if count > 10000:
                 raise ValueError('Note lookup exceeds the 10,000-entry limit. Use an explicit note path.')
             for row in rows:
                 check_cancelled(cancelled)
-                if row['name'].startswith('.'):
-                    continue
                 child = self.contained(row['path'])
                 if row['directory']:
                     pending.append(child)

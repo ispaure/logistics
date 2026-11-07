@@ -35,8 +35,11 @@ For writable libraries, use **New Document**, **New folder** and **Rename…**
 in the sidebar. Click an already-selected file or folder name to rename it inline,
 or press F2. Enter applies the name; Escape cancels. Drag an entry onto a folder
 to move it; drop on empty sidebar space to move it to the library root.
-**Rename…** changes only the name in the current folder. **Move…**, in the
-selection menu, opens a folder browser confined to this library and keeps the name. Moves preserve note history; unsaved
+**Rename…** changes the name in the current folder. Renaming `Topic/` to
+`Archive/` also renames its landing note from `Topic.md` to `Archive.md`.
+Renaming the landing note directly leaves its parent folder in place.
+**Move…**, in the selection menu, opens a folder browser confined to this
+library and keeps the name. Moves preserve note history; unsaved
 changes must be resolved first. Choosing Save continues the requested move after
 saving succeeds; a failed save keeps the draft and its original path.
 Existing destinations are never overwritten.
@@ -49,13 +52,19 @@ for confirmation and permanently removes the selected item and its contents.
 Clicking a folder with a matching `Folder/Folder.md` opens that landing note;
 its name is underlined. Hovering over that folder shows a pointing-hand cursor. Use the expansion arrow to browse its children.
 
-Every open file has a breadcrumb path beside the history arrows, including
-images, PDFs, source files, drawings and file-information previews. Underlined
-folders open their same-named Markdown page. Other folder names reveal that folder in Files.
-When space is limited, the path initially shows its end. Swipe or use the
-mouse/trackpad wheel over it to reach earlier folders, including the library root.
+The breadcrumb shows the folders below the library root and the filename,
+including for images, PDFs, source files, drawings and file-information previews.
+The breadcrumb uses the same folder, folder-note and file icons as Files, with
+`>` between entries.
+Click a folder to open its same-named Markdown page. If that page is already open
+or the folder has no landing page, the click reveals the folder in Files.
+The path is centered between the toolbar buttons and wraps to two lines as
+needed. If it still overflows, it initially shows its end. Swipe or use the
+mouse or trackpad wheel over the breadcrumb to reach earlier folders.
 
-On desktop, the sidebar stays visible and has **Files** and **Calendar** tabs.
+On desktop, the sidebar has **Files**, **Search** and **Calendar** tabs.
+Files contains the folder tree and file actions. Search contains both search
+modes and their results.
 Previous/next note and parent-folder controls sit in the document toolbar.
 Each tab has its own back/forward history. Opening a sidebar file in the current
 tab adds it to that history; switching tabs does not. Alt+Left and Alt+Right
@@ -66,7 +75,7 @@ Loading messages, progress and **Cancel** share a single bottom row with notices
 for the active document. Hover over a shortened notice to read its full text.
 Markdown editing-mode guidance appears in the **Formatted / Source** selector's tooltip.
 
-File search defaults to **Search in File Names**. Select **Search within Documents**
+The Search tab defaults to **Search in File Names**. Select **Search within Documents**
 to also find matches in file contents. Both modes include unopened folders.
 Name matches appear before content matches; quoted phrases and separate
 keywords use the same search rules as mobile. **Show more notes** extends the
@@ -124,8 +133,8 @@ Videos such as MP4 open the full desktop Video Player, preserving the current
 library note and using the same source and credentials. That player offers
 resume, autoplay, tracks, subtitles and the full playback tools. Video embeds
 such as `![[clip.mp4]]` stay inside Markdown with simple Play/Pause and seeking
-controls, paused at the beginning of each new embed. Playback starts when you press Play; opening the page does not preload
-the whole video. Images and videos use the same lookup as file links: beside the
+controls, paused at the beginning of each new embed. Press Play to resolve the
+attachment and start playback. Images and videos use the same lookup as file links: beside the
 note, from the library root, then a unique matching path elsewhere in the library.
 Use an explicit path if several files match. If an embedded image cannot load,
 its preview shows a reason such as a missing file, ambiguous path, denied access

@@ -451,25 +451,8 @@ required-reason APIs and app icon during signed distribution validation.
 
 ## Verification boundary
 
-On 2026-10-13, a local unsigned Release archive packaged successfully with SDK
-27.1 and the normal Logistics launcher. Export of that local archive was rejected
-as intended. Focused unit tests cover pinned identity, profile type/expiry,
-effective default Keychain access, build-number validation and export defaults.
-On 2026-10-14, a fresh unsigned Release archive of the shared working tree packaged
-successfully as version `0.1.5`, build `202610143`, using Xcode 27.1. The native Go
-bridge tests passed. The archive is retained under `mobile_build/build/testflight/202610143`
-with its `release.json`, curated source fingerprint and build logs. It records
-dirty source and cannot be exported or uploaded. Attempts `202610141` and
-`202610142` stopped at sandbox cache access and remain as diagnostic workspaces.
-This rehearsal includes ongoing local mobile changes and is separate from the
-frozen [alpha audit](mobile-alpha-verification.md).
-
-The release tests additionally cover rejected profile Keychain groups and verify
-that uploading cannot run without a reviewed export, explicit opt-in and unchanged
-archive/IPA fingerprints. Profile identity checks run before signing assets are
-installed. A local keychain check found two Apple Development identities and no
-Apple Distribution identity. Enrollment approval is confirmed, but distribution
-signing/export and upload were unverified at that earlier preparation checkpoint.
-The later build `202610145` records above supersede that historical limit. New
-mobile changes can now be captured without committing before signed release staging. This
-documentation audit did not install or upload an app.
+Project tests cover signing identity, provisioning profile constraints, Keychain
+access, build numbers and export defaults. Upload requires a reviewed export,
+explicit opt-in and matching archive and IPA fingerprints. Use the signed
+distribution workflow to validate the actual package and retain its receipts
+in the [build manager](build-manager.md).

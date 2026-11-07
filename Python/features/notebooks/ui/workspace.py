@@ -11,9 +11,9 @@ from PySide6.QtWebEngineWidgets import QWebEngineView
 from ..notebook import Notebook, MAX_ARCHIVE
 from ..recovery import Repository
 from ..editor import Editor
-from ..progress import open_notebook_progress, page_location
+from ..progress import notebook_progress_state, open_notebook_progress, page_location, restore_notebook_progress
 from ..bridge import Bridge
-from ..protocol import document_state, save_status, stroke_script, update_script, validate_action
+from ..protocol import brush_color_script, document_state, save_status, stroke_script, update_script, validate_action
 from ..canvas import editor_html
 
 # Register Quick wrapper types before WebEngine creates internal objects.
@@ -215,7 +215,8 @@ class NotebookWorkspace(qt.QWidget):
             self.document_window.setWindowTitle(book.name)
         self.editor = Editor(book, self.document.checkpoint if self.document else lambda book: self.repository.save(key, book))
         self.clear()
-        self.progress, self.editor.index = self.load_progress(book, key)
+        self.progress, saved = self.load_progress(book, key)
+        restore_notebook_progress(self.editor, saved)
         self.bridge = Bridge()
         self._position_sequence = -1
         self.web = QWebEngineView(self)
@@ -298,6 +299,13 @@ class NotebookWorkspace(qt.QWidget):
         error = ''
         previous_page = page_location(self.editor)
         try:
+            if op == 'brush-color':
+                self.editor.brush_colors[action['tool']] = action['color']
+                page = self.web.page()
+                self._position_sequence = page.bridge.sequence
+                status = self.progress.save(notebook_progress_state(self.editor)) if self.progress is not None else None
+                page.runJavaScript(brush_color_script(status))
+                return
             if op == 'page-previews':
                 from ..previews import page_previews
                 rows = page_previews(self.editor.notebook, action['start'])
@@ -349,7 +357,7 @@ class NotebookWorkspace(qt.QWidget):
                     if (result is True and self.progress is progress and self.web is not None
                             and self.web.page() is page and position_sequence >= self._position_sequence):
                         self._position_sequence = position_sequence
-                        if progress.save(location) == 'write-failed':
+                        if progress.save(notebook_progress_state(self.editor, location)) == 'write-failed':
                             page.runJavaScript("document.getElementById('status').textContent='Could not save the notebook page position.'")
                 page.runJavaScript(script, displayed)
             else:
@@ -463,7 +471,7 @@ class NotebookWorkspace(qt.QWidget):
             self.editor.checkpoint = document.checkpoint
             self.progress, _ = self.load_progress(document.book, document.key)
             if self.progress is not None:
-                self.progress.save(page_location(self.editor))
+                self.progress.save(notebook_progress_state(self.editor))
             if previous is not None:
                 previous.close()
         self.busy = False

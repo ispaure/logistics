@@ -38,15 +38,16 @@ bounds. Calligraphy retains every sample. Opening or saving existing handwriting
 does not reduce its points; the live pen preview is unchanged.
 
 The document fills the area beneath a compact drawing toolbar containing the
-current brush, **Erase**, **Select / move**, **Undo** and **Redo**. The toolbar
+working brush, **Add current brush preset (+)**, **Erase**, **Select / move**,
+**Undo** and **Redo**. The toolbar
 stays above the paper instead of covering handwriting. Swipe the drawing strip
 horizontally on narrow phones to reach every tool. Android's **Close (X)** and
 **Notebook actions (… )** share that row. iOS/iPadOS retains the native notebook
 title, Close, page overview, template/layers, view/input and actions controls;
-Duo places these in its side rail when applicable. When the available width
-fits all five drawing tools, the notebook name and location sit to their left
-in the same row. Narrower windows and accessibility text sizes use a separate
-drawing row. In a wide iPhone landscape window, the name sits at the upper
+Duo places these in its side rail when applicable. In narrow iPhone portrait
+windows, including the folded Duo, the notebook name and location are centered
+above the drawing tools. Wider layouts can place the drawing controls beside
+the title. In a wide iPhone landscape window, the name sits at the upper
 left and the drawing row offers brush and ink color choices directly. Swipe
 either choice group horizontally to reach more options. The reader accounts
 for space occupied by system activity. Choose **Notebook actions → Hide tools**
@@ -61,19 +62,26 @@ the tools. Opening, closing, rotating and entering or leaving laptop mode keep
 a deliberate zoom and the viewed paper position where the page edges allow.
 At the default zoom, the page adapts to the new layout instead.
 
-Tap the current brush icon to open **Writing tools**: choose an instrument card,
-then a **Thin**, **Medium** or **Thick** stroke sample (Highlighter has one
-**Fixed** width), then an ink color.
-Brushes and available colors each use a three-column grid. The panel
-shows Ballpoint, Fineliner, Highlighter in its first brush row; Pencil,
-Mechanical pencil, Calligraphy in the second; and Marker, Shader, Paintbrush
-in the third. The panel
-floats below the toolbar. Tap the brush icon again, tap outside, or start a
-stroke outside the panel to close it; that first stroke draws immediately. The current
-brush has a tinted background and check mark in the palette; the top button also
-shows its nib and a small ink-color indicator. A border and check mark identify
-the selected color. Colors follow the selected brush's supported palette and
-remain visible in high-contrast mode and while grayscale document preview is on. The original brush icons are shared with the desktop editor.
+Tap a brush slot with a finger or pen to select it. The active slot is
+highlighted. Tap that slot again to open the **Writing tools** drawer below it.
+All nine brushes appear in one row on wide screens and in two full-width rows
+of five and four on narrow screens. The ink strip shows the selected brush’s
+colors, and the stroke sample sits next to **Thin**, **Medium**, and **Thick**
+(Highlighter has one **Fixed** width). Tap the opener again, tap outside, or
+start a stroke outside the drawer to close it. That first stroke draws immediately.
+A border and check mark identify the selected color. Colors follow the selected brush's supported palette and
+remain visible in high-contrast mode and while grayscale document preview is on.
+Each brush starts with its first color and remembers your choice for that
+notebook across reopenings. Choices follow the notebook's saved page position
+on this device, including protected page position storage for LocalCrypt.
+The original brush icons are shared with the desktop editor.
+
+Tap **+** in the drawing toolbar to save the current brush, ink color, and width
+as a preset. Presets appear between the working brush and **+** in the same row.
+Once there are three brush slots, **+** disappears. Touch and hold a saved brush
+to open **Delete preset**. Changing a setting in the drawer creates a working
+configuration you can save when a slot is available. Presets are shared across
+notebooks on this device and persist after restarting the app.
 
 Open **Notebook actions** for **Pages Overview**, **Layers** (the **Page template
 and layers** panel), saving, Save As, export,
@@ -92,7 +100,11 @@ unsaved ink. **Layers** selects
 the visible layer to draw on, shows or hides layers, and adds a named layer.
 
 Controls follow the device's light or dark appearance using the app's Slate
-colors. Paper and PDF backgrounds stay white, and ink colors stay unchanged.
+colors. Paper and PDF backgrounds stay white with a thin black page outline.
+The mobile page starts just below the drawing tools. The iOS canvas extends to
+the bottom of the display. Where iOS shows a side
+rail, the canvas extends behind its soft blur and the drawing controls stay
+clear of the rail. The ink colors follow the notebook format.
 The bottom zoom bar is hidden initially. Pinching or changing zoom reveals **−**,
 **+**, the current percentage and **Reset** for three seconds after the last zoom
 change. Showing or hiding it does not move the paper. **Reset** restores the

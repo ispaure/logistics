@@ -1,25 +1,7 @@
-# Mobile Markdown editor and library rework
+# Mobile Markdown editing and layout
 
-Implementation brief requested on October 24, 2026. Rework the mobile Markdown
-editor and Notes Library into a coherent, modern reading and writing experience
-on iPhone, iPad, iPhone Duo and Android phones. Fix formatted editing on iOS and
-controls becoming inaccessible when the Android keyboard opens. Local and
-LocalCrypt must support reading and writing; cloud remotes must remain read-only.
-
-The implementation, core physical-device checks and automated iPad keyboard/
-accessibility checks below are complete. Duo inner-display/fold poses and manual
-screen-reader, hardware-keyboard and multitasking-window checks remain open
-acceptance gates. Do not treat simulator coverage as proof that those gates passed.
-
-## Execution instruction
-
-Carry this work through diagnosis, design, implementation, refactoring and native
-testing. Keep working through failed checks and visual problems until the editor
-and library meet the acceptance criteria. Do not stop after a cosmetic pass,
-a passing host suite, or one successful device run. If a required device or
-runtime is unavailable, complete independent work and record the exact unverified
-gate; do not describe the whole rework as finished. Preserve user documents,
-LocalCrypt data, settings and unrelated changes in the current development branch.
+The Text Editor and Notes Library share mobile Markdown authoring. This guide
+covers rendering, storage permissions, keyboard layout and native validation.
 
 ## Starting points and ownership
 
@@ -174,34 +156,6 @@ library entry for cloud folders. Keep filename filtering distinct from searching
 the open note. Backlinks and outgoing connections scan bounded local libraries
 on demand without writing an index. Standalone cloud Markdown remains read-only.
 
-## Implementation sequence and refactoring
-
-1. Reproduce both reported defects with a small shared Markdown fixture. Record
-   platform, entry point, access location, mode, dimensions and keyboard state.
-   Trace iOS load/style/input/bridge events and Android inset/bar ownership. Turn
-   confirmed failures into meaningful regressions before changing their owners.
-2. Compare repairing the existing block editor with adopting a maintained editing
-   engine. Prototype the hardest iOS input, selection, Markdown preservation and
-   Android keyboard cases. If considering a dependency, evaluate offline bundling,
-   licensing, accessibility, payload cost and private-document behavior. Choose on
-   observed results; avoid a migration that cannot preserve source safely.
-3. Establish the shared access decision and test it across every opening path.
-   Centralize mode and command availability without moving storage ownership into
-   WebView JavaScript or duplicating the draft.
-4. Refactor editor document state, rendering/input bridge and presentation into
-   focused owners. Separate HTML/CSS/JavaScript assets where it improves maintenance.
-   Give managed and provider hosts a common presentation contract. Make load,
-   ready, editing, saving, failure, suspend and close transitions explicit; flush
-   final input before mode changes, save or navigation. Reject stale revisions and
-   callbacks after close, lock or provider changes.
-5. Implement the approved visual direction and keyboard layout in both editor
-   hosts, then integrate the library redesign and save/return workflow. Remove
-   obsolete duplicate layout code after equivalent behavior is verified.
-6. Run focused tests, native interaction and visual review across the matrix
-   below. Fix failures and repeat affected checks. Review the complete user flow,
-   not only isolated controls. Update usage and developer guides to the final
-   implemented behavior.
-
 ## Testing and acceptance
 
 Extend the existing suites: `mobile_build/tests/editing/test_markdown_editor.py`,
@@ -256,120 +210,14 @@ If BOOX testing is included, save evidence and uninstall temporary Logistics tes
 probe and QA packages afterward. Verify only `io.github.ispaure.logisticsmobile`
 remains among Logistics packages; preserve that main app and all its data.
 
-The final handoff must name the changes, tests, device matrix results and any
-remaining acceptance gaps. Mark complete only after all required gates are met.
-
-
-## Implementation and validation record — October 24, 2026
-
-The existing offline block editor was retained and refactored into Python state,
-JavaScript interaction and shared reading/writing CSS. Formatted mode now uses
-clear heading/emphasis/list/code/table typography, a compact toolbar and an overlay
-Format panel. Short keyboard windows use a floating Format control. Read, formatted
-and exact-source modes share one draft; explicit DOM snapshots precede save, mode
-changes and close decisions. Late pages cannot replace a current draft. Untouched
-blocks retain their original source; edited nested fences retain their marker and
-info string, and tables retain alignment. Private WebViews are detached and cleared
-through their native memory-only lifecycle.
-
-Local and unlocked LocalCrypt support editing and new-note creation. Remote policy
-is enforced below the UI and repeated at persistence; encrypted cloud providers
-remain remote. The refreshed library exposes location/access context and a local
-pencil handoff, with Save/Discard/Cancel on return and refreshed saved content.
-Android retains its native document actions during typing. Keyboard dismissal and
-session changes restore secondary controls even when window dimensions repeat.
-
-| Validation surface | Observed result |
-| --- | --- |
-| Host regressions | Markdown editing, fonts, images, search, speech, access and library-return suites; provider modes and save guards; source input/picker; Notes Library with the real local encrypted bridge; keyboard/native chrome; responsiveness; private sessions and reader/close lifecycle passed. Packaging and lint passed. |
-| iPhone simulator, iOS 27 | Styled WKWebView content; final unnotified DOM save; Unicode; nested fence/table round-trip; Source/Formatted scroll retention; both landscape orientations; local library edit/save/return; remote rejection and LocalCrypt save/lock passed. Software keyboard probe passed. |
-| iPad simulator, iOS 27 | Core reading/editing/library/remote/LocalCrypt flow and rotation passed, including a dark appearance run. |
-| Dedicated iPhone Duo simulator, iOS 27.1 | Core flow and rotation passed on its outer display; the recorded pose was hinge status 1. This does not validate its inner display or fold transitions. |
-| Android phone emulator, API 35 | Core flow, real native WebView input and LocalCrypt save/lock passed. Thirteen software-keyboard scenarios passed in portrait and again in landscape, including native composition, blank/new notes, link formatting, large text, local-provider Source/Formatted editing and three rotations during input. |
-
-Native core checks asserted a 32 px heading against 16 px body text and bold weight
-700. Representative formatted readiness was below one second and the explicit
-final-input save below 0.1 seconds on the tested iPhone and Android emulator.
-These are diagnostic samples, not a general performance guarantee. Long-note mode
-switching retained the reading scroll offset. No broad memory-growth benchmark or
-physical-device performance claim is made.
-
-Native checks used separate QA bundle/package identities and synthetic notes and
-LocalCrypt fixtures. Apple checks staged current Python sources into an existing
-native shell; an optional QA-only native helper supplied current Inbox symbols
-missing from that cached shell. Android checks similarly overlaid current source
-and native helper classes into a separate signed QA APK. These checks validate the
-changed runtime paths; they are not fresh release archive/signing validation.
-Reusable drivers live under `mobile_build/native_tests` and `mobile_build/validation`.
-Raw screenshots, source manifests, timings and logs remain outside the wiki.
-
 ## Remaining acceptance gates
 
-- Duo inner display, flat/partial/fold transitions and seam interaction remain
-  unverified. The operator declined manual Device Hub pose changes. Public display
-  discovery identified the inner display, but targeting its inactive display did
-  not produce a native layout observation; one launch was rejected by the system
-  shell. Screen power/launch controls did not establish a hinge transition. The
-  original display state was restored. Outer rotation remains the verified scope.
-- iPad narrow multitasking layout remains unverified: the attempted corner gesture
-  entered the app switcher and scaled the window snapshot; the actual UIKit/DOM
-  viewport did not shrink. That run is excluded from narrow-window acceptance.
-- Hardware-keyboard focus/navigation, physical selection/autocorrect/dictation
-  and actual spoken VoiceOver/TalkBack traversal still require manual checks.
-  The automated accessibility audits below do not establish those outcomes.
-- Physical keyboard/vendor coverage now includes Samsung and BOOX, but additional
-  gesture-navigation and third-party keyboard combinations remain unverified.
-- Complete sustained memory-growth/background stress measurements and the remaining
-  full interaction matrix before declaring every original acceptance gate complete.
-
-
-## Physical and adaptive follow-up — October 24, 2026
-
-Signing was unblocked after the operator signed into Xcode. The valid development
-profile included both paired devices. Its wildcard application and Keychain
-privileges were narrowed to the exact QA identity before signing; the main app's
-identity and shared storage were not granted to QA. Focused provisioning tests
-reject the main identity, its shared groups and devices outside the profile.
-
-| Target | Additional observed result |
-| --- | --- |
-| Physical iPhone 15 Pro Max, iOS 26.6.2 | Core formatting, final-input save, Markdown preservation, rotation, local library return, remote read-only and LocalCrypt save/lock passed. Actual formatted/Source/plain-text software-keyboard typing and caret/navigation restoration passed. |
-| Physical iPad Pro 11-inch, iPadOS 26.7.1 | The same core flow passed, followed by actual docked software-keyboard input/caret checks in formatted, Source and plain text. |
-| Physical Samsung SM-G955W, Android 9/API 28 | Core and LocalCrypt flow passed. Thirteen actual keyboard scenarios passed after using real pointer focus before IME input, including blank notes, large text, formatting/link interaction and rotation. |
-| Physical BOOX NoteAir5C | Core and LocalCrypt flow passed. Thirteen actual keyboard scenarios passed, including large text, formatting/link interaction and rotation. The vendor WebView originally panned the whole viewport; the formatted editor now keeps its native outer scroll at zero while preserving the DOM writing scroller. |
-| iPad simulator | XCTest drove the real docked → floating → native text entry → formatting/link dialog → docked sequence. The keyboard changed from 1032-point to 320-point width and returned to 1032. Native accessibility audits reported zero issues for hit regions, descriptions, traits and contrast in the editor, plus clipping in the open formatting menu. Repeated with dark appearance, Increase Contrast and the largest accessibility content-size category. |
-
-The expanded iPad audit found redundant small accessibility elements for the mode,
-Format caption and Block caption. Their visible text remains; accessibility uses
-the parent formatting control and explicitly named block-style selector. No audit
-issues were suppressed in the final assertion. A label-based XCTest query handles
-WebKit exposing the link popup control as an accessibility Other element.
-
-The Samsung also exposed an older Android libc boundary: LocalCrypt creation
-required atomic no-replace publication, while its libc lacked the exported
-`renameat2` wrapper. commonUtils now invokes the same ARM64 kernel operation when
-the wrapper is absent, retaining collision rejection and failing on unsupported
-kernels/filesystems. Its publication, resource-operation and rename regressions
-passed; the successful physical Samsung LocalCrypt round-trip validates this
-consumer path. The dependency update is explicit in Logistics.
-
-`markdown_adaptive_probe.py` observes actual native poses/keyboard changes while
-retaining a synthetic unsaved draft; it never injects hinge states. Use the
-simulator runner's `--adaptive --timeout 400` option and write its evidence-cache
-`finish` signal after interaction. `MarkdownAdaptiveUITests.swift` supplies the
-real iPad gesture and accessibility checks for an iOS UI-test target.
-`markdown_physical_tools.py` accepts a separately provisioned physical QA `.app`,
-checks device/profile membership, narrows entitlements, stages current source,
-re-signs it, collects native evidence and uninstalls only the QA identity. A cached
-native shell can accept an optional current QA native helper via `--native-library`;
-this remains targeted runtime validation rather than fresh release validation.
-
-All temporary QA packages from this follow-up were removed after saving evidence.
-Physical iPhone/iPad and Samsung inventories retained the main application. BOOX
-cleanup explicitly verified that only `io.github.ispaure.logisticsmobile` remained
-among Logistics packages. Simulator appearance, contrast and text-size settings
-and the Duo display power state were restored. Local test identifiers, screenshots,
-source manifests, XCTest results and logs remain outside the wiki.
+Manual checks include the Duo inner display and fold transitions during editing,
+actual narrow iPad multitasking, hardware-keyboard focus and navigation,
+physical selection/autocorrect/dictation, and spoken VoiceOver and TalkBack
+traversal. Include additional gesture-navigation and keyboard configurations
+and sustained memory and background/resume stress runs when validating those
+changes.
 
 ## In-place library documents
 

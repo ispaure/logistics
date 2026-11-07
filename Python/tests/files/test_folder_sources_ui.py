@@ -1208,11 +1208,17 @@ class FolderSourceTests(QtTestCase):
             return ['Restored']
         read_names.side_effect = names
         self.addCleanup(release.set)
+        page.resize(1250, 750)
+        page.show()
+        self.app.processEvents()
+        panes_geometry = page.panes.geometry()
         page.source_tabs.setCurrentIndex(self.tab(page, 'Cloud'))
         self.until(entered.is_set)
         self.assertTrue(page.discovery.busy)
+        self.assertEqual(page.panes.geometry(), panes_geometry)
         release.set()
         self.wait(page)
+        self.assertEqual(page.panes.geometry(), panes_geometry)
         self.assertEqual([entry.name for entry in self.entries(page)], ['Restored'])
         read_names.side_effect = OSError('temporarily unavailable')
         page.refresh_button.click()
@@ -1248,6 +1254,50 @@ class FolderSourceTests(QtTestCase):
             window.tabs.setCurrentIndex(known_index)
             self.wait(page)
             self.assertEqual(read_names.call_count, 3)
+            window.dlg.close()
+
+    def test_returning_from_open_notes_library_refreshes_workspaces_once(self):
+        from PySide6.QtTest import QTest
+        from features.notes_library import register
+
+        vault = self.folder('Vault')
+        (vault.path / '.obsidian').mkdir()
+        (vault.path / 'Welcome.md').write_text('# Welcome')
+        self.local_folders = [vault]
+        feature = register()
+        notes = RegisteredContribution(feature.id, feature.label, feature.pages[0])
+        tool = RegisteredContribution(feature.id, feature.label, feature.folder_features[0])
+        with (patch('features.application.registry.get_pages', return_value=[notes]),
+              patch('features.application.registry.get_folder_features', return_value=[tool]),
+              patch('features.application.registry.is_feature_enabled', return_value=True)):
+            window = MainWindow()
+            self.addCleanup(window.dlg.deleteLater)
+            self.addCleanup(window.tabs.widget(0).file_browser.shutdown)
+            window.dlg.show()
+            page = window.sidebar.pages['hub']
+            self.wait(page)
+            window._destination_changed(page)
+            self.wait(page)
+            self.select_first(page)
+            self.wait(page)
+            button = next(button for button in page.detail_scroll.findChildren(qt.QPushButton)
+                          if button.text() == 'Open as Notes Library')
+            QTest.mouseClick(button, qt.Qt.MouseButton.LeftButton)
+            notes_page = window._feature_pages[feature.id, feature.pages[0].page_id]
+            self.assertIs(window.tabs.currentWidget(), notes_page)
+            library = next(iter(notes_page.records))
+            self.until(lambda: library.library is not None and not library.progress.busy)
+
+            with patch.object(page, 'refresh', wraps=page.refresh) as refresh:
+                QTest.mouseClick(window.sidebar.buttons['hub'], qt.Qt.MouseButton.LeftButton)
+                self.until(lambda: not page.discovery.busy or refresh.call_count > 1)
+                self.app.processEvents()
+                refresh.assert_called_once_with()
+                self.assertFalse(page.discovery.busy)
+                self.assertTrue(page.discovery.isHidden())
+                self.assertEqual(page.selected_entry_name, vault.name)
+                QTest.mouseClick(window.sidebar.buttons['browser'], qt.Qt.MouseButton.LeftButton)
+                self.assertIs(window.tabs.currentWidget(), window.sidebar.pages['browser'])
             window.dlg.close()
 
     def test_excluded_remote_does_not_hide_its_local_folder(self):

@@ -75,7 +75,7 @@ class NotesDrawersProbe(NotesInteractionChecks, LogisticsMobile):
         await asyncio.sleep(.3)
         report['native_file_and_folder_holds'] = True
 
-    async def check_note_actions(self, owner, report):
+    async def check_note_actions(self, owner, report, breadcrumb_note):
         assert await owner.open_note('Other.md')
         await asyncio.sleep(.3)
         assert owner.secondary.parent is not None
@@ -109,12 +109,12 @@ class NotesDrawersProbe(NotesInteractionChecks, LogisticsMobile):
         actions = owner.reader_actions_button._impl.native
         assert actions.menu is not None and actions.showsMenuAsPrimaryAction
         assert any(label == 'Contents…' for label, _ in owner.reader_actions.actions)
-        assert await owner.open_note('Home.md')
+        assert await owner.open_note(breadcrumb_note)
         await asyncio.sleep(.3)
         # Check that title content cannot swallow taps on the folder row.
         from rubicon.objc import CGPoint
         from commonUtils.ui.native.keyboard import native_value
-        button = owner.breadcrumbs.children[-1]._impl.native
+        button = owner.breadcrumbs.children[-3].children[1]._impl.native
         window = self.main_window._impl.native
         frame = button.convertRect(button.bounds, toView=window)
         viewport = owner.breadcrumb_scroll._impl.native
@@ -251,7 +251,8 @@ class NotesDrawersProbe(NotesInteractionChecks, LogisticsMobile):
                 owner.sidebar.show_sidebar()
                 assert await owner.open_note('Home.md')
                 if type(self._impl).__module__.startswith('toga_iOS.'):
-                    await self.check_note_actions(owner, report)
+                    await self.check_note_actions(owner, report, 'Long folder name for compact row preview/Child.md')
+                    assert await owner.open_note('Home.md')
                     await capture_window(self, output / ('notes-reading-' + orientation + '.png'))
                 if owner.sidebar.expanded:
                     assert owner.back_action() == (owner.previous_note if owner.history_index > 0 else None)

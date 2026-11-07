@@ -103,6 +103,11 @@ orange and gray. Shader offers gray, blue, red, green, yellow, cyan, magenta
 and orange, each with its own native transparency; it has no black or white
 choice.
 
+Each brush starts with its first color and remembers your choice for that
+notebook across reopenings. Logistics keeps the choices with the notebook's
+saved page position on this device. LocalCrypt uses the same protected storage
+as its page positions.
+
 Highlighter has one **Fixed** width, matching the sampled Paper Pro firmware.
 Other brushes have **Thin**, **Medium** and **Thick** widths; these labels are not
 fixed physical measurements. Fineliner and mechanical pencil keep an even width.

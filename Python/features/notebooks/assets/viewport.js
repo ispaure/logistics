@@ -151,7 +151,7 @@ function resize() {
   const wrap = $('paperWrap'), layers = $('inkLayers'), background = $('pdfBackground');
   wrap.style.width = (bounds.width * scale) + 'px';
   wrap.style.height = (bounds.height * scale) + 'px';
-  wrap.style.margin = paperView === 'move' ? '0 auto auto' : 'auto';
+  wrap.style.margin = mobileViewport() || paperView === 'move' ? '0 auto auto' : 'auto';
   layers.style.left = (-bounds.x * scale) + 'px';
   layers.style.width = (state.width * scale) + 'px';
   const imageBounds = state.pdf_paper || {x: 0, width: state.width, height: state.height};

@@ -18,13 +18,10 @@ creation checks its identity against the capture before writing, and final sourc
 settings verification refuses changes made during preparation. Plans are combined
 under this shared context, not by assuming independently captured sources match.
 
-Existing workspace operation locks, snapshot holds, resource requirements and
-project retention remain authoritative. Mobile validation branches run in sequence
-so their disposable device lifecycles do not overlap. An always-run admission step
-lets later platform validation proceed after an earlier platform fails, without making one platform’s success a validation prerequisite for the other.
-The admission step uses a completion-only scheduling edge. Artifact review follows
-only success-required dependencies, so an unrelated failure cannot veto delivery. Owned cleanup is scoped to its
-branch so it cannot wait forever on delivery steps that depend on it.
+Workspace locks, snapshot holds and declared resource limits still apply.
+Independent Android and iOS branches can overlap. Each branch keeps its
+own cleanup and result dependencies, so failure in one branch does not
+block unrelated artifact review or delivery.
 
 Credentials remain protected references or inherited environment variables.
 Profiles and plans never contain private-key/token contents. Changing a credential
@@ -34,24 +31,16 @@ credential files. Runtime executable paths are not credential files.
 
 ## Local manager dependency and verification
 
-This integration needs the manager with journey schema 1 and explicit host
-backend mappings. The current local project environment uses the existing editable
-manager installation. Its published manager pin is not advanced to an unpublished
-revision, and `build-manager-dependency.json` is preserved. For another environment,
-install the reviewed local manager explicitly or advance the project pin only after
-an authorized publication. Do not silently substitute a different checkout or pin.
+Use the revision in `build-manager-dependency.json` unless explicitly testing a
+local manager checkout. See [manager installation](../user/build-manager.md#external-manager-installation-adapter-api-1)
+for the pinned installation and local override.
 
 Portable acceptance uses the real project adapter and JSON bridge, temporary
 local repositories, mocked native/provider entry points and harmless subprocesses.
 It covers shared capture, complete release gates, source changes, cleanup order,
 partial failure, approval pause/resume, retained preparation, and overlapping
-independent uploads. No native VM/device checks, signing/build acceptance, hosted
-dispatch, uploads or publication were run for this integration. Prior native
-acceptance does not certify the new combined journey. Native acceptance remains
-separate, explicitly authorized work at exact source/artifact identities.
-
-- [Build manager](build-manager.md)
-- [Developer home](development.md)
+independent uploads. Use the [platform checks](platform-checks.md) for native
+validation, and verify the source and artifact identities used for delivery.
 
 ## Shared tests and suite discovery
 

@@ -39,11 +39,6 @@ is not refreshed from external sources. Weight and balance, navigation charts,
 flight plans, a pilot logbook and PDF export were listed as ideas in the old README
 but had no implementation to migrate.
 
-The former Python installation troubleshooting PDF is retained in `legacy_docs/`
-for reference. Standalone launcher/config/environment files and the old fixed-size
-UI are superseded by Logistics. The duplicate commonUtils tree is superseded by
-the existing shared submodule; it is not merged into that submodule.
-
 ## Source ownership and platform boundary
 
 - `Python/features/aviation_tools/__init__.py` registers the lazy desktop page.

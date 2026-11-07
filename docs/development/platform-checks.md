@@ -231,3 +231,19 @@ Validate workflow syntax and expressions with actionlint, recognizing the existi
 `xcode-27` runner label. These checks do not establish hosted runner capacity,
 native test success or elapsed-time savings. Hosted execution and timings remain
 unverified until the later GitHub release validation checkpoint.
+
+## Native suite timings
+
+The final native report includes a `timings` summary. Full events are emitted as
+`LOGISTICS_NATIVE_TIMING` and checkpointed in the app cache as
+`logistics-native-ui-timings.json`. From the repository root, summarize either
+file with:
+
+```sh
+python -m mobile_build.validation.native_timing_report path/to/report.json
+```
+
+Section totals include their children. Use `self_s` for exclusive time and keep
+request, layout settling, geometry and screenshot costs separate when evaluating
+rotation readiness. Results describe the runner and rendering configuration
+used for that run.

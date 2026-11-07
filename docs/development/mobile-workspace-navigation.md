@@ -349,8 +349,7 @@ resize animation respects Reduce Motion and keeps the same widget owners.
 The navigation controller reaches the outside bar edge; its leaf content applies
 safe insets. Document and reader-tool routes expand that controller to the full
 wrapper bounds, so a wide Workspaces wrapper cannot make its document bar an
-interior horizontal bar. See the [Duo panel audit](iphone-duo-ui-brief.md#october-28-implementation-results)
-for current validation and remaining acceptance.
+interior horizontal bar.
 Android search adds its input beneath the existing folder title/status header.
 Its header chevron dispatches the same transient-state and folder-history policy
 as system Back. Focused coverage lives in `test_ios_workspace_columns.py`,
@@ -890,7 +889,7 @@ in the main route. The Workspaces drawer implementation remains available, but i
 hamburger is not mounted.
 
 
-## Mobile feedback follow-up (historical, superseded by the UX passes below)
+## Workspace routes and document history
 
 Home suppresses only its own Apple navigation bar; its bottom tab stays visible.
 Current presentation owners are `home.HomeScreen` and `documents_hub.DocumentsHub`,
@@ -1902,9 +1901,7 @@ activity coverage on other displays. All stimuli, apps and simulators remain in
 the existing scratch/owned-device lifecycle. This does not establish genuine
 two-app Split View or physical touch acceptance; those remain separate gates.
 
-The [November 5 Brief 1 handoff](iphone-duo-feedback-plan.md#brief-1-implementation-handoff--november-5-2026)
-records the completed open/front activity sweeps and integrated static profiles.
-The activity gate requires measured growth and contraction at unchanged window
+The activity check requires measured growth and contraction at unchanged window
 dimensions. Native collision checks intersect actual clipping ancestors: UIKit
 retains offscreen tab views when its bar collapses to a destination selector.
 Raw frames and hit-test results remain in the local report for review.
@@ -1941,3 +1938,17 @@ Credential publication refreshes retained workspace trees even beside an open
 browser or during a transfer. Discovery reads published metadata/local names and
 does not acquire the busy remote bridge. Regression coverage checks retained row
 identity and lock/unlock transitions while a browser route and transfer are active.
+
+## iPhone Duo native bar placement
+
+UIKit uses horizontal bars on the open portrait display and can move eligible
+navigation and document bars to the outer edge on the open landscape or front
+display. Use the current native container and preferred edge. Internal browser
+and document panes share one system window, so they can keep horizontal bars
+when their containers do not touch the outside edge. Back follows route
+history. Document Close runs the document's save/discard/cancel workflow.
+
+Check both outside edges in actual two-app Split View, alongside the open and
+closed display configurations. The simulator profiles cover synthetic panels
+and activity transitions. Physical touch and VoiceOver, live providers,
+minimum supported iOS and genuine two-app Split View require separate checks.

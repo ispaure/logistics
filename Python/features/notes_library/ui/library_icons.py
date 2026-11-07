@@ -1,7 +1,9 @@
 """Qt rendering of the same entry artwork used by the mobile browser."""
 from base64 import b64decode
+from functools import lru_cache
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.icons import painted_icon
+from commonUtils.ui.file_browser.navigation import BreadcrumbSeparator
 from services.documents.entry_icons import ENTRY_ICONS
 
 
@@ -10,7 +12,9 @@ class EntryArtwork:
         self.image = qt.QImage.fromData(b64decode(ENTRY_ICONS[kind]))
 
     def paint(self, painter, rect, mode, state):
-        image = self.image.copy()
+        ratio = painter.device().devicePixelRatioF()
+        image = self.image.scaled(rect.size() * ratio, qt.Qt.AspectRatioMode.KeepAspectRatio,
+                                  qt.Qt.TransformationMode.SmoothTransformation)
         tint = qt.QPainter(image)
         try:
             tint.setCompositionMode(qt.QPainter.CompositionMode.CompositionMode_SourceIn)
@@ -21,13 +25,37 @@ class EntryArtwork:
             tint.fillRect(image.rect(), qt.QApplication.palette().color(group, role))
         finally:
             tint.end()
-        painter.setRenderHint(qt.QPainter.RenderHint.SmoothPixmapTransform)
         painter.drawImage(rect, image)
 
 
 def entry_icon(directory, *, landing_page=False):
     kind = 'folder_document' if directory and landing_page else 'files' if directory else 'documents'
     return painted_icon(EntryArtwork, kind)
+
+
+@lru_cache(maxsize=12)
+def breadcrumb_icon_source(directory, landing_page, palette_key):
+    """Embed the same tinted entry icon in the breadcrumb's rich text."""
+    pixmap = entry_icon(directory, landing_page=landing_page).pixmap(32)
+    return png_source(pixmap)
+
+
+@lru_cache(maxsize=8)
+def breadcrumb_chevron_source(color):
+    width = BreadcrumbSeparator.WIDTH
+    image = qt.QImage(width * 3, width * 3, qt.QImage.Format.Format_ARGB32_Premultiplied)
+    image.fill(qt.Qt.GlobalColor.transparent)
+    with qt.QPainter(image) as painter:
+        painter.scale(3, 3)
+        BreadcrumbSeparator.paint_chevron(painter, width, width, qt.QColor(color))
+    return png_source(image)
+
+
+def png_source(image):
+    buffer = qt.QBuffer()
+    buffer.open(qt.QIODevice.OpenModeFlag.WriteOnly)
+    image.save(buffer, 'PNG')
+    return 'data:image/png;base64,' + bytes(buffer.data().toBase64()).decode('ascii')
 
 
 class ActionArtwork:

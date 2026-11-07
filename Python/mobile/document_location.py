@@ -193,6 +193,8 @@ def mount_apple_title(view, controller, title):
         controls = notes_controls[1:] if edge else notes_controls
         view._document_title_controls = controls
     compact_tools = tools is not None and not controls and band is None and tools.fits(controller)
+    stacked_notebook = (tools is not None and not controls and band is None
+                        and tools.stacked_portrait(controller))
     wide_notebook = (tools is not None and not controls and band is None
                      and not getattr(view, '_reader_fullscreen', False) and tools.wide_phone(controller))
     leading = compact_tools or wide_notebook
@@ -205,7 +207,7 @@ def mount_apple_title(view, controller, title):
     control_widths = (button.style.width for button in controls)
     gutters = ((32 if edge else 16) + sum((width if isinstance(width, (int, float)) else 48) + 8
                                         for width in control_widths)
-               if controls else (32 if edge else 216))
+               if controls else (32 if edge or stacked_notebook else 216))
     width = max(44, available - gutters)
     state = (title, getattr(view, '_document_storage_status', ''), tuple(getattr(view, '_document_storage_kinds', ())), width, leading)
     changed = getattr(view, '_document_title_state', None) != state
@@ -239,11 +241,11 @@ def mount_apple_title(view, controller, title):
     header = getattr(view, '_document_title_header', None)
     was_mounted = side_title_header(view) is not None
     frame = getattr(view, '_reading_frame_owner', None)
-    if controls or leading or (edge and (frame is not None or hasattr(view, '_document_path'))):
+    if controls or leading or stacked_notebook or (edge and (frame is not None or hasattr(view, '_document_path'))):
         # UIKit owns the side actions, but can reposition its titleView after
         # content layout. Give the actual title its own row above the page.
         if header is None:
-            top = 0 if notes_controls else 6
+            top = 0 if notes_controls or stacked_notebook else 6
             header = view._document_title_header = toga.Box(style=Pack(margin_top=top, margin_bottom=6))
             header._empty_bar_title = empty_bar_title()
             if controls:

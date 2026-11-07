@@ -4,8 +4,7 @@ Developer reference for changes to `cbz.py`, `sanitization.py`, `comicinfo.py`
 and `archive_io.py`. Start with the [feature overview](development.md); controls and
 options are in the [user guide](../user/user.md). These rules are covered by
 `test_comics.py`, the image tests, `test_async_comic_operations.py` and
-`test_encrypted_comics.py`. The [historical parity report](zip-compression-parity.md)
-records comparisons against the pre-password implementation.
+`test_encrypted_comics.py`.
 
 ## Output rules
 

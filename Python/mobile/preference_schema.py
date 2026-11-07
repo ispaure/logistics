@@ -10,9 +10,11 @@ from services.appearance_palette import DEFAULT_ACCENT
 from .magnifier import LEVELS, RANGE_ERROR
 from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_SIZES, validate as validate_reading
 from features.images.mobile.burst_camera import DEFAULTS as CAMERA_DEFAULTS, validate_preferences as validate_camera
+from features.notebooks.mobile.brush_presets import PREFERENCE as NOTEBOOK_BRUSH_PRESETS, read_presets
 
 DEFAULTS = {
     'notebook_paper_preview': 'true',
+    NOTEBOOK_BRUSH_PRESETS: '[]',
     'notes_library_migrated': 'true',
     'seasonal_snow': 'true',
     'android_eink': 'false',
@@ -71,6 +73,7 @@ def validate(values):
         raise ValueError('Invalid session speech lock-screen preference.')
     if values['notebook_paper_preview'] not in {'true', 'false'}:
         raise ValueError('Invalid notebook preview preference.')
+    read_presets(values[NOTEBOOK_BRUSH_PRESETS])
     if values['seasonal_snow'] not in {'true', 'false'}:
         raise ValueError('Invalid seasonal snow preference.')
     if values['android_eink'] not in {'true', 'false'}:

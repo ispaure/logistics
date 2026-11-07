@@ -183,7 +183,7 @@ def notes_host(app):
     from features.notes_library.notes import MAX_NOTE, MAX_RENDERED_HTML, MAX_IMAGE_HTML
     from commonUtils.ui.native.markdown_preview import MarkdownPreviewLimits
     from ..appearance import list_button, batch_surfaces
-    from ..browser_ui import FileBrowser, middle_filename, entry_icon, highlight_entry
+    from ..browser_ui import FileBrowser, middle_filename, entry_icon, breadcrumb_separator, highlight_entry
     from ..markdown_speech import MarkdownSpeech
     from ..action_menu import FeatureCommands
     from .. import obsidian
@@ -300,6 +300,7 @@ def notes_host(app):
         list_button=list_button,
         middle_filename=middle_filename,
         entry_icon=entry_icon,
+        breadcrumb_separator=breadcrumb_separator,
         highlight_entry=highlight_entry,
         preview=lambda text, **kwargs: obsidian.markdown_preview(
             text, int(app.preferences.values["markdown_font_size"]), local_links=True, limits=preview_limits, compact_top=True, callouts=True, **kwargs

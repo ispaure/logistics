@@ -2,16 +2,18 @@
 from pathlib import Path, PurePosixPath
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.status_line import StatusLine
+from commonUtils.ui.file_browser.navigation import BreadcrumbSeparator
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 from commonUtils.ui.markdown.navigation import MarkdownNavigation
 from .dataview import NotesMarkdownViewer
 from .library_connections import LibraryConnections
+from .library_icons import breadcrumb_chevron_source, breadcrumb_icon_source
 from ..preparation import prepare_document
 from ..notes import NotesLibrary, MAX_NOTE, breadcrumb_folders
 
 
 class BreadcrumbViewport(qt.QScrollArea):
-    """A single toolbar row, scrollable with touch or a mouse/trackpad wheel."""
+    """Center the trail and allow horizontal scrolling when two lines overflow."""
     def __init__(self, label):
         super().__init__()
         self.setFrameShape(qt.QFrame.Shape.NoFrame)
@@ -19,10 +21,16 @@ class BreadcrumbViewport(qt.QScrollArea):
         self.setFixedHeight(max(28, label.sizeHint().height() + 4))
         self.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.setVerticalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.setAlignment(qt.Qt.AlignmentFlag.AlignCenter)
         self.setWidget(label)
         self.horizontalScrollBar().rangeChanged.connect(
             lambda minimum, maximum: self.horizontalScrollBar().setValue(maximum))
         qt.QScroller.grabGesture(self.viewport(), qt.QScroller.ScrollerGestureType.TouchGesture)
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if event.size().width() != event.oldSize().width():
+            self.widget().render_path()
 
     def wheelEvent(self, event):
         delta = event.pixelDelta()
@@ -44,6 +52,7 @@ class NotesBreadcrumbs(qt.QLabel):
         self.setMinimumWidth(0)
         self.setSizePolicy(qt.QSizePolicy.Policy.Ignored, qt.QSizePolicy.Policy.Preferred)
         self.setTextFormat(qt.Qt.TextFormat.RichText)
+        self.setAlignment(qt.Qt.AlignmentFlag.AlignCenter)
         self.setTextInteractionFlags(qt.Qt.TextInteractionFlag.LinksAccessibleByMouse |
                                      qt.Qt.TextInteractionFlag.LinksAccessibleByKeyboard)
         self.linkActivated.connect(self.activate)
@@ -56,7 +65,7 @@ class NotesBreadcrumbs(qt.QLabel):
         if not 0 <= index < len(self.entries):
             return
         target = self.entries[index][1]
-        if target:
+        if target and target != self._path:
             self.owner.open_note(target)
         elif index < len(self.folders):
             self.owner.reveal_folder(self.folders[index])
@@ -72,14 +81,11 @@ class NotesBreadcrumbs(qt.QLabel):
     def show_path(self, path):
         changed = path != self._path
         self._path = path
-        folders = breadcrumb_folders(self.owner.library.root, path)
-        if self.owner.library.root not in folders:
-            folders.insert(0, self.owner.library.root)
-        self.folders = folders
-        self.entries = [(PurePosixPath(folder).name or self.owner.library_label,
-                         self.owner.folder_pages.get(folder)) for folder in folders]
+        self.folders = breadcrumb_folders(self.owner.library.root, path)
+        self.entries = [(PurePosixPath(folder).name, self.owner.folder_pages.get(folder))
+                        for folder in self.folders]
         self.entries.append((PurePosixPath(path).name, None))
-        self.setToolTip(' / '.join(label for label, _ in self.entries))
+        self.setToolTip(' > '.join(label for label, _ in self.entries))
         self.setAccessibleName(self.toolTip())
         self.render_path()
         viewport = getattr(self.owner, 'breadcrumb_viewport', None)
@@ -97,14 +103,43 @@ class NotesBreadcrumbs(qt.QLabel):
 
     def render_path(self):
         from html import escape
+        from itertools import accumulate
+
+        viewport = getattr(self.owner, 'breadcrumb_viewport', None)
+        chevron_width = BreadcrumbSeparator.WIDTH
+        muted = self.palette().color(qt.QPalette.ColorRole.PlaceholderText).name(qt.QColor.NameFormat.HexArgb)
+        chevron = breadcrumb_chevron_source(muted)
+        separator = (f'<img src="{chevron}" width="{chevron_width}" height="{chevron_width}" '
+                     'style="vertical-align:middle">')
+        icon_size = 14
+        palette_key = qt.QApplication.palette().cacheKey()
         color = self.palette().color(qt.QPalette.ColorRole.WindowText).name()
-        self.setText(' / '.join(
-            f'<a href="{i}" style="color:{color};text-decoration:{"underline" if page else "none"}">{escape(label)}</a>'
-            if i < len(self.folders) else escape(label)
-            for i, (label, page) in enumerate(self.entries)))
+        parts = []
+        for i, (label, page) in enumerate(self.entries):
+            directory = i < len(self.folders)
+            source = breadcrumb_icon_source(directory, bool(page), palette_key)
+            title = escape(label)
+            if page:
+                title = f'<span style="text-decoration:underline">{title}</span>'
+            crumb = (f'<img src="{source}" width="{icon_size}" height="{icon_size}" '
+                     f'style="vertical-align:middle">&nbsp;{title}')
+            if directory:
+                crumb = f'<a href="{i}" style="color:{color};text-decoration:none">{crumb}</a>'
+            parts.append(crumb)
+        lines = [separator.join(parts)]
+        if viewport is not None and len(parts) > 1:
+            measure = qt.QFontMetricsF(self.font()).horizontalAdvance
+            gap = chevron_width
+            icon_width = icon_size + measure('\u00a0')
+            widths = list(accumulate(icon_width + measure(label) + gap for label, _ in self.entries))
+            if widths[-1] - gap > viewport.viewport().width():
+                # Leave the chevron at the line break so the trail reads continuously.
+                split = min(range(1, len(parts)),
+                            key=lambda i: abs(2 * widths[i - 1] - widths[-1] + chevron_width))
+                lines = [separator.join(parts[:split]) + separator, separator.join(parts[split:])]
+        self.setText('<br>'.join(lines))
         size = self.sizeHint()
         self.resize(size)
-        viewport = getattr(self.owner, 'breadcrumb_viewport', None)
         if viewport is not None:
             viewport.setFixedHeight(max(28, size.height() + 4))
 
@@ -252,7 +287,7 @@ class DocumentPresentation:
         self.breadcrumbs = NotesBreadcrumbs(self)
         self.idle.connect(self.refresh_breadcrumb_path)
         self.breadcrumb_viewport = BreadcrumbViewport(self.breadcrumbs)
-        self.navigation.layout().addWidget(self.breadcrumb_viewport, 1)
+        self.navigation.layout().addWidget(self.breadcrumb_viewport, 1, qt.Qt.AlignmentFlag.AlignVCenter)
         self.navigation.setMinimumWidth(0)
         self.navigation.setSizePolicy(qt.QSizePolicy.Policy.Expanding, qt.QSizePolicy.Policy.Preferred)
         self.back = self.navigation.back_button
@@ -341,6 +376,7 @@ class DocumentPresentation:
             return self.open_video_file(path)
         self.viewer.speech.stop()
         self.remember_position()
+        self.viewer.status.clear()
         self.pending = ('note', path, remember, fragment, index)
         self.viewer.setEnabled(False)
         self.set_navigation_enabled(False)
@@ -362,7 +398,7 @@ class DocumentPresentation:
             window = open_document_resource(self.provider, self.library.contained(path), self)
             for view in (self.viewer.browser, self.viewer.formatted_editor):
                 for card in view.inline_videos.cards.values():
-                    card.player.pause()
+                    card.pause()
             return window
         except (OSError, ValueError, PermissionError) as error:
             self.viewer.status.setText(str(error))
@@ -663,9 +699,9 @@ class DocumentPresentation:
             self.index = len(self.history) - 1
         elif index is not None:
             self.index = index
+        self.viewer.browser.inline_videos.clear()
+        self.viewer.formatted_editor.inline_videos.clear()
         if result.kind != 'markdown':
-            self.viewer.browser.inline_videos.clear()
-            self.viewer.formatted_editor.inline_videos.clear()
             self.library.release_media(path)
         if result.kind is None:
             self.show_file(result.preview, result.rendered)
@@ -732,7 +768,6 @@ class NotesDocumentPane(LibraryConnections, DocumentPresentation, qt.QWidget):
     def __init__(self, workspace, label):
         super().__init__()
         self.workspace = workspace
-        self.library_label = workspace.library_label
         self.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
         self.setWindowTitle(label)
         self.init_document()

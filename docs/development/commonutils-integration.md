@@ -49,7 +49,6 @@ Before adding a utility, check these existing shared guides:
 These links open the shared wiki in Logistics' pinned submodule checkout.
 Initialize that checkout before following them. Missing shared documentation belongs
 with the owning component; keep its API manual there.
-See the [audit follow-ups](documentation-audit.md#commonutils-documentation-ownership-and-gaps).
 
 ## Current import contract
 
@@ -113,8 +112,7 @@ in commonUtils itself. Logistics supplies destination definitions, close/navigat
 guards, document controllers and adaptive workspace composition. Feature-specific
 mobile EPUB/comic presentation is under the Books/Comics owners; catalogue storage,
 private-content policy and transfer workflows remain in Logistics. See the
-[architecture roadmap](mobile-architecture-roadmap.md) for the baseline assessment
-and validation sequence.
+[mobile runtime](mobile-runtime.md) for Logistics host ownership and checks.
 
 Failed Apple navigation construction can retain an inactive cleanup owner.
 Keep the `NativeNavigationHost` available for its uninstall retry before another

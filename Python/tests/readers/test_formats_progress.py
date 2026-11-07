@@ -1,6 +1,6 @@
 """Remaining reader adapters through actual Qt reopening and a fresh process."""
 
-from contextlib import closing
+from contextlib import closing, ExitStack
 from dataclasses import asdict
 from pathlib import Path
 import json
@@ -73,10 +73,10 @@ class FormatProgressTests(QtTestCase):
         self.assertNotIn(b'Private fixture marker', state)
         self.assertNotIn(b'Paragraph 100.', state)
 
-    def test_notebook_fresh_process_restore_uses_stable_id_after_reordering(self):
+    def test_notebook_fresh_process_restores_brush_colors_and_stable_page_id_after_reordering(self):
         from features.notebooks.editor import Editor
         from features.notebooks.notebook import Notebook
-        from features.notebooks.progress import open_notebook_progress, page_location
+        from features.notebooks.progress import notebook_progress_state, open_notebook_progress, restore_notebook_progress
         from commonUtils.runtime.resources.local import LocalFiles
         from services.documents.storage import DocumentResource
 
@@ -86,29 +86,68 @@ class FormatProgressTests(QtTestCase):
         book.add_page()
         path.write_bytes(book.to_bytes())
         with DocumentResource(LocalFiles(self.root), path.name, max_bytes=2**20) as resource:
-            progress, index = open_notebook_progress(book, self.cache, resource=resource)
-            self.assertEqual(index, 0)
+            progress, saved = open_notebook_progress(book, self.cache, resource=resource)
+            self.assertEqual(saved, {})
             editor = Editor(book, lambda _: self.fail('Navigation checkpointed ink.'))
+            restore_notebook_progress(editor, saved)
             editor.apply(dict(op='page', index=2))
-            chosen = page_location(editor)['page_id']
-            progress.save(page_location(editor))
+            chosen = book.pages[editor.index].id
+            editor.brush_colors = {15: 6, 18: -1}
+            progress.save(notebook_progress_state(editor))
             progress.retire()
         book.move_page(2, 1)
         path.write_bytes(book.to_bytes())
         output = subprocess.check_output([sys.executable, '-c', """
 from pathlib import Path
-import sys
+import json, sys
+from features.notebooks.editor import Editor
 from features.notebooks.notebook import Notebook
-from features.notebooks.progress import open_notebook_progress
+from features.notebooks.progress import open_notebook_progress, restore_notebook_progress
 from commonUtils.runtime.resources.local import LocalFiles
 from services.documents.storage import DocumentResource
 path, root = map(Path, sys.argv[1:])
 with DocumentResource(LocalFiles(path.parent), path.name, max_bytes=2**20) as resource:
     book = Notebook.read(resource.read())
-    _, index = open_notebook_progress(book, root, resource=resource)
-    print(index, book.pages[index].id)
+    _, saved = open_notebook_progress(book, root, resource=resource)
+    editor = Editor(book)
+    restore_notebook_progress(editor, saved)
+    print(json.dumps([editor.index, book.pages[editor.index].id, editor.brush_colors]))
 """, str(path), str(self.cache)], text=True)
-        self.assertEqual(output.strip(), f'1 {chosen}')
+        self.assertEqual(json.loads(output), [1, chosen, {'15': 6, '18': -1}])
+
+    @stage(TestStage.EXTENDED)
+    def test_localcrypt_notebook_reopens_brush_colors_from_encrypted_progress(self):
+        from io import BytesIO
+        from features.notebooks.editor import Editor
+        from features.notebooks.notebook import Notebook
+        from features.notebooks.progress import notebook_progress_state, open_notebook_progress, restore_notebook_progress
+        from services.documents.progress import ProgressMode, ProgressStatus
+        from services.documents.storage import DocumentResource
+        from tests.local_crypt_fixture import crypt_fixture, require_pinned_rclone
+
+        name = 'private-sketch.rmdoc'
+        original = Notebook.new('Private sketch').to_bytes()
+        with (crypt_fixture(self.root, require_pinned_rclone(), state_password='synthetic-package-password', pull=False) as fixture,
+              ExitStack() as browser):
+            browser.callback(fixture.provider.acquire())
+            fixture.provider.create_file(name, BytesIO(original))
+            for writing in (True, False):
+                with DocumentResource(fixture.provider, name, max_bytes=2**20) as resource:
+                    self.assertEqual(resource.read(), original)
+                    editor = Editor(Notebook.read(original))
+                    progress, saved = open_notebook_progress(editor.notebook, self.cache, resource=resource)
+                    self.assertIs(progress.mode, ProgressMode.ENCRYPTED)
+                    restore_notebook_progress(editor, saved)
+                    if writing:
+                        editor.brush_colors = {15: 6, 18: -1}
+                        self.assertIs(progress.save(notebook_progress_state(editor)), ProgressStatus.SAVED)
+                    else:
+                        self.assertEqual(editor.brush_colors, {15: 6, 18: -1})
+                    progress.retire()
+            directory = self.cache / 'ReaderPositions'
+            archive, = directory.glob('*.zip')
+            self.assertNotIn(b'brush_colors', archive.read_bytes())
+            self.assertFalse(list(directory.rglob('*.json')))
 
     def test_video_fingerprint_migration_and_track_settings_after_process_restart(self):
         from commonUtils.runtime.resources.local import LocalFiles

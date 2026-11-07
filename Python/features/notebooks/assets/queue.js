@@ -43,6 +43,12 @@ window.notebookUpdate = function(next, error) {
   render();
   pump()
 };
+window.notebookBrushColorUpdate = function(error) {
+  busy = false;
+  queue.shift();
+  $('status').textContent = error || (queue.length ? 'Saving…' : state.save_status);
+  pump();
+};
 // Mobile acknowledges durable strokes without resending/replaying the whole page.
 window.notebookStrokeUpdate = function(stroke, status) {
   if(typeof inputTrace==='function')inputTrace(active!==null?'stroke-ack-deferred':'stroke-ack-applied');

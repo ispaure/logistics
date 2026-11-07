@@ -65,9 +65,10 @@ def prepare_document(library, path, *, current='', resolve_link=False,
             result.resource = None  # The notebook now owns this lease.
         else:
             from services.documents.markdown import prepare_markdown
-            stage('Preparing embedded media…')
+            stage('Preparing embedded images…')
             result.data, result.resources = prepare_markdown(provider, provider.root / path, data=data,
-                cancelled=cancelled, image_source=library.image_source(path, cancelled=cancelled, batch=True))
+                cancelled=cancelled, image_source=library.image_source(path, cancelled=cancelled, batch=True),
+                deferred_video=lambda target, stopped: library.open_embedded_video(path, target, cancelled=stopped))
         check_cancelled(cancelled)
         return result
     except BaseException:

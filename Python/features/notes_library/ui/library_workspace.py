@@ -5,7 +5,6 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.workspaces.scoped_tabs import ScopedTabBar
 from .notes_library import NotesLibraryWindow
 from .document import NotesDocumentPane
-from ..navigation import PathChange
 
 
 class LibraryTabs(qt.QStackedWidget):
@@ -234,9 +233,7 @@ class LibraryTabs(qt.QStackedWidget):
         menu.addAction('Close tab', lambda: self.close_tab(child))
         menu.exec(group.tabBar().mapToGlobal(point))
 
-    def remap(self, source, destination, deleted):
-        change = PathChange(source, destination, deleted)
-
+    def remap(self, change):
         for child in list(self.documents):
             current = self.path(child)
             if change.removes(current):
@@ -370,7 +367,7 @@ class TabbedNotesLibrary(NotesLibraryWindow):
         if self.document_tabs is not None and not self.locked:
             self.document_tabs.setEnabled(True)
             if mutation is not None and not error:
-                self.document_tabs.remap(mutation[1], result.destination, mutation[2])
+                self.document_tabs.remap(result.change)
                 self.document_tabs.refresh_connections()
 
     def clear_document(self):

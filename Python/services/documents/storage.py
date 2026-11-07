@@ -18,6 +18,10 @@ class _ReadRevisionChanged(ValueError):
     """The provider's revision changed across one bounded document read."""
 
 
+class DocumentSizeExceeded(ValueError):
+    """Document bytes exceed the caller's format limit."""
+
+
 @dataclass(frozen=True)
 class DocumentPolicy:
     persistent: bool
@@ -183,7 +187,7 @@ class DocumentResource:
                 data = read_up_to(stream, self.max_bytes + 1, cancelled=cancelled)
         check_cancelled(cancelled)
         if len(data) > self.max_bytes:
-            raise ValueError('Document is too large; exceeds its format size limit.')
+            raise DocumentSizeExceeded('Document is too large; exceeds its format size limit.')
         if self.check()['revision'] != before:
             raise _ReadRevisionChanged('The document changed while opening; reopen it.')
         self.revision = before
@@ -207,7 +211,7 @@ class DocumentResource:
         if expected_revision is not None and not policy.writable:
             raise PermissionError('This document is read-only.')
         if len(data) > max_bytes:
-            raise ValueError('Document is too large; exceeds its format size limit.')
+            raise DocumentSizeExceeded('Document is too large; exceeds its format size limit.')
         check_cancelled(lambda: cancelled() or not alive())
         validate(data)
         def reopen():

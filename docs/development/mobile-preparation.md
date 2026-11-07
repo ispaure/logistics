@@ -178,7 +178,7 @@ adaptive workspace for side-by-side panes. iPad supports independent UIKit
 scenes. Each scene owns its host, navigation and workspace state. The scene
 manager shares ordinary document storage and uses `WindowOwners` to prevent
 competing writers. Protected sessions are restricted to a single window.
-See the [scene implementation milestone](#phase-4-part-1-independent-uikit-scenes)
+See the [independent scene lifecycle](#independent-uikit-scenes)
 and [workspace navigation guide](mobile-workspace-navigation.md).
 
 ## Ownership and contracts
@@ -231,67 +231,7 @@ and the [payload manifests](#owner-declared-source-selection). The portable
 testbed adds test modules and fixtures for runtime contracts. Briefcase's native
 UI test entry is separate from the normal application entry.
 
-## Implementation history
-
-The evidence, plans and numbered phases through Phase 6 Parts 2–3 below record
-earlier checkpoints. Their case counts, release references, destination labels,
-pending milestones and device limits apply to those checkpoints. Use the
-[validation gates](#validation-gates) above for current checks.
-
-## Evidence status
-
-The shared foundation previously passed Android and iOS in
-[run 38277821906](https://github.com/ispaure/commonUtils/actions/runs/38277821906),
-with seven cases per runtime. Its
-[mobile test guide](../../Python/commonUtils/docs/development/mobile-testing.md)
-records those source/runtime details; this is separate from Logistics validation.
-
-The new Logistics 14-case host harness, packaging/verifier tests and Toga dummy
-widget workflow pass locally. Native iOS project generation and dependency
-installation succeeded, but the local Xcode storyboard build failed with
-`iOS 26.5 Platform Not Installed`; no simulator devices were available. Both [hosted native builds](https://github.com/ispaure/logistics/actions/runs/38353619087)
-passed at `a02a4ba`, producing an Android debug APK and iOS Simulator app; see
-build evidence (local artifact `test-results/mobile-evidence/2026-10-13-native-initial.json`). The
-[first Logistics runtime run](https://github.com/ispaure/logistics/actions/runs/38353619071)
-passed all 13 initial cases on iOS, recorded in
-iOS evidence (local artifact `test-results/mobile-evidence/2026-10-13-ios-initial.json`). Android ran all 13 but
-reported seven errors because its sandbox rejected hard-link publication of new
-files; the failed record (local artifact `test-results/mobile-evidence/2026-10-13-android-initial.json`) is retained.
-New private files now use exclusive creation followed by publication of a durable
-recovery record, and the suite has a fourteenth case enforcing that contract.
-The [corrected runtime run](https://github.com/ispaure/logistics/actions/runs/38354610543)
-passed all 14 cases with zero failures, errors or skips on both Android and iOS at
-`5c4a528`; retained reports are Android (local artifact `test-results/mobile-evidence/2026-10-13-android-corrected.json`)
-and iOS (local artifact `test-results/mobile-evidence/2026-10-13-ios-corrected.json`). Both corrected native builds
-also passed in [run 38354610510](https://github.com/ispaure/logistics/actions/runs/38354610510);
-see build evidence (local artifact `test-results/mobile-evidence/2026-10-13-native-corrected.json`).
-No physical-device or actual native picker result is claimed here.
-
-Source releases require both mobile native builds and document runtime checks
-alongside the desktop platform checks before packaging and publication. The same
-commit supplies every called workflow and source payload; standalone branch runs
-do not substitute for this release gate.
-
-## Next work
-
-The early prototype plan called for native picker and recovery validation,
-reader expansion, explicit export/share, a provider writeback contract and
-signed distribution. These were proposals at that checkpoint. Follow the
-[mobile host code guide](mobile-runtime.md) and [mobile handbook](mobile-handbook.md)
-for implemented workflows and current validation.
-
-## Phase roadmap
-
-The original sequence began with hub/preferences/text/Markdown, then added EPUB
-and comic readers, LM chat, and rclone credential packages and remote access.
-Phase 1 used Home/Documents/Settings navigation, private INI preferences,
-platform export-copy pickers and an offline basic Markdown preview. The pinned
-Android WebView used a Chaquopy static proxy for navigation handlers. The preview
-bounded HTML below the WebView's 2 MiB default content limit, escaped active
-input and refused navigation. The picker tests covered cancellation and stream
-cleanup with fixtures.
-
-## Phase 2 reader contracts
+## Reader contracts
 
 `library.py` streams bounded imports into private storage, validates archive member
 paths/counts/sizes and uses native access for protected archives before reusing portable EPUBBook and
@@ -314,25 +254,7 @@ artifacts are the pre-test normal APK/Simulator archive. Native UI evidence is a
 required build-job result; packaging cannot bypass it. Physical-device pickers,
 keyboard/touch/accessibility and suspension remain independent validation work.
 
-### Phase 2 native UI evidence
-
-At `428d1d7`, [native run 38365625757](https://github.com/ispaure/logistics/actions/runs/38365625757)
-passed all seven actual app cases on Android and iOS, including DOM rendering and
-native PNG decoding. Retained Android (local artifact `test-results/mobile-evidence/2026-10-13-android-native-ui-phase2.json`)
-and iOS (local artifact `test-results/mobile-evidence/2026-10-13-ios-native-ui-phase2.json`) reports identify the
-real backend and source commits. The initial failures exposed an Android AVD/tool
-mismatch, the pinned backend's required AndroidX WebView asset loader, and an iOS
-blank-document navigation race. Briefcase now creates the selected emulator with
-its own tools; Android declares WebKit 1.15.0; HTML uses a distinct offline-document
-origin while navigation handlers and CSP deny external content. These checks do
-not establish physical-device interaction or provider permission behavior.
-
-Phase 1 was published as [v0.1.1-alpha.11](https://github.com/ispaure/logistics/releases/tag/v0.1.1-alpha.11)
-at `99f7653`, after the complete five-platform release gate passed. Its exact
-commit was promoted to main and release `v0.1.1-main.03` was requested without
-waiting for that separate pipeline.
-
-## Phase 3 chat contracts
+## Chat contracts
 
 `features/lm/mobile/storage.py` uses the existing `features.lm.domain` conversation schema, validation and
 whole-turn request budgeting, with a mobile-owned bounded private store. Desktop
@@ -354,12 +276,7 @@ required cases. iOS declares NSLocalNetworkUsageDescription; physical-device
 network consent/ATS/provider behavior remains a separate gate. Conversation export
 uses the existing bounded system export-copy workflow.
 
-Phase 2 was published as [v0.1.1-alpha.13](https://github.com/ispaure/logistics/releases/tag/v0.1.1-alpha.13)
-at `428d1d7` after all desktop, native UI and 21-case mobile runtime gates passed.
-Its exact commit was promoted to main and release `v0.1.1-main.04` was requested
-without waiting for that separate pipeline.
-
-## Phase 4 embedded rclone contract
+## Embedded rclone contract
 
 The credential import UI exposes **Choose credential ZIP…**, the selected
 filename, a password field and adjacent **Load remotes** button. Selection
@@ -385,8 +302,7 @@ is pinned in the native workflow; checks run module tests before native builds.
 Compiled-module license notices and the Go runtime license are included in the
 native Python payload before Briefcase creates the app.
 
-The bridge exposes import, list, bounded read, offline probe, cancel and clear;
-it does not expose generic RC, commands or remote mutation. No RC listener starts.
+The bridge exposes scoped credential, browse and transfer operations.
 Drive/dropbox/onedrive/s3/webdav/smb/memory backends are linked (plus crypt). Parsed credentials
 are checked against explicit per-backend option allowlists before publication.
 Config uses the synchronized Storage in `mobile_build/rclone_bridge/vault.go`;
@@ -435,48 +351,9 @@ AES-256; tests cover wrong passwords, tampering, path traversal, oversized input
 unsupported filesystem/script settings and retention of the prior session on a
 failed import. All tests use synthetic credentials and an in-memory remote.
 
-`cloud.py` owns the ctypes C allocation/free boundary and app-private completed
-copies. Downloads stream into a duplicated caller-owned private descriptor;
-only metadata crosses the C/JSON bridge, avoiding base64 amplification for files.
-`features/rclone/mobile/cloud_ui.py` owns explicit picker/import/connect/download controls. Private
-copies use exclusive creation in UUID folders and a completion marker, so recovery
-excludes incomplete, linked or invalid entries. Export extends the existing system
-copy adapter to chunked binary output with an explicit 32 MiB maximum; existing
-document/chat exports retain their 1 MiB default.
-
-Crypt downloads have two explicit storage contracts. The ordinary `read` action
-continues to reject crypt remotes. `crypt_fetch` saves original ciphertext into
-LocalCrypt. The explicit `crypt_read` action resolves an admitted crypt/backing
-pair, opens the encrypted object, authenticates/decrypts it as a stream and writes
-to a new caller-owned private descriptor. It verifies the decrypted byte count,
-completion, cancellation and flush; no whole-file buffer or fixed size cap is
-introduced. Python `Downloads.fetch(..., decrypted=True)` publishes the readable
-filename in Private downloads only after success, and removes partial plaintext
-on failure. The UI labels this action **Download decrypted copy** and explains
-that it stores unencrypted data, alongside **Download encrypted copy**. Ordinary
-open/export and normal app-data backup behavior apply to the explicit plaintext
-copy. Tests cover a transfer larger than the in-memory reader limit, remote
-ciphertext preservation, corrupted input, cancellation, existing destinations,
-unsafe paths and failed-copy cleanup.
-
-The mobile core inventory now includes 30 cases, including protected-key lifecycle
-and failure privacy. Native UI evidence includes ten cases. The ninth covers: real linked rclone, AES credential import,
-folder browsing, downloading/opening a private copy and forgetting the session.
-Native entry points retain the explicit `native_picker_tested=false` evidence flag.
-The tenth exercises native protected-key creation/reload/forget, encrypted package
-restoration, missing-key recovery without regeneration and a session-only import
-preserving ciphertext. These new native tests
-have not yet run on Android/iOS for the local uncommitted implementation.
-Physical-provider interaction, real-account OAuth rotation,
-background transfers and signed/distributed device builds remain unverified work.
-
-Phase 3 was published as [v0.1.1-alpha.19](https://github.com/ispaure/logistics/releases/tag/v0.1.1-alpha.19)
-at `e3f7194`, after all desktop checks, 25-case core checks and eight native UI
-cases passed on both mobile runtimes in [run 38379277207](https://github.com/ispaure/logistics/actions/runs/38379277207).
-Its exact commit was promoted to main and `v0.1.1-main.05` was requested without
-waiting for that separate pipeline. Retained native reports:
-Android (local artifact `test-results/mobile-evidence/2026-10-13-android-native-ui-phase3.json`) and
-iOS (local artifact `test-results/mobile-evidence/2026-10-13-ios-native-ui-phase3.json`).
+For reader and transfer behavior, see the [rclone developer guide](../features/rclone/development/development.md).
+It separates [remote browsing](../features/rclone/development/remote-browsing.md)
+from [reviewed transfers](../features/rclone/development/transfers.md).
 
 `native_loop.py` binds Toga 0.5.7 Android cooperative dispatch to the app's owned
 asyncio loop. Java callbacks can enter Python with a different callback-local
@@ -497,81 +374,7 @@ are opened lazily through the bundled ZIP library. Comic/EPUB metadata saves rep
 only metadata and preserve inner passwords and untouched archive entries. The native private reader keeps text
 and PNG/JPEG/WebP images out of persistent
 document/library records. EPUB uses a generic archive source. See [LocalCrypt](../features/rclone/development/localcrypt.md)
-for API boundaries, limits and host regression coverage. Earlier phase-4 evidence
-predates this extension and does not validate its Android/iOS UI or native binaries.
-
-On 2026-10-13, the local uncommitted implementation passed all 14 native UI cases
-on an iPhone 17 Pro simulator (iOS 26.5) and an ARM64 Android 35 emulator.
-The LocalCrypt cases cover reading, text/Markdown editing, comic/EPUB metadata
-editing with inner AES ZIP passwords, save-conflict preservation and locking.
-Retained local reports: iOS (local artifact `test-results/mobile-evidence/2026-10-13-localcrypt-ios-native-ui-local.json`)
-and Android (local artifact `test-results/mobile-evidence/2026-10-13-localcrypt-android-native-ui-local.json`).
-Both bind the staged source fingerprint
-`e002b8ca59668c23e7decd8255ea394639092484e20564e7afab73cb7664de36`.
-They explicitly record dirty sources and are not release-gate evidence.
-Physical devices, real system pickers and manual touch/keyboard interaction remain
-unverified. Native testing fixed private-label wrapping on iOS and report log-line
-truncation; the failed-save scenario uses an actual stale-file conflict after an
-oversized single-line input stalled the Android native text widget.
-
-
-The subsequent local file-management extension passed 15 native UI cases on both
-runtimes, including mkdir, rename, moves within/into/out of crypt storage, editing
-after a move, Save As to crypt/Local, continued saves, and collision rejection.
-The shared deletion engine is exercised natively; the confirmation/cancel UI is
-covered by the dummy-backend regression. Final source fingerprint:
-`9b9bfd2610615c299fd2d4ca7c35cdfa7eedddbae040763db1205a8caa71922f`.
-Reports: iOS (local artifact `test-results/mobile-evidence/2026-10-13-localcrypt-files-ios-native-ui-local.json`)
-and Android (local artifact `test-results/mobile-evidence/2026-10-13-localcrypt-files-android-native-ui-local.json`).
-These retain the dirty-source marker and do not replace release-gate evidence.
-
-Two review passes covered mutation safety and UI/provider lifecycle. Fixes included
-rejecting different representations of the same physical storage, refreshing iOS
-picker row counts, preserving desktop shutdown wiring, and mapping managed staging
-names through the crypt provider. Host regressions additionally inject a broken
-writer which emits plaintext under an encrypted name, reject corrupted ciphertext,
-preserve inner archives during transfers, verify managed metadata editing, and
-check source retention on verification/cancellation/conflict failures. Go race
-tests cover rewrapping with distinct keys and rejecting the wrong key.
-
-### Shared resource refactor validation (2026-10-13)
-
-The final local payload `154f87ea8cd9ae01c9cf7560aa075a983078059bf63a1aa2f98a31f52b54099b`
-passed all 15 native UI cases on the iPhone 17 Pro / iOS 26.5 simulator and
-LogisticsLocalCrypt / Android API 35 emulator. This rerun includes the shared save
-transaction, explicit capabilities, text-state/editor integration, split provider
-modules, partial-failure reporting, explicit encrypted transfer stream and exclusive
-staging ownership. Cases cover reading, text/Markdown editing, inner-password comic
-and EPUB metadata, file operations, Save As, stale saves and credential locking.
-
-Reports: iOS (local artifact `test-results/mobile-evidence/2026-10-13-localcrypt-refactor-ios-native-ui-local.json`)
-and Android (local artifact `test-results/mobile-evidence/2026-10-13-localcrypt-refactor-android-native-ui-local.json`).
-Both are marked dirty local-development evidence, not release evidence. System file
-picker interaction and physical devices were not tested by these runs.
-
-Targeted shared tests additionally inject verification failures, stale revisions,
-late cancellation, partial source deletion, post-save external writes and temporary
-name collisions. All passed. Desktop Qt/real-rclone tests and host native-bridge
-round trips passed, including inner-password preservation and plaintext-under-encoded-name
-rejection. The mobile dummy-backend UI suite passed all 11 cases.
-
-### Provider bypass audit validation (2026-10-13)
-
-Payload `141c29aff3512f96383b018fe513bbf222e54de06a1aa5c0b5bc8c2b4562f646`
-passed all 15 native cases on both the iOS simulator and Android API 35 emulator.
-Reports: iOS (local artifact `test-results/mobile-evidence/2026-10-13-provider-audit-ios-native-ui-local.json`),
-Android (local artifact `test-results/mobile-evidence/2026-10-13-provider-audit-android-native-ui-local.json`).
-These are dirty local-development reports, not release or physical-device evidence;
-system file pickers remain outside this suite.
-
-Additional validation passed: 75 metadata/core cases, 37 desktop editor/crypt cases,
-19 private-backend cases with registered boundaries, 27 shared persistence/provider
-cases, and all 11 mobile dummy-backend UI cases. The broader browser, removal,
-bulk rename and Markdown run passed 83 tests with one case-sensitive-filesystem
-case skipped on this Mac. Targeted tests also verified ordinary Save As rejection
-inside actual ciphertext storage and draft retention after a successful mobile
-save whose new reader fails to open. Test groups overlap; counts are not additive.
-
+for API boundaries, limits and validation.
 
 ## Shared mobile browser extension
 
@@ -684,34 +487,6 @@ were not exercised. The host native decoder, Go bridge suite and 15 mobile widge
 checks also passed, including AES and legacy passwords, retry and locking.
 
 
-### Remote action checkpoint
-
-Credential controls live in a Settings route; the Files remote route keeps browse
-status before the entries and download actions. Invalid selections report the
-next action instead of silently returning. `folder_download.pull_folder` streams
-ordinary or decrypted files into a private staging directory, validates direct
-child paths and duplicate entries, checks cancellation and credential generation,
-and publishes a new local folder only after all entries complete. Failures remove
-staging; repeated pulls never overwrite local edits. This is a one-time pull, not
-synchronization. The 10,000-entry bound matches the mobile traversal budget.
-
-Library sessions use `reader_sessions.Readers` with per-session native views and
-one shared LibraryStore adapter. Inactive decoders suspend; asynchronous page/open
-results check reader generation and host lifetime. At this checkpoint, protected
-comic sessions were transient and LocalCrypt used its guarded private reader. Independent scenes arrived in
-[Phase 4 Part 1](#phase-4-part-1-independent-uikit-scenes).
-
-Checkpoint validation: 42 mobile widget/workflow tests, six shared workspace/cloud
-checks and the Go bridge suite passed. Both native suites passed all 18 cases,
-including a real embedded-rclone folder pull, opening its local copy and checking
-its bytes: iPhone Duo (local artifact `test-results/mobile-evidence/2026-10-14-mobile-checkpoint-ios-native-ui-local.json`)
-and Android (local artifact `test-results/mobile-evidence/2026-10-14-mobile-checkpoint-android-native-ui-local.json`).
-Both reports identify local snapshot
-`3862ab9c3f839f7c79b3cb9c92a0dbeef62a9f31225941e9867721e6b005724e`.
-These are local development checks, not a published release or physical-device
-validation.
-
-
 ### Explicit text-session close
 
 User Close actions open a destination-local choice screen when text is dirty.
@@ -747,7 +522,7 @@ label contrast against each bar's surface. This prevents normal launch from
 showing only the selected destination against an incompatible black background.
 
 
-### Phase 1: memory-only provider session ownership
+### Memory-only provider sessions
 
 `private_sessions.PrivateSessions` owns up to four provider controllers alongside
 the ordinary text/library registries. Resource identities hash the stable storage
@@ -787,7 +562,7 @@ while preserving private text and metadata widgets. Native mixed-session checks
 also exercise the cleanup callback without losing either draft.
 
 
-### Phase 2: repeatable one-way folder pulls
+### Repeatable one-way folder pulls
 
 `pull_jobs.PullJobs` stores bounded ordinary job metadata, opaque connection
 identities, and SHA-256 file/directory baselines. The native `connection_identity`
@@ -815,7 +590,7 @@ activates that imported resource instead of duplicating it. The index stores
 no source path, title, draft, password or permission handle; encrypted provider
 readers remain outside this index and the ordinary recovery store.
 
-## Unified Files milestone
+## Unified Files
 
 Toga remains the selected mobile runtime; the Qt experiment is retained separately.
 Files caches its native browser route, so destination switching does not rebuild
@@ -836,7 +611,7 @@ and Android (local artifact `test-results/mobile-evidence/2026-10-14-phase2-andr
 are labeled local source snapshots; physical provider/device checks remain limits.
 The 57 host widget/workflow tests and native Go bridge suite also pass.
 
-## Phase 3 Part 1: native reader presentation
+## Native reader presentation
 
 `ComicCanvas` extends the pinned Toga ImageView backend through its widget factory.
 iOS owns a UIScrollView/UIImageView zoom container; Android owns a tracked Java
@@ -853,7 +628,7 @@ flag is whitelisted in the bounded ordinary manifest. Native UI coverage adds
 rendered text snapshot instead of reading a transient empty document during reload.
 Android evidence runs cold-start the emulator rather than restoring renderer state.
 
-## Phase 4 Part 1: independent UIKit scenes
+## Independent UIKit scenes
 
 `window_scenes.py` installs a tracked UIApplicationDelegate/UISceneDelegate
 extension around the pinned Toga backend. A separate Window frontend uses the
@@ -882,7 +657,7 @@ substitute. The native case creates actual scenes, rejects duplicate writers,
 closes and restores a distinct draft and selected destination. Device-specific
 picker and OS eviction checks remain unverified.
 
-## Phase 5 Part 1: managed mobile transfers
+## Managed mobile transfers
 
 MirrorJobs adds bounded, versioned managed-copy mappings and interrupted-publication
 recovery. Ordinary copies live beneath LocalFiles; ciphertext copies use the
@@ -910,10 +685,10 @@ protected provider operations concurrent: transfer setup preserves dirty work an
 releases clean provider views. Active-app background work is distinct from an
 OS background-transfer entitlement. The guided CopyUI workflow is integrated and
 now uses atomic no-replace rename rather than hard-link publication, which Android
-sandboxes reject. Native cases exercise guided copy, ordinary background pull/push,
-and ciphertext folder pull/edit/push; all 25 cases pass on Android and iPad/iOS.
+sandboxes reject. Native cases exercise guided copy, ordinary background pull/push
+and ciphertext folder pull/edit/push.
 
-## Phase 5 Part 2: scoped ciphertext and complete preflight
+## Scoped ciphertext and transfer preflight
 
 Schema 2 keys live ciphertext trees by full connection identity, while the cipher
 identity continues to validate encryption settings. CryptFiles accepts a separate
@@ -963,87 +738,6 @@ Documents destination is selected. Explicit text activation clears that pending
 reader selection. The iOS CI gate shuts down its completed iPhone simulator before
 launching iPad; both inventories still require all native cases, and iPad requires
 actual independent-window evidence.
-
-## Phase 5 Part 3: final alpha submission
-
-The final local validation passes all 25 native cases on iPhone iOS 27.1, iPad
-simulator iOS 27.0 and Android 15, including actual secondary iPad scenes and managed
-Local/LocalCrypt folder transfers. The tracked mobile host suite passes 67 tests;
-Go bridge race tests and Python lint pass. The source alpha gates independently
-validate the clean tagged source before publication. Local snapshot evidence is
-retained under `test-results/mobile-evidence/2026-10-14-phase5-part2-*-native-ui-local.json` and
-correctly records its pre-commit dirty source identity.
-
-The original submission was `v0.1.1-alpha.33`. Its Windows comic-library fixture
-cleanup race blocked publication. Phase 5 Part 4 uses the existing Qt-aware
-temporary-directory scope and passes all 31 comic-library tests locally without
-suppressing errors. The corrected submission is `v0.1.1-alpha.34`, with title
-**Phase 5 Part 5: Toga workspaces and validated mobile transfers**. Consult its GitHub release and CI results
-for actual publication status. Physical original-window destruction remains
-unverified, as do the manual device checks listed above; no simulator request is
-reported as a successful OS closure. This release packages source and does not
-imply device signing or App Store/TestFlight publication.
-
-## Phase 5 Part 6: published alpha and clean CI evidence
-
-[v0.1.1-alpha.34](https://github.com/ispaure/logistics/releases/tag/v0.1.1-alpha.34)
-is published with its source ZIP. The [release workflow](https://github.com/ispaure/logistics/actions/runs/38542171235)
-passed every platform gate (Windows, macOS, Ubuntu, Fedora and static validation),
-both embedded mobile runtimes, both native builds, packaging and publication.
-Clean tagged native reports verify all 25 cases on Android, iPhone and iPad; iPad
-reports actual independent scenes. Both embedded runtime inventories contain all
-39 expected tests. The published ZIP's version identifies commit
-`8416b248f33b87837783edefde3d2658b4e2b0f2`; its recorded file hashes and tagged
-transfer/runtime sources were verified after download.
-
-Clean native reports are retained under
-`test-results/mobile-evidence/2026-10-14-alpha34-*-native-ui-ci.json`. Physical original-window
-closure remains explicitly unverified, and the device limits above still apply.
-This final documentation checkpoint changes no released runtime behavior.
-
-## Phase 6 Part 1: brief verification and restoration preference
-
-The user requested three verification passes against the navigation brief and
-current alpha. Pass 1 traces navigation, resource identities, recovery/privacy,
-adaptive presentation, readers, Files/connection ownership and independent scenes
-against their implementation and existing fixtures. The current baseline passes
-all 67 tracked host tests. A new cold-reader regression then demonstrates that
-startup restored a selected library session despite `restore_last_document=false`.
-The fix retains the open reader and saved chapter/page while respecting the
-preference; explicit reopening still works. All 68 tracked host tests and all 39
-portable core tests pass after the fix.
-
-The feature matrix's physical permissions, cancelled system gestures, physical
-fold poses, original iPad window closure, large-text/screen-reader combinations and
-minimum-iOS coverage remain unverified. Existing simulator resize and programmatic
-checks are not substitutes for those device-specific claims. The Home-first order
-in the brief's updated decisions overrides its older three-destination milestone
-text; the separately authorized managed Push also supersedes its original remote
-read-only boundary. No desktop emulator documentation boundary changed.
-
-The exact prior alpha.34 commit was separately promoted to main and published as
-[v0.1.1-main.07](https://github.com/ispaure/logistics/releases/tag/v0.1.1-main.07)
-after every [release gate](https://github.com/ispaure/logistics/actions/runs/38570954429)
-passed. Its signed normal-launcher build matches the validated source fingerprint
-and installed over Wi-Fi without uninstalling or changing identity. All 16 existing
-document files remained listed with matching sizes; file contents were not copied
-or byte-compared. Physical launch was initially blocked by the locked phone. After the user unlocked
-it, launch succeeded and the installed executable was confirmed running.
-The alpha verification fixes do not alter that exact-commit main release.
-
-## Phase 6 Parts 2–3: local alpha verification
-
-The [three-pass alpha audit](mobile-alpha-verification.md) records the delayed-open,
-superseded-host and hidden password-focus fixes, plus native navigation-intent
-tracking that tolerates UIKit container refreshes. All 72 frozen host tests,
-39 core tests and 25 native cases on each of Android, iPad and iPhone pass.
-Concurrent folder improvements were excluded from the local audit snapshot,
-which was separate from main.07.
-
-Native comic geometry checks wait for three consecutive centered samples after
-chrome transitions, with a 15-second deadline. This replaces a fixed 300 ms delay
-that could sample the previous viewport during slow hosted Android layout. The
-same two-pixel centering and fullscreen-height assertions still apply.
 
 ## Android collection drive selection
 

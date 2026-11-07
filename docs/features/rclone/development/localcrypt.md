@@ -358,7 +358,3 @@ The same fixture can run with the host's compiled bridge and dummy widgets.
 Apple action-sheet title discovery accepts both property and method forms of
 UIKit child-view getters, so enabling the full-path title hold cannot prevent
 the file menu from opening.
-
-The [implementation history](history/history.md) preserves earlier audits,
-streaming details and their original validation scope. Current owner entry points
-are in the [developer guide](development.md).

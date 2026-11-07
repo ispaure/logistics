@@ -19,7 +19,7 @@ from toga.style.pack import COLUMN, ROW, CENTER, NONE, PACK
 from features.notes_library.notes import NotesLibrary, MAX_NOTE, MAX_PREVIEW_HTML, MARKDOWN, document_kind
 from features.notes_library import library_files
 from ..notes import breadcrumb_folders
-from ..navigation import PathChange, MutationResult
+from ..navigation import MutationResult
 from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.search.names import search_terms
 from commonUtils.search.providers import SearchResult
@@ -51,6 +51,7 @@ class NotesHost:
     list_button: Callable
     middle_filename: Callable
     entry_icon: Callable
+    breadcrumb_separator: Callable
     highlight_entry: Callable
     preview: Callable
     drawers: Callable
@@ -292,7 +293,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 button.parent.remove(button)
             self.secondary.add(button)
         self.view.insert(1, self.secondary)
-        self.breadcrumbs = toga.Box(style=Pack(direction=ROW, justify_content=CENTER))
+        self.breadcrumbs = toga.Box(style=Pack(direction=ROW, align_items=CENTER, justify_content=CENTER))
         from .breadcrumbs import BreadcrumbScroll
         self.breadcrumb_scroll = BreadcrumbScroll(content=self.breadcrumbs, horizontal=True,
             vertical=False, style=Pack(flex=1, height=44))
@@ -441,10 +442,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self._breadcrumb_key = None
             return
         folders = breadcrumb_folders(self.root, self.path)
-        if self.root not in folders:
-            folders.insert(0, self.root)
-        entries = [(PurePosixPath(folder).name or self.library_title,
-                    self.folder_pages.get(folder), folder) for folder in folders]
+        entries = [(PurePosixPath(folder).name, self.folder_pages.get(folder), folder)
+                   for folder in folders]
         key = (self.path, tuple(entries), self._breadcrumb_width)
         if key == self._breadcrumb_key:
             self.breadcrumb_scroll.retry_end(self.host.loop,
@@ -465,9 +464,9 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             return len(value) * 8
         for name, page, folder in entries:
             if self.breadcrumbs.children:
-                self.breadcrumbs.add(toga.Label('›', style=Pack(margin_top=12, width=12, font_size=self.breadcrumb_font)))
+                self.breadcrumbs.add(self.host.breadcrumb_separator())
             async def open_folder(widget, path=page, folder=folder, **kwargs):
-                if path:
+                if path and path != self.path:
                     await self.open_note(path)
                 else:
                     await self.reveal_folder(folder)
@@ -490,8 +489,16 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 native.setContentDescription(name)
             button.breadcrumb_path = page
             button.breadcrumb_folder = folder
-            underline_folder_link(button)
-            self.breadcrumbs.add(button)
+            if page:
+                underline_folder_link(button)
+            icon = self.host.entry_icon(True, landing_page=page is not None)
+            icon.style.width = icon.style.height = 16
+            self.breadcrumbs.add(toga.Box(children=[icon, button], style=Pack(direction=ROW, align_items=CENTER)))
+        if entries:
+            self.breadcrumbs.add(self.host.breadcrumb_separator())
+        file_icon = self.host.entry_icon(False)
+        file_icon.style.width = file_icon.style.height = 16
+        self.breadcrumbs.add(file_icon)
         self.breadcrumb_scroll.reveal_end(self.host.loop,
             valid=lambda: self._breadcrumb_key == key and self.valid())
 
@@ -1268,13 +1275,15 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self.article.enabled = False
             self.epoch += 1
             def move():
-                self.library.move(source, destination,
+                change = self.library.move_with_change(source, destination,
                     cancelled=lambda: mutation_cancelled.is_set() or not self.valid())
-                try:
-                    self.host.relocate_references(self.provider, source, destination)
-                except (OSError, ValueError, PermissionError):
-                    return MutationResult(destination, reference_errors=['Some saved references could not be updated.'])
-                return MutationResult(destination)
+                mutation = MutationResult(change)
+                for before, after in change.reference_moves():
+                    try:
+                        self.host.relocate_references(self.provider, before, after)
+                    except (OSError, ValueError, PermissionError):
+                        mutation.reference_errors.append('Some saved references could not be updated.')
+                return mutation
             worker = asyncio.create_task(asyncio.to_thread(move))
             # Retire the worker before releasing its guard. A cancellation after
             # commit must still reconcile saved references and the current note.
@@ -1291,7 +1300,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 return False
             if moving_open:
                 self.retire_editor()
-            change = PathChange(source, mutation.destination)
+            change = mutation.change
             self.history, self.history_index = change.history(self.history, self.history_index)
             self.positions = change.positions(self.positions)
             self.path, self.selected_path = change.remap(self.path), destination

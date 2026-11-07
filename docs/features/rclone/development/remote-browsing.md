@@ -263,83 +263,14 @@ password fallback for other failures. `file_archive_test.go` covers these bounde
 member paths; manifest, metadata and thumbnail paths are outside this correction.
 These host checks do not establish OS/device acceptance.
 
-## Native validation, 2026-10-15
+## Remote reader validation
 
-The final browse-only payload passed 16 targeted checks on each of Android 15
-arm64 (emulator), iPhone iOS 26.5 and iPad iOS 27.0 (simulators). The probe uses a
-separate app identifier and synthetic ordinary/crypt memory remotes. It checks
-navigation/current-folder filtering, direct text/image/EPUB/comic rendering,
-manual-copy dialogs, absence of standalone downloads, no persisted document
-plaintext, unchanged remote contents and credential-lock retirement. Credentials
-are session-only. This is not physical-device or live-cloud-service validation.
-
-Native macOS Qt passed seven remote-browser tests. The mobile host suite passed
-243 tests; affected catalog/UI tests passed again after the final deletion of
-unused record writers. Go tests and race tests passed, as did rebuilt host-bridge
-remote-reader and existing LocalCrypt text/metadata/large-archive compatibility
-checks. Ruff and whitespace checks passed.
-
-The validation manifest (local artifact `test-results/mobile-evidence/2026-10-15-remote-preview-only-validation.json`)
-records source fingerprints and scope. Per-target reports:
-Android (local artifact `test-results/mobile-evidence/2026-10-15-remote-preview-only-android.json`),
-iPhone (local artifact `test-results/mobile-evidence/2026-10-15-remote-preview-only-iphone.json`),
-iPad (local artifact `test-results/mobile-evidence/2026-10-15-remote-preview-only-ipad.json`).
-Screenshots: desktop (local artifact `test-results/mobile-evidence/2026-10-15-remote-preview-only-desktop-browser.png`),
-Android (local artifact `test-results/mobile-evidence/2026-10-15-remote-preview-only-android-browser.png`),
-iPhone (local artifact `test-results/mobile-evidence/2026-10-15-remote-preview-only-iphone-browser.png`),
-iPad (local artifact `test-results/mobile-evidence/2026-10-15-remote-preview-only-ipad-browser.png`).
-
-
-### Final code and UI review
-
-A follow-up audit found disabled Save controls and a Save As/Metadata overflow
-label inherited by mobile remote readers. Remote views now omit these controls
-entirely, including the discard-edits action and editable-file help text. Local
-and LocalCrypt readers retain their editing controls. Regression checks inspect
-both the main reader and overflow tools for text, images and comics; the native
-probe repeats the check for EPUB too on all three mobile targets.
-
-At that reviewed snapshot, the audit found no standalone remote file/folder download or copy entry points.
-The remaining offline catalogs only read existing records; their creation/fetch
-helpers and the retired native endpoints are absent. Managed Pull/Push, local
-file operations and existing offline-file export remain intentional. Current
-reports and the validation manifest above reflect the reviewed source snapshot.
-The later selected-item mobile Pull is documented above and has its own validation scope.
-
-
-A second audit also found disabled desktop EPUB/comic metadata actions. These
-are now hidden for remote providers, including the EPUB metadata button, and
-restored when the reader returns to a local file. Seven native macOS reader UX
-tests passed, including a regression covering both transitions. No mobile code
-changed during this second audit; the native mobile evidence above still applies.
-Credential retirement clears the mobile browser's listing, thumbnails, selection
-and navigation history through its existing stop contract.
-
-
-### Expanded end-to-end pass
-
-The final source passed 31 native scenarios each on Android, iPhone and iPad,
-eight desktop remote-browser tests, seven desktop reader UX tests, all 252 mobile
-host tests, the host Python/native remote-reader integration and Go race tests.
-The native bridge source fingerprint still matches the rebuilt libraries.
-
-Added scenarios invoke reader tools and Appearance and return through Back,
-exercise Markdown preview/text switching, corrupt PNG/CBZ/EPUB, missing files,
-oversized text, failed navigation, and credential lock/replacement. Error-dialog
-requests and messages are asserted by intercepting presentation; reader widgets,
-real document decoding, menus and navigation run through native backends.
-These local fixtures do not model live-provider outages or physical touch gestures.
-
-This pass fixed selection-placeholder restoration after failed mobile navigation,
-prevented stale-listing restoration after credentials change, added the manual-copy
-explanation to desktop direct-read failures, restricted remote reader menus to
-commands available for each format, and replaced Markdown's misleading Edit label
-with Text for read-only remote documents. Existing managed transfers/offline-copy
-compatibility remains preserved. The reports above now contain the 31-scenario
-runs and final staged-source fingerprint.
-
-Android's implemented appearance controls and E Ink limitations are described in
-the [mobile user guide](../../../user_mobile/settings/settings.md#appearance-and-e-ink-status).
+Desktop and mobile checks cover current-folder filtering, direct rendering,
+format-specific read-only commands, credential lock and replacement, and error
+handling for missing, oversized or corrupt files. Native checks use synthetic
+ordinary and crypt remotes and cover reader tools, navigation and return paths.
+Managed transfers and existing offline copies have separate coverage. Use live
+provider and physical device checks for service behavior and touch gestures.
 
 ## Offline folder snapshots
 

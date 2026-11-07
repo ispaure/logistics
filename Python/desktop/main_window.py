@@ -446,7 +446,7 @@ class MainWindow(pyside.Window):
     def _features_changed(self):
         pyside.QTimer.singleShot(0, self._sync_feature_pages)
 
-    def _sync_feature_pages(self):
+    def _sync_feature_pages(self, *, skip_unchanged=False):
         from shiboken6 import isValid
         if not isValid(self.dlg):
             return
@@ -476,12 +476,17 @@ class MainWindow(pyside.Window):
         for (feature, page_id), page in self._feature_pages.items():
             if page not in active_pages and getattr(page, 'retain_when_disabled', False) and page.count:
                 entries.append((17, 'Notes Library', page))
+        ordered_tabs = [(name, page) for _, name, page in
+                        sorted(entries, key=lambda entry: (entry[0], entry[1].casefold()))]
+        if skip_unchanged and ordered_tabs == [
+                (self.tabs.tabText(index), self.tabs.widget(index)) for index in range(self.tabs.count())]:
+            return
         with pyside.QSignalBlocker(self.tabs):
             while self.tabs.count():
                 page = self.tabs.widget(0)
                 self.tabs.removeTab(0)
                 page.hide()
-            for _, name, page in sorted(entries, key=lambda entry: (entry[0], entry[1].casefold())):
+            for name, page in ordered_tabs:
                 self.tabs.addTab(page, name)
             index = self.tabs.indexOf(current)
             if index >= 0:
@@ -491,7 +496,9 @@ class MainWindow(pyside.Window):
 
     def _library_sessions_changed(self):
         self._sync_menus()
-        self._sync_feature_pages()
+        # Title updates can come from the active Workspaces scan. Reconcile
+        # retained destinations only if the tab list actually needs to change.
+        self._sync_feature_pages(skip_unchanged=True)
 
     def _refresh_sidebar(self):
         catalog = self._launch_catalog(refresh=True)

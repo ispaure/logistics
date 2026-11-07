@@ -893,6 +893,32 @@ class NotesLibraryPanelTests(unittest.TestCase):
             self.assertIsNone(owner.embedded)
         self.run_async(exercise())
 
+    def test_folder_rename_reopens_landing_note_and_direct_rename_keeps_folder(self):
+        (self.vault / 'Projects/Projects.md').write_text('# Landing')
+
+        async def rename(owner, path, target):
+            owner.selected_path = path
+            self.assertTrue(owner.manage_entry(move=True))
+            form = self.app.body.children[0].content
+            form.children[2].value = target
+            await form.children[4].on_press()
+
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            await owner.open_note('Vault/Projects/Projects.md')
+            await rename(owner, 'Vault/Projects', 'Archive')
+            self.assertEqual(owner.path, 'Vault/Archive/Archive.md')
+            self.assertEqual(owner.history[owner.history_index], owner.path)
+            self.assertEqual((self.vault / 'Archive/Archive.md').read_text(), '# Landing')
+            self.assertTrue((self.vault / 'Archive/Plan.MD').is_file())
+            self.assertFalse((self.vault / 'Archive/Projects.md').exists())
+            await rename(owner, owner.path, 'Landing.md')
+            self.assertEqual(owner.path, 'Vault/Archive/Landing.md')
+            self.assertIsNone(owner.library.folder_page('Vault/Archive'))
+            self.assertTrue((self.vault / 'Archive/Landing.md').is_file())
+
+        self.run_async(exercise())
+
     def test_deleting_another_note_keeps_the_current_draft(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')

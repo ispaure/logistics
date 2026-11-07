@@ -2,11 +2,11 @@
 
 For workflows, settings and troubleshooting, see the [user guide](../user/user.md).
 
-The [Notes Library feature and desktop navigation brief](../../../development/notes-library-feature-brief.md)
-records the extraction from Text Editor and dedicated desktop destination.
+The [Notes Library developer guide](../../notes_library/development/development.md)
+covers its dedicated desktop destination and shared authoring boundary.
 
-The [Mobile Markdown editor and library rework](mobile-markdown-rework.md) records
-the redesign, storage permissions, refactoring and remaining native acceptance gates.
+The [mobile Markdown guide](mobile-markdown-rework.md) covers storage permissions,
+keyboard layout and native acceptance.
 
 An optional Logistics feature for plain text and code, independent of Books,
 Comics and the shared Markdown reader. Open **Documents → Text Editor**, or use **Open in Text Editor**
@@ -614,10 +614,5 @@ local cache. Private provider drafts avoid ordinary recovery/recent persistence.
 render retirement; source-language/search tests are in `test_source_editor.py`,
 and picker cancellation/state ownership is in `test_editor_picker.py`.
 
-The November 4, 2026 documentation audit inspected these source/test owners and
-ran static Markdown/link checks only. No runtime, Qt, browser, build or device
-validation was run during the release hold. The dated
-[Markdown rework record](mobile-markdown-rework.md#remaining-acceptance-gates)
-retains its unverified acceptance gates; source implementation is not proof of
-Duo fold transitions, narrow iPad multitasking, spoken accessibility traversal
-or sustained memory behavior.
+See [remaining native acceptance](mobile-markdown-rework.md#remaining-acceptance-gates)
+for device and accessibility checks.
