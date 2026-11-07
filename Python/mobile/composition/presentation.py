@@ -71,7 +71,7 @@ def mobile_presentation(app):
     from mobile.appearance import action_button
     from mobile.action_menu import ActionMenu, NativeMenu
     from mobile.appearance import surface
-    from mobile.appearance import apple_color
+    from mobile.appearance import accessible_name, apple_color
     from mobile.workspace_navigation import menu_button
     from mobile.pickers import export_document
     from mobile.preview import markdown_preview
@@ -80,11 +80,18 @@ def mobile_presentation(app):
     from mobile.font_scaling import bind, font_size
     from mobile.document_sources import folder_action
     from mobile.fold_layout import reserved_divisions, division
-    from mobile.reader_top_band import reset_notebook_clearance
+    from mobile.document_location import bind_apple_hold
+    from mobile.reader_edges import clear_notebook_rail, compact_apple_reader
+    from mobile.reader_top_band import NOTEBOOK_TOOLBAR_CLEARANCE, reset_notebook_clearance
     from mobile.layout_participants import participants
     from mobile.favourites import favourite_resource
     from mobile.filename_input import FilenameInput
     from mobile.scroll_edges import fill_bottom
+
+    def refresh_notebook_layout(view):
+        container = view._impl.container
+        if container is not None and compact_apple_reader(container, notebook=view):
+            container.content.interface.refresh()
 
     return MobilePresentation(
         icon_button=icon_button,
@@ -107,6 +114,11 @@ def mobile_presentation(app):
         reserved_divisions=reserved_divisions,
         fold_division=lambda widget: division(app, widget),
         reset_reader_layout=reset_notebook_clearance,
+        accessible_name=accessible_name,
+        bind_apple_hold=bind_apple_hold,
+        notebook_toolbar_clearance=NOTEBOOK_TOOLBAR_CLEARANCE,
+        refresh_notebook_layout=refresh_notebook_layout,
+        clear_notebook_rail=clear_notebook_rail,
         register_layout=lambda *args, **kwargs: participants(app).register(*args, **kwargs),
         filename_input=FilenameInput,
         fill_scroll_bottom=fill_bottom,

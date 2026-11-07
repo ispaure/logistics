@@ -86,8 +86,7 @@ class NativeDrawingTools:
                 await self.activate(name)
             button = toga.Button(on_press=click, enabled=False, style=Pack(width=44, height=48))
             if name.startswith('preset-'):
-                from mobile.document_location import bind_apple_hold
-                bind_apple_hold(button, button._impl.native, lambda _, name=name:
+                panel.app.presentation.bind_apple_hold(button, button._impl.native, lambda _, name=name:
                                 panel.app.loop.create_task(self.activate(name, hold=True)))
                 button.style.display = 'none'
             else:
@@ -203,16 +202,15 @@ class NativeDrawingTools:
             button._impl.native.hidden = not visible
             button.enabled = visible and not (row['disabled'] or panel.busy or panel.native_input_pending)
             if visible and name.startswith('preset-'):
-                self.paint_preset(button, row)
+                self.paint_preset(button, row, panel.app.presentation.accessible_name)
             surface(button, background='hover' if row['active'] else 'surface', foreground='text')
             visible_index += visible
         if 'add-preset' in value:
             self.strip.style.width = 44 * visible_index
 
     @staticmethod
-    def paint_preset(button, row):
+    def paint_preset(button, row, accessible_name):
         from rubicon.objc import ObjCClass
-        from mobile.appearance import accessible_name
         visual = (row['label'], tuple(row['preset']), tuple(row['rgb']))
         if getattr(button, '_preset_visual', None) == visual:
             return

@@ -69,8 +69,7 @@ class NotebookPanel:
         self.busy = False
         self.closed = False
         self.view = toga.Box(style=Pack(direction=COLUMN, flex=1))
-        from mobile.reader_top_band import NOTEBOOK_TOOLBAR_CLEARANCE
-        self.view._notebook_dom_toolbar_contract = NOTEBOOK_TOOLBAR_CLEARANCE
+        self.view._notebook_dom_toolbar_contract = app.presentation.notebook_toolbar_clearance
         from services.documents.mobile_notebooks import install_notebook_controls
         install_notebook_controls(self)
         self._release_protection = app.protection.register(self, self.privacy_gates)
@@ -396,11 +395,7 @@ class NotebookPanel:
     def refresh_native_canvas_layout(self):
         # Canvas mounting can follow the native container's last layout pass.
         if getattr(self.view, '_notebook_canvas', None) is not None:
-            container = self.view._impl.container
-            if container is not None:
-                from mobile.reader_edges import compact_apple_reader
-                if compact_apple_reader(container, notebook=self.view):
-                    container.content.interface.refresh()
+            self.app.presentation.refresh_notebook_layout(self.view)
 
     def refresh_fold(self):
         if self.web is None or not getattr(self, '_canvas_ready', False) or getattr(self, '_fold_pending', None) is not None:
@@ -804,8 +799,7 @@ class NotebookPanel:
         web = getattr(self, 'web', None)
         if web is not None:
             if getattr(self.view, '_notebook_canvas', None) is web:
-                from mobile.reader_edges import clear_notebook_rail
-                clear_notebook_rail(web)
+                self.app.presentation.clear_notebook_rail(web)
                 self.view._notebook_canvas = None
                 self.view._notebook_viewport_insets = (0, 0, 0)
             web.on_navigation_starting = None
