@@ -66,9 +66,9 @@ Loading messages, progress and **Cancel** share a single bottom row with notices
 for the active document. Hover over a shortened notice to read its full text.
 Markdown editing-mode guidance appears in the **Formatted / Source** selector's tooltip.
 
-File search offers
-**Search within Notes Library** and **Search in File Names**, including unopened
-folders. Name matches appear before content matches; quoted phrases and separate
+File search defaults to **Search in File Names**. Select **Search within Documents**
+to also find matches in file contents. Both modes include unopened folders.
+Name matches appear before content matches; quoted phrases and separate
 keywords use the same search rules as mobile. **Show more notes** extends the
 result list. Hidden configuration is excluded.
 Each search mode keeps its own query field, results, selected row, scroll position
