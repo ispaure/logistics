@@ -79,11 +79,19 @@ async def rotate(app, orientation, *, settle=ROTATION_SETTLE, timeout=None):
             orientation=orientation, error=error)), flush=True)
     with section(app, 'rotation-dispatch', orientation=orientation):
         rotation.request(orientation, on_rejected=rejected)
-    with section(app, 'rotation-acknowledgement', orientation=orientation):
-        from commonUtils.testing.settings import ROTATION_TIMEOUT
-        await wait_until(lambda: rotation.acknowledged(orientation),
-                         timeout=ROTATION_TIMEOUT if timeout is None else timeout,
-                         message='Native rotation did not complete: ' + orientation)
+    try:
+        with section(app, 'rotation-acknowledgement', orientation=orientation):
+            from commonUtils.testing.settings import ROTATION_TIMEOUT
+            await wait_until(lambda: rotation.acknowledged(orientation),
+                             timeout=ROTATION_TIMEOUT if timeout is None else timeout,
+                             message='Native rotation did not complete: ' + orientation)
+    except AssertionError:
+        if sys.platform == 'ios':
+            try:
+                rotation_failure_snapshot(app, panel='native-request', cycle=-1, orientation=orientation)
+            except Exception:
+                pass  # Keep the original failed deadline if observation fails.
+        raise
     await measure(app, 'rotation-post-ack-settle', asyncio.sleep(settle), orientation=orientation)
 
 
@@ -460,6 +468,8 @@ def rotation_failure_snapshot(app, *, panel, cycle, orientation):
         coordinator = value(native, 'transitionCoordinator')
         modal = value(native, 'presentedViewController')
         return dict(class_name=str(value(native, 'className')), view=view(value(native, 'viewIfLoaded')),
+                    supported_orientations=value(native, 'supportedInterfaceOrientations'),
+                    should_autorotate=value(native, 'shouldAutorotate'),
                     transition_active=coordinator is not None,
                     transition_animated=value(coordinator, 'isAnimated'),
                     transition_interactive=value(coordinator, 'isInteractive'),

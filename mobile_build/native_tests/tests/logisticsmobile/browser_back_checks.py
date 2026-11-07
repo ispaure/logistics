@@ -10,6 +10,18 @@ from zipfile import ZipFile
 from commonUtils.runtime.platform import get_os, OS
 
 
+async def wait_for_private_reader(owner):
+    """Wait for the direct file reader's native layout and page operations."""
+    deadline = asyncio.get_running_loop().time() + 60
+    settled = 0
+    while True:
+        settled = settled + 1 if not owner.operation_busy else 0
+        if settled >= 3:
+            return
+        assert asyncio.get_running_loop().time() < deadline, 'Private reader operation did not settle'
+        await asyncio.sleep(.05)
+
+
 async def prepare_android_back(app):
     """Measure screen Back after the IME's separate dismissal has settled."""
     if get_os() is not OS.ANDROID:
@@ -145,10 +157,11 @@ async def exercise_browser_back(app):
     scroll = browser
     for filename in ('Comic.cbz', 'A Notes.md', 'Comic.cbz'):
         def trace_viewport(phase):
+            active = getattr(getattr(app, 'private_sessions', None), 'active', None)
             print('LOGISTICS_BROWSER_BACK=' + json.dumps(dict(
                 phase=phase, filename=filename, position=scroll.vertical_position,
                 routes=app.native_host.state.routes['files'],
-                reader_busy=bool(getattr(app.readers.active, 'book_busy', False)),
+                reader_busy=bool(getattr(active, 'operation_busy', False)),
                 back_pending=app.routes.back_task is not None)), flush=True)
             if get_os() is OS.IOS:
                 native = browser.native_list._impl.native
@@ -190,15 +203,16 @@ async def exercise_browser_back(app):
             browser.on_open_file = open_file
         trace_viewport('after-activate')
         assert app.native_host.state.destination == 'files'
-        owner = app.readers.active if filename.endswith('.cbz') else app.private_sessions.active
+        owner = app.private_sessions.active
+        reader = getattr(owner, 'crypt_reader', None)
+        assert reader is not None and reader.name == filename, (filename, getattr(reader, 'key', None))
         if filename.endswith('.cbz'):
-            from .reader_checks import wait_for_reader
-            await wait_for_reader(owner)
+            await wait_for_private_reader(owner)
             # Reveal the native Back button, as a user would from fullscreen.
-            if owner.reader_immersive:
-                owner.book_content.children[0].toggle_controls()
+            if owner.crypt_immersive:
+                owner.toggle_private_reading_mode()
             reader_panel = app.body
-            owner.show_reader_tools()
+            owner.show_private_tools()
             await asyncio.sleep(.2)
             await prepare_android_back(app)
             if get_os() is OS.IOS:
@@ -207,10 +221,10 @@ async def exercise_browser_back(app):
             else:
                 app.native_host.adapter.impl._native_activity.getOnBackPressedDispatcher().onBackPressed()
             for _ in range(60):
-                if app.body is reader_panel and owner.library_view in app.body.children:
+                if app.body is reader_panel and owner.crypt_view in app.body.children:
                     break
                 await asyncio.sleep(.05)
-            assert app.body is reader_panel and owner.library_view in app.body.children, (
+            assert app.body is reader_panel and owner.crypt_view in app.body.children, (
                 'Tools Back lost the reader', app.native_host.state.routes['files'],
                 [type(child).__name__ for child in app.body.children], app.body is reader_panel)
         else:
@@ -219,7 +233,7 @@ async def exercise_browser_back(app):
         if filename.endswith('.cbz'):
             # Returning from tools can reload the native page. Back is guarded
             # while that operation is busy; wait for readiness before tapping.
-            await wait_for_reader(owner)
+            await wait_for_private_reader(owner)
         await prepare_android_back(app)
         trace_viewport('before-return')
         if get_os() is OS.IOS:
