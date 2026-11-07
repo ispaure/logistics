@@ -40,7 +40,8 @@ class NativeDrawingTools:
 
     def fits(self, controller):
         panel = self.panel()
-        if panel is None or panel.closed or not getattr(panel, '_canvas_ready', False):
+        if (panel is None or panel.closed or not getattr(panel, '_canvas_ready', False)
+                or not getattr(panel.app.presentation, 'native_notebook_toolbar', True)):
             return False
         native = controller.view
         size = str(controller.traitCollection.preferredContentSizeCategory)

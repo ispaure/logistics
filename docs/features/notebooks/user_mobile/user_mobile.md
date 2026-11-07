@@ -47,7 +47,9 @@ title, Close, page overview, template/layers, view/input and actions controls;
 Duo places these in its side rail when applicable. In narrow iPhone portrait
 windows, including the folded Duo, the notebook name and location are centered
 above the drawing tools. In wide landscape layouts, the file name and storage
-label sit on the left and the compact drawing toolbar sits on the right.
+label are left-aligned. On Duo, the same drawing toolbar and brush icons stay
+available as you change orientation. The swipe-to-add-page control stays inside
+the area beside the side rail.
 Tap the active brush to open the drawer for brush and ink color choices. The reader accounts
 for space occupied by system activity. Choose **Notebook actions → Hide tools**
 to leave **Show tools** on the canvas. Hiding and restoring tools keeps the

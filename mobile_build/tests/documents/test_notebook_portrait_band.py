@@ -40,6 +40,35 @@ class PortraitAcknowledgementTests(unittest.IsolatedAsyncioTestCase):
             self.assertIsNone(getattr(panel.view,'_notebook_dom_ready',None))
             panel.app.adaptive.render.assert_not_called()
 
+    async def test_rail_change_during_inset_delivery_is_sent_after_ack(self):
+        panel, result = self.panel()
+        panel.view._reader_top_band_state = None
+        panel.view._notebook_viewport_insets = (0, 0, 0)
+        panel.refresh_fold()
+        await asyncio.sleep(0)
+
+        panel.view._notebook_viewport_insets = (0, 84, 34)
+        panel.refresh_fold()
+        result.set_result(True)
+        await panel._fold_pending
+        self.assertEqual(panel._viewport_insets_sent, (0, 0, 0))
+        panel.app.loop.call_soon.assert_called_once_with(panel.refresh_fold)
+
+        panel.refresh_fold()
+        await panel._fold_pending
+        self.assertEqual(panel._viewport_insets_sent, (0, 84, 34))
+        panel.web.evaluate_javascript.assert_called_with('window.notebookViewportInsets?.([0, 84, 34])')
+
+    async def test_missing_viewport_hook_does_not_acknowledge_insets(self):
+        panel, result = self.panel()
+        panel.view._reader_top_band_state = None
+        panel.view._notebook_viewport_insets = (0, 84, 34)
+        panel.refresh_fold()
+        await asyncio.sleep(0)
+        result.set_result(None)
+        await panel._fold_pending
+        self.assertIsNone(getattr(panel, '_viewport_insets_sent', None))
+
     async def test_timeout_never_cancels_native_query_or_creates_overlap(self):
         panel,result=self.panel()
         async def timeout(query,seconds):raise TimeoutError

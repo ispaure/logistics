@@ -29,6 +29,11 @@ class NativeToolsTests(unittest.IsolatedAsyncioTestCase):
         self.manager.anchor = lambda name: [100, -48, 44, 48]
         self.state = {name:dict(disabled=name == 'redo', active=name == 'pen') for name in TOOLS}
 
+    async def test_full_drawing_toolbar_is_selected_before_native_geometry_is_available(self):
+        self.panel._canvas_ready = True
+        self.panel.app.presentation.native_notebook_toolbar = False
+        self.assertFalse(self.manager.fits(controller=None))
+
     async def test_native_window_controller_and_hidden_ancestors_bound_visibility(self):
         window = NS(ptr=NS(value=10))
         parent = NS(isHidden=False, superview=None)

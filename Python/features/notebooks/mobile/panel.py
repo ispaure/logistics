@@ -399,8 +399,12 @@ class NotebookPanel:
             self.app.presentation.refresh_notebook_layout(self.view)
 
     def refresh_fold(self):
-        if self.web is None or not getattr(self, '_canvas_ready', False) or getattr(self, '_fold_pending', None) is not None:
+        if self.web is None or not getattr(self, '_canvas_ready', False):
             return
+        if getattr(self, '_fold_pending', None) is not None:
+            self._fold_refresh_requested = True
+            return
+        self._fold_refresh_requested = False
         web = self.web
         bridge = self.bridge
         async def update():
@@ -445,8 +449,9 @@ class NotebookPanel:
                         self._fold_signature = signature
                 insets = getattr(self.view, '_notebook_viewport_insets', None)
                 if self.web is web and insets != getattr(self, '_viewport_insets_sent', None):
-                    await web.evaluate_javascript('window.notebookViewportInsets?.(' + json.dumps(insets) + ')')
-                    if self.web is web:
+                    accepted = await web.evaluate_javascript(
+                        'window.notebookViewportInsets?.(' + json.dumps(insets) + ')')
+                    if self.web is web and self.bridge is bridge and _input_true(accepted):
                         self._viewport_insets_sent = insets
                 if self.web is web and hasattr(self, '_brush_presets_sent'):
                     raw = self.app.preferences.values.get(BRUSH_PRESETS, '[]')
@@ -458,6 +463,8 @@ class NotebookPanel:
             finally:
                 if getattr(self, '_fold_pending', None) is asyncio.current_task():
                     self._fold_pending = None
+                    if self._fold_refresh_requested and self.web is web and self.bridge is bridge:
+                        self.app.loop.call_soon(self.refresh_fold)
         self._fold_pending = self.app.loop.create_task(update())
 
     def navigate(self, widget, url, **kwargs):
