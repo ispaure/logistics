@@ -186,7 +186,8 @@ class DocumentsHub:
                     await reopen_file(self.app, source)
                 except (OSError, ValueError) as error:
                     await self.main_window.dialog(toga.InfoDialog('Could not open file', str(error)))
-            button = list_button(toga.Button(hit['name'], on_press=open_result, style=Pack(height=48)))
+            button = list_button(toga.Button(hit['name'], on_press=open_result,
+                                             style=Pack(height=48, flex=1)))
             from .browser_ui import middle_filename
             middle_filename(button)
             button_icons(button, [('storage_local', 'Local document'), *(

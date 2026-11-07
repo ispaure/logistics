@@ -68,6 +68,9 @@ def diagnostics(entry_point):
             for panel in ('server', 'limits', 'device'))
     if entry_point.endswith('.mobile_feedback_probe'):
         return NATIVE_DIAGNOSTICS + tuple(f'feedback-{name}.png' for name in ('notes-portrait', 'notes-landscape-left', 'help', 'more', 'about-loading', 'about-ready', 'licenses', 'licenses-landscape'))
+    if entry_point.endswith('.documents_search_probe'):
+        return NATIVE_DIAGNOSTICS + tuple(f'documents-search-{pose}.png'
+            for pose in ('portrait', 'landscape-left'))
     if entry_point.endswith('.documents_hub_probe'):
         return NATIVE_DIAGNOSTICS + tuple(f'documents-hub-{orientation}-{panel}.png'
             for orientation in ('portrait', 'landscape-left')
@@ -843,7 +846,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('workspace-edges', 'mobile-feedback', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('workspace-edges', 'mobile-feedback', 'documents-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--retain-build', action='store_true', help='Pin this managed QA build for reruns; caller must remove the pin and workspace afterward.')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
@@ -917,6 +920,9 @@ def main():
         if args.probe == 'notes-audit':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotesauditqa',
                 entry_point='tests.logisticsmobile.notes_audit_probe', result_name='notes-audit-result.json')
+        if args.probe == 'documents-search':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.documents_search_probe', result_name='documents-search-result.json')
         if args.probe == 'documents-hub':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.documents_hub_probe', result_name='documents-hub-result.json')
