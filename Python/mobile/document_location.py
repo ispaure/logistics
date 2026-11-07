@@ -84,7 +84,7 @@ def side_title_header(view):
 
 
 def side_title_reader(view):
-    if side_title_header(view) is not None:
+    if side_title_header(view) is not None or getattr(view, '_canvas_document_title', False):
         return view
     for child in getattr(view, 'children', ()):
         reader = side_title_reader(child)
@@ -174,6 +174,17 @@ def bind_android_hold(view, label, callback=show_document_path):
 
 
 def mount_apple_title(view, controller, title):
+    if getattr(view, '_canvas_document_title', False):
+        # The filename and live drawing buttons share the canvas header.
+        remove_location_row(view)
+        header = getattr(view, '_document_title_header', None)
+        if header is not None and header.parent is not None:
+            header.parent.remove(header)
+        placeholder = getattr(view, '_canvas_empty_title', None)
+        if placeholder is None:
+            placeholder = view._canvas_empty_title = empty_bar_title()
+        controller.navigationItem.titleView = placeholder
+        return
     if not hasattr(view, '_document_storage_status') and not hasattr(view, '_document_path'):
         controller.navigationItem.titleView = None
         return

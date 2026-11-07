@@ -69,6 +69,15 @@ renderEraserChoices();
   let more = makeButton('more', 'Notebook actions', e => sheet.hidden ? openSheet('document', e.currentTarget) : closeSheet());
   more.hidden = !!state.native_actions;
   header.append(iconButton(command('library'), 'close', 'Close document'), more);
+  const identity = document.createElement('button');
+  identity.id = 'notebookIdentity';
+  identity.type = 'button';
+  identity.innerHTML = '<span class="notebook-filename"></span><span class="notebook-storage"></span>';
+  identity.setAttribute('aria-label', 'Document location');
+  identity.onclick = () => send({op: 'document-location'});
+  identity.hidden = !state.canvas_header;
+  header.classList.toggle('canvas-document-header', !!state.canvas_header);
+  header.insertBefore(identity, more);
   let dock = document.createElement('nav');
   dock.className = 'mobile-dock';
   dock.setAttribute('aria-label', 'Drawing and page tools');
@@ -559,6 +568,8 @@ renderEraserChoices();
   // their real state. A short lease restores the DOM toolbar if the host stalls.
   let nativeToolsLease = null, nativeToolAnchor = null, brushPanelAnchor = null, brushPanelOpener = null;
   window.notebookNativeTools = action => {
+    // A retained/older host must never replace the unified canvas header.
+    if (state.canvas_header) return JSON.stringify(null);
     clearTimeout(nativeToolsLease);
     const restoreTools = () => {
       // Keep paper geometry stable until every current contact/queued edit retires.
@@ -1014,10 +1025,14 @@ renderEraserChoices();
     colorSignature = '';
 
   function sync() {
+    identity.firstChild.textContent = state.display_name ?? state.name;
+    identity.lastChild.textContent = state.storage_status || '';
+    identity.title = [state.display_name ?? state.name, state.storage_status].filter(Boolean).join(' · ');
     pageNumber.max = String(state.count);
     if (document.activeElement !== pageNumber) pageNumber.value = String(state.index + 1);
     for (let card of previews.querySelectorAll('[data-page]')) card.setAttribute('aria-current', String(Number(card.dataset.page) === state.index));
-    for (let b of document.querySelectorAll('[data-file-action]')) b.hidden = state.notes_library && ['library','save-as','transfer','show-in-folder','delete-file'].includes(b.dataset.fileAction) ? true : b.dataset.fileAction === 'show-in-folder' ? !state.has_source : b.dataset.fileAction === 'delete-file' ? !state.can_delete : false;
+    for (let b of document.querySelectorAll('[data-file-action]')) b.hidden = b.dataset.fileAction === 'show-in-folder' ? !state.has_source : b.dataset.fileAction === 'delete-file' ? !state.can_delete : false;
+    command('save-as').textContent = state.notes_library ? 'Save a copy…' : 'Save As…';
     let t = control('tool'),
       c = control('color');
     const next = JSON.stringify(state.tools);

@@ -104,8 +104,17 @@ link drawers remain available while editing. Changing document or closing the
 library asks to save or discard unsaved edits; cancelling keeps the draft open.
 Malformed drawings and failed saves retain the current document.
 
-The first mobile header row contains Close, the left-pane button, the filename,
-and the right-pane button. Note history, edit/view and the actions menu are on a
+Drawing documents keep the full canvas toolbar beside the filename, or below it
+on narrow screens. **Note actions** includes **Pages Overview**, **Page template
+and layers**, **View and input…**, and **Notebook actions…**. The canvas also has
+its own notebook actions menu; iOS/iPadOS exposes the panel buttons in native
+navigation, including the Duo side rail. **Save a copy…** exports a separate
+editable notebook without changing the current file or discarding unsaved edits.
+**Show in folder** reveals the containing library folder.
+
+The first mobile header row contains Close, the left-pane button, the filename
+(or library name while editing a drawing), and the right-pane button.
+Note history, edit/view and the actions menu are on a
 second row, hidden during folder browsing. Back and Forward sit on the left;
 edit/view and the actions menu sit on the right. The folder breadcrumb fills the
 space between them. Short paths are centered. Long paths start at the end.

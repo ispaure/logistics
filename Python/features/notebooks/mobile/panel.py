@@ -70,6 +70,7 @@ class NotebookPanel:
         self.busy = False
         self.closed = False
         self.view = toga.Box(style=Pack(direction=COLUMN, flex=1))
+        self.view._canvas_document_title = True
         self.view._notebook_dom_toolbar_contract = app.presentation.notebook_toolbar_clearance
         from services.documents.mobile_notebooks import install_notebook_controls
         install_notebook_controls(self)
@@ -237,6 +238,9 @@ class NotebookPanel:
         state['native_top_band'] = bool(band is not None and band.get('notebook_candidate') is not None)
         state['native_close'] = hasattr(self.view, '_native_reader_buttons')
         state['native_actions'] = hasattr(self, 'native_actions')
+        state['canvas_header'] = True
+        from services.documents.mobile_notebooks import notebook_storage_status
+        state['storage_status'] = notebook_storage_status(self)
         state['notebook_viewport_insets'] = getattr(self.view, '_notebook_viewport_insets', (0, 0, 0))
         state['native_pen'] = self.pen_input is not None and bool(getattr(self.pen_input, 'enabled', True))
         if self.pen_input is not None and isinstance(getattr(self.pen_input, 'view_id', None), str):
@@ -609,8 +613,9 @@ class NotebookPanel:
                         picker.save_as_status.value = 'The original file is unavailable or changed. Choose a new location to save your retained draft.'
                     return
             elif op == 'save-as':
+                prepared = await canvas.wait(self.prepare_save_as())
                 await respond(update_script(self.state(), ''), acknowledges=True)
-                await canvas.wait(self.app.editor_picker().show_notebook_destination(self))
+                await canvas.wait(self.save_as(prepared))
                 return
             elif op == 'transfer':
                 if not await canvas.wait(self.confirm_export()):
@@ -735,6 +740,12 @@ class NotebookPanel:
     async def confirm_export(self):
         from services.documents.mobile_storage import confirm_export
         return await confirm_export(self.app, self.document.resource if self.document else None)
+
+    async def prepare_save_as(self):
+        return None
+
+    async def save_as(self, prepared):
+        await self.app.editor_picker().show_notebook_destination(self)
 
     def transfer_panel(self):
         for child in list(self.view.children):

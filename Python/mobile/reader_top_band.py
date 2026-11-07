@@ -107,6 +107,9 @@ def release_other(app, view):
 
 def project(app, view, destination, controller):
     """Keep original native targets/menu owners; decline unsupported geometry."""
+    if getattr(view, '_canvas_document_title', False):
+        restore(view)
+        return False
     from .ios_toolbar import vertical_edge, system_occlusions
     from commonUtils.ui.native.keyboard import native_value
     native = getattr(controller, 'view', None)

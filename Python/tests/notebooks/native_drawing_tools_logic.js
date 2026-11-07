@@ -6,7 +6,7 @@ const classes=new Set(), clicks=[], timers=new Map();let serial=0;
 function button(name){return {disabled:false,pressed:name==='pen',getAttribute(){return String(this.pressed)},click(){clicks.push(name);this.pressed=true}}}
 const buttons=Object.fromEntries(['pen','erase','select','undo','redo'].map(n=>[n,button(n)]));buttons.redo.disabled=true;
 const context={window:{},document:{body:{classList:{add:n=>classes.add(n),remove:n=>classes.delete(n),contains:n=>classes.has(n)}}},
- active:null,busy:false,queue:[],resize:()=>{},dismissToolPanels:()=>{},header:{inert:false},dock:{inert:false},brushToggle:buttons.pen,control:n=>buttons[n],
+ state:{},active:null,busy:false,queue:[],resize:()=>{},dismissToolPanels:()=>{},header:{inert:false},dock:{inert:false},brushToggle:buttons.pen,control:n=>buttons[n],
  setTimeout:(f,ms)=>{f.delay=ms;timers.set(++serial,f);return serial},clearTimeout:id=>timers.delete(id)};
 vm.createContext(context);vm.runInContext(block,context);
 context.active=1;

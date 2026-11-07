@@ -89,7 +89,58 @@ def check_toolbar_layout(view, js, wait, output):
     return reports
 
 
-def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolbar_only=False):
+def check_canvas_header(view, js, wait, output):
+    """The filename, real brush controls and notebook panels survive every size."""
+    reports = []
+    assert js('window.notebookNativeTools(null)') == 'null'
+    for width, height, rail in [(320, 640, 0), (390, 844, 0), (540, 720, 0),
+                                (669, 951, 80), (951, 669, 80), (1024, 768, 0)]:
+        view.resize(width, height)
+        wait(lambda: js('innerWidth') == width)
+        js(f'window.notebookViewportInsets([{rail},0,0])')
+        report = json.loads(js("""JSON.stringify((()=>{
+            const rect=id=>$(id).getBoundingClientRect().toJSON();
+            return {width:innerWidth,title:rect('notebookIdentity'),brush:rect('brushToggle'),
+                viewport:rect('viewport'),header:document.querySelector('header').getBoundingClientRect().toJSON(),
+                native:document.body.classList.contains('native-drawing-tools'),
+                overflow:document.body.scrollWidth>innerWidth};
+        })())"""))
+        assert not report['native'] and not report['overflow'], report
+        assert report['title']['width'] >= 96 and report['title']['height'] >= 44, report
+        assert report['viewport']['top'] >= report['header']['bottom'], report
+        if width >= 640:
+            assert abs(report['title']['top'] - report['brush']['top']) <= 4, report
+            assert report['title']['right'] <= report['brush']['left'], report
+        else:
+            assert report['title']['bottom'] <= report['brush']['top'], report
+        reachable = js("""[...document.querySelectorAll('.mobile-tools button')].filter(b=>!b.hidden).every(b=>{
+            b.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});
+            const r=b.getBoundingClientRect();
+            return r.width>=44 && r.height>=44 &&
+                document.elementFromPoint(r.x+r.width/2,r.y+r.height/2)?.closest('button')===b;
+        })""")
+        assert reachable, report
+        js("document.querySelector('.mobile-dock').scrollLeft=0")
+        QTest.qWait(100)  # Include an actually painted frame in the saved evidence.
+        view.grab().save(str(output / f'canvas-header-{width}.png'))
+        for selector, panel in [('#pagesToggle', 'pages'), ('#layersToggle', 'layers'),
+                                ('.view-options', 'view')]:
+            js("document.querySelector('[aria-label=\"Notebook actions\"]').click()")
+            js(f"document.querySelector({json.dumps(selector)}).click()")
+            assert js(f"!$('mobileSheet').hidden && $('mobileSheet').dataset.panel === {json.dumps(panel)}")
+            js("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))")
+        js("$('brushToggle').click()")
+        assert js("!$('mobileSheet').hidden && $('mobileSheet').dataset.panel==='brush'")
+        js("document.querySelector('[data-tool=\"18\"]').click()")
+        assert js("!!$('brushToggle').querySelector('.current-ink') && $('brushToggle').title.includes('Highlighter')")
+        before = js("JSON.stringify($('paper').getBoundingClientRect().toJSON())")
+        js("window.notebookNativeAction('hide-tools');$('restoreTools').click()")
+        assert before == js("JSON.stringify($('paper').getBoundingClientRect().toJSON())")
+        reports.append(report)
+    return reports
+
+
+def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolbar_only=False, header_only=False):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=True)
     _app = qt.QApplication.instance() or qt.QApplication([])  # Retain Qt ownership for the probe.
@@ -101,6 +152,9 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         preferences = Preferences(root / 'preferences')
         bridge = Bridge()
         failures, received = [], []
+        header_state = dict(canvas_header=True, display_name='Field notes.rmdoc', storage_status='On-device',
+                            native_close=True, native_actions=False, notes_library=True,
+                            brush_presets=[dict(id='blue', brush=[17,6,2]), dict(id='yellow', brush=[18,13,1])]) if header_only else {}
 
         class Page(QWebEnginePage):
             def javaScriptConsoleMessage(self, level, message, line, source):
@@ -115,7 +169,7 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
                         self.runJavaScript('window.notebookPagePreviews(' + json.dumps(page_previews(book, action['start'])) + ')')
                     elif action['op'] != 'document-location':
                         editor.apply(action)
-                    self.runJavaScript(update_script(editor.state()))
+                    self.runJavaScript(update_script(dict(editor.state(), **header_state)))
                 elif level == QWebEnginePage.JavaScriptConsoleMessageLevel.ErrorMessageLevel:
                     failures.append(message)
 
@@ -144,12 +198,24 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         initial_state = editor.state()
         initial_state['native_actions'] = native_only
         initial_state['native_close'] = native_only
+        if header_only:
+            initial_state.update(header_state)
         if native_only:
             initial_state['tablet'] = False
             initial_state['brush_preset_limit'] = 2
         view.setHtml(mobile_editor_html(initial_state, bridge.url, console_bridge=True))
         wait(lambda: bool(loaded))
         assert loaded[-1]
+        if header_only:
+            try:
+                reports = check_canvas_header(view, js, wait, output)
+                (output / 'canvas-header-result.json').write_text(json.dumps(
+                    dict(success=True, layouts=reports), indent=2))
+            finally:
+                view.close()
+                view.deleteLater()
+                qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+            return
         toolbar_reports = []
         if toolbar_only:
             try:
@@ -637,5 +703,7 @@ if __name__ == '__main__':
     parser.add_argument('--laptop-only', action='store_true', help='Check split tools, drawing coordinates and unfold restoration.')
     parser.add_argument('--native-only', action='store_true', help='Check native toolbar routing to canvas panels and commands.')
     parser.add_argument('--toolbar-only', action='store_true', help='Check actual narrow toolbar targets and scroll reachability only.')
+    parser.add_argument('--header-only', action='store_true', help='Check canvas filename, drawing controls and library panels.')
     args = parser.parse_args()
-    main(args.output, palm_only=args.palm_only, laptop_only=args.laptop_only, native_only=args.native_only, toolbar_only=args.toolbar_only)
+    main(args.output, palm_only=args.palm_only, laptop_only=args.laptop_only, native_only=args.native_only,
+         toolbar_only=args.toolbar_only, header_only=args.header_only)

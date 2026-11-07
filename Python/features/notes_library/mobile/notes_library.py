@@ -272,7 +272,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.view._workspace_menu_button = self.menu
         self.view._native_reader_toolbar = self.toolbar
         self.view._native_reader_title = (
-            lambda: PurePosixPath(self.path).name if self.path else self.library_title
+            lambda: (PurePosixPath(self.path).name if self.path and
+                     getattr(self.embedded, 'kind', None) != 'notebook' else self.library_title)
         )
         from services.documents.storage import display_path
         self.view._document_path = lambda: display_path(self.provider, self.path or self.root) if self.valid() else None
@@ -410,15 +411,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                     if button.parent is self.secondary]
         available = article_width - left - right
         gap = self.secondary.style.gap
-        sync_tools = getattr(self.embedded, 'sync_drawing_toolbar', None)
-        drawing_width = 0
-        if sync_tools is not None:
-            remaining = available - len(controls) * (48 + gap) - 112
-            drawing_width = sync_tools(self.secondary, self.reader_actions_button, remaining)
-            if drawing_width:
-                drawing_width += gap
         # Preserve a useful breadcrumb viewport without adding another toolbar row.
-        width = round(48 * .6) if not drawing_width and available - len(controls) * (48 + gap) < 160 else 48
+        width = round(48 * .6) if available - len(controls) * (48 + gap) < 160 else 48
         title_width = round(48 * .8) if not self.sidebar.wide and width < 48 else 48
         for button in self.view._notes_title_controls:
             if button.style.width != title_width:
@@ -431,12 +425,13 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                     native = impl.native
                     padding = impl.scale_in(2 if width < 48 else 12)
                     native.setPaddingRelative(padding, native.getPaddingTop(), padding, native.getPaddingBottom())
-        self._breadcrumb_width = max(0, available - drawing_width - len(controls) * (width + gap))
+        self._breadcrumb_width = max(0, available - len(controls) * (width + gap))
         self.refresh_breadcrumbs()
 
     def native_note_buttons(self):
         """Keep panel controls in the title bar and document actions below it."""
-        return [] if self.host.apple else [self.links_button]
+        notebook = getattr(self.embedded, 'native_buttons', None)
+        return notebook() if self.host.apple and notebook is not None else ([] if self.host.apple else [self.links_button])
 
     async def breadcrumb_pages(self, path, cancelled):
         folders = breadcrumb_folders(self.root, path)
@@ -541,8 +536,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             if self.library.writable and getattr(self.embedded, 'kind', None) != 'file':
                 actions.append(('Save', self.embedded.save))
             if getattr(self.embedded, 'kind', None) == 'notebook':
-                if self.host.apple:
-                    actions.append(('Notebook actions…', self.embedded.notebook_actions))
+                actions.extend(self.embedded.notebook_commands())
                 if self.embedded.writable:
                     actions.append(('✓ Save and Close', self.save_and_close_notebook))
                 else:

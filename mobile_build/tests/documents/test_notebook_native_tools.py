@@ -273,7 +273,8 @@ class NativeToolsMountTests(unittest.TestCase):
         panel.view.add(header)
         manager = NativeDrawingTools(panel)
         with patch.object(panel.app.main_window._impl, 'native', window, create=True), \
-                patch.object(panel.app, '_presentation', replace(panel.app.presentation, fold_division=lambda web:None)):
+                patch.object(panel.app, '_presentation', replace(panel.app.presentation,
+                             native_notebook_toolbar=True, fold_division=lambda web:None)):
             self.assertTrue(manager.fits(controller))
             manager.mount(header, controller)
         self.assertEqual(len(manager.buttons), 5)
@@ -340,6 +341,9 @@ class NotebookPresentationBoundaryTests(unittest.TestCase):
         from features.notebooks.mobile.panel import NotebookPanel
         app = create_app(self)
         panel = NotebookPanel(app, library=False)
+        self.assertTrue(panel.view._canvas_document_title)
+        self.assertFalse(app.presentation.native_notebook_toolbar)
+        self.assertFalse(hasattr(panel, 'native_drawing_tools'))
         panel.view._notebook_dom_ready = 'old-canvas'
         panel.view._notebook_dom_epoch = 1
         panel.retire_canvas()

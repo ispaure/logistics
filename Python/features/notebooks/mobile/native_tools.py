@@ -67,7 +67,7 @@ class NativeDrawingTools:
         if panel is None or panel.closed or not getattr(panel, '_canvas_ready', False) or controller is None:
             return False
         landscape = self.wide_landscape(controller)
-        if not landscape and not getattr(panel.app.presentation, 'native_notebook_toolbar', True):
+        if not getattr(panel.app.presentation, 'native_notebook_toolbar', False):
             return False
         if inline_width is not None and not landscape:
             return False
