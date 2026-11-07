@@ -29,14 +29,20 @@ explicitly switches to the Documents list.
 
 ## Android Back
 
-In Workspaces, **Local** has **Rclone** and **Others** tabs. Rclone shows
-downloaded Local and LocalCrypt copies associated with remotes. Others shows
+In Workspaces, **Local** has **Rclone Copies** and **On This Phone** tabs. Rclone Copies shows
+ordinary and encrypted local copies associated with remotes. On This Phone shows
 **Received Files** and **Shared Files**. Shared Files opens the browse root;
 ordinary folders are reached inside it. Ordinary names remain
 intact rather than being split into groups at hyphens. These tabs change the
 view, without moving any files. The app remembers the last Local tab on this
-device across restarts, starting with **Others** on first use. A notebook's **× (Close document)** closes its
+device across restarts, starting with **On This Phone** on first use. A notebook's **× (Close document)** closes its
 session with the usual unsaved-edit choices and returns to the Home overview.
+
+On tablets, **On This Tablet** replaces **On This Phone**. **Cloud** has one
+**Rclone Remotes** tab, including encrypted remotes. Local destination pickers use
+`<foldername> - Encrypted Copy` for encrypted copies and just the folder name
+for regular folders. Lock icons describe current access; unlocking does not
+remove encryption from the stored copy.
 
 The Android Back button and back gesture dismiss the current temporary surface
 before leaving its screen. This includes a compact file/conversation drawer,

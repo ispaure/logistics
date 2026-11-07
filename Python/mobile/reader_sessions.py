@@ -18,6 +18,20 @@ class ReaderController(ReaderHost, ReaderUI):
         self.library_host = library_host(self.app)
         self.presentation_destination = self.app.native_host.state.destination
 
+    def comic_file_entries(self):
+        from .document_sources import comic_file_entries
+        return comic_file_entries(self.app, self.session, self)
+
+    async def open_comic_neighbor(self, path):
+        from .document_imports import open_local_document
+        immersive = self.reader_immersive
+        opened = await open_local_document(self.app, path, destination=self.presentation_destination)
+        if opened:
+            owner = self.app.private_sessions.active
+            if owner.crypt_immersive != immersive:
+                owner.toggle_private_reading_mode()
+        return opened
+
     def show_view(self, view, **kwargs):
         self.refresh_folder_action()
         self.manager.bind(self)

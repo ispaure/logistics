@@ -110,6 +110,8 @@ class MobilePresentation:
     reserved_divisions: Callable[[Any], tuple[Any, ...]]
     fold_division: Callable[[Any], Any]
     register_layout: Callable[..., Any]
+    filename_input: Callable[..., Any]
+    fill_scroll_bottom: Callable[..., Any]
 
     favourite_resource: Callable | None = None
     reset_reader_layout: Callable[[Any], None] = lambda view: None

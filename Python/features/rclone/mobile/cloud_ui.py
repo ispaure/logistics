@@ -159,8 +159,7 @@ class CloudUI(LocalCryptUI):
             self.remote_browser.location_bar,
             self.remote_browser.scroll_container()],
             style=Pack(direction=COLUMN, margin=12, flex=1))
-        from mobile.scroll_edges import fill_bottom
-        fill_bottom(self.cloud_view, self.remote_browser.native_list, self.remote_browser._tile_scroll)
+        self.app.presentation.fill_scroll_bottom(self.cloud_view, self.remote_browser.native_list, self.remote_browser._tile_scroll)
 
     async def browse_cloud_path(self, widget=None, **kwargs):
         previous_notes = getattr(self.app, 'vault_browser', None)

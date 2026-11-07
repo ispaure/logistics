@@ -11,6 +11,7 @@ from commonUtils.ui.tasks.operation_progress import OperationProgress
 
 from features.application import registry
 from features.contributions import UIAction
+from services.folders.labels import local_source_label, RCLONE_REMOTES
 from services.folders.sources import discover_folder_sources
 from services.folders.workspaces import SOURCE_NAMES, source_category, workspace_remote_sources
 from desktop.pages.workspace_panes import WorkspacePanes, WORKSPACE_PANES_LOCKED
@@ -50,12 +51,13 @@ class FoldersPage(pyside.QWidget):
         self.local_source_tabs.setExpanding(True)
         self.local_source_tabs.setAccessibleName('Local folder sources')
         for name in ('Dropbox', 'Rclone', 'Others'):
-            self.local_source_tabs.addTab(name)
+            index = self.local_source_tabs.addTab(local_source_label(name))
+            self.local_source_tabs.setTabData(index, name)
         self.local_source_tabs.setCurrentIndex(1)
         self.cloud_source_tabs = pyside.QTabBar()
         self.cloud_source_tabs.setExpanding(True)
         self.cloud_source_tabs.setAccessibleName('Cloud folder sources')
-        self.cloud_source_tabs.addTab('rclone')
+        self.cloud_source_tabs.addTab(RCLONE_REMOTES)
         self.credential_combo = pyside.QComboBox()
         self.credential_label = pyside.QLabel('Credential')
         self._remote_sources = []
@@ -326,7 +328,7 @@ class FoldersPage(pyside.QWidget):
         selected_source = self._get_selected_source()
         is_remote = selected_source is not None and selected_source[0] == 'remote'
         category = self.source_tabs.tabText(self.source_tabs.currentIndex())
-        local_rclone = not is_remote and self.local_source_tabs.tabText(self.local_source_tabs.currentIndex()) == 'Rclone'
+        local_rclone = not is_remote and self.local_source_tabs.tabData(self.local_source_tabs.currentIndex()) == 'Rclone'
         cloud = is_remote and category == 'Cloud'
         sources = (selected_source[2] if cloud else
                    [source for source in self._sources.remote_sources if source.feature_name == 'rclone'])
@@ -415,7 +417,7 @@ class FoldersPage(pyside.QWidget):
         storage = ('Remote' if self._get_selected_source()[0] == 'remote' else
                    getattr(entry.local, 'storage_label', 'Local'))
         item.setData(0, pyside.Qt.ItemDataRole.AccessibleDescriptionRole,
-                     storage + (', ' + state if state else ''))
+                     storage.replace('LocalCrypt', 'Encrypted Copy') + (', ' + state if state else ''))
 
     def _browse_entry(self, entry, *, force=False):
         source = self._get_selected_source()
@@ -795,7 +797,7 @@ class FoldersPage(pyside.QWidget):
             if Path(entry.remote_context).suffix == '.session':
                 note = pyside.QLabel(
                     'Session-only credentials enable Cloud browsing and transfers. '
-                    'A session-loaded crypt remote can create a LocalCrypt copy; '
+                    'A session-loaded crypt remote can create an encrypted local copy; '
                     'its encrypted files remain on disk when credentials lock.')
                 note.setWordWrap(True)
                 status_layout.addWidget(note, next_row + 1, 0, 1, 2)

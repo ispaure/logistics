@@ -322,7 +322,7 @@ class FolderSourceTests(QtTestCase):
                 'Saved': frozenset({'SavedPrivate'}),
                 'Active (session)': frozenset({'SessionPrivate'}),
                 'Retained — Local': frozenset(),
-                'Retained — LocalCrypt': frozenset(),
+                'Retained — Encrypted Copy': frozenset(),
             },
         )
         for snapshot in sources[2:]:
@@ -433,7 +433,7 @@ class FolderSourceTests(QtTestCase):
         page = self.page()
         page.show()
         self.app.processEvents()
-        self.assertEqual(page.local_source_tabs.tabText(page.local_source_tabs.currentIndex()), 'Rclone')
+        self.assertEqual(page.local_source_tabs.tabText(page.local_source_tabs.currentIndex()), 'Rclone Copies')
         self.assertEqual({entry.local.path for entry in self.entries(page)}, {local.path, cipher})
         page.local_source_tabs.setCurrentIndex(0)
         page.refresh()
@@ -448,7 +448,7 @@ class FolderSourceTests(QtTestCase):
         crypt_entry = next(entry for entry in self.entries(page) if entry.local.path == cipher)
         icon_item = page._entry_items[page._entry_key(crypt_entry)]
         self.assertFalse(icon_item.icon(0).isNull())
-        self.assertEqual(icon_item.data(0, qt.Qt.ItemDataRole.AccessibleDescriptionRole), 'LocalCrypt, locked')
+        self.assertEqual(icon_item.data(0, qt.Qt.ItemDataRole.AccessibleDescriptionRole), 'Encrypted Copy, locked')
         page.folder_tree.setCurrentItem(icon_item)
         from desktop.file_browser import _PrivateBrowserLocation
         self.assertEqual(self.browser_factory.call_args.args, (_PrivateBrowserLocation(connection, cipher),))
@@ -477,7 +477,7 @@ class FolderSourceTests(QtTestCase):
         self.assertTrue(page.cloud_source_tabs.isVisible())
         self.assertGreater(page.cloud_source_tabs.height(), 0)
         self.assertEqual([page.cloud_source_tabs.tabText(i) for i in range(page.cloud_source_tabs.count())],
-                         ['rclone'])
+                         ['Rclone Remotes'])
         self.assertTrue(page.refresh_button.isVisible())
         page.refresh()
         self.wait(page)
@@ -507,7 +507,7 @@ class FolderSourceTests(QtTestCase):
         self.assertEqual(page.credential_label.text(), 'Credential')
         self.assertIsNone(page.credential_combo.currentData())
         self.assertEqual([page.local_source_tabs.tabText(i) for i in range(page.local_source_tabs.count())],
-                         ['Dropbox', 'Rclone', 'Others'])
+                         ['Dropbox', 'Rclone Copies', 'On This Computer'])
         page.local_source_tabs.setCurrentIndex(2)
         self.assertEqual({entry.local.path for entry in self.entries(page)}, {other.path})
         self.select_first(page)
@@ -517,7 +517,7 @@ class FolderSourceTests(QtTestCase):
         self.assertEqual(page.selected_entry_name, other.name)
         page.refresh()
         self.wait(page)
-        self.assertEqual(page.local_source_tabs.tabText(page.local_source_tabs.currentIndex()), 'Others')
+        self.assertEqual(page.local_source_tabs.tabText(page.local_source_tabs.currentIndex()), 'On This Computer')
         self.assertEqual(page._selected_entry_key, selected)
         current = page.folder_tree.currentItem()
         self.assertIsNotNone(current)
@@ -538,7 +538,7 @@ class FolderSourceTests(QtTestCase):
         self.assertEqual(page.credential_label.text(), 'Credential')
         page.source_tabs.setCurrentIndex(self.tab(page, 'Local'))
         self.wait(page)
-        self.assertEqual(page.local_source_tabs.tabText(page.local_source_tabs.currentIndex()), 'Rclone')
+        self.assertEqual(page.local_source_tabs.tabText(page.local_source_tabs.currentIndex()), 'Rclone Copies')
 
     def test_sources_open_without_selecting_or_browsing_a_folder(self):
         self.local_folders = [self.folder('Workspace')]
@@ -627,7 +627,7 @@ class FolderSourceTests(QtTestCase):
             factory.assert_called_once()
             self.assertEqual(len(page._entry_items), 2)
             for item in page._entry_items.values():
-                self.assertEqual(item.data(0, qt.Qt.ItemDataRole.AccessibleDescriptionRole), 'LocalCrypt, unlocked')
+                self.assertEqual(item.data(0, qt.Qt.ItemDataRole.AccessibleDescriptionRole), 'Encrypted Copy, unlocked')
 
     def test_unlock_refreshes_icons_and_actions_even_if_browser_cannot_open(self):
         from types import SimpleNamespace
@@ -663,7 +663,7 @@ class FolderSourceTests(QtTestCase):
             self.assertIn('synthetic browser failure', page.browser_notice.text())
             self.assertFalse(page.panes.docks[1].isHidden())
             for item in page._entry_items.values():
-                self.assertEqual(item.data(0, qt.Qt.ItemDataRole.AccessibleDescriptionRole), 'LocalCrypt, unlocked')
+                self.assertEqual(item.data(0, qt.Qt.ItemDataRole.AccessibleDescriptionRole), 'Encrypted Copy, unlocked')
             buttons = {button.text() for button in page.detail_scroll.widget().findChildren(qt.QPushButton)}
             self.assertIn('Fixture action', buttons)
 

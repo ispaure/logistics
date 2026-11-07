@@ -224,26 +224,26 @@ class RemoteDownloadPickerTests(unittest.TestCase):
         crypt.private=True
         def available_crypts(*, roots=None):
             if roots is not None:
-                roots['LocalCrypt: empty unlocked']=('Empty', 'a'*64)
-            return {'LocalCrypt: unlocked':crypt}
+                roots['empty unlocked - Encrypted Copy']=('Empty', 'a'*64)
+            return {'unlocked - Encrypted Copy':crypt}
         with patch.object(app,'existing_crypt_locations',side_effect=available_crypts), \
              patch.object(app,'linked_crypt_locations',return_value={}):
             app.loop.run_until_complete(app.editor_picker().show_destination('note.txt',request))
         picker=app.editor_picker()
-        self.assertIn('Local files',picker.editor_storage_roots)
+        self.assertIn('Local',picker.editor_storage_roots)
         self.assertIn('Received Files',picker.editor_storage_roots)
-        self.assertIn('Shared files',picker.editor_storage_roots)
-        self.assertIn('LocalCrypt: unlocked',picker.editor_storage_roots)
-        self.assertEqual(picker.editor_storage_roots['LocalCrypt: empty unlocked'],'Empty')
+        self.assertIn('Shared Files',picker.editor_storage_roots)
+        self.assertIn('unlocked - Encrypted Copy',picker.editor_storage_roots)
+        self.assertEqual(picker.editor_storage_roots['empty unlocked - Encrypted Copy'],'Empty')
         self.assertEqual(picker.picker_primary.text,'Download here')
         self.assertIs(picker.operation.destination_action,request)
-        shared = picker.editor_storage_roots['Shared files']
+        shared = picker.editor_storage_roots['Shared Files']
         self.assertFalse(shared.include_collections)
         self.assertNotIn('Local', [row['name'] for row in shared.list()])
         self.assertNotIn('Received Files', [row['name'] for row in shared.list()])
         from services.documents.locations import collection_path
-        app.loop.run_until_complete(picker.browser_editor_location(('Shared files', collection_path(app.private_root).name)))
-        self.assertEqual(picker.save_as_storage.value,'Local files')
+        app.loop.run_until_complete(picker.browser_editor_location(('Shared Files', collection_path(app.private_root).name)))
+        self.assertEqual(picker.save_as_storage.value,'Local')
         self.assertEqual(picker.picker_folder.value,'')
         picker.cancel_text_destination()
 

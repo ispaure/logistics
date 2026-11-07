@@ -301,7 +301,8 @@ class DocumentsHub:
             rows.append(self.recent_row(session, summary))
         from features.notebooks.mobile.documents import repository
         for key, name in (repository(self.app).list() if self.app.feature_enabled('notebooks') else ()):
-            if ('notebook', key) not in represented:
+            if ('notebook', key) not in represented and self.recent_documents.notebook_file_reference(
+                    dict(provider='notebook', resource=key))['provider'] == 'notebook':
                 summary = name, 'notebook', []
                 rows.append(self.recent_row(Session('', 'notebook', key, 'notebook', title=name), summary))
         self.document_saved_list.add(document_list(rows, 'No other saved documents.'))

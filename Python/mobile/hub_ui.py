@@ -1,4 +1,6 @@
 """Shared session summaries and refresh coordination for Home and Documents."""
+from pathlib import Path
+
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
@@ -135,6 +137,52 @@ class HubUI(HomeScreen, DocumentsHub):
                 self.show_documents(resume=True)
         return reopen
 
+    def document_row_menu(self, session):
+        from .action_menu import FeatureCommands
+        from .document_sources import folder_location, ordinary_browser_location, show_folder_location
+
+        app = self.app
+        try:
+            location = folder_location(app, session)
+        except (OSError, ValueError):
+            return []
+        if location is None:
+            return []
+        actions = [('Document location', lambda: show_folder_location(app, location))]
+        path, provider = location.get('path'), location.get('provider')
+        if path is None and provider is not None and not provider.private:
+            path = Path(provider.root) / location['key']
+        matching = ordinary_browser_location(app, path) if path is not None else None
+        if matching:
+            label, provider, row = matching
+            for title, callback in app.file_item_commands(context=(provider, label, row)):
+                async def invoke(target=callback):
+                    import inspect
+
+                    async def selected(browser, entry):
+                        if browser is not app.file_browser or entry.payload['path'] != row['path']:
+                            return False
+                        if (target == app.delete_file
+                                and app.file_provider.entry(row['path'])['revision'] != row['revision']):
+                            await app.main_window.dialog(toga.InfoDialog(
+                                'File changed', 'Review the current file before deleting it.'))
+                            return False
+                        result = target()
+                        return await result if inspect.isawaitable(result) else result
+
+                    return await show_folder_location(app, location, on_selected=selected)
+                actions.append((title, invoke))
+        elif 'remote' in location:
+            async def remote_actions():
+                async def selected(browser, entry):
+                    if browser.on_item_actions is not None:
+                        browser.on_item_actions(entry.payload)
+                return await show_folder_location(app, location, on_selected=selected)
+            actions.append(('File actions…', remote_actions))
+        button = icon_button('overflow', 'Document actions')
+        button.document_actions = FeatureCommands(button, app, actions, None, document=True)
+        return [button]
+
     def recent_row(self, session, summary):
         title, kind, details = summary
         row = toga.Box(style=Pack(direction=COLUMN, margin_bottom=8))
@@ -144,7 +192,7 @@ class HubUI(HomeScreen, DocumentsHub):
         middle_filename(name)
         self.document_button_icons(name, session)
         row.document_button = name
-        row.add(toga.Box(children=[name],
+        row.add(toga.Box(children=[name, *self.document_row_menu(session)],
             style=Pack(direction=ROW, align_items=CENTER)))
         currently_open = session.id in self.workspace.sessions
         if currently_open or details:
@@ -197,7 +245,7 @@ class HubUI(HomeScreen, DocumentsHub):
                     details.append('File changed outside editor')
             except (OSError, ValueError, KeyError, TypeError):
                 details.append('Unavailable; retry to reopen')
-        elif session.provider == 'notebook':
+        elif session.provider == 'notebook' and not getattr(session, 'history_source', None):
             from features.notebooks.mobile.documents import repository
             names = dict(repository(self.app).list())
             title = names.get(session.resource, title)
@@ -223,13 +271,12 @@ class HubUI(HomeScreen, DocumentsHub):
         middle_filename(button)
         self.document_button_icons(button, session)
         box.document_button = button
+        buttons = [button, *self.document_row_menu(session)]
         if close:
             close_button = icon_button('close', 'Close ' + title, on_press=self.session_closer(session.id))
             box.close_button = close_button
-            box.add(toga.Box(children=[button, close_button], style=Pack(direction=ROW)))
-        else:
-            box.add(toga.Box(children=[button],
-                             style=Pack(direction=ROW)))
+            buttons.append(close_button)
+        box.add(toga.Box(children=buttons, style=Pack(direction=ROW)))
         if details:
             box.add(status_badges(details, icon_count=len(getattr(button, 'leading_icons', ()))))
         return box

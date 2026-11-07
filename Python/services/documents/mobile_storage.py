@@ -87,12 +87,9 @@ def notebook_binding(recovery, key):
     return Path(recovery.root) / identifier(key) / 'source.json'
 
 
-def restore_notebook_resource(recovery, key):
+def notebook_source_binding(recovery, key):
     """Ordinary recovery references only; private sessions never call this adapter."""
     import json
-    from commonUtils.runtime.resources.local import LocalFiles
-    from services.documents.storage import DocumentResource
-    from features.notebooks.notebook import MAX_ARCHIVE
     path = notebook_binding(recovery, key)
     if not path.exists():
         return None, None
@@ -112,7 +109,15 @@ def restore_notebook_resource(recovery, key):
         source_root = relocated
         for _ in relative.parts:
             source_root = source_root.parent
-    if not source_root.is_dir():
+    return source_root, value
+
+
+def restore_notebook_resource(recovery, key):
+    from commonUtils.runtime.resources.local import LocalFiles
+    from services.documents.storage import DocumentResource
+    from features.notebooks.notebook import MAX_ARCHIVE
+    source_root, value = notebook_source_binding(recovery, key)
+    if source_root is None or not source_root.is_dir():
         return None, value
     provider = LocalFiles(source_root)
     return DocumentResource(provider, value['path'], max_bytes=MAX_ARCHIVE), value

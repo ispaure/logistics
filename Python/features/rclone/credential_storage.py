@@ -5,7 +5,7 @@ PERSISTENT_TITLE = 'Persistent credential storage'
 SESSION_DESCRIPTION = (
     'Keep unlocked credentials in memory until you lock them or exit Logistics. '
     'Unlock the ZIP again next time; no passwords are saved. '
-    'For crypt remotes, this also enables encrypted LocalCrypt copies.')
+    'For crypt remotes, this also enables encrypted local copies.')
 PERSISTENT_DESCRIPTION = (
     'Save credentials on this device so the remotes remain available after restarting Logistics. '
     'The saved credentials are not protected by the ZIP password. '

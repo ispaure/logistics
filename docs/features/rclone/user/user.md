@@ -1,5 +1,13 @@
 # Connect and transfer remote folders
 
+Workspace naming uses **Local → Rclone Copies** and **Cloud → Rclone Remotes**.
+Both ordinary and encrypted copies belong under Rclone Copies; encrypted remotes
+belong under Rclone Remotes. Destination pickers label encrypted local copies
+`<foldername> - Encrypted Copy`; regular folders keep their names without a
+storage suffix. **Locked** / **Unlocked** describes access, not whether files are
+encrypted on disk. `LocalCrypt` remains the technical name in paths and settings.
+
+
 Load private credential packages, then push or pull folders using the chosen
 remote config. FUSE is optional and only needed for mounting.
 
@@ -88,7 +96,7 @@ Use the selected folder's **Push…** or **Pull** action. Review the direction a
 available options before starting: the operation changes files at its destination.
 Pull means **Cloud → this device**. A regular **Local** copy contains readable,
 decrypted files that remain accessible after credentials lock or Logistics exits.
-When creating a copy from a session-unlocked crypt remote, choose **LocalCrypt**
+When creating a copy from a session-unlocked crypt remote, choose **Encrypted Copy**
 (recommended) to keep names and contents encrypted on disk, or **Regular Local copy**
 for readable files. Both stay on disk; LocalCrypt needs the matching credentials
 to read it. Saved-config pulls use regular Local storage. Pulling an existing
@@ -212,7 +220,7 @@ Unassociated local folders match accounts by remote name. A folder pulled with
 temporary credentials remembers its matching ZIP; a different ZIP cannot claim
 that same local folder name.
 
-For a session-loaded crypt remote, choosing **LocalCrypt** after **Pull** mirrors the backing
+For a session-loaded crypt remote, choosing **Encrypted Copy** after **Pull** mirrors the backing
 remote's ciphertext into `~/Library/Application Support/Logistics/LocalCrypt` on
 macOS (the Logistics per-user preferences folder on Windows/Linux). **Push** sends that copy back to the
 matching backing remote and subpath without encrypting it again. Both operations
@@ -300,13 +308,13 @@ encrypted copy on disk; session-only describes how its credentials are held.
 The encrypted copy remains after the credentials lock or Logistics exits.
 
 For a session-loaded crypt remote with no existing copy, tap **Pull**. A popup
-strongly recommends **LocalCrypt** and lets you choose the storage type before
+strongly recommends **Encrypted Copy** and lets you choose the storage type before
 reviewing the transfer:
 
 | Popup choice | Destination | Contents on disk |
 | --- | --- | --- |
 | Regular Local copy | `Server/Local/<remote>` | Ordinary decrypted files |
-| LocalCrypt (recommended) | Logistics application support folder, `LocalCrypt/<remote-name>` | Original ciphertext |
+| Encrypted Copy (recommended) | Logistics application support folder, `LocalCrypt/<remote-name>` | Original ciphertext |
 
 Once a copy exists, **Pull** refreshes the selected kind: Local stays decrypted,
 LocalCrypt stays encrypted. If both exist, select the appropriate entry first;
@@ -342,7 +350,7 @@ package in Settings to add Cloud destinations. Connection records without a fold
 do not create entries.
 
 Choose **Load for Session**, unlock the ZIP containing both the crypt
-remote and its direct backing remote, then use **Pull** and choose **LocalCrypt**. Open its
+remote and its direct backing remote, then use **Pull** and choose **Encrypted Copy**. Open its
 LocalCrypt folder to browse decrypted names. Supported documents are text (`.txt`), Markdown (`.md`, `.markdown`), EPUB books
 and comic ZIP/CBZ files. EPUB and comic metadata are editable from the context
 menu or reader. Other file types stay unopened in this private browser. This workflow needs no mounted filesystem.
@@ -482,8 +490,8 @@ folders show an error instead of opening as ordinary files. Finder and other
 external file browsers still show ciphertext names.
 
 Workspaces shows a loaded credential's encrypted copy once. If both decrypted Local
-and LocalCrypt copies exist, both remain selectable with short **Local** and
-**LocalCrypt** labels. Hover an entry to see its complete source and path.
+and LocalCrypt copies exist, both remain selectable with ordinary copy names and
+**Encrypted Copy** descriptions. Hover an entry to see its complete source and path.
 
 Private desktop browser tabs, text and Markdown editors, comic readers and metadata windows begin their titles with **🕵️ Private -**. The private browser shares the regular browser’s list, tile and column views, icon-size controls, navigation and folder breadcrumbs. Comic/EPUB covers and image thumbnails are generated on demand and kept only in memory. **Move into this folder…** groups file and folder imports in one toolbar menu. Open/Save As keeps the storage picker at the top and uses the same navigation style, without a side preview or storage maps.
 

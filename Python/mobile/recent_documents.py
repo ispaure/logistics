@@ -50,9 +50,29 @@ class RecentDocuments:
         path = local_document_path(SimpleNamespace(private_root=self.private_root), source['path'])
         return dict(source, path=str(path))
 
+    def notebook_file_reference(self, item):
+        """Upgrade clean, file-backed notebook history from a recovery UUID."""
+        if item['provider'] != 'notebook':
+            return item
+        from pathlib import Path
+        from types import SimpleNamespace
+        from services.documents.mobile_storage import notebook_source_binding
+        try:
+            root, binding = notebook_source_binding(
+                SimpleNamespace(root=self.private_root / 'notebooks'), item['resource'])
+        except (OSError, ValueError, KeyError, TypeError):
+            return item
+        if binding is None or binding.get('dirty'):
+            return item
+        path = root / binding['path']
+        source = dict(type='local', path=str(path.resolve()))
+        return dict(item, provider='file-reference', resource=self.reference_id(source),
+                    title=Path(path).name, source=source)
+
     def normalize_items(self, items):
         result, seen = [], set()
         for item in sorted(items, key=lambda item: item.get('opened', 0), reverse=True):
+            item = self.notebook_file_reference(item)
             if item['provider'] == 'file-reference':
                 before = item['source']
                 source = self.normalize_source(before)
@@ -179,6 +199,7 @@ class RecentDocuments:
             raise ValueError('Recent history could not be read; it was preserved.')
         items = []
         for item in self.items:
+            item = self.notebook_file_reference(item)
             before = item.get('source')
             after = relocated_source(before, source, destination) if before is not None else before
             if before is not after:

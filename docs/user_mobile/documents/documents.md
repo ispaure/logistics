@@ -26,7 +26,7 @@ discovered Notes libraries followed by configured Comics libraries, under
 
 The upper-right **Search documents** magnifier beside Open and New opens a dedicated
 filename search. It searches filenames recursively through Local,
-Shared files, Received Files and unlocked LocalCrypt storage, including files and folders
+Shared Files, Received Files and unlocked LocalCrypt storage, including files and folders
 you have never opened. Results use compact filename rows with **…** actions;
 **Show in folder** reveals the item in the file browser. It does not search file contents or online remotes.
 While text is entered, results replace the collection buttons and lists.
@@ -47,7 +47,7 @@ contains Open, New and Search while Unlock remains directly available.
 
 In **New document**, enter a name and choose Plain text, Markdown or Notebook.
 Tap **Choose location** to leave the keyboard and open the folder browser. Select
-a folder in **Local**, **All files**, **Received Files** or an unlocked **LocalCrypt**
+a folder in **Local**, **Shared Files**, **Received Files** or an unlocked **Encrypted Copy**
 location. Changing the file type updates a matching document extension; a name
 without an extension receives the selected one. Tap **Create document** to create
 and open the file. On a narrow screen, **Back to name** keeps your chosen folder
@@ -58,16 +58,16 @@ The folder arrow navigates within the browser. Android Back dismisses folder
 entry or search and retraces folder navigation first. At the root it returns
 to naming on a narrow screen or exits when both steps are visible. **Cancel**
 returns directly to the screen where you started. The file is
-created in that folder and appears when you browse it from All files. **Save**
+created in that folder and appears when you browse it from Shared Files. **Save**
 writes edits back to the same file. LocalCrypt files stay encrypted on disk;
 cloud locations are read-only and receive changes through reviewed **Push**.
 New documents do not use the private saved-document store. Existing saved
 documents remain available in Documents.
 
-The folder browser starts at **All files**, the same root as Workspaces’
-**Browse All Files**. Open Local or Received Files to choose a folder; Up returns
-to All files from either collection. To make a subfolder, tap **New folder**,
-enter its name, then tap **Create folder**. The browser selects the new folder.
+The New Document folder browser starts at **Shared Files**. Choose **Local**
+or **Received Files** to browse those collections. Up returns to **Shared Files**
+from either collection. The Move picker uses the same location names.
+To make a subfolder, tap **New folder**, enter its name, then tap **Create folder**. The browser selects the new folder.
 Cancelling the folder entry keeps the current location and your filename.
 On Android this root is a list of locations;
 the form prompts you to choose a folder and keeps **Create document** disabled there. Errors

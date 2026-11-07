@@ -34,7 +34,7 @@ class NotebookPanelTests(unittest.TestCase):
         panel = self.app.notebook_panel
         self.app.loop.run_until_complete(panel.perform({'op': 'rename', 'name': 'Field notes'}))
         self.assertEqual(panel.view._native_reader_title(), 'Field notes')
-        self.assertEqual(panel.view._document_path(), f'Field notes\n\n{panel.repository.root / panel.key}')
+        self.assertEqual(panel.view._document_path(), 'Field notes\n\nNotebook draft')
         panel.dispose()
         self.assertIsNone(panel.view._document_path())
 

@@ -8,7 +8,7 @@ def document_locations(entry):
     if not remote_scope and entry.local is not None:
         if getattr(entry.local, 'private', False):
             from features.rclone.desktop_service import service
-            result.append(('LocalCrypt', lambda: service.localcrypt.open(entry.local.connection), False))
+            result.append(('Encrypted Copy', lambda: service.localcrypt.open(entry.local.connection), False))
         else:
             from commonUtils.runtime.resources.local import LocalFiles
             result.append(('Local', lambda: LocalFiles(entry.local.path), False))

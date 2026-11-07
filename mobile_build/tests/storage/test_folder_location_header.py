@@ -115,7 +115,7 @@ class FolderLocationTests(unittest.TestCase):
             self.assertEqual(header.storage_identity.children[-1].value,
                              ('Cloud' if online else 'On-device') +
                              ((' · Unlocked' if unlocked else ' · Locked') if encrypted else '') +
-                             (' · LocalCrypt' if encrypted and not online else ''))
+                             (' · Encrypted Copy' if encrypted and not online else ''))
             self.assertEqual(button.control_icon, 'back')
             self.assertEqual(button.accessible_name, 'Back')
 
@@ -125,17 +125,17 @@ class FolderLocationTests(unittest.TestCase):
         provider = SimpleNamespace(private=True, remote='Secret', client=SimpleNamespace(
             package_records=[dict(remotes=['Secret'], saved=False)]))
         header = FolderLocationHeader(toga.Label(''), icon_button('up', 'Parent folder'))
-        header.update_provider('', provider, name='LocalCrypt: Secret')
+        header.update_provider('', provider, name='Secret - Encrypted Copy')
         self.assertEqual(header.folder_name.value, 'Secret')
         self.assertEqual(header.storage_identity.children[-1].value,
-                         'On-device · Unlocked (Session Only) · LocalCrypt')
+                         'On-device · Unlocked (Session Only) · Encrypted Copy')
         screen = FolderScreen(None, SimpleNamespace(search_provider=provider), None,
-                              'LocalCrypt: Secret', '', 'browser')
+                              'Secret - Encrypted Copy', '', 'browser')
         self.assertEqual(screen.title, 'Secret')
         provider.client.package_records[0]['saved'] = True
         header.update_provider('', provider)
         self.assertEqual(header.storage_identity.children[-1].value,
-                         'On-device · Unlocked · LocalCrypt')
+                         'On-device · Unlocked · Encrypted Copy')
         screen.path = 'Books/Reference'
         self.assertEqual(screen.title, 'Reference')
 
@@ -163,7 +163,7 @@ class FolderLocationTests(unittest.TestCase):
                     return cls
                 backend = type('HeaderImpl', (), {'__module__': 'toga_iOS.widgets.box'})()
                 header = Mock(_impl=backend, _storage_kinds=[('storage_local', ''), ('folder_unlocked', '')],
-                              storage_identity=NS(children=[NS(text='On-device · Unlocked (Session Only) · LocalCrypt')]),
+                              storage_identity=NS(children=[NS(text='On-device · Unlocked (Session Only) · Encrypted Copy')]),
                               window=NS(_impl=NS(native=NS(bounds=NS(size=NS(width=390))))))
                 controller = NS(navigationItem=NS())
                 objc = NS(ObjCClass=factory, CGRect=lambda origin, size: (origin, size),
@@ -187,7 +187,7 @@ class FolderLocationTests(unittest.TestCase):
                 instances['UILabel'][-1].setContentCompressionResistancePriority.assert_called_once_with(1000, forAxis=0)
                 scroll.addSubview.assert_called_once_with(instances['UIStackView'][0])
                 self.assertEqual(instances['UILabel'][-1].text,
-                                 'On-device · Unlocked (Session Only) · LocalCrypt')
+                                 'On-device · Unlocked (Session Only) · Encrypted Copy')
 
     def test_root_navigation_returns_to_hub_even_when_cloud_busy(self):
         self.app.show_cloud(present=False)

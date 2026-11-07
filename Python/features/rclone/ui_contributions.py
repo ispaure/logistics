@@ -68,12 +68,12 @@ def _get_actions(entry: FolderEntry) -> list[UIAction]:
             item = entry.local.connection
             ui_actions.append(UIAction(name='Pull',
                 callback=lambda: actions.pull_encrypted_copy(entry.remote_name, config_path, item=item, review=True),
-                description='Cloud → LocalCrypt: update this encrypted copy. Review changes before downloading.'))
+                description='Cloud → encrypted copy: update this encrypted copy. Review changes before downloading.'))
         elif is_crypt and entry.local is None:
             from features.rclone.transfers.ui.pull_dialog import pull_new_copy
             ui_actions.append(UIAction(name='Pull',
                 callback=lambda: pull_new_copy(entry.remote_name, config_path),
-                description='Cloud → this device: choose encrypted LocalCrypt or readable Local files, then review.'))
+                description='Cloud → this device: choose an encrypted copy or readable local files, then review.'))
         else:
             association = getattr(entry.remote_context, 'item', None)
             ui_actions.append(UIAction(name='Pull',
@@ -155,7 +155,7 @@ def _get_remote_sources() -> list[RemoteFolderSource]:
         if item in represented_copies:
             continue
         sources.append(RemoteFolderSource(
-            name=f'{item.package.stem} — LocalCrypt',
+            name=f'{item.package.stem} — Encrypted Copy',
             get_remote_names=lambda item=item: [item.remote], context=CopyContext(item),
             get_local_folders=lambda item=item: [LocalCryptFolder(item)]))
     return sources

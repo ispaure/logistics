@@ -43,7 +43,11 @@ def choose_editor_resource(parent, mode, provider=None, name='', *, markdown=Fal
             if drive.exists() and str(drive) != local_root:
                 locations.append((str(drive), lambda drive=drive: (LocalFiles(drive), lambda: None)))
     from features.application import registry
-    for item in connections() if registry.is_feature_enabled('rclone') else ():
+    from collections import Counter
+    from services.folders.labels import encrypted_copy_label
+    copies = connections() if registry.is_feature_enabled('rclone') else ()
+    counts = Counter(item.remote for item in copies)
+    for item in copies:
         if item == getattr(provider, 'connection', None):
             continue
         def factory(item=item):
@@ -55,7 +59,8 @@ def choose_editor_resource(parent, mode, provider=None, name='', *, markdown=Fal
             except BaseException:
                 backend.close()
                 raise
-        locations.append((f'LocalCrypt · {item.remote} · {item.package.name}', factory))
+        label = item.remote if counts[item.remote] == 1 else f'{item.remote} · {item.package.name}'
+        locations.append((encrypted_copy_label(label), factory))
     if directory is None:
         directory = '' if provider else Path.home().relative_to(local_root).as_posix()
     return choose_resource(locations, parent=parent, mode=mode, name=name,

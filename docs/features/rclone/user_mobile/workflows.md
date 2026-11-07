@@ -1,5 +1,13 @@
 # Rclone mobile workflows
 
+Workspace naming uses **Local → Rclone Copies** and **Cloud → Rclone Remotes**.
+Both ordinary and encrypted copies belong under Rclone Copies; encrypted remotes
+belong under Rclone Remotes. Destination pickers label encrypted local copies
+`<foldername> - Encrypted Copy`; regular folders keep their names without a
+storage suffix. **Locked** / **Unlocked** describes access, not whether files are
+encrypted on disk. `LocalCrypt` remains the technical name in paths and settings.
+
+
 ## Android and iOS prototype
 
 The independent mobile app can import the same TXT-in-ZIP credential format into
@@ -105,7 +113,7 @@ The adjacent **•••** action button keeps explicit Browse Local/LocalCrypt/
 Pull and Push choices together. Mapped copies show Pull and Push direction.
 Delete local folder is separated and styled as destructive, and retains its
 confirmation. Transfer notifications use larger touch targets and an accessible
-dismiss label. Credential, Local, LocalCrypt, Pull and Push terminology is retained.
+dismiss label. Credential, Pull and Push terminology is retained; encrypted local copies use the Encrypted Copy caption.
 
 ### Android collection drive
 

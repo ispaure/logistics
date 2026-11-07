@@ -174,7 +174,7 @@ class _BrowserHost:
                 if self.closing:
                     return
                 if item is None:
-                    raise ValueError('This LocalCrypt folder has no valid credential mapping. Open a mapped copy or pull it again.')
+                    raise ValueError('This encrypted copy has no valid credential mapping. Open a mapped copy or pull it again.')
                 from features.rclone.localcrypt.ui.views import ensure_session
                 if not ensure_session(item.context, package=item.package, parent=self):
                     return
@@ -202,7 +202,7 @@ class _BrowserHost:
                 from features.rclone.localcrypt.ui.views import open_browser
                 open_browser(item, self)
             except Exception as error:
-                qt.QMessageBox.warning(self, 'Cannot open LocalCrypt', str(error))
+                qt.QMessageBox.warning(self, 'Cannot open encrypted copy', str(error))
             finally:
                 self._crypt_route_pending = False
         qt.QTimer.singleShot(0, self, open_copy)

@@ -18,7 +18,7 @@ class LocalCryptUI:
         self.crypt_open = toga.Button('Read encrypted copy', on_press=self.open_crypt, style=Pack(height=44))
         self.crypt_password = PasswordInput(placeholder='Inner ZIP password (if needed)', style=Pack(height=44))
         self.crypt_resume = toga.Button('Return to private reader/editor', on_press=self.resume_crypt, style=Pack(height=44))
-        return [toga.Label('LocalCrypt · encrypted offline copies'),
+        return [toga.Label('Encrypted Copies'),
                 self.crypt_selector, self.crypt_refresh, self.crypt_password, self.crypt_open, self.crypt_resume, self.build_file_manager()]
 
     async def refresh_crypt(self, widget=None, **kwargs):

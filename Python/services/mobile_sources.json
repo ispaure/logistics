@@ -49,6 +49,7 @@
     "folders/__init__.py",
     "folders/appearance.py",
     "folders/catalog.py",
+    "folders/labels.py",
     "folders/policy.py",
     "identifiers.py",
     "license_inventory.py",
