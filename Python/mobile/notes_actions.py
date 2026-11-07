@@ -122,7 +122,7 @@ async def offer_notes(app, entry, box, button, status):
                 if not valid() or app.navigation_generation != command_origin:
                     return
                 if vault_root(provider, root, rows) is None:
-                    raise ValueError('This folder no longer contains an .obsidian directory.')
+                    raise ValueError('This folder no longer has a Notes Library marker.')
                 from .obsidian import open_vault
                 await open_vault(app, provider, root, title=entry['name'], rows=rows)
             except (OSError, ValueError) as error:

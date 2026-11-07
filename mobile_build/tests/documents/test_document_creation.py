@@ -491,6 +491,78 @@ class DocumentCreationTests(unittest.TestCase):
                 self.app.loop.run_until_complete(picker.confirm_editor_file())
                 self.assertTrue(target.is_file(), picker.save_as_status.value)
 
+    def test_notes_library_creation_uses_storage_picker_and_opens_marked_folder(self):
+        import toga
+        from features.notes_library.notes import LIBRARY_MARKER, vault_root
+        from features.rclone.localcrypt.mobile.resources import CryptFiles
+        from mobile.incoming_files import inbox_path
+        from services.documents.locations import collection_path, use_shared_local, _shared_local_roots
+
+        app = self.app
+        shared_directory = TemporaryDirectory()
+        self.addCleanup(shared_directory.cleanup)
+        shared = Path(shared_directory.name)
+        use_shared_local(self.root, shared)
+        self.addCleanup(_shared_local_roots.pop, self.root)
+        app.cloud_client = CreationClient()
+        crypt = CryptFiles(self.root / 'LocalCryptFolders', app.cloud_client, 'Secret')
+        self.addCleanup(crypt.close)
+
+        async def exercise():
+            for label, destination in (
+                ('Local', collection_path(self.root)),
+                ('Received Files', inbox_path(self.root)),
+                ('Shared Files', shared),
+                ('LocalCrypt: Secret', None),
+            ):
+                with self.subTest(label=label):
+                    app.show_documents_hub()
+                    button = next(item for item in app.document_notes_list.children
+                                  if getattr(item, 'text', '') == 'New Notes Library…')
+                    await button.on_press()
+                    picker = app.editor_picker()
+                    self.assertTrue(picker.visible())
+                    await picker.browser_editor_location((label, ''))
+                    picker.show_new_folder()
+                    self.assertFalse(picker.picker_primary.enabled)
+                    picker.new_folder_name.value = 'Projects'
+                    await picker.create_picker_folder()
+                    picker.save_as_name.value = 'Journal'
+                    await picker.confirm_editor_file()
+                    owner = app.vault_browser
+                    self.assertIsNotNone(owner, picker.save_as_status.value)
+                    self.assertEqual(owner.root, 'Projects/Journal')
+                    self.assertFalse(picker.visible())
+                    self.assertEqual(vault_root(owner.provider, owner.root,
+                                                owner.provider.list(owner.root)), owner.root)
+                    marker = owner.root + '/' + LIBRARY_MARKER
+                    if destination is None:
+                        self.assertTrue(owner.provider.private)
+                        self.assertEqual(crypt._physical(marker).read_bytes(), b'cipher:')
+                    else:
+                        self.assertEqual((destination / marker).read_bytes(), b'')
+                    owner.dispose()
+
+        with (patch.object(app, 'existing_crypt_locations', return_value={'LocalCrypt: Secret': crypt}),
+              patch('services.documents.mobile_views.document_webview',
+                    side_effect=lambda resource=None, inline_video=False, **options: toga.WebView(**options))):
+            app.loop.run_until_complete(exercise())
+
+    def test_failed_notes_marker_write_removes_only_new_empty_folder(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from features.notes_library.notes import create_library
+
+        provider = LocalFiles(self.root)
+        with patch.object(provider, 'create_file', side_effect=OSError('Storage unavailable')):
+            with self.assertRaisesRegex(OSError, 'Storage unavailable'):
+                create_library(provider, '', 'Journal')
+        self.assertFalse((self.root / 'Journal').exists())
+
+        (self.root / 'Journal').mkdir()
+        with self.assertRaises(FileExistsError):
+            create_library(provider, '', 'Journal')
+        self.assertEqual(list((self.root / 'Journal').iterdir()), [])
+
     def test_notebook_name_preview_listing_validation_and_retry_use_notebook_format(self):
         from features.notebooks.notebook import Notebook
         local = self.root / 'LocalFiles'

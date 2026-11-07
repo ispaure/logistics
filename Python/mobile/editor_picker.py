@@ -8,7 +8,7 @@ from dataclasses import dataclass, replace
 
 import toga
 from toga.style.pack import COLUMN, ROW, NONE
-from commonUtils.runtime.operations import MutationIncomplete
+from commonUtils.runtime.operations import MutationIncomplete, OperationCancelled
 from commonUtils.runtime.resources.selection import ResourceSelection
 from commonUtils.runtime.resources.paths import resource_name
 from commonUtils.runtime.resources.provider import capabilities
@@ -343,7 +343,7 @@ class EditorPicker:
             roots = self.app.file_roots
         self.editor_storage_roots = destination_location_labels(roots)
         if self.app.feature_enabled('rclone'):
-            if getattr(destination_action, 'kind', '') == 'download':
+            if mode == 'folder' or getattr(destination_action, 'kind', '') == 'download':
                 unlocked = {}
                 existing = self.existing_crypt_locations(roots=unlocked)
                 # A loaded cipher is also a valid destination before its first
@@ -602,7 +602,10 @@ class EditorPicker:
             writable = False
         self.picker_new_folder.enabled = (self.operation.mode != 'open' and writable
                                           and capabilities(provider).create)
-        if self.operation.mode != 'open':
+        if self.operation.mode == 'folder':
+            self.picker_primary.enabled = (writable and capabilities(provider).create
+                and capabilities(provider).delete and not self.entering_creation_folder())
+        elif self.operation.mode != 'open':
             self.picker_primary.enabled = writable and all(
                 getattr(capabilities(provider), key) for key in ('create', 'rename', 'delete'))
             if self.operation.creation is not None:
@@ -619,7 +622,8 @@ class EditorPicker:
         self.fit_keyboard(getattr(self, '_compact_keyboard', False))
 
     def entering_creation_folder(self):
-        return self.creation is not None and self.new_folder_form in self.save_as_view.children
+        return ((self.creation is not None or self.operation.mode == 'folder')
+                and self.new_folder_form in self.save_as_view.children)
 
     def show_new_folder(self, widget=None, **kwargs):
         if not self.picker_new_folder.enabled:
@@ -630,19 +634,20 @@ class EditorPicker:
         self.new_folder_name.value = ''
         if self.new_folder_form not in self.save_as_view.children:
             self.save_as_view.insert(1, self.new_folder_form)
-        if self.creation is not None:
+        if self.entering_creation_folder():
             self.update_picker_actions()
         self.new_folder_name.focus()
 
     def hide_new_folder(self, widget=None, **kwargs):
         if hasattr(self, 'new_folder_form') and self.new_folder_form in self.save_as_view.children:
-            if self.creation is not None:
+            entering_folder = self.entering_creation_folder()
+            if entering_folder:
                 if self._work is not None:
                     return
                 from .keyboard import dismiss_picker_keyboard
                 dismiss_picker_keyboard(self, self.new_folder_name)
             self.save_as_view.remove(self.new_folder_form)
-            if self.creation is not None:
+            if entering_folder:
                 if self.save_as_status.value.startswith('Folder creation failed:'):
                     self.save_as_status.value = ''
                 self.update_picker_actions()
@@ -822,7 +827,8 @@ class EditorPicker:
             self.editor_picker_rows[label] = row
             self.browser_editor_selected(None)
         self.picker_entries.value = label
-        if not row['directory'] and self.operation.creation is None and self.operation.destination_action is None:
+        if (not row['directory'] and self.operation.mode != 'folder'
+                and self.operation.creation is None and self.operation.destination_action is None):
             self.save_as_name.value = row['name']
 
     async def browser_editor_file(self, row):
@@ -909,6 +915,8 @@ class EditorPicker:
             model = ResourceSelection(self.editor_provider(label), mode=self.operation.mode,
                                       extensions=self.picker_extensions())
             rows = await asyncio.to_thread(model.list, folder, cancelled=work.cancel.is_set)
+            if self.operation.mode == 'folder':
+                rows = [row for row in rows if row['directory'] and not row['name'].startswith('.')]
             if not self._accepts(work):
                 return False
             self.editor_picker_rows = {f'{i+1}. {"Folder" if row["directory"] else "File"}: {row["name"]}': row for i,row in enumerate(rows)}
@@ -976,9 +984,8 @@ class EditorPicker:
             if row['directory']:
                 self.picker_folder.value = row['path']
                 await self.refresh_editor_browser()
-            else:
-                if self.operation.creation is None:
-                    self.save_as_name.value = row['name']
+            elif self.operation.creation is None and self.operation.mode != 'folder':
+                self.save_as_name.value = row['name']
 
     async def confirm_editor_file(self, widget=None, **kwargs):
         if (self.name_panel is not None and self.panel is self.name_panel
@@ -989,6 +996,8 @@ class EditorPicker:
             await pending
         if self.operation.destination_action is not None:
             return await self.complete_destination()
+        if self.operation.mode == 'folder':
+            return await self.create_notes_library()
         if self.operation.mode == 'save':
             return await self.save_text_destination()
         if self.cloud_busy:
@@ -1014,7 +1023,8 @@ class EditorPicker:
         visible = dismissed or self.visible()
         if self._work is not None:
             self.cancel()
-            if self.operation.origin is not None or self.operation.destination_action is not None or self.operation.creation is not None:
+            if (self.operation.origin is not None or self.operation.destination_action is not None
+                    or self.operation.creation is not None or self.operation.mode == 'folder'):
                 self._restore_when_idle = (self.app.navigation_generation, dismissed)
             self.save_as_status.value = ('Stopping the move… Waiting for file cleanup.' if self.moving()
                 else 'Cancelling the operation. Your draft remains available.')
@@ -1046,6 +1056,40 @@ class EditorPicker:
                         return
                     return self.app.routes.back()
                 return self._restore_origin(origin)
+
+
+    async def create_notes_library(self):
+        from features.notes_library.notes import create_library
+        from .obsidian import open_vault
+
+        app = self.app
+        if self.cloud_busy or not self.picker_primary.enabled or not app.feature_enabled('notes_library'):
+            return
+        provider = self._listed_provider
+        parent, name = self.picker_folder.value, self.save_as_name.value
+        work = self._begin_work()
+        self.save_as_name.enabled = False
+        try:
+            root = await asyncio.to_thread(create_library, provider, parent, name,
+                                           cancelled=work.cancel.is_set)
+            if not self._accepts(work) or not app.feature_enabled('notes_library'):
+                return
+        except OperationCancelled:
+            return
+        except (OSError, ValueError) as error:
+            if self._accepts(work):
+                self.save_as_status.value = 'Library creation failed: ' + str(error)[:200]
+            return
+        finally:
+            self._finish_work(work)
+
+        self.clear()
+        app.show_documents_hub()
+        try:
+            await open_vault(app, provider, root, 'documents')
+        except (OSError, ValueError) as error:
+            await app.main_window.dialog(toga.ErrorDialog(
+                'Library created', 'The library could not be opened. ' + str(error)[:160]))
 
 
     async def save_text_destination(self, widget=None, **kwargs):
