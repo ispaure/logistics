@@ -151,6 +151,12 @@ class CollectionFiles(MobileLocalFiles):
         return local_folder_snapshot(self, path, cancelled=cancelled, names_only=True)
 
 
+def ordinary_index_provider(provider):
+    """Recognize filesystem adapters whose namespace the shared index can read."""
+    return (type(provider) in (LocalFiles, MobileLocalFiles, CollectionFiles)
+            and not provider.private and not getattr(provider, 'session_only', False))
+
+
 def local_folder_snapshot(provider, path='', *, cancelled=lambda: False, names_only=False):
     """List an ordinary mobile folder with provider guards at both boundaries."""
     path = provider.relative(path)

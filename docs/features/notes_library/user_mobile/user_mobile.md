@@ -172,6 +172,13 @@ lists, scroll positions and **Show more notes** limits. Switching between them
 restores that scope's query and completed results. An unfinished search is cancelled
 and resumes when you return to its scope.
 
+For ordinary local libraries, **File names** can show saved results from the
+Files directory index while it refreshes in the background. Search in documents
+reads supported files for the current query. Unlocked LocalCrypt libraries use
+the protected filename cache described in the [LocalCrypt guide](../../rclone/user_mobile/localcrypt.md).
+Closing a library reopened from Recent returns to the Home or Documents screen
+that opened it.
+
 Calendar starts on the current
 month; use its arrows to browse months. A dot marks a day with a note named
 `YYYY-MM-DD.md` anywhere in the library. Tap to open it, choosing a folder if

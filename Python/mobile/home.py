@@ -3,7 +3,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 
-from .appearance import accessible_name, surface
+from .appearance import accessible_name, action_button, surface
 from .hub_controls import HubSections, document_group, empty_document_row, heading
 
 
@@ -38,9 +38,8 @@ class HomeScreen:
             style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12))
         self.app._home_status_row = status_row
         self.home_continue = None
-        opener = surface(toga.Button('Open Document', on_press=self.open_hub_file,
-                                     style=Pack(height=48, flex=1)),
-                         background='alternate', foreground='accent', outlined=True)
+        opener = action_button(toga.Button('Open Document', on_press=self.open_hub_file,
+                                          style=Pack(height=48, flex=1)))
         opener._toolbar_symbol = 'folder'
         opener._toolbar_group = 'home-documents'
         self.home_actions = toga.Box(children=[opener],
@@ -48,8 +47,8 @@ class HomeScreen:
         self.home_content = box
         from .document_choices import available_choices
         if available_choices(self.app):
-            creator = toga.Button('New Document', on_press=self.new_hub_document,
-                                  style=Pack(height=48, flex=1, margin_left=8))
+            creator = action_button(toga.Button('New Document', on_press=self.new_hub_document,
+                                               style=Pack(height=48, flex=1, margin_left=8)))
             creator._toolbar_symbol = 'plus'
             creator._toolbar_group = 'home-documents'
             self.home_actions.add(creator)
@@ -69,8 +68,8 @@ class HomeScreen:
         from features.images.mobile.burst_camera import available, present
         if available(self.app):
             box.add(heading('Camera'))
-            box.add(toga.Button('Burst camera', on_press=lambda widget: present(self.app),
-                                style=Pack(height=48)))
+            box.add(action_button(toga.Button('Burst camera', on_press=lambda widget: present(self.app),
+                                              style=Pack(height=48))))
         self.home_sections = HubSections(box, overview_box, before=favourites)
         self.home_sections._home_primary_actions = self.home_actions
         self.home_sections._home_primary_buttons = tuple(self.home_actions.children)

@@ -75,6 +75,10 @@ Each search mode keeps its own query field, results, selected row, scroll positi
 and result limit. Switching modes restores completed results; an unfinished scan
 is cancelled and resumes when that mode is selected again.
 
+Filename search in ordinary local libraries reuses the Files directory index.
+Saved matches can appear while the index refreshes for the query. Search within
+documents reads supported Markdown and source text on demand.
+
 Calendar marks days with a `YYYY-MM-DD.md` note anywhere in the library. Select
 a day to open it, choosing a path when several notes share that date. A missing
 day asks before creating a note in the library root. **Refresh daily notes**

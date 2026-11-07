@@ -370,7 +370,7 @@ class LibraryDocuments:
 
         videos = {}
         html = self.host.preview(text, image_source=self.library.image_source(
-            path, cancelled=cancelled, on_video=remember_video))
+            path, cancelled=cancelled, on_video=remember_video, batch=True))
         html = self.data_view_html(html, active=active, base=base)
         def video_button(match):
             source = sources.get(unescape(match[1]))

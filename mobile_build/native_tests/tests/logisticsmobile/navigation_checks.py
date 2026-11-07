@@ -106,6 +106,17 @@ async def exercise_first_selection(app):
             assert app.body is app.routes.body(destination), ('Visible root disagrees', destination)
             assert app.body.children, ('First selection left an empty page', destination)
             samples.append(dict(round=round, destination=destination))
+            if get_os() is OS.IOS:
+                from mobile.fold_layout import has_fold
+                if has_fold(app, app.main_window):
+                    from .ui_review import home_document_menu
+                    home = adapter.navigation[host.destinations.index('home')]
+                    adapter.controller.selectedViewController = home
+                    app._apple_tab_selection_delegate.tabBarController_didSelectViewController_(
+                        adapter.controller, home)
+                    await asyncio.sleep(.15)
+                    assert host.state.destination == 'home'
+                    home_document_menu(app)
     app.show_home()
     return samples
 

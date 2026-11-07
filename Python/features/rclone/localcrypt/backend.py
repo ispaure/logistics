@@ -75,6 +75,11 @@ class CryptResources(CryptNoteLookup, LocalFiles):
             self.credential_grant = service.credentials.capture(self.context)
             from features.rclone.document_protection import DesktopDocumentProtection
             self.document_protection = DesktopDocumentProtection(self)
+            from commonUtils.filesystem.storage import cache_directory
+            from services.documents.credential_state import DesktopCredentialCipher
+            from .directory_index import DirectoryIndex
+            self._directory_index = DirectoryIndex(self, cache_directory(create=False) / 'LocalCryptNames',
+                                                   DesktopCredentialCipher(self))
             # remember() attaches to the current parent: reject an intervening
             # replacement instead of lending that generation stale settings.
             parent_grant.check()
@@ -448,4 +453,7 @@ class CryptResources(CryptNoteLookup, LocalFiles):
 
     def close(self):
         if self._cache.retire():
+            index = getattr(self, '_directory_index', None)
+            if index is not None:
+                index.close()
             session.forget(self.context)

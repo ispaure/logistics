@@ -355,7 +355,8 @@ class SessionTransitions:
         # closes must do this too, even without a visible-reader exit intent.
         for current, screens in host.routes.screens.items():
             index = next((i for i, (name, panel, _) in enumerate(screens)
-                          if name in ('private:' + key, 'reader:' + key, 'notebook:' + key, 'close:' + key,
+                          if name in ('private:' + key, 'reader:' + key, 'notebook:' + key,
+                                      'notes-library:' + key, 'close:' + key,
                                       'private-close:' + key)
                           or any(getattr(child, '_reader_session_id', None) == key for child in panel.children)), None)
             if index is not None:

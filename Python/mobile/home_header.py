@@ -25,9 +25,34 @@ def place_unlock(row, unlock, visible):
         row.remove(unlock)
 
 
+def use_document_menu(app, view):
+    if getattr(view, '_home_document_menu', None) is not None:
+        return
+    restore(view)
+    row = view._home_primary_actions
+    from .action_menu import NativeMenu
+    from .control_icons import icon_button
+    more = icon_button('overflow', 'Document actions')
+    more._toolbar_priority = True
+    def invoke(callback):
+        if app.active_host and app.native_host.state.destination == 'home':
+            callback()
+    more._home_commands = NativeMenu(more,
+        [(button.text, button.on_press) for button in view._home_primary_buttons],
+        invoke=invoke, context=lambda: app._impl.native, fallback=lambda: None)
+    view._home_document_menu = more
+    row.parent.remove(row)
+
+
 def sync(app, view):
     row = getattr(view, '_home_primary_actions', None)
     if row is None:
+        return False
+    from .fold_layout import division, has_fold
+    if getattr(view, '_home_document_menu', None) is not None or has_fold(app, app.main_window):
+        use_document_menu(app, view)
+        place_unlock(row, view._destination_actions[1][0], False)
+        view._home_inline_unlock = False
         return False
     from .ios_toolbar import vertical_edge, system_occlusions
     controller = app.native_host.adapter.content_controller('home')
@@ -44,7 +69,6 @@ def sync(app, view):
             row.insert(index, button)
     native, window = controller.view, app.main_window._impl.native
     origin = native.convertRect(native.bounds, toView=window).origin
-    from .fold_layout import division
     split = division(app, view) is not None or getattr(getattr(view, '_home_sections', None), 'paired', False)
     wants_unlock = bool(app.home_unlock_candidates())
     buttons = [*primary, *([unlock] if wants_unlock else [])]

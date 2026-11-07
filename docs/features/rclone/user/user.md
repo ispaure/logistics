@@ -394,9 +394,12 @@ and reject stale originals. Cancel before publication preserves the original;
 a cancellation after a completed replacement cannot undo that save. Use **Push**
 explicitly to upload local changes, and review its resolved backing destination.
 
-The private browser keeps filtering, locations and resources in memory. Persistent
-indexing, disk thumbnail caches, recent-file records and private comic/EPUB reading positions
-are disabled. Private EPUB bookmarks stay in the current session. Markdown Open
+The private browser keeps filtering, locations and resources in memory.
+LocalCrypt filename searches that use cached directory metadata can persist it
+as encrypted records when the credential ZIP key is available. With no ZIP key,
+that cache stays in memory for the unlocked session. Private thumbnails stay
+in memory. See [private reader history](../../../development/reader-state.md)
+for the separate position and bookmark settings. Markdown Open
 and Save As use the Local/LocalCrypt picker; temporary-file diagram rendering is disabled;
 images are limited to prefetched local resources inside the copy. Markdown files
 are limited to 8 MiB, folder listings to 10,000 entries, and prefetched Markdown

@@ -21,6 +21,47 @@ from tests.resources.localcrypt_cases import LocalCryptCase
 
 
 class LocalCryptStorageTests(LocalCryptCase):
+    def test_directory_index_without_zip_key_is_memory_only(self):
+        from features.rclone.localcrypt.directory_index import DirectoryIndex
+        from services.documents.credential_state import DesktopCredentialCipher
+
+        with TemporaryDirectory() as directory, crypt_fixture(directory, self.binary, pull=False) as f:
+            cache = f.root / 'directory-index'
+            f.provider._directory_index = DirectoryIndex(f.provider, cache, DesktopCredentialCipher(f.provider))
+            self.assertIn('note.md', {row['name'] for row in f.provider.indexed_list()})
+            self.assertFalse(cache.exists())
+            with patch.object(f.provider, 'list', side_effect=AssertionError('Expected a memory cache hit')):
+                self.assertIn('note.md', {row['name'] for row in f.provider.indexed_list()})
+
+    def test_directory_index_is_zip_bound_and_rechecks_names_after_mutation(self):
+        from io import BytesIO
+        import pyzipper
+        from features.rclone.localcrypt.directory_index import DirectoryIndex
+        from services.documents.credential_state import DesktopCredentialCipher
+
+        with TemporaryDirectory() as directory, crypt_fixture(
+                directory, self.binary, pull=False, state_password='index-test-password') as f:
+            cache = f.root / 'directory-index'
+            cipher = DesktopCredentialCipher(f.provider)
+            index = f.provider._directory_index = DirectoryIndex(f.provider, cache, cipher)
+            self.assertIn('note.md', {row['name'] for row in f.provider.indexed_list()})
+            file, = cache.glob('*.zip')
+            self.assertNotIn(b'note.md', file.read_bytes())
+            with pyzipper.AESZipFile(file) as archive:
+                archive.setpassword(b'incorrect')
+                with self.assertRaises(RuntimeError):
+                    archive.read('state.json')
+            index.close()
+            index = f.provider._directory_index = DirectoryIndex(f.provider, cache, cipher)
+            with patch.object(f.provider, 'list', side_effect=AssertionError('Expected a sealed cache hit')):
+                self.assertIn('note.md', {row['name'] for row in f.provider.indexed_list()})
+            f.provider.create_file('Added.txt', BytesIO(b'example'))
+            self.assertIn('Added.txt', {row['name'] for row in f.provider.indexed_list()})
+            session.forget(f.context)
+            self.assertFalse(index.rows)
+            with self.assertRaises(ValueError):
+                f.provider.indexed_list()
+
     def test_recursive_search_uses_one_listing_and_opens_nested_results(self):
         from commonUtils.search.providers import search_resources
         from io import BytesIO

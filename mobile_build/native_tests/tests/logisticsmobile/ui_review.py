@@ -8,6 +8,19 @@ from commonUtils.runtime.platform import get_os, OS
 TEST_STAGE = TestStage.REGRESSION
 
 
+def home_document_menu(app):
+    view = app.routes.body('home').children[0]
+    button = getattr(view, '_home_document_menu', None)
+    assert button is not None and view._home_primary_actions.parent is None
+    adapter = app.native_host.adapter
+    assert not adapter.navigation_for('home').isNavigationBarHidden()
+    item = button._ios_action_item
+    nav = adapter.content_controller('home').navigationItem
+    assert any(item in group.barButtonItems for group in nav.trailingItemGroups)
+    assert [str(action.title) for action in item.menu.children] == ['Open Document', 'New Document']
+    return button._home_commands
+
+
 async def wait_for_file_entry(app, path):
     """Native navigation presents its page before its asynchronous listing."""
     for _ in range(600):
@@ -203,7 +216,10 @@ async def exercise_ui_review(app):
         app.show_home()
         await asyncio.sleep(.2)
         action = home_browse_button(app.body)
-        if action is None and get_os() is OS.IOS:
+        if action is None and getattr(app.routes.body('home').children[0], '_home_document_menu', None) is not None:
+            menu = home_document_menu(app)
+            menu.invoke(menu.actions[0][1])
+        elif action is None and get_os() is OS.IOS:
             # In the Duo's vertical bar, UIKit projects the retained Home
             # button as a native bar item outside the content widget tree.
             from .fixtures import ios_toolbar_items

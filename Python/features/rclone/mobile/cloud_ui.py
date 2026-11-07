@@ -40,6 +40,7 @@ class CloudUI(LocalCryptUI):
             try:
                 from features.rclone.mobile.credential_vault import ProtectedVault
                 self.cloud_client = CloudClient(vault=ProtectedVault.for_app(self.app))
+                self.cloud_client.directory_index_root = self.app.private_root / 'Cache' / 'LocalCryptNames'
             except Exception:
                 self._cloud_setup_error = 'The native remote engine or device credential protection is unavailable.'
         self._cloud_prepared = True

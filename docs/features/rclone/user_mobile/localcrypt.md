@@ -38,6 +38,13 @@ and folders** opens a local browser with **Local files** and existing
 icons. Browsing reads basic filesystem information and decrypts LocalCrypt names;
 it does not open file contents, load covers or parse comic/EPUB metadata. Open a
 file to read it and load its reader metadata.
+
+LocalCrypt filename searches can reuse directory metadata while the copy is
+unlocked. With the credential ZIP key, the cache is saved as encrypted records
+and revalidated against the ciphertext directory before use. Without a ZIP key,
+the cache stays in memory and is cleared when the credential session ends.
+The cache contains names, types and file metadata. File contents are read
+through the provider when needed.
 The storage picker and **Parent folder** are visible directly in the local browser.
 Changing storage opens its root. Navigation supports tapping folder entries, **Parent folder** and **Back** through
 successful folder/storage visits. **Search** opens a full-width field and searches this folder and its subfolders

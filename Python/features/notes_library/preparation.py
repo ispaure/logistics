@@ -67,7 +67,7 @@ def prepare_document(library, path, *, current='', resolve_link=False,
             from services.documents.markdown import prepare_markdown
             stage('Preparing embedded media…')
             result.data, result.resources = prepare_markdown(provider, provider.root / path, data=data,
-                cancelled=cancelled, image_source=library.image_source(path, cancelled=cancelled))
+                cancelled=cancelled, image_source=library.image_source(path, cancelled=cancelled, batch=True))
         check_cancelled(cancelled)
         return result
     except BaseException:

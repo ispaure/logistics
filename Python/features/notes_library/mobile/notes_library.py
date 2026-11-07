@@ -102,10 +102,10 @@ def compact_file_row_padding(button):
 
 
 class VaultBrowser(LibraryDocuments, LibraryPanels):
-    def __init__(self, host, provider, root, destination):
+    def __init__(self, host, provider, root, destination, *, index_database=None):
         self.host, self.provider, self.destination = host, provider, destination
         self.release_provider = lambda: None
-        self.library = NotesLibrary(provider, root)
+        self.library = NotesLibrary(provider, root, index_database=index_database)
         self.root = self.library.root
         from features.notes_library.notes import library_name
         self.library_title = library_name(provider, self.root)
@@ -185,7 +185,12 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.links_refresh_task = None
         self.sidebar = host.drawers(self.tree, self.article, self.links)
         self.sidebar.document_web = self.web
-        self.sidebar.opening_swipes_enabled = lambda: not getattr(self.embedded, 'owns_document_swipes', False)
+        # The Markdown WebView decides which swipes belong to its tables.
+        # A native recognizer cannot distinguish a table pan from a pane swipe.
+        self.sidebar.opening_swipes_enabled = lambda: (
+            self.web.parent is not self.article
+            and not getattr(self.embedded, 'owns_document_swipes', False)
+        )
         self.sidebar.open_links = lambda: host.loop.create_task(self.show_links(toggle=False))
         self.sidebar.on_close = self.cancel_links
         self.links_button = self.host.presentation.icon_button(

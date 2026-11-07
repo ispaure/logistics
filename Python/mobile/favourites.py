@@ -162,6 +162,18 @@ def relocate(app, provider, source, destination=None):
             update_history()
 
 
+def relative_note(path, root):
+    """Normalize the saved root alias while keeping the relative path guarded."""
+    path, root = Path(path), Path(root)
+    if path.is_relative_to(root):
+        return path.relative_to(root).as_posix()
+    canonical = root.resolve()
+    for ancestor in path.parents:
+        if ancestor.resolve() == canonical:
+            return path.relative_to(ancestor).as_posix()
+    raise ValueError('The note is outside its saved Notes Library.')
+
+
 async def reopen(app, row, *, error_title='Open favourite'):
     source, opener = row['source'], row['opener']
     try:
@@ -177,7 +189,7 @@ async def reopen(app, row, *, error_title='Open favourite'):
             if source['type'] == 'local':
                 same = ((current.provider.root / current.root).resolve() == Path(opener['root']).resolve()
                         and not getattr(current.provider, 'private', False))
-                path = Path(source['path']).relative_to(current.provider.root).as_posix() if same else None
+                path = relative_note(source['path'], current.provider.root) if same else None
             else:
                 same = (source['type'] == 'crypt' and current.root == opener['root']
                         and getattr(current.provider, 'identity', None) == source['identity']
@@ -196,7 +208,7 @@ async def reopen(app, row, *, error_title='Open favourite'):
             from commonUtils.runtime.resources.local import LocalFiles
             path = Path(source['path'])
             library_root = Path(opener['root'])
-            provider, path = LocalFiles(library_root), path.relative_to(library_root).as_posix()
+            provider, path = LocalFiles(library_root), relative_note(path, library_root)
         elif source['type'] == 'crypt':
             from features.rclone.mobile.service import native_service
             from features.rclone.localcrypt.mobile.locations import LocalCryptLocation
@@ -210,7 +222,7 @@ async def reopen(app, row, *, error_title='Open favourite'):
         try:
             from .obsidian import open_vault
             root = '' if source['type'] == 'local' else opener['root']
-            owner = await open_vault(app, provider, root, 'documents')
+            owner = await open_vault(app, provider, root)
             if owner is not None:
                 return await owner.open_note(path)
         finally:

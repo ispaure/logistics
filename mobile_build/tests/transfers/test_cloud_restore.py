@@ -55,6 +55,33 @@ class CloudRestoreTests(IsolatedAsyncioTestCase):
         ready.set()
         await app.cloud_startup_task
 
+    async def test_background_restore_reprojects_home_unlock_without_tab_navigation(self):
+        ready = asyncio.Event()
+        state = SimpleNamespace(destination='home')
+        candidates = []
+        observed = []
+
+        async def restore():
+            await ready.wait()
+            candidates.clear()
+
+        def start():
+            candidates.append('Retained.zip')
+            return asyncio.create_task(restore())
+
+        app = SimpleNamespace(active_host=True, start_cloud_restore=start,
+            native_host=SimpleNamespace(state=state),
+            adaptive=SimpleNamespace(render=lambda: observed.append(tuple(candidates))))
+        task = asyncio.create_task(restore_cloud_in_background(app))
+        try:
+            await asyncio.sleep(.04)
+            self.assertEqual(observed, [('Retained.zip',)])
+        finally:
+            ready.set()
+            await task
+        self.assertEqual(observed, [('Retained.zip',), ()])
+        self.assertEqual(state.destination, 'home')
+
     async def test_retired_host_does_not_start_connections(self):
         app = SimpleNamespace(active_host=False, start_cloud_restore=Mock())
         await restore_cloud_in_background(app)
