@@ -216,12 +216,25 @@ async def exercise_continuous_ink(panel):
         raise AssertionError('Notebook drawing queue did not drain: ' + repr(status))
     count = len(panel.editor.notebook.page(panel.editor.index).strokes)
     for tool in panel.editor.state()['tools'].values():
+        # Select through the working brush slot. Directly changing the hidden
+        # select leaves a saved preset active and its settings can be restored.
+        selected = await panel.web.evaluate_javascript(r'''(()=>{
+            const working=$('brushToggle');
+            if(working.getAttribute('aria-pressed')!=='true')working.click();
+            if(working.getAttribute('aria-expanded')!=='true')working.click();
+            const brush=document.querySelector('.brush-card[data-tool="TOOL"]');
+            if(!brush || working.getAttribute('aria-expanded')!=='true')return false;
+            brush.click();
+            document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));
+            return chosenInk().tool===TOOL;
+        })()'''.replace('TOOL', str(tool)))
+        assert selected, tool
+        await drained()
         started = time.monotonic()
         payload = r'''(()=>{
             const capture=canvas.setPointerCapture;canvas.setPointerCapture=()=>{};
             let clears=0;const clear=ctx.clearRect.bind(ctx);ctx.clearRect=(...a)=>{clears++;clear(...a)};
             try{
-                $('tool').value=TOOL;$('tool').onchange();mode='ink';
                 const r=canvas.getBoundingClientRect();
                 for(let n=0;n<12;n++){
                     const event=i=>({pointerId:301+n,pointerType:'pen',clientX:r.left+25+i*2,
@@ -234,7 +247,7 @@ async def exercise_continuous_ink(panel):
                 }
                 return JSON.stringify({queued:queue.length,clears});
             }finally{canvas.setPointerCapture=capture;ctx.clearRect=clear}
-        })()'''.replace('TOOL', str(tool))
+        })()'''
         burst = json.loads(await panel.web.evaluate_javascript(payload))
         assert burst['queued'] == 12 and burst['clears'] == 0, burst
         await drained()
