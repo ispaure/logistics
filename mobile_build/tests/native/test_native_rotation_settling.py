@@ -33,7 +33,8 @@ class RotationSettlingTests(unittest.IsolatedAsyncioTestCase):
         app = NS(main_window=NS(_impl=NS(native=NS(windowScene=scene))))
         rotation = Mock(errors=['Error Domain=BSActionErrorDomain Code=1 response-not-possible'])
 
-        async def wait(predicate, **kwargs):
+        async def wait(predicate, *, timeout, message):
+            self.assertEqual(timeout, rotation_checks.IOS_ROTATION_ACK_TIMEOUT)
             self.assertFalse(predicate())
             scene.interfaceOrientation = 1
             self.assertTrue(predicate())

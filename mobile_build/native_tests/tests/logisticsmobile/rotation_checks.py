@@ -9,8 +9,9 @@ from pathlib import Path
 import sys
 
 from commonUtils.testing.rotation import NativeRotation, ORIENTATIONS
+from commonUtils.testing.settings import ROTATION_TIMEOUT
 from commonUtils.testing.waiting import wait_until, wait_for_assertion
-from .settings import ROTATION_SETTLE, CONTROL_SETTLE_TIMEOUT
+from .settings import ROTATION_SETTLE, IOS_ROTATION_ACK_TIMEOUT, CONTROL_SETTLE_TIMEOUT
 
 
 def panel_state(app):
@@ -88,13 +89,13 @@ async def rotate(app, orientation, *, settle=ROTATION_SETTLE, timeout=None):
             return scene is not None and int(scene.interfaceOrientation) == ORIENTATIONS[orientation][1]
         return rotation.acknowledged(orientation)
 
+    if timeout is None:
+        timeout = IOS_ROTATION_ACK_TIMEOUT if sys.platform == 'ios' else ROTATION_TIMEOUT
     with section(app, 'rotation-dispatch', orientation=orientation):
         rotation.request(orientation, on_rejected=rejected)
     try:
         with section(app, 'rotation-acknowledgement', orientation=orientation):
-            from commonUtils.testing.settings import ROTATION_TIMEOUT
-            await wait_until(acknowledged,
-                             timeout=ROTATION_TIMEOUT if timeout is None else timeout,
+            await wait_until(acknowledged, timeout=timeout,
                              message='Native rotation did not complete: ' + orientation)
     except AssertionError:
         if sys.platform == 'ios':
