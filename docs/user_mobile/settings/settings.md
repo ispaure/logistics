@@ -249,9 +249,10 @@ appearance, separately from the app's system-following surfaces and reader theme
 ### File storage
 
 Files shared from other apps appear in **Received Files** in Workspaces.
-**Browse All Files** omits the dedicated **Local** and **Received Files** folders;
-file destination pickers still offer them. On iOS, Files shows **Logisticks/Received Files** beside
-**Local**. Android keeps Received Files alongside the selected Local and LocalCrypt
+In the Workspaces browser, **Shared Files**, **Local** and **Received Files**
+are separate locations. File destination pickers use those same names.
+On iOS, Files shows **Logisticks/Received Files** beside **Local**. Android
+keeps Received Files alongside the selected Local and LocalCrypt
 collections. Legacy Inbox contents are copied without overwriting existing files;
 see [receiving files](../documents/workflows.md#receive-files-from-another-app).
 

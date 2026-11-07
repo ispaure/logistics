@@ -26,7 +26,7 @@ discovered Notes libraries followed by configured Comics libraries, under
 
 The upper-right **Search documents** magnifier beside Open and New opens a dedicated
 filename search. It searches filenames recursively through Local,
-Shared files, Received Files and unlocked LocalCrypt storage, including files and folders
+Shared Files, Received Files and unlocked LocalCrypt storage, including files and folders
 you have never opened. Results use compact filename rows with **…** actions;
 **Show in folder** reveals the item in the file browser. It does not search file contents or online remotes.
 While text is entered, results replace the collection buttons and lists.
@@ -64,10 +64,10 @@ cloud locations are read-only and receive changes through reviewed **Push**.
 New documents do not use the private saved-document store. Existing saved
 documents remain available in Documents.
 
-The folder browser starts at **Shared Files**, the same shared root as Workspaces.
-Choose **Local** or **Received Files** to browse those folders. Up returns to
-**Shared Files** from either collection. To make a subfolder, tap **New folder**,
-enter its name, then tap **Create folder**. The browser selects the new folder.
+The New Document folder browser starts at **Shared Files**. Choose **Local**
+or **Received Files** to browse those collections. Up returns to **Shared Files**
+from either collection. The Move picker uses the same location names.
+To make a subfolder, tap **New folder**, enter its name, then tap **Create folder**. The browser selects the new folder.
 Cancelling the folder entry keeps the current location and your filename.
 On Android this root is a list of locations;
 the form prompts you to choose a folder and keeps **Create document** disabled there. Errors

@@ -355,13 +355,13 @@ class NotebookStorageTests(unittest.TestCase):
         self.stroke(panel)
         self.run_async(self.app.editor_picker().show_notebook_destination(panel))
         picker = self.app.editor_picker()
-        picker.save_as_storage.value = 'Local files'
+        picker.save_as_storage.value = 'Local'
         picker.save_as_name.value = 'Copy.rmdoc'
         self.run_async(picker.refresh_editor_browser())
         with patch.object(self.app.main_window, 'dialog', return_value=False):
             self.run_async(picker.confirm_editor_file())
         self.assertTrue(panel.session.transient)
-        self.assertFalse((picker.editor_provider('Local files').root / 'Copy.rmdoc').exists())
+        self.assertFalse((picker.editor_provider('Local').root / 'Copy.rmdoc').exists())
         with patch.object(self.app.main_window, 'dialog', return_value=True):
             self.run_async(picker.confirm_editor_file())
         self.assertFalse(panel.session.transient, picker.save_as_status.value)

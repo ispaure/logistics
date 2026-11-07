@@ -296,7 +296,7 @@ class CreationProbe(LogisticsMobile):
         picker = self.editor_picker()
         assert self.store.documents() == before
         assert not any(label.startswith('Remote') for label in picker.editor_storage_roots)
-        assert picker.editor_picker_location == ('All files', ''), (picker.panel is picker.name_panel,
+        assert picker.editor_picker_location == ('Shared Files', ''), (picker.panel is picker.name_panel,
             picker.cloud_busy, picker.effective_name.text, picker.save_as_status.value)
         picker.save_as_storage.value = location
         # UIKit may finish its push after the async action returns. Match a
@@ -336,13 +336,13 @@ class CreationProbe(LogisticsMobile):
         await form.choose_creation_location()
         await asyncio.sleep(.3)
         picker = self.editor_picker()
-        assert picker.editor_picker_location == ('All files', ''), (picker.panel is picker.name_panel,
+        assert picker.editor_picker_location == ('Shared Files', ''), (picker.panel is picker.name_panel,
             picker.cloud_busy, picker.effective_name.text, picker.save_as_status.value)
         row = next(row for row in picker.editor_picker_rows.values() if row['name'] == 'Local')
         assert await picker.browser_editor_folder(row), picker.save_as_status.value
         assert picker.picker_parent.enabled
         await picker.parent_editor_folder()
-        assert picker.editor_picker_location == ('All files', ''), (picker.panel is picker.name_panel,
+        assert picker.editor_picker_location == ('Shared Files', ''), (picker.panel is picker.name_panel,
             picker.cloud_busy, picker.effective_name.text, picker.save_as_status.value)
         assert await picker.browser_editor_folder(row), picker.save_as_status.value
         picker.show_new_folder()

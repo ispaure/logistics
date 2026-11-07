@@ -87,10 +87,10 @@ async def exercise_notebooks(app, *, return_to_home=True):
     # Native Selection change callbacks can start another directory read after
     # the push; wait for actual readiness rather than a fixed animation delay.
     for _ in range(200):
-        if picker.editor_picker_location == ('All files', '') and not picker.cloud_busy:
+        if picker.editor_picker_location == ('Shared Files', '') and not picker.cloud_busy:
             break
         await asyncio.sleep(.1)
-    assert picker.editor_picker_location == ('All files', ''), (picker.editor_picker_location, picker.save_as_status.value)
+    assert picker.editor_picker_location == ('Shared Files', ''), (picker.editor_picker_location, picker.save_as_status.value)
     row = next(row for row in picker.editor_picker_rows.values() if row['name'] == 'Local')
     assert await picker.browser_editor_folder(row), picker.save_as_status.value
     assert picker.effective_name.text == 'Save as: Notebook QA.rmdoc'

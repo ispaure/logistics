@@ -66,7 +66,7 @@ class EditorPickerTests(unittest.TestCase):
         owner = SimpleNamespace(session=None, privacy_gate=None, document=None,
             editor=SimpleNamespace(notebook=Notebook.new('Destination check')))
         self.app.loop.run_until_complete(picker.show_notebook_destination(owner))
-        self.assertTrue({'Local files', 'Shared files', 'Received Files'} <=
+        self.assertTrue({'Local', 'Shared Files', 'Received Files'} <=
                         {row.value for row in picker.save_as_storage.items})
         received = picker.editor_provider('Received Files')
         self.assertTrue(self.app.loop.run_until_complete(
@@ -74,8 +74,8 @@ class EditorPickerTests(unittest.TestCase):
         self.assertIs(picker._listed_provider, received)
         self.assertTrue(picker.picker_primary.enabled)
         self.app.loop.run_until_complete(picker.browser_editor_location(
-            ('Shared files', collection_path(self.app.private_root).name)))
-        self.assertEqual(picker.save_as_storage.value, 'Local files')
+            ('Shared Files', collection_path(self.app.private_root).name)))
+        self.assertEqual(picker.save_as_storage.value, 'Local')
         self.assertEqual(picker.picker_folder.value, '')
         self.assertTrue(picker.picker_primary.enabled)
         self.assertEqual(picker.save_as_name.value, 'Destination check.rmdoc')
@@ -508,7 +508,7 @@ class EditorPickerTests(unittest.TestCase):
         (root / 'Notes').mkdir()
         (root / 'Notes/existing.md').write_bytes(b'original')
         app.loop.run_until_complete(app.show_text_destination('draft.md', b'draft'))
-        row = picker.editor_provider('Local files').entry('Notes/existing.md')
+        row = picker.editor_provider('Local').entry('Notes/existing.md')
         picker.browser_editor_selected(row)
         app.loop.run_until_complete(picker.browser_editor_file(row))
         self.assertEqual(picker.picker_folder.value, 'Notes')
@@ -569,9 +569,9 @@ class EditorPickerTests(unittest.TestCase):
         return picker, source
 
     async def choose_ordinary_save_destination(self, picker):
-        self.assertTrue(await picker.browser_editor_location(('Local files', '')))
+        self.assertTrue(await picker.browser_editor_location(('Local', '')))
         self.assertIn('Plaintext', picker.picker_destination.text)
-        return picker.editor_provider('Local files').root
+        return picker.editor_provider('Local').root
 
     def test_private_provider_text_save_as_decline_preserves_draft(self):
         from services.session_auth import ResumePassword
