@@ -199,8 +199,6 @@ def install():
                 changed = compact_apple_reader(container) or changed
             if changed and container.content is not None:
                 container.content.interface.refresh()
-            from .scroll_edges import reserve_container
-            reserve_container(container)
             # Observe effective geometry, not the intermediate safe layout.
             notify_viewport(container)
         finally:
