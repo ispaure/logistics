@@ -32,14 +32,14 @@ class MobileRenameReferenceTests(unittest.TestCase):
         async def exercise():
             owner = await open_vault(app, self.provider, 'Vault', 'documents')
             self.assertTrue(await owner.open_note(source))
-            move = owner.library.move
+            move = owner.library.move_with_change
             def committed_move(*args, **kwargs):
                 result = move(*args, **kwargs)
                 committed.set()
                 if not release.wait(4):
                     raise RuntimeError('Rename test worker was not released')
                 return result
-            with patch.object(owner.library, 'move', side_effect=committed_move):
+            with patch.object(owner.library, 'move_with_change', side_effect=committed_move):
                 task = asyncio.create_task(owner.move_entry_to(source, target))
                 try:
                     self.assertTrue(await asyncio.to_thread(committed.wait, 3))
@@ -64,13 +64,13 @@ class MobileRenameReferenceTests(unittest.TestCase):
         started, release = Event(), Event()
         async def exercise():
             owner = await open_vault(app, self.provider, 'Vault', 'documents')
-            move = owner.library.move
+            move = owner.library.move_with_change
             def pending_move(*args, **kwargs):
                 started.set()
                 if not release.wait(4):
                     raise RuntimeError('Rename test worker was not released')
                 return move(*args, **kwargs)
-            with patch.object(owner.library, 'move', side_effect=pending_move):
+            with patch.object(owner.library, 'move_with_change', side_effect=pending_move):
                 task = asyncio.create_task(owner.move_entry_to(source, target))
                 try:
                     self.assertTrue(await asyncio.to_thread(started.wait, 3))
