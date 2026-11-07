@@ -84,6 +84,9 @@ class LocalDocumentSearchTests(TestCase):
         app.show_documents_hub()
         app.publish_document_search(hits, [])
         rows = list(widgets(app.document_search_results))
+        titles = [w for w in rows if isinstance(w, toga.Button) and w.text in {hit['name'] for hit in hits}]
+        self.assertEqual(len(titles), len(hits))
+        self.assertTrue(all(button.style.flex == 1 for button in titles))
         self.assertFalse(any(isinstance(w, toga.Label) and 'Nested/' in w.text for w in rows))
         menus = [w._document_search_menu for w in rows if hasattr(w, '_document_search_menu')]
         self.assertEqual(len(menus), len(hits))
