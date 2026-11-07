@@ -129,6 +129,8 @@ class NativeDrawingTools:
             self.buttons[name] = button
             if button.style.display != 'none':
                 self.strip.add(button)
+        # Keep the flattened iOS controls hidden until the canvas yields its toolbar.
+        self.strip.style.visibility = 'hidden'
         self.strip.style.width = 44 * len(self.strip.children)
         if before is None:
             leading, gap = self.title_spacers
@@ -238,16 +240,13 @@ class NativeDrawingTools:
         # Keep observing, with native buttons hidden until a lease is available.
         value = json.loads(raw) if raw is not None else None
         if value is None:
-            self.strip._impl.native.hidden = True
+            self.strip.style.visibility = 'hidden'
             for button in self.buttons.values():
-                # Toga iOS mounts the button views beside the box view.
-                button._impl.native.hidden = True
                 button.enabled = False
             return
         if set(value) != set(self.buttons) or any(type(row.get(key)) is not bool
                 for row in value.values() for key in ('disabled', 'active')):
             raise ValueError('The notebook drawing controls are not ready.')
-        self.strip._impl.native.hidden = False
         surface = panel.app.presentation.surface
         visible_index = 0
         for name, row in value.items():
@@ -261,7 +260,6 @@ class NativeDrawingTools:
                     self.strip.insert(visible_index, button)
                 elif not visible and button.parent is self.strip:
                     self.strip.remove(button)
-            button._impl.native.hidden = not visible
             button.enabled = visible and not (row['disabled'] or panel.busy or panel.native_input_pending)
             if visible and name.startswith('preset-'):
                 self.paint_preset(button, row, panel.app.presentation.accessible_name)
@@ -271,6 +269,7 @@ class NativeDrawingTools:
         if 'add-preset' in value and self.strip.style.width != width:
             self.strip.style.width = width
             self.reflow_landscape()
+        self.strip.style.visibility = 'visible'
 
     @staticmethod
     def paint_preset(button, row, accessible_name):

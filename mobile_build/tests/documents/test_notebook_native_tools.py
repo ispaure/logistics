@@ -24,7 +24,7 @@ class NativeToolsTests(unittest.IsolatedAsyncioTestCase):
         self.enterContext(patch.object(self.manager, 'visible', return_value=True))
         self.manager.web = self.panel.web
         self.manager.header = NS(parent=object(), remove=unittest.mock.Mock())
-        self.manager.strip = NS(parent=self.manager.header, _impl=NS(native=NS(hidden=False)))
+        self.manager.strip = NS(parent=self.manager.header, style=NS(visibility='hidden'))
         self.manager.buttons = {name:NS(enabled=False, _impl=NS(native=NS(hidden=False))) for name in TOOLS}
         self.manager.anchor = lambda name: [100, -48, 44, 48]
         self.state = {name:dict(disabled=name == 'redo', active=name == 'pen') for name in TOOLS}
@@ -103,14 +103,13 @@ class NativeToolsTests(unittest.IsolatedAsyncioTestCase):
             await self.manager.refresh()
             self.assertIs(self.manager.strip, strip)
             self.assertIs(strip.parent, self.manager.header)
-            self.assertTrue(strip._impl.native.hidden)
-            self.assertTrue(all(button._impl.native.hidden and not button.enabled for button in buttons.values()))
+            self.assertEqual(strip.style.visibility, 'hidden')
+            self.assertTrue(all(not button.enabled for button in buttons.values()))
         await self.manager.refresh()
         self.assertIs(self.manager.strip, strip)
-        self.assertFalse(strip._impl.native.hidden)
+        self.assertEqual(strip.style.visibility, 'visible')
         for name, button in buttons.items():
             self.assertIs(self.manager.buttons[name], button)
-            self.assertFalse(button._impl.native.hidden)
             self.assertEqual(button.enabled, not self.state[name]['disabled'])
 
     async def test_new_strip_waits_for_native_attachment_before_querying(self):
