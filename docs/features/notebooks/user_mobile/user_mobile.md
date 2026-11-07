@@ -46,9 +46,11 @@ horizontally on narrow phones to reach every tool. Android's **Close (X)** and
 title, Close, page overview, template/layers, view/input and actions controls;
 Duo places these in its side rail when applicable. In narrow iPhone portrait
 windows, including the folded Duo, the notebook name and location are centered
-above the drawing tools. In wide landscape layouts, the file name and storage
-label are left-aligned. On Duo, the same drawing toolbar and brush icons stay
-available as you change orientation. The swipe-to-add-page control stays inside
+above the drawing tools. In wide iPhone Duo and iPad landscape windows with enough room, the filename
+and storage label sit near the first third of the usable header, and the
+drawing tools sit near the second third. The header leaves space at both
+edges. On Duo, the same drawing toolbar and brush icons stay available as
+you change orientation. The swipe-to-add-page control stays inside
 the area beside the side rail.
 Tap the active brush to open the drawer for brush and ink color choices. The reader accounts
 for space occupied by system activity. Choose **Notebook actions → Hide tools**
@@ -271,8 +273,10 @@ across reopenings. The size remains active while you work in the editor.
 
 ## Saving from Notes Library
 
-Writable notebooks on persistent storage save when you open another document or
-close the library. A failed save keeps the drawing open so you can retry. Session-only
+In wide iPhone Duo and iPad landscape windows, the drawing tools share the row
+with previous and next note when the document pane has room. In smaller panes
+the drawing strip stays just above the paper. Writable notebooks on persistent
+storage save when you open another document or close the library. A failed save keeps the drawing open so you can retry. Session-only
 storage still asks before leaving a dirty drawing. For writable notebooks, use
 **Note actions → Save and Close** to save pending edits and close the library.
 
