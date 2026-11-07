@@ -55,8 +55,8 @@ Logistics’ shared Files directory, showing other files and folders saved there
 **Shared Files** shows the other public files and folders, omitting the dedicated
 **Local** and **Received Files** collections. Both collections remain available in Apple’s Files app
 and in destination pickers. No files are moved or duplicated.
-Workspaces lists downloaded/synced copies individually under Local → Rclone.
-Local → Others shows Received Files and Shared Files. **Shared Files** appears underneath
+Workspaces lists downloaded/synced copies individually under Local → Rclone Copies.
+Local → On This Phone shows Received Files and Shared Files. **Shared Files** appears underneath
 the folder list and opens the shared directory on iOS.
 On Android, this browser may be empty when there are no other public files.
 When you open a local folder directly from Workspaces, Back from that folder
@@ -251,7 +251,7 @@ backgrounds and explicit sort controls.
 Open a remote and choose **Pull…**. A selected folder is the source; otherwise
 it uses the currently browsed folder, including the remote root. If a matching
 local mapping already exists, Pull reuses that destination. New copies offer
-**Local** (readable files) or **LocalCrypt** (original encrypted names and bytes).
+**Local** (readable files) or **Encrypted Copy** (original encrypted names and bytes).
 Transfer confirmations use rclone path notation: `Remote:` for the configured
 remote root and `Remote:folder/subfolder` for a folder within it. “Root” is not
 added as a folder name.

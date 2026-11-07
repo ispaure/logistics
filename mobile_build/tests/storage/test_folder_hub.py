@@ -96,7 +96,7 @@ class FolderHubTests(unittest.TestCase):
             vault.root.mkdir()
             cache = CredentialPackages(vault, client)
             cache.remember(SimpleNamespace(name='Personal.zip', data=PACKAGE), {'Secret': 'a' * 64})
-            copy = dict(name='Secret', source='LocalCrypt', kind='crypt', value='LocalCrypt: Secret', remote='Secret')
+            copy = dict(name='Secret', source='LocalCrypt', kind='crypt', value='Secret - Encrypted Copy', remote='Secret')
             with patch.object(app, 'retained_packages', return_value=cache), \
                     patch.object(app, 'refresh_hub_crypt_locations', new_callable=AsyncMock), \
                     patch.object(app, 'existing_crypt_locations', return_value={}):
@@ -113,7 +113,7 @@ class FolderHubTests(unittest.TestCase):
                 with patch.object(app, 'show_files', new_callable=AsyncMock) as browse:
                     app.credential_unlock_password.value = 'correct'
                     app.loop.run_until_complete(app.credential_unlock_button.on_press())
-                    browse.assert_awaited_once_with(location=('LocalCrypt: Secret', ''))
+                    browse.assert_awaited_once_with(location=('Secret - Encrypted Copy', ''))
                 self.assertTrue(client.loaded)
                 self.assertFalse(app.cloud_busy)
 
@@ -367,7 +367,7 @@ class FolderHubTests(unittest.TestCase):
             directory = app.storage_root
             app.show_cloud(present=False)
             app.show_locations()
-            app.hub_crypt_roots = {'LocalCrypt: Secret': ('Secret', 'a' * 64)}
+            app.hub_crypt_roots = {'Secret - Encrypted Copy': ('Secret', 'a' * 64)}
             path = app.private_root / 'LocalCryptFolders' / ('a' * 64)
             with patch.object(app, 'existing_crypt_locations', side_effect=AssertionError('Native discovery')):
                 self.assertTrue(app.loop.run_until_complete(app.refresh_folder_hub()))
@@ -602,7 +602,7 @@ class FolderHubTests(unittest.TestCase):
                 self.assertFalse(app.folder_picker_header.children)
                 self.assertNotIn('Comics', app.folder_buttons)
                 app.change_folder_source('rclone')
-                self.assertFalse(app.folder_local_header.children)
+                self.assertEqual(list(app.folder_local_header.children), [app.folder_cloud_tabs])
                 self.assertEqual(list(app.folder_picker_header.children), [app.folder_credential_row])
                 self.assertEqual(app.folder_credential_row.children[0].text, 'Credential')
                 self.assertEqual(app.folder_credential.value, 'All')

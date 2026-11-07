@@ -802,15 +802,15 @@ not establish native Duo fold-gesture support.
 
 ## Workspaces and file browser naming
 
-The Local source retains separate Rclone and Others tree views. Classification
+The Local source retains separate Rclone Copies and On This Phone tree views. Classification
 uses each local copy's remote association, including mapped LocalCrypt copies;
-Others owns only Received Files and Shared Files. Mixed catalog entries keep
+On This Phone owns only Received Files and Shared Files. Mixed catalog entries keep
 only the selected group's copies, while managed entries retain their remote
 actions. Others renders literal folder names; remote naming groups remain
-available in Rclone. Local → Rclone also shows the Credential filter, defaulting
+available in Rclone Copies. Local → Rclone Copies also shows the Credential filter, defaulting
 to All when entering from another source or local subtab. It filters managed
 plaintext and LocalCrypt copies by their credential association, including
-offline copies; Local → Others remains unfiltered. Picker destinations include existing encrypted copies and
+offline copies; Local → On This Phone remains unfiltered. Picker destinations include existing encrypted copies and
 linked pull targets, without synthesizing empty roots for every loaded remote.
 Android's virtual location root disables publication and explains the required
 folder choice. Picker status uses a fitted label mounted only when nonempty.
@@ -1358,7 +1358,7 @@ Documents root separately from the managed Local directory. The app-owned
 mutations. Its `include_collections` listing option defaults to true for pickers and
 the Shared Files browser, including recursive root search. Android's `DeviceFiles` uses the same option without
 exposing private app storage. This changes listings only, not filesystem exposure.
-Local → Rclone lists downloaded/synced copies individually. Local → Others
+Local → Rclone Copies lists downloaded/synced copies individually. Local → On This Phone
 shows only Received Files and Shared Files; ordinary folders stay inside the browser. The root choice is marked `browser_root` and rendered as a
 **Shared Files** folder button below the folder tree, using the same row
 surface, title metrics and folder icon as Received Files, without a workspace
@@ -1879,3 +1879,14 @@ The activity gate requires measured growth and contraction at unchanged window
 dimensions. Native collision checks intersect actual clipping ancestors: UIKit
 retains offscreen tab views when its bar collapses to a destination selector.
 Raw frames and hit-test results remain in the local report for review.
+
+## Workspace display labels and credential refresh
+
+Source/filter keys (`Rclone`, `Others`, `LocalCrypt`) remain technical identifiers.
+The selectors display Rclone Copies, On This Phone (On This Tablet on tablets),
+and Cloud's single Rclone Remotes tab. Desktop uses On This Computer and retains
+Dropbox. Picker captions use `<foldername> - Encrypted Copy`; disk paths are unchanged.
+Credential publication refreshes retained workspace trees even beside an open
+browser or during a transfer. Discovery reads published metadata/local names and
+does not acquire the busy remote bridge. Regression coverage checks retained row
+identity and lock/unlock transitions while a browser route and transfer are active.

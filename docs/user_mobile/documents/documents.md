@@ -47,7 +47,7 @@ contains Open, New and Search while Unlock remains directly available.
 
 In **New document**, enter a name and choose Plain text, Markdown or Notebook.
 Tap **Choose location** to leave the keyboard and open the folder browser. Select
-a folder in **Local**, **Shared Files**, **Received Files** or an unlocked **LocalCrypt**
+a folder in **Local**, **Shared Files**, **Received Files** or an unlocked **Encrypted Copy**
 location. Changing the file type updates a matching document extension; a name
 without an extension receives the selected one. Tap **Create document** to create
 and open the file. On a narrow screen, **Back to name** keeps your chosen folder

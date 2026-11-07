@@ -17,6 +17,21 @@ class EditorResourcePickerTests(QtTestCase):
     def setUpClass(cls):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
+    def test_encrypted_destination_names_put_folder_first_and_disambiguate_packages(self):
+        from types import SimpleNamespace
+        from services.documents.ui.editors import choose_editor_resource
+        copies = [SimpleNamespace(remote=name, package=Path(package)) for name, package in
+                  [('Personal', 'keys.zip'), ('Shared', 'one.zip'), ('Shared', 'two.zip')]]
+        with patch('features.rclone.localcrypt.mapping.connections', return_value=copies), \
+             patch('features.rclone.storage.install_local_storage_policy'), \
+             patch('features.application.registry.is_feature_enabled', return_value=True), \
+             patch('services.documents.ui.editors.choose_resource') as choose:
+            choose_editor_resource(None, 'save')
+        names = [name for name, _ in choose.call_args.args[0]]
+        self.assertEqual(names[-3:], ['Personal - Encrypted Copy',
+                                     'Shared · one.zip - Encrypted Copy',
+                                     'Shared · two.zip - Encrypted Copy'])
+
     def test_private_markdown_loads_images_without_disk_cache(self):
         from services.documents.ui.editors import prepare_editor, make_private_editor
         with self.temporary_directory() as directory:

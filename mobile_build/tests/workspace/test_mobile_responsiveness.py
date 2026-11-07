@@ -129,6 +129,28 @@ class ResponsivenessTests(unittest.TestCase):
             app.change_folder_source('Local')
             self.assertEqual(icon(), 'folder_locked')
 
+    def test_credential_changes_refresh_retained_tree_beside_browser_while_busy(self):
+        app = self.app
+        app.cloud_client = SimpleNamespace(generation=1, package_records=(), cancel=lambda: None)
+        retained = [dict(zip='Fixture.zip', remotes=['Secret'], crypt_remotes=['Secret'])]
+        with patch.object(app, 'retained_credential_associations', return_value=retained):
+            app.select_destination('files')
+            app.change_folder_source('rclone')
+            button = app.folder_buttons['Secret']
+            icon = button.parent.children[0]
+            self.assertEqual(icon.control_icon, 'folder_locked')
+            app.routes.screens['files'].append(SimpleNamespace())
+            app.transfer_busy = True
+            app.cloud_client.package_records = (dict(package_name='Fixture.zip', remotes=['Secret']),)
+            app.refresh_folder_actions()
+            self.assertIs(app.folder_buttons['Secret'], button)
+            self.assertEqual(icon.control_icon, 'folder_unlocked')
+            app.cloud_client.package_records = ()
+            app.refresh_folder_actions()
+            self.assertEqual(icon.control_icon, 'folder_locked')
+            app.routes.screens['files'].clear()
+            app.transfer_busy = False
+
     def test_retained_workspace_keeps_credential_filter_and_transfer_actions(self):
         app = self.app
         app.cloud_client = SimpleNamespace(generation=1, package_records=(

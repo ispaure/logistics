@@ -654,7 +654,7 @@ class FilesUI:
         self.file_rows = {row['name']: row}
         self.set_file_items(list(self.file_rows))
         self.populate_file_browser([row])
-        self.file_status.value = 'Choose a Local or LocalCrypt destination for this downloaded file.'
+        self.file_status.value = 'Choose a local folder or encrypted copy for this downloaded file.'
 
     # Existing native probes and callbacks retain their app-facing entry points.
     editor_browser = OwnedAttribute('editor_picker', 'editor_browser')

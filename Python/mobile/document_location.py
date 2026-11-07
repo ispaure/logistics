@@ -22,7 +22,7 @@ def storage_identity(copies=None, reader=None):
     if encrypted:
         parts.append('Unlocked')
         if not remote:
-            parts.append('LocalCrypt')
+            parts.append('Encrypted Copy')
     if any(getattr(source, 'session_only', False) for source in sources) or private and not remote:
         parts.append('🕵️ Session-Only')
     if not document_writable(copies, reader):

@@ -1,5 +1,13 @@
 # Files and documents in Logistics
 
+Workspace naming uses **Local → Rclone Copies** and **Cloud → Rclone Remotes**.
+Both ordinary and encrypted copies belong under Rclone Copies; encrypted remotes
+belong under Rclone Remotes. Destination pickers label encrypted local copies
+`<foldername> - Encrypted Copy`; regular folders keep their names without a
+storage suffix. **Locked** / **Unlocked** describes access, not whether files are
+encrypted on disk. `LocalCrypt` remains the technical name in paths and settings.
+
+
 Logistics starts with a launch chooser. **Features** on the left lists File Browser,
 Workspaces, Bulk Rename and enabled features with their own navigation buttons.
 Favourites appear above recent files in the right third. Workspace choices open
@@ -70,9 +78,9 @@ feature contributions as right-clicking the current selection.
 File Browser starts at your home folder. Use it for arbitrary paths;
 **Workspaces** brings configured local folders and remote integrations together.
 Choose **Local**, **Cloud** or **Home Server**, then a workspace in the compact left
-tree. Local has **Dropbox**, **Rclone** and **Others** source tabs; Rclone is selected
+tree. Local has **Dropbox**, **Rclone Copies** and **On This Computer** source tabs; Rclone Copies is selected
 initially and includes ordinary Local and encrypted LocalCrypt copies. Local →
-Rclone and Cloud → rclone have a **Credential** filter, initially **All**.
+Rclone Copies and Cloud → Rclone Remotes have a **Credential** filter, initially **All**.
 Home Server has no credential filter and displays **Pending Implementation**;
 see the source grouping below before relying on that destination.
 Right-click a folder under **Local**, including an rclone local copy, and choose
@@ -258,10 +266,10 @@ switch to Info for the selected workspace’s local and remote availability and 
 Local folders normally live under
 `~/Server/Local`. **Local** includes all available local copies, including detected
 Dropbox account folders and rclone-linked Local and LocalCrypt copies. On desktop,
-choose **Dropbox**, **Rclone** or **Others** in the Local source tabs. Rclone also
+choose **Dropbox**, **Rclone Copies** or **On This Computer** in the Local source tabs. Rclone Copies also
 has a credential filter, initially **All**, like Cloud. Cloud keeps its single
 **rclone** source tab visible even without loaded credentials. Refresh and **+**
-appear beside the credential filter only in Local → Rclone and Cloud → rclone;
+appear beside the credential filter only in Local → Rclone Copies and Cloud → Rclone Remotes;
 **+** opens rclone credentials in Settings. Home Server has no credential dropdown and
 shows an italic **Pending Implementation** notice.
 **Cloud**

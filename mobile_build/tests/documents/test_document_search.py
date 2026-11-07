@@ -95,7 +95,7 @@ class LocalDocumentSearchTests(TestCase):
         app = self.app
         base = app.private_root / 'search-fixture'
         providers = {}
-        for label in ('Local files', 'Shared files', 'Received Files', 'LocalCrypt: Fixture'):
+        for label in ('Local files', 'Shared files', 'Received Files', 'Fixture - Encrypted Copy'):
             root = base / label
             (root / 'One/Two/Three').mkdir(parents=True)
             (root / 'One/Two/Three/Needle.md').write_text('contents never searched')
@@ -107,9 +107,9 @@ class LocalDocumentSearchTests(TestCase):
         (crypt.root / 'One/Two/Three').mkdir(parents=True)
         (crypt.root / 'One/Two/Three/Needle.md').write_bytes(b'opaque cipher fixture')
         (crypt.root / 'Different.txt').write_bytes(b'opaque cipher fixture')
-        providers['LocalCrypt: Fixture'] = crypt
+        providers['Fixture - Encrypted Copy'] = crypt
         with (patch.object(app, 'ordinary_file_roots', return_value={label: p for label, p in providers.items() if not p.private}),
-              patch.object(app, 'existing_crypt_locations', return_value={'LocalCrypt: Fixture': crypt}),
+              patch.object(app, 'existing_crypt_locations', return_value={'Fixture - Encrypted Copy': crypt}),
               patch.object(app, 'linked_crypt_locations', return_value={}),
               patch.object(app, 'storage_provider', side_effect=lambda label, roots: roots[label]),
               patch.object(LocalFiles, 'open', side_effect=AssertionError('Search read file content'))):
@@ -220,7 +220,7 @@ class LocalDocumentSearchTests(TestCase):
         app = self.app
         root = app.private_root / 'encrypted-discovery-fixture'
         (root / 'Projects/Vault/.obsidian').mkdir(parents=True)
-        with (patch.object(app, 'existing_crypt_locations', return_value={'LocalCrypt: Vault': 'Vault'}),
+        with (patch.object(app, 'existing_crypt_locations', return_value={'Vault - Encrypted Copy': 'Vault'}),
               patch('features.rclone.localcrypt.mobile.resources.encrypted_storage',
                     side_effect=lambda *args, **kwargs: LocalFiles(root))):
             app.show_documents_hub()
@@ -229,7 +229,7 @@ class LocalDocumentSearchTests(TestCase):
         rows = app.document_notes_list.children[1]
         button, = rows.children
         self.assertEqual(button.text, 'Vault')
-        self.assertIn('LocalCrypt: Vault / Projects', button.accessible_name)
+        self.assertIn('Vault - Encrypted Copy / Projects', button.accessible_name)
         self.assertIn(('storage_unlocked', 'Encrypted library, unlocked'), button.leading_icons)
 
     def test_unlock_is_last_header_action_and_returns_to_each_origin(self):

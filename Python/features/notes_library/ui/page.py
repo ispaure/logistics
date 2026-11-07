@@ -34,7 +34,7 @@ class NotesLibraryPage(DocumentsPage):
         layout.addStretch()
         title = qt.QLabel('Notes Library'); title.setObjectName('sectionTitle')
         layout.addWidget(title)
-        description = qt.QLabel('Open a local folder or an unlocked LocalCrypt copy to read and edit its notes.')
+        description = qt.QLabel('Open a local folder or an unlocked encrypted copy to read and edit its notes.')
         description.setWordWrap(True); layout.addWidget(description)
         button = qt.QPushButton('Open Library')
         from features.application import registry

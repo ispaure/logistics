@@ -492,10 +492,10 @@ class NotebookStorageTests(unittest.TestCase):
         self.stroke(panel)
         source = panel.document.resource.provider.root / panel.document.resource.path
         original = source.read_bytes()
-        with patch.object(self.app, 'existing_crypt_locations', return_value={'LocalCrypt: Secret': self.provider}):
+        with patch.object(self.app, 'existing_crypt_locations', return_value={'Secret - Encrypted Copy': self.provider}):
             self.run_async(self.app.editor_picker().show_notebook_destination(panel))
         picker = self.app.editor_picker()
-        picker.save_as_storage.value = 'LocalCrypt: Secret'
+        picker.save_as_storage.value = 'Secret - Encrypted Copy'
         picker.save_as_name.value = 'Encrypted.rmdoc'
         self.run_async(picker.refresh_editor_browser())
         self.run_async(picker.confirm_editor_file())

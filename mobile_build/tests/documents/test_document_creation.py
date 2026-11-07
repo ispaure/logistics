@@ -530,9 +530,9 @@ class DocumentCreationTests(unittest.TestCase):
         app.cloud_client = client = CreationClient()
         provider = CryptFiles(self.root / 'LocalCryptFolders', client, 'Secret')
         before = app.store.documents()
-        with patch.object(app, 'existing_crypt_locations', return_value={'LocalCrypt: Secret': provider}):
+        with patch.object(app, 'existing_crypt_locations', return_value={'Secret - Encrypted Copy': provider}):
             _, picker = self.choose('Private note', 'Markdown (.md)')
-        picker.save_as_storage.value = 'LocalCrypt: Secret'
+        picker.save_as_storage.value = 'Secret - Encrypted Copy'
         app.loop.run_until_complete(picker.refresh_editor_browser())
         app.loop.run_until_complete(picker.confirm_editor_file())
         owner = app.private_sessions.active
@@ -562,7 +562,7 @@ class DocumentCreationTests(unittest.TestCase):
         app.cloud_client = CreationClient()
         app.cloud_crypt_remotes = {'Secret'}
         _, picker = self.choose('First encrypted file')
-        self.assertNotIn('LocalCrypt: Secret', picker.editor_storage_roots)
+        self.assertNotIn('Secret - Encrypted Copy', picker.editor_storage_roots)
         self.assertIn('Create a folder', picker.save_as_status.value)
 
     def test_session_capacity_rejects_creation_before_publishing(self):

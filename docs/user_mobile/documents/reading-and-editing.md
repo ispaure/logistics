@@ -3,7 +3,7 @@
 ## Reading and editing
 
 EPUB, PDF and CBZ/ZIP comic files open from both **Local** and unlocked
-**LocalCrypt**, including the Workspaces browser and document file drawer.
+**Encrypted Copy**, including the Workspaces browser and document file drawer.
 Choose the file directly; no format-specific connection setup is needed.
 Local files can be opened immediately after launching the app. LocalCrypt uses
 the unlocked connection to read its encrypted copy, keeping decoded content in

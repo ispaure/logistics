@@ -220,7 +220,7 @@ class FolderLocationHeader(toga.Box):
             state = 'Unlocked (Session Only)' if unlocked and session_only else 'Unlocked' if unlocked else 'Locked'
             identity += ' · ' + state
             if not remote:
-                identity += ' · LocalCrypt'
+                identity += ' · Encrypted Copy'
         self.storage_identity.add(BrowserStatusLabel(identity, style=Pack(
             font_size=self.folder_name.style.font_size * .75, margin=0)))
         surface(self.storage_identity.children[-1], radius=0, background='transparent', foreground='muted',
