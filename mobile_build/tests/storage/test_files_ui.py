@@ -265,7 +265,7 @@ class FileUITests(unittest.TestCase):
                 with patch.object(app.main_window, 'dialog', AsyncMock(return_value=True)):
                     app.loop.run_until_complete(app.delete_file())
                 self.assertFalse((root / 'remove.txt').exists())
-                app.new_document()
+                app.create_chosen_document('md')
                 app.editor.value = 'ordinary draft saved through provider'
                 app.loop.run_until_complete(app.show_document_save_as())
                 app.save_as_name.value = 'saved.md'

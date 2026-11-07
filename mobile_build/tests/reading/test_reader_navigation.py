@@ -168,27 +168,27 @@ class ReaderNavigationTests(unittest.TestCase):
                                           wraps=app.native_host.chrome.set_page_swipes) as policy:
                             await app.read_managed_file()
                             self.assertEqual(app.native_host.state.destination, 'files')
-                            owner = app.readers.active
+                            owner = app.private_sessions.active
                             self.assertTrue(policy.call_args.args[0])
                             if path == comic:
                                 with patch('mobile.page_animation.begin_page_slide') as begin, patch(
                                         'mobile.page_animation.finish_page_slide') as finish:
                                     for rtl in (False, True):
-                                        owner.book_reader.right_to_left = rtl
+                                        owner.crypt_reader.right_to_left = rtl
                                         for index, expected in ((1, -1 if rtl else 1), (0, 1 if rtl else -1)):
-                                            await owner.move_book_page(index)
+                                            await owner.move_private_page(index)
                                             self.assertEqual(begin.call_args.args[1], expected)
                                             self.assertEqual(finish.call_args.args[1], expected)
                             if path == epub:
                                 with patch('mobile.page_animation.begin_page_slide') as begin:
-                                    await owner.move_book_page(1)
+                                    await owner.move_private_page(1)
                                     self.assertEqual(begin.call_args.args[1], 1)
-                                    await owner.move_book_page(0)
+                                    await owner.move_private_page(0)
                                     self.assertEqual(begin.call_args.args[1], -1)
-                            owner.set_reading_mode(False)
+                            owner.toggle_private_reading_mode()
                             app.adaptive.render()
                             self.assertTrue(policy.call_args.args[0])
-                            owner.set_reading_mode(True)
+                            owner.toggle_private_reading_mode()
                             app.adaptive.render()
                             self.assertTrue(policy.call_args.args[0])
                             self.assertTrue(app.routes.back())

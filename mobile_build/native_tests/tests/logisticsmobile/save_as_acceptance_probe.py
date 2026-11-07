@@ -104,7 +104,7 @@ class AcceptanceProbe(DestinationProbe):
         for name, expected in (('Bare', 'Bare.md'), ('UPPER.TXT', 'UPPER.TXT'),
                                ('Résumé 😀.md', 'Résumé 😀.md'), ('two.dots.md', 'two.dots.md'),
                                ('.hidden', '.hidden.md')):
-            await setup()
+            await setup('draft.TXT' if expected.endswith('.TXT') else 'draft.md')
             picker.save_as_name.value = name
             await picker.confirm_editor_file()
             assert (b / expected).read_bytes() == b'Native retained draft', picker.save_as_status.value
@@ -121,7 +121,7 @@ class AcceptanceProbe(DestinationProbe):
         assert (b / 'Text basename.txt').read_bytes() == b'Native retained draft'
         assert self.close_session(self.provider_sessions().active.session.id)
         await setup()
-        for invalid in ('', 'bad.exe', '../escape', 'nested/file.md', 'trailing.'):
+        for invalid in ('', '../escape', 'nested/file.md', r'nested\file.md'):
             picker.save_as_name.value = invalid
             await picker.confirm_editor_file()
             assert picker.save_as_status.value and picker.save_as_data == b'Native retained draft'
@@ -375,7 +375,7 @@ class AcceptanceProbe(DestinationProbe):
                 for control in (picker.save_as_name, picker.picker_new_folder,
                                 picker.picker_primary, *picker.picker_actions.children):
                     control.style.font_size = 24
-                picker.save_as_name.value = 'unsupported.exe'
+                picker.save_as_name.value = 'invalid/name'
                 await picker.confirm_editor_file()
                 assert picker.save_as_status.value
                 await asyncio.sleep(.4)

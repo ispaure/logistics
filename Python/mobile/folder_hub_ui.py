@@ -459,7 +459,7 @@ class FolderHubUI(WorkspacesScreen):
         # The retained tree can remain visible beside a browser, and credentials
         # can change during transfers or in another window. Discovery reads only
         # published metadata/local names, so it is safe while the bridge is busy.
-        if refresh_choices and hasattr(self, 'folder_list'):
+        if refresh_choices and hasattr(self, 'folder_list') and not getattr(self.app, '_storage_changing', False):
             choices = self.folder_choices()
             self.update_folder_list(choices)
         status = getattr(self, 'folder_picker_status', None)

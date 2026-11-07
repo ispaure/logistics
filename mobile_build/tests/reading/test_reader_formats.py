@@ -37,7 +37,7 @@ class ReaderFormatTests(unittest.TestCase):
                 app.preferences.save(comic_layout='double', comic_split_wide='false')
                 fixtures = root / 'fixtures'
                 fixtures.mkdir()
-                _, source = make_books(fixtures)
+                _, source = make_books(root)
                 with ZipFile(source, 'a') as archive:
                     archive.writestr('ComicInfo.xml', '<ComicInfo><Manga>' +
                         ('YesAndRightToLeft' if rtl else 'No') + '</Manga></ComicInfo>')
@@ -48,7 +48,8 @@ class ReaderFormatTests(unittest.TestCase):
                         path = fixtures / name
                         path.write_bytes(source.read_bytes())
                         records.append(store.import_book(LocalDocuments(), path))
-                    async def swipe(owner, provider, direction):
+                    async def swipe(owner, direction):
+                        provider = hasattr(owner, 'crypt_reader')
                         # The provider's opening/layout workers must finish before
                         # sending a gesture; busy readers deliberately ignore it.
                         import asyncio
@@ -71,40 +72,42 @@ class ReaderFormatTests(unittest.TestCase):
                             copies = SimpleNamespace(root=files.root, provider=files, open=open_copy, encrypted=False)
                             app.show_cloud(present=False)
                             await app.open_crypt(copies=copies, key='Comics/02.cbz')
-                            manager = app.private_sessions
+                            def current():
+                                return app.private_sessions.active
                             def identity(owner):
                                 return owner.crypt_reader.key
                             expected = ['Comics/' + name for name in ('01.cbz', '02.cbz', '03.cbz')]
                         else:
                             await app.open_book(records[1]['id'])
-                            manager = app.readers
+                            def current():
+                                return app.provider_sessions().active or app.readers.active
+                            names = ('01.cbz', '02.cbz', '03.cbz')
+                            stored_names = {record['id']: name for record, name in zip(records, names)}
                             def identity(owner):
-                                return owner.book_record['id']
-                            expected = [record['id'] for record in records]
-                        middle = manager.active
-                        await swipe(middle, provider, -1)
-                        self.assertIs(manager.active, middle)
+                                return (owner.crypt_reader.key if hasattr(owner, 'crypt_reader')
+                                        else stored_names[owner.book_record['id']])
+                            expected = list(names)
+                        middle = current()
+                        await swipe(middle, -1)
+                        self.assertIs(current(), middle)
                         self.assertIn(('→' if rtl else '←') + ' Swipe to read', app._comic_boundary_feedback.message)
-                        await swipe(middle, provider, -1)
-                        self.assertEqual(identity(manager.active), expected[0])
-                        if provider:
-                            await manager.active.next_provider_comic_file()
-                        else:
-                            await manager.active.next_comic_file()
-                        middle = manager.active
+                        await swipe(middle, -1)
+                        self.assertEqual(identity(current()), expected[0])
+                        await current().next_provider_comic_file()
+                        middle = current()
                         self.assertEqual(identity(middle), expected[1])
-                        await swipe(middle, provider, 1)
+                        await swipe(middle, 1)
                         self.assertIn('End of comic', app._comic_boundary_feedback.message,
-                            (provider, getattr(middle, 'comic_navigation', None).__dict__ if not provider
+                            (provider, getattr(middle, 'comic_navigation', None).__dict__ if not hasattr(middle, 'crypt_reader')
                              else middle.crypt_reader.comic_navigation.__dict__))
                         self.assertNotIn('Swipe to read', app._comic_boundary_feedback.message)
-                        self.assertEqual(identity(manager.active), expected[1])
-                        await swipe(middle, provider, 1)
-                        self.assertEqual(identity(manager.active), expected[2])
-                        last = manager.active
-                        await swipe(last, provider, 1)
-                        await swipe(last, provider, 1)
-                        self.assertIs(manager.active, last)
+                        self.assertEqual(identity(current()), expected[1])
+                        await swipe(middle, 1)
+                        self.assertEqual(identity(current()), expected[2])
+                        last = current()
+                        await swipe(last, 1)
+                        await swipe(last, 1)
+                        self.assertIs(current(), last)
                         self.assertIn('No next volume', app._comic_boundary_feedback.message)
                 try:
                     app.loop.run_until_complete(exercise())
@@ -241,7 +244,7 @@ class ReaderFormatTests(unittest.TestCase):
             app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
             fixtures = root / 'fixtures'
             fixtures.mkdir()
-            _, source = make_books(fixtures)
+            _, source = make_books(root)
             async def exercise():
                 store = app.reader_manager().catalog.library_store
                 records = []
@@ -257,21 +260,21 @@ class ReaderFormatTests(unittest.TestCase):
                 self.assertLess(owner.library_view.children.index(owner.reader_header),
                                 owner.library_view.children.index(owner.book_content))
                 self.assertEqual(owner.comic_header.previous.control_icon, 'previous_comic')
-                self.assertEqual(owner.comic_header.following.accessible_name, 'Next comic')
+                self.assertEqual(owner.comic_header.following.accessible_name, 'Next comic file')
                 self.assertTrue(owner.comic_header.previous.enabled)
                 self.assertTrue(owner.comic_header.following.enabled)
                 await owner.comic_header.following.on_press()
-                last = app.readers.active
-                self.assertEqual(last.book_record['id'], records[2]['id'])
-                self.assertFalse(last.reader_immersive)
+                last = app.private_sessions.active
+                self.assertEqual(last.crypt_reader.key, '03.cbz')
+                self.assertFalse(last.crypt_immersive)
                 self.assertFalse(last.comic_header.following.enabled)
                 await last.comic_header.previous.on_press()
-                await app.readers.active.comic_header.previous.on_press()
-                first = app.readers.active
-                self.assertEqual(first.book_record['id'], records[0]['id'])
+                await app.private_sessions.active.comic_header.previous.on_press()
+                first = app.private_sessions.active
+                self.assertEqual(first.crypt_reader.key, '01.cbz')
                 self.assertFalse(first.comic_header.previous.enabled)
-                first.set_reading_mode(True)
-                self.assertNotIn(first.reader_header, first.library_view.children)
+                first.toggle_private_reading_mode()
+                self.assertTrue(first.crypt_immersive)
                 from types import SimpleNamespace
                 rows = [dict(path=name, name=name, directory=False) for name in ('01.cbz', '02.cbz', '03.cbz')]
                 provider = SimpleNamespace(root=root / 'provider', private=False, list=lambda folder='': rows)
