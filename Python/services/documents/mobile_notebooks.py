@@ -340,7 +340,6 @@ def install_notebook_controls(panel):
             if name == 'library' and hasattr(panel, 'session'):
                 # Native Close must remain usable when the WebView cannot answer.
                 # The session owner flushes boundedly and presents Save/Discard/Cancel.
-                panel.app.__dict__.setdefault('_reader_returns', {})[panel.session.id] = ('home', None, False)
                 panel.app.request_reader_close(panel.session.id)
                 return
             if panel.web is None:

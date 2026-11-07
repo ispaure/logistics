@@ -218,17 +218,17 @@ class NotebookPanelTests(unittest.TestCase):
         panel.dispose()
         controller.close.assert_called_once_with()
 
-    def test_notebook_close_returns_home_and_retires_session_from_another_tab(self):
+    def test_notebook_close_returns_to_the_documents_overview(self):
         app = self.app
-        app.show_locations()
-        app.loop.run_until_complete(open_notebook(app, destination='files'))
+        app.show_documents_hub()
+        app.loop.run_until_complete(open_notebook(app))
         panel = app.notebook_panel
         key = panel.session.id
         app.loop.run_until_complete(panel.perform(dict(op='library')))
         self.assertNotIn(key, app.workspace.sessions)
         self.assertTrue(panel.closed)
-        self.assertEqual(app.native_host.state.destination, 'home')
-        self.assertFalse(app.routes.screens['home'])
+        self.assertEqual(app.native_host.state.destination, 'documents')
+        self.assertFalse(app.routes.screens['documents'])
 
     def test_notebook_close_keeps_unsaved_edits_for_the_close_prompt(self):
         from unittest.mock import AsyncMock, patch
