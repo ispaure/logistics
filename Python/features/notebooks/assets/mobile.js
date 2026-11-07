@@ -282,7 +282,7 @@ renderEraserChoices();
       card.dataset.page = row.index;
       card.setAttribute('aria-label', 'Page ' + (row.index + 1) + (row.warning ? ': preview unavailable' : ''));
       card.setAttribute('aria-current', String(row.index === state.index));
-      image.src = row.image;
+      paintPagePreview(row, image);
       image.alt = '';
       caption.textContent = String(row.index + 1);
       card.append(image, caption);

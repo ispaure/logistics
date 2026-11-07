@@ -564,7 +564,7 @@ class NotebookPanel:
             if op == 'page-previews':
                 from ..previews import page_previews
                 previews = await canvas.wait(asyncio.to_thread(page_previews, editor.notebook, action['start']))
-                await respond('window.notebookPagePreviews(' + json.dumps(previews) + ')')
+                await respond('window.notebookPagePreviews(' + json.dumps(previews, separators=(',', ':')) + ')')
             if op == 'library':
                 # Release the JS queue before native guards. Cancel/Keep editing
                 # must leave a usable canvas, and queued ink precedes this action.

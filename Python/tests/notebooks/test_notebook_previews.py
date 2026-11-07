@@ -1,21 +1,19 @@
-"""Overview previews are bounded, respect hidden layers and leave the book alone."""
+"""Overview scenes are bounded, preserve brush data and leave the book alone."""
 
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
-import base64
 import unittest
-from xml.etree import ElementTree as ET
 
 from features.notebooks.notebook import Notebook
-from features.notebooks.previews import BATCH, page_previews
+from features.notebooks.previews import BATCH, BATCH_POINTS, POINTS, page_previews
 
 
 class PagePreviewTests(unittest.TestCase):
     def test_visible_ink_and_fixed_ranges_do_not_change_page_order_or_bytes(self):
         book = Notebook.new('Overview')
         ink = book.page(0)
-        ink.add([[10, 20, .2], [40, 50, .8]], 15, 7, 2)
+        first = ink.add([[10, 20, .2], [40, 50, .8]], 15, 7, 2)
         ink.add_layer('Hidden')
         hidden = ink.layers[-1][0]
         ink.add([[100, 200, .5], [200, 300, .5]], 17, 6, 2, hidden)
@@ -27,10 +25,10 @@ class PagePreviewTests(unittest.TestCase):
         order = [p.id for p in book.pages]
         rows = page_previews(book, 0)
         self.assertEqual(len(rows), BATCH)
-        svg = base64.b64decode(rows[0]['image'].split(',', 1)[1])
-        paths = ET.fromstring(svg).findall('.//{http://www.w3.org/2000/svg}path')
-        self.assertEqual(len(paths), 1)
-        self.assertEqual(paths[0].get('stroke'), '#c23132')
+        self.assertEqual(len(rows[0]['items']), 1)
+        item = rows[0]['items'][0]
+        self.assertEqual((item['tool'], item['color']), (15, 7))
+        self.assertEqual([p[3] for p in item['points']], [p[3] for p in first.points])
         self.assertEqual([row['index'] for row in page_previews(book, BATCH)], [BATCH, BATCH + 1, BATCH + 2])
         self.assertEqual([p.id for p in book.pages], order)
         self.assertEqual(book.to_bytes(), before)
@@ -40,36 +38,29 @@ class PagePreviewTests(unittest.TestCase):
 
     def test_dense_page_preview_is_bounded_and_retains_stroke_endpoints(self):
         book = Notebook.new()
-        ink = book.page(0)
-        ink.add([[i / 10, i / 10, .5] for i in range(10000)], 17, 0, 2)
-        image = base64.b64decode(page_previews(book, 0)[0]['image'].split(',', 1)[1])
-        self.assertLess(len(image), 40000)
-        self.assertIn(b'999.9,999.9', image)
+        samples = [[i / 10, i / 10, .5] for i in range(10000)]
+        for i in range(3):
+            if i:
+                book.add_page()
+            stroke = book.page(i).add(samples[:2], 17, 0, 2)
+            stroke.points = [[x, y, pressure, 3.5] for x, y, pressure in samples]
+        rows = page_previews(book, 0)
+        self.assertEqual([row['index'] for row in rows], [0, 1])
+        self.assertLessEqual(sum(len(row['items'][0]['points']) for row in rows), BATCH_POINTS)
+        for row in [*rows, *page_previews(book, 2)]:
+            points = row['items'][0]['points']
+            self.assertLessEqual(len(points), POINTS)
+            self.assertEqual(points[0][:2], [0, 0])
+            self.assertEqual(points[-1][:2], [999.9, 999.9])
 
-    def test_native_highlighter_palette_matches_canvas_without_rgba(self):
+    def test_native_colors_and_rgba_reach_the_renderer_in_scene_order(self):
         book = Notebook.new()
+        ink = book.page(0)
         for choice in (13, 10, 5, 6, -1, 1):
-            book.page(0).add([[10, 20, .5], [40, 50, .8]], tool=18, color=choice)
-        book = Notebook.read(book.to_bytes())
-        before = book.to_bytes()
-        self.assertTrue(all(stroke.color_rgba is None for stroke in book.page(0).strokes))
-        svg = base64.b64decode(page_previews(book, 0)[0]['image'].split(',', 1)[1])
-        paths = ET.fromstring(svg).findall('.//{http://www.w3.org/2000/svg}path')
-        self.assertEqual([path.get('stroke') for path in paths],
-                         ['#ffed75', '#acff85', '#f29eff', '#beeafe', '#ffc38c', '#c7c7c6'])
-        self.assertEqual([path.get('opacity') for path in paths], ['1.00'] * 6)
-        self.assertEqual(book.to_bytes(), before)
-
-    def test_explicit_rgba_priority_and_other_tool_color_fallbacks(self):
-        book = Notebook.new()
-        ink = book.page(0)
-        imported = ink.add([[10, 20, .5]], tool=18, color=6)
-        imported.color_rgba = (12, 34, 56, 117)
-        legacy = ink.add([[30, 20, .5]], tool=17)
-        legacy.color = 3
-        unknown = ink.add([[50, 20, .5]], tool=17)
-        unknown.color = 99
-        svg = base64.b64decode(page_previews(book, 0)[0]['image'].split(',', 1)[1])
-        paths = ET.fromstring(svg).findall('.//{http://www.w3.org/2000/svg}path')
-        self.assertEqual([(path.get('stroke'), path.get('opacity')) for path in paths],
-                         [('#0c2238', '0.46'), ('#fbf719', '1.00'), ('#000000', '1.00')])
+            ink.add([[10, 20, .5], [40, 50, .8]], tool=18, color=choice)
+        shader = ink.add([[30, 20, .5]], tool=23, color=6)
+        ink.order = [shader.id, *[s.id for s in ink.strokes if s.id != shader.id]]
+        items = page_previews(book, 0)[0]['items']
+        self.assertEqual((items[0]['tool'], items[0]['color_rgba']), (23, (48, 74, 224, 77)))
+        self.assertEqual([item['color'] for item in items[1:]], [3, 4, 5, 14, 15, 16])
+        self.assertTrue(all(item['color_rgba'] is None for item in items[1:]))

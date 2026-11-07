@@ -510,6 +510,7 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         wait(lambda: js('busy') is False)
         js("document.querySelector('header button[aria-label=\"Notebook actions\"]').click();document.getElementById('pagesToggle').click()")
         wait(lambda: js("document.querySelectorAll('.page-previews button').length") == 2)
+        wait(lambda: js("[...document.querySelectorAll('.page-previews img')].every(img => img.naturalWidth === 288)"))
         wait(lambda: js('busy') is False)
         js("document.getElementById('prev').click()")
         wait(lambda: editor.index == 0 and js('busy') is False)

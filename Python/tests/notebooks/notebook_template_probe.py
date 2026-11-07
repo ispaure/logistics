@@ -53,7 +53,15 @@ def pdf_highlighter(view, desktop):
       const black = pixel(600,173), white = pixel(800,173);
       const overlap = pixel(690,166), single = pixel(560,166), intervening = pixel(730,173);
       const singleRule = [171,172,173,174,175].map(y=>pixel(560,y)).reduce((a,b)=>a[0]<b[0]?a:b);
-      const crossSection = () => Array.from({length: 35}, (_, i) => pixel(700, 156+i));
+      const crossSection = () => {
+        const sy = canvas.height / state.height, x = Math.floor(700 * canvas.width / state.width);
+        const top = Math.floor(156 * sy), bottom = Math.floor(190 * sy);
+        const rgba = ctx.getImageData(x, top, 1, bottom - top + 1).data;
+        return Array.from({length: 35}, (_, i) => {
+          const offset = 4 * (Math.floor((156 + i) * sy) - top);
+          return [...rgba.subarray(offset, offset + 4)];
+        });
+      };
       const beforeLive = crossSection();
       inkSettings = {tool:18,color:13,width:1};
       points = [[650,173,.5],[770,173,.5]];
@@ -66,9 +74,20 @@ def pdf_highlighter(view, desktop):
       const queued = crossSection();
       queue.pop();
       draw();
-      return JSON.stringify({plain,rule,black,white,overlap,single,intervening,singleRule,
-        liveMatches: JSON.stringify(beforeLive) === JSON.stringify(live),
-        queuedMatches: JSON.stringify(beforeLive) === JSON.stringify(queued)});
+      const fill = document.createElement('canvas');
+      fill.width = 128; fill.height = 96;
+      const g = fill.getContext('2d', {willReadFrequently: true});
+      g.fillStyle = 'white';
+      g.fillRect(0, 0, fill.width, fill.height);
+      const pass = points => ({tool:18, color:16, points:points.map(([x,y]) => [x,y,.5,26])});
+      paintOrderedInk([
+        pass([[8,30],[115,30],[115,50],[8,50],[8,30],[115,30]]),
+        pass([[8,43.25],[115,43.25]]),
+      ], g, false);
+      const fillSection = Array.from({length: 40}, (_, i) => [...g.getImageData(60,20+i,1,1).data]);
+      return JSON.stringify({plain,rule,black,white,overlap,single,intervening,singleRule,fillSection,
+        liveChanges: beforeLive.flatMap((pixel, i) => String(pixel) === String(live[i]) ? [] : [[i,pixel,live[i]]]),
+        queuedChanges: beforeLive.flatMap((pixel, i) => String(pixel) === String(queued[i]) ? [] : [[i,pixel,queued[i]]])});
     })()"""))
     plain, rule, black, white = (pixels[key] for key in ('plain', 'rule', 'black', 'white'))
     assert plain[0] >= 245 and plain[2] <= 130, pixels
@@ -76,7 +95,12 @@ def pdf_highlighter(view, desktop):
     assert max(black[:3]) <= 20 and min(white[:3]) >= 235, pixels
     assert pixels['overlap'] == pixels['single'] == pixels['intervening'], pixels
     assert pixels['singleRule'] == rule, pixels
-    assert pixels['liveMatches'] and pixels['queuedMatches'], pixels
+    # Chromium can resample the underlying PDF bitmap by a few color levels
+    # on readback. A second coat of the highlight changes much more than this.
+    for key in ('liveChanges', 'queuedChanges'):
+        assert all(max(abs(a - b) for a, b in zip(before, after)) <= 3
+                   for _, before, after in pixels[key]), (desktop, pixels[key])
+    assert all(rgba == [199, 199, 198, 255] for rgba in pixels['fillSection']), pixels
     return pixels
 
 

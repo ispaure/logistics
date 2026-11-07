@@ -60,7 +60,6 @@ class NotebookTests(unittest.TestCase):
     def test_imported_artwork_is_preserved_on_new_pages_without_substitution(self):
         from features.notebooks.templates import select
         from features.notebooks.previews import page_previews
-        import base64
         self.editor.apply(dict(op='template', name='Logistics Meeting notes', format='pro', visible=True))
         page = self.book.pages[0]
         asset = page.template + '.template'
@@ -74,7 +73,7 @@ class NotebookTests(unittest.TestCase):
         self.assertEqual(page.template, reference)
         self.assertFalse(self.editor.state()['template_available'])
         self.assertIsNone(self.editor.state()['background'])
-        self.assertNotIn(b'Meeting notes', base64.b64decode(page_previews(self.book, 0)[0]['image'].split(',')[1]))
+        self.assertIsNone(page_previews(self.book, 0)[0]['background'])
         self.editor.apply(dict(op='add-page'))
         target = self.book.pages[1]
         self.assertEqual(target.template, reference)

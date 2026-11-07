@@ -789,10 +789,11 @@ with native handwriting apps or using the separate vendor raw-drawing pipeline.
 Horizontal single-finger swipes turn pages when the page fits the viewport width.
 Zoomed views retain panning; vertical, cancelled, multi-touch and out-of-range
 gestures do not turn pages. The overflow menu is an anchored dropdown. Pages
-Overview requests ink-only SVG previews in batches of 16, each bounded to 256
-strokes and roughly 2048 sampled points. Hidden layers are excluded. Preview
-requests do not edit page state or save; templates/unsupported content are labelled
-as outside the thumbnail scope. Direct page navigation and Add page use the same
+Overview requests up to 16 pages per batch, with up to 256 strokes and 8192
+points per page and 16384 points per batch. The WebView draws the visible ink in
+scene order with the editor's brush renderer and supported templates. PDF
+backgrounds, embedded images and unsupported artwork are omitted. Preview
+requests do not edit page state or save. Direct page navigation and Add page use the same
 ordered command bridge; Add page inserts at `editor.index + 1`.
 
 The calligraphy profile uses an original fixed 45-degree elliptical nib with

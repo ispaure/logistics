@@ -378,44 +378,35 @@ function strokeBounds(points, padding) {
 }
 
 function paintOrderedInk(items, target = ctx, showSelection = true, region = null) {
-  const colors = new Map(), highlights = new Map();
+  const colors = new Map(), runs = [];
   for (const item of items) {
-    if (item.corners || !item.points.length || brushFor(item.tool).family !== 'highlighter') continue;
+    if (item.corners || !item.points.length || brushFor(item.tool).family !== 'highlighter') {
+      runs.push({item});
+      continue;
+    }
     const {rgb, alpha} = inkColor(item), key = [...rgb, alpha].join(',');
+    const bounds = highlightBounds(item.points), previous = runs.at(-1);
+    if (previous?.key === key) {
+      previous.items.push(item);
+      previous.bounds = previous.bounds.map((value, i) => i < 2 ? Math.min(value, bounds[i]) : Math.max(value, bounds[i]));
+      continue;
+    }
     if (!colors.has(key)) colors.set(key, []);
     const group = colors.get(key);
-    const entry = {item, bounds: highlightBounds(item.points), group, index: group.length};
-    group.push(entry);
-    highlights.set(item, entry);
+    const run = {items: [item], key, rgb, alpha, bounds, group, index: group.length};
+    group.push(run);
+    runs.push(run);
   }
   let scratch;
   const transform = target.getTransform();
-  for (const item of items) {
-    if (item.corners) {
-      paintPicture(item, target, showSelection);
+  for (const run of runs) {
+    if (run.item) {
+      if (run.item.corners) paintPicture(run.item, target, showSelection);
+      else line(run.item, target, showSelection);
       continue;
     }
-    const entry = highlights.get(item);
-    if (!entry || entry.index === entry.group.length - 1) {
-      line(item, target, showSelection);
-      continue;
-    }
-    const [left, top, right, bottom] = entry.bounds;
-    const later = entry.group.slice(entry.index + 1).filter(({bounds: [l, t, r, b]}) =>
-      l < right && r > left && t < bottom && b > top);
-    if (!later.length) {
-      line(item, target, showSelection);
-      continue;
-    }
-    // A fully retraced path has no independent edge coverage to paint.
-    if (later.some(({item: next}) => sameHighlightPath(item.points, next.points))) {
-      if (showSelection) strokeOutline(item, target);
-      continue;
-    }
-    // The last pass of this color owns the tint at each covered pixel. Moving
-    // that tint forward lets intervening pen/image pixels receive it only where
-    // a later highlight actually covers them.
-    const [l, t, r, b] = region || [left, top, right, bottom];
+    const [left, top, right, bottom] = run.bounds;
+    const [l, t, r, b] = region || run.bounds;
     const x = Math.max(0, Math.floor(Math.max(left, l) * transform.a + transform.e));
     const y = Math.max(0, Math.floor(Math.max(top, t) * transform.d + transform.f));
     const width = Math.min(target.canvas.width, Math.ceil(Math.min(right, r) * transform.a + transform.e)) - x;
@@ -426,24 +417,69 @@ function paintOrderedInk(items, target = ctx, showSelection = true, region = nul
     scratch.height = height;
     const g = scratch.getContext('2d');
     g.setTransform(transform.a, 0, 0, transform.d, transform.e - x, transform.f - y);
-    line(item, g, false);
-    g.globalCompositeOperation = 'destination-out';
-    g.strokeStyle = g.fillStyle = '#000';
+    g.strokeStyle = g.fillStyle = colorCss(run.rgb);
     g.lineCap = 'butt';
     g.lineJoin = 'round';
+    const later = run.group.slice(run.index + 1).filter(next => intersects(next.bounds, run.bounds));
+    const painted = [];
+    // Rasterize the whole run as opaque coverage. Multiplying a path directly
+    // can tint its self-intersections on WebKit, and punching out each adjacent
+    // pass separately leaves antialiased seams inside the fill.
+    for (const item of run.items) {
+      if (painted.some(points => sameHighlightPath(points, item.points)) ||
+          later.some(next => next.items.some(other => sameHighlightPath(other.points, item.points)))) continue;
+      geometry(g, item.points, 'highlighter');
+      painted.push(item.points);
+    }
+    // Across intervening ink/images the last run still owns the overlapping
+    // tint, so marks above an earlier pass can be highlighted by a later one.
+    g.globalCompositeOperation = 'destination-out';
     const masked = [];
-    for (const {item: next} of later) {
-      if (masked.some(points => sameHighlightPath(points, next.points))) continue;
-      geometry(g, next.points, 'highlighter');
-      masked.push(next.points);
+    for (const next of later) {
+      for (const item of next.items) {
+        if (!intersects(highlightBounds(item.points), run.bounds) ||
+            masked.some(points => sameHighlightPath(points, item.points))) continue;
+        geometry(g, item.points, 'highlighter');
+        masked.push(item.points);
+      }
     }
     target.save();
     target.resetTransform();
     target.globalCompositeOperation = 'multiply';
+    target.globalAlpha = run.alpha;
     target.drawImage(scratch, x, y);
     target.restore();
-    if (showSelection) strokeOutline(item, target);
+    if (showSelection) for (const item of run.items) strokeOutline(item, target);
   }
+}
+
+function intersects([l, t, r, b], [left, top, right, bottom]) {
+  return l < right && r > left && t < bottom && b > top;
+}
+
+// The overview uses the same scene painter without any transient pen state,
+// selection decoration or page zoom. Each card owns its asynchronous result.
+async function paintPagePreview(page, image) {
+  const preview = document.createElement('canvas');
+  preview.width = 288;
+  preview.height = Math.max(1, Math.round(preview.width * page.height / page.width));
+  const target = preview.getContext('2d');
+  target.setTransform(preview.width / page.width, 0, 0, preview.height / page.height, 0, 0);
+  target.fillStyle = 'white';
+  target.fillRect(0, 0, page.width, page.height);
+  if (page.background) {
+    const artwork = new Image();
+    artwork.src = page.background;
+    try {
+      await artwork.decode();
+      if (!image.isConnected) return;
+      target.drawImage(artwork, 0, 0, page.width, page.height);
+    } catch {
+      // A failed template decode must still leave the ink visible.
+    }
+  }
+  paintOrderedInk(page.items, target, false);
+  image.src = preview.toDataURL();
 }
 
 function sameHighlightPath(points, other) {
