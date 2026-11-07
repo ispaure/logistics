@@ -560,6 +560,25 @@ class NotebookTests(unittest.TestCase):
         self.assertEqual(len(self.repo.open(self.key).page(0).strokes),2)
         self.assertEqual(len(list(base.parent.glob('*.rm'))),1)
 
+    def test_large_notebook_recovery_keeps_unopened_scenes_lazy(self):
+        book = Notebook.new()
+        for _ in range(1000):
+            book.add_page()
+        book = Notebook.read(book.to_bytes())
+        self.assertEqual(len(book.pages), 1001)
+        key = self.repo.create(book)
+        self.assertTrue(all(page.ink is None for page in book.pages))
+        editor = Editor(book, lambda value: self.repo.save(key, value))
+        editor.apply(dict(op='page', index=1000))
+        editor.apply(dict(op='stroke', points=[[20, 30, .5], [40, 50, .5]]))
+        reopened = self.repo.open(key)
+        self.assertEqual(len(reopened.pages), 1001)
+        self.assertTrue(all(page.ink is None for page in reopened.pages))
+        self.assertEqual(len(Notebook.read(reopened.to_bytes()).page(1000).strokes), 1)
+        self.assertEqual(len(reopened.page(1000).strokes), 1)
+        reopened.copy_page(reopened, 1000)
+        self.assertEqual(len(Notebook.read(reopened.to_bytes()).pages), 1002)
+
     def test_malformed_archives_and_unsafe_paths_are_rejected(self):
         for name in ('../bad', '/absolute', 'C:/bad', 'x\\bad'):
             with self.subTest(name=name), self.assertRaises(ValueError):

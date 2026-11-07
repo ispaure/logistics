@@ -6,6 +6,7 @@ from io import BytesIO
 from pathlib import Path
 from services.documents.storage import read_local_bytes
 import toga
+from commonUtils.runtime.streams import read_up_to
 from commonUtils.ui.native.inline_html import set_inline_html
 from commonUtils.ui.native.text_size import native_backend
 from toga.style import Pack
@@ -181,7 +182,7 @@ class NotebookPanel:
                 with adapter.open(reference) as (name, stream):
                     if not name.lower().endswith('.rmdoc'):
                         raise ValueError('Choose an .rmdoc file.')
-                    return Notebook.read(stream.read(MAX_ARCHIVE + 1))
+                    return Notebook.read(read_up_to(stream, MAX_ARCHIVE + 1))
         except Exception as error:
             if not self.closed:
                 self.status.text = str(error)

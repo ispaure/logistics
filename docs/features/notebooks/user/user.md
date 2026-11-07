@@ -151,8 +151,10 @@ EPUB-backed archives remain unsupported.
 The page surface uses 1404 × 1872 notebook units. Supported templates render beneath
 the ink; unrecognized template references remain preserved with an artwork notice.
 There is no OCR, cloud sync or exact brush
-texture simulation. Archives are limited to 32 MiB compressed, 128 MiB expanded,
-4096 members and 1000 pages. Very long strokes or densely populated pages can
+texture simulation. Logistics accepts RMDOC archives up to 128 MiB compressed,
+256 MiB expanded and 65,536 archive entries. Notebook page count has no separate
+limit. An embedded PDF and the storage location can have their own limits.
+Very long strokes or densely populated pages can
 reach editing limits; rejected edits keep the previous saved content. Error
 messages leave the source copy available. Expanded drawing controls scroll so
 the page remains available in short windows.

@@ -80,23 +80,31 @@ class Repository:
         # Interrupted saves leave the previous manifest and pages recoverable.
         pages = []
         normalized = []
-        for index, page in enumerate(notebook.pages):
-            ink = notebook.page(index)
-            raw = ink.to_bytes()
-            decoded = ink if raw is ink.raw else InkPage.read(raw, previous=ink)
-            if decoded.warning and not ink.warning:
-                raise ValueError('This edit exceeds the supported ink scene: ' + decoded.warning)
+        blank = None
+        for page in notebook.pages:
+            ink = page.ink
+            if ink is None:
+                raw = notebook.unloaded_ink(page)
+                if raw is None:
+                    if blank is None:
+                        blank = InkPage.blank().raw
+                    raw = blank
+            else:
+                raw = ink.to_bytes()
+                decoded = ink if raw is ink.raw else InkPage.read(raw, previous=ink)
+                if decoded.warning and not ink.warning:
+                    raise ValueError('This edit exceeds the supported ink scene: ' + decoded.warning)
+                normalized.append((page, decoded))
             digest = sha256(raw).hexdigest()
             target = directory / (digest + '.rm')
             if not target.exists():
                 atomic_write_bytes(target, raw)
-            normalized.append(decoded)
             pages.append(dict(id=page.id, record=page.record, template=page.template, ink=digest))
         # Copied page sidecars and unknown document members remain in a bounded base.
         # Update it for structural changes or an explicit source replacement,
         # never per pen sample. Replacing a clean source must not mark its
         # structure dirty: its original archive members remain authoritative.
-        for page, ink in zip(notebook.pages, normalized):
+        for page, ink in normalized:
             page.ink = ink
         structural = notebook.structure_dirty
         baseline = None
@@ -162,8 +170,11 @@ class Repository:
             raw = (directory / (digest + '.rm')).read_bytes()
             if sha256(raw).hexdigest() != digest:
                 raise ValueError('Notebook recovery page failed its integrity check.')
-            pages.append(Page(identifier(item['id']), item['record'], item['template'], InkPage.read(raw)))
-        if not 1 <= len(pages) <= 1000:
+            page = Page(identifier(item['id']), item['record'], item['template'])
+            if raw != notebook.unloaded_ink(page):
+                page.recovered_ink = raw
+            pages.append(page)
+        if not pages:
             raise ValueError('Invalid notebook recovery page count.')
         self.revisions.setdefault(notebook, {})[key] = sha256((directory / 'state.json').read_bytes()).hexdigest()
         notebook.pages = pages
