@@ -502,7 +502,8 @@ async def _exercise_library(app, fixtures, epub, comic, passed):
         assert app.request_reader_close(owner.session.id)
         if (close_task := getattr(owner, '_exit_task', None)) is not None:
             await asyncio.wait_for(asyncio.shield(close_task), 30)
-        assert owner.session.id not in app.workspace.sessions
+        assert owner.session.id not in app.workspace.sessions, (
+            'Protected comic stayed open after close', owner.book_busy, owner.book_status.text)
         assert owner.book_reader is None and not owner.book_content.children
         assert raw_source.password is None and not raw_source.cache
         assert app.reader_manager().catalog.library_store.path(protected_record['id'], '.cbz').read_bytes() == original
