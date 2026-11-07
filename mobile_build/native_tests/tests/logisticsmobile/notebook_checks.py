@@ -28,6 +28,48 @@ def verify_native_pencil_binding(app, panel, state):
     assert state.get('native_pen') is True and nonce == feed.view_id == state.get('input_view'), 'Native feed and canvas nonce disagree'
 
 
+async def reopen_renamed_notebook(app, resource):
+    """Check the native reader and prompts after a file-backed Recents rename."""
+    from threading import Event
+    from unittest.mock import AsyncMock, patch
+    from mobile.document_mutations import prepare_document_mutation
+    from mobile.file_operations import FileOperationRequest, retiring_work
+
+    name = 'Renamed Notebook QA.rmdoc'
+    request = FileOperationRequest('rename', resource.provider, resource.path, name)
+    plan = await prepare_document_mutation(app, request)
+    try:
+        await retiring_work(plan.execute, Event(), completed=plan.apply)
+    finally:
+        plan.release()
+    matches = [(session, summary) for session, summary in app.recent_items() if summary[0] == name]
+    assert len(matches) == 1 and not any(summary[0] == 'Notebook QA.rmdoc' for _, summary in app.recent_items())
+    session, _ = matches[0]
+    await app.recent_opener(session)()
+    panel = app.notebook_panel
+    assert panel.document.resource.path == name
+    await wait_for_text(panel.web, 'Native notebook')
+    await panel.perform({'op': 'rename', 'name': 'Unsaved native title'})
+    assert panel.document.dirty
+    with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='cancel')) as dialog:
+        app.request_reader_close(panel.session.id)
+        pending = getattr(panel, '_native_close_task', None)
+        if pending is not None:
+            await asyncio.wait_for(pending, 10)
+        pending = app.__dict__.get('_document_close_tasks', {}).get(panel.session.id)
+        if pending is not None:
+            await asyncio.wait_for(pending, 10)
+        dialog.assert_awaited_once()
+        assert 'Save changes' in dialog.call_args.args[0].title
+    assert not panel.closed and panel.document.dirty
+    with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='cancel')) as dialog:
+        assert not await panel.delete_document()
+        assert dialog.call_args.args[0].title == f'Delete {name}?'
+    await panel.perform({'op': 'save'})
+    assert not panel.document.dirty
+    return panel
+
+
 async def exercise_notebooks(app, *, return_to_home=True):
     from features.notebooks.mobile.documents import open_notebook
     from mobile.navigation import DESTINATIONS
@@ -245,15 +287,19 @@ async def exercise_notebooks(app, *, return_to_home=True):
     # The corner control follows the shared document-close workflow. Save this
     # synthetic local resource first so closing does not request a user choice.
     await reopened.perform(dict(op='save'))
+    resource = reopened.document.resource
     await reopened.web.evaluate_javascript("send({op:'library'})")
     for _ in range(100):
         if reopened.web is None and app.native_host.state.destination == 'home':
             break
         await asyncio.sleep(.1)
     assert reopened.web is None and app.native_host.state.destination == 'home'
-    assert await open_notebook(app, key=key)
-    current = app.notebook_panel
-    await wait_for_text(current.web, 'Native notebook')
+    if tools is not None:
+        current = await reopen_renamed_notebook(app, resource)
+    else:
+        assert await open_notebook(app, key=key)
+        current = app.notebook_panel
+        await wait_for_text(current.web, 'Native notebook')
     state = json.loads(await current.web.evaluate_javascript('JSON.stringify({busy})'))
     assert not state['busy'], 'Reopened canvas was left waiting for acknowledgement'
     if return_to_home:
