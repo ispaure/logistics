@@ -41,12 +41,11 @@ def storage_title_height(text):
     return 37 if text else 21
 
 
-def storage_title(title, text, kinds, width, *, leading=False, bold=False):
+def storage_title(title, text, kinds, width, *, leading=False, bold=False, title_size=17):
     """Use the same title and subtitle proportions for folders and documents."""
     from rubicon.objc import ObjCClass, CGRect
     from .appearance import apple_color
     from .hub_icons import icon
-    title_size = 17
     from commonUtils.ui.readers.layout import READER_LAYOUT
     subtitle_size = READER_LAYOUT.caption_size
     from commonUtils.ui.native.panning_title import apple_title_class

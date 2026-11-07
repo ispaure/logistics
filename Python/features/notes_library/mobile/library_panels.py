@@ -13,8 +13,12 @@ from ..navigation import PathChange
 from services.documents.authoring.document_dialogs import DocumentDialog, DocumentTypeDialog
 
 
-# Match the host's 13-sp captions and 16-sp controls in Toga CSS-point units.
-CAPTION_FONT, CONTROL_FONT = 10, 12
+# Design sizes in native pt/sp. Only Toga widget styles use the host conversion.
+FILENAME_SIZE = 15
+TAB_SIZE = 13
+PATH_SIZE = 12
+ENTRY_ICON_SIZE = 18
+CAPTION_FONT = 10
 
 
 class LibraryPanels:
@@ -61,7 +65,7 @@ class LibraryPanels:
         for label, value in (('In documents', 'Search within Documents'), ('File names', 'Search in File Names')):
             def choose(widget=None, value=value, **kwargs):
                 self.search_mode.value = value
-            button = toga.Button(label, on_press=choose, style=Pack(flex=1, height=44, font_size=CONTROL_FONT))
+            button = toga.Button(label, on_press=choose, style=Pack(flex=1, height=44, font_size=self.host.style_font(TAB_SIZE)))
             self.search_scope_buttons[value] = button
             self.search_scope.add(button)
         self.search_content = toga.Box(children=[self.search, self.search_scope, search_scroll],
@@ -78,7 +82,7 @@ class LibraryPanels:
                 if self.panel_tab != name:
                     self.select_panel_tab(name)
             button = toga.Button(name, on_press=select,
-                style=Pack(height=46, font_size=CONTROL_FONT))
+                style=Pack(height=46, font_size=self.host.style_font(TAB_SIZE)))
             self.panel_tabs[name] = button
             indicator = toga.Box(style=Pack(height=2))
             self.panel_tab_indicators[name] = indicator
@@ -86,6 +90,9 @@ class LibraryPanels:
             self.style_panel_tab(name, name == self.panel_tab)
         self.calendar_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
         self.calendar_scroll = toga.ScrollContainer(content=self.calendar_content, horizontal=False, style=Pack(flex=1))
+        self.sidebar.set_files_scrolls(self.calendar_scroll, *(
+            getattr(state['rows'], 'native_list', state['scroll']) for state in self._row_panels.values()
+        ))
         self.panel_body = toga.Box(children=[self.files_content], style=Pack(direction=COLUMN, flex=1))
         self.panel_body.style.margin_left = self.panel_body.style.margin_right = 4
         self.panel_body.style.margin_top = 8
@@ -188,7 +195,7 @@ class LibraryPanels:
         button = self.panel_tabs[name]
         self.host.tab_style(button, selected)
         self.host.presentation.surface(button, radius=0, background='transparent',
-            foreground='text' if selected else 'muted', outlined=False)
+            foreground='accent' if selected else 'muted', outlined=False)
         self.host.presentation.surface(self.panel_tab_indicators[name], radius=0,
             background='accent' if selected else 'transparent', outlined=False)
 
@@ -222,6 +229,10 @@ class LibraryPanels:
         if name in ('Files', 'Search'):
             self.select_panel_rows(self._search_scope if name == 'Search' else name)
         self.panel_tab = name
+        if name == 'Files' and self.panel_actions.parent is None:
+            self.tree.insert(1, self.panel_actions)
+        elif name != 'Files' and self.panel_actions.parent is self.tree:
+            self.tree.remove(self.panel_actions)
         selected = {'Files': self.files_content, 'Search': self.search_content,
                     'Calendar': self.calendar_scroll}[name]
         if self.panel_body.children != [selected]:
@@ -380,14 +391,16 @@ class LibraryPanels:
             if button is not None:
                 selected = button.vault_path == self.selected_path
                 if getattr(row, '_notes_selected', None) != selected:
-                    self.host.highlight_entry(row, selected)
-                    self.host.highlight_entry(button, selected)
-                    if not selected:
-                        self.host.presentation.surface(row, radius=0, background='transparent',
-                            outlined=False, eink_outlined=False)
-                        self.host.presentation.surface(button, radius=0, background='transparent',
-                            foreground='text', outlined=False, eink_outlined=False)
-                    row._notes_selected = selected
+                    self.style_tree_selection(row, button, selected)
+
+    def style_tree_selection(self, row, button, selected):
+        self.host.highlight_entry(row, selected)
+        self.host.presentation.surface(row, radius=8 if selected else 0,
+            background='notes_selection' if selected else 'transparent',
+            outlined=False, eink_outlined=selected, eink_selected=selected)
+        self.host.presentation.surface(button, radius=0, background='transparent',
+            foreground='text', outlined=False, eink_outlined=False, eink_selected=selected)
+        row._notes_selected = selected
 
     def bind_file_hold(self, button, path, *, directory=False):
         def show():

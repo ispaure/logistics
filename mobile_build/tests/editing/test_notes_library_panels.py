@@ -455,7 +455,9 @@ class NotesLibraryPanelTests(unittest.TestCase):
             self.assertEqual(owner.panel_body.children, [owner.files_content])
             self.assertIsNone(owner.calendar_scroll.parent)
             self.assertEqual(owner.panel_tabs['Files'].style.font_weight, 'bold')
-            self.assertEqual(owner.panel_tabs['Files']._impl._surface_roles[:2], ('transparent', 'text'))
+            self.assertEqual({button.style.font_size for button in owner.panel_tabs.values()},
+                             {13})
+            self.assertEqual(owner.panel_tabs['Files']._impl._surface_roles[:2], ('transparent', 'accent'))
             self.assertEqual(owner.panel_tabs['Calendar']._impl._surface_roles[:2], ('transparent', 'muted'))
             owner.search.value = 'Plan'
             await owner.search_task
@@ -463,12 +465,13 @@ class NotesLibraryPanelTests(unittest.TestCase):
             self.assertIs(owner.search.parent, owner.search_content)
             self.assertIsNone(owner.search_mode.parent)
             self.assertIs(owner.rows_scroll.parent, owner.search_content)
-            self.assertIs(owner.panel_actions.parent, owner.tree)
+            self.assertIsNone(owner.panel_actions.parent)
             owner.select_panel_tab('Calendar')
             self.assertEqual(owner.panel_body.children, [owner.calendar_scroll])
+            self.assertIsNone(owner.panel_actions.parent)
             self.assertIsNone(owner.files_content.parent)
             self.assertEqual(owner.panel_tabs['Calendar'].style.font_weight, 'bold')
-            self.assertEqual(owner.panel_tabs['Calendar']._impl._surface_roles[:2], ('transparent', 'text'))
+            self.assertEqual(owner.panel_tabs['Calendar']._impl._surface_roles[:2], ('transparent', 'accent'))
             self.assertEqual(owner.panel_tabs['Files']._impl._surface_roles[:2], ('transparent', 'muted'))
             await owner.calendar_task
             owner.select_panel_tab('Files')

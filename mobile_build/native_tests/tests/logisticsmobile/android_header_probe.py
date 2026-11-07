@@ -174,6 +174,10 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                     label = listing._impl.native.getRowTitleView(entry.index, listing._impl.generation)
                     assert label is not None and label.getMaxLines() == 2
                     assert label.getLayout().getLineCount() == 2, 'Long note title did not wrap'
+                    from android.util import TypedValue
+                    expected = TypedValue.applyDimension(
+                        TypedValue.COMPLEX_UNIT_SP, 15, label.getResources().getDisplayMetrics())
+                    assert abs(label.getTextSize() - expected) < .1
                     await self.capture_header(evidence / 'notes-files-portrait.png')
                     drawer = owner.sidebar.overlay
                     pending = asyncio.create_task(owner.file_actions('World'))

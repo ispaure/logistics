@@ -67,12 +67,23 @@ def accent_colors(hue=DEFAULT_ACCENT[0], saturation=DEFAULT_ACCENT[1]):
     return color, color
 
 
+def notes_selection_color(accent, surface):
+    """Tint the Notes selection surface with 16% of the Settings accent."""
+    colors = [bytes.fromhex(value[1:]) for value in (accent, surface)]
+    return '#' + bytes(round(a * .16 + b * .84) for a, b in zip(*colors)).hex()
+
+
+for colors in (LIGHT, DARK):
+    colors['notes_selection'] = notes_selection_color(colors['accent'], colors['surface'])
+
+
 def set_accent(hue=DEFAULT_ACCENT[0], saturation=DEFAULT_ACCENT[1]):
     """Change only accent roles; semantic artwork and lock colors are independent."""
     hue, saturation = validate_accent(hue, saturation)
     for colors, color in zip((LIGHT, DARK), accent_colors(hue, saturation)):
         colors['accent'] = color
         colors['primary'] = color
+        colors['notes_selection'] = notes_selection_color(color, colors['surface'])
 
 def css_variables(mode='system'):
     if mode not in ('system', 'light', 'dark'):
@@ -96,7 +107,7 @@ def themed_chapter(content, mode):
 EINK = dict(window='#ffffff', surface='#ffffff', alternate='#ffffff',
             text='#000000', muted='#000000', border='#000000',
             primary='#000000', accent='#000000', hover='#ffffff')
-EINK.update(file_icon='#000000', folder='#000000', folder_unlocked='#000000', folder_locked='#000000')
+EINK.update(notes_selection=EINK['hover'], file_icon='#000000', folder='#000000', folder_unlocked='#000000', folder_locked='#000000')
 EINK.update(settings_background='#ffffff', settings_group='#ffffff', settings_separator='#000000')
 EINK.update(control_border='#000000', destructive='#000000')
 EINK.update(destructive_fill='#000000', on_destructive='#ffffff')
