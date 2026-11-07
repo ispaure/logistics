@@ -942,6 +942,12 @@ class NotesLibraryTests(unittest.TestCase):
                     self.assertTrue(owner.cancelled.is_set())
                     self.assertIsNone(owner.path)
                     self.assertIsNot(self.app.body, panel)
+                    self.assertEqual(self.app.native_host.state.destination, 'documents')
+
+            self.app.show_locations()
+            owner = await open_vault(self.app, LocalFiles(self.root), 'Vault', 'files')
+            owner.close()
+            self.assertEqual(self.app.native_host.state.destination, 'files')
 
         self.run_async(exercise())
 

@@ -11,7 +11,8 @@ editing remain usable with Text Editor disabled. Notebooks controls drawing open
 and creation separately.
 
 Use Files, Search, Calendar and Links to navigate, and the library's close
-control to leave. The New Document, New Folder and Collapse All controls appear
+control to leave. Close returns to Documents or Workspaces, depending on where
+you opened the library. The New Document, New Folder and Collapse All controls appear
 in Files. Unsaved changes retain their save/discard/cancel choices. Folder-backed
 Markdown uses the [shared mobile editing controls](../../text_editor/user_mobile/user_mobile.md).
 
