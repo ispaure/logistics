@@ -85,7 +85,8 @@ def search(library, query, *, include_text, visible=None, cancelled=lambda: Fals
                 with saved:
                     children = lambda folder, **kwargs: indexed_children(library, saved, folder)
                     previous = run(None)
-                    notify(SearchResult(previous.rows, previous.scanned, False, previous.errors))
+                    if previous.rows:
+                        notify(SearchResult(previous.rows, previous.scanned, False, previous.errors))
             with cache.get(root, cancelled=cancelled, validate_files=False) as current:
                 if current.complete and not current.errors:
                     children = lambda folder, **kwargs: indexed_children(library, current, folder)
