@@ -36,6 +36,8 @@ async def open_review_folder_from_shared_files(app):
 async def exercise_ui_review(app):
     import base64
     import toga
+    if get_os() is OS.IOS:
+        from toga_iOS.libs import UIControlEventTouchUpInside
     webp = base64.b64decode('UklGRhwAAABXRUJQVlA4TA8AAAAvAYAAEAcQ/Y8CBiKi/wEA')
     variants = [webp,
         base64.b64decode('UklGRjwAAABXRUJQVlA4IDAAAADQAQCdASoCAAMAAUAmJaACdLoB+AADsAD+8ut//NgVzXPv9//S4P0uD9Lg/9KQAAA='),
@@ -234,7 +236,6 @@ async def exercise_ui_review(app):
             point = native.convertPoint(CGPoint(native.bounds.size.width / 2, native.bounds.size.height / 2), toView=window)
             hit = window.hitTest(point, withEvent=None)
             assert hit is not None and (hit == native or hit.isDescendantOfView(native)), f'Home Browse tap blocked at {point}: {hit}'
-            from toga_iOS.libs import UIControlEventTouchUpInside
             native.sendActionsForControlEvents(UIControlEventTouchUpInside)
         else:
             assert action is not None
