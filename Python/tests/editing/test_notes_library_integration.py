@@ -109,7 +109,8 @@ class NotesLibraryIntegrationTests(QtTestCase):
         from PySide6.QtMultimedia import QMediaFormat
         with self.temporary_directory() as directory:
             root = Path(directory)
-            source = '# Video\n\n![[potato.mp4]]\n\nFollowing text\n'
+            source = ('# Video\n\n' + 'Before the video.\n\n' * 80
+                      + '![[potato.mp4]]\n\nFollowing text\n' + '\nMore text.\n' * 40)
             (root / 'Home.md').write_text(source)
             (root / 'Media').mkdir()
             shutil.copyfile(Path(__file__).parents[1] / 'readers/fixtures/video/h264-aac.mp4', root / 'Media/potato.mp4')
@@ -121,14 +122,25 @@ class NotesLibraryIntegrationTests(QtTestCase):
             self.assertEqual(len(window.viewer.browser.inline_videos.cards), 1)
             card = next(iter(window.viewer.browser.inline_videos.cards.values()))
             self.assertTrue(card.play.isVisible())
-            self.assertTrue(card.player.source().isEmpty())
-            card.audio.setMuted(True)
-            frames = []
-            card.screen.videoSink().videoFrameChanged.connect(lambda frame: frames.append(frame.isValid()))
-            card.play.click()
-            self.assertFalse(card.player.source().isEmpty())
+            self.assertIsNone(card.player)
+            browser = window.viewer.browser
+            browser.setFocus()
+            scrollbar = browser.verticalScrollBar()
+            scrollbar.setValue(scrollbar.value() + card.y())
+            self.wait_until(lambda: browser.viewport().rect().contains(card.geometry()))
+            scroll_position = scrollbar.value()
+            self.assertGreater(scroll_position, 0)
+            create = card.create_player
+            def muted_player():
+                create()
+                card.audio.setMuted(True)
+            with patch.object(card, 'create_player', side_effect=muted_player):
+                from PySide6.QtTest import QTest
+                QTest.mouseClick(card.play, qt.Qt.MouseButton.LeftButton)
+                self.wait_until(lambda: card.player is not None and not card.player.source().isEmpty())
+            self.assertEqual(scrollbar.value(), scroll_position)
             if QMediaFormat().supportedFileFormats(QMediaFormat.ConversionMode.Decode):
-                self.wait_until(lambda: any(frames) and card.player.position() > 0,
+                self.wait_until(lambda: not card.screen.current_image.isNull() and card.player.position() > 0,
                                 message='Embedded video did not decode a frame')
             self.assertIn('Following text', window.viewer.browser.toPlainText())
             window.viewer.set_editing(True)
@@ -176,16 +188,32 @@ class NotesLibraryIntegrationTests(QtTestCase):
             provider.mkdir('Media')
             movie = Path(__file__).parents[1] / 'readers/fixtures/video/h264-aac.mp4'
             provider.create_file('Media/Clip.mp4', BytesIO(movie.read_bytes()))
-            provider.write_bytes('note.md', b'# Encrypted video\n\n![[Clip.mp4]]\n')
+            placeholders = ''.join(f'![[Synthetic-{index}.mp4]]\n\n' for index in range(12))
+            provider.write_bytes('note.md', ('# Encrypted video\n\n' + placeholders + '![[Clip.mp4]]\n').encode())
             window = NotesLibraryWindow(lambda: provider, 'Encrypted video')
             window.show()
             try:
                 self.wait_for_provider(window)
-                window.open_note('note.md')
-                self.wait_for_provider(window)
-                self.wait_until(lambda: bool(window.viewer.browser.inline_videos.cards))
-                embedded = next(iter(window.viewer.browser.inline_videos.cards.values()))
-                self.assertTrue(embedded.play.isVisible())
+                with patch.object(window.library, 'link', wraps=window.library.link) as lookup:
+                    window.open_note('note.md')
+                    self.wait_for_provider(window)
+                    self.wait_until(lambda: len(window.viewer.browser.inline_videos.cards) == 13)
+                    cards = window.viewer.browser.inline_videos.cards.values()
+                    self.assertTrue(all(card.player is None for card in cards))
+                    self.assertFalse(window.library.image_source('note.md').videos)
+                    lookup.assert_not_called()
+                    embedded = next(card for card in cards if card.label == 'Clip.mp4')
+                    create = embedded.create_player
+                    def muted_player():
+                        create()
+                        embedded.audio.setMuted(True)
+                    with patch.object(embedded, 'create_player', side_effect=muted_player):
+                        embedded.play.click()
+                        self.wait_until(lambda: embedded.player is not None and not embedded.player.source().isEmpty(),
+                                        timeout=20)
+                    lookup.assert_called_once()
+                    self.assertEqual(lookup.call_args.args, ('note.md', 'Clip.mp4'))
+                    self.assertEqual(list(window.library.image_source('note.md').videos), ['Media/Clip.mp4'])
                 with patch('desktop.document_catalog.open_resource') as opened:
                     window.open_note('Clip.mp4', resolve_link=True)
                     self.wait_for_provider(window)
@@ -194,6 +222,37 @@ class NotesLibraryIntegrationTests(QtTestCase):
                 self.assertFalse(embedded.player.isPlaying())
             finally:
                 window.close()
+
+    def test_localcrypt_preview_batches_fallback_images_into_one_recursive_listing(self):
+        from io import BytesIO
+        from features.notes_library.notes import NotesLibrary
+        from features.notes_library.preparation import prepare_document
+        from tests.local_crypt_fixture import crypt_fixture, require_pinned_rclone
+        from logistics_build.build_retention import scratch
+
+        with scratch() as directory, crypt_fixture(directory, require_pinned_rclone(), pull=False) as fixture:
+            provider = fixture.provider
+            provider.mkdir('Vault')
+            provider.mkdir('Vault/Attachments')
+            provider.mkdir('Vault/.Hidden')
+            for filename in ('first.png', 'second.png', 'third.png'):
+                provider.create_file('Vault/Attachments/' + filename, BytesIO(fixture.image))
+            provider.create_file('Vault/.Hidden/second.png', BytesIO(fixture.image))
+            library = NotesLibrary(provider, 'Vault')
+            self.addCleanup(library.close)
+            provider.create_file('Vault/Preview.md', BytesIO(
+                b'![[first.png]]\n\n![[second.png]]\n\n![[third.png]]'))
+            with patch.object(provider, 'search_entries', wraps=provider.search_entries) as recursive, \
+                    patch.object(provider, 'find_note_paths', wraps=provider.find_note_paths) as individual, \
+                    patch.object(provider, 'indexed_list', side_effect=AssertionError('Unexpected per-folder listing')):
+                prepared = prepare_document(library, 'Vault/Preview.md')
+                try:
+                    recursive.assert_called_once()
+                    individual.assert_not_called()
+                    self.assertEqual(len(prepared.resources), 3)
+                    self.assertFalse(prepared.resources.errors)
+                finally:
+                    prepared.close()
 
     def test_real_localcrypt_and_crypt_remote_open_and_read_notes(self):
         from io import BytesIO

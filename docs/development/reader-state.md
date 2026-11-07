@@ -8,9 +8,6 @@ and relative path, including relocated iOS Documents containers. Protected ident
 include their credential authority, namespace and logical key. Access checks remain
 separate from identity: finding an existing reader does not grant additional access.
 
-See the [investigation and implementation plan](reader-progress-plan.md) for the
-original failures, implementation scope and acceptance requirements.
-
 ## Storage and observation contract
 
 Ordinary local files use bounded atomic JSON checkpoints in app-owned storage,
@@ -139,3 +136,19 @@ rows subscribe to revocation; mobile Home refresh follows credential publication
 Unreadable buckets are preserved and do not hide unrelated available references.
 Focused catalogue tests cover wrong passwords, cross-credential substitution,
 revocation during encryption, opening-method replacement and independent clearing.
+
+## Progress adapter checks
+
+Use `Python/tests/readers/test_unified_progress_core.py` for publication order,
+interrupted writes, encryption and clear fences. `test_formats_progress.py`
+covers format adapters, and `test_unified_video_progress_acceptance.py` checks
+playback time and options across processes. Mobile host coverage lives in
+`mobile_build/tests/reading/test_unified_progress_acceptance.py`. The native
+`unified-progress` and `unified-progress-video` probes exercise relaunch and
+restoration through the native app on disposable devices.
+
+Image restoration covers supported zoom. Android PDF restores supported zoom,
+while iOS PDF also exposes a normalized center. Text and Markdown preserve
+mode and normalized scroll for compatible content revisions. Supported native
+source editors additionally store a UTF-16 line anchor. A changed revision
+invalidates a locator tied to the previous text.

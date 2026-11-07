@@ -288,42 +288,88 @@ class NotesLibraryDesktopTests(QtTestCase):
             self.wait_until(lambda: window.operation_footer.height() <= 1)
             window.close()
 
-    def test_empty_search_notice_does_not_reserve_space_below_tree(self):
+    def test_sidebar_tabs_own_their_controls_and_search_footer_collapses(self):
         with self.temporary_directory() as directory:
             root = Path(directory)
             (root / 'Home.md').write_text('# Home')
             window = self.open_library(root)
-            files = window.panel_tabs.widget(0)
-            self.wait_until(lambda: window.files_stack.geometry().bottom() == files.contentsRect().bottom())
+            self.assertEqual([window.panel_tabs.tabText(i) for i in range(window.panel_tabs.count())],
+                             ['Files', 'Search', 'Calendar'])
+            self.assertIs(window.panel_tabs.currentWidget(), window.files_panel)
+            self.assertTrue(window.tree.isVisible())
+            self.assertTrue(window.note_controls.isVisible())
+            self.assertFalse(window.search.isVisible())
+            window.panel_tabs.setCurrentWidget(window.search_panel)
+            self.assertTrue(window.search.isVisible())
+            self.assertFalse(window.tree.isVisible())
+            self.assertFalse(window.note_controls.isVisible())
+            self.assertFalse(window.calendar.isVisible())
+            results = window.search_results_stack
+            bottom = window.search_panel.contentsRect().bottom()
+            self.wait_until(lambda: results.geometry().bottom() == bottom)
             self.assertTrue(window.search_notice.isHidden())
-            self.assertEqual(window.files_stack.geometry().bottom(), files.contentsRect().bottom())
             window.search_notice.setText('Searching…')
-            self.wait_until(lambda: window.files_stack.geometry().bottom() < window.search_footers.geometry().top())
+            self.wait_until(lambda: results.geometry().bottom() < window.search_footers.geometry().top())
             self.assertFalse(window.search_notice.isHidden())
             window.search_notice.setText('Some items could not be searched.')
             self.assertFalse(window.search_notice.isHidden())
             window.search_notice.setText('')
-            self.wait_until(lambda: window.files_stack.geometry().bottom() == files.contentsRect().bottom())
+            self.wait_until(lambda: results.geometry().bottom() == bottom)
             window.search_notice.setText('Search failed.')
             window.search_notice.clear()
-            self.wait_until(lambda: window.files_stack.geometry().bottom() == files.contentsRect().bottom())
+            self.wait_until(lambda: results.geometry().bottom() == bottom)
             self.assertTrue(window.search_notice.isHidden())
-            self.assertEqual(window.files_stack.geometry().bottom(), files.contentsRect().bottom())
+            window.panel_tabs.setCurrentWidget(window.calendar_panel)
+            self.assertTrue(window.calendar.isVisible())
+            self.assertFalse(window.search.isVisible())
+            self.wait_until(lambda: not window.aux.busy)
 
-    def test_breadcrumb_viewport_tracks_larger_fonts(self):
+    def test_breadcrumb_centers_between_buttons_and_wraps_at_larger_fonts(self):
         with self.temporary_directory() as directory:
             root = Path(directory)
-            (root / 'A note with a long title.md').write_text('# Note')
+            (root / 'Design references').mkdir()
+            path = 'Design references/A note with a long title.md'
+            (root / path).write_text('# Note')
             window = self.open_library(root)
-            window.open_note('A note with a long title.md')
-            self.wait_until(lambda: not window.progress.busy)
+            wide_width = 1800
+            window.resize(wide_width, window.height())
+            window.open_note(path)
+            self.wait_until(lambda: not window.progress.busy and window.breadcrumb_viewport.isVisible())
+            self.assertNotIn('<br>', window.breadcrumbs.text())
+
+            def center(widget):
+                return widget.mapToGlobal(widget.rect().center())
+
+            def check_alignment():
+                left, right = window.up, window.viewer.edit_button
+                left_edge = left.mapToGlobal(left.rect().topRight()).x()
+                right_edge = right.mapToGlobal(right.rect().topLeft()).x()
+                viewport_center = center(window.breadcrumb_viewport)
+                self.assertLessEqual(abs(viewport_center.x() - (left_edge + right_edge) / 2), 2)
+                self.assertLessEqual(abs(center(window.breadcrumbs).x() - viewport_center.x()), 1)
+                for widget in (window.breadcrumbs, left, right):
+                    self.assertLessEqual(abs(center(widget).y() - viewport_center.y()), 1)
+
+            check_alignment()
+            initial_height = window.breadcrumb_viewport.height()
             font = window.breadcrumbs.font()
-            font.setPointSize(32)
+            font.setPointSize(20)
             window.breadcrumbs.setFont(font)
-            self.wait_until(lambda: window.breadcrumb_viewport.viewport().height() >= window.breadcrumbs.height(),
-                            message='Breadcrumb viewport did not resize for the larger font')
+            width = window.width() - window.breadcrumb_viewport.width()
+            width += round(window.breadcrumbs.width() * .8)
+            window.resize(width, window.height())
+            self.wait_until(lambda: '<br>' in window.breadcrumbs.text()
+                            and window.breadcrumb_viewport.height() > initial_height
+                            and window.navigation.height() == window.breadcrumb_viewport.height())
+            self.assertEqual(window.breadcrumbs.text().count('<br>'), 1)
+            self.assertIn('height="14" style="vertical-align:middle"><br>', window.breadcrumbs.text())
             self.assertGreaterEqual(window.breadcrumb_viewport.viewport().height(),
                                     window.breadcrumbs.height())
+            check_alignment()
+            window.resize(wide_width, window.height())
+            self.wait_until(lambda: '<br>' not in window.breadcrumbs.text()
+                            and abs(center(window.up).y() - center(window.breadcrumb_viewport).y()) <= 1)
+            check_alignment()
             window.close()
 
     def test_breadcrumbs_link_only_folder_notes_and_follow_every_document_kind(self):
@@ -344,26 +390,35 @@ class NotesLibraryDesktopTests(QtTestCase):
                 window.open_note('Topics/Plain/' + name)
                 self.wait_until(lambda: not window.progress.busy)
                 self.assertEqual(window.breadcrumbs.entries,
-                    [('Parity', None), ('Topics', 'Topics/Topics.md'), ('Plain', None), (name, None)])
+                    [('Topics', 'Topics/Topics.md'), ('Plain', None), (name, None)])
                 self.assertIn('href="0"', window.breadcrumbs.text())
                 self.assertIn('href="1"', window.breadcrumbs.text())
-                self.assertIn('href="2"', window.breadcrumbs.text())
-                window.breadcrumbs.resize(260, 30)
-                window.breadcrumbs.render_path()
+                self.assertNotIn('href="2"', window.breadcrumbs.text())
+                self.assertEqual(window.breadcrumbs.text().count('data:image/png;base64,'), 5)
                 self.assertIn(name, window.breadcrumbs.text())
-            window.breadcrumb_viewport.setFixedWidth(160)
+            window.breadcrumb_viewport.setFixedWidth(35)
             self.app.processEvents()
             bar = window.breadcrumb_viewport.horizontalScrollBar()
             self.assertGreater(bar.maximum(), 0)
             self.assertEqual(bar.value(), bar.maximum())
             bar.setValue(0)
             self.assertEqual(bar.value(), 0)
-            window.breadcrumbs.linkActivated.emit('2')
+            window.breadcrumbs.linkActivated.emit('1')
             self.assertEqual(window.reveal_path, 'Topics/Plain')
             self.wait_until(lambda: not window.progress.busy)
-            window.breadcrumbs.linkActivated.emit('1')
+            window.breadcrumbs.linkActivated.emit('0')
             self.wait_until(lambda: not window.progress.busy)
             self.assertEqual(window.history[window.index], 'Topics/Topics.md')
+            window.panel_tabs.setCurrentWidget(window.search_panel)
+            history = window.history[:]
+            with patch.object(window, 'open_note', wraps=window.open_note) as opened:
+                window.breadcrumbs.linkActivated.emit('0')
+                opened.assert_not_called()
+            self.wait_until(lambda: not window.progress.busy)
+            self.assertIs(window.panel_tabs.currentWidget(), window.files_panel)
+            self.assertIs(window.tree.currentItem(), window.items['Topics'])
+            self.assertTrue(window.items['Topics'].isExpanded())
+            self.assertEqual(window.history, history)
             window.navigate(-1)
             self.wait_until(lambda: not window.progress.busy)
             self.assertEqual(window.history[window.index], 'Topics/Plain/Unknown.bin')
@@ -457,6 +512,7 @@ class NotesLibraryDesktopTests(QtTestCase):
             root = Path(directory)
             (root / 'Nested').mkdir()
             (root / 'Nested/Home.md').write_text('# Home')
+            (root / 'Nested/Nested.md').write_text('# Landing')
             window = self.open_library(root)
             window.items['Nested'].setExpanded(True)
             self.wait_until(lambda: not window.progress.busy)
@@ -471,7 +527,10 @@ class NotesLibraryDesktopTests(QtTestCase):
             QTest.keyClick(editor, qt.Qt.Key.Key_Return)
             self.wait_until(lambda: not window.progress.busy)
             self.assertEqual((root / 'Moved folder/Renamed.md').read_text(), '# Home')
-            self.assertEqual(window.history[window.index], 'Moved folder/Renamed.md')
+            self.assertEqual(window.history[window.index], 'Moved folder/Moved folder.md')
+            self.assertEqual((root / 'Moved folder/Moved folder.md').read_text(), '# Landing')
+            self.assertEqual(window.folder_pages['Moved folder'], 'Moved folder/Moved folder.md')
+            self.assertFalse((root / 'Moved folder/Nested.md').exists())
             self.assertFalse(window.items[window.library.root].flags() & qt.Qt.ItemFlag.ItemIsEditable)
             window.close()
 
@@ -551,6 +610,8 @@ class NotesLibraryDesktopTests(QtTestCase):
         window = NotesLibraryWindow(lambda: LocalFiles(root), 'Parity')
         window.show()
         self.wait_until(lambda: not window.progress.busy)
+        index_directory = self.temporary_directory()
+        window.library.index_database = Path(index_directory.name) / 'directory-index.sqlite3'
         self.addCleanup(lambda: window.close() if __import__('shiboken6').isValid(window) else None)
         return window
 
@@ -580,6 +641,7 @@ class NotesLibraryDesktopTests(QtTestCase):
             (root / 'Nested').mkdir()
             (root / 'Nested/Target.md').write_text('# Target note')
             window = self.open_library(root)
+            window.panel_tabs.setCurrentWidget(window.search_panel)
             window.search.setText('Target')
             window.filter()
             self.wait_until(lambda: not window.aux.busy and bool(window.search_rows))
@@ -756,7 +818,7 @@ class NotesLibraryDesktopTests(QtTestCase):
             self.assertEqual(window.history[window.index], 'C.md')
             window.close()
 
-    def test_delayed_files_search_cannot_cancel_calendar_or_restart_hidden_scan(self):
+    def test_delayed_search_cannot_cancel_calendar_or_restart_hidden_scan(self):
         from threading import Event
         from features.notes_library.library_files import daily_notes
         with self.temporary_directory() as directory:
@@ -770,18 +832,18 @@ class NotesLibraryDesktopTests(QtTestCase):
                 return daily_notes(*args, **kwargs)
             try:
                 with patch('features.notes_library.library_files.daily_notes', side_effect=slow) as scan:
-                    window.panel_tabs.setCurrentIndex(1)
+                    window.panel_tabs.setCurrentWidget(window.calendar_panel)
                     self.wait_until(entered.is_set)
                     generation = window.aux_generation
                     window.search.setText('query')
-                    window.filter()  # Delayed callback from Files.
+                    window.filter()  # Delayed callback from Search.
                     self.assertEqual(window.aux_generation, generation)
                     self.assertFalse(window.aux.cancelled.is_set())
                     release.set()
                     self.wait_until(lambda: not window.aux.busy)
                     self.assertIn('2026-11-02', window.calendar_entries)
                     window.search.clear()
-                    window.panel_tabs.setCurrentIndex(0)
+                    window.panel_tabs.setCurrentWidget(window.files_panel)
                     window.refresh_calendar()  # A retained button callback.
                     self.assertEqual(scan.call_count, 1)
                     self.assertFalse(window.aux.busy)
@@ -824,6 +886,7 @@ class NotesLibraryDesktopTests(QtTestCase):
             (root / 'Home.md').write_text('# Needle\n\n[[Missing]]')
             (root / 'Other.md').write_text('# Other')
             window = self.open_library(root)
+            window.panel_tabs.setCurrentWidget(window.search_panel)
             window.search_mode.setCurrentText('Search within Documents')
             window.search.setText('needle')
             window.filter()
@@ -868,6 +931,7 @@ class NotesLibraryDesktopTests(QtTestCase):
             (root / 'Home.md').write_text('# Needle\n\n[[Missing]]')
             (root / 'Other.md').write_text('# Other')
             window = self.open_library(root)
+            window.panel_tabs.setCurrentWidget(window.search_panel)
             window.search_mode.setCurrentText('Search within Documents')
             window.search.setText('needle')
             window.filter()
@@ -934,6 +998,7 @@ class NotesLibraryDesktopTests(QtTestCase):
             window = self.open_library(root)
             window.open_note('Home.md')
             self.wait_until(lambda: not window.progress.busy)
+            window.panel_tabs.setCurrentWidget(window.search_panel)
             window.search_mode.setCurrentText('Search within Documents')
             window.search.setText('needle')
             window.filter()
@@ -959,6 +1024,7 @@ class NotesLibraryDesktopTests(QtTestCase):
             (root / 'Body.md').write_text('A turtle followed by red.')
             window = self.open_library(root)
             (root / '.obsidian/turtle red.md').write_text('Private configuration')
+            window.panel_tabs.setCurrentWidget(window.search_panel)
             self.assertEqual(window.search_mode.currentText(), 'Search in File Names')
             self.assertIs(window.search_inputs.currentWidget(), window.search)
             self.assertEqual(window.search.placeholderText(), 'Search file names')
@@ -974,7 +1040,8 @@ class NotesLibraryDesktopTests(QtTestCase):
             self.assertEqual([row['path'] for row in window.search_rows], ['Nested/turtle red.md', 'Body.md'])
             window.search.clear()
             window.filter()
-            self.assertIs(window.files_stack.currentWidget(), window.tree)
+            self.assertEqual(window.search_results.topLevelItemCount(), 0)
+            self.assertIs(window.panel_tabs.currentWidget(), window.search_panel)
             window.close()
 
     def test_calendar_handles_nested_duplicates_and_confirmed_creation(self):
@@ -984,7 +1051,7 @@ class NotesLibraryDesktopTests(QtTestCase):
             for path in ['2026-10-15.md', 'Nested/2026-10-15.md']:
                 (root / path).write_text('# Daily')
             window = self.open_library(root)
-            window.panel_tabs.setCurrentIndex(1)
+            window.panel_tabs.setCurrentWidget(window.calendar_panel)
             self.wait_until(lambda: not window.aux.busy)
             self.assertEqual(len(window.calendar_entries['2026-10-15']), 2)
             with patch.object(qt.QInputDialog, 'getItem', return_value=('Nested/2026-10-15.md', True)):
@@ -1080,6 +1147,7 @@ class NotesLibraryDesktopTests(QtTestCase):
                 with patch('features.notes_library.notes_links.connections', side_effect=slow):
                     window.toggle_links()
                     self.wait_until(entered.is_set)
+                    window.panel_tabs.setCurrentWidget(window.search_panel)
                     window.search_mode.setCurrentText('Search within Documents')
                     window.search.setText('Searchable')
                     window.filter()
@@ -1135,6 +1203,7 @@ class NotesLibraryDesktopTests(QtTestCase):
                 return original(*args, **kwargs)
             try:
                 with patch.object(DirectoryCache, 'get', autospec=True, side_effect=slow):
+                    window.panel_tabs.setCurrentWidget(window.search_panel)
                     window.search.setText('query')
                     window.filter()
                     self.wait_until(entered.is_set)
@@ -1314,6 +1383,7 @@ class NotesLibraryDesktopTests(QtTestCase):
                 self.assertIn('nested note',child.viewer.browser.toPlainText())
                 window.navigate(-1);self.wait_until(lambda:not child.progress.busy)
                 self.assertEqual(window.history[window.index],'Home.md')
+                window.panel_tabs.setCurrentWidget(window.search_panel)
                 window.search.setText('Home')
                 self.assertFalse(window.items['Home.md'].isHidden())
             finally:
@@ -1453,6 +1523,7 @@ class NotesLibraryDesktopTests(QtTestCase):
             (root / 'Plan.md').write_text('Filename result')
             (root / 'Body.md').write_text('Unique phrase in the body')
             window = self.open_library(root)
+            window.panel_tabs.setCurrentWidget(window.search_panel)
             window.search_mode.setCurrentText('Search within Documents')
             window.search.setText('Unique phrase')
             window.filter()
@@ -1473,6 +1544,9 @@ class NotesLibraryDesktopTests(QtTestCase):
             names_item = names_tree.topLevelItem(0)
             names_tree.setCurrentItem(names_item)
             with patch.object(window, 'request_aux', side_effect=AssertionError('Completed scope rescanned')):
+                window.panel_tabs.setCurrentWidget(window.files_panel)
+                window.panel_tabs.setCurrentWidget(window.search_panel)
+                self.assertIs(window.search_results.currentItem(), names_item)
                 window.search_mode.setCurrentIndex(0)
                 self.assertIs(window.search, documents_input)
                 self.assertEqual(window.search.text(), 'Unique phrase')
@@ -1498,6 +1572,7 @@ class NotesLibraryDesktopTests(QtTestCase):
             (root / 'Plan.md').write_text('Filename result')
             (root / 'Body.md').write_text('Unique phrase')
             window = self.open_library(root)
+            window.panel_tabs.setCurrentWidget(window.search_panel)
             window.search_mode.setCurrentText('Search within Documents')
             started, release = Event(), Event()
             original = window.library.read_text
@@ -1538,7 +1613,7 @@ class NotesLibraryDesktopTests(QtTestCase):
             self.assertEqual(len(window.viewer.browser.inline_videos.cards), 1)
             card = next(iter(window.viewer.browser.inline_videos.cards.values()))
             self.assertTrue(card.play.isVisible())
-            self.assertTrue(card.player.source().isEmpty())
+            self.assertIsNone(card.player)
             self.assertIn('Following text', window.viewer.browser.toPlainText())
             window.viewer.set_editing(True)
             self.wait_until(lambda: bool(window.viewer.formatted_editor.inline_videos.cards))
@@ -1548,7 +1623,7 @@ class NotesLibraryDesktopTests(QtTestCase):
             with patch('desktop.document_catalog.open_resource') as opened:
                 window.open_note('Media/potato.mp4')
                 opened.assert_called_once_with(window.provider, 'Media/potato.mp4', window)
-            self.assertTrue(card.player.source().isEmpty())
+            self.assertIsNone(card.player)
             self.assertIs(window.document_stack.currentWidget(), window.viewer)
             window.close()
             self.assertTrue(all(transport.closed.is_set() for transport in transports))

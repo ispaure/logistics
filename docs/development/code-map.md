@@ -5,7 +5,7 @@
 Start with [your first contribution](getting-started.md), then use this map to find the
 owner of your change. Paths below describe the current checkout, not a proposed
 directory layout. The [feature conventions](features.md#where-new-code-belongs) explain where to
-put new code. The [restructuring record](restructuring.md) retains migration history.
+put new code.
 
 ## Repository map
 

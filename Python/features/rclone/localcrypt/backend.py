@@ -242,15 +242,19 @@ class CryptResources(CryptNoteLookup, LocalFiles):
         check_cancelled(cancelled)
         return sorted(result, key=lambda row: (not row['directory'], row['name'].casefold()))
 
-    def search_entries(self, path='', *, cancelled=lambda: False):
+    def search_entries(self, path='', *, cancelled=lambda: False, max_entries=None):
         """List descendants with one rclone process, retaining names only in RAM."""
         prefix = self.relative(path)
         physical = self._physical(prefix, directory=True)
         # A recursive rclone listing must not traverse a link under our root.
         def unreadable(error):
             raise error
+        count = 0
         for folder, directories, files in os.walk(physical, followlinks=False, onerror=unreadable):
             check_cancelled(cancelled)
+            count += len(directories) + len(files)
+            if max_entries is not None and count > max_entries:
+                raise ValueError('Encrypted listing exceeds the entry limit.')
             for name in (*directories, *files):
                 check_cancelled(cancelled)
                 target = Path(folder) / name
@@ -260,7 +264,7 @@ class CryptResources(CryptNoteLookup, LocalFiles):
                     raise ValueError(f'Encrypted copies require independent regular files: {target}')
         rows = json.loads(self.command('lsjson', prefix, '--encrypted', '--recursive',
                                        limit=64 * 1024 * 1024, cancelled=cancelled))
-        if not isinstance(rows, list):
+        if not isinstance(rows, list) or (max_entries is not None and len(rows) > max_entries):
             raise ValueError('Invalid recursive encrypted listing.')
         for row in rows:
             check_cancelled(cancelled)

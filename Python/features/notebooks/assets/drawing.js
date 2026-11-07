@@ -25,14 +25,27 @@ function brushFor(tool) {
 }
 
 let normalWidth = '2';
+const colorByBrush = new Map(Object.entries(state.brush_colors || {}).map(([tool, color]) => [Number(tool), color]));
+let paletteBrush;
 function brushOptions() {
-  let brush = brushFor(Number($('tool').value));
+  const tool = Number($('tool').value), brush = brushFor(tool), color = $('color');
+  if (paletteBrush !== undefined && color.value !== '') colorByBrush.set(paletteBrush, Number(color.value));
   options('color', brush.colors.map(id => Object.entries(state.colors).find(([name, value]) => value === id)));
+  const rememberedColor = colorByBrush.get(tool);
+  color.value = brush.colors.includes(rememberedColor) ? rememberedColor : brush.colors[0];
+  paletteBrush = tool;
   if ($('width').options.length > 1) normalWidth = $('width').value;
   options('width', brush.fixed_width ? [['Fixed', 1]] : Object.entries(state.widths));
   $('width').value = brush.fixed_width ? '1' : normalWidth;
   warmSelectedGraphite();
 }
+
+$('color').addEventListener('change', () => {
+  const {tool, color} = chosenInk();
+  if (!brushFor(tool).colors.includes(color) || colorByBrush.get(tool) === color) return;
+  colorByBrush.set(tool, color);
+  if (state.brush_colors) send({op: 'brush-color', tool, color});
+});
 
 function chosenInk() {
   return {

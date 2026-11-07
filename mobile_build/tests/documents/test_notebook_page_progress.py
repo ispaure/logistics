@@ -13,7 +13,7 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class NotebookPageProgressTests(unittest.TestCase):
-    def test_home_and_local_reopen_visible_page_without_writing_ink(self):
+    def test_home_and_local_reopen_visible_page_and_brush_colors_without_writing_ink(self):
         app, _, _ = create_storage_notebook_app(self)
         run = app.loop.run_until_complete
         folder = app.private_root / 'Downloads' / 'Nested'
@@ -28,7 +28,9 @@ class NotebookPageProgressTests(unittest.TestCase):
         self.assertTrue(run(app.open_local_document(path, destination='home')))
         panel = app.notebook_panel
         panel.web.evaluate_javascript = AsyncMock(return_value=True)
+        run(panel.perform({'op': 'brush-color', 'tool': 15, 'color': 6}))
         run(panel.perform({'op': 'page', 'index': 2}))
+        run(panel.perform({'op': 'brush-color', 'tool': 18, 'color': -1}))
         selected = panel.state()['page_id']
         self.assertEqual(selected, book.pages[2].id)
         self.assertFalse(panel.document.dirty)
@@ -41,9 +43,11 @@ class NotebookPageProgressTests(unittest.TestCase):
         reopened = app.notebook_panel
         self.assertIsNot(reopened, panel)
         self.assertEqual(reopened.state()['page_id'], selected)
+        self.assertEqual(reopened.state()['brush_colors'], {15: 6, 18: -1})
         self.assertFalse(reopened.document.dirty)
         self.assertTrue(app.close_session(reopened.session.id))
 
         self.assertTrue(run(app.open_local_document(path, destination='home')))
         self.assertEqual(app.notebook_panel.state()['page_id'], selected)
+        self.assertEqual(app.notebook_panel.state()['brush_colors'], {15: 6, 18: -1})
         self.assertEqual(path.read_bytes(), original)

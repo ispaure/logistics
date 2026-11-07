@@ -35,11 +35,90 @@ button{-webkit-appearance:none;appearance:none}
 
 /* Tool options float below their toolbar buttons without blocking canvas input. */
 #mobileSheet[data-panel=brush],#eraserDialog{position:fixed;right:auto;bottom:auto;margin:0;width:min(360px,calc(100vw - 16px));max-width:none;max-height:calc(100dvh - 84px - env(safe-area-inset-top));box-sizing:border-box;border:1px solid var(--edge);border-radius:18px;background:var(--paper);color:var(--ink);box-shadow:0 4px 24px #15201030;z-index:6}
-#mobileSheet[data-panel=brush] .sheet-scroll{min-height:0}
 #eraserDialog{padding:18px;overflow:auto}
-#mobileSheet[data-panel=brush] .sheet-heading{padding:14px 18px}
-#mobileSheet[data-panel=brush] .swatches{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
-#mobileSheet[data-panel=brush] .swatch{width:100%}
+
+#mobileSheet[data-panel=brush] {
+  width:min(650px,calc(100vw - 16px));
+  max-height:calc(100dvh - var(--drawer-top,60px) - max(8px,env(safe-area-inset-bottom),calc(var(--notebook-home-bottom) + 4px)));
+  overflow:visible;
+}
+#mobileSheet[data-panel=brush]::before {
+  content:'';
+  position:absolute;
+  top:-5px;
+  left:calc(var(--drawer-notch,24px) - 5px);
+  width:9px;
+  height:9px;
+  background:var(--paper);
+  border-top:1px solid var(--edge);
+  border-left:1px solid var(--edge);
+  transform:rotate(45deg);
+  pointer-events:none;
+}
+#mobileSheet[data-panel=brush] .sheet-heading{display:none}
+#mobileSheet[data-panel=brush] .sheet-scroll{min-height:0;padding:10px;border-radius:inherit}
+#mobileSheet[data-panel=brush] h3{margin:8px 2px 4px;text-transform:none;letter-spacing:0}
+#mobileSheet[data-panel=brush] h3:first-child{margin-top:0}
+#mobileSheet[data-panel=brush] .brush-grid {
+  grid-template-columns:repeat(20,minmax(0,1fr));
+  gap:3px 0;
+  padding:3px 1px;
+  border:1px solid var(--edge);
+  border-radius:12px;
+  background:var(--wash);
+}
+#mobileSheet[data-panel=brush] .brush-card {
+  grid-column:span 4;
+  min-width:0;
+  min-height:52px;
+  margin:0 2px;
+  padding:3px 1px;
+  gap:2px;
+  border-radius:8px;
+}
+#mobileSheet[data-panel=brush] .brush-card:nth-child(n+6){grid-column:span 5}
+#mobileSheet[data-panel=brush] .brush-card svg{width:24px;height:25px}
+#mobileSheet[data-panel=brush] .brush-card span{font-size:10px;line-height:11px}
+@media(min-width:640px){
+  #mobileSheet[data-panel=brush] .brush-grid{grid-template-columns:repeat(9,minmax(0,1fr))}
+  #mobileSheet[data-panel=brush] .brush-card:nth-child(n){grid-column:span 1;min-height:66px}
+}
+#mobileSheet[data-panel=brush] .swatches{display:flex;gap:2px}
+#mobileSheet[data-panel=brush] .swatch{flex:1 1 0;min-width:0;max-width:44px;padding:0}
+#mobileSheet[data-panel=brush] .widths{align-items:center;gap:3px}
+#mobileSheet[data-panel=brush] .widths button{min-width:0;padding:3px;gap:0}
+.stroke-sample{display:none}
+#mobileSheet[data-panel=brush] .stroke-sample{display:flex;flex:1;min-height:44px;align-items:center;justify-content:center;background:var(--wash);border-radius:8px}
+#mobileSheet[data-panel=brush] .stroke-sample svg{width:64px;height:30px;overflow:visible}
+@media(prefers-reduced-motion:no-preference){
+  #mobileSheet[data-panel=brush]:not([hidden]){animation:ink-drawer-in 120ms ease-out}
+  @keyframes ink-drawer-in{from{opacity:0}to{opacity:1}}
+}
+
+/* Saved brushes are part of the same scrolling drawing toolbar. */
+.preset-buttons{display:contents}
+.preset-buttons .icon{position:relative;padding:3px 8px 8px 3px;border-color:var(--edge);-webkit-touch-callout:none;touch-action:pan-x}
+.preset-buttons .current-ink{top:4px;right:4px}
+.preset-width{position:absolute;right:4px;bottom:2px;font-size:9px;letter-spacing:1px}
+#brushPresetMenu{position:fixed;z-index:6;margin:0;padding:4px;border:1px solid var(--edge);border-radius:12px;background:var(--paper);color:var(--ink);box-shadow:0 4px 20px #15201030}
+#brushPresetMenu button{color:var(--destructive,#963520);padding-inline:14px}
+.notebook-mobile {
+  --notebook-rail-left:0px;
+  --notebook-rail-right:0px;
+  --notebook-home-bottom:0px;
+  --notebook-safe-width:calc(100vw - var(--notebook-rail-left) - var(--notebook-rail-right));
+  --notebook-tools-shift:calc((var(--notebook-rail-left) - var(--notebook-rail-right)) / 2);
+}
+.notebook-mobile header.mobile-head {
+  position:relative;
+  left:var(--notebook-tools-shift);
+  max-width:min(calc(var(--notebook-safe-width) - 8px),calc(100% - max(4px,env(safe-area-inset-left)) - max(4px,env(safe-area-inset-right))));
+}
+#mobileSheet[data-panel=brush]{width:min(650px,calc(var(--notebook-safe-width) - 16px))}
+#eraserDialog{width:min(360px,calc(var(--notebook-safe-width) - 16px))}
+#mobileSheet[data-panel=brush] .swatch svg.color-disc{width:min(26px,100%)}
+.notebook-mobile #restoreTools,.notebook-mobile .capture-tools{right:calc(var(--notebook-rail-right) + 8px)}
+.notebook-mobile #zoomControls{bottom:max(10px,env(safe-area-inset-bottom),calc(var(--notebook-home-bottom) + 4px))}
 
 /* The real horizontal hinge reserves upper settings and lower drawing space. */
 body.notebook-laptop header.mobile-head{max-width:calc(100% - 8px)}
@@ -68,8 +147,8 @@ body.notebook-laptop #mobileBackdrop{bottom:calc(100% - var(--fold-top))}
 /* Only an acknowledged live native landscape strip owns the drawing row. */
 body.native-drawing-tools header.mobile-head{display:none}
 /* Only an acknowledged native portrait band may borrow this DOM clearance. */
-body.notebook-portrait-band header.mobile-head{max-width:min(256px,calc(100% - 8px));min-height:48px;margin-top:4px}
-body.notebook-portrait-band #restoreTools{top:4px;left:50%;right:auto;transform:translateX(-50%);max-width:256px}
+body.notebook-portrait-band header.mobile-head{max-width:min(352px,calc(100% - 8px));min-height:48px;margin-top:4px}
+body.notebook-portrait-band #restoreTools{top:4px;left:50%;right:auto;transform:translateX(-50%);max-width:352px}
 
 /* Keep a single toolbar row. Each choice group scrolls independently. */
 .quick-choices{display:none}

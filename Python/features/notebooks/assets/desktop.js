@@ -72,7 +72,7 @@ function syncSwatches() {
     let rgb = swatchColor(tool, value);
     let b = choice('swatches', name, value, '', () => {
       $('color').value = value;
-      syncChrome()
+      $('color').dispatchEvent(new Event('change'))
     });
     b.className = 'swatch';
     b.style.setProperty('--swatch', colorCss(rgb));

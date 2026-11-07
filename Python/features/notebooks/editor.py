@@ -12,6 +12,7 @@ class Editor:
         self.checkpoint = checkpoint
         self.checkpoint_unconfirmed = False
         self.index = 0
+        self.brush_colors = {}
         self.undo = []
         self.redo = []
         self._stroke_clipboard = []

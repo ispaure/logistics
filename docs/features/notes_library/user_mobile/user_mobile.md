@@ -49,6 +49,7 @@ mobile Video Player with its resume, autoplay, tracks and playback tools. The
 current library page stays available when you return. In a Markdown note's
 reading view, use the embedded clip's Play button and timeline to watch it in
 place. Tap **Play fullscreen video** to open it in the native Video Player.
+The reading view resolves the video attachment when you choose playback.
 Unsupported formats
 show file information in that pane. Image previews allow up to 8 MiB and 16
 megapixels; PDFs allow up to 32 MiB. Back and forward retrace files opened in the
@@ -56,12 +57,15 @@ library; switching files asks about unsaved changes.
 
 Folders with a same-named `Folder/Folder.md` page have underlined names in Files;
 tap the name to open that page, or use the arrow to expand the folder.
-A horizontally scrollable folder breadcrumb appears below the title for every
-open file type, including images and PDFs. It retains every ancestor, including
-the library root, and initially shows the end of a long path. Swipe horizontally
-to reach earlier folders. Tap a folder to open its same-named page, or browse
-that folder when it has no page. The filename appears in the title; hold the
-title to see its full location.
+Renaming the folder also renames its matching landing note. Renaming the note
+directly leaves its parent folder in place.
+A horizontally scrollable breadcrumb shows the folders below the library root
+for every open file type, including images and PDFs. Long paths initially show
+their end. The trail uses Files icons with `>` between entries and ends in a
+file icon. Swipe horizontally to reach earlier folders. Tap a folder to open
+its same-named page. If that page is already open or the folder has no landing
+page, the tap reveals the folder in Files. Hold the filename in the title to
+see its full location.
 
 On iPhone, iPad and Android, previous/next note, edit/view and Note actions stay
 in the content row below the title, beside the breadcrumb. Close, Files and

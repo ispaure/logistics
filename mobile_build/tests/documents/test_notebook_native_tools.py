@@ -313,7 +313,6 @@ class NotebookPresentationBoundaryTests(unittest.TestCase):
         from features.notebooks.mobile.panel import NotebookPanel
         app = create_app(self)
         panel = NotebookPanel(app, library=False)
-        panel.view._notebook_dom_toolbar_contract = (48, 256)
         panel.view._notebook_dom_ready = 'old-canvas'
         panel.view._notebook_dom_epoch = 1
         panel.retire_canvas()

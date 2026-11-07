@@ -9,7 +9,6 @@ rclone connection, never real user credentials or remote writes.
 The browser omits column view explicitly because Qt 6.12/Python 3.15 crashes in
 QColumnView while changing a populated root. List/thumbnail navigation remains
 available. This proof is not a replacement mobile application or a release gate.
-See [the result and limitations](mobile-qt-proof.md).
 
 ## Reproduce on an Apple Silicon Mac
 
@@ -37,25 +36,26 @@ Python.xcframework using `--xcframework-path`, or use the tool's checksummed
 framework downloader. Current deployment documentation is
 [Qt's iOS deployment guide](https://doc.qt.io/qtforpython-6/deployment/deployment-pyside6-ios-deploy.html).
 
-The historical command sequence ran from the Logistics checkout. The fixed
-temporary paths and simulator placeholder below record that setup.
+Run from the Logistics checkout inside the scratch context. Set
+`LOGISTICS_QT_SCRATCH` to its disposable path, and substitute the UUID of the
+owned simulator and an ignored evidence destination.
 
 ```sh
-python mobile_build/qt_proof/prepare.py /tmp/logistics-qt-proof
-pyside6-ios-deploy /tmp/logistics-qt-proof/main.py --name LogisticsQtProof \
+python mobile_build/qt_proof/prepare.py "${LOGISTICS_QT_SCRATCH}/stage"
+pyside6-ios-deploy "${LOGISTICS_QT_SCRATCH}/stage"/main.py --name LogisticsQtProof \
   --bundle-id io.github.ispaure.logisticsqtproof \
   --wheel-pyside /path/to/pyside6-simulator.whl \
   --wheel-shiboken /path/to/shiboken6-simulator.whl \
   --xcframework-path /path/to/Python.xcframework
-python mobile_build/qt_proof/link_ios.py /tmp/logistics-qt-proof --go /path/to/go
-xcodebuild -project /tmp/logistics-qt-proof/deployment/ios_arm64_simulator/LogisticsQtProof.xcodeproj \
+python mobile_build/qt_proof/link_ios.py "${LOGISTICS_QT_SCRATCH}/stage" --go /path/to/go
+xcodebuild -project "${LOGISTICS_QT_SCRATCH}/stage"/deployment/ios_arm64_simulator/LogisticsQtProof.xcodeproj \
   -scheme LogisticsQtProof -sdk iphonesimulator \
   -destination 'generic/platform=iOS Simulator' \
-  -derivedDataPath /tmp/logistics-qt-build ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
+  -derivedDataPath "${LOGISTICS_QT_SCRATCH}/build" ARCHS=arm64 ONLY_ACTIVE_ARCH=YES \
   CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES
-xcrun simctl install SIMULATOR_UUID /tmp/logistics-qt-build/Build/Products/Debug-iphonesimulator/LogisticsQtProof.app
+xcrun simctl install SIMULATOR_UUID "${LOGISTICS_QT_SCRATCH}/build"/Build/Products/Debug-iphonesimulator/LogisticsQtProof.app
 xcrun simctl launch SIMULATOR_UUID io.github.ispaure.logisticsqtproof
-python mobile_build/qt_proof/collect.py SIMULATOR_UUID /tmp/logistics-qt-evidence
+python mobile_build/qt_proof/collect.py SIMULATOR_UUID test-results/qt-proof
 ```
 
 The app runs programmatic checks shortly after startup and writes evidence and

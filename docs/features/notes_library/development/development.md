@@ -1,6 +1,6 @@
 # Notes Library development
 
-[Notes Library guides](../notes_library.md) · [Implementation brief](../../../development/notes-library-feature-brief.md)
+[Notes Library guides](../notes_library.md)
 
 | Change | Owner and focused tests |
 | --- | --- |
@@ -24,8 +24,8 @@ filename and path order. Mobile supplies its visibility filter before traversal.
 Scope switches cancel pending work and advance
 its publication generation before restoring the target interface. Completed
 queries are retained, while library mutations and saves invalidate cached queries.
-Retirement clears both scopes, including hidden query controls. Mobile also keeps
-Files rows separate from both search scopes.
+Retirement clears both scopes, including hidden query controls. Files keeps its
+own list separate from both search scopes on desktop and mobile.
 
 The mobile `test_notes_library_modes.py` and `test_notes_library_panels.py` suites
 and desktop `test_notes_library_desktop.py` cover independent inputs and results,
@@ -43,17 +43,21 @@ adapter use a memory-only `FilePreview` in the same library pane; images and
 PDF pages use existing image validation and PDF backends. Other formats display
 metadata without loading arbitrary binary data. Selecting a video file hands off
 to the full platform Video Player while retaining the library document. The
-mobile Markdown reading view and formatted editor use revocable
-`VideoContent`/`VideoTransport` streams for inline video. The reading view uses
-page-scoped actions for inline Play and native fullscreen. Inline Play goes
-through the mobile audio consent owner, which can also pause the embedded clip
+desktop and mobile Markdown readers render video controls from the authored
+targets. Play resolves the requested attachment and opens a revocable
+`VideoContent`/`VideoTransport` stream. Mobile fullscreen resolves the attachment
+on demand and hands it directly to the native player. Mobile page actions expire
+when their page is replaced. On mobile, inline Play goes
+through the audio consent owner, which can also pause the embedded clip
 when playback permission is revoked.
 Markdown image and video embeds use the same authoritative lookup as file links:
 current folder, library root, then a unique suffix match across the library.
-Conventional attachment folders do not bypass ambiguity checks. LocalCrypt uses its
-ciphertext-name search for these fallbacks. Link resolution accepts any
-contained file, retaining hidden-path and library-root restrictions. File
-previews retire rendered content, PDF bytes and video streams on replacement, close or lock;
+Conventional attachment folders do not bypass ambiguity checks. Link resolution accepts
+contained files and retains hidden-path and library-root restrictions. Notes Library
+image preparation builds one bounded inventory on the first suffix fallback and
+reuses it for the rest of the render. LocalCrypt uses one recursive rclone listing
+for that inventory. Individual links and on-demand videos still use its ciphertext-name search.
+File previews retire rendered content, PDF bytes and video streams on replacement, close or lock;
 page workers finish before their content is released.
 File-preview creation also closes its stream if validation fails while leaving
 the provider operation. A failed media resolution revalidates cached video
@@ -120,10 +124,13 @@ Notes Library owns breadcrumb presentation for every embedded document kind.
 Ancestor landing pages use the same bounded provider probes as sidebar folders,
 including files opened before their ancestors are expanded. Probes run off the
 UI thread; links follow the existing document navigation/save/history path.
-Desktop places a horizontally scrollable rich-text path beside history. Mobile
-keeps the filename in its title and places the complete folder breadcrumb between
-history and edit/actions on the next row. Both preserve every ancestor and start
-at the end of an overflowing path. `features/notes_library/mobile/breadcrumbs.py` removes Toga's default
+Both hosts start the breadcrumb at the first folder below the library root.
+Desktop centers the path between the toolbar button groups and wraps between
+crumbs into two lines when needed. Mobile keeps the filename in its title and
+places the folder breadcrumb between history and edit/actions on the next row.
+Both reuse Files artwork, use `>` between entries and start at the end of an
+overflowing path.
+`features/notes_library/mobile/breadcrumbs.py` removes Toga's default
 100-unit scroll-container minimum, allowing a 320-point row to retain its right
 controls. It defers initial scrolling until native viewport/content measurements
 agree with the current layout; retries are bounded and cancelled for obsolete
@@ -141,9 +148,9 @@ and start at the last folder. A touch that starts inside the strip
 belongs to the strip in either direction, including at its scroll limits.
 Android breadcrumb buttons use the measured typeface and explicit spacing rather
 than native button insets, so their labels remain intact inside the scrollable path.
-Folder breadcrumbs open a landing page when present, otherwise reveal the folder
-in Files. Files retains its separate rule that only landing-page names are
-underlined. Closing or locking the library clears the displayed path.
+Folder breadcrumbs open a landing page when present. If that page is already
+open or absent, they reveal the folder in Files. In Files, only folders with
+landing pages are underlined. Closing or locking the library clears the path.
 
 Apple and Android keep note history, edit/view and Note actions in the content
 row beside breadcrumbs. Read-only libraries omit edit/view. Close, Files,
@@ -314,7 +321,10 @@ to the bounded visible-tree scan, which batches directory-name decoding across
 each breadth-first level and skips hidden folders. Neither path retains a lookup
 index. Root containment, linked/special
 file rejection, cancellation, credential checks and the 10,000-entry limit remain
-enforced. Ordinary local global lookups reuse an in-memory, 10,000-entry folder-name cache. Validated local
+enforced. The LocalCrypt directory index caches search listing rows. Live link
+probes use provider metadata and validate the attachment on access. On desktop,
+an uncached file or directory mapping can require a separate rclone invocation.
+Ordinary local global lookups reuse an in-memory, 10,000-entry folder-name cache. Validated local
 directory inode and nanosecond modification/change times invalidate changed
 folders, including changes made outside Logistics. On Windows, a fresh lightweight
 name/type fingerprint also detects rapid changes whose directory timestamps are
@@ -857,8 +867,9 @@ resources, connections and operation footer; the workspace selects the active
 projection. `ui/library_connections.py` owns the document Links panel independently
 of library navigation. Desktop library and scoped-tab regressions cover the split,
 including private leases, shortcuts, footer selection and worker retirement.
-Document panes retain the outer library label for root breadcrumbs; scoped-tab
-tests assert that label as well as document identity.
+The outer workspace has separate Files, Search and Calendar tabs. Files owns
+the tree and file commands. Search keeps separate query fields, result lists
+and pagination for filename and document-content searches.
 
 ## Test scope and DataView execution
 
@@ -989,3 +1000,21 @@ Android recycled-tree functional and two-device controlled latency acceptance
 are recorded above, separately from earlier panel probes. Additional-device,
 physical Samsung S8 and physical drag/drop behavior have not been certified by
 these probes.
+
+## Rename, Move and Markdown preparation
+
+Rename changes the name within the existing parent. Move retains the name and
+uses a library-rooted folder projection that excludes the source and its
+descendants. Mobile injects the native picker through `NotesHost.folder_browser`.
+The temporary picker borrows the provider without acquiring a browser lease.
+Cancelling it leaves the active encrypted library, draft and drawer intact.
+
+While mobile prepares an editor, the published reader remains below the
+loading panel. Cancel restores that reader and invalidates late publication.
+Repeated renders can reuse document-owned media subject to access and revision
+checks. Retiring the document clears those resources.
+
+Run the Notes Library modes and panel tests for cancellation, stale callbacks
+and encrypted provider lifetime. The native `notes-markdown-feedback` probe
+exercises media reuse and replacement, editing cancellation and separate
+Rename and Move flows on disposable iOS and Android targets.

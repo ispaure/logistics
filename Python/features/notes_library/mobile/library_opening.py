@@ -10,16 +10,20 @@ from html import unescape
 from json import dumps
 from pathlib import PurePosixPath
 from textwrap import fill
+from threading import Event
 from time import perf_counter
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 from uuid import uuid4
-from commonUtils.runtime.operations import OperationCancelled
+from commonUtils.runtime.operations import OperationCancelled, check_cancelled
 from commonUtils.ui.native.inline_html import set_inline_html
 from ..notes import MAX_PREVIEW_HTML, MARKDOWN, document_kind
 from ..dataview import view_plan
 from ..dataview_script import worker_policy
 from .library_panels import LibraryOpening
 from .inline_video import install_controls, video_embed
+
+
+PREPARING_VIDEO = 'Preparing video…'
 
 
 class LibraryDocuments:
@@ -152,6 +156,7 @@ class LibraryDocuments:
                 pass
             if cancelled():
                 return False
+            self.notice.text = ''
             self.page_loading.start(path, finding=resolve_link)
             self.speech.close()
             if not resolve_link:
@@ -189,7 +194,7 @@ class LibraryDocuments:
 
             base = "https://markdown.invalid/vault/" + uuid4().hex + "/"
             def read():
-                stage('Preparing embedded media…')
+                stage('Preparing Markdown preview…')
                 plan = view_plan(data.decode("utf-8-sig"))
                 html, videos = self.note_preview(plan.render() if plan.scripts else plan.source,
                     path, base, active=bool(plan.scripts), cancelled=cancelled)
@@ -268,20 +273,10 @@ class LibraryDocuments:
             target = url
         elif url.split("?", 1)[0] == self.base:
             query = parse_qs(parsed.query)
-            if 'inline-video' in query:
-                key = query['inline-video'][0]
-                audio = getattr(self, '_inline_audio', None)
-                if (key in self._page_videos and not self.editing and audio is not None
-                        and audio.interactive()):
-                    self.speech.close()
-                    if audio.request_play():
-                        self.web.evaluate_javascript('window.logisticsPlayVideo?.(' + dumps(key) + ')')
-                return False
-            if "video" in query:
-                path = self._page_videos.get(query["video"][0])
-                pending = self._video_opening
-                if path is not None and not self.editing and (pending is None or pending.done()):
-                    self._video_opening = self.host.loop.create_task(self.open_video_file(path, page=self.base))
+            inline = 'inline-video' in query
+            if inline or 'video' in query:
+                key = query['inline-video' if inline else 'video'][0]
+                self.start_embedded_video(key, inline=inline)
                 return False
             target = query.get("target", [""])[0]
         else:
@@ -345,6 +340,9 @@ class LibraryDocuments:
     def clear_video_actions(self):
         if self._video_opening is not None:
             self._video_opening.cancel()
+            self._video_opening = None
+            if self.notice.text == PREPARING_VIDEO:
+                self.notice.text = ''
         audio = getattr(self, '_inline_audio', None)
         if audio is not None:
             self.pause_inline_videos()
@@ -363,24 +361,76 @@ class LibraryDocuments:
         if getattr(self, '_inline_audio', None) is not None:
             self.web.evaluate_javascript("document.querySelectorAll('.note-video video').forEach(video => video.pause())")
 
+    def start_embedded_video(self, key, *, inline):
+        videos = self._page_videos
+        if key not in videos or self.editing or (
+                self._video_opening is not None and not self._video_opening.done()):
+            return
+        audio = getattr(self, '_inline_audio', None)
+        if inline:
+            if audio is None or not audio.interactive():
+                return
+            self.speech.close()
+            if not audio.request_play():
+                return
+        self._video_opening = self.host.loop.create_task(
+            self.play_embedded_video(key, videos[key], self.path, self.base, videos, audio if inline else None))
+
+    async def play_embedded_video(self, key, target, document, base, videos, audio):
+        def current():
+            return (self.valid() and not self.editing and self.path == document
+                    and self.base == base and self._page_videos is videos and key in videos)
+
+        def cancelled():
+            return not current() or stopped.is_set()
+
+        stopped = Event()
+        self.notice.text = PREPARING_VIDEO
+        try:
+            if audio is None:
+                path, _ = await asyncio.to_thread(self.library.link, document, target, cancelled=cancelled)
+                return current() and await self.open_video_file(path, page=base)
+            url = await asyncio.to_thread(self.library.open_embedded_video, document, target, cancelled=cancelled)
+            if not current() or not audio.interactive() or not audio.permitted():
+                return False
+            if url is None:
+                raise ValueError('Video unavailable.')
+            await self.web.evaluate_javascript('window.logisticsPlayVideo?.(' + dumps(key) + ',' + dumps(url) + ')')
+            return True
+        except OperationCancelled:
+            return False
+        except (OSError, RuntimeError, ValueError):
+            if current():
+                self.notice.text = 'Video unavailable.'
+            return False
+        finally:
+            stopped.set()
+            if current() and self.notice.text == PREPARING_VIDEO:
+                self.notice.text = ''
+
     def note_preview(self, text, path, base, *, active=False, cancelled=lambda: False):
-        sources = {}
-        def remember_video(path, url):
-            sources[url] = path
+        from commonUtils.ui.native.markdown_preview import VideoPlaceholder
+        from services.documents.markdown_media import video_reference
 
         videos = {}
-        html = self.host.preview(text, image_source=self.library.image_source(
-            path, cancelled=cancelled, on_video=remember_video, batch=True))
+        images = self.library.image_source(path, cancelled=cancelled, batch=True)
+
+        def media(target):
+            check_cancelled(cancelled)
+            if not video_reference(target):
+                return images(target)
+            key = uuid4().hex
+            videos[key] = target
+            return 'video/mp4', VideoPlaceholder(key)
+
+        html = self.host.preview(text, image_source=media)
         html = self.data_view_html(html, active=active, base=base)
         def video_button(match):
-            source = sources.get(unescape(match[1]))
-            if source is None:
-                return match[0]
-            key = uuid4().hex
-            videos[key] = source
-            return video_embed(match[0], base, key, PurePosixPath(source).name)
+            key = match[1]
+            filename = PurePosixPath(unquote(urlsplit(videos[key]).path)).name
+            return video_embed(match[0], base, key, filename)
 
-        html = re.sub(r'<video controls\b[^>]*\bsrc="([^"]+)"[^>]*>[^<]*</video>',
+        html = re.sub(r'<video controls\b[^>]*\bdata-video-key="([0-9a-f]+)"[^>]*>[^<]*</video>',
                       video_button, html)
         if videos:
             html = install_controls(html, uuid4().hex, worker=active)

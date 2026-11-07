@@ -61,6 +61,23 @@ const reset=()=>{target.clearRect(0,0,280,150);target.fillStyle='white';target.f
 const pixel=(x,y)=>Array.from(target.getImageData(x,y,1,1).data);
 let signatures=[],controls=[];
 const choose=tool=>{let button=document.querySelector('#brushes [data-value="'+tool+'"]')||document.querySelector('.brush-card[data-tool="'+tool+'"]');check(button,'Missing visual brush choice');button.click()};
+const swatch=color=>document.querySelector('.swatch[data-value="'+color+'"],.swatch[data-color="'+color+'"]');
+const checkColor=(color,message)=>check(chosenInk().color===color&&swatch(color)?.getAttribute('aria-pressed')==='true',message);
+const pick=(tool,color)=>{
+  swatch(color).click();
+  check(busy&&queue[0]?.op==='brush-color'&&queue[0].tool===tool&&queue[0].color===color,'Color choice was not sent to host');
+  window.notebookBrushColorUpdate('');
+  check(!busy&&!queue.length,'Color choice acknowledgement did not release the queue');
+};
+choose(16);checkColor(6,'Marker did not restore its saved color');
+choose(15);checkColor(0,'Ballpoint inherited Marker blue');pick(15,6);
+choose(17);checkColor(0,'Fineliner inherited Ballpoint blue');pick(17,7);
+choose(18);checkColor(13,'Highlighter must start with yellow');pick(18,-1);
+choose(23);checkColor(1,'Shader must start with gray');
+choose(15);checkColor(6,'Ballpoint did not restore blue');
+choose(17);checkColor(7,'Fineliner did not restore red');
+choose(18);checkColor(-1,'Highlighter did not restore orange');
+render();checkColor(-1,'Page render reset the selected color');
 for(let tool of Object.values(state.tools)){
 choose(tool);
 check($('width').options.length===(tool===18?1:3),'Wrong per-tool width choices');
@@ -242,6 +259,7 @@ def main(output):
 
         view.loadFinished.connect(loaded)
         state = Editor(Notebook.new('Brush compatibility')).state()
+        state.update(brush_colors={16: 6}, save_status='Saved')
         state['frame_batched_ink'] = batched
         state['native_pen'] = not desktop and not batched
         if desktop:

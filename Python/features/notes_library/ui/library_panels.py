@@ -50,7 +50,7 @@ class LibrarySearchTree(FolderPageTree):
 
 
 class LibraryPanels(LibraryConnections):
-    def init_panels(self, side, controls):
+    def init_panels(self, files, *, searchable):
         qt.QApplication.instance().paletteChanged.connect(self.refresh_entry_icons)
         self.positions = {}
         self.folder_pages = {}
@@ -63,19 +63,13 @@ class LibraryPanels(LibraryConnections):
         self.search_mode.addItems(['Search within Documents', 'Search in File Names'])
         self.search_inputs = qt.QStackedWidget()
         self.search_footers = qt.QStackedWidget()
-        self.files_stack = qt.QStackedWidget()
-        side.removeWidget(self.tree)
-        self.files_stack.addWidget(self.tree)
+        self.search_results_stack = qt.QStackedWidget()
         self._search_interfaces = []
-        first_input = self.search
-        if first_input is not None:
-            side.removeWidget(first_input)
         for index, placeholder in enumerate(('Search in documents', 'Search file names')):
-            control = first_input if index == 0 else qt.QLineEdit() if first_input is not None else None
+            control = qt.QLineEdit() if searchable else None
             if control is not None:
                 control.setPlaceholderText(placeholder)
-                if index:
-                    qt.connect_search(control, lambda control=control: self.filter_search_input(control))
+                qt.connect_search(control, lambda control=control: self.filter_search_input(control))
             self.search_inputs.addWidget(control if control is not None else qt.QWidget())
             results = LibrarySearchTree()
             results.setHeaderLabels(['Name', 'Type', 'Size', 'Path'])
@@ -99,7 +93,7 @@ class LibraryPanels(LibraryConnections):
             footer_layout.addWidget(more)
             footer_layout.addWidget(notice)
             self.search_footers.addWidget(footer)
-            self.files_stack.addWidget(results)
+            self.search_results_stack.addWidget(results)
             self._search_interfaces.append(dict(search=control, search_results=results,
                 search_more=more, search_notice=notice, search_rows=[], search_shown=50,
                 search_query=None, search_paused=False))
@@ -107,20 +101,25 @@ class LibraryPanels(LibraryConnections):
         self.search_mode.setCurrentIndex(self._search_scope)
         self.search_inputs.setCurrentIndex(self._search_scope)
         self.search_footers.setCurrentIndex(self._search_scope)
+        self.search_results_stack.setCurrentIndex(self._search_scope)
         for name, value in self._search_interfaces[self._search_scope].items():
             setattr(self, name, value)
         self.search_mode.currentIndexChanged.connect(self.select_search_scope)
-        side.insertWidget(0, self.search_mode)
-        side.insertWidget(1, self.search_inputs)
-        side.addWidget(self.files_stack, 1)
-        side.addWidget(self.search_footers)
-        self.search_footers.hide()
         self.panel_tabs = qt.QTabWidget()
-        files = qt.QWidget()
-        files.setLayout(side)
-        self.panel_tabs.addTab(files, 'Files')
-        calendar = qt.QWidget()
-        layout = qt.QVBoxLayout(calendar)
+        self.files_panel = files
+        self.panel_tabs.addTab(self.files_panel, 'Files')
+        self.search_panel = qt.QWidget()
+        search_layout = qt.QVBoxLayout(self.search_panel)
+        search_layout.setContentsMargins(0, 0, 0, 0)
+        search_layout.addWidget(self.search_mode)
+        search_layout.addWidget(self.search_inputs)
+        search_layout.addWidget(self.search_results_stack, 1)
+        search_layout.addWidget(self.search_footers)
+        self.search_footers.hide()
+        search_tab = self.panel_tabs.addTab(self.search_panel, 'Search')
+        self.panel_tabs.setTabEnabled(search_tab, searchable)
+        self.calendar_panel = qt.QWidget()
+        layout = qt.QVBoxLayout(self.calendar_panel)
         self.calendar = qt.QCalendarWidget()
         self.calendar.setGridVisible(True)
         self.calendar.clicked.connect(self.open_daily_note)
@@ -133,7 +132,7 @@ class LibraryPanels(LibraryConnections):
         layout.addWidget(refresh)
         layout.addStretch()
         self.calendar_entries = None
-        self.panel_tabs.addTab(calendar, 'Calendar')
+        self.panel_tabs.addTab(self.calendar_panel, 'Calendar')
         self.panel_tabs.currentChanged.connect(self.panel_changed)
         self.init_connections()
         self.document_saved.connect(self.invalidate_search_interfaces)
@@ -152,7 +151,7 @@ class LibraryPanels(LibraryConnections):
             self.filter()
 
     def select_search_scope(self, index):
-        active = self.panel_tabs.currentIndex() == 0
+        active = self.panel_tabs.currentWidget() is self.search_panel
         if active:
             self.cancel_aux()
         self.remember_search_interface()
@@ -161,8 +160,7 @@ class LibraryPanels(LibraryConnections):
             setattr(self, name, value)
         self.search_inputs.setCurrentIndex(index)
         self.search_footers.setCurrentIndex(index)
-        searching = self.search is not None and bool(search_terms(self.search.text()))
-        self.files_stack.setCurrentWidget(self.search_results if searching else self.tree)
+        self.search_results_stack.setCurrentIndex(index)
         self.sync_search_footer()
         if active:
             self.resume_search_interface()
@@ -263,13 +261,12 @@ class LibraryPanels(LibraryConnections):
     def filter(self, *args):
         if not hasattr(self, 'aux') or self.library is None or self.locked or self.closing:
             return
-        # A debounced Files callback may arrive after Calendar was selected.
+        # A debounced Search callback may arrive after another tab was selected.
         # Tab switching owns cancellation; hidden search must not cancel its scan.
-        if self.panel_tabs.currentIndex() != 0:
+        if self.panel_tabs.currentWidget() is not self.search_panel or self.search is None:
             return
-        query = self.search.text() if self.search is not None else ''
+        query = self.search.text()
         searching = bool(search_terms(query))
-        self.files_stack.setCurrentWidget(self.search_results if searching else self.tree)
         self.search_more.hide()
         if not searching:
             self.cancel_aux()
@@ -337,7 +334,7 @@ class LibraryPanels(LibraryConnections):
     def reveal_folder(self, path):
         self.reveal_path = path
         self.split.widget(0).show()
-        self.panel_tabs.setCurrentIndex(0)
+        self.panel_tabs.setCurrentWidget(self.files_panel)
         parts = PurePosixPath(path).relative_to(self.library.root or '.').parts
         parent = self.library.root
         for part in parts:
@@ -356,15 +353,16 @@ class LibraryPanels(LibraryConnections):
             self.tree.scrollToItem(item)
         self.reveal_path = None
 
-    def panel_changed(self, index):
+    def panel_changed(self):
         self.cancel_aux()
-        if index == 1:
+        if self.panel_tabs.currentWidget() is self.calendar_panel:
             self.refresh_calendar()
-        else:
+        elif self.panel_tabs.currentWidget() is self.search_panel:
             self.resume_search_interface()
 
     def refresh_calendar(self, *args):
-        if self.library is None or self.locked or self.closing or self.panel_tabs.currentIndex() != 1:
+        if (self.library is None or self.locked or self.closing
+                or self.panel_tabs.currentWidget() is not self.calendar_panel):
             return
         library = self.library
         self.calendar_entries = None
@@ -400,12 +398,11 @@ class LibraryPanels(LibraryConnections):
             self.mutate(lambda cancelled: self.library.create(key, self.library.root, cancelled=cancelled), created=True)
 
     def selected_file_actions(self):
-        tree = self.search_results if self.files_stack.currentWidget() is self.search_results else self.tree
-        item = tree.currentItem()
+        item = self.tree.currentItem()
         if item is None:
             self.viewer.status.setText('Select a file or folder first.')
             return
-        self.file_actions(tree, tree.visualItemRect(item).center())
+        self.file_actions(self.tree, self.tree.visualItemRect(item).center())
 
     def file_actions(self, tree, point):
         if self.library is None or self.progress.busy or self.locked:

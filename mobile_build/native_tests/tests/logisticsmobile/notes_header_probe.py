@@ -3,6 +3,7 @@ import asyncio
 import json
 from pathlib import Path
 import traceback
+import toga
 
 from commonUtils.testing.stages import TestStage
 from commonUtils.runtime.resources.local import LocalFiles
@@ -76,8 +77,7 @@ class NotesHeaderProbe(NotesDrawersProbe):
                     'portrait', 'landscape-left', 'portrait'):
                 await rotate(self, orientation, settle=.5)
                 assert await owner.open_note('Home.md')
-                await self.check_note_actions(owner, report)
-                assert await owner.open_note('3D Character Art/3D Character Art.md')
+                await self.check_note_actions(owner, report, '3D Character Art/3D Character Art.md')
                 await asyncio.sleep(.5)
                 assert owner.secondary.parent is not None
                 assert owner.breadcrumb_scroll.parent is owner.secondary
@@ -86,16 +86,19 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 self.assert_breadcrumb_end(owner)
                 scroll.horizontal_position = 0
                 await asyncio.sleep(.35)
-                root_button = owner.breadcrumbs.children[0]._impl.native
-                root_point = root_button.convertPoint(
-                    CGPoint(root_button.bounds.size.width / 2, root_button.bounds.size.height / 2), toView=window)
-                hit = window.hitTest(root_point, withEvent=None)
-                while hit is not None and hit != root_button:
+                first = owner.breadcrumbs.children[0].children[1]
+                assert first.breadcrumb_folder == '3D Character Art'
+                first_button = first._impl.native
+                first_point = first_button.convertPoint(
+                    CGPoint(first_button.bounds.size.width / 2, first_button.bounds.size.height / 2), toView=window)
+                hit = window.hitTest(first_point, withEvent=None)
+                while hit is not None and hit != first_button:
                     hit = hit.superview
-                assert hit == root_button, 'Beginning of breadcrumb path is unreachable'
+                assert hit == first_button, 'Beginning of breadcrumb path is unreachable'
                 scroll.horizontal_position = scroll.max_horizontal_position
                 await asyncio.sleep(.35)
-                for button in (owner.menu, owner.links_button, *owner.breadcrumbs.children):
+                crumbs = [child.children[1] for child in owner.breadcrumbs.children if isinstance(child, toga.Box)]
+                for button in (owner.menu, owner.links_button, *crumbs):
                     if not hasattr(button, 'on_press') or not button.enabled:
                         continue
                     native = button._impl.native

@@ -15,6 +15,23 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class LibraryFolderTests(unittest.TestCase):
+    def test_landing_note_rename_conflicts_preserve_original_paths(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'Topic').mkdir()
+            (root / 'Topic/Topic.md').write_text('# Landing')
+            (root / 'Topic/Archive.md').write_text('# Existing note')
+            (root / 'Occupied').mkdir()
+            library = NotesLibrary(LocalFiles(root))
+            self.addCleanup(library.close)
+            for destination in ('Archive', 'Occupied'):
+                with self.subTest(destination=destination), self.assertRaises(FileExistsError):
+                    library.move('Topic', destination)
+                self.assertEqual(library.folder_page('Topic'), 'Topic/Topic.md')
+                self.assertEqual((root / 'Topic/Topic.md').read_text(), '# Landing')
+                self.assertEqual((root / 'Topic/Archive.md').read_text(), '# Existing note')
+                self.assertFalse((root / 'Topic/Occupied.md').exists())
+
     def test_local_folder_snapshot_uses_names_without_entry_or_body_reads(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
@@ -129,7 +146,8 @@ class LibrarySearchTests(unittest.TestCase):
                     stopped = cancel_on_failure
                     raise ValueError('Folder cannot be listed')
                 return original(folder, cancelled=cancelled)
-            with patch.object(library, 'folders', side_effect=listing):
+            with (patch.object(library_files, 'directory_index', return_value=None),
+                  patch.object(library, 'folders', side_effect=listing)):
                 result = library_files.search(library, 'needle', include_text=False, cancelled=lambda: stopped)
                 self.assertEqual([row['path'] for row in result.rows], ['Vault/needle.md'])
                 self.assertFalse(result.complete)

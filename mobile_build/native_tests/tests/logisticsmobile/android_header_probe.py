@@ -3,6 +3,7 @@ import asyncio
 import json
 from pathlib import Path
 import traceback
+import toga
 
 from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.testing.stages import TestStage
@@ -54,9 +55,10 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
             (root / 'Home.md').write_text('# Home\n\n[[Other]]')
             (root / 'Other.md').write_text('# Other\n\n[[Home]]')
             long_name = 'Weekly environment art and lighting production references.md'
-            (root / long_name).write_text('# Weekly review')
             (root / 'World').mkdir(exist_ok=True)
             (root / 'World/World.md').write_text('# World')
+            long_path = 'World/' + long_name
+            (root / long_path).write_text('# Weekly review')
             folder = root / 'World/Projects/Character art production planning'
             folder.mkdir(parents=True, exist_ok=True)
             name = 'Review the complete delivery schedule and documentation notes.md'
@@ -92,9 +94,10 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                 self.adaptive.render()
                 await asyncio.sleep(.3)
                 scroll = owner.breadcrumb_scroll
-                for button in owner.breadcrumbs.children:
-                    if not hasattr(button, 'breadcrumb_folder'):
+                for crumb in owner.breadcrumbs.children:
+                    if not isinstance(crumb, toga.Box):
                         continue
+                    button = crumb.children[1]
                     native = button._impl.native
                     layout = native.getLayout()
                     assert layout is not None and layout.getEllipsisCount(0) == 0, (
@@ -151,18 +154,25 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                     if scroll.horizontal_position <= 1:
                         break
                     await self.touch_native(scroll._impl.hScrollView, swipe=1)
-                assert scroll.horizontal_position <= 1, ('Cannot swipe to library root', before, scroll.horizontal_position)
+                assert scroll.horizontal_position <= 1, ('Cannot swipe to first folder', before, scroll.horizontal_position)
                 assert not owner.sidebar.sidebar_open, 'Breadcrumb swipe opened a drawer'
-                await self.capture_header(evidence / ('notes-root-' + orientation + '.png'))
+                await self.capture_header(evidence / ('notes-first-folder-' + orientation + '.png'))
+                first = owner.breadcrumbs.children[0].children[1]
+                assert first.breadcrumb_folder == 'World'
+                await self.touch_native(first._impl.native)
+                await self.wait_for(lambda: owner.path == 'World/World.md' and not owner.page_loading.active,
+                    'Ancestor breadcrumb tap did not open its landing page')
                 owner.select_panel_tab('Search')
-                await self.touch_native(owner.breadcrumbs.children[0]._impl.native)
+                history = owner.history[:]
+                await self.touch_native(owner.breadcrumbs.children[0].children[1]._impl.native)
                 await self.wait_for(lambda: owner.panel_tab == 'Files'
-                    and (owner.sidebar.expanded or owner.sidebar.sidebar_open),
-                    'Root breadcrumb tap did not reveal Files')
+                    and owner.selected_path == 'World' and (owner.sidebar.expanded or owner.sidebar.sidebar_open),
+                    'Current landing page breadcrumb tap did not reveal its folder')
+                assert owner.path == 'World/World.md' and owner.history == history
                 if orientation == 'portrait':
                     await asyncio.sleep(.45)
                     listing = owner.rows.native_list
-                    entry = next(row for row in listing.data if row.path == long_name)
+                    entry = next(row for row in listing.data if row.path == long_path)
                     label = listing._impl.native.getRowTitleView(entry.index, listing._impl.generation)
                     assert label is not None and label.getMaxLines() == 2
                     assert label.getLayout().getLineCount() == 2, 'Long note title did not wrap'
@@ -182,13 +192,9 @@ class AndroidHeaderProbe(DocumentationHeaderProbe):
                     assert owner.sidebar.overlay is drawer and owner.sidebar.side == 'files'
                 owner.sidebar.show_detail()
                 owner.sidebar.finish_dismissals()
-                await asyncio.sleep(.4)
-                scroll.horizontal_position = 0
-                await self.touch_native(owner.breadcrumbs.children[2]._impl.native)
-                await self.wait_for(lambda: owner.path == 'World/World.md', 'Ancestor breadcrumb tap did not open its landing page')
                 report['samples'].append(dict(orientation=orientation, expanded=owner.sidebar.expanded,
                     title_width=titles.getWidth() / density, breadcrumb_width=scroll_width / density,
-                    initial_scroll=before, root_swipe=True, root_tap=True, ancestor_tap=True))
+                    initial_scroll=before, first_folder_swipe=True, current_folder_tap=True, ancestor_tap=True))
             await self.touch_native(owner.close_button._impl.native)
             from android.view import View
             await self.wait_for(lambda: not owner.valid()

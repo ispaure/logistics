@@ -1,4 +1,5 @@
 """Bounded in-memory Markdown resources, independent of presentation."""
+from functools import partial
 from pathlib import Path
 from urllib.parse import urlsplit, urljoin
 from urllib.request import url2pathname
@@ -18,7 +19,8 @@ class MarkdownResources(dict):
         self.clear()
 
 
-def prepare_markdown(provider, path, *, data=None, cancelled=lambda: False, image_source=None):
+def prepare_markdown(provider, path, *, data=None, cancelled=lambda: False, image_source=None,
+                     deferred_video=None):
     from commonUtils.runtime.operations import check_cancelled
     from contextlib import nullcontext
     def read(path, limit):
@@ -37,15 +39,27 @@ def prepare_markdown(provider, path, *, data=None, cancelled=lambda: False, imag
     # Resource I/O stays in the opening worker; Qt rendering uses only RAM.
     from commonUtils.persistence.text import decode_bytes
     from commonUtils.formats.markdown.images import image_targets
+    from services.documents.markdown_media import video_reference
     try:
-        for reference in image_targets(decode_bytes(data).text)[:128]:
+        for index, reference in enumerate(image_targets(decode_bytes(data).text)):
             check_cancelled(cancelled)
-            parts = urlsplit(reference)
+            lazy_video = deferred_video is not None and video_reference(reference)
+            if not lazy_video and (index >= 128 or budget <= 0):
+                if deferred_video is None:
+                    break
+                continue
+            try:
+                parts = urlsplit(reference)
+            except ValueError:
+                continue
             if parts.scheme or parts.netloc or parts.query:
                 continue
             target = Path(url2pathname(urlsplit(urljoin(path.parent.as_uri() + '/', parts.path)).path))
             try:
                 provider.relative(target)
+                if lazy_video:
+                    resources.videos[target.resolve()] = partial(deferred_video, reference)
+                    continue
                 from features.video.formats import VIDEO_EXTENSIONS
                 if target.suffix.lower() in VIDEO_EXTENSIONS:
                     source = image_source
@@ -86,8 +100,6 @@ def prepare_markdown(provider, path, *, data=None, cancelled=lambda: False, imag
                 from commonUtils.formats.markdown.image_sources import image_failure_reason
                 resources.errors[target.resolve()] = image_failure_reason(error)
                 continue
-            if budget <= 0:
-                break
         check_cancelled(cancelled)
     except BaseException:
         resources.close()

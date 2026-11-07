@@ -136,9 +136,7 @@ nonpersistent native WebView, which clears content on disposal. `mobile/text_rea
 Native forms consume these portable helpers through the host; there is no
 Books `mobile/metadata.py` module.
 Mobile rendering and chapter labels are feature-owned; import records, provider
-transactions and session/privacy policy remain host-owned. See the
-[parity assessment](books-comics-parity.md) for remaining
-reader and editing gaps. Shared parsing does not imply full reading parity.
+transactions and session/privacy policy remain host-owned.
 
 
 ## Native speech and typography
@@ -545,13 +543,7 @@ disposal before private chapter preparation. The browser DOM fixture compares li
 and hidden counts in single- and two-column layouts. The native EPUB journey checks
 the combined footer once its two-chapter fixture has finished counting.
 
-## Documentation audit and validation scope
-
-The November 4, 2026 audit compared the guides with feature registration, mobile
-catalogue/controllers, archive policies and test source. It did not rerun Qt,
-browser, native-device or build validation during the release quiet hold. Earlier
-results in this guide and the [parity record](books-comics-parity.md) remain dated
-evidence, not current release acceptance.
+## Catalogue validation
 
 The visible mobile catalogue lists configured folders. Ordinary imported records
 and their metadata index still support document sessions and suggestions; they
@@ -566,3 +558,15 @@ encrypted persistence, while passwordless state remains in memory. See the
 [shared reader-state contract](../../../development/reader-state.md) for host
 ownership and clearing behavior. Do not infer a session-only policy from the
 legacy `epub_session_bookmarks` field name.
+
+## Imported metadata publication
+
+`Python/mobile/library_edits.py` publishes metadata changes to the managed
+UUID copy of an imported EPUB or comic. The external source is preserved.
+The host validates the rewritten archive and confirms the current checksum
+and revision before creating a bounded `.edits` journal. Once publication
+begins, it finishes replacing the managed archive and updating its record
+or leaves the journal for recovery on the next open. Recovery checks the
+archive digest against the before and after records, and preserves the
+journal if it finds an unexpected change. Cancellation is checked before
+each file enters publication.

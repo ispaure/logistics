@@ -1,6 +1,8 @@
 """Project retained native reader chrome beside a measured edge status cluster."""
 import weakref
 
+NOTEBOOK_TOOLBAR_CLEARANCE = (48, 352)
+
 
 def free_top_band(regions, width, safe_top, required_width, *, row_height=60):
     """Choose only a wide edge column; missing/central/full-width data declines."""
@@ -42,10 +44,11 @@ def free_top_band(regions, width, safe_top, required_width, *, row_height=60):
 
 def notebook_geometry(geometry, regions, contract, *, origin_x=0, margins=(0, 0, 0)):
     """Contract-backed DOM clearance, only in a wholly unoccluded tool column."""
-    if contract != (48, 256) or abs(origin_x) > .5 or any(margins):
+    if contract != NOTEBOOK_TOOLBAR_CLEARANCE or abs(origin_x) > .5 or any(margins):
         return None
+    row_height, toolbar_width = contract
     width = geometry['width']
-    left, right = (width - 256) / 2, (width + 256) / 2
+    left, right = (width - toolbar_width) / 2, (width + toolbar_width) / 2
     if left < geometry['left'] + 8 or right > geometry['right'] - 8:
         return None
     # Check every measured region, not only the first native row. Detached
@@ -53,12 +56,12 @@ def notebook_geometry(geometry, regions, contract, *, origin_x=0, margins=(0, 0,
     if any(w > 0 and h > 0 and x < right + 8 and x + w > left - 8
            for x, y, w, h in regions):
         return None
-    return dict(geometry, reserve=max(geometry['row_top'] + geometry['row_height'], geometry['reserve'] - 48),
-                full_reserve=geometry['reserve'], content_clearance=48, toolbar_max_width=256)
+    return dict(geometry, reserve=max(geometry['row_top'] + geometry['row_height'], geometry['reserve'] - row_height),
+                full_reserve=geometry['reserve'], content_clearance=row_height, toolbar_max_width=toolbar_width)
 
 
 def reset_notebook_clearance(view):
-    if getattr(view, '_notebook_dom_toolbar_contract', None) != (48, 256):
+    if getattr(view, '_notebook_dom_toolbar_contract', None) != NOTEBOOK_TOOLBAR_CLEARANCE:
         return
     view._notebook_dom_ready = None
     view._notebook_dom_epoch = getattr(view, '_notebook_dom_epoch', 0) + 1
@@ -116,8 +119,10 @@ def project(app, view, destination, controller):
     prompt = status.lower().startswith(('save failed', 'cannot ', 'unsaved changes:',
                                        'book import failed', 'could not '))
     close = getattr(view, '_reader_close_button', None)
+    notebook_tools = getattr(view, '_native_drawing_tools', None)
     if (vertical_edge(controller) or getattr(view, '_reader_fullscreen', False)
             or getattr(app, '_reader_chrome_hidden', False) or prompt or close is None
+            or (notebook_tools is not None and notebook_tools.stacked_portrait(controller))
             or abs(float(origin.y)) > .5 or not hasattr(view, '_document_storage_status')
             or hasattr(view, '_document_title_controls')):
         restore(view)

@@ -316,29 +316,46 @@ class NotesLibraryTests(unittest.TestCase):
             for name in ('Current.md', 'Image.png', 'Data.json', 'Unknown.bin'):
                 self.assertTrue(await owner.open_note('Vault/Projects/Plain/' + name))
                 owner.reflow(1400)
-                links = [child for child in owner.breadcrumbs.children if hasattr(child, 'breadcrumb_path')]
+                crumbs = [child for child in owner.breadcrumbs.children if isinstance(child, toga.Box)]
+                links = [crumb.children[1] for crumb in crumbs]
                 self.assertEqual([child.breadcrumb_path for child in links],
-                                 ['Vault/Vault.md', 'Vault/Projects/Projects.md', None])
-                self.assertTrue(all(child.notes_folder_link for child in links))
-                self.assertEqual(owner.breadcrumbs.children[-1].text, 'Plain')
-                self.assertTrue(any(getattr(child, 'text', '') == 'Plain' for child in owner.breadcrumbs.children))
+                                 ['Vault/Projects/Projects.md', None])
+                self.assertEqual([getattr(child, 'notes_folder_link', False) for child in links], [True, False])
+                self.assertEqual([link.text for link in links], ['Projects', 'Plain'])
+                self.assertEqual([crumb.children[0].browser_entry_kind for crumb in crumbs],
+                                 ['folder_document', 'folder'])
+                self.assertEqual(owner.breadcrumbs.children[-1].browser_entry_kind, 'file')
             owner.reflow(390)
-            self.assertEqual(len(owner.breadcrumbs.children), 5)
+            for index in (1, 3):
+                separator = owner.breadcrumbs.children[index]
+                self.assertIsInstance(separator, toga.ImageView)
+                self.assertEqual((separator.style.width, separator.style.height), (14, 14))
             self.assertEqual(owner.secondary.children, [owner.back_button, owner.forward_button,
                 owner.breadcrumb_scroll, owner.reader_actions_button])
-            await owner.breadcrumbs.children[-1].on_press()
+            await links[-1].on_press()
             self.assertEqual(owner.sidebar.side, 'files')
             self.assertIn('Vault/Projects/Plain', owner.expanded)
             self.assertEqual(owner.selected_path, 'Vault/Projects/Plain')
             self.assertEqual(owner.path, 'Vault/Projects/Plain/Unknown.bin')
             owner.sidebar.show_detail()
-            await links[1].on_press()
+            await links[0].on_press()
             self.assertEqual(owner.path, 'Vault/Projects/Projects.md')
+            owner.select_panel_tab('Search')
+            landing = owner.breadcrumbs.children[0].children[1]
+            history = owner.history[:]
+            with patch.object(owner, 'open_note', wraps=owner.open_note) as opened:
+                await landing.on_press()
+                opened.assert_not_called()
+            self.assertEqual(owner.sidebar.side, 'files')
+            self.assertEqual(owner.panel_tab, 'Files')
+            self.assertEqual(owner.selected_path, 'Vault/Projects')
+            self.assertIn('Vault/Projects', owner.expanded)
+            self.assertEqual(owner.history, history)
             await owner.previous_note()
             self.assertEqual(owner.path, 'Vault/Projects/Plain/Unknown.bin')
             self.assertTrue(await owner.open_note(self.provider.relative(deep / 'Current.md')))
             owner.reflow(220)
-            self.assertEqual(owner.breadcrumbs.children[-1].text, 'Nested')
+            self.assertEqual(owner.breadcrumbs.children[-3].children[1].text, 'Nested')
             owner.dispose()
             self.assertFalse(owner.breadcrumbs.children)
         self.run_async(exercise())
@@ -350,6 +367,7 @@ class NotesLibraryTests(unittest.TestCase):
             with patch('features.notes_library.notes.can_write', return_value=False):
                 owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
                 self.assertTrue(await owner.open_note('Vault/Home.md'))
+                self.assertEqual([child.browser_entry_kind for child in owner.breadcrumbs.children], ['file'])
                 for apple in (False, True):
                     owner.host = replace(owner.host, apple=apple)
                     for width in (320, 834, 390):
@@ -361,7 +379,7 @@ class NotesLibraryTests(unittest.TestCase):
                 owner.dispose()
         self.run_async(exercise())
 
-    def test_provider_root_stays_reachable_in_full_breadcrumb_path(self):
+    def test_breadcrumb_starts_at_first_folder_below_provider_root(self):
         from mobile.obsidian import open_vault
         parent = 'Projects/Long names for the complete project archive/2026 design references'
         directory = self.vault / parent
@@ -371,12 +389,13 @@ class NotesLibraryTests(unittest.TestCase):
             owner = await open_vault(self.app, LocalFiles(self.vault), '', 'documents')
             self.assertTrue(await owner.open_note(parent + '/Plan.md'))
             owner.reflow(320)
-            links = [child for child in owner.breadcrumbs.children if hasattr(child, 'breadcrumb_folder')]
-            self.assertEqual([child.text for child in links], [owner.library_title, *parent.split('/')])
-            self.assertEqual(links[0].breadcrumb_folder, '')
+            links = [child.children[1] for child in owner.breadcrumbs.children if isinstance(child, toga.Box)]
+            self.assertEqual([child.text for child in links], parent.split('/'))
+            self.assertEqual(links[0].breadcrumb_folder, 'Projects')
             self.assertGreater(sum(child.style.width for child in links), owner._breadcrumb_width)
             await links[0].on_press()
             self.assertTrue(owner.sidebar.sidebar_open)
+            self.assertEqual(owner.selected_path, 'Projects')
             owner.dispose()
         self.run_async(exercise())
 
@@ -495,8 +514,10 @@ class NotesLibraryTests(unittest.TestCase):
         (self.vault / 'Home.md').write_text(source)
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
-            with patch.object(owner.web, 'set_content') as publish:
+            with patch.object(owner.web, 'set_content') as publish, \
+                    patch.object(owner.library, 'link', wraps=owner.library.link) as lookup:
                 self.assertTrue(await owner.open_note('Vault/Home.md'))
+                lookup.assert_not_called()
             media = owner.library.image_source('Vault/Home.md')
             html = publish.call_args.args[1]
             import re
@@ -507,11 +528,9 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertNotIn('<video controls', html)
             self.assertIn('aria-label="Second clip"', html)
             self.assertNotIn('http://127.0.0.1:1/', html)
-            self.assertEqual(len(media.videos), 2)
-            blocks = editor_blocks(source, image_source=media)
-            self.assertIn('<video ', blocks[0]['html'])
+            self.assertFalse(media.videos)
+            blocks = editor_blocks(source, image_source=lambda _: None)
             self.assertIn('![[potato.mp4]]', blocks[0]['source'])
-            transports = [transport for _, transport in media.videos.values()]
             from unittest.mock import AsyncMock
             self.app.set_feature_enabled('video', True, refresh=False)
             with patch.object(owner.web, 'evaluate_javascript', new_callable=AsyncMock) as pause, patch(
@@ -527,14 +546,21 @@ class NotesLibraryTests(unittest.TestCase):
                     native.assert_awaited_with(self.app, self.provider, 'Vault/Media/' + filename, fullscreen=True)
                 self.assertFalse(owner.follow_link(owner.web, links[0].replace(owner.base, owner.base + 'old/')))
                 self.assertEqual(pause.await_count, 4)
+                self.assertFalse(media.videos)  # Fullscreen owns its own playback transport.
             inline = links[0].replace('?video=', '?inline-video=')
-            with patch.object(owner.web, 'evaluate_javascript') as javascript, patch.object(
-                    owner._inline_audio, 'request_play', side_effect=[False, True]) as consent:
+            with patch.object(owner.web, 'evaluate_javascript', new_callable=AsyncMock) as javascript, patch.object(
+                    owner._inline_audio, 'request_play', side_effect=[False, True]) as consent, patch.object(
+                    owner._inline_audio, 'permitted', return_value=True):
                 self.assertFalse(owner.follow_link(owner.web, inline))
                 javascript.assert_not_called()
+                self.assertFalse(media.videos)
                 self.assertFalse(owner.follow_link(owner.web, inline))
-                javascript.assert_called_once_with('window.logisticsPlayVideo?.("' + inline.split('=')[-1] + '")')
+                self.assertTrue(await owner._video_opening)
+                transport = media.videos['Vault/Media/potato.mp4'][1]
+                javascript.assert_awaited_once_with(
+                    'window.logisticsPlayVideo?.("' + inline.split('=')[-1] + '","' + transport.url + '")')
                 self.assertEqual(consent.call_count, 2)
+            with patch.object(owner.web, 'evaluate_javascript') as javascript:
                 owner._inline_audio.players[owner]()
                 self.assertIn('video.pause()', javascript.call_args.args[0])
             self.assertEqual(native.await_count, 4)
@@ -543,8 +569,44 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertNotIn('autoplay', html)
             self.assertNotIn('autoplay', blocks[0]['html'])
             owner.dispose()
-            self.assertTrue(all(transport.closed.is_set() for transport in transports))
+            self.assertTrue(transport.closed.is_set())
             self.assertIsNone(media('potato.mp4'))
+        self.run_async(exercise())
+
+    def test_switching_notes_cancels_pending_inline_video_before_publication(self):
+        from threading import Event
+        from mobile.obsidian import open_vault
+        (self.vault / 'Home.md').write_text('![[clip.mp4]]')
+        started, release, finished = Event(), Event(), Event()
+        cancellations = []
+
+        def open_video(document, target, *, cancelled):
+            started.set()
+            release.wait(5)
+            cancellations.append(cancelled())
+            finished.set()
+            return 'http://127.0.0.1:1234/synthetic/video.mp4'
+
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            self.assertTrue(await owner.open_note('Vault/Home.md'))
+            with patch.object(owner.library, 'open_embedded_video', side_effect=open_video), \
+                    patch.object(owner._inline_audio, 'request_play', return_value=True):
+                key = next(iter(owner._page_videos))
+                owner.follow_link(owner.web, owner.base + '?inline-video=' + key)
+                task = owner._video_opening
+                try:
+                    self.assertTrue(await asyncio.to_thread(started.wait, 2))
+                    self.assertTrue(await owner.open_note('Vault/Projects/Plan.MD'))
+                    with self.assertRaises(asyncio.CancelledError):
+                        await task
+                finally:
+                    release.set()
+                    self.assertTrue(await asyncio.to_thread(finished.wait, 2))
+                self.assertEqual(cancellations, [True])
+                self.assertFalse(owner._page_videos)
+            owner.dispose()
+
         self.run_async(exercise())
 
     def test_miscellaneous_files_are_visible_and_movable_but_dotfiles_are_hidden(self):
@@ -1023,7 +1085,8 @@ class NotesLibraryTests(unittest.TestCase):
         from uuid import uuid4
         from features.rclone.mobile.cloud import CloudClient
         from features.rclone.localcrypt.mobile.resources import encrypted_storage
-        fixture = json.loads(Path('mobile_build/native_tests/tests/logisticsmobile/localcrypt_fixture.json').read_text())
+        fixture_path = Path(__file__).resolve().parents[2] / 'native_tests/tests/logisticsmobile/localcrypt_fixture.json'
+        fixture = json.loads(fixture_path.read_text())
         self.app.show_cloud(present=False)
 
         async def wait_for_discovery():
@@ -1051,8 +1114,9 @@ class NotesLibraryTests(unittest.TestCase):
                 provider.mkdir('.obsidian')
                 provider.create_file('.obsidian/config.ini', BytesIO(b'[Fixture]'))
                 provider.mkdir('Nested')
-                provider.create_file('Home.md', BytesIO(b'# Private home'))
+                provider.create_file('Home.md', BytesIO(b'# Private home\n\n![[clip.mp4]]'))
                 provider.create_file('Nested/Next.md', BytesIO(b'# Private nested note'))
+                provider.create_file('Nested/clip.mp4', BytesIO(b'synthetic video bytes'))
                 self.app.cloud_crypt_remotes = {'Secret'}
                 self.app.set_loaded_remote_names(['Secret'])
                 self.app.remember_credential_association('Synthetic.zip', ['Secret'], session_only=True)
@@ -1072,8 +1136,23 @@ class NotesLibraryTests(unittest.TestCase):
                 discovered = self.app.vault_browser
                 self.assertEqual(self.app.native_host.state.destination, 'documents')
                 self.assertTrue(discovered.provider.private)
-                self.assertTrue(await discovered.open_note('Home.md'), discovered.notice.text)
+                with patch.object(discovered.library, 'link', wraps=discovered.library.link) as lookup:
+                    self.assertTrue(await discovered.open_note('Home.md'), discovered.notice.text)
+                    lookup.assert_not_called()
+                    media = discovered.library.image_source('Home.md')
+                    self.assertFalse(media.videos)
+                    key = next(iter(discovered._page_videos))
+                    from unittest.mock import AsyncMock
+                    with patch.object(discovered._inline_audio, 'request_play', return_value=True), \
+                            patch.object(discovered._inline_audio, 'permitted', return_value=True), \
+                            patch.object(discovered.web, 'evaluate_javascript', new_callable=AsyncMock):
+                        discovered.follow_link(discovered.web, discovered.base + '?inline-video=' + key)
+                        self.assertTrue(await discovered._video_opening, discovered.notice.text)
+                    lookup.assert_called_once()
+                    self.assertEqual(list(media.videos), ['Nested/clip.mp4'])
+                    transport = media.videos['Nested/clip.mp4'][1]
                 self.assertTrue(await discovered.open_note('Nested/Next.md'), discovered.notice.text)
+                self.assertTrue(transport.closed.is_set())
                 await discovered.navigate_history(-1)
                 self.assertEqual(discovered.path, 'Home.md')
                 self.assertNotIn('Synthetic.zip', self.app.preferences.values.get('remote_packages', ''))
@@ -1123,7 +1202,8 @@ class NotesLibraryTests(unittest.TestCase):
                 self.app.show_documents_hub()
                 self.app.document_view_buttons['Libraries'].on_press()
                 await wait_for_discovery()
-                self.assertFalse(self.app.document_notes_list.children[1].children)
+                self.assertEqual([row.text for row in self.app.document_notes_list.children[1].children],
+                                 ['No Notes libraries found.'])
             finally:
                 client.clear()
         self.run_async(exercise())

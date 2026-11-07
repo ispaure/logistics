@@ -208,9 +208,9 @@ metadata, reader/spreads/decoding, catalog, file-type integration, passwords,
 encryption and asynchronous cancellation using disposable fixtures. Shared ZIP and
 browser tests belong to commonUtils. `Python/tests/comics/test_comic_password_ui.py`
 checks GUI-thread password prompts, reader/editor retries, adjacent-comic cancellation
-and suppression of queued browser retries after closure. The [parity report](zip-compression-parity.md)
-records decrypted full-run comparisons; ZIP container timestamps are not expected
-to match. Tests do not reproduce the ComicRack crash, invoke a real RAR extractor
+and suppression of queued browser retries after closure. Compression parity
+checks compare decrypted member names and content independently of ZIP
+container timestamps. Tests do not reproduce the ComicRack crash, invoke a real RAR extractor
 or replace native desktop/remote-mount validation. EPUB reading/editing belongs to the separate Books engine.
 
 Reader concurrency tests force cache misses and wait for worker entry before
@@ -267,16 +267,14 @@ page navigation after resume and recovery from a failed reload.
 `collection/pages.py` applies the native PNG/JPEG/WebP policy to `comic_page_names`.
 Imports, provider readers and ordinary browser covers use that policy, including
 macOS resource-fork exclusions. Unsupported image pages fail explicitly rather
-than being silently omitted by provider readers. See the
-[desktop/mobile parity assessment](../../books/development/books-comics-parity.md)
-for implemented desktop/mobile behavior and remaining collection-tool gaps.
+than being silently omitted by provider readers.
 
 Mobile spread loading/navigation and rendering live under `mobile/navigation.py`
 and `mobile/presentation.py`, reusing `reading.visible_pages` and
 `pages.double_page_indices`. Native single/batch metadata semantics live in
 `mobile/metadata.py` with shared `edit_state.py`; UUID/checksum publication remains
-in the mobile host. Imported metadata writes have a recoverable archive/record
-journal described in the parity guide.
+in the mobile host. See [imported metadata publication](../../books/development/development.md#imported-metadata-publication)
+for the shared archive/record recovery contract.
 
 
 Native two-page spreads now compose an owned bitmap in `mobile/composite.py` and

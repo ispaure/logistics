@@ -1,10 +1,6 @@
 # Video Player development
 
-See the [desktop parity implementation brief](desktop-parity.md) for the current
-mobile-to-desktop gap analysis and delivery sequence. The fullscreen changes
-below supersede that brief's earlier floating-window scope.
-
-## Desktop parity implementation
+## Desktop playback
 
 Desktop open actions use the factory in `ui/backend.py`: macOS prefers the
 colour renderer, other desktops use `ui/vlc_backend.py`. The Qt adapter and its
@@ -142,9 +138,6 @@ the separately reported chrome checks. The normal probe includes those UI checks
 
 Platform references: [Android HDR playback](https://developer.android.com/media/grow/hdr-playback)
 and [Apple HDR video metadata](https://developer.apple.com/documentation/technotes/tn3145-hdr-video-metadata).
-
-See the [desktop/mobile playback audit](playback-audit.md) for functionality
-differences, remaining oversights and the adjustable memory-buffer policy.
 
 | Change | Owner | Focused checks |
 | --- | --- | --- |

@@ -7,6 +7,20 @@ from threading import RLock
 from urllib.parse import unquote, urlsplit
 
 from commonUtils.formats.markdown.image_sources import folder_image_source
+from commonUtils.runtime.operations import check_cancelled
+
+
+def video_reference(target):
+    """Recognize a relative video embed without consulting its provider."""
+    from features.video.formats import VIDEO_EXTENSIONS
+    try:
+        parts = urlsplit(target)
+    except ValueError:
+        return False
+    name = unquote(parts.path)
+    return (PurePosixPath(name).suffix.lower() in VIDEO_EXTENSIONS
+            and not (parts.scheme or parts.netloc or parts.query
+                     or name.startswith('/') or '\\' in name))
 
 
 class MarkdownMedia:
@@ -57,7 +71,8 @@ class MarkdownMedia:
         source.videos = self.videos
         return source
 
-    def __call__(self, target, *, resolve=None, on_video=None):
+    def __call__(self, target, *, resolve=None, on_video=None, cancelled=lambda: False,
+                 replace_oldest=False):
         from features.video.formats import VIDEO_EXTENSIONS
         parts = urlsplit(target)
         name = unquote(parts.path)
@@ -100,6 +115,7 @@ class MarkdownMedia:
             if self.closed:
                 return None
             for candidate in paths():
+                check_cancelled(cancelled)
                 if candidate == '..' or candidate.startswith('../'):
                     continue
                 if self.root and not candidate.startswith(self.root + '/'):
@@ -119,19 +135,32 @@ class MarkdownMedia:
                             finally:
                                 content.close()
                         else:
+                            # Refresh recency before another clip can evict it.
+                            self.videos[candidate] = self.videos.pop(candidate)
                             if on_video is not None:
                                 on_video(candidate, transport.url)
                             return 'video/mp4', transport.url
-                    if len(self.videos) >= 8:
+                    if len(self.videos) >= 8 and not replace_oldest:
                         return None
                     from features.video.playback import VideoContent
                     from features.video.transport import VideoTransport
                     content = VideoContent(self.provider, candidate)
                     try:
                         transport = VideoTransport(content)
+                        try:
+                            check_cancelled(cancelled)
+                        except BaseException:
+                            transport.close()
+                            raise
                     except BaseException:
                         content.close()
                         raise
+                    if len(self.videos) >= 8:
+                        old_content, old_transport = self.videos.pop(next(iter(self.videos)))
+                        try:
+                            old_transport.close()
+                        finally:
+                            old_content.close()
                     self.videos[candidate] = content, transport
                     if on_video is not None:
                         on_video(candidate, transport.url)

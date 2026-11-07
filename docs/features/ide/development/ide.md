@@ -106,24 +106,6 @@ See https://jedi.readthedocs.io/en/v0.19.2/docs/api.html and
 https://pypi.org/project/jedi/0.19.2/. Add to uv manifest/lock; release packaging
 already ships synchronized dependencies and the pinned commonUtils checkout.
 
-## Original implementation sequence (historical)
-
-1. Confirm shared editor reuse and regression coverage; add only needed extensions.
-2. Add versioned project store, settings and independent lazy feature registration.
-3. Add browser, canonical document ownership, up to three non-detachable groups,
-   conflict-aware saves, close vetoes and layout restoration.
-4. Integrate Jedi, modifier-click, definition/history, quick file and line navigation.
-5. Extend shared Pygments detection for Python stubs, PHP and compound Blade names.
-6. Add bounded worker-backed file search and symbol navigation using existing tools.
-7. Run focused tests and both repository suites; document actual platform coverage.
-
-This sequence records the initial implementation plan, not a current backlog.
-The implemented contracts below describe current behavior. Tests use
-isolated stores and temporary source trees, exercising persistence, imports,
-shared buffers, close cancellation, external edits and retained worker shutdown.
-No changes to commonUtils public interfaces or unrelated feature dependencies are
-planned. No source repository configuration directories are created.
-
 ## Implemented contracts
 
 GitPage delegates validated working-file opens through an application-owned
@@ -201,94 +183,6 @@ Future work should move bounded save/reload IO off the GUI thread, add optional
 unsaved-import overlays, and validate native Windows/Linux interaction. Automatic
 diagnostics and automatic hover remain unimplemented. Git working-file handoff
 is implemented as described above.
-
-## Validation record — 2026-10-11
-
-Validated with Python 3.12.2 / PySide6 6.6.2 on macOS 26.6.2 ARM64:
-
-- Logistics: 840 tests across 78 isolated modules; zero failures or skips.
-- commonUtils: 662 tests across 90 isolated modules; zero failures, one expected
-  case-sensitive-filesystem skip on this volume.
-- Release tooling: 10 tests passed. Historical comic compression parity passed.
-- Repository Ruff checks passed. Offscreen visual inspection covered three editor
-  groups, file tree, Python/TOML/Blade colors and full-height layout. Palette tests
-  cover light and dark syntax rendering.
-- Dedicated IDE tests cover serialization, malformed/conflicting stores, source and
-  interpreter paths, imported definitions, modifier-click and back/forward,
-  stale results, search cancellation/exclusions/binary files, canonical buffers,
-  the three-group cap, cancelled closes, independent project restoration, missing
-  files, split sizes, external writes/deletions and own-save watcher notifications.
-
-The first broad runs exposed shared-index contention and a native Bulk Rename
-fixture cleanup crash. The regression runner now gives each process a private
-index and isolates both repositories' test modules. The Bulk Rename fixture
-retires its window/models before removing its temporary sources; it also passed
-three consecutive focused reruns. Final full-suite reruns passed after these
-repairs. The generic regression runner's release-tooling tests still pass without
-commonUtils on the import path.
-
-Commands: `Python/tests/run_regressions.py Python/tests --isolate-modules` and
-`Python/tests/run_regressions.py Python/commonUtils/tests --isolate-modules`, using
-the project interpreter with `PYTHONPATH=Python` and `QT_QPA_PLATFORM=offscreen`.
-The platform runner invokes both suites plus compression parity.
-
-Windows/Linux native desktop behavior has not been tested here. These checks do
-not establish debugger, diagnostics, crash recovery, or full dynamic Python/Blade
-analysis support. Concurrent unrelated File Browser/Workspaces/workspace changes
-were present in the shared checkout during validation and were not staged in IDE
-commits.
-
-Implementation commits in Logistics: `af1e1d5`, `5037a3a`, `1c2d860`, `8acbbd4`,
-`d180dd7`, `13f7532`, `a902793`, `3ccb91b`, `c39b5cb`, `0485a04`, `542bb9d`,
-`a2b5784`, `990c129`. This validation record is a separate documentation commit.
-Shared commonUtils commits: `7fc93d1` (PHP/Blade support) and `dc134af` (PHP/HTML
-state across lines), with the latter pinned by Logistics.
-
-## Second review — 2026-10-11
-
-This historical table records limits at that review. Later contracts above
-supersede its shared-view, open-file rename and Git handoff limitations.
-
-A requirement-by-requirement source review and adversarial workflow tests found
-defects not exercised by the initial suite. This pass fixes:
-
-- Back/forward branching after returning from a definition: new jumps replace
-  the old forward branch and preserve the new destination.
-- Restoration dropping unreadable file records and losing the group/cursor of
-  temporarily missing files. These records now retain their placement.
-- Browser rename/delete racing with queued opens, including during modal
-  confirmation. Both open buffers and pending reads protect affected paths.
-- Browser exclusions accepting `.` and thereby filtering out its own root.
-- Pending tree expansion/selection being lost before directories become available;
-  selection changes now also trigger persistence.
-- Reveal opening only a containing folder: IDE now uses shared desktop reveal.
-- Completion callback exceptions preventing worker cleanup and queue progress.
-- Analysis accepting results from an obsolete project source-path/interpreter
-  configuration, or after changes during a target/completion dialog.
-- Scan limits counting only files: empty directory trees now consume the budget.
-
-The implementation covers project registration, independent projects, persistent
-layouts, one-to-three groups, safe close prompts, shared editing/highlighting,
-Python definition/import navigation, history, file/line/symbol navigation, basic
-completion/documentation and bounded project search. It does **not** implement
-every preferred or optional capability in the mandate:
-
-| Area | Remaining limit |
-| --- | --- |
-| Shared documents | The later shared-view implementation resolves this gap; see the current contracts above. |
-| Responsiveness | Save/reload and filesystem metadata probes remain synchronous; slow/network storage can stall the GUI. A busy workspace vetoes close and requires retry. |
-| Relocated roots | Root settings change browsing/analysis, but do not rebase absolute document paths. Missing registrations are retained. |
-| Browser mutations | Open files must be closed before rename/delete; recursive deletion is unavailable. Confined drag and menu moves are available. |
-| Intelligence | Manual documentation and completion; no automatic hover, diagnostics, unsaved imported-module overlays or Git handoff. These were optional productivity choices. |
-| Highlighting | Blade mixed-language support remains limited for multiline constructs. |
-| Persistence | Byte comparison detects intervening instance saves but is not a cross-process transaction; simultaneous writers can still race. |
-| Validation | Native Windows/Linux interactions remain unverified. |
-
-Second-pass validation: 14 focused IDE tests pass on macOS with offscreen Qt,
-including four new regression workflows and expanded stale-result coverage. Ruff
-and diff whitespace checks pass. The earlier full-suite counts above are the
-initial implementation's validation, not a claim that all suites were rerun after
-this review. No commonUtils implementation changes were required in this pass.
 
 ## Shared-view implementation and reuse review
 

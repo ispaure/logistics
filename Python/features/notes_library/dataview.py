@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 from markdown_it import MarkdownIt
 from commonUtils.formats.markdown import split_frontmatter
 from commonUtils.runtime.operations import check_cancelled
-from services.documents.storage import DocumentResource
+from services.documents.storage import DocumentResource, DocumentSizeExceeded
 from .notes import MARKDOWN, operation
 
 MAX_FILE = 2 * 1024 * 1024
@@ -162,8 +162,13 @@ class ViewFiles:
             remaining = MAX_TOTAL - self.total
             if info['size'] > remaining:
                 raise ValueError('Data view reads exceed the 8 MiB limit.')
-            with DocumentResource(self.library.provider, path, max_bytes=min(MAX_FILE, remaining), independent=False) as resource:
-                data = resource.read(cancelled=cancelled)
+            try:
+                with DocumentResource(self.library.provider, path, max_bytes=min(MAX_FILE, remaining), independent=False) as resource:
+                    data = resource.read(cancelled=cancelled)
+            except DocumentSizeExceeded as error:
+                message = ('Data view reads exceed the 8 MiB limit.' if remaining < MAX_FILE
+                           else 'Data view file exceeds the 2 MiB limit.')
+                raise DocumentSizeExceeded(message) from error
         self.total += len(data)
         if self.total > MAX_TOTAL:
             raise ValueError('Data view reads exceed the 8 MiB limit.')

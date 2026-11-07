@@ -3,6 +3,7 @@ import asyncio
 import json
 from pathlib import Path
 import traceback
+import toga
 from threading import Event
 from uuid import uuid4
 from unittest.mock import AsyncMock, patch
@@ -143,6 +144,8 @@ class NotesLibraryProbe(LogisticsMobile):
         assert await owner.open_note('Media.md')
         await self.wait_js(owner.web, '!!document.querySelector("video")')
         media = owner.library.image_source('Media.md')
+        assert not media.videos
+        assert await asyncio.to_thread(owner.library.open_embedded_video, 'Media.md', 'clip.mp4')
         transports = [transport for _, transport in media.videos.values()]
         assert transports
         sessions = set(self.workspace.sessions)
@@ -176,15 +179,22 @@ class NotesLibraryProbe(LogisticsMobile):
         for name in ('Current Page.md', 'Image.png', 'Data.json', 'Unknown.binary'):
             assert await owner.open_note('Technology/Accessories/Devices/' + name), owner.notice.text
             await asyncio.sleep(.3)
-            links = [child for child in owner.breadcrumbs.children if hasattr(child, 'breadcrumb_path')]
+            links = [child.children[1] for child in owner.breadcrumbs.children if isinstance(child, toga.Box)]
             assert links, [getattr(child, 'text', '') for child in owner.breadcrumbs.children]
+            separators = [child for child in owner.breadcrumbs.children
+                          if isinstance(child, toga.ImageView) and not hasattr(child, 'browser_entry_kind')]
+            assert len(separators) == len(links)
             for button in links:
                 native = button._impl.native
                 if self._impl.__class__.__module__.startswith('toga_iOS.'):
-                    assert native.attributedTitleForState(0) is not None
+                    title = native.attributedTitleForState(0)
+                    if button.breadcrumb_path:
+                        assert title is not None and str(title.string) == button.text
+                    else:
+                        assert title is None
                 else:
-                    assert native.getPaintFlags() & 8
-            assert owner.breadcrumbs.children[-1].text == 'Devices'
+                    assert bool(native.getPaintFlags() & 8) == bool(button.breadcrumb_path)
+            assert links[-1].text == 'Devices'
             await capture_window(self, evidence / ('notes-breadcrumb-' + name + '.png'))
         landing = next((button for button in links if button.breadcrumb_path), None)
         await (landing or links[-1]).on_press()
@@ -220,7 +230,7 @@ class NotesLibraryProbe(LogisticsMobile):
             await capture_window(self, evidence / 'notes-files.png')
             assert await owner.open_note('Home.md')
             await asyncio.sleep(.4)
-            expected_parent = owner.article if owner.sidebar.expanded else owner.view
+            expected_parent = owner.article if owner.host.apple or owner.sidebar.expanded else owner.view
             assert owner.secondary.parent is expected_parent
             await capture_window(self, evidence / 'notes-reading.png')
             session_ids = set(self.workspace.sessions)

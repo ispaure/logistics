@@ -206,6 +206,18 @@ class MarkdownMediaTests(TestCase):
         self.assertFalse(content.closed)
         self.assertFalse(transport.closed.is_set())
 
+    def test_playback_can_open_more_than_eight_distinct_embeds(self):
+        first = self.media('clip.mp4', replace_oldest=True)
+        original = self.media.videos['clip.mp4'][1]
+        for index in range(8):
+            name = f'fixture-{index}.mp4'
+            (self.root / name).write_bytes(b'synthetic video bytes')
+            self.assertIsNotNone(self.media(name, replace_oldest=True))
+        self.assertEqual(len(self.media.videos), 8)
+        self.assertTrue(original.closed.is_set())
+        self.assertNotEqual(self.media('clip.mp4', replace_oldest=True), first)
+        self.assertEqual(len(self.media.videos), 8)
+
     def test_revocation_retires_cached_playback_and_refuses_a_new_stream(self):
         source = self.media.render_source()
         self.assertIsNotNone(source('clip.mp4'))

@@ -558,9 +558,8 @@ use the same project interpreter:
 
 On Windows, use `.venv/Scripts/python.exe Python/tests/run_platform_checks.py`.
 The runner configures the import path and headless Qt automatically. See
-[cross-platform testing](platform-checks.md) for CI and platform details,
-[UI architecture](features.md) for extension conventions,
-and [maintenance notes](maintenance.md) for remaining validation gaps.
+[cross-platform testing](platform-checks.md) for CI and platform details and
+[feature conventions](features.md) for extension points.
 
 Tests cover application startup, contributions, local fixtures and simulated
 failures. Desktop interaction, real remote transfers/mounts, external applications

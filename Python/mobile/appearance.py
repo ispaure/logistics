@@ -251,7 +251,8 @@ def reserve_navigation(app, *, view=None):
     from commonUtils.ui.readers.layout import remaining_clearance
     from .reader_edges import footer_bottom_extension
     extension = footer_bottom_extension(view, home_bottom)
-    extra = max(extra, remaining_clearance(bottom - extension, safe_bottom))
+    if getattr(view, '_notebook_canvas', None) is None:
+        extra = max(extra, remaining_clearance(bottom - extension, safe_bottom))
     from .scroll_edges import sync_bottom
     if sync_bottom(view, inset=container.bottom_inset, overlap=extra):
         return

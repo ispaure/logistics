@@ -184,6 +184,8 @@ def present(app, panel, *, destination=None):
                   title=notebook_title(panel))
     if panel.web is None:
         panel.mount_canvas()
+    else:
+        panel.refresh_fold()
     app.save_workspace()
     app.refresh_document_list()
 
@@ -314,8 +316,8 @@ def adopt_notebook_document(app, panel, document):
     panel.document, panel.key = document, document.key
     panel.progress, _ = panel.load_progress(document.book, document.key, resource)
     if panel.progress is not None:
-        from features.notebooks.progress import page_location
-        panel.progress.save(page_location(panel.editor))
+        from features.notebooks.progress import notebook_progress_state
+        panel.progress.save(notebook_progress_state(panel.editor))
     panel.editor.checkpoint = document.checkpoint
     panel.editor.checkpoint_unconfirmed = False
     session.resource, session.transient = document.key, not resource.policy.persistent

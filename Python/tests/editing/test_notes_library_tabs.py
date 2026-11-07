@@ -45,7 +45,7 @@ class NotesLibraryTabTests(QtTestCase):
             owner = self.opened(Path(directory))
             child = self.note(owner, 'A.md')
             self.assertIsInstance(child, qt.QWidget)
-            self.assertEqual(child.breadcrumbs.entries, [('Tabs', None), ('A.md', None)])
+            self.assertEqual(child.breadcrumbs.entries, [('A.md', None)])
             self.assertNotIsInstance(child, qt.QMainWindow)
             for name in ('tree', 'panel_tabs', 'calendar', 'search_results', 'aux'):
                 self.assertFalse(hasattr(child, name), name)
@@ -53,8 +53,7 @@ class NotesLibraryTabTests(QtTestCase):
             self.assertIs(child.provider, owner.provider)
             with patch.object(owner, 'reveal_folder') as reveal:
                 child.breadcrumbs.linkActivated.emit('0')
-                reveal.assert_called_once_with('')
-                reveal.reset_mock()
+                reveal.assert_not_called()
                 child.up.click()
                 reveal.assert_called_once_with('')
             owner.close()

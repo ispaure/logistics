@@ -66,14 +66,17 @@ SCRIPT = """
     video.addEventListener('playing', () => { status.hidden = true; });
     players.set(card.dataset.key, {
       video,
-      start: () => video.play().catch(error => { if (error.name !== 'AbortError') failed(); }),
+      start: url => {
+        if (video.getAttribute('src') !== url) video.src = url;
+        video.play().catch(error => { if (error.name !== 'AbortError') failed(); });
+      },
     });
   }
-  window.logisticsPlayVideo = key => {
+  window.logisticsPlayVideo = (key, url) => {
     const selected = players.get(key);
     if (!selected) return;
     for (const player of players.values()) if (player !== selected) player.video.pause();
-    selected.start();
+    selected.start(url);
   };
 })();
 """

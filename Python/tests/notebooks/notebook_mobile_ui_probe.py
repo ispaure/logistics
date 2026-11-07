@@ -13,6 +13,7 @@ from PySide6.QtWebEngineCore import QWebEnginePage, QWebEngineScript
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from features.notebooks.bridge import Bridge
 from features.notebooks.protocol import update_script
+from features.notebooks.mobile.brush_presets import PREFERENCE, change_preset, read_presets
 from features.notebooks.mobile.surface import mobile_editor_html
 from features.notebooks.notebook import Notebook
 from features.notebooks.editor import Editor
@@ -27,6 +28,7 @@ from mobile_build.native_tests.tests.logisticsmobile.notebook_chrome_checks impo
 from mobile_build.native_tests.tests.logisticsmobile.notebook_input_checks import INPUT_CHECKS
 from features.notebooks.previews import page_previews
 from mobile.palette import EINK_CSS
+from mobile.preferences import Preferences
 
 
 def check_pointer_input(js):
@@ -68,7 +70,7 @@ def check_toolbar_layout(view, js, wait, output):
         })())"""))
         assert not dimensions['overflow'], dimensions
         assert 0 <= dimensions['header']['left'] and dimensions['header']['right'] <= width, dimensions
-        assert len(dimensions['buttons']) == 5, dimensions
+        assert len(dimensions['buttons']) == 6, dimensions
         assert all(row['rect']['width'] >= 44 and row['rect']['height'] >= 44
                    for row in dimensions['buttons']), dimensions
         reachable = json.loads(js("""JSON.stringify([...document.querySelectorAll('.mobile-tools button')].map(b=>{
@@ -96,6 +98,7 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         book = Notebook.new('Field notes')
         key = repository.create(book)
         editor = Editor(book, lambda book: repository.save(key, book))
+        preferences = Preferences(root / 'preferences')
         bridge = Bridge()
         failures, received = [], []
 
@@ -104,6 +107,10 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
                 action = bridge.command(message)
                 if action:
                     received.append(action)
+                    if action['op'] in ('add-brush-preset', 'remove-brush-preset'):
+                        presets = change_preset(preferences, action)
+                        self.runJavaScript(f'window.notebookBrushPresetUpdate({json.dumps(presets)}, "")')
+                        return
                     if action['op'] == 'page-previews':
                         self.runJavaScript('window.notebookPagePreviews(' + json.dumps(page_previews(book, action['start'])) + ')')
                     elif action['op'] != 'document-location':
@@ -139,6 +146,7 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         initial_state['native_close'] = native_only
         if native_only:
             initial_state['tablet'] = False
+            initial_state['brush_preset_limit'] = 2
         view.setHtml(mobile_editor_html(initial_state, bridge.url, console_bridge=True))
         wait(lambda: bool(loaded))
         assert loaded[-1]
@@ -167,7 +175,8 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
             # The native strip must invoke the real mobile handlers, including
             # popup toggle/dismissal; counter-only dispatcher tests cannot prove it.
             state = json.loads(js("window.notebookNativeTools(null)"))
-            assert set(state) == {'pen', 'erase', 'select', 'undo', 'redo'}
+            assert list(state) == ['pen', 'preset-0', 'preset-1', 'add-preset', 'erase', 'select', 'undo', 'redo']
+            assert state['add-preset']['visible'] and not state['preset-0']['visible']
             assert js("document.body.classList.contains('native-drawing-tools')")
             native_anchor = json.dumps(dict(name='pen', anchor=[220, -48, 44, 48]))
             js('window.notebookNativeTools(' + native_anchor + ')')
@@ -191,7 +200,7 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
             wait(lambda: js("!document.body.classList.contains('native-drawing-tools')"))
             assert js("window.notebookPortraitBand(true)"), 'Actual native host flags must enable compact portrait CSS'
             compact = json.loads(js("JSON.stringify(document.querySelector('header').getBoundingClientRect().toJSON())"))
-            assert compact['width'] <= 256 and compact['height'] >= 48 and compact['top'] == 4, compact
+            assert compact['width'] <= 352 and compact['height'] >= 48 and compact['top'] == 4, compact
             canvas_top = js("$('paper').getBoundingClientRect().top")
             js("window.notebookNativeAction('hide-tools')")
             assert js("$('paper').getBoundingClientRect().top") == canvas_top
@@ -219,6 +228,14 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
             js("window.notebookNativeAction('pages')")
             wait(lambda: js("document.querySelectorAll('.page-previews button').length === 1"))
             assert js("!$('mobileSheet').hidden && $('mobileSheet').dataset.panel === 'pages'")
+            js("window.notebookNativeTools(false);document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))")
+            assert js("window.notebookRefreshBrushPresets([[17,6,2],[18,13,1]])")
+            state = json.loads(js("window.notebookNativeTools(null)"))
+            assert not state['add-preset']['visible'] and state['preset-0']['preset'] == [17, 6, 2]
+            js("window.notebookNativeTools({name:'preset-0',preset:'17,6,2',hold:true,anchor:[220,-48,44,48]})")
+            assert js("$('brushPresetMenu').open && $('mobileSheet').hidden")
+            js("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))")
+            js("window.notebookNativeAction('pages')")
             js("window.notebookNativeAction('layers')")
             assert js("$('mobileSheet').dataset.panel === 'layers' && !$('layer').hidden")
             js("window.notebookNativeAction('view')")
@@ -376,8 +393,16 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
             assert json.loads(js('window.absentFoldProof')) == dict(open=True, focused=True), 'An absent fold update dismissed the brush picker'
             assert js("document.activeElement.matches('.brush-card[aria-pressed=true]')")
             assert js("[...$('mobileSheet').querySelectorAll('button')].filter(b=>b.getClientRects().length).every(b=>b.getAttribute('aria-label')!=='Close panel')")
-            assert js("[...document.querySelectorAll('#mobileSheet .sheet-panel:not([hidden]) h3')].map(h=>h.textContent).join('/')") == 'Brush/Stroke width/Ink color'
-            assert js("getComputedStyle(document.querySelector('.brush-grid')).gridTemplateColumns.split(' ').length===3 && getComputedStyle(document.querySelector('.swatches')).gridTemplateColumns.split(' ').length===3")
+            assert js("[...document.querySelectorAll('#mobileSheet .sheet-panel:not([hidden]) h3')].map(h=>h.textContent).join('/')") == 'Brush/Ink color/Stroke width'
+            brush_rows = json.loads(js("""JSON.stringify((()=>{
+                const rows = Object.groupBy(document.querySelectorAll('.brush-card'), button => button.offsetTop);
+                return Object.values(rows).map(row => ({count:row.length,
+                    left:row[0].getBoundingClientRect().left, right:row.at(-1).getBoundingClientRect().right}));
+            })())"""))
+            assert [row['count'] for row in brush_rows] == ([5, 4] if width < 640 else [9]), brush_rows
+            assert all(abs(row['left'] - brush_rows[0]['left']) < 1
+                       and abs(row['right'] - brush_rows[0]['right']) < 1 for row in brush_rows), brush_rows
+            assert js("(()=>{const scroll=$('mobileSheet').lastChild;return scroll.scrollHeight<=scroll.clientHeight})()"), (width, height)
             assert js("document.querySelector('#mobileSheet').getBoundingClientRect().right<=innerWidth")
             assert js("$('mobileBackdrop').hidden && !$('viewport').inert && !document.querySelector('header').inert")
             assert js("$('mobileSheet').getBoundingClientRect().bottom<=innerHeight && $('mobileSheet').getBoundingClientRect().top>=document.querySelector('header').getBoundingClientRect().bottom")
@@ -404,10 +429,16 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         # Real hit-tested clicks close either popout, including its own icon.
         view.resize(390, 844)
         QTest.qWait(100)
-        def click_element(element):
+        def click_element(element, *, hold=False):
             center = json.loads(js("JSON.stringify((()=>{const r=(" + element + ").getBoundingClientRect();return [r.x+r.width/2,r.y+r.height/2]})())"))
-            QTest.mouseClick(view.focusProxy(), qt.Qt.MouseButton.LeftButton,
-                             qt.Qt.KeyboardModifier.NoModifier, qt.QPoint(*map(int, center)))
+            position = qt.QPoint(*map(int, center))
+            target = view.focusProxy()
+            if hold:
+                QTest.mousePress(target, qt.Qt.MouseButton.LeftButton, pos=position)
+                QTest.qWait(575)
+                QTest.mouseRelease(target, qt.Qt.MouseButton.LeftButton, pos=position)
+            else:
+                QTest.mouseClick(target, qt.Qt.MouseButton.LeftButton, pos=position)
             QTest.qWait(30)
 
         for opener, closed in [("$('brushToggle')", "$('mobileSheet').hidden"),
@@ -501,6 +532,46 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         js("document.querySelector('#mobileNotice button').click()")
         assert js("document.getElementById('mobileNotice').hidden")
         js("document.getElementById('restoreTools').click()")
+        # Pin through the drawing toolbar, select with one tap, and open and
+        # dismiss the drawer only on repeated taps of the same slot.
+        js("$('brushToggle').click();document.querySelector('.brush-card[data-tool=\"17\"]').click();document.querySelector('.swatch[data-color=\"6\"]').click();document.querySelector('[data-width=\"3\"]').click();$('addBrushPreset').click()")
+        wait(lambda: js("!!document.querySelector('[data-preset=\"17,6,3\"]')&&!busy"))
+        js("$('brushToggle').click();$('brushToggle').click();document.querySelector('.swatch[data-color=\"7\"]').click();document.querySelector('[data-width=\"1\"]').click();$('addBrushPreset').click()")
+        wait(lambda: js("!!document.querySelector('[data-preset=\"17,7,1\"]')&&!busy"))
+        assert read_presets(Preferences(root / 'preferences').values[PREFERENCE]) == [[17, 6, 3], [17, 7, 1]]
+        assert js("""[...document.querySelectorAll('.mobile-tools button')].slice(0,4)
+            .map(b=>b.id || b.dataset.preset).join('/')==='brushToggle/17,6,3/17,7,1/addBrushPreset'
+            && $('addBrushPreset').hidden
+            && document.querySelector('.mobile-tools [data-preset]').getBoundingClientRect().top
+                 === $('brushToggle').getBoundingClientRect().top""")
+        blue_slot = 'document.querySelector(\'[data-preset="17,6,3"]\')'
+        click_element(blue_slot)
+        assert js(f"""$('mobileSheet').hidden && {blue_slot}.getAttribute('aria-pressed')==='true'
+            && $('brushToggle').getAttribute('aria-pressed')==='false'
+            && $('tool').value==='17' && $('color').value==='6' && $('width').value==='3'""")
+        click_element(blue_slot)
+        assert js(f"!$('mobileSheet').hidden && {blue_slot}.getAttribute('aria-expanded')==='true'")
+        QTest.qWait(150)
+        view.grab().save(str(output / 'presets-drawer-390x844.png'))
+        click_element(blue_slot)
+        assert js("$('mobileSheet').hidden")
+        QTest.qWait(50)
+        view.grab().save(str(output / 'presets-390x844.png'))
+        click_element(blue_slot)
+        js("$('viewport').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))")
+        assert js("$('mobileSheet').hidden")
+        click_element('document.querySelector(\'[data-preset="17,7,1"]\')')
+        click_element(blue_slot, hold=True)
+        assert js("$('brushPresetMenu').open && $('mobileSheet').hidden")
+        assert js(f"{blue_slot}.getAttribute('aria-pressed')==='false' && $('color').value==='7'")
+        QTest.qWait(50)
+        view.grab().save(str(output / 'preset-delete-390x844.png'))
+        click_element("document.querySelector('#brushPresetMenu button')")
+        wait(lambda: js("!document.querySelector('[data-preset=\"17,6,3\"]')&&!busy"))
+        assert js("!$('addBrushPreset').hidden && !$('brushPresetMenu').open")
+        assert read_presets(Preferences(root / 'preferences').values[PREFERENCE]) == [[17, 7, 1]]
+        js("$('zoom').value='page';$('zoom').onchange();$('viewport').scrollTop=0")
+        assert js("Math.abs($('paperWrap').getBoundingClientRect().top-$('viewport').getBoundingClientRect().top)<1")
         (output / 'mobile-ui.json').write_text(json.dumps(dict(status='passed', sizes=reports, toolbar=toolbar_reports,
             brush=12, color=6, real_mouse_input=True, undo=True, redo=True,
             focus_mode=True, view_preserved=True, stable_canvas_origin=True, error_visible=True,

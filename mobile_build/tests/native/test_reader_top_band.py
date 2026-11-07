@@ -223,28 +223,28 @@ class NotebookClearanceTests(unittest.TestCase):
     def test_verified_column_and_all_state_clearance(self):
         regions=((535,0,134,82),)
         geometry=band.free_top_band(regions,669,82,316)
-        value=band.notebook_geometry(geometry,regions,(48,256))
+        value=band.notebook_geometry(geometry,regions,band.NOTEBOOK_TOOLBAR_CLEARANCE)
         self.assertEqual(value['reserve'],71)
         self.assertGreaterEqual(value['reserve']+value['content_clearance'],geometry['reserve'])
         detached=regions+((535,100,134,30),)
         full=band.free_top_band(detached,669,82,316)
-        self.assertEqual(band.notebook_geometry(full,detached,(48,256))['reserve'],90)
+        self.assertEqual(band.notebook_geometry(full,detached,band.NOTEBOOK_TOOLBAR_CLEARANCE)['reserve'],90)
 
     def test_ambiguous_width_offset_margins_and_detached_center_decline(self):
         regions=((316,0,134,82),)
         geometry=band.free_top_band(regions,450,82,316)
-        self.assertIsNone(band.notebook_geometry(geometry,regions,(48,256)))
+        self.assertIsNone(band.notebook_geometry(geometry,regions,band.NOTEBOOK_TOOLBAR_CLEARANCE))
         regions=((535,0,134,82),)
         geometry=band.free_top_band(regions,669,82,316)
         for kwargs in ({'contract':None},{'origin_x':2},{'margins':(1,0,0)}):
-            args=dict(contract=(48,256));args.update(kwargs)
+            args=dict(contract=band.NOTEBOOK_TOOLBAR_CLEARANCE);args.update(kwargs)
             self.assertIsNone(band.notebook_geometry(geometry,regions,**args))
-        self.assertIsNone(band.notebook_geometry(geometry,regions+((300,100,40,30),),(48,256)))
+        self.assertIsNone(band.notebook_geometry(geometry,regions+((300,100,40,30),),band.NOTEBOOK_TOOLBAR_CLEARANCE))
 
 
 class NotebookNativeProjectionTests(NativeBandOwnershipTests):
     def test_compacts_only_after_current_canvas_readiness_and_retirement_invalidates(self):
-        self.view._notebook_dom_toolbar_contract=(48,256)
+        self.view._notebook_dom_toolbar_contract=band.NOTEBOOK_TOOLBAR_CLEARANCE
         band.project(self.app,self.view,'documents',self.controller)
         first=self.view._reader_top_band_state
         token=first['notebook_candidate']

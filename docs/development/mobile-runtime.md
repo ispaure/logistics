@@ -12,7 +12,7 @@ User behavior belongs in [the mobile user guide](../user_mobile/user_mobile.md).
 | Open/save or publish a reader | [Open/Save As](#opensave-as-lifecycle), [provider adoption](#provider-presentation-assembly), [publication](#reader-publication-boundary) |
 | Close, replace or trim a host | [Shutdown](#application-shutdown-and-disposable-resources), [sleep/trim](#sleep-memory-trimming-and-visible-library-readers) |
 | Work on settings or startup | [Settings owners](#settings-implementation-owners), [startup](#native-startup-progress) |
-| Reproduce a dated timing result | [Performance evidence and limits](mobile-performance.md) |
+| Measure a mobile workload | [Performance and profiling](mobile-performance.md) |
 
 Workspace restoration reads at most 64 KiB plus one byte before decoding its
 manifest, independently of file-size metadata. Oversized/invalid input preserves
@@ -1071,11 +1071,6 @@ presentation reuses that guard. Destination selection checkpoints text first and
 saves workspace state once afterward. These paths are shared by Android and iOS.
 `Python/tests/test_mobile_workspace.py` covers view changes and external edits.
 
-### BOOX file-list before/after profiling — 2026-10-19
-
-The dated [paired BOOX measurements and limitations](mobile-performance.md#boox-file-list-beforeafter-profiling--2026-10-19)
-are retained in the performance reference. Current listing contracts are above.
-
 ## Workspaces refresh
 
 Workspaces has no routine Refresh button; returning to the hub and credential/
@@ -1157,13 +1152,7 @@ at the provider root and returns to Workspaces; nested folders retain Up.
 `browser_ui.py` retains `FileBrowser` and explicit compatibility exports for the
 location controls.
 
-## Android Workspaces profiling — 2026-10-19
-
-The dated [emulator measurements, retained-view verification and probe procedure](mobile-performance.md#android-workspaces-profiling--2026-10-19)
-are retained in the performance reference, including the October 20 incremental
-comparison. They do not certify later changes or physical-phone latency.
-
-### Retained Workspaces implementation
+## Retained Workspaces implementation
 
 Workspaces retains its root page and separate row hierarchies for Local, Cloud
 and Home Server. Background discovery still snapshots native credential state on
@@ -1337,8 +1326,8 @@ Comic folder batch plans/views are owned by a composed feature controller.
 Generic speech, private WebView and image-header mechanisms live in commonUtils;
 voice preferences, media privacy gates and document routing remain here. Native
 payload allowlists include all moved modules and explicitly stage new shared
-modules in dirty local development payloads. See the
-[ownership audit and implementation status](ownership-audit.md).
+modules in local development payloads. See [mobile preparation](mobile-preparation.md)
+for the payload contract.
 
 ## Pinned-folder workflow capabilities
 
@@ -1429,9 +1418,9 @@ disposing the old navigation host. This happens after durable preservation and
 before the new host reuses its workspace; a destroyed Activity alone does not
 retire Python listeners. `resize_workspace` ignores retired hosts before accessing
 native layout, including callbacks Toga queued before disposal. The
-[full-host native lifecycle checks](mobile-navigation-proof.md#full-host-ime-scenes-and-activity-recreation)
-exercise three real same-process replacements and inspect deliberately retained
-old hosts for retired callbacks.
+`native_host_lifecycle_probe.py` fixture covers native IME handling, independent
+iOS scenes and Android same-process Activity replacement. It retains old hosts
+to check that their callbacks are retired.
 `reader_lifecycle.py` still owns individual document exit/Back behavior. Host tests
 include `test_application_lifecycle.py`, startup progress, reset, private sessions,
 LocalCrypt and speech media.

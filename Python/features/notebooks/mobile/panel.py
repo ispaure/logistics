@@ -15,8 +15,9 @@ from ..notebook import Notebook, MAX_ARCHIVE
 from ..recovery import Repository
 from ..editor import Editor
 from ..bridge import Bridge, RetiredCanvas
-from ..progress import open_notebook_progress, page_location
-from ..protocol import document_state, stroke_script, ink_patch_script, update_script, validate_action
+from ..progress import notebook_progress_state, open_notebook_progress, page_location, restore_notebook_progress
+from ..protocol import brush_color_script, document_state, stroke_script, ink_patch_script, update_script, validate_action
+from .brush_presets import PREFERENCE as BRUSH_PRESETS, TOOLBAR_PRESET_LIMIT, change_preset, read_presets
 from .surface import mobile_editor_html
 
 
@@ -68,7 +69,8 @@ class NotebookPanel:
         self.busy = False
         self.closed = False
         self.view = toga.Box(style=Pack(direction=COLUMN, flex=1))
-        self.view._notebook_dom_toolbar_contract = (48, 256)
+        from mobile.reader_top_band import NOTEBOOK_TOOLBAR_CLEARANCE
+        self.view._notebook_dom_toolbar_contract = NOTEBOOK_TOOLBAR_CLEARANCE
         from services.documents.mobile_notebooks import install_notebook_controls
         install_notebook_controls(self)
         self._release_protection = app.protection.register(self, self.privacy_gates)
@@ -225,6 +227,8 @@ class NotebookPanel:
 
     def state(self):
         state = document_state(self.editor, self.document)
+        state['brush_preset_limit'] = TOOLBAR_PRESET_LIMIT
+        state['brush_presets'] = read_presets(self.app.preferences.values.get(BRUSH_PRESETS, '[]'))
         if self.document is not None and self.document.resource is not None:
             from services.documents.mobile_notebooks import notebook_title
             state['display_name'] = notebook_title(self)
@@ -232,6 +236,7 @@ class NotebookPanel:
         state['native_top_band'] = bool(band is not None and band.get('notebook_candidate') is not None)
         state['native_close'] = hasattr(self.view, '_native_reader_buttons')
         state['native_actions'] = hasattr(self, 'native_actions')
+        state['notebook_viewport_insets'] = getattr(self.view, '_notebook_viewport_insets', (0, 0, 0))
         state['native_pen'] = self.pen_input is not None and bool(getattr(self.pen_input, 'enabled', True))
         if self.pen_input is not None and isinstance(getattr(self.pen_input, 'view_id', None), str):
             state['native_pen_nonce'] = self.pen_input.view_id
@@ -320,10 +325,10 @@ class NotebookPanel:
         if progress is None:
             resource = self.document.resource if self.document else None
             progress = self.load_progress(book, key, resource)
-        self.progress, index = progress
+        self.progress, saved = progress
         self.key = key
         self.editor = Editor(book, self.document.checkpoint if self.document else lambda book: self.repository.save(key, book))
-        self.editor.index = index
+        restore_notebook_progress(self.editor, saved)
         if mount:
             self.mount_canvas()
 
@@ -339,6 +344,8 @@ class NotebookPanel:
             # The host reserves system/header clearance. A second WK inset
             # moves the canvas and breaks window-to-DOM pen coordinates.
             self.web._impl.native.scrollView.contentInsetAdjustmentBehavior = 2  # never
+            self.view._notebook_canvas = self.web
+        self._viewport_insets_sent = None
         self._fold_subscription = self.app.presentation.register_layout(('notebook-fold', id(self)), self,
             lambda owner, frame: owner.refresh_fold())
         self._fold_signature = ()
@@ -359,6 +366,7 @@ class NotebookPanel:
         self.view.add(self.web)
         if restore_location:
             self.view.insert(0, location)
+        self.refresh_native_canvas_layout()
         if native_backend(self.web).startswith('toga_iOS.'):
             from .ios_native_pen import attach as attach_native_pen
             self.pen_input = attach_native_pen(self.web, window=self.app.main_window._impl.native,
@@ -371,6 +379,7 @@ class NotebookPanel:
                 from .ios_input import attach_diagnostics
                 self.pencil_input_trace = attach_diagnostics(self.web, self.app.loop,
                     Path(self.app.private_root) / 'notebook-input-diagnostics.json')
+        self._brush_presets_sent = self.app.preferences.values.get(BRUSH_PRESETS, '[]')
         set_inline_html(self.web, 'https://logistics.invalid/notebooks/', mobile_editor_html(
             self.state(), self.bridge.url, stylesheet=self.app.presentation.css_variables(),
             paper_preview=self.app.preferences.values.get('notebook_paper_preview', 'true') == 'true'))
@@ -384,6 +393,15 @@ class NotebookPanel:
             self.app.adaptive.render()
         self.refresh_fold()
 
+    def refresh_native_canvas_layout(self):
+        # Canvas mounting can follow the native container's last layout pass.
+        if getattr(self.view, '_notebook_canvas', None) is not None:
+            container = self.view._impl.container
+            if container is not None:
+                from mobile.reader_edges import compact_apple_reader
+                if compact_apple_reader(container, notebook=self.view):
+                    container.content.interface.refresh()
+
     def refresh_fold(self):
         if self.web is None or not getattr(self, '_canvas_ready', False) or getattr(self, '_fold_pending', None) is not None:
             return
@@ -391,6 +409,7 @@ class NotebookPanel:
         bridge = self.bridge
         async def update():
             try:
+                self.refresh_native_canvas_layout()
                 band = getattr(self.view, '_reader_top_band_state', None)
                 candidate = band.get('notebook_candidate') if band is not None else None
                 ready = getattr(self.view, '_notebook_dom_ready', None)
@@ -428,6 +447,18 @@ class NotebookPanel:
                     await web.evaluate_javascript('window.notebookFold?.(' + json.dumps(geometry) + ')')
                     if self.web is web:
                         self._fold_signature = signature
+                insets = getattr(self.view, '_notebook_viewport_insets', None)
+                if self.web is web and insets != getattr(self, '_viewport_insets_sent', None):
+                    await web.evaluate_javascript('window.notebookViewportInsets?.(' + json.dumps(insets) + ')')
+                    if self.web is web:
+                        self._viewport_insets_sent = insets
+                if self.web is web and hasattr(self, '_brush_presets_sent'):
+                    raw = self.app.preferences.values.get(BRUSH_PRESETS, '[]')
+                    if raw != self._brush_presets_sent:
+                        presets = json.dumps(read_presets(raw))
+                        accepted = await web.evaluate_javascript('window.notebookRefreshBrushPresets?.(' + presets + ')')
+                        if self.web is web and _input_true(accepted):
+                            self._brush_presets_sent = raw
             finally:
                 if getattr(self, '_fold_pending', None) is asyncio.current_task():
                     self._fold_pending = None
@@ -485,7 +516,29 @@ class NotebookPanel:
                 ack_dispatched = True
             return await self._respond(web, script, canvas, release_busy=release_busy)
         try:
+            if action.get('op') in ('add-brush-preset', 'remove-brush-preset'):
+                try:
+                    presets = change_preset(self.app.preferences, action)
+                    message = ''
+                except (OSError, ValueError) as failure:
+                    presets = read_presets(self.app.preferences.values.get(BRUSH_PRESETS, '[]'))
+                    message = str(failure)
+                raw = self.app.preferences.values.get(BRUSH_PRESETS, '[]')
+                await respond('window.notebookBrushPresetUpdate(' + json.dumps(presets) + ', '
+                              + json.dumps(message) + ')', acknowledges=True)
+                self._brush_presets_sent = raw
+                return
             op = validate_action(action)
+            if op == 'brush-color':
+                editor.brush_colors[action['tool']] = action['color']
+                self._position_sequence = position_sequence
+                status = None
+                if progress is not None:
+                    observation = progress.observe(notebook_progress_state(editor))
+                    status = ('fenced' if observation is None else
+                              await canvas.wait(asyncio.to_thread(progress.flush, observation)))
+                await respond(brush_color_script(status), acknowledges=True)
+                return
             if op in {'save', 'save-as', 'export'} and self.native_transport:
                 pending = self.native_input_pending
                 if not pending:
@@ -637,7 +690,7 @@ class NotebookPanel:
                 if (changed and progress is self.progress and _input_true(displayed)
                         and position_sequence >= self._position_sequence):
                     self._position_sequence = position_sequence
-                    observation = progress.observe(location)
+                    observation = progress.observe(notebook_progress_state(editor, location))
                     if observation is not None:
                         status = await asyncio.to_thread(progress.flush, observation)
                         if status == 'write-failed' and not self.closed and progress is self.progress:
@@ -750,6 +803,11 @@ class NotebookPanel:
             self.boox_refresh = None
         web = getattr(self, 'web', None)
         if web is not None:
+            if getattr(self.view, '_notebook_canvas', None) is web:
+                from mobile.reader_edges import clear_notebook_rail
+                clear_notebook_rail(web)
+                self.view._notebook_canvas = None
+                self.view._notebook_viewport_insets = (0, 0, 0)
             web.on_navigation_starting = None
             android = native_backend(web).startswith('toga_android.')
             private = callable(getattr(web, 'clear_private_content', None))

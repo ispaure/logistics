@@ -196,6 +196,9 @@ class FoldersPage(pyside.QWidget):
         self.discovery.bar.setTextVisible(False)
         self.discovery.bar.setStyleSheet('QProgressBar { min-height: 0px; }')
         self.discovery.cancel_button.setStyleSheet('QPushButton { min-height: 0px; padding: 2px 6px; }')
+        policy = self.discovery.sizePolicy()
+        policy.setRetainSizeWhenHidden(True)
+        self.discovery.setSizePolicy(policy)
         root_layout.addWidget(self.discovery)
 
     def _connect_signals(self):

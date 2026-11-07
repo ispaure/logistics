@@ -45,6 +45,20 @@ def entry_icon(directory, *, landing_page=False):
     return image
 
 
+def breadcrumb_separator():
+    """A passive, theme-tinted File Browser chevron."""
+    image = template_icon(toga.ImageView(icon('breadcrumb_chevron'), style=Pack(width=14, height=14)))
+    surface(image, radius=0, background='transparent', foreground='muted',
+            outlined=False, eink_outlined=False)
+    backend = type(image._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        image._impl.native.isAccessibilityElement = False
+    elif backend.startswith('toga_android.'):
+        from android.view import View
+        image._impl.native.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO)
+    return image
+
+
 def highlight_entry(widget, selected):
     if not isinstance(widget, toga.Button):
         selection_row(widget, selected)

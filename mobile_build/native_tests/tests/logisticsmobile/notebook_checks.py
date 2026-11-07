@@ -153,8 +153,8 @@ async def exercise_notebooks(app, *, return_to_home=True):
                          observer_exit=tools.observer_exit, dom=dom)))
     if native_tools:
         assert tools is not None and tools.current()
-        frames = [tools.anchor(name) for name in tools.buttons]
-        assert len(frames) == 5 and all(width >= 44 and height >= 44 for _, _, width, height in frames)
+        frames = [tools.anchor(name) for name, button in tools.buttons.items() if button.style.display != 'none']
+        assert len(frames) == 6 and all(width >= 44 and height >= 44 for _, _, width, height in frames)
         assert all(abs(frame[1] - frames[0][1]) <= 1 for frame in frames)
         title_host = tools.header._title_content._impl.native
         strip = tools.strip._impl.native

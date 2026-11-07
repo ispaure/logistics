@@ -52,8 +52,8 @@ short learning examples separate from exhaustive API and validation reference;
 link to the owning contract instead of copying it.
 
 Use concrete subjects and verbs, and prefer a disposable worked example over a
-list of internal module names without context. Date historical assessments and
-explain their scope so they cannot be mistaken for current guarantees. This
+list of internal module names without context. Keep current behavior, supported commands and concise validation scope in the wiki.
+Use Git history for superseded plans, dated audits and implementation logs. This
 approach follows [Diátaxis](https://www.diataxis.fr/start-here/),
 [Write the Docs](https://www.writethedocs.org/guide/writing/beginners-guide-to-docs/)
 and [Google's clear-sentence guidance](https://developers.google.com/tech-writing/one/clear-sentences).
