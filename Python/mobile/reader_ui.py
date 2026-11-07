@@ -404,13 +404,14 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         from .reading.epub_resume import appearance
         self._epub_appearance = appearance(self.preferences.values)
         self.epub_text, self.epub_offset, content = prepared_epub
+        restored_offset = self.epub_offset
         bridge = None
 
         def event(action, value):
             nonlocal initial
             if bridge is None or self.epub_view._chapter_bridge is not bridge:
                 return
-            self.epub_event(reader, epoch, index, action, value, initial=initial)
+            self.epub_event(reader, epoch, index, action, value, initial=initial and value == restored_offset)
             initial = False
 
         self.epub_view = chapter_view(content, getattr(self, 'epub_view', None), offset=self.epub_offset,

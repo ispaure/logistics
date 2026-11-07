@@ -70,13 +70,14 @@ class LocalCryptComicMetadataTests(LocalCryptCase):
                     self.wait(lambda: not window.busy and not window.page_cache.busy)
                     self.assertTrue(window.pages.document.private)
                     self.assertTrue(window.windowTitle().startswith('🕵️ Private - '))
-                    from services.documents.reader_positions import PrivateComicState
-                    self.assertIsInstance(window._state, PrivateComicState)
-                    with self.assertRaises(PermissionError):
-                        _ = window._state.state.cipher.identity
-                    with patch('commonUtils.persistence.atomic_write_bytes', side_effect=AssertionError('Passwordless checkpoint wrote disk')):
-                        window._state.save(0, window.pages.pages)
-                    self.assertEqual(window._state.state.memory['page'], 0)
+                    from services.documents.progress import ProgressMode, ProgressStatus
+                    from features.comics.reading_state import comic_location
+                    progress = window._state
+                    self.assertIs(progress.mode, ProgressMode.SESSION_MEMORY)
+                    location = comic_location(window.pages, 0)
+                    with patch.object(progress, '_write_durable', side_effect=AssertionError('Passwordless checkpoint wrote disk')):
+                        self.assertIs(progress.save(location), ProgressStatus.SESSION_ONLY)
+                    self.assertEqual(progress.load(), location)
                     self.assertTrue(window.menus.shared.open_action.isEnabled())
                     self.assertEqual(released, [])
                     reused = open_reader_choice(choice('extra'), None, 'comic')

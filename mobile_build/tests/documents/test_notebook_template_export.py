@@ -22,7 +22,7 @@ class NotebookTemplateExportTests(unittest.IsolatedAsyncioTestCase):
         editor.apply(dict(op='stroke', points=[[700, 180, .5], [850, 180, .5]]))
         original = book.page(0).to_bytes()
         owner = SimpleNamespace(bridge=Bridge(), web=object(), editor=editor,
-                                document=None, view=SimpleNamespace(children=[]),
+                                document=None, progress=None, view=SimpleNamespace(children=[]),
                                 confirm_export=AsyncMock(return_value=True),
                                 closed=False, busy=False, native_transport=False,
                                 app=SimpleNamespace(active_host=True))

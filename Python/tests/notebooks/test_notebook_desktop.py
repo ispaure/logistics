@@ -283,7 +283,7 @@ class NotebookAcknowledgementTests(unittest.TestCase):
             for x in (20, 40):
                 editor.apply(dict(op='stroke', points=[[x, 30, .5]]))
             editor.apply(dict(op='undo'))
-            owner = NS(busy=False, editor=editor, document_window=None, web=Mock(),
+            owner = NS(busy=False, editor=editor, document_window=None, web=Mock(), progress=None,
                        state=lambda: document_state(editor, document),
                        acknowledge_stroke=Mock(), save_document=Mock(), export_document=Mock())
             bridge = Bridge()
@@ -351,7 +351,7 @@ class NotebookAcknowledgementTests(unittest.TestCase):
         from features.notebooks.editor import Editor
         from features.notebooks.ui.workspace import NotebookWorkspace
         editor = Editor(Notebook.new())
-        owner = NS(busy=False, editor=editor, document_window=None, web=Mock(),
+        owner = NS(busy=False, editor=editor, document_window=None, web=Mock(), progress=None,
                    state=Mock(side_effect=editor.state), acknowledge_stroke=Mock())
         action = dict(op='stroke', points=[[20, 30, .5], [40, 50, .7]], tool=17, width=2)
         NotebookWorkspace.perform(owner, action)

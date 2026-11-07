@@ -71,7 +71,7 @@ class RecentDocumentTests(unittest.TestCase):
                           kind='video', title='Movie.mkv', source=source, opened=i + 1)
                      for i, source in enumerate(sources)]
             (root / 'recent-documents.json').write_text(json.dumps(items))
-            with patch('services.documents.locations.shared_documents_path', return_value=documents):
+            with patch('services.documents.progress_identity.shared_documents_path', return_value=documents):
                 history = RecentDocuments(root)
                 self.assertFalse(history.error)
                 self.assertEqual(len(history.items), 3)
@@ -94,7 +94,7 @@ class RecentDocumentTests(unittest.TestCase):
             (documents / 'Movie.mkv').touch()
             source = dict(type='local', path='/var/mobile/Containers/Data/Application/OLD/Documents/Movie.mkv')
             session = Session('', 'file-reference', '', 'video', title='Movie.mkv')
-            with patch('services.documents.locations.shared_documents_path',
+            with patch('services.documents.progress_identity.shared_documents_path',
                        side_effect=lambda private: documents if private == root else None):
                 history = RecentDocuments(window, private_root=root)
                 history.remember_file(session, source)

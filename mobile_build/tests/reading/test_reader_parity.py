@@ -155,64 +155,67 @@ class ReaderParityUITests(unittest.TestCase):
 
     def test_provider_epub_passage_search_bookmarks_and_close_cleanup(self):
         from mobile_build.tests.support.readers import MemoryWebView
-        with TemporaryDirectory() as directory:
-            root = Path(directory)
-            app = self.host(root)
-            fixtures = root / "fixtures"
-            fixtures.mkdir()
-            epub, _ = make_books(fixtures)
-            app.show_cloud()
-            private = PrivateReader("Private.epub", epub.read_bytes())
+        directory = self.enterContext(TemporaryDirectory())
+        root = Path(directory)
+        app = self.host(root)
+        fixtures = root / "fixtures"
+        fixtures.mkdir()
+        epub, _ = make_books(fixtures)
+        app.show_cloud()
+        private = PrivateReader("Private.epub", epub.read_bytes())
 
-            async def exercise():
-                with patch.object(app.crypt_copies, "open", return_value=private), patch(
-                    'features.books.mobile.provider_reader.private_webview_supported', return_value=True
-                ), patch('features.books.mobile.provider_reader.PrivateWebView', MemoryWebView):
-                    self.assertTrue(
-                        await app.open_crypt(copies=app.crypt_copies, key="a" * 32),
-                        app.cloud_status.value,
-                    )
-                owner = app.private_sessions.active
-                panel = owner.provider_epub_view
-                from mobile_build.tests.editing.test_markdown_speech import Engine
-                speaker = next(button for button in owner.reader_toolbar.children
-                    if getattr(button, 'control_icon', None) == 'speaker')
-                with patch('features.books.mobile.speech_view.NativeSpeech', Engine):
-                    speaker.on_press()
-                    await panel.speech_panel.ready_task
-                    self.assertTrue(panel.speech_panel.play_button.enabled)
-                    panel.close_read_aloud()
-                panel.query.value = "chapter"
-                panel.find()
-                panel.seek(7)
-                self.assertTrue(owner.show_provider_layout())
-                self.assertIs(owner.provider_epub_view, panel)
-                self.assertTrue(app.routes.back())
-                await __import__("asyncio").sleep(0)
-                await owner._epub_resume_task
-                self.assertIs(owner.provider_epub_view, panel)
-                self.assertEqual(panel.offset, 7)
-                self.assertTrue(owner.show_provider_layout())
-                app.routes.body('settings').children[-1].content.font_choice.value = "24"
-                self.assertTrue(app.routes.back())
-                await __import__("asyncio").sleep(0)
-                await owner._epub_resume_task
-                panel = owner.provider_epub_view
-                self.assertIs(owner.provider_epub_view, panel)
-                self.assertEqual(panel.offset, 7)
-                self.assertFalse(owner.page_suspended)
-                owner.toggle_private_bookmark()
-                self.assertEqual(len(owner.epub_session_bookmarks), 1)
-                self.assertTrue(owner._provider_epub_locations)
+        async def exercise():
+            with patch.object(app.crypt_copies, "open", return_value=private), patch(
+                'features.books.mobile.provider_reader.private_webview_supported', return_value=True
+            ), patch('features.books.mobile.provider_reader.PrivateWebView', MemoryWebView):
                 self.assertTrue(
-                    app.private_sessions.close(owner.session.id, discard=True)
+                    await app.open_crypt(copies=app.crypt_copies, key="a" * 32),
+                    app.cloud_status.value,
                 )
-                self.assertEqual(panel.text.value, "")
-                self.assertEqual(owner.epub_session_bookmarks, set())
-                self.assertEqual(owner._provider_epub_locations, {})
-                self.assertIsNone(panel.book)
+            owner = app.private_sessions.active
+            panel = owner.provider_epub_view
+            from mobile_build.tests.editing.test_markdown_speech import Engine
+            speaker = next(button for button in owner.reader_toolbar.children
+                if getattr(button, 'control_icon', None) == 'speaker')
+            with patch('features.books.mobile.speech_view.NativeSpeech', Engine):
+                speaker.on_press()
+                await panel.speech_panel.ready_task
+                self.assertTrue(panel.speech_panel.play_button.enabled)
+                panel.close_read_aloud()
+            panel.query.value = "chapter"
+            panel.find()
+            panel.seek(7)
+            bridge = panel.webview._chapter_bridge
+            bridge.navigation(None, bridge.root + "position?offset=7")
+            self.assertTrue(owner.show_provider_layout())
+            self.assertIs(owner.provider_epub_view, panel)
+            self.assertTrue(app.routes.back())
+            await __import__("asyncio").sleep(0)
+            await owner._epub_resume_task
+            self.assertIs(owner.provider_epub_view, panel)
+            self.assertEqual(panel.offset, 7)
+            self.assertTrue(owner.show_provider_layout())
+            app.routes.body('settings').children[-1].content.font_choice.value = "24"
+            self.assertTrue(app.routes.back())
+            await __import__("asyncio").sleep(0)
+            await owner._epub_resume_task
+            panel = owner.provider_epub_view
+            self.assertIs(owner.provider_epub_view, panel)
+            self.assertEqual(panel.offset, 7)
+            self.assertFalse(owner.page_suspended)
+            owner.toggle_private_bookmark()
+            self.assertEqual(len(owner.epub_session_bookmarks), 1)
+            self.assertTrue(owner._provider_epub_locations)
+            self.assertTrue(app.request_reader_close(owner.session.id))
+            if (close_task := getattr(owner, '_progress_close_task', None)) is not None:
+                await close_task
+            self.assertNotIn(owner.session.id, app.workspace.sessions)
+            self.assertEqual(panel.text.value, "")
+            self.assertEqual(owner.epub_session_bookmarks, set())
+            self.assertEqual(owner._provider_epub_locations, {})
+            self.assertIsNone(panel.book)
 
-            app.loop.run_until_complete(exercise())
+        app.loop.run_until_complete(exercise())
 
     def test_imported_spreads_advance_backward_and_keep_page_on_failed_load(self):
         import struct

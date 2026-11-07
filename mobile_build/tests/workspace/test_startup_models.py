@@ -97,9 +97,11 @@ class StartupModelTests(TestCase):
                 self.assertTrue(app.loop.run_until_complete(open_legacy_import(app, epub)))
                 app.loop.run_until_complete(app.next_book_page())
                 selected = app.workspace.active
-                app.checkpoint()
+                self.assertTrue(app.checkpoint())
+                app.loop.run_until_complete(app.readers.active._book_progress.flush())
+                app.main_window.close()
                 restored = AsyncStartupApp('Logistics', 'io.github.ispaure.logisticsmobile')
-                self.assertTrue(restored.loop.run_until_complete(restored.startup_task))
+                self.assertTrue(restored.loop.run_until_complete(asyncio.wait_for(restored.startup_task, 10)))
                 self.assertEqual(restored.native_host.state.destination, 'documents')
                 self.assertEqual(restored.workspace.active, selected)
                 self.assertIsNotNone(restored.readers.active.book_reader)

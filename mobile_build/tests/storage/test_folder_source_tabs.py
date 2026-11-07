@@ -324,8 +324,7 @@ class FolderSourceTabTests(unittest.TestCase):
         group = app.folder_tree_buttons[('Server', 'Lib')]
         folder = app.folder_buttons['Server-Perforce']
         self.assertEqual(group.style.font_size, folder.style.font_size)
-        # Pinned native backends convert Toga CSS points to native pt/sp.
-        self.assertAlmostEqual(folder.style.font_size * 96 / 72, 17, delta=2 / 3)
+        self.assertEqual(folder.style.font_size, 17)
         self.assertEqual(group.style.font_weight, 'bold')
         self.assertEqual(folder.style.font_weight, 'normal')
         self.assertEqual(group.parent.style.height, folder.parent.style.height)
@@ -351,7 +350,7 @@ class FolderSourceTabTests(unittest.TestCase):
                         app.folder_transfers_button, app.folder_add_share_button,
                         app.folder_add_remote_button]:
             self.assertGreaterEqual(control.style.height, 48)
-            self.assertEqual(control.style.font_size * 96 / 72, 16)
+            self.assertEqual(control.style.font_size, 16)
 
     def test_all_files_child_back_returns_to_shared_root_before_workspaces(self):
         app = self.app

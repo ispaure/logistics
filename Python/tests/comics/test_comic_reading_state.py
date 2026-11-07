@@ -15,7 +15,7 @@ import zipfile
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from features.comics.pages import ComicPages
-from features.comics.reading_state import ReadingState
+from features.comics.reading_state import ReadingState, open_comic_progress
 from features.comics.ui.reader import ComicReaderWindow
 from tests.comics.fixtures import encoded_page
 
@@ -79,8 +79,9 @@ class ComicResumeTests(QtTestCase):
         reader._request_file(self.root / 'missing.cbz')
         self.wait(reader)
         reader.close()
-        state = ReadingState(self.path, folder=self.folder)
-        self.assertEqual(state.position(ComicPages(self.path).pages), 1)
+        progress, index = open_comic_progress(ComicPages(self.path), self.folder)
+        self.addCleanup(progress.retire)
+        self.assertEqual(index, 1)
 
     def test_shutdown_flushes_and_disabled_setting_preserves_history(self):
         reader = self.reader()
@@ -88,15 +89,20 @@ class ComicResumeTests(QtTestCase):
         self.wait(reader)
         reader.shutdown()
         reader.close()
-        state = ReadingState(self.path, folder=self.folder)
-        before = state.path.read_bytes()
+        progress, index = open_comic_progress(ComicPages(self.path), self.folder)
+        self.assertEqual(index, 2)
+        before = progress.load()
+        progress.retire()
         with patch('features.comics.ui.reader.remember_position', return_value=False):
             reader = self.reader()
         self.assertEqual(reader.shown_page, 0)
         reader.go(1)
         self.wait(reader)
         reader.close()
-        self.assertEqual(state.path.read_bytes(), before)
+        progress, index = open_comic_progress(ComicPages(self.path), self.folder)
+        self.addCleanup(progress.retire)
+        self.assertEqual(index, 2)
+        self.assertEqual(progress.load(), before)
 
     def test_invalid_state_identity_and_changed_page_lists(self):
         pages = ComicPages(self.path).pages
@@ -133,7 +139,14 @@ class ComicResumeTests(QtTestCase):
         state.path.write_text(json.dumps({'page': 2, 'name': '2.png', 'total': 3,
                                          'padding': 'x' * (128 * 1024)}))
         before = state.path.read_bytes()
-        with patch.object(Path, 'stat', return_value=SimpleNamespace(st_size=0)):
+        original_stat = Path.stat
+
+        def stale_stat(path, *args, **kwargs):
+            if path == state.path:
+                return SimpleNamespace(st_size=0)
+            return original_stat(path, *args, **kwargs)
+
+        with patch.object(Path, 'stat', stale_stat):
             self.assertEqual(state.position(pages), 0)
             self.assertEqual(state.badge(pages), '')
             self.assertEqual(state.badge(), '')

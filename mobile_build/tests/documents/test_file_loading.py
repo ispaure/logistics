@@ -215,10 +215,10 @@ class FileLoadingTests(TestCase):
             started, release = asyncio.Event(), asyncio.Event()
             original = ReaderController.display_book_page
 
-            async def first_page(owner, index):
+            async def first_page(owner, index, **kwargs):
                 started.set()
                 await release.wait()
-                await original(owner, index)
+                await original(owner, index, **kwargs)
 
             with patch.object(ReaderController, 'display_book_page', first_page):
                 task = asyncio.create_task(self.app.open_book(record['id']))

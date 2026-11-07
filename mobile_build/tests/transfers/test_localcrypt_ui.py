@@ -152,7 +152,9 @@ class LocalCryptUITests(unittest.TestCase):
             with ZipFile(data, 'w') as archive:
                 archive.writestr('page.png', png)
                 archive.writestr('ComicInfo.xml', f'<ComicInfo><Title>{title}</Title></ComicInfo>')
-            return PrivateReader('comic.cbz', data.getvalue())
+            result = PrivateReader('comic.cbz', data.getvalue())
+            result.key = 'a' * 32
+            return result
         class Client:
             generation = 0
 

@@ -194,6 +194,8 @@ class ReaderNavigationTests(unittest.TestCase):
                             app.adaptive.render()
                             self.assertTrue(policy.call_args.args[0])
                             self.assertTrue(app.routes.back())
+                            if getattr(owner, '_progress_close_task', None) is not None:
+                                await owner._progress_close_task
                             self.assertIs(app.body, origin)
                             self.assertEqual(app.file_path, file_path)
                             self.assertFalse(policy.call_args.args[0])

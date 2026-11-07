@@ -65,7 +65,9 @@ class ComicPasswordUITests(unittest.TestCase):
                 owner = app.reader_manager().active
                 self.assertNotIn('Lock protected comic', [label for label, _ in owner.reader_actions.actions])
                 self.assertFalse(hasattr(owner, 'book_lock'))
-                self.assertTrue(app.close_session(owner.session.id))
+                self.assertTrue(app.request_reader_close(owner.session.id))
+                app.loop.run_until_complete(owner._exit_task)
+                self.assertNotIn(owner.session.id, app.workspace.sessions)
                 self.assertIsNone(raw_source.password)
                 self.assertEqual(raw_source.cache_bytes, 0)
                 self.assertFalse(owner.book_content.children)

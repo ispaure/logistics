@@ -76,13 +76,13 @@ class LocalCryptBookMetadataTests(LocalCryptCase):
                     self.wait(lambda: not window.reader._loading)
                     self.assertTrue(window.reader.private)
                     self.assertTrue(window.windowTitle().startswith('🕵️ Private - '))
-                    from services.documents.credential_state import CredentialState
-                    self.assertIsInstance(window.reader._state, CredentialState)
-                    with self.assertRaises(PermissionError):
-                        _ = window.reader._state.cipher.identity
-                    with patch('commonUtils.persistence.atomic_write_bytes', side_effect=AssertionError('Passwordless checkpoint wrote disk')):
-                        window.reader._state.save({'position': .5})
-                    self.assertEqual(window.reader._state.memory, {'position': .5})
+                    from services.documents.progress import ProgressMode, ProgressStatus
+                    progress = window.reader._state
+                    self.assertIs(progress.mode, ProgressMode.SESSION_MEMORY)
+                    location = {'position': .5}
+                    with patch.object(progress, '_write_durable', side_effect=AssertionError('Passwordless checkpoint wrote disk')):
+                        self.assertIs(progress.save(location), ProgressStatus.SESSION_ONLY)
+                    self.assertEqual(progress.load(), location)
                     self.assertFalse(window.reader.menus.recent.isEnabled())
                     self.assertTrue(window.reader.text.toPlainText())
                     self.assertEqual(released, [])

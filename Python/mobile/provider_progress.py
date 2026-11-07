@@ -30,7 +30,8 @@ def provider_revision(copies, reader):
         # Existing protected checkpoints are bound to the provider revision.
         return getattr(source, 'expected', None)
     if getattr(reader, 'book', None) is not None or reader.kind in {'.cbz', '.zip'}:
-        names = reader.book.spine if reader.book is not None else reader.pages
+        book = getattr(reader, 'book', None)
+        names = book.spine if book is not None else getattr(reader, 'pages', ())
         try:
             with source.open_archive(source.path) as archive:
                 return archive_revision(archive, names)
@@ -205,7 +206,7 @@ class ProviderProgress(ProgressWrites):
         if getattr(reader, 'password', '') and not reading_capabilities(copies).private:
             provider = PASSWORD_READER
             key = repr(document_identity(copies, key, app=app))
-        state = open_progress(provider, key, app.private_root, kind=reader.kind,
+        state = open_progress(provider, key, app.private_root, kind=reader.kind or 'text',
                               revision=revision, legacy_path=legacy, app=app, check=check or owner.document_access)
         super().__init__(owner, state)
         self.restored = {}

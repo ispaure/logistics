@@ -182,7 +182,7 @@ class ScreenPrivacyTests(unittest.TestCase):
         gate = ResumePassword('session-password')
         app = SimpleNamespace(main_window=SimpleNamespace(_impl=SimpleNamespace(native=window)),
             retire_private_comic_batch=Mock(),
-            private_sessions=SimpleNamespace(controllers={'private': SimpleNamespace(privacy_gate=gate)}))
+            private_sessions=SimpleNamespace(flush_visible_progress=Mock(), controllers={'private': SimpleNamespace(privacy_gate=gate)}))
         privacy = self.privacy(app, 'toga_iOS.app')
         classes = {'UIView': Shield, 'UIColor': SimpleNamespace(blackColor=lambda: 'black')}
         with patch.dict(sys.modules, {'rubicon.objc': SimpleNamespace(ObjCClass=classes.__getitem__)}):
@@ -287,7 +287,7 @@ class ScreenPrivacyTests(unittest.TestCase):
         gate = ResumePassword('session-password')
         app = SimpleNamespace(_impl=SimpleNamespace(native=SimpleNamespace(getWindow=lambda: window)),
             cloud_client=SimpleNamespace(session_privacy=gate),
-            private_sessions=SimpleNamespace(controllers={'private': SimpleNamespace(privacy_gate=gate)}))
+            private_sessions=SimpleNamespace(flush_visible_progress=Mock(), controllers={'private': SimpleNamespace(privacy_gate=gate)}))
         privacy = self.privacy(app, 'toga_android.app')
         privacy.refresh()
         self.assertTrue(window.flags & 0x2000)
@@ -406,7 +406,7 @@ class ResumeLockTests(unittest.TestCase):
     def test_lock_names_credential_files_and_updates_remaining_password_prompt(self):
         self.gate.credential_name = 'Personal.zip'
         other = ResumePassword('work-password', credential_name='Work.zip')
-        self.app.private_sessions = SimpleNamespace(controllers={
+        self.app.private_sessions = SimpleNamespace(flush_visible_progress=Mock(), controllers={
             'other': SimpleNamespace(privacy_gate=other)})
         self.privacy.conceal()
         self.privacy.reveal()
@@ -635,7 +635,7 @@ class ResumeLockTests(unittest.TestCase):
 
     def test_private_view_holds_protection_after_credentials_cleared(self):
         other = ResumePassword('other-password')
-        self.app.private_sessions = SimpleNamespace(controllers={
+        self.app.private_sessions = SimpleNamespace(flush_visible_progress=Mock(), controllers={
             'retained-draft': SimpleNamespace(privacy_gate=other)})
         self.privacy.conceal()
         self.privacy.reveal()

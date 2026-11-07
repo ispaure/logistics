@@ -83,7 +83,7 @@ class AutomaticCredentialImportTests(unittest.TestCase):
         self.app.loop.run_until_complete(self.app.cloud_import.on_press())
         self.assertIs(self.app.cloud_pending_zip, selected)
         self.assertEqual(self.app.cloud_password.value, '')
-        self.assertIn('Check the password', self.app.cloud_import_message.text)
+        self.assertIn('Check the password', ' '.join(self.app.cloud_import_message.text.split()))
         self.app.cloud_password.value = 'correct'
         self.app.loop.run_until_complete(self.app.cloud_import.on_press())
         self.assertEqual(self.client.calls, [('wrong', False), ('correct', False)])
