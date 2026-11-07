@@ -5,6 +5,7 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import base64
+from io import BytesIO
 import json
 import os
 import unittest
@@ -43,6 +44,15 @@ class NotesLibraryTests(unittest.TestCase):
     setUp = test_obsidian.ObsidianTests.setUp
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
+
+    def test_folder_note_artwork_uses_file_icon_blue(self):
+        from PIL import Image, ImageColor
+        from services.appearance_palette import FILE_ICON_BLUE
+        from services.documents.entry_icons import ENTRY_ICONS
+
+        with Image.open(BytesIO(base64.b64decode(ENTRY_ICONS['folder_document']))) as artwork:
+            visible_colors = {rgba[:3] for _, rgba in artwork.getcolors(artwork.width * artwork.height) if rgba[3]}
+        self.assertEqual(visible_colors, {ImageColor.getrgb(FILE_ICON_BLUE)})
 
     def test_search_folder_note_uses_folder_document_icon_and_opens_landing_page(self):
         from mobile.obsidian import open_vault
