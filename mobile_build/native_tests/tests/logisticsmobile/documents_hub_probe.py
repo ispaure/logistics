@@ -60,7 +60,8 @@ class DocumentsHubProbe(DocumentWorkspaceProbe):
                 await capture_window(self, Path(self.paths.cache) / f'documents-hub-{orientation}-{destination}.png')
                 if self.routes.apple:
                     geometry = native_geometry(self)
-                    unlock = [item for item in geometry['items'] if item['label'] == 'Unlock LocalCrypt']
+                    controls = [*geometry['items'], *geometry['header_items']]
+                    unlock = [item for item in controls if item['label'] == 'Unlock LocalCrypt']
                     assert len(unlock) == 1, geometry
                     position = unlock[0]['frame']
                     report['samples'].append(dict(destination=destination, orientation=orientation,
@@ -71,11 +72,10 @@ class DocumentsHubProbe(DocumentWorkspaceProbe):
                     report['samples'].append(dict(destination=destination, orientation=orientation, unlock=position))
                 positions.append(position)
                 await capture_window(self, Path(self.paths.cache) / f'documents-hub-{orientation}-{destination}.png')
-            # Documents keeps its native bar even when another destination
-            # projects its unlock shortcut into a free part of the top band.
-            for position in (positions[1:2] if self.routes.apple else positions[1:]):
-                assert abs(position[0] - positions[0][0]) <= 2, positions
-                assert abs(position[1] - positions[0][1]) <= 2, positions
+            if not self.routes.apple:
+                for position in positions[1:]:
+                    assert abs(position[0] - positions[0][0]) <= 2, positions
+                    assert abs(position[1] - positions[0][1]) <= 2, positions
             assert not hasattr(self.body.children[0], '_workspace_frame')
             report.setdefault('collections', []).append(self.check_collection_frames(control_frame, orientation))
             self.document_view_buttons['Libraries'].on_press()
