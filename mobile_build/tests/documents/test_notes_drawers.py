@@ -527,6 +527,7 @@ class NotesDrawerTests(unittest.TestCase):
         from mobile.notes_drawers import NotesDrawers
         owner = NotesDrawers.__new__(NotesDrawers)
         owner.side, owner.gestures = 'files', []
+        owner.action_choice = None
         owner.show_detail = Mock()
         popup = Mock()
         owner.overlay = SimpleNamespace(popup=popup)

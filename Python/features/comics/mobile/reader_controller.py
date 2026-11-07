@@ -31,6 +31,7 @@ class ComicController:
     toggle_reading_mode = HostAttribute("toggle_reading_mode")
     active_host = HostAttribute("active_host")
     book_busy = HostAttribute("book_busy")
+    _book_idle = HostAttribute("_book_idle")
     book_content = HostAttribute("book_content")
     book_epoch = HostAttribute("book_epoch")
     book_reader = HostAttribute("book_reader")
@@ -105,6 +106,16 @@ class ComicController:
         ), max(1, layout.content_height or 1)
 
     async def move_comic(self, direction):
+        reader, epoch = self.book_reader, self.book_epoch
+        navigation = getattr(self, 'comic_navigation', None)
+        while self.book_busy and reader is not None and navigation is not None and navigation.layout_reload:
+            # A native keyboard/chrome resize may still be fitting the page
+            # after unlock returns. Preserve this navigation intent while that
+            # automatic reload finishes, without applying it to a new reader.
+            await self._book_idle.wait()
+            if (self.book_reader is not reader or self.book_epoch != epoch
+                    or not self.active_host or self.manager.active is not self.app):
+                return
         if (
             self.book_busy
             or self.book_reader is None

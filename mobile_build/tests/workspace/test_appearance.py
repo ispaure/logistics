@@ -33,8 +33,11 @@ class AppearanceTests(unittest.TestCase):
             for dark, color in enumerate(slider._accent_preview):
                 self.assertEqual(options['palette'](bool(dark))['accent'], color)
                 self.assertEqual(options['apple_color'].__self__.palette(bool(dark))['accent'], color)
+            paint.reset_mock()
             refresh_progress()
-            self.assertEqual(paint.call_args.kwargs['palette']()['accent'], slider._accent_preview[0])
+            refreshed = [call for call in paint.call_args_list if call.args[0] is slider]
+            self.assertEqual(len(refreshed), 1)
+            self.assertEqual(refreshed[0].kwargs['palette']()['accent'], slider._accent_preview[0])
             set_eink_enabled(True)
             self.assertEqual(options['palette']()['accent'], EINK['accent'])
 
