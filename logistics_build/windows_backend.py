@@ -51,7 +51,8 @@ def _run_attempt(args):
         signal.signal(sig, lambda *_: cancelled.set())
     args.results.mkdir(parents=True, exist_ok=False)
     selected = client.start(args.vm)
-    if args.prepared and args.prepared.is_file():
+    reuse_prepared = args.prepared is not None and args.prepared.is_file()
+    if reuse_prepared:
         prepared = json.loads(args.prepared.read_text())
         if prepared.get('vm') != selected['uuid'] or prepared.get('status') != 'prepared':
             raise ValueError('Prepared tools belong to another guest or are incomplete.')
@@ -75,7 +76,8 @@ def _run_attempt(args):
         environment['LOGISTICS_REUSE_TEST_RESULTS'] = 'off'
     result = dict(schema=1, status='running', source=args.source_identity, backend='Parallels Windows', original_state=selected['status'],
                   started_at=datetime.now(timezone.utc).isoformat(), guest_architecture=prepared['guestArchitecture'],
-                  runtime=prepared['runtime'], workspace=prepared['workspace'], workspace_token=prepared['token'], operation=operation)
+                  runtime=prepared['runtime'], workspace=prepared['workspace'], workspace_token=prepared['token'], operation=operation,
+                  public_tool_cache_retained=True)
     lifecycle = GuestResultLifecycle(result, args.results, 'Parallels Windows', 'test_workspace')
     manager = 'manager-' + operation
     try:
@@ -144,13 +146,19 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         result.update(status='failed', error=str(error))
     finally:
+        def cleanup():
+            paths = [source, source + '.zip', manager, manager + '.zip', reports,
+                     'plan-' + operation + '.json', 'operation-' + operation, 'cancel-' + operation,
+                     'evidence-' + operation + '.zip']
+            if not reuse_prepared:
+                paths.extend(['environment', 'cache', 'python', 'tools', 'downloads'])
+            guest.remove_paths(paths)
+            result['public_tool_cache_retained'] = reuse_prepared
+
         lifecycle.collect(
             lambda: guest.collect([reports, source + '/test-results'], args.results / 'guest'),
             args.results / 'guest' / reports / 'manager/result.json',
-            lambda: guest.remove_paths([source, source + '.zip', manager, manager + '.zip', reports,
-                'plan-' + operation + '.json', 'operation-' + operation, 'cancel-' + operation,
-                'evidence-' + operation + '.zip']))
-        result['public_tool_cache_retained'] = True
+            cleanup)
         lifecycle.finish()
     if args.shutdown and selected['status'] == 'stopped':
         client.shutdown(selected['uuid'])

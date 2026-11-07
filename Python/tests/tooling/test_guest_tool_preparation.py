@@ -94,3 +94,60 @@ class GuestToolPreparationTests(unittest.TestCase):
             self.assertEqual(result['vm'], 'test-vm')
             self.assertEqual(result['token'], client.powershell.call_args.args[2]['token'])
             self.assertFalse(result['tests_run'])
+
+    def test_windows_attempt_reclaims_only_disposable_tools_after_evidence_transfer(self):
+        tool_paths = {'environment', 'cache', 'python', 'tools', 'downloads'}
+        for reuse, transfer_fails, cleanup_fails in (
+            (False, False, False), (True, False, False), (False, True, False), (False, False, True),
+        ):
+            with self.subTest(reuse=reuse, transfer_fails=transfer_fails, cleanup_fails=cleanup_fails), \
+                    TemporaryDirectory() as directory:
+                root = Path(directory)
+                source = {'commit': 'fixture'}
+                prepared = dict(vm='test-vm', status='prepared', token='a' * 32, workspace=r'C:\bm\fixture',
+                                python='python', git='git', runtime={}, guestArchitecture='ARM64')
+                reference = root / 'prepared.json' if reuse else None
+                if reference:
+                    reference.write_text(json.dumps(prepared))
+                args = argparse.Namespace(vm='test-vm', prepared=reference, results=root / 'attempt',
+                                          snapshot=root, source_identity=source, manager_checkout=None,
+                                          pattern='', shutdown=False)
+                with patch.object(windows_backend, 'Parallels') as transport, \
+                        patch.object(windows_backend, 'prepare', return_value=prepared) as prepare, \
+                        patch.object(windows_backend, 'WindowsGuest') as guest_class, \
+                        patch.object(windows_backend, 'source_zip', return_value=b'source'), \
+                        patch.object(windows_backend.signal, 'signal'):
+                    transport.return_value.start.return_value = dict(uuid='test-vm', status='running')
+                    guest = guest_class.return_value
+                    guest.call_idempotent.return_value = json.dumps(dict(runtime={}, git='git', path=''))
+                    guest.run.return_value = 0
+                    evidence = []
+
+                    def collect(paths, destination):
+                        if transfer_fails:
+                            raise OSError('evidence transfer failed')
+                        report = destination / paths[0] / 'manager/result.json'
+                        report.parent.mkdir(parents=True)
+                        report.write_text(json.dumps(dict(source=source, backend='Parallels Windows',
+                                                          status='passed', phases=[])))
+                        evidence.append(report)
+
+                    def remove(paths):
+                        self.assertTrue(evidence[0].is_file())
+                        self.assertEqual(tool_paths.intersection(paths), set() if reuse else tool_paths)
+                        if cleanup_fails:
+                            raise OSError('cleanup failed')
+
+                    guest.collect.side_effect = collect
+                    guest.remove_paths.side_effect = remove
+                    self.assertEqual(windows_backend._run_attempt(args), int(transfer_fails or cleanup_fails))
+                    if reuse:
+                        prepare.assert_not_called()
+                    else:
+                        prepare.assert_called_once_with('test-vm', args.results / 'prepared.json')
+                    if transfer_fails:
+                        guest.remove_paths.assert_not_called()
+                    else:
+                        guest.remove_paths.assert_called_once()
+                    result = json.loads((args.results / 'result.json').read_text())
+                    self.assertEqual(result['public_tool_cache_retained'], reuse or transfer_fails or cleanup_fails)
