@@ -85,7 +85,7 @@ async def rotate(app, orientation, *, settle=ROTATION_SETTLE, timeout=None):
                 'BSActionErrorDomain Code=1' in error and 'response-not-possible' in error
                 for error in rotation.errors):
             scene = app.main_window._impl.native.windowScene
-            return int(scene.interfaceOrientation) == ORIENTATIONS[orientation][1]
+            return scene is not None and int(scene.interfaceOrientation) == ORIENTATIONS[orientation][1]
         return rotation.acknowledged(orientation)
 
     with section(app, 'rotation-dispatch', orientation=orientation):

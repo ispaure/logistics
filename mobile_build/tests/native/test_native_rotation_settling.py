@@ -38,7 +38,11 @@ class RotationSettlingTests(unittest.IsolatedAsyncioTestCase):
             scene.interfaceOrientation = 1
             self.assertTrue(predicate())
 
-        with patch.object(rotation_checks, 'NativeRotation', return_value=rotation),                 patch.object(rotation_checks.sys, 'platform', 'ios'),                 patch.object(rotation_checks, 'wait_until', side_effect=wait):
+        with (
+            patch.object(rotation_checks, 'NativeRotation', return_value=rotation),
+            patch.object(rotation_checks.sys, 'platform', 'ios'),
+            patch.object(rotation_checks, 'wait_until', side_effect=wait),
+        ):
             await rotation_checks.rotate(app, 'portrait', settle=0)
         rotation.acknowledged.assert_not_called()
 
