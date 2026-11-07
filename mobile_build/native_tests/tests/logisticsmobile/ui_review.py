@@ -199,11 +199,24 @@ async def exercise_ui_review(app):
         app.file_browser.search.value = 'Old filter with no matches'
         leave()
         app.show_home()
-        action = home_browse_button(app.body)
-        assert action is not None
         await asyncio.sleep(.2)
-        native = action._impl.native
-        if get_os() is OS.IOS:
+        action = home_browse_button(app.body)
+        if action is None and get_os() is OS.IOS:
+            # In the Duo's vertical bar, UIKit projects the retained Home
+            # button as a native bar item outside the content widget tree.
+            from .fixtures import ios_toolbar_items
+            from mobile.ios_toolbar import vertical_edge
+            navigation = app.native_host.adapter.navigation_for('home')
+            controller = navigation.topViewController
+            assert vertical_edge(controller) and not navigation.isNavigationBarHidden()
+            action = next(button for button in app.home_sections._home_primary_buttons
+                          if button.text == 'Open Document')
+            item = action._ios_action_item
+            assert item in ios_toolbar_items(controller) and item.isEnabled()
+            item.target.performSelector(item.action, withObject=item)
+        elif get_os() is OS.IOS:
+            assert action is not None
+            native = action._impl.native
             from rubicon.objc import CGPoint, ObjCClass
             # Exercise the actual Home file-opening control through UIKit.
             ancestor = native.superview
@@ -224,6 +237,8 @@ async def exercise_ui_review(app):
             from toga_iOS.libs import UIControlEventTouchUpInside
             native.sendActionsForControlEvents(UIControlEventTouchUpInside)
         else:
+            assert action is not None
+            native = action._impl.native
             assert native.isShown() and native.isEnabled()
             assert native.performClick()
         for _ in range(200):
