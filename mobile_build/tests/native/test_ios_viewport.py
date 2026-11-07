@@ -377,14 +377,17 @@ class ControlClearanceTests(unittest.TestCase):
         bar = Mock()
         bar.isHidden.return_value = False
         owner = SimpleNamespace(navigationBar=bar, topViewController=SimpleNamespace(navigationItem=item))
-        with patch('mobile.ios_toolbar.vertical_edge', return_value=2), patch.dict(
+        with patch('mobile.ios_toolbar.vertical_edge', return_value=2) as edge, patch.dict(
                 'sys.modules', {'rubicon.objc': SimpleNamespace(SEL=lambda name: name)}):
             self.assertFalse(reserve_bar_clearance(owner))
-            self.assertEqual(item.verticalBarCompressionBehavior, 1)
+            self.assertEqual(item.verticalBarCompressionBehavior, 2)
             self.assertFalse(hasattr(owner, 'additionalSafeAreaInsets'))
             bar.isHidden.return_value = True
             reserve_bar_clearance(owner)
-            self.assertEqual(item.verticalBarCompressionBehavior, 1)
+            self.assertEqual(item.verticalBarCompressionBehavior, 2)
+            edge.return_value = 0
+            self.assertFalse(reserve_bar_clearance(owner))
+            self.assertEqual(item.verticalBarCompressionBehavior, 0)
 
     def test_native_bars_do_not_add_island_offsets_as_activity_changes(self):
         from mobile.ios_system_occlusions import reserve_bar_clearance
