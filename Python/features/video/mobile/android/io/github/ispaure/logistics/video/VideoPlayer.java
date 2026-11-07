@@ -105,7 +105,7 @@ public final class VideoPlayer {
     private final ArrayList<RendererDiscoverer> discoverers = new ArrayList<>();
     private final ArrayList<RendererItem> renderers = new ArrayList<>();
     private boolean done, ended, attached, casting, wasSecure;
-    private long resume, lastPosition;
+    private long resume, lastPosition, progressSeek = -1;
     private long knownDuration;
     private boolean mediaStartsAtResume, resumeSeekSubmitted;
     private int resumeVolume = 100;
@@ -361,6 +361,8 @@ public final class VideoPlayer {
                 }
                 scheduleControls();
             }
+            if (event.type == MediaPlayer.Event.ESAdded && tools != null) tools.apply();
+            if (event.type == MediaPlayer.Event.TimeChanged && progressSeek >= 0) confirmProgressSeek();
             if (event.type == MediaPlayer.Event.EndReached) { ended = true; playRequested = false; lastPosition = 0; setControlsVisible(true); if (tools != null) tools.emit("ended", ""); }
             if (event.type == MediaPlayer.Event.EncounteredError ||
                     (event.type == MediaPlayer.Event.Stopped && playbackActive && playRequested && !ended)) {
@@ -681,6 +683,8 @@ public final class VideoPlayer {
         lastRenderedClock = target;
         if (networkResumePending) bufferPosition = target;
         resume = player.isPlaying() ? -1 : target;
+        resumeSeekSubmitted = false;
+        progressSeek = target;
         player.setTime(target);
     }
 
@@ -842,26 +846,40 @@ public final class VideoPlayer {
         return parts.isEmpty() ? "Track " + track.id : android.text.TextUtils.join(" · ", parts);
     }
 
+    String trackKey(MediaPlayer.TrackDescription track, boolean text) {
+        org.videolan.libvlc.interfaces.IMedia media = player.getMedia();
+        try {
+            if (media != null) for (int index = 0; index < media.getTrackCount(); index++) {
+                org.videolan.libvlc.interfaces.IMedia.Track info = media.getTrack(index);
+                int type = text ? org.videolan.libvlc.interfaces.IMedia.Track.Type.Text
+                                : org.videolan.libvlc.interfaces.IMedia.Track.Type.Audio;
+                if (info == null || info.id != track.id || info.type != type) continue;
+                return new JSONArray(java.util.Arrays.asList("android-vlc", info.language,
+                    info.description, info.codec, track.name)).toString();
+            }
+        } finally {
+            if (media != null) media.release();
+        }
+        return new JSONArray(java.util.Arrays.asList("android-vlc", track.name)).toString();
+    }
+
     private void tracks(boolean subtitlesOnly) {
         if (!allowed(false)) return;
         ArrayList<String> labels = new ArrayList<>();
         ArrayList<Runnable> actions = new ArrayList<>();
-        if (subtitlesOnly) { labels.add("Subtitles off"); actions.add(() -> { player.setSpuTrack(-1); tools.setting("subtitle_track", -1); }); }
+        if (subtitlesOnly) { labels.add("Subtitles off"); actions.add(() -> { player.setSpuTrack(-1); tools.selectTrack("subtitle_track", -1, ""); }); }
         MediaPlayer.TrackDescription[] audio = player.getAudioTracks();
         if (!subtitlesOnly && audio != null) for (MediaPlayer.TrackDescription track : audio) {
-            labels.add((player.getAudioTrack() == track.id ? "✓ " : "") + trackLabel(track, false)); actions.add(() -> { player.setAudioTrack(track.id); tools.setting("audio_track", track.id); });
+            labels.add((player.getAudioTrack() == track.id ? "✓ " : "") + trackLabel(track, false)); actions.add(() -> { player.setAudioTrack(track.id); tools.selectTrack("audio_track", track.id, trackKey(track, false)); });
         }
         MediaPlayer.TrackDescription[] text = player.getSpuTracks();
         if (subtitlesOnly && text != null) for (MediaPlayer.TrackDescription track : text) {
-            labels.add((player.getSpuTrack() == track.id ? "✓ " : "") + trackLabel(track, true)); actions.add(() -> { player.setSpuTrack(track.id); tools.setting("subtitle_track", track.id); });
+            labels.add((player.getSpuTrack() == track.id ? "✓ " : "") + trackLabel(track, true)); actions.add(() -> { player.setSpuTrack(track.id); tools.selectTrack("subtitle_track", track.id, trackKey(track, true)); });
         }
         for (int index = 0; subtitlesOnly && index < subtitles.length(); index++) {
             final int selected = index;
             labels.add("External: " + subtitles.optJSONObject(index).optString("name"));
-            actions.add(() -> {
-                player.addSlave(Media.Slave.Type.Subtitle, Uri.parse(subtitles.optJSONObject(selected).optString("url")), true);
-                tools.emit("subtitleSelect", subtitles.optJSONObject(selected).optString("name"));
-            });
+            actions.add(() -> tools.emit("subtitleSelect", subtitles.optJSONObject(selected).optString("name")));
         }
         openDialog = new AlertDialog.Builder(activity).setTitle(subtitlesOnly ? "Subtitles" : "Audio tracks")
             .setItems(labels.toArray(new String[0]), (dialog, index) -> {
@@ -1002,6 +1020,20 @@ public final class VideoPlayer {
             attached = false;
             if (restricted && !wasSecure) activity.getWindow().clearFlags(WindowManager.LayoutParams.FLAG_SECURE);
         }
+    }
+
+    private void confirmProgressSeek() {
+        long time = player.getTime();
+        if (time >= 0 && Math.abs(time - progressSeek) <= 750) {
+            progressSeek = -1;
+            if (tools != null) tools.emit("progress", Long.toString(time));
+        }
+    }
+
+    public long progressPosition() {
+        if (ended) return 0;
+        if (progressSeek >= 0 || networkResumePending || resumeSeekSubmitted || resume >= 0) return -1;
+        return player.getTime();
     }
 
     public long position() {

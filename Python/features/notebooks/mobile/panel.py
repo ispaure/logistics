@@ -15,6 +15,7 @@ from ..notebook import Notebook, MAX_ARCHIVE
 from ..recovery import Repository
 from ..editor import Editor
 from ..bridge import Bridge, RetiredCanvas
+from ..progress import open_notebook_progress, page_location
 from ..protocol import document_state, stroke_script, ink_patch_script, update_script, validate_action
 from .surface import mobile_editor_html
 
@@ -56,6 +57,8 @@ class NotebookPanel:
         self.document = None
         self.privacy_gate = None
         self.editor = None
+        self.progress = None
+        self._position_sequence = -1
         self.web = None
         self.boox_refresh = None
         self.pen_input = None
@@ -88,6 +91,7 @@ class NotebookPanel:
 
     def library(self):
         self.retire_canvas()
+        self.retire_progress()
         for child in list(self.view.children):
             self.view.remove(child)
         box = toga.Box(style=Pack(direction=COLUMN, margin=16))
@@ -132,6 +136,13 @@ class NotebookPanel:
                 key = await asyncio.to_thread(self.repository.create, book)
             if self.closed or not self.app.active_host or self.app.navigation_generation != generation:
                 return False
+            resource = self.document.resource if self.document and key == self.document.key else None
+            progress = await asyncio.to_thread(self.load_progress, book, key, resource)
+            if self.closed or not self.app.active_host or self.app.navigation_generation != generation:
+                if progress[0] is not None:
+                    progress[0].retire()
+                return False
+            self.retire_progress()
             if self.document is not None:
                 if key == self.document.key:
                     self.document.book = book
@@ -141,7 +152,7 @@ class NotebookPanel:
             if self.web is not None:
                 self.retire_canvas()
                 self.busy = True
-            self.open(book, key, mount=False)
+            self.open(book, key, mount=False, progress=progress)
             if not await self.prewarm_pdf() or self.app.navigation_generation != generation:
                 return False
             if mount:
@@ -208,9 +219,9 @@ class NotebookPanel:
                 and getattr(self, 'document', None) is document
                 and getattr(document, 'resource', None) is resource)
 
-    def open_resource(self, document, *, mount=True):
+    def open_resource(self, document, *, mount=True, progress=None):
         self.document = document
-        self.open(document.book, document.key, mount=mount)
+        self.open(document.book, document.key, mount=mount, progress=progress)
 
     def state(self):
         state = document_state(self.editor, self.document)
@@ -288,20 +299,38 @@ class NotebookPanel:
             raise ValueError('The notebook canvas changed during Save; your draft remains open.')
         return self.document is not None and not self.document.dirty and not self.native_input_pending and not self.busy
 
-    def open(self, book, key, *, mount=True):
+    def load_progress(self, book, key, resource=None):
+        draft_path = self.repository.root / key / 'base.rmdoc' if resource is None else None
+        return open_notebook_progress(book, self.app.private_root, resource=resource,
+                                      draft_path=draft_path, app=self.app)
+
+    def retire_progress(self):
+        if self.progress is not None:
+            self.progress.flush()
+            self.progress.retire()
+            self.progress = None
+
+    def open(self, book, key, *, mount=True, progress=None):
+        self.retire_progress()
         if self.document is not None and self.document.book is not book:
             if self.document.recovery is not None:
                 self._repository = self.document.recovery
             self.document.close()
             self.document = None
+        if progress is None:
+            resource = self.document.resource if self.document else None
+            progress = self.load_progress(book, key, resource)
+        self.progress, index = progress
         self.key = key
         self.editor = Editor(book, self.document.checkpoint if self.document else lambda book: self.repository.save(key, book))
+        self.editor.index = index
         if mount:
             self.mount_canvas()
 
     def mount_canvas(self):
         self.retire_canvas()
         self.bridge = Bridge()
+        self._position_sequence = -1
         from services.documents.mobile_views import document_webview
         resource = self.document.resource if self.document else None
         self.web = document_webview(resource, on_navigation_starting=self.navigate,
@@ -445,6 +474,9 @@ class NotebookPanel:
         self.busy = True
         error = ''
         web, editor = self.web, self.editor
+        progress = self.progress
+        position_sequence = canvas.sequence
+        previous_page = page_location(editor)
         previous_ink = list(editor.notebook.page(editor.index).strokes) if action.get('op') == 'erase' else None
         ack_dispatched = False
         async def respond(script, *, acknowledges=False, release_busy=True):
@@ -597,7 +629,19 @@ class NotebookPanel:
                     script = update_script(self.state(), '') + ';' + status_script
                 else:
                     script = update_script(self.state(), error)
-                await respond(script, acknowledges=True)
+                location = page_location(editor)
+                changed = progress is not None and not error and location != previous_page
+                if changed:
+                    script += ';state.page_id === ' + json.dumps(location['page_id']) + ' && state.index === ' + str(location['index'])
+                displayed = await respond(script, acknowledges=True)
+                if (changed and progress is self.progress and _input_true(displayed)
+                        and position_sequence >= self._position_sequence):
+                    self._position_sequence = position_sequence
+                    observation = progress.observe(location)
+                    if observation is not None:
+                        status = await asyncio.to_thread(progress.flush, observation)
+                        if status == 'write-failed' and not self.closed and progress is self.progress:
+                            self._native_notice('Could not save the notebook page position.')
             except RetiredCanvas:
                 return
             except NotebookResponseTimeout:
@@ -732,6 +776,7 @@ class NotebookPanel:
         if native_actions is not None:
             native_actions.dispose()
         self.retire_canvas()
+        self.retire_progress()
         if self.document is not None:
             self.document.close()
             self.document = None

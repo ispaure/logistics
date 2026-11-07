@@ -66,6 +66,8 @@ class ComicPages:
         self.path = self.document.path
         with self.document.open_archive() as archive:
             self.pages = comic_page_names(archive)
+            self.progress_pages = {name: [archive.getinfo(name).CRC, archive.getinfo(name).file_size]
+                                   for name in self.pages}
         if not self.pages:
             raise ValueError('This archive contains no supported image pages')
         self.double_pages = double_page_indices(self.document.info, len(self.pages))

@@ -32,7 +32,9 @@ class ReadingState:
     def __init__(self, comic_path, *, folder=None):
         from services.documents.history_controls import PositionLease
         self._position_lease = PositionLease()
-        identifier = hashlib.sha256(str(Path(comic_path).resolve()).encode()).hexdigest()
+        self.comic_path = Path(comic_path).resolve()
+        self.root = Path(folder) if folder else cache_directory(create=False)
+        identifier = hashlib.sha256(str(self.comic_path).encode()).hexdigest()
         self.path = (Path(folder) if folder is not None else cache_directory(create=False) / 'Comics') / (identifier + '.json')
 
     def _load(self):
@@ -58,9 +60,17 @@ class ReadingState:
         self._position_lease.publish(lambda: atomic_write_json(self.path, dict(page=index, name=pages[index], total=len(pages)),
                           max_bytes=MAX_STATE_BYTES))
 
-    def badge(self, pages=None):
+    def badge(self, pages=None, *, revisions=None):
+        from services.documents.progress import open_progress
+
         try:
-            state = self._load()
+            progress = open_progress(None, self.comic_path, self.root, kind='desktop-comic')
+            state = progress.load()
+            if progress.can_import_legacy:
+                state = self._load()
+            progress.retire()
+            if revisions is not None and 'member_revision' in state:
+                state['page'] = verified_comic_index(state, pages, revisions)
             if type(state.get('page')) is not int:
                 return ''
             total = len(pages) if pages is not None else state.get('total')
@@ -70,3 +80,43 @@ class ReadingState:
             return f'{index + 1}/{total}'
         except (OSError, ValueError):
             return ''
+
+
+def open_comic_progress(comic, folder=None):
+    from services.documents.progress import open_progress
+
+    source = comic.document.source
+    path = comic.path
+    root = folder or cache_directory(create=False)
+    progress = open_progress(source, path, root, kind='desktop-comic')
+    record = progress.load()
+    if progress.can_import_legacy:
+        if comic.document.private:
+            from services.documents.reader_positions import desktop_state
+
+            previous = desktop_state(source, path, 'comic')
+            legacy = previous.load()
+            if previous.locked_state:
+                progress.load_status = 'locked'
+                progress.retire()
+        else:
+            legacy = ReadingState(path, folder=folder)._load()
+        if legacy.get('name') in comic.progress_pages:
+            record = comic_location(comic, comic.pages.index(legacy['name']))
+            progress.save(record)
+    return progress, verified_comic_index(record, comic.pages, comic.progress_pages)
+
+
+def verified_comic_index(record, pages, revisions):
+    name, signature = record.get('name'), record.get('member_revision')
+    if name in revisions and revisions[name] == signature:
+        return pages.index(name)
+    index = record.get('page')
+    if type(index) is int and 0 <= index < len(pages) and revisions[pages[index]] == signature:
+        return index
+    return 0
+
+
+def comic_location(comic, index):
+    name = comic.pages[index]
+    return dict(page=index, name=name, total=len(comic.pages), member_revision=comic.progress_pages[name])

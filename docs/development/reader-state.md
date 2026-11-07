@@ -1,11 +1,48 @@
-# Private reader state and history clearing
+# Document progress and private history clearing
 
-Session-only remote sources (encrypted or ordinary) and LocalCrypt use the owning
-credential ZIP password for persistent reader state. `services/documents/credential_state.py`
-provides the bounded shared store. EPUB, comics, PDF and video adapters supply
-format-specific positions; provider readers also retain their page, EPUB offsets
-and bookmarks. Passwordless sessions keep state in RAM only. No fallback writes
+`services/documents/progress.py` owns reading observations, storage selection and
+publication order. `progress_identity.py` resolves the admitted document independently
+of the browser root or navigation entry point. Home and Local therefore share an
+identity for the same nested local file. Managed local identities use a stable root
+and relative path, including relocated iOS Documents containers. Protected identities
+include their credential authority, namespace and logical key. Access checks remain
+separate from identity: finding an existing reader does not grant additional access.
+
+See the [investigation and implementation plan](reader-progress-plan.md) for the
+original failures, implementation scope and acceptance requirements.
+
+## Storage and observation contract
+
+Ordinary local files use bounded atomic JSON checkpoints in app-owned storage,
+including when document contents are read-only. Protected sources with an available
+credential ZIP password use `credential_state.py` and its existing encrypted store.
+A source without approved persistence authority uses explicitly reported session
+memory. In particular, mobile Saved connection metadata does not supply the native
+ZIP key that encrypted Session-Only credential ZIP imports can provide. A clear
+ZIP does not acquire encryption authority merely because import supplied a password.
+A standalone archive password
+also does not grant credential-history encryption authority. No fallback writes
 private positions with just a device key, remote settings or storage encryption.
+
+Adapters load before accepting initial layout callbacks, observe successfully
+displayed locations, and flush accepted observations through their host's lifecycle
+workers. Closing an old window must not create a new observation from its stale
+view. Checkpoints carry a locator version, revision binding, observation sequence
+and clear-history generation. Positions and bookmarks are independent sections;
+coalescing one must not discard pending changes to the other. Interrupted publication
+preserves the previous checkpoint and retains the pending observation for retry.
+Continuous saves limit loss if the operating system terminates without a final
+callback; termination before publication cannot be guaranteed lossless.
+
+The shared API distinguishes restored, absent, incompatible, session-only, locked,
+error, fenced, stale, saved and write-failed outcomes. An unreadable original is preserved.
+Ordinary local readers do not use the credential-password recovery notice.
+
+## Protected storage
+
+Session-Only remote sources and LocalCrypt with an available credential ZIP password
+use that password for persistent reader state. Format adapters supply only their
+locators and playback settings, rather than document text or media bytes.
 
 Desktop credential publication retains a separate mutable copy of the ZIP password
 in the credential session registry. Derived remote/LocalCrypt contexts inherit the

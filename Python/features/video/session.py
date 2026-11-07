@@ -41,6 +41,8 @@ class PlaybackSettings:
     pip_subtitles: bool = False
     audio_track: int | None = None
     subtitle_track: int | None = None
+    audio_track_key: str = ""
+    subtitle_track_key: str = ""
     subtitle_file: str = ""
     renderer: str = 'auto'
     colour_output: str = 'auto'
@@ -69,6 +71,9 @@ class PlaybackSettings:
         if (not isinstance(result.subtitle_file, str) or len(json.dumps(result.subtitle_file)) > 2048
                 or any(c in result.subtitle_file for c in '\x00\r\n')):
             raise ValueError('Invalid subtitle resource.')
+        for key in (result.audio_track_key, result.subtitle_track_key):
+            if not isinstance(key, str) or len(key) > 1024 or '\x00' in key:
+                raise ValueError('Invalid playback track identity.')
         for value in (result.audio_track, result.subtitle_track):
             if value is not None and (type(value) is not int or not -1 <= value <= 10000):
                 raise ValueError('Invalid playback track.')

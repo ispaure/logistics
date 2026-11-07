@@ -631,7 +631,7 @@ class NotebookStorageTests(unittest.TestCase):
         data['root'] = '/var/mobile/Containers/Data/Application/OLD-CONTAINER/Documents'
         binding.write_text(json.dumps(data))
         self.assertTrue(self.app.close_session(panel.session.id))
-        with patch('services.documents.locations.shared_documents_path', return_value=root):
+        with patch('services.documents.progress_identity.shared_documents_path', return_value=root):
             self.assertTrue(self.run_async(open_notebook(self.app, key=key)))
         restored = self.app.notebook_panel
         self.assertIsNotNone(restored.document.resource)
@@ -653,7 +653,7 @@ class NotebookStorageTests(unittest.TestCase):
         replacement = Notebook.new('External changed copy').to_bytes()
         source.write_bytes(replacement)
         self.assertTrue(self.app.close_session(panel.session.id))
-        with patch('services.documents.locations.shared_documents_path', return_value=root):
+        with patch('services.documents.progress_identity.shared_documents_path', return_value=root):
             self.assertTrue(self.run_async(open_notebook(self.app, key=key)))
         restored = self.app.notebook_panel
         self.assertIsNone(restored.document.resource)

@@ -165,13 +165,23 @@ class ProviderProgressLifetimeTests(unittest.IsolatedAsyncioTestCase):
     def progress(self):
         from types import SimpleNamespace as NS
         from unittest.mock import Mock
-        from mobile.provider_progress import ProviderProgress
+        from mobile.provider_progress import ProgressWrites, ProviderProgress
+        from services.documents.progress import ProgressStatus
+
+        owner = NS(active_host=True, crypt_reader=NS(labels=['page']),
+                   crypt_page=NS(value='page'), loop=asyncio.get_running_loop())
         progress = ProviderProgress.__new__(ProviderProgress)
-        progress.owner = NS(active_host=True, crypt_reader=NS(labels=['page']),
-                            crypt_page=NS(value='page'), loop=asyncio.get_running_loop())
-        progress.pending, progress.closed, progress.task = {'page': 0}, False, None
-        progress.live, progress.worker, progress.generation = True, None, 0
-        progress.state = NS(save=Mock())
+        state = NS(flush=Mock(return_value=ProgressStatus.SAVED), retire=Mock(),
+                   observe=lambda value: value, load_status=ProgressStatus.ABSENT,
+                   write_status=ProgressStatus.SAVED)
+        ProgressWrites.__init__(progress, owner, state)
+        progress.pending = {'page': 0}
+        progress.surface = progress.surface_task = None
+        progress.surface_ready = False
+        progress.last_location = {'page': 0}
+        progress.worker_finished = lambda: None
+        progress.available = lambda: (not progress.closed and owner.active_host
+                                      and not getattr(getattr(owner, '_provider_document', None), 'terminal', False))
         return progress
 
     async def test_cancelled_progress_write_retains_borrow_until_real_worker_finishes(self):
@@ -186,7 +196,7 @@ class ProviderProgressLifetimeTests(unittest.IsolatedAsyncioTestCase):
                     raise RuntimeError('Fixture not released')
             finally:
                 finished.set()
-        progress.state.save.side_effect = save
+        progress.state.flush.side_effect = save
         progress.task = asyncio.create_task(progress.write())
         try:
             await asyncio.wait_for(entered.wait(), 2)
@@ -208,37 +218,34 @@ class ProviderProgressLifetimeTests(unittest.IsolatedAsyncioTestCase):
             self.assertTrue(await asyncio.to_thread(finished.wait, 2))
         progress.retire()
         self.assertTrue(progress.closed)
-        progress.state.save.assert_called_once_with({'page': 0})
+        progress.state.flush.assert_called_once_with({'page': 0})
 
-    async def test_preparation_checkpoints_then_terminal_retirement_never_writes(self):
+    async def test_preparation_flushes_without_observing_the_closing_window_again(self):
         progress = self.progress()
-        progress.pending = None
         await progress.prepare_replacement()
-        self.assertEqual(progress.state.save.call_count, 1)
-        self.assertEqual(progress.state.save.call_args.args[0]['page'], 0)
+        progress.state.flush.assert_called_once_with({'page': 0})
+        self.assertEqual(progress.generation, 0)
         progress.retire()
         progress.retire()
-        progress.capture()
-        self.assertEqual(progress.state.save.call_count, 1)
+        progress.observe({'page': 1})
+        progress.state.flush.assert_called_once()
         self.assertTrue(progress.closed)
 
-    async def test_preparation_vetoes_existing_unsettled_progress_without_final_write(self):
+    async def test_write_failure_retains_latest_observation_for_retry(self):
+        from services.documents.progress import ProgressStatus
         progress = self.progress()
-        release = asyncio.Event()
-        progress.task = asyncio.create_task(release.wait())
-        try:
-            with self.assertRaises(OSError):
-                await progress.prepare_replacement()
-            progress.state.save.assert_not_called()
-            self.assertFalse(progress.closed)
-        finally:
-            release.set()
-            await progress.task
+        progress.state.flush.side_effect = [ProgressStatus.WRITE_FAILED, ProgressStatus.SAVED]
+        self.assertIs(await progress.flush(), ProgressStatus.WRITE_FAILED)
+        self.assertEqual(progress.pending, {'page': 0})
+        progress.observe({'page': 1})
+        await progress.flush()
+        self.assertEqual(progress.state.flush.call_args.args[0], {'page': 1})
+        self.assertIsNone(progress.pending)
+        progress.retire()
 
     async def test_final_progress_capture_invalidates_receipt_when_changed_during_save(self):
         from threading import Event
         progress = self.progress()
-        progress.pending = None
         entered, release = asyncio.Event(), Event()
         loop = asyncio.get_running_loop()
         writes = []
@@ -247,19 +254,18 @@ class ProviderProgressLifetimeTests(unittest.IsolatedAsyncioTestCase):
             loop.call_soon_threadsafe(entered.set)
             if not release.wait(5):
                 raise RuntimeError('Fixture not released')
-        progress.state.save.side_effect = save
+        progress.state.flush.side_effect = save
         task = asyncio.create_task(progress.prepare_replacement())
         try:
             await asyncio.wait_for(entered.wait(), 2)
-            progress.owner.crypt_bookmarks = {0}
-            progress.capture()
+            progress.observe({'page': 1})
         finally:
             release.set()
             with self.assertRaises(OSError):
                 await task
         self.assertFalse(progress.closed)
         self.assertEqual(len(writes), 2)
-        self.assertEqual(writes[-1]['bookmarks'], [0])
+        self.assertEqual(writes[-1], {'page': 1})
 
     async def test_document_disposal_and_reader_assignment_reject_progress_borrow(self):
         from types import SimpleNamespace as NS
@@ -279,7 +285,7 @@ class ProviderProgressLifetimeTests(unittest.IsolatedAsyncioTestCase):
             loop.call_soon_threadsafe(entered.set)
             if not release.wait(5):
                 raise RuntimeError('Fixture not released')
-        progress.state.save.side_effect = save
+        progress.state.flush.side_effect = save
         progress.task = asyncio.create_task(progress.write(delay=False))
         try:
             await asyncio.wait_for(entered.wait(), 2)
@@ -305,7 +311,7 @@ class ProviderProgressLifetimeTests(unittest.IsolatedAsyncioTestCase):
             document.dispose()
         reader.pdf.close.assert_called_once_with()
         reader.source.close.assert_called_once_with()
-        self.assertEqual(progress.state.save.call_count, 1)
+        self.assertEqual(progress.state.flush.call_count, 1)
 
     async def test_terminal_admission_fences_reentrant_footer_capture_before_source_close(self):
         from types import SimpleNamespace as NS
@@ -334,7 +340,7 @@ class ProviderProgressLifetimeTests(unittest.IsolatedAsyncioTestCase):
         await progress.write(delay=False)
         self.assertIsNone(progress.task)
         self.assertIsNone(progress.pending)
-        progress.state.save.assert_not_called()
+        progress.state.flush.assert_not_called()
         reader.source.close.assert_called_once_with()
         reader.pdf.close.assert_called_once_with()
         owner.crypt_view.page_footer.dispose.assert_called_once_with()

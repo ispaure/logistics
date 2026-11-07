@@ -2,7 +2,9 @@
 
 - [Notes Library feedback review](notes-feedback-review.md)
 
-- [Private reader state and history clearing](reader-state.md)
+- [Document progress and private history clearing](reader-state.md)
+
+- [Unified document progress investigation and refactor plan](reader-progress-plan.md)
 
 If this is your first contribution, follow [the contributor walkthrough](getting-started.md).
 It covers setup, a safe local exploration, choosing a code/test owner and checking

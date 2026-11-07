@@ -211,6 +211,7 @@ SCRIPT = r'''
      if (start < 0) {getSelection().removeAllRanges();selectedCache=null;speechRange=null;speechAnchor=null;return;}
      speechAnchor=start;
      seek(start);
+     notify('position',anchor);
      const p=point(start), q=point(end,true);if(!p || !q)return;
      const r=document.createRange();r.setStart(...p);r.setEnd(...q);
      if(window.CSS && CSS.highlights && window.Highlight) {
@@ -258,7 +259,7 @@ SCRIPT = r'''
    },
    measurement: () => measurement,
    seekPage: value => {place(value);anchor=visible(true);notify('position',anchor);},
-   seek,
+   seek: (offset,end=null) => {seek(offset,end);notify('position',anchor);},
    suspend: () => {suspended=true;stopMotion();},
    resume: () => {suspended=false;resized();return true;},
    turn: direction => {

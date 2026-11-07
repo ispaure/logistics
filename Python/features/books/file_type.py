@@ -31,10 +31,12 @@ class EPUBFile(File):
         from features.books.ui.preview import cover_thumbnail
         book = self.open_book()
         self._reading_spine = tuple(book.spine)
+        self._reading_revision = book.progress_revision
         return cover_thumbnail(book, size)[0]
 
     def browser_thumbnail_badge(self):
         from .preferences import ReadingState, defaults
         if not defaults()['remember']:
             return ''
-        return ReadingState(self.path).badge(getattr(self, '_reading_spine', None))
+        return ReadingState(self.path).badge(getattr(self, '_reading_spine', None),
+                                             revision=getattr(self, '_reading_revision', None))

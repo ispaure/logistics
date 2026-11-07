@@ -25,6 +25,8 @@ class BooksPage(Bookmarks, qt.QWidget):
         self.worker = None
         self._state_folder = state_folder
         self._state = None
+        self._accepted_position = None
+        self._legacy_progress_locked = False
         self._bookmarks = []
         self._settings = defaults()
         self._current = 0
@@ -173,7 +175,7 @@ class BooksPage(Bookmarks, qt.QWidget):
             return
         if self.worker:
             return
-        self._save_state()
+        self._retire_state()
         self.book_progress.clear()
         self.book = self.text.book = self._state = None
         self._path = None
@@ -288,16 +290,40 @@ class BooksPage(Bookmarks, qt.QWidget):
             self.reader_window().setWindowFilePath(str(book.path))
         if not self.private:
             self._remember(book.path)
-        if self.private:
-            from services.documents.reader_positions import desktop_state
-            self._state = desktop_state(book.source, book.path, 'epub')
-        else:
-            self._state = ReadingState(book.path, folder=self._state_folder)
-        state = self._state.load() if self._state and self._settings['remember'] else {}
+        from commonUtils.filesystem.storage import cache_directory
+        from services.documents.progress import open_progress
+
+        self._retire_state()
+        root = self._state_folder or cache_directory(create=False)
+        self._state = open_progress(book.source, book.path, root, kind='desktop-epub',
+                                    revision=book.progress_revision)
+        state = self._state.load()
+        self._legacy_progress_locked = False
+        migrate_position = migrate_bookmarks = False
+        if self._state.can_import_legacy or self._state.bookmark_status == 'absent':
+            if self.private:
+                from services.documents.reader_positions import desktop_state
+
+                previous = desktop_state(book.source, book.path, 'epub')
+                legacy = previous.load()
+                self._legacy_progress_locked = previous.locked_state
+            else:
+                legacy = ReadingState(book.path, folder=self._state_folder).legacy_load()
+            if self._state.can_import_legacy and legacy.get('path') in book.spine:
+                state.update({key: legacy[key] for key in ('path', 'position', 'location', 'chapter', 'chapters')
+                              if key in legacy})
+                migrate_position = True
+            if self._state.bookmark_status == 'absent' and isinstance(legacy.get('bookmarks'), list):
+                state['bookmarks'] = legacy['bookmarks']
+                migrate_bookmarks = True
+        if not self._settings['remember']:
+            state = {'bookmarks': state.get('bookmarks', [])}
         self._bookmarks = [item for item in state.get('bookmarks', [])[:50]
                            if isinstance(item, dict) and item.get('path') in book.spine
                            and isinstance(item.get('label'), str) and isinstance(item.get('position'), (int, float))
                            and isfinite(item['position'])]
+        if migrate_bookmarks:
+            self._save_bookmarks()
         for control in (self.font_family, self.font_size, self.theme, self.spacing, self.reading_width):
             control.blockSignals(True)
         self.font_family.setCurrentFont(qt.QFont(self._settings['font_family']))
@@ -316,7 +342,9 @@ class BooksPage(Bookmarks, qt.QWidget):
         self._populate_bookmarks()
         path = state.get('path')
         self._current = book.spine.index(path) if path in book.spine else 0
-        self._render(position=state.get('position', 0), location=state.get('location'))
+        self._accepted_position = None
+        self._render(position=state.get('position', 0), location=state.get('location'),
+                     initial=not (migrate_position and self._settings['remember']))
         self._set_busy(self.worker is not None)
         self.text.setFocus()
 
@@ -419,7 +447,7 @@ class BooksPage(Bookmarks, qt.QWidget):
                     selections += [entry for entry in source.extraSelections() if entry.format.property(tag)]
                 widget.setExtraSelections(selections)
 
-    def _render(self, *, position=0, fragment='', location=None, turn=0):
+    def _render(self, *, position=0, fragment='', location=None, turn=0, initial=False):
         if not self.book:
             return
         path = self.book.spine[self._current]
@@ -474,7 +502,11 @@ class BooksPage(Bookmarks, qt.QWidget):
             self._loading = False
             self.text._resize_anchor = None
             self.text.resize_settle.stop()
+            if initial:
+                self._accepted_position = self._position_payload()
             self._position_changed()
+            if initial and self._state is not None:
+                self._progress_notice('locked' if self._legacy_progress_locked else self._state.load_status)
             if turn:
                 slide.finish()
         qt.QTimer.singleShot(0, self, restore)
@@ -527,18 +559,38 @@ class BooksPage(Bookmarks, qt.QWidget):
                                           'Pages adapt to your font and window size; saved locations follow the text.')
             if not self._loading:
                 self._set_busy(self.worker is not None)
-        if self.book and not self._loading and not self.worker:
-            self.save_timer.start()
+        if (self.book and not self._loading and self._state and self._settings['remember']
+                and not self._legacy_progress_locked):
+            payload = self._position_payload()
+            if payload != self._accepted_position and self._state.observe(payload) is not None:
+                self._accepted_position = payload
+                self.save_timer.start()
+
+    def _position_payload(self):
+        return dict(path=self._path, position=self._position(), location=self.text.location(),
+                    chapter=self._current, chapters=len(self.book.spine))
+
+    def _save_bookmarks(self):
+        if self._state is not None and not self._legacy_progress_locked:
+            self._state.observe_bookmarks(dict(bookmarks=self._bookmarks))
+            self._save_state()
 
     def _save_state(self):
         self.save_timer.stop()
-        if not self._state or not self.book or not self._settings['remember']:
-            return
-        try:
-            self._state.save(dict(path=self._path, position=self._position(), location=self.text.location(), bookmarks=self._bookmarks,
-                                  chapter=self._current, chapters=len(self.book.spine)))
-        except (OSError, ValueError) as error:
-            self.status.setText(f'Reading position could not be saved: {error}')
+        if self._state is not None:
+            self._progress_notice(self._state.flush())
+
+    def _progress_notice(self, status):
+        from services.documents.ui.position_notice import position_notice
+
+        message = position_notice(self._state, status)
+        if message:
+            self.status.setText(message)
+
+    def _retire_state(self):
+        self._save_state()
+        if self._state is not None:
+            self._state.retire()
 
     def edit_metadata(self):
         if not self.book or self.worker:
@@ -575,7 +627,7 @@ class BooksPage(Bookmarks, qt.QWidget):
         if resource_tasks_pending(self.reader_window() or self):
             return False
         self.speech.stop()
-        self._save_state()
+        self._retire_state()
         if self.worker is not None:
             self.worker.requestInterruption()
             return False

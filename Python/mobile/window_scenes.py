@@ -68,7 +68,8 @@ class SceneManager:
             # Restored manifests carry no live views. The first window to restore
             # a resource retains its writer; another keeps an unavailable entry.
             try:
-                self.owners.claim(key, session.identity, private=session.transient)
+                if not session.shared_read:
+                    self.owners.claim(key, session.identity, private=session.private_access)
             except ValueError:
                 pass
 

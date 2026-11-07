@@ -76,10 +76,8 @@ class ReaderController(ReaderHost, ReaderUI):
             await self.comic_controller().refresh_comic_neighbors()
         return self.book_reader is not None
 
-    async def display_book_page(self, index, *, preserve_speech=False):
-        await super().display_book_page(index, preserve_speech=preserve_speech)
-        if self.session is not None and self.book_record is not None:
-            self.session.view['position'] = self.book_record['position']
+    async def display_book_page(self, index, *, preserve_speech=False, initial=False):
+        await super().display_book_page(index, preserve_speech=preserve_speech, initial=initial)
         self.manager.update_session(self)
 
     def cancel_book_unlock(self, widget=None, **kwargs):
@@ -87,8 +85,23 @@ class ReaderController(ReaderHost, ReaderUI):
         self.manager.update_session(self)
 
     def suspend(self):
-        pending = getattr(self, '_epub_location_task', None)
-        if self.book_busy or (pending is not None and not pending.done()):
+        pending = self.request_position_flush()
+        if self.book_busy:
+            return False
+        if pending is not None and not pending.done():
+            task = getattr(self, '_suspend_book_task', None)
+            if task is None or task.done():
+                reader = self.book_reader
+
+                async def suspend_after_write():
+                    import asyncio
+                    await asyncio.wait({pending})
+                    if (self.book_reader is reader and self.active_host
+                            and not self._can_resume_visible_reader()
+                            and getattr(self._book_progress, 'pending', None) is None):
+                        self.suspend()
+
+                self._suspend_book_task = self.loop.create_task(suspend_after_write())
             return False
         if self.book_reader is not None:
             self._reader_suspended = True
@@ -159,7 +172,6 @@ class Readers:
             # Workspace restoration deliberately stores identities, not names.
             # Rehydrate the title before bind() presents the restored reader.
             owner.session.title = owner.book_record['name']
-            owner.session.view['position'] = owner.book_record['position']
 
     def show_catalog(self):
         self.catalog.presentation_destination = self.app.native_host.state.destination
@@ -209,9 +221,25 @@ class Readers:
             owner.show_library()
         return opened
 
+    def flush_progress(self):
+        scheduled = [owner.request_position_flush() for owner in self.controllers.values()]
+        return [task for task in scheduled if task is not None]
+
+    def require_replacement_safe(self):
+        for owner in self.controllers.values():
+            if owner.book_busy and owner.book_reader is not None:
+                raise OSError('Finish the reader operation before replacing this workspace.')
+            progress = getattr(owner, '_book_progress', None)
+            if progress is not None:
+                progress.checkpoint_sync()
+
+    def retire(self):
+        for owner in self.controllers.values():
+            owner.release_book_reader()
+
     def close(self, key):
         owner = self.controllers.get(key)
-        pending = getattr(owner, '_epub_location_task', None)
+        pending = owner.request_position_flush() if owner is not None else None
         if owner is not None and (owner.book_busy or (pending is not None and not pending.done())):
             owner.request_position_flush()
             owner.book_status.text = 'Wait for this reader operation before closing.'

@@ -217,6 +217,20 @@ class ProviderUI(FilesUI):
         self.crypt_metadata_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=children, style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
         self.show_view(self.crypt_metadata_view)
 
+    async def _updated_provider_progress(self, reader, cancelled):
+        previous = getattr(self, '_provider_progress', None)
+        if previous is None:
+            return None
+        from .provider_opening import _await_opening_worker
+        from .provider_progress import ProviderProgress
+
+        def prepare():
+            progress = ProviderProgress(self, self._crypt_reader_store, reader, reader.key)
+            progress.load()
+            return progress
+
+        return await _await_opening_worker(asyncio.to_thread(prepare), cancelled)
+
     async def save_crypt_metadata(self, widget=None, **kwargs):
         document = self.provider_document()
         current = document.capture()
@@ -263,7 +277,15 @@ class ProviderUI(FilesUI):
                 if cancellation is not None:
                     raise cancellation
                 return
+            replacement = await self._updated_provider_progress(result, cancelled)
+            if not current():
+                document.release_reader(result)
+                if replacement is not None:
+                    replacement.close()
+                return
             self.crypt_reader = result
+            if replacement is not None:
+                self._provider_progress.replace_with(replacement)
             current = partial(current, result)
             if not current():
                 if cancellation is not None:
@@ -355,7 +377,18 @@ class ProviderUI(FilesUI):
             finally:
                 document.worker = None
             if current():
+                progress = getattr(self, '_provider_progress', None)
+                if progress is not None:
+                    progress.sample_surface()
+                replacement = await self._updated_provider_progress(result, cancelled)
+                if not current():
+                    document.release_reader(result)
+                    if replacement is not None:
+                        replacement.close()
+                    return
                 self.crypt_reader = result
+                if replacement is not None:
+                    progress.replace_with(replacement).watch_surface(initial=True)
                 current = partial(current, result)
             elif result is not reader:
                 document.release_reader(result)
@@ -452,9 +485,14 @@ class ProviderUI(FilesUI):
         view._provider_displayed_half = view.crypt_reader.comic_navigation.half if kind == 'spread' else 0
         previous_index = getattr(view, '_provider_displayed_index', None)
         view._provider_displayed_index = view.crypt_reader.labels.index(view.crypt_page.value)
+        was_suspended = getattr(view, 'page_suspended', False)
+        view.page_suspended = False
         progress = getattr(view, '_provider_progress', None)
         if progress is not None:
-            progress.capture()
+            if view.crypt_reader.kind == '.pdf':
+                progress.stop_surface()
+            progress.capture(initial=was_suspended or
+                             (view.crypt_reader.kind == '.pdf' and previous_index == view._provider_displayed_index))
         if (view.crypt_reader.kind == '.pdf' and hasattr(view, 'pdf_number')
                 and previous_index != view._provider_displayed_index):
             view.pdf_number.value = str(view._provider_displayed_index + 1)
@@ -494,6 +532,9 @@ class ProviderUI(FilesUI):
             self._provider_comic_sharing = self.format_services.comic_sharing()
             self._provider_comic_seam = self.private_comic_seam()
             reader = self.crypt_reader
+            progress = getattr(self, '_provider_progress', None)
+            if progress is not None:
+                progress.sample_surface()
             from .reading.publication import ReadingPublication
             publication = ReadingPublication.provider(self, self)
             worker = document.worker = asyncio.create_task(asyncio.to_thread(self.provider_page_content, reader, index))
@@ -571,7 +612,7 @@ class ProviderUI(FilesUI):
             self.refresh_private_bookmarks()
             progress = getattr(self, "_provider_progress", None)
             if progress is not None:
-                progress.capture()
+                progress.bookmarks_changed()
             return
         if index in self.crypt_bookmarks:
             self.crypt_bookmarks.remove(index)
@@ -580,7 +621,7 @@ class ProviderUI(FilesUI):
         self.refresh_private_bookmarks()
         progress = getattr(self, "_provider_progress", None)
         if progress is not None:
-            progress.capture()
+            progress.bookmarks_changed()
 
     def select_private_bookmark(self, widget=None, **kwargs):
         if self.cloud_busy or self.crypt_reader is None:
@@ -748,17 +789,35 @@ class ProviderUI(FilesUI):
     def toggle_private_preview(self, widget=None, *, initial=False, rendered=None, **kwargs):
         workflow = getattr(self, '_provider_markdown', None)
         if workflow is not None:
-            return workflow.toggle_preview(widget, initial=initial, rendered=rendered, **kwargs)
+            progress = getattr(self, '_provider_progress', None)
+            if progress is not None:
+                progress.sample_surface()
+            result = workflow.toggle_preview(widget, initial=initial, rendered=rendered, **kwargs)
+            if progress is not None:
+                progress.watch_surface(initial=initial)
+            return result
 
     def private_edit_mode_changed(self, widget=None, **kwargs):
         workflow = getattr(self, '_provider_markdown', None)
         if workflow is not None:
-            return workflow.edit_mode_changed(widget, **kwargs)
+            progress = getattr(self, '_provider_progress', None)
+            if progress is not None:
+                progress.sample_surface()
+            result = workflow.edit_mode_changed(widget, **kwargs)
+            if progress is not None:
+                progress.watch_surface(initial=progress.last_location is None)
+            return result
 
     def show_private_markdown_editor(self):
         workflow = getattr(self, '_provider_markdown', None)
         if workflow is not None:
-            return workflow.show_editor()
+            progress = getattr(self, '_provider_progress', None)
+            if progress is not None:
+                progress.sample_surface()
+            result = workflow.show_editor()
+            if progress is not None:
+                progress.watch_surface(initial=progress.last_location is None)
+            return result
 
     def show_private_tools(self, widget=None, **kwargs):
         if not self.cloud_busy:

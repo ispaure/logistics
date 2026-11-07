@@ -33,6 +33,18 @@ class Document(qt.QWidget):
         self.markers = ChangeMarkers(self, self.editor.document(), lambda: self.snapshot,
             lambda: [v for v in (self.views.primary, self.views.secondary) if v is not None])
 
+    def bind_position(self, *, restore=True):
+        if not hasattr(self, 'position'):
+            from services.documents.ui.text_position import TextPosition
+
+            self.position = TextPosition(self, {'source': self.views.primary}, notice=self.position_notice)
+        self.position.bind(None, self.path, self.snapshot.original, kind='desktop-text', restore=restore)
+
+    def position_notice(self, text):
+        status_bar = getattr(self.window(), 'statusBar', None)
+        if status_bar is not None:
+            status_bar().showMessage(text)
+
     @property
     def language(self):
         return self.language_selection.language_id
@@ -68,6 +80,8 @@ class Document(qt.QWidget):
         )
 
     def replace(self, snapshot):
+        if hasattr(self, 'position'):
+            self.position.retire()
         self.snapshot = snapshot
         self.encoding = snapshot.encoding
         self.newline_override = None
@@ -78,3 +92,4 @@ class Document(qt.QWidget):
         self.editor.setPlainText(snapshot.text)
         self.editor.document().setModified(False)
         self.changed.emit()
+        self.bind_position()

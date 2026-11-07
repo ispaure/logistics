@@ -160,7 +160,59 @@ from services.documents.markdown import prepare_markdown
 from commonUtils.ui.markdown.window import MarkdownWindow
 
 
-class PrivateMarkdownWindow(MarkdownWindow):
+class ProgressMarkdownWindow(MarkdownWindow):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from .text_position import TextPosition
+
+        viewer = self.viewer
+        self.position = TextPosition(
+            self, {'preview': viewer.browser, 'source': viewer.editor, 'formatted': viewer.formatted_editor},
+            active=lambda: viewer.edit_mode.currentData() if viewer.edit_button.isChecked() else 'preview',
+            set_mode=self.restore_mode, current_path=lambda: viewer.current_path, notice=viewer.status.setText,
+        )
+        viewer.path_changed.connect(self.bind_position)
+        viewer.pages.currentChanged.connect(self.position.observe)
+        self.bind_position(viewer.current_path)
+
+    def restore_mode(self, mode):
+        if mode == 'preview':
+            self.viewer.set_editing(False)
+        elif self.viewer.allow_edit:
+            self.viewer.set_edit_mode(mode)
+            self.viewer.set_editing(True)
+
+    def bind_position(self, path):
+        viewer = self.viewer
+        storage = viewer.storage
+        resource = getattr(storage, 'resource', None)
+        provider = resource.provider if resource is not None else None
+        data = storage.data if resource is not None else viewer.editor.toPlainText().encode('utf-8')
+        url = viewer.history[viewer.history_index]['url'] if 0 <= viewer.history_index < len(viewer.history) else None
+        self.position.bind(provider, path, data, kind='desktop-markdown', restore=url is None or not url.fragment())
+
+    def closeEvent(self, event):
+        super().closeEvent(event)
+        if event.isAccepted():
+            self.position.retire()
+
+
+def activate_markdown(item, context):
+    from commonUtils.formats.markdown.file import MarkdownFile
+
+    if not isinstance(item, MarkdownFile):
+        return False
+    open_markdown(item.path)
+    return True
+
+
+def open_markdown(path=None, *, allow_edit=False):
+    from .editors import retain
+
+    return retain(ProgressMarkdownWindow(path, allow_edit=allow_edit))
+
+
+class PrivateMarkdownWindow(ProgressMarkdownWindow):
     idle = qt.Signal()
     def __init__(self, path, storage, *, edit=True):
         self.pending_close = False
@@ -178,6 +230,7 @@ class PrivateMarkdownWindow(MarkdownWindow):
             self.setWindowTitle('🕵️ Private - ' + self.windowTitle())
 
     def retire_private_content(self):
+        self.position.retire()
         viewer, storage = self.viewer, self.viewer.storage
         viewer.browser.inline_videos.clear()
         viewer.formatted_editor.inline_videos.clear()

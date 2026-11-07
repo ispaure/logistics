@@ -70,7 +70,10 @@ class CloudVideoTests(unittest.TestCase):
                         self.assertEqual(progress.load(), 12345)
                         self.assertEqual(progress.duration, 90000)
                         self.assertEqual(VideoProgress(content, fixture.root / 'forbidden-cache').load(), 12345)
-                        state_path = progress.credential_state.root / (progress.credential_state.binding() + '.zip')
+                        from services.documents.credential_state import CredentialState
+                        credential = CredentialState(provider, key, fixture.root, kind='video',
+                                                     revision=content.source.expected)
+                        state_path = credential.root / (credential.binding() + '.zip')
                         state = state_path.read_bytes()
                         self.assertNotIn(b'position', state)
                         self.assertNotIn(b'movie.mkv', state)

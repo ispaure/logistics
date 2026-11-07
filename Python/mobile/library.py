@@ -280,6 +280,56 @@ class LibraryStore(LibraryEdits):
             validate_page_names(reader.pages)
         return record, reader
 
+    def open_reading(self, key, *, password=None, app):
+        """Verify the copy before associating a legacy location with its UUID."""
+        record, reader = self.open(key, password=password)
+        state, restored = self.reading_progress(record, reader, app)
+        return record, reader, state, restored
+
+    def reading_progress(self, record, reader, app):
+        from services.documents.progress import ProgressStatus, open_progress
+        from .provider_progress import PASSWORD_READER, archive_revision
+
+        epub = record['kind'] == 'epub'
+        names = reader.spine if epub else reader.pages
+        key = record['id']
+        path = self.path(key, '.epub' if epub else '.cbz')
+        protected = bool(getattr(getattr(reader, 'document', None), 'password', None))
+        if protected:
+            provider, reference, revision = PASSWORD_READER, key, record['digest']
+        else:
+            provider, reference = None, path
+            with ZipFile(path) as archive:
+                revision = archive_revision(archive, names)
+        state = open_progress(provider, reference, app.private_root, kind='import-' + record['kind'],
+                              revision=revision, app=app, managed_roots={'imports': self.root})
+        restored = state.load()
+        if state.can_import_legacy:
+            legacy = {}
+            index = record['position']
+            if 0 <= index < len(names):
+                legacy = dict(page=index, resource=names[index])
+                if epub and record.get('location', {}).get('path') in names:
+                    legacy.update(resource=record['location']['path'], offset=record['location']['offset'])
+                if not epub:
+                    legacy['half'] = record.get('comic_half', 0)
+            if index or record.get('location') or record.get('comic_half'):
+                restored.update(legacy)
+            if state.bookmark_status is ProgressStatus.ABSENT:
+                restored.update({name: record[name] for name in ('bookmarks', 'epub_bookmarks')
+                                 if record.get(name)})
+            if restored:
+                state.save(restored)
+        elif state.bookmark_status is ProgressStatus.ABSENT and not protected:
+            # Clear resets legacy positions independently of bookmark metadata.
+            bookmarks = {name: record[name] for name in ('bookmarks', 'epub_bookmarks') if record.get(name)}
+            if bookmarks:
+                observation = state.observe_bookmarks(bookmarks)
+                if observation is not None:
+                    state.flush(observation)
+                restored.update(bookmarks)
+        return state, restored
+
     def comic_reader(self, path, *, password=None, protected=False):
         from features.comics.library import ComicDocument
         from features.comics.pages import ComicPages

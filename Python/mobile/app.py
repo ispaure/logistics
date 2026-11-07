@@ -188,6 +188,13 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
                 def valid():
                     return (predecessor.replacement_attempt is attempt and _active_hosts.get(identity) is previous
                             and not own.startup_aborted and not own.replaced)
+                readers = getattr(previous, 'readers', None)
+                if readers is not None:
+                    tasks = readers.flush_progress()
+                    if tasks:
+                        await asyncio.wait(tasks)
+                    if not valid():
+                        raise asyncio.CancelledError
                 private = getattr(previous, 'private_sessions', None)
                 receipt = await private.prepare_replacement(valid=valid) if private is not None else None
                 if not valid():
@@ -521,6 +528,12 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         self.loop.call_soon(resume_visible_epub, self)
 
     def mark_navigation(self):
+        private = getattr(self, 'private_sessions', None)
+        if private is not None:
+            private.flush_visible_progress()
+        readers = getattr(self, 'readers', None)
+        if readers is not None:
+            readers.flush_progress()
         from .markdown_speech import stop_markdown_speech
         stop_markdown_speech(self)
         self.navigation_generation += 1
@@ -943,10 +956,12 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         picker = getattr(self, '_editor_picker', None)
         if picker is not None and picker.moving():
             return False
+        private = getattr(self, 'private_sessions', None)
+        if private is not None:
+            private.flush_visible_progress()
         readers = getattr(self, 'readers', None)
         if readers is not None:
-            for owner in readers.controllers.values():
-                owner.request_position_flush()
+            readers.flush_progress()
         if getattr(self, '_startup_in_progress', False) and not hasattr(self, 'current'):
             return True
         if getattr(self, '_reset_scheduled', False):
@@ -1134,9 +1149,19 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             else:
                 await owner.save_crypt()
             if not owner.private_dirty():
-                self.close_session(owner.session.id)
+                await close()
+
+        async def close(*, discard=False):
+            progress = getattr(owner, '_provider_progress', None)
+            if progress is not None:
+                progress.sample_surface()
+                await progress.flush()
+            key = owner.session.id
+            if self.active_host and key in self.workspace.sessions:
+                self.close_session(key, choice='discard' if discard else 'keep')
+
         return self.document_close_dialog(owner.session.id, owner.session.title,
-            save, lambda: self.close_session(owner.session.id, choice='discard'))
+            save, lambda: close(discard=True))
 
 
 def main():

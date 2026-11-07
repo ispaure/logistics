@@ -20,7 +20,12 @@ from build_manager.android_emulators import AndroidEmulator
 REPO = Path(__file__).resolve().parents[2]
 SOURCE = REPO
 BUNDLE = 'io.github.ispaure.logisticsstorageqa'
-QA_BUNDLES = {BUNDLE, 'io.github.ispaure.logisticsnotesauditqa', 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
+UNIFIED_PROGRESS_BUNDLE = 'io.github.ispaure.logisticsunifiedprogressqa'
+UNIFIED_PROGRESS_ENTRY = 'tests.logisticsmobile.unified_progress_probe'
+UNIFIED_PROGRESS_RESULT = 'unified-progress-result.json'
+UNIFIED_PROGRESS_ANDROID_ENTRY = 'tests.logisticsmobile.unified_progress_android_probe'
+UNIFIED_PROGRESS_VIDEO_ENTRY = 'tests.logisticsmobile.unified_progress_video_probe'
+QA_BUNDLES = {UNIFIED_PROGRESS_BUNDLE, BUNDLE, 'io.github.ispaure.logisticsnotesauditqa', 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
               'io.github.ispaure.logisticsnotebookqa', 'io.github.ispaure.logisticsfeaturesqa',
               'io.github.ispaure.logisticsreaderspaceqa', 'io.github.ispaure.logisticsviewerlayoutqa'}
 NATIVE_DIAGNOSTICS = ('pdf-edge-left.png', 'pdf-edge-right.png', 'logistics-native-ui-timings.json', 'logistics-native-ui-error.txt', 'logistics-native-ui-webview-counts.json', 'notes-discovery.png', 'notes-file-hold.png', 'notes-compact-files.png',
@@ -33,6 +38,11 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 
 
 def diagnostics(entry_point):
+    if entry_point == UNIFIED_PROGRESS_ANDROID_ENTRY:
+        return ('progress-fixture-epub-before.png', 'progress-fixture-epub-after.png')
+    if entry_point == UNIFIED_PROGRESS_ENTRY:
+        return tuple(f'progress-{document}-{phase}.png' for phase in ('before', 'after')
+                     for document in ('fixture-cbz', 'fixture-zip', 'fixture-pdf'))
     if entry_point.endswith('.drawer_privacy_probe'):
         return tuple(f'drawer-privacy-{side}-{phase}.png' for side in ('files', 'links')
                      for phase in ('open', 'returned', 'wrong', 'reopened'))
@@ -105,11 +115,27 @@ def command(args, output, *, cwd=None, env=None, timeout=1200):
         raise RuntimeError(str(output) + '\n' + '\n'.join(output.read_text(errors='replace').splitlines()[-20:]))
 
 
-def copy_payload(payload, target, *, entry_point='tests.logisticsmobile.document_storage_probe'):
+def stage_progress_credentials(folder):
+    # The desktop environment owns the project's WinZip AES dependency.
+    from importlib.util import find_spec
+    python = sys.executable if find_spec('pyzipper') else REPO / '.venv/bin/python'
+    source = folder / 'localcrypt_fixture.json'
+    target = folder / 'unified-progress-credentials.b64'
+    subprocess.run([python, '-c',
+                    'import sys; from mobile_build.validation.make_localcrypt_fixture import stage_encrypted_package; '
+                    'stage_encrypted_package(*sys.argv[1:])',
+                    str(source), str(target), 'synthetic-session-password'],
+                   cwd=SOURCE, env=dict(os.environ, PYTHONPATH=os.pathsep.join((str(SOURCE / 'Python'), str(SOURCE)))),
+                   check=True, capture_output=True, timeout=30)
+
+
+def copy_payload(payload, target, *, entry_point='tests.logisticsmobile.document_storage_probe', android=False):
     for name in ('features', 'services', 'commonUtils', 'mobile', 'logisticsmobile'):
         shutil.rmtree(target / name, ignore_errors=True)
         shutil.copytree(payload / name, target / name)
     shutil.copytree(SOURCE / 'mobile_build/native_tests/tests', target / 'tests', dirs_exist_ok=True)
+    if entry_point in (UNIFIED_PROGRESS_ENTRY, UNIFIED_PROGRESS_ANDROID_ENTRY, UNIFIED_PROGRESS_VIDEO_ENTRY):
+        stage_progress_credentials(target / 'tests/logisticsmobile')
     # Cached native shells predate notebooks. Supply the exact declared pure
     # Python dependency from the configured test environment.
     from importlib.metadata import distribution
@@ -117,6 +143,25 @@ def copy_payload(payload, target, *, entry_point='tests.logisticsmobile.document
     if dependency.version != '26.3':
         raise ValueError('The probe requires the declared packaging==26.3 dependency.')
     shutil.copytree(dependency.locate_file('packaging'), target / 'packaging', dirs_exist_ok=True)
+    if entry_point in (UNIFIED_PROGRESS_ENTRY, UNIFIED_PROGRESS_VIDEO_ENTRY):
+        from tests.readers.video_fixtures import bundled_movie, multitrack_movie
+        fixtures = target / 'tests/logisticsmobile/video-fixtures'
+        source = bundled_movie('h264-aac.mp4', fixtures)
+        long_source = fixtures / 'long.mp4'
+        # Extend only the synthetic movie used by this probe. A short clip
+        # would immediately qualify for the normal completion reset.
+        codec = ['-c', 'copy']
+        if android and entry_point == UNIFIED_PROGRESS_VIDEO_ENTRY:
+            # The goldfish H.264 decoder has stalled on cold input in the
+            # disposable emulator. Keep the real VLC acceptance independent
+            # from that codec-specific emulator failure.
+            codec = ['-c:v', 'mpeg4', '-threads', '1', '-q:v', '4', '-c:a', 'copy']
+        subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y',
+                        '-stream_loop', '14', '-i', str(source), *codec, str(long_source)],
+                       check=True, capture_output=True, timeout=30)
+        multitrack_movie(fixtures, long_source)
+        for temporary in (source, long_source, fixtures / 'tracks.srt'):
+            temporary.unlink()
     if entry_point.endswith(('.viewer_layout_probe', '.control_center_probe')):
         from tests.readers.video_fixtures import codec_matrix
         codec_matrix(target / 'tests/logisticsmobile/video-fixtures', duration=60)
@@ -156,6 +201,18 @@ def notebook_lifecycle(read, write, background, launch, stop):
     return result
 
 
+def check_progress_report(result, initial_pid):
+    """Accept one checkpoint followed by a report from a distinct process."""
+    phase, pid = result.get('phase'), result.get('pid')
+    if type(pid) is not int or pid <= 0:
+        raise ValueError('Progress probe did not report a valid process ID')
+    if initial_pid is None and phase == 'checkpoint':
+        return pid
+    if initial_pid is not None and phase == 'restarted' and pid != initial_pid:
+        return pid
+    raise ValueError(f'Unexpected progress probe phase/process: {phase!r}, {pid!r}')
+
+
 def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
             entry_point='tests.logisticsmobile.document_storage_probe',
             result_name='document-storage-result.json', family='iPhone', increase_contrast=False, duoctl=None, source_app=None, pose=None, runtime_id=None):
@@ -173,6 +230,16 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
             command([sys.executable, '-m', 'briefcase', 'create', 'iOS', '--no-input'],
                     output / 'ios-create.log', cwd=workspace, env=env)
         ios(project)
+        if entry_point in (UNIFIED_PROGRESS_ENTRY, UNIFIED_PROGRESS_VIDEO_ENTRY):
+            from hashlib import sha256
+            sources = sorted((payload / 'features/video/mobile/ios').glob('*.m'))
+            if not {'VideoPlayer.m', 'PlaybackControls.m'} <= {path.name for path in sources}:
+                raise ValueError('Captured payload is missing the native video progress adapters.')
+            sources.append(payload / 'mobile/ios/ScreenAwake.m')
+            for source in sources:
+                shutil.copyfile(source, project / 'Support' / source.name)
+            (output / 'ios-video-source.json').write_text(json.dumps(
+                {path.name: sha256(path.read_bytes()).hexdigest() for path in sources}, indent=2))
         copy_payload(payload, project / 'LogisticsMobile/app', entry_point=entry_point)
         for path in [project / 'Logistics Mobile.xcodeproj/project.pbxproj',
                      *project.rglob('*Info.plist'), *project.rglob('*.entitlements')]:
@@ -187,6 +254,12 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
                  'CODE_SIGNING_ALLOWED=YES', 'CODE_SIGN_IDENTITY=-', 'CODE_SIGN_STYLE=Manual', 'DEVELOPMENT_TEAM=', 'ARCHS=arm64', 'ONLY_ACTIVE_ARCH=YES', 'build'], output / 'ios-build.log', env=env)
         app = workspace / 'derived/Build/Products/Debug-iphonesimulator/Logistics Mobile.app'
     else:
+        if entry_point in (UNIFIED_PROGRESS_ENTRY, UNIFIED_PROGRESS_VIDEO_ENTRY):
+            # Retry against the exact byte-checked native build produced by the
+            # first acceptance pass, restaging only captured Python and fixtures.
+            parents = source_app.resolve().parents
+            if len(parents) < 5 or not all((parents[4] / name).is_file() for name in ('.manager-scratch', '.keep')):
+                raise ValueError('Use a freshly built, retained manager progress QA shell.')
         # Reuse only an exact native source build. Python and tests are restaged;
         # a stale compiled adapter must never masquerade as current acceptance.
         from hashlib import sha256
@@ -265,6 +338,7 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
     device = client.create(name, model, runtime)
     (output / 'ios-lease.json').write_text(json.dumps(dict(device=device, name=name, runtime=runtime, model=model)))
     cache = console = console_stream = None
+    initial_progress_pid = None
     try:
         client.boot(device)
         if entry_point.endswith(('.document_creation_probe', '.lockscreen_probe')):
@@ -316,7 +390,7 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
         console_stream = (output / 'ios-console.log').open('w')
         console = subprocess.Popen(['xcrun', 'simctl', 'launch', '--console-pty', device, bundle],
             env=env, stdout=console_stream, stderr=subprocess.STDOUT)
-        deadline = time.monotonic() + (1800 if result_name == 'logistics-native-ui-result.json' else 600 if entry_point.endswith(('.notes_drawers_probe', '.links_images_voices_probe', '.folder_feedback_probe')) else 240)
+        deadline = time.monotonic() + (1800 if result_name == 'logistics-native-ui-result.json' else 600 if entry_point.endswith(('.notes_drawers_probe', '.links_images_voices_probe', '.folder_feedback_probe')) else 600 if entry_point in (UNIFIED_PROGRESS_ENTRY, UNIFIED_PROGRESS_VIDEO_ENTRY) else 240)
         next_progress = 0
         while time.monotonic() < deadline:
             background_request = cache / 'file-transfer-background'
@@ -385,6 +459,18 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
                 request.unlink()
                 (cache / 'lockscreen-capture-done').touch()
             report = cache / result_name
+            capture = cache / 'unified-progress-capture.json'
+            if entry_point == UNIFIED_PROGRESS_ENTRY and capture.exists():
+                capture_name = json.loads(capture.read_text()).get('name')
+                if not isinstance(capture_name, str) or not re.fullmatch(
+                        r'progress-(?:fixture-epub(?:-home)?|secret-passage-epub)-(?:before|after)', capture_name):
+                    raise ValueError('Unexpected progress screenshot name')
+                # A visible DOM range can precede the separate WebKit render
+                # process drawing the frame into the simulated display.
+                capture.unlink()
+                time.sleep(.5)
+                client.invoke('io', device, 'screenshot', str(output / (capture_name + '.png')), timeout=40)
+                (cache / (capture_name + '.captured')).touch()
             if entry_point.endswith('.document_creation_probe'):
                 request = cache / 'document-creation-evidence/keyboard-request.json'
                 if request.exists():
@@ -402,10 +488,34 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
                 if entry_point.endswith('.lockscreen_probe') and result.get('phase') not in ('complete', 'failed'):
                     time.sleep(.2)
                     continue
-                (output / 'ios-result.json').write_text(json.dumps(result, indent=2))
-                client.invoke('io', device, 'screenshot', str(output / 'ios-final.png'))
+                checkpoint = (entry_point in (UNIFIED_PROGRESS_ENTRY, UNIFIED_PROGRESS_VIDEO_ENTRY)
+                              and initial_progress_pid is None and result.get('success') and result.get('phase') == 'checkpoint')
+                if not checkpoint:
+                    (output / 'ios-result.json').write_text(json.dumps(result, indent=2))
+                screenshot = 'ios-before-restart.png' if checkpoint else 'ios-final.png'
+                client.invoke('io', device, 'screenshot', str(output / screenshot))
                 if not result['success']:
                     raise RuntimeError(result.get('error') or result.get('errors') or 'Native layout assertions failed')
+                if entry_point in (UNIFIED_PROGRESS_ENTRY, UNIFIED_PROGRESS_VIDEO_ENTRY):
+                    expected_scope = env.get('SIMCTL_CHILD_LOGISTICS_PROGRESS_CASE')
+                    if expected_scope and result.get('scope') != expected_scope:
+                        raise ValueError('Native progress probe ran a different case scope.')
+                    pid = check_progress_report(result, initial_progress_pid)
+                    if initial_progress_pid is None:
+                        initial_progress_pid = pid
+                        shutil.copyfile(report, output / 'ios-progress-before-restart.json')
+                        report.unlink()
+                        client.invoke('terminate', device, bundle, timeout=20)
+                        # Keep the original launch log and a separate console
+                        # receipt for exceptions raised during restart.
+                        console.wait(timeout=20)
+                        console_stream.close()
+                        console_stream = (output / 'ios-restart-console.log').open('w')
+                        console = subprocess.Popen(
+                            ['xcrun', 'simctl', 'launch', '--console-pty', device, bundle],
+                            env=env, stdout=console_stream, stderr=subprocess.STDOUT)
+                        deadline = time.monotonic() + 600
+                        continue
                 if result_name == 'notebook-result.json':
                     result = notebook_lifecycle(
                         lambda name: (cache / name).read_bytes() if (cache / name).exists() else None,
@@ -507,6 +617,8 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 observe=None, probe_timeout=None):
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
+    if entry_point in (UNIFIED_PROGRESS_ANDROID_ENTRY, UNIFIED_PROGRESS_VIDEO_ENTRY) and device is not None:
+        raise ValueError('Unified progress restart acceptance requires an owned emulator.')
     if probe_timeout is not None and (type(probe_timeout) is not int or not 1 <= probe_timeout <= 3600):
         raise ValueError('Probe timeout must be 1 to 3600 seconds.')
     memory_probe = entry_point.endswith(('.notebook_memory_probe', '.notebook_soak_probe', '.notebook_load_probe'))
@@ -524,7 +636,7 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
             command([sys.executable, '-m', 'briefcase', 'create', 'android', '--no-input'],
                     output / 'android-create.log', cwd=workspace, env=env)
         android()
-    copy_payload(payload, project / 'app/src/main/python', entry_point=entry_point)
+    copy_payload(payload, project / 'app/src/main/python', entry_point=entry_point, android=True)
     gradle = project / 'app/build.gradle'
     gradle.write_text(re.sub(r'applicationId "[^"]+"', 'applicationId "' + bundle + '"', gradle.read_text()))
     manifest = project / 'app/src/main/AndroidManifest.xml'
@@ -622,7 +734,7 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
             observe('installed', emulator, record, output)
         emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity')
         deadline = time.monotonic() + (probe_timeout if probe_timeout is not None else 2400 if hands_on or result_name == 'logistics-native-ui-result.json' else 900 if raw_ink or memory_probe else 600 if entry_point.endswith(('.lockscreen_probe', '.notes_drawers_probe', '.links_images_voices_probe', '.folder_feedback_probe', '.documentation_header_probe', '.android_header_probe')) else 240)
-        last_stage = last_orientation = None
+        last_stage = last_orientation = initial_progress_pid = None
         while time.monotonic() < deadline:
             if observe is not None:
                 observe('poll', emulator, record, output)
@@ -721,6 +833,16 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
                     observe('result', emulator, record, output)
                 if not result['success']:
                     raise RuntimeError(result.get('error') or result.get('errors') or 'Native layout assertions failed')
+                if entry_point in (UNIFIED_PROGRESS_ANDROID_ENTRY, UNIFIED_PROGRESS_VIDEO_ENTRY):
+                    pid = check_progress_report(result, initial_progress_pid)
+                    if initial_progress_pid is None:
+                        initial_progress_pid = pid
+                        (output / 'android-progress-before-restart.json').write_text(json.dumps(result, indent=2))
+                        emulator.invoke('-s', serial, 'shell', 'am', 'force-stop', bundle)
+                        emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'rm', 'cache/' + result_name)
+                        emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity')
+                        deadline = time.monotonic() + (probe_timeout or 240)
+                        continue
                 if result_name == 'notebook-result.json':
                     def read(name):
                         found = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
@@ -846,17 +968,23 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('workspace-edges', 'mobile-feedback', 'documents-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('workspace-edges', 'mobile-feedback', 'documents-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--retain-build', action='store_true', help='Pin this managed QA build for reruns; caller must remove the pin and workspace afterward.')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
     parser.add_argument('--ios-runtime', help='Explicit installed CoreSimulator runtime identifier for a disposable iOS probe.')
+    parser.add_argument('--external-subtitle-only', action='store_true',
+                        help='With iOS unified-progress, run only the external subtitle restart case.')
     parser.add_argument('--ios-app', type=Path, help='Reuse a managed simulator shell only when native video source bytes match')
     parser.add_argument('--pose', choices=('closed', 'open', 'partial'), help='Explicit Duo simulator posture')
     parser.add_argument('--duoctl', type=Path, help='Reviewed external simulator-only Duo pose helper')
     parser.add_argument('--increase-contrast', action='store_true')
     parser.add_argument('--android-tablet', action='store_true', help='Use a tablet viewport on the disposable Android emulator.')
     args = parser.parse_args()
+    if args.external_subtitle_only and (args.platform != 'ios' or args.probe != 'unified-progress'):
+        parser.error('--external-subtitle-only requires the iOS unified-progress probe.')
+    if args.probe in ('unified-progress', 'unified-progress-video') and args.device:
+        parser.error('Unified progress acceptance requires a disposable device.')
     if args.ios_runtime and args.platform != 'ios':
         parser.error('--ios-runtime requires iOS.')
     if args.probe == 'android-header' and args.platform != 'android':
@@ -888,6 +1016,9 @@ def main():
                ANDROID_SDK_ROOT=options['tools.android_sdk'], JAVA_HOME=options['tools.java'])
     env['PATH'] = os.pathsep.join((str(Path(sys.executable).parent),
         str(REPO / 'mobile_build/.tools/go/bin'), env['PATH']))
+    env.pop('SIMCTL_CHILD_LOGISTICS_PROGRESS_CASE', None)
+    if args.external_subtitle_only:
+        env['SIMCTL_CHILD_LOGISTICS_PROGRESS_CASE'] = 'external-subtitle'
     os.environ.update(env)
     with scratch(REPO) as workspace:
         if args.retain_build:
@@ -900,7 +1031,11 @@ def main():
         os.environ['GOCACHE'] = env['GOCACHE']
         shutil.copyfile(SOURCE / 'mobile_build/pyproject.toml', workspace / 'pyproject.toml')
         payload = workspace / 'payload'
-        manifest = stage(SOURCE, payload, allow_dirty=SOURCE == REPO)
+        # stage() verifies the manager fingerprint before and after a focused
+        # development snapshot. Other out-of-tree probes retain their policy.
+        captured_progress = (args.probe in ('unified-progress', 'unified-progress-video')
+                             and (SOURCE / '.manager-source.json').is_file())
+        manifest = stage(SOURCE, payload, allow_dirty=SOURCE == REPO or captured_progress)
         (args.output / 'source.json').write_text(json.dumps(manifest, indent=2))
         creation_profile = dict(bundle='io.github.ispaure.logisticscreationqa',
             entry_point='tests.logisticsmobile.document_creation_probe',
@@ -941,6 +1076,15 @@ def main():
         if args.probe == 'markdown-typography':
             creation_profile = dict(entry_point='tests.logisticsmobile.markdown_typography_probe',
                 result_name='markdown-typography-result.json')
+        if args.probe == 'unified-progress':
+            entry = UNIFIED_PROGRESS_ENTRY if args.platform == 'ios' else UNIFIED_PROGRESS_ANDROID_ENTRY
+            creation_profile = dict(bundle=UNIFIED_PROGRESS_BUNDLE, entry_point=entry,
+                                    result_name=UNIFIED_PROGRESS_RESULT)
+        if args.probe == 'unified-progress-video':
+            creation_profile = dict(bundle=UNIFIED_PROGRESS_BUNDLE, entry_point=UNIFIED_PROGRESS_VIDEO_ENTRY,
+                                    result_name=UNIFIED_PROGRESS_RESULT)
+            if args.platform == 'android':
+                creation_profile['probe_timeout'] = 480
         if args.probe == 'reader-space':
             creation_profile = dict(bundle='io.github.ispaure.logisticsreaderspaceqa',
                 entry_point='tests.logisticsmobile.reader_space_probe', result_name='reader-space-result.json')

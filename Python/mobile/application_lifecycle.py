@@ -74,6 +74,9 @@ class HostLifecycle:
         host = self.host
         private = getattr(host, 'private_sessions', None)
         if not self.replaced:
+            readers = getattr(host, 'readers', None)
+            if readers is not None:
+                readers.require_replacement_safe()
             if private is not None and receipt is None:
                 receipt = private.prepare_replacement_sync()
             self.prepare_replacement(receipt)
@@ -181,6 +184,7 @@ class HostLifecycle:
         self._retire(getattr(host, '_layout_participants', None), 'dispose')
         from .markdown_speech import stop_markdown_speech
         self._retire(getattr(host, 'video_player', None), 'retire')
+        self._retire(getattr(host, 'readers', None), 'retire')
         from features.books.mobile.media_controls import stop_media
         self._stop_playback(stop_markdown_speech)
         self._stop_playback(stop_media)
@@ -265,6 +269,9 @@ class HostLifecycle:
         restoring = background is not None and not background.done()
         if getattr(host, 'cloud_busy', False) and not restoring:
             host.cancel_cloud()
+            return False
+        readers = getattr(host, 'readers', None)
+        if readers is not None and (readers.flush_progress() or any(owner.book_busy for owner in readers.controllers.values())):
             return False
         if getattr(host, 'private_sessions', None) is not None:
             if not host.clear_private_reader():

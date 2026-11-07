@@ -7,7 +7,6 @@ import asyncio
 import base64
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch
 import toga
@@ -34,6 +33,16 @@ class ReaderLifecycleTests(TestCase):
 
     def run_async(self, operation):
         return self.app.loop.run_until_complete(operation)
+
+    async def wait_closed(self, owner):
+        async with asyncio.timeout(5):
+            while owner.session.id in self.app.workspace.sessions:
+                await asyncio.sleep(.01)
+
+    async def wait_surface(self, progress):
+        async with asyncio.timeout(5):
+            while not progress.surface_ready:
+                await asyncio.sleep(.01)
 
     def answer_close(self, choice):
         tasks = list(self.app._document_close_tasks.values())
@@ -219,23 +228,29 @@ class ReaderLifecycleTests(TestCase):
         async def exercise():
             self.assertTrue(await self.app.open_crypt(copies=self.app.crypt_copies, key=key))
             owner = self.app.private_sessions.active
-            owner.provider_epub_view.offset = 120
-            release_progress = asyncio.Event()
-            progress = SimpleNamespace(worker=None, task=None, capture=lambda: None, close=lambda: None)
+            owner.provider_epub_view.seek(120)
+            entered = asyncio.Event()
+            from threading import Event
+            unblock = Event()
+            progress = owner._provider_progress
+            original = progress.state.flush
 
-            async def write_progress():
-                await release_progress.wait()
-                progress.worker = None
+            def write(value):
+                self.app.loop.call_soon_threadsafe(entered.set)
+                if not unblock.wait(5):
+                    raise TimeoutError('Synthetic write did not drain')
+                return original(value)
 
-            with patch.object(owner, '_provider_progress', progress, create=True):
-                progress.worker = progress.task = asyncio.create_task(write_progress())
+            with patch.object(progress.state, 'flush', side_effect=write):
+                progress.schedule(immediate=True)
                 try:
+                    await asyncio.wait_for(entered.wait(), 5)
                     owner.crypt_view._reader_close_button.on_press()
                     self.assertIsNotNone(owner._exit_task)
                     self.assertIn(owner.session.id, self.app.workspace.sessions)
                 finally:
-                    release_progress.set()
-                await owner._exit_task
+                    unblock.set()
+                await self.wait_closed(owner)
             self.assert_closed(owner)
             self.assertIsNone(owner.crypt_reader)
             self.assertTrue(await self.app.open_crypt(copies=self.app.crypt_copies, key=key))
@@ -258,34 +273,54 @@ class ReaderLifecycleTests(TestCase):
         self.run_async(self.answer_close('save'))
         self.assert_closed(owner)
 
-    def test_text_scroll_survives_close_without_retaining_content_in_position_cache(self):
+    def test_text_scroll_survives_close_without_persisting_document_content(self):
         path = self.root / 'text-position.txt'
-        path.write_text('Content must not enter the position cache')
-        self.run_async(self.app.open_crypt(copies=self.copies, key=path.name))
-        owner = self.app.private_sessions.active
-        with patch('mobile.reader_lifecycle.scroll_position', return_value=(0, 345)):
-            owner.crypt_view._reader_close_button.on_press()
-        self.assert_closed(owner)
-        self.assertNotIn('Content must not', repr(self.app.private_sessions.positions))
-        with patch('mobile.reader_lifecycle.restore_scroll') as restore:
-            self.run_async(self.app.open_crypt(copies=self.copies, key=path.name))
-        restore.assert_any_call(self.app.private_sessions.active.crypt_text, (0, 345))
+        path.write_text('Content must not enter reading progress')
+
+        async def exercise():
+            with patch('mobile.reader_lifecycle.normalized_scroll', return_value=[0, 0]) as position:
+                self.assertTrue(await self.app.open_crypt(copies=self.copies, key=path.name))
+                owner = self.app.private_sessions.active
+                await self.wait_surface(owner._provider_progress)
+                position.return_value = [0, .345]
+                owner.crypt_view._reader_close_button.on_press()
+                await self.wait_closed(owner)
+            self.assert_closed(owner)
+            with patch('mobile.reader_lifecycle.restore_normalized_scroll') as restore:
+                self.assertTrue(await self.app.open_crypt(copies=self.copies, key=path.name))
+                resumed = self.app.private_sessions.active
+                await self.wait_surface(resumed._provider_progress)
+                restore.assert_called_once_with(resumed.crypt_text, [0, .345])
+            self.app.routes.system_back()
+            await self.wait_closed(resumed)
+        self.run_async(exercise())
+        for record in (self.root / 'ReaderPositions').rglob('*.json'):
+            self.assertNotIn(path.read_text(), record.read_text())
 
     def test_markdown_scroll_waits_for_loaded_preview_and_preserves_search_handler(self):
         path = self.root / 'preview-position.md'
         path.write_text('# Remember this passage')
-        self.run_async(self.app.open_crypt(copies=self.copies, key=path.name))
-        owner = self.app.private_sessions.active
-        with patch('mobile.reader_lifecycle.scroll_position', return_value=(0, 345)):
-            owner.crypt_view._reader_close_button.on_press()
-        with patch('mobile.reader_lifecycle.restore_scroll') as restore:
-            self.run_async(self.app.open_crypt(copies=self.copies, key=path.name))
-            resumed = self.app.private_sessions.active
-            self.run_async(resumed.crypt_preview.on_webview_load())
-            resumed.crypt_preview_search.ready = False
-            self.run_async(resumed.crypt_preview.on_webview_load())
-        self.assertTrue(resumed.crypt_preview_search.ready)
-        restore.assert_any_call(resumed.crypt_preview, (0, 345))
+
+        async def exercise():
+            with patch('mobile.reader_lifecycle.normalized_scroll', return_value=[0, 0]) as position:
+                self.assertTrue(await self.app.open_crypt(copies=self.copies, key=path.name))
+                owner = self.app.private_sessions.active
+                await owner.crypt_preview.on_webview_load()
+                await self.wait_surface(owner._provider_progress)
+                position.return_value = [0, .345]
+                owner.crypt_view._reader_close_button.on_press()
+                await self.wait_closed(owner)
+            with patch('mobile.reader_lifecycle.restore_normalized_scroll') as restore:
+                self.assertTrue(await self.app.open_crypt(copies=self.copies, key=path.name))
+                resumed = self.app.private_sessions.active
+                restore.assert_not_called()
+                await resumed.crypt_preview.on_webview_load()
+                await self.wait_surface(resumed._provider_progress)
+                self.assertTrue(resumed.crypt_preview_search.ready)
+                restore.assert_called_once_with(resumed.crypt_preview, [0, .345])
+            self.app.routes.system_back()
+            await self.wait_closed(resumed)
+        self.run_async(exercise())
 
     def test_metadata_back_returns_to_document_and_reopening_keeps_draft(self):
         from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
@@ -362,13 +397,15 @@ class ReaderLifecycleTests(TestCase):
                     self.assertIn(owner.session.id, self.app.workspace.sessions)
                     await owner.move_private_page(2)
                     owner.crypt_view._reader_close_button.on_press()
+                    await self.wait_closed(owner)
                     self.assert_closed(owner)
                     self.assertTrue(await open_file(), self.app.cloud_status.value)
                     resumed = self.app.private_sessions.active
                     self.assertEqual(resumed._provider_displayed_index, 2)
                     self.app.routes.system_back()
+                    await self.wait_closed(resumed)
                     self.assert_closed(resumed)
             self.app.clear_private_reader(discard=True)
-            self.assertFalse(self.app.private_sessions.positions)
+            self.assertFalse(self.app.private_sessions.controllers)
         with patch('features.pdf.document.PDFDocument.open', native_pdf):
             self.run_async(exercise())

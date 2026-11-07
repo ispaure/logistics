@@ -46,10 +46,12 @@ class ReadingState:
     def __init__(self, book_path, *, folder=None):
         from services.documents.history_controls import PositionLease
         self._position_lease = PositionLease()
-        identifier = hashlib.sha256(str(Path(book_path).resolve()).encode()).hexdigest()
+        self.book_path = Path(book_path).resolve()
+        self.root = Path(folder) if folder else cache_directory(create=False)
+        identifier = hashlib.sha256(str(self.book_path).encode()).hexdigest()
         self.path = (Path(folder) if folder else cache_directory(create=False) / 'Books') / (identifier + '.json')
 
-    def load(self):
+    def legacy_load(self):
         if not self._position_lease.valid():
             return {}
         try:
@@ -73,8 +75,17 @@ class ReadingState:
         self.path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
         self._position_lease.publish(lambda: atomic_write_json(self.path, data, max_bytes=MAX_STATE_BYTES))
 
-    def badge(self, spine=None):
-        state = self.load()
+    def load(self):
+        return self.legacy_load()
+
+    def badge(self, spine=None, *, revision=None):
+        from services.documents.progress import open_progress
+
+        progress = open_progress(None, self.book_path, self.root, kind='desktop-epub', revision=revision)
+        state = progress.load()
+        if progress.can_import_legacy:
+            state = self.legacy_load()
+        progress.retire()
         total, chapter = state.get('chapters'), state.get('chapter')
         if spine is not None:
             if state.get('path') not in spine:

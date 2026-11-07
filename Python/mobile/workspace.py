@@ -51,6 +51,12 @@ class Session:
     view: dict = field(default_factory=dict)
     generation: int = 0
     dirty: bool = False
+    protected: bool | None = None
+    shared_read: bool = False
+
+    @property
+    def private_access(self):
+        return self.transient if self.protected is None else self.protected
 
     @property
     def identity(self):
@@ -103,24 +109,29 @@ class Workspace:
         except (OSError, ValueError, TypeError):
             self.error = 'Open-document state could not be restored; the original file was preserved.'
 
-    def open(self, provider, resource, kind, title='', *, transient=False):
+    def open(self, provider, resource, kind, title='', *, transient=False, protected=None, shared_read=False):
         if (not isinstance(provider, str) or not isinstance(resource, str)
                 or kind not in KINDS or (not transient and (provider not in PROVIDERS or not uuid(resource)))):
             raise ValueError('Unsupported workspace resource.')
         existing = next((session for session in self.sessions.values() if session.identity == (provider, resource)), None)
         owners = getattr(self, 'window_owners', None)
+        private_access = transient if protected is None else protected
+        if shared_read and private_access:
+            raise ValueError('Protected documents require an exclusive window.')
         if existing is not None:
-            if existing.transient != transient:
+            if (existing.transient != transient or existing.private_access != private_access
+                    or existing.shared_read != shared_read):
                 raise ValueError('Resource privacy cannot change while it is open.')
-            if owners is not None:
-                owners.claim(self.window_id, (provider, resource), private=transient)
+            if owners is not None and not shared_read:
+                owners.claim(self.window_id, (provider, resource), private=private_access)
             self.active = existing.id
             return existing
         if len(self.sessions) >= MAX_SESSIONS:
             raise ValueError('Close an open document before opening another (limit: 32).')
-        if owners is not None:
-            owners.claim(self.window_id, (provider, resource), private=transient)
-        session = Session(uuid4().hex, provider, resource, kind, title, transient)
+        if owners is not None and not shared_read:
+            owners.claim(self.window_id, (provider, resource), private=private_access)
+        session = Session(uuid4().hex, provider, resource, kind, title, transient,
+                          protected=protected, shared_read=shared_read)
         self.sessions[session.id] = session
         self.active = session.id
         return session
@@ -148,7 +159,7 @@ class Workspace:
         self.invalidate(key)
         del self.sessions[key]
         owners = getattr(self, 'window_owners', None)
-        if owners is not None:
+        if owners is not None and not session.shared_read:
             owners.release(self.window_id, session.identity)
         if self.active == key:
             self.active = next(reversed(self.sessions), None)

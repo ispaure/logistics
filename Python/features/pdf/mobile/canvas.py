@@ -12,6 +12,43 @@ class PDFCanvas(ImageCanvas):
             description='PDF page. Tap to toggle fullscreen; swipe up for next page, down for previous page. Hold in fullscreen to magnify.',
             **kwargs)
 
+    def reading_viewport(self):
+        """Store fit-relative zoom and an in-spread normalized focal point."""
+        if self.image is None:
+            return None
+        zoom = round(self.zoom_scale, 3)
+        if zoom <= 1.05:
+            return None
+        value = dict(zoom=zoom)
+        if hasattr(self._impl, 'picture'):
+            scroll = self._impl.native
+            point, bounds, size = scroll.contentOffset, scroll.bounds.size, scroll.contentSize
+            if size.width > 0 and size.height > 0:
+                value['center'] = [
+                    round(max(0, min(1, (offset + extent / 2) / length)), 5)
+                    for offset, extent, length in ((point.x, bounds.width, size.width),
+                                                   (point.y, bounds.height, size.height))]
+        return value
+
+    def restore_viewport(self, value):
+        if self.image is None or not isinstance(value, dict):
+            return
+        zoom = value.get('zoom')
+        if type(zoom) not in (float, int) or not 1.05 < zoom <= 6:
+            return
+        self.set_zoom(zoom)
+        center = value.get('center')
+        if (not hasattr(self._impl, 'picture') or not isinstance(center, list)
+                or len(center) != 2 or any(type(v) not in (float, int) or not 0 <= v <= 1 for v in center)):
+            return
+        from rubicon.objc import CGPoint
+        scroll = self._impl.native
+        bounds, size = scroll.bounds.size, scroll.contentSize
+        def offset(fraction, extent, length):
+            return max(0, min(length - extent, fraction * length - extent / 2)) if length >= extent else (length - extent) / 2
+        scroll.setContentOffset(CGPoint(offset(center[0], bounds.width, size.width),
+                                        offset(center[1], bounds.height, size.height)), animated=False)
+
     def bind_links(self, owner, reader):
         self.link_owner, self.link_reader = owner, reader
         self.on_tap = self.follow_link

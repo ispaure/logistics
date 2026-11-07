@@ -5,6 +5,7 @@
     "validation.py",
     "document.py",
     "mobile/navigation.py",
+    "mobile/progress.py",
     "mobile/__init__.py",
     "mobile/burst_camera.py",
     "mobile/ios/BurstCamera.m",

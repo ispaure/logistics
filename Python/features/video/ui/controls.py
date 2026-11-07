@@ -1,6 +1,7 @@
 """Desktop playback tools; provider lifetime stays with the document window."""
 
 from dataclasses import asdict, replace
+import json
 from time import monotonic
 
 from commonUtils.ui import pyside as qt
@@ -110,15 +111,21 @@ class PlaybackTools:
             return
         try:
             updates = {key: value}
+            if key in {'audio_track', 'subtitle_track'}:
+                tracks = self.player.audioTracks() if key == 'audio_track' else self.player.subtitleTracks()
+                updates[key + '_key'] = self.track_key(tracks[value]) if type(value) is int and 0 <= value < len(tracks) else ''
             if key == 'subtitle_track' and value is not None:
                 updates['subtitle_file'] = ''
             elif key == 'subtitle_file':
                 updates['subtitle_track'] = None
-            self.settings = self.settings_store.save(asdict(replace(self.settings, **updates)))
+                updates['subtitle_track_key'] = ''
+            self.settings = self.settings_store.save(asdict(replace(self.settings, **updates)), explicit=updates.keys())
             if key == 'renderer':
                 self.reopen_renderer(value)
                 return
             self.apply_settings()
+            if self.progress.state.write_status == 'locked':
+                self.status.setText(self.progress.resume_notice)
         except (OSError, ValueError) as error:
             self.status.setText(str(error))
 
@@ -154,24 +161,42 @@ class PlaybackTools:
             else qt.Qt.AspectRatioMode.KeepAspectRatio
         )
 
+    def track_key(self, metadata):
+        from PySide6.QtMultimedia import QMediaMetaData
+
+        values = [metadata.stringValue(key) for key in (
+            QMediaMetaData.Key.Title, QMediaMetaData.Key.Language, QMediaMetaData.Key.AudioCodec,
+        )]
+        return json.dumps([type(self.backend).__name__, *values], ensure_ascii=False)[:1024]
+
     def prefer_languages(self):
         from PySide6.QtMultimedia import QMediaMetaData
 
-        for preferred, explicit, tracks, select in (
+        for preferred, explicit, identity, tracks, select in (
             (
                 self.settings.audio_language,
                 self.settings.audio_track,
+                self.settings.audio_track_key,
                 self.player.audioTracks(),
                 self.player.setActiveAudioTrack,
             ),
             (
                 self.settings.subtitle_language,
                 self.settings.subtitle_track,
+                self.settings.subtitle_track_key,
                 self.player.subtitleTracks(),
                 self.player.setActiveSubtitleTrack,
             ),
         ):
-            if explicit is not None and (explicit == -1 or explicit < len(tracks)):
+            if explicit == -1:
+                select(-1)
+                continue
+            if identity:
+                matches = [index for index, track in enumerate(tracks) if self.track_key(track) == identity]
+                if len(matches) == 1:
+                    select(matches[0])
+                    continue
+            elif type(explicit) is int and 0 <= explicit < len(tracks):
                 select(explicit)
                 continue
             if not preferred:

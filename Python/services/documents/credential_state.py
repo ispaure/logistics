@@ -5,6 +5,7 @@ ciphertext files and document/source binding, shared by every reader format.
 """
 
 import base64
+from contextlib import contextmanager
 from hashlib import sha256
 from io import BytesIO
 import json
@@ -12,9 +13,6 @@ import hmac
 import secrets
 from pathlib import Path
 from threading import RLock
-
-from services.documents.storage import document_sources
-
 
 class PreviousPasswordRequired(PermissionError):
     """Existing protected state needs migration; do not fall back or overwrite it."""
@@ -32,6 +30,33 @@ def _revision_value(value):
     raise TypeError(f"Unsupported reader revision value: {type(value).__name__}")
 
 
+def position_generation(root):
+    path = Path(root) / "ReaderPositions" / "generation"
+    if path.is_symlink() or path.parent.is_symlink():
+        raise ValueError("Linked reader state is not supported.")
+    try:
+        with path.open("r") as stream:
+            return stream.read(64)
+    except FileNotFoundError:
+        return ""
+
+
+@contextmanager
+def checkpoint_write_lock(root):
+    """Serialize checkpoint publication and Clear across app processes."""
+    from commonUtils.persistence.locking import file_lock
+
+    directory = Path(root) / "ReaderPositions"
+    lock = directory / ".write.lock"
+    if directory.is_symlink() or lock.is_symlink():
+        raise ValueError("Linked reader state is not supported.")
+    directory.mkdir(mode=0o700, parents=True, exist_ok=True)
+    with file_lock(lock, timeout=1) as acquired:
+        if not acquired:
+            raise OSError("Reader history is busy. Retry the operation.")
+        yield
+
+
 def sources(provider):
     seen = set()
     pending = [provider]
@@ -42,6 +67,27 @@ def sources(provider):
         seen.add(id(source))
         yield source
         pending.extend(getattr(source, key, None) for key in ("provider", "resource"))
+
+
+def credential_authority(provider):
+    """Stable source authority, independent of whether a ZIP key is available."""
+    for source in sources(provider):
+        client, remote = getattr(source, "client", None), getattr(source, "remote", None)
+        if client is not None and remote is not None:
+            return client.connection_identity(remote)
+        context = getattr(source, "context", None) or getattr(source, "config_path", None)
+        if context is None:
+            continue
+        from features.rclone import desktop_session
+
+        session = desktop_session()
+        authority = session.registry.state_authority(context)
+        if authority is not None:
+            return authority
+        values = session.credentials(context)
+        if values:
+            return sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
+    raise PermissionError("The credential source is unavailable.")
 
 
 class DesktopCredentialCipher:
@@ -167,6 +213,7 @@ class CredentialState:
         app=None,
         check=None,
         section="positions",
+        generation=None,
     ):
         self.base = Path(root)
         self.provider, self.document, self.root = (
@@ -197,7 +244,7 @@ class CredentialState:
             if app is not None
             else DesktopCredentialCipher(provider)
         )
-        self.generation = self._generation()
+        self.generation = self._generation() if generation is None else generation
 
     def _check(self):
         for source in sources(self.provider):
@@ -208,46 +255,17 @@ class CredentialState:
                 check()
 
     def _generation(self):
-        try:
-            return (self.root / "generation").read_text()[:64]
-        except FileNotFoundError:
-            return ""
+        return position_generation(self.base) if self.section == "positions" else ""
 
     def authority(self):
-        for source in sources(self.provider):
-            client, remote = (
-                getattr(source, "client", None),
-                getattr(source, "remote", None),
-            )
-            if client is not None and remote is not None:
-                return client.connection_identity(remote)
-            context = getattr(source, "context", None) or getattr(
-                source, "config_path", None
-            )
-            if context is None:
-                continue
-            from features.rclone import desktop_session
-
-            session = desktop_session()
-
-            authority = (
-                session.registry.state_authority(context)
-                if context is not None
-                else None
-            )
-            if authority is not None:
-                return authority
-            values = session.credentials(context) if context is not None else None
-            if values:
-                return sha256(json.dumps(values, sort_keys=True).encode()).hexdigest()
-        raise PermissionError("The credential source is unavailable.")
+        return credential_authority(self.provider)
 
     def locator_key(self, *, create=False):
         authority = self.authority()
         directory = self.base / "ReaderKeys" / self.section
         key_id = sha256(json.dumps([authority, self.generation]).encode()).hexdigest()
         path = directory / (key_id + ".zip")
-        if directory.is_symlink() or path.is_symlink():
+        if directory.parent.is_symlink() or directory.is_symlink() or path.is_symlink():
             raise ValueError("Linked private reader keys are not supported.")
         try:
             with path.open("rb") as stream:
@@ -265,7 +283,7 @@ class CredentialState:
             from commonUtils.persistence import atomic_write_bytes
 
             directory.mkdir(parents=True, exist_ok=True, mode=0o700)
-            atomic_write_bytes(path, encrypted, overwrite=False)
+            atomic_write_bytes(path, encrypted, overwrite=False, validate=self.check)
         try:
             if len(encrypted) > LIMIT + 2048:
                 raise ValueError("Private reader key record exceeds limits.")
@@ -285,7 +303,7 @@ class CredentialState:
                 "Protected reader history needs the previous ZIP password. Use Settings → Reader history migration."
             ) from error
 
-    def binding(self, *, create=False):
+    def binding(self, *, create=False, remote_name=None):
         self.cipher.identity
         source = next(
             (
@@ -309,7 +327,7 @@ class CredentialState:
                 [
                     self.authority(),
                     str(source),
-                    remote,
+                    remote if remote_name is None else remote_name,
                     self.document,
                     self.kind,
                     self.section,
@@ -326,6 +344,46 @@ class CredentialState:
             self.locked_state = self.locked_state or self.bookmarks.locked_state
         return state
 
+    def checkpoint_path(self, identity):
+        path = self.root / (identity + ".zip")
+        if self.root.is_symlink() or path.is_symlink():
+            raise ValueError("Linked reader state is not supported.")
+        return path
+
+    def read_checkpoint(self, identity):
+        """Read the existing keyed record, preserving authentication failures."""
+        self.check()
+        with self.checkpoint_path(identity).open("rb") as stream:
+            encrypted = stream.read(LIMIT + 2049)
+        if len(encrypted) > LIMIT + 2048:
+            raise ValueError("Encrypted reader state exceeds limits.")
+        try:
+            raw = self.cipher.transform(encrypted, True)
+        except (OSError, ValueError, RuntimeError) as error:
+            raise PreviousPasswordRequired(
+                "Protected reader history could not be unlocked. The original was preserved."
+            ) from error
+        self.check()
+        if len(raw) > LIMIT:
+            raise ValueError("Reader state exceeds limits.")
+        record = json.loads(raw)
+        if (not isinstance(record, dict) or record.get("identity") != identity
+                or record.get("authority") != self.authority()):
+            raise ValueError("Invalid reader state binding.")
+        return record
+
+    def write_checkpoint(self, identity, raw, *, validate):
+        """Publish only encrypted bytes after the caller verifies the original."""
+        if len(raw) > LIMIT:
+            raise ValueError("Reader state exceeds limits.")
+        self.check()
+        encrypted = self.cipher.transform(raw)
+        self.check()
+        from commonUtils.persistence import atomic_write_bytes
+
+        self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        atomic_write_bytes(self.checkpoint_path(identity), encrypted, validate=validate)
+
     def _load(self):
         self.check()
         with _io_lock:
@@ -333,21 +391,13 @@ class CredentialState:
                 return {}
             try:
                 identity = self.binding()
-                path = self.root / (identity + ".zip")
-                if self.root.is_symlink() or path.is_symlink():
-                    raise ValueError("Linked reader state is not supported.")
-                with path.open("rb") as stream:
-                    encrypted = stream.read(LIMIT + 2049)
-                if len(encrypted) > LIMIT + 2048:
-                    raise ValueError("Encrypted reader state exceeds limits.")
-                record = json.loads(self.cipher.transform(encrypted, True))
-                if not isinstance(record, dict):
-                    raise ValueError("Invalid reader state.")
-                self.check()
+                record = self.read_checkpoint(identity)
+                revision = self.revision
+                if record.get("version") == 2:
+                    revision = sha256(revision.encode()).hexdigest()
                 if (
-                    record.get("version") != 1
-                    or record.get("identity") != identity
-                    or record.get("revision") != self.revision
+                    record.get("version") not in (1, 2)
+                    or record.get("revision") != revision
                     or not isinstance(record.get("state"), dict)
                 ):
                     return {}
@@ -384,54 +434,41 @@ class CredentialState:
             if self.generation != self._generation():
                 return  # A reader opened before Clear must not resurrect its checkpoint.
             try:
-                identity = self.binding(create=True)
-            except PreviousPasswordRequired:
-                self.locked_state = True
-                raise
+                self.cipher.identity
             except PermissionError:
                 self.memory = dict(state)
                 return  # Passwordless credentials have no persistent fallback.
-            path = self.root / (identity + ".zip")
-            if path.exists():
-                try:
-                    with path.open("rb") as stream:
-                        existing = stream.read(LIMIT + 2049)
-                    if len(existing) > LIMIT + 2048:
-                        raise ValueError("Reader state exceeds limits.")
-                    original = json.loads(self.cipher.transform(existing, True))
-                    if (
-                        not isinstance(original, dict)
-                        or original.get("identity") != identity
-                        or original.get("version") != 1
-                    ):
-                        raise ValueError(
-                            "Saved reader state belongs to a different document."
-                        )
-                except (ValueError, RuntimeError, OSError) as error:
-                    self.locked_state = True
-                    raise PermissionError(
-                        "Saved reader state needs the previous ZIP password. Use Settings → Reader history migration."
-                    ) from error
-            raw = json.dumps(
-                dict(
-                    version=1,
-                    identity=identity,
-                    authority=self.authority(),
-                    revision=self.revision,
-                    state=state,
-                )
-            ).encode()
-            if len(raw) > LIMIT:
-                raise ValueError("Reader state exceeds limits.")
-            encrypted = self.cipher.transform(raw)
-            self.check()
-            from commonUtils.persistence import atomic_write_bytes
+            with checkpoint_write_lock(self.base):
+                if self.generation == self._generation():
+                    self._save_encrypted(state)
 
-            self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
-            path = self.root / (identity + ".zip")
-            if self.root.is_symlink() or path.is_symlink():
-                raise ValueError("Linked reader state is not supported.")
-            atomic_write_bytes(path, encrypted)
+    def _save_encrypted(self, state):
+        try:
+            identity = self.binding(create=True)
+        except PreviousPasswordRequired:
+            self.locked_state = True
+            raise
+        path = self.checkpoint_path(identity)
+        if path.exists():
+            try:
+                original = self.read_checkpoint(identity)
+                if original.get("version") != 1:
+                    raise ValueError("Saved reader state uses the shared checkpoint format.")
+            except (ValueError, RuntimeError, OSError) as error:
+                self.locked_state = True
+                raise PermissionError(
+                    "Saved reader state could not be unlocked. The original was preserved."
+                ) from error
+        raw = json.dumps(
+            dict(
+                version=1,
+                identity=identity,
+                authority=self.authority(),
+                revision=self.revision,
+                state=state,
+            )
+        ).encode()
+        self.write_checkpoint(identity, raw, validate=self.check)
 
 
 def clear_positions(root):
@@ -440,11 +477,14 @@ def clear_positions(root):
     from commonUtils.persistence import atomic_write_bytes
 
     directory = Path(root) / "ReaderPositions"
-    with _io_lock:
+    with _io_lock, checkpoint_write_lock(root):
         if directory.is_symlink():
             raise ValueError("Linked reader state is not supported.")
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         atomic_write_bytes(directory / "generation", token_hex(32).encode())
+        from .progress import fence_positions
+
+        fence_positions(root)
         key_directory = Path(root) / "ReaderKeys" / "positions"
         if key_directory.is_symlink() or key_directory.parent.is_symlink():
             raise ValueError("Linked reader keys were preserved.")
@@ -456,7 +496,7 @@ def clear_positions(root):
             ):
                 raise ValueError("Unexpected reader key file was preserved.")
             path.unlink()
-        for path in directory.glob("*.zip"):
+        for path in (*directory.glob("*.zip"), *directory.glob("*.json")):
             if (
                 path.is_symlink()
                 or len(path.stem) != 64
@@ -464,3 +504,6 @@ def clear_positions(root):
             ):
                 raise ValueError("Unexpected reader state file; it was preserved.")
             path.unlink()
+        from .progress_store import clear_local_checkpoints
+
+        clear_local_checkpoints(directory / "Local")

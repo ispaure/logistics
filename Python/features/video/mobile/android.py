@@ -69,8 +69,11 @@ class AndroidVideo:
         self.native.background()
 
     def position(self):
-        self.owner.progress.duration = int(self.native.durationMilliseconds())
         return int(self.native.position()), bool(self.native.completed())
+
+    def progress_position(self):
+        self.owner.progress.duration = int(self.native.durationMilliseconds())
+        return int(self.native.progressPosition()), bool(self.native.completed())
 
     def status(self, message):
         self.native.status(message)

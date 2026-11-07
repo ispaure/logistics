@@ -13,8 +13,6 @@ from .typography import options as typography_options
 class EpubController:
     METHODS = (
         "epub_event",
-        "request_position_flush",
-        "save_epub_location",
         "epub_boundary",
         "epub_link",
         "show_epub_search",
@@ -28,13 +26,9 @@ class EpubController:
         "epub_query",
         "epub_search_status",
         "_epub_target",
-        "_epub_pending",
-        "_epub_flush",
-        "_epub_location_task",
         "_epub_width_task",
     )
     preferences = HostAttribute("preferences")
-    _book_idle = HostAttribute("_book_idle")
     active_host = HostAttribute("active_host")
     book_busy = HostAttribute("book_busy")
     book_epoch = HostAttribute("book_epoch")
@@ -43,7 +37,6 @@ class EpubController:
     book_status = HostAttribute("book_status")
     chapter_sidebar = HostAttribute("chapter_sidebar")
     format_services = HostAttribute("format_services")
-    library_store = HostAttribute("library_store")
     library_view = HostAttribute("library_view")
     loop = HostAttribute("loop")
     manager = HostAttribute("manager")
@@ -60,12 +53,13 @@ class EpubController:
     def __init__(self, owner):
         self.app = owner
 
-    def epub_event(self, reader, epoch, index, action, offset):
+    def epub_event(self, reader, epoch, index, action, offset, *, initial=False):
         if (
             self.book_reader is not reader
             or self.book_epoch != epoch
             or not self.active_host
             or self.session.id not in self.workspace.sessions
+            or self.book_record["position"] != index
         ):
             return
         self.epub_offset = min(offset, self.epub_text.length)
@@ -73,65 +67,20 @@ class EpubController:
             self.page_footer.chapter_progress(
                 index, len(reader.spine), self.epub_offset, self.epub_text.length
             )
-        self._epub_pending = (reader, epoch, index, self.epub_offset)
-        task = getattr(self, "_epub_location_task", None)
-        if task is None or task.done():
-            self._epub_flush = asyncio.Event()
-            self._epub_location_task = self.loop.create_task(self.save_epub_location())
+        self.app.observe_book_location(index, offset=self.epub_offset, initial=initial)
         if action in {"next", "previous"}:
             self.loop.create_task(
                 self.epub_boundary(index, 1 if action == "next" else -1)
             )
-
-    def request_position_flush(self):
-        wake = getattr(self, "_epub_flush", None)
-        if wake is not None:
-            wake.set()
-
-    async def save_epub_location(self):
-        # A fixed window bounds latency even while position events keep arriving.
-        try:
-            await asyncio.wait_for(self._epub_flush.wait(), 0.15)
-        except asyncio.TimeoutError:
-            pass
-        while getattr(self, "_epub_pending", None) is not None:
-            if self.book_busy:
-                await self._book_idle.wait()
-                continue
-            reader, epoch, index, offset = self._epub_pending
-            self._epub_pending = None
-            if (
-                self.book_reader is not reader
-                or self.book_epoch != epoch
-                or self.book_record["position"] != index
-            ):
-                continue
-            self.set_book_busy(True)
-            try:
-                updated = await asyncio.to_thread(
-                    self.library_store.progress,
-                    self.book_record,
-                    index,
-                    location=dict(path=reader.spine[index], offset=offset),
-                )
-                if self.book_reader is reader and self.book_epoch == epoch:
-                    self.book_record = updated
-            except (OSError, ValueError) as error:
-                self.book_status.text = (
-                    "Cannot save reading position: " + str(error)[:300]
-                )
-            finally:
-                self.set_book_busy(False)
 
     async def epub_boundary(self, index, direction):
         view = getattr(self, "epub_view", None)
         bridge = getattr(view, "_chapter_bridge", None)
         if bridge is None or bridge.input_suspended:
             return
-        task = getattr(self, "_epub_location_task", None)
-        if task is not None:
-            self.request_position_flush()
-            await task
+        pending = self.app.request_position_flush()
+        if pending is not None:
+            await asyncio.wait({pending})
         if (self.book_reader is not None and self.book_record["position"] == index
                 and self.epub_view is view and view._chapter_bridge is bridge
                 and not bridge.input_suspended):
@@ -196,15 +145,9 @@ class EpubController:
             self.epub_search_status.text = "No matching text in this chapter."
             return
         start, end = result
-        self.epub_offset = start
         self.epub_view._chapter_bridge.seek(start, end)
-        self.epub_event(
-            self.book_reader,
-            self.book_epoch,
-            self.book_record["position"],
-            "position",
-            start,
-        )
+        if getattr(self.epub_view._impl, 'native', None) is None:
+            self.epub_event(self.book_reader, self.book_epoch, self.book_record['position'], 'position', start)
         self.show_library()
 
     def watch_epub_width(self, reader, epoch):
