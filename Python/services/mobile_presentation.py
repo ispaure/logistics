@@ -118,5 +118,6 @@ class MobilePresentation:
     refresh_notebook_layout: Callable[[Any], None]
     clear_notebook_rail: Callable[[Any], None]
 
+    native_notebook_toolbar: bool = True
     favourite_resource: Callable | None = None
     reset_reader_layout: Callable[[Any], None] = lambda view: None

@@ -592,7 +592,8 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         assert [entry['brush'] for entry in read_presets(Preferences(root / 'preferences').values[PREFERENCE])] == [[17, 7, 1]]
         js("$('zoom').value='page';$('zoom').onchange();$('viewport').scrollTop=0")
         assert js("Math.abs($('paperWrap').getBoundingClientRect().top-$('viewport').getBoundingClientRect().top)<1")
-        js("window.notebookViewportInsets([0,84,34]);showSwipePage()")
+        js("window.notebookViewportInsets([0,0,0]);showSwipePage()")
+        assert js("window.notebookViewportInsets([0,84,34])")
         assert js("""(()=>{const button=$('swipeAddPage'), r=button.getBoundingClientRect();
             return !button.hidden && r.right<=innerWidth-84
               && document.elementFromPoint(r.x+r.width/2,r.y+r.height/2).closest('button')===button

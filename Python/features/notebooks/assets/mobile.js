@@ -52,7 +52,9 @@ renderEraserChoices();
     repositionBrushPanel();
     if (eraserDialog.open) positionPanel(eraserDialog, control('erase'));
     if (presetMenu.open) presetMenu.close();
+    if (!swipeAddPage.hidden) showSwipePage();
     selectionRender();
+    return true;
   };
   window.notebookPortraitBand = enabled => {
     const usable = enabled === true && !!state.native_close && !!state.native_actions &&

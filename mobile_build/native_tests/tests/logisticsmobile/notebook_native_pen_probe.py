@@ -238,6 +238,7 @@ async def geometry(app, panel, orientation, output, index):
         assert status_bottom <= paper_top < 206, record
     if orientation == 'landscape-left':
         assert band is None, record
+    if orientation == 'landscape-left' and app.presentation.native_notebook_toolbar:
         tools = panel.native_drawing_tools
         assert tools.current() and len(tools.buttons) == 5, 'Landscape title/tool row did not mount'
         title = panel.view._document_title_view
@@ -262,6 +263,10 @@ async def geometry(app, panel, orientation, output, index):
             raise AssertionError('Mounted native tools did not replace the DOM toolbar')
         record['native_drawing_targets'] = targets
         record['title_and_tools_same_row'] = True
+    elif orientation == 'landscape-left':
+        assert dom['header']['height'] >= 44 and await panel.web.evaluate_javascript(
+            "!document.body.classList.contains('native-drawing-tools') && "
+            "$('brushToggle').getBoundingClientRect().width >= 44"), record
     await capture_window(app, output / ('native-pencil-' + str(index) + '-' + orientation + '.png'))
     return record
 

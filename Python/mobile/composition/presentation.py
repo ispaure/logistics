@@ -79,7 +79,7 @@ def mobile_presentation(app):
     from mobile.recycled_file_list import summary_list
     from mobile.font_scaling import bind, font_size
     from mobile.document_sources import folder_action
-    from mobile.fold_layout import reserved_divisions, division
+    from mobile.fold_layout import reserved_divisions, division, is_iphone_duo
     from mobile.document_location import bind_apple_hold
     from mobile.reader_edges import clear_notebook_rail, compact_apple_reader
     from mobile.reader_top_band import NOTEBOOK_TOOLBAR_CLEARANCE, reset_notebook_clearance
@@ -117,6 +117,7 @@ def mobile_presentation(app):
         accessible_name=accessible_name,
         bind_apple_hold=bind_apple_hold,
         notebook_toolbar_clearance=NOTEBOOK_TOOLBAR_CLEARANCE,
+        native_notebook_toolbar=not is_iphone_duo(),
         refresh_notebook_layout=refresh_notebook_layout,
         clear_notebook_rail=clear_notebook_rail,
         register_layout=lambda *args, **kwargs: participants(app).register(*args, **kwargs),
