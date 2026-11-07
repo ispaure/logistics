@@ -592,7 +592,8 @@ renderEraserChoices();
     })));
     if (hidden || active !== null || busy) {
       nativeToolsLease = setTimeout(restoreTools, 1500);
-      return hidden ? JSON.stringify(null) : snapshot();
+      return hidden || !document.body.classList.contains('native-drawing-tools')
+        ? JSON.stringify(null) : snapshot();
     }
     if (action !== null) {
       if (!action || !Object.hasOwn(controls, action.name) || !Array.isArray(action.anchor)
