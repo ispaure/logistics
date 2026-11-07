@@ -183,6 +183,29 @@ class NotesLibraryTests(unittest.TestCase):
             owner.dispose()
         self.run_async(exercise())
 
+    def test_reading_renders_callouts_and_preserves_note_source(self):
+        from mobile.obsidian import open_vault
+        path = self.vault / 'Home.md'
+        source = b'> [!NOTE] Trail guide\n>\n> ### Directions\n>\n> - Cross the bridge.\n'
+        path.write_bytes(source)
+
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            try:
+                with patch.object(owner.web, 'set_content') as publish:
+                    self.assertTrue(await owner.open_note('Vault/Home.md'))
+                html = publish.call_args.args[1]
+                callout = html.split('<blockquote class="markdown-callout"', 1)[1].split('</blockquote>', 1)[0]
+                self.assertIn('<p class="markdown-callout-title">Trail guide</p>', callout)
+                self.assertIn('<h3 id="directions">Directions</h3>', callout)
+                self.assertIn('<li>Cross the bridge.</li>', callout)
+                self.assertNotIn('[!NOTE]', html)
+                self.assertEqual(path.read_bytes(), source)
+            finally:
+                owner.dispose()
+
+        self.run_async(exercise())
+
     def test_nested_encoded_image_embeds_and_failure_reasons_reach_preview_and_editor(self):
         from mobile.obsidian import open_vault
         from commonUtils.tests.formats.test_gif_headers import GIF

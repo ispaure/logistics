@@ -7,14 +7,14 @@ from services.documents.authoring.markdown_style import READING_CSS
 __all__ = ['markdown_body', 'markdown_preview']
 
 
-def markdown_preview(text, font_size=16, *, local_links=False, image_source=None, limits=None, compact_top=False):
+def markdown_preview(text, font_size=16, *, local_links=False, image_source=None, limits=None, compact_top=False, callouts=False):
     # The Android host replaces this fallback with the actual native font.
     stylesheet = (css_variables() + 'html body{font-family:-apple-system,BlinkMacSystemFont,sans-serif}'
                   'html,html body{background:var(--window);color:var(--text)}'
                   'p,li{text-align:var(--logistics-text-align,start)}' + READING_CSS)
     if compact_top:
         stylesheet += 'html body{margin:0 auto;padding-top:12px}@media(max-width:480px){html body{padding-top:8px}}'
-    content = _markdown_preview(text, font_size, local_links=local_links, stylesheet=stylesheet, image_source=image_source, limits=limits)
+    content = _markdown_preview(text, font_size, local_links=local_links, stylesheet=stylesheet, image_source=image_source, limits=limits, callouts=callouts)
     content = content.replace('content="width=device-width, initial-scale=1"',
         'content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"', 1)
     return content.replace('</head>', '<meta name="logistics-native-font" content="true"></head>', 1)
