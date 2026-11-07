@@ -105,7 +105,7 @@ async def exercise_mirrors(app, comic_key):
             with patch.dict(app.preferences.values, comic_layout='single'):
                 await tap('Local comic.cbz')
                 owner = app.private_sessions.active
-                assert owner.crypt_reader.comic.pages == ['page2.webp', 'page10.webp']
+                assert owner.crypt_reader.pages == ['page2.webp', 'page10.webp']
                 view = owner.provider_spread
                 canvas = view.canvases[0] if hasattr(view, 'canvases') else view
                 assert (canvas.image.width, canvas.image.height) == (2, 3)

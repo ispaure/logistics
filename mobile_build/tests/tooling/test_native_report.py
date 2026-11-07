@@ -106,16 +106,20 @@ class NativePreflightTests(unittest.TestCase):
                 patch.object(ui_tools.subprocess, 'run') as run:
             path = Path(directory) / 'android-native-ui.log'
             run.side_effect = [SimpleNamespace(stdout=b'List of devices attached\nemulator-5554\tdevice\n'),
-                              *[SimpleNamespace(stdout=b'evidence', returncode=0) for _ in range(4)]]
+                              *[SimpleNamespace(stdout=data, returncode=0) for data in (
+                                  b'evidence', b'Window{abc u0 Application Not Responding: com.android.systemui}',
+                                  b'evidence', b'evidence', b'evidence')]]
             ui_tools.record_android_stall(path, {'reason': 'keyboard'})
             receipt = json.loads(path.with_name('android-focus-stall.json').read_text())
             self.assertEqual(receipt['status'], 'captured')
             self.assertEqual(receipt['serial'], 'emulator-5554')
+            self.assertEqual(receipt['external_blocker'], 'com.android.systemui ANR dialog')
             self.assertEqual(path.with_name('android-focus-stall-screen.png').read_bytes(), b'evidence')
+            self.assertEqual(path.with_name('android-focus-stall-logcat.txt').read_bytes(), b'evidence')
             for call in run.call_args_list[1:]:
                 self.assertEqual(call.args[0][1:3], ['-s', 'emulator-5554'])
             ui_tools.record_android_stall(path, {})
-            self.assertEqual(run.call_count, 5)
+            self.assertEqual(run.call_count, 6)
 
     def test_ios_stall_samples_only_the_identified_test_app(self):
         with TemporaryDirectory() as directory, patch.object(ui_tools.sys, 'platform', 'darwin'):
