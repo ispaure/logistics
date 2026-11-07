@@ -17,6 +17,7 @@ class NativeDrawingTools:
         self.lock = asyncio.Lock()
         self.pending = {}
         self.epoch = 0
+        self.observer_exit = None
 
     def wide_phone(self, controller):
         from .viewport import tablet_viewport
@@ -73,6 +74,7 @@ class NativeDrawingTools:
             self.buttons[name] = button
             self.strip.add(button)
         header.add(header._title_content, self.strip)
+        self.observer_exit = None
         self.task = panel.app.loop.create_task(self.observe())
 
     async def query(self, script, *, web=None):
@@ -202,11 +204,17 @@ class NativeDrawingTools:
                         await self.refresh()
                 await asyncio.sleep(.5)
             if self.epoch == epoch:
+                self.observer_exit = (
+                    'strip retired' if not self.owns_strip(panel := self.panel())
+                    else 'controller replaced' if not self.owns_controller(panel)
+                    else 'header outside visible window'
+                )
                 self.close()
         except asyncio.CancelledError:
             raise
-        except Exception:
+        except Exception as error:
             if self.epoch == epoch:
+                self.observer_exit = type(error).__name__
                 self.close()
 
     def close(self):
