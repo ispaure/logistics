@@ -28,6 +28,20 @@ class RotationSettlingTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(wait.call_args.kwargs['timeout'], .1)
                 capture.assert_called_once_with(app, panel='native-request', cycle=-1, orientation='landscape-left')
 
+    async def test_ios_response_not_possible_still_requires_exact_orientation(self):
+        scene = NS(interfaceOrientation=3)
+        app = NS(main_window=NS(_impl=NS(native=NS(windowScene=scene))))
+        rotation = Mock(errors=['Error Domain=BSActionErrorDomain Code=1 response-not-possible'])
+
+        async def wait(predicate, **kwargs):
+            self.assertFalse(predicate())
+            scene.interfaceOrientation = 1
+            self.assertTrue(predicate())
+
+        with patch.object(rotation_checks, 'NativeRotation', return_value=rotation),                 patch.object(rotation_checks.sys, 'platform', 'ios'),                 patch.object(rotation_checks, 'wait_until', side_effect=wait):
+            await rotation_checks.rotate(app, 'portrait', settle=0)
+        rotation.acknowledged.assert_not_called()
+
     async def test_transient_native_morph_is_remeasured_before_acceptance(self):
         with patch.object(rotation_checks, 'assert_visible_controls',
                           side_effect=[AssertionError('button still morphing'), 4]) as audit, \
