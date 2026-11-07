@@ -74,9 +74,9 @@ class ReaderReopenProbe(LogisticsMobile):
             await asyncio.sleep(.5)
             assert not self.native_host.adapter.tabs_hidden(), 'Close did not restore tabs'
             result['close_restores_tabs'] = True
-            # Check the file-browser entry point too, using the same import.
+            # Check an explicitly imported reader from the Files destination too.
             await self.show_files()
-            assert await self.open_download(path=epub)
+            assert await self.open_book(record['id'])
             owner = self.readers.active
             await chapter_ready()
             owner.library_view._reader_close_button._impl.native.sendActionsForControlEvents(1 << 6)

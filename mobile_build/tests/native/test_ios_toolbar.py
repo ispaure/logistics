@@ -116,6 +116,18 @@ class ToolbarTests(TestCase):
         button._impl.native.menu = NS(children=['refreshed-menu'])
         self.assertIs(bar_item(button).menu, button._impl.native.menu)
 
+    def test_file_arrows_are_individually_borderless_and_remain_disabled_items(self):
+        buttons = [Button(icon, icon) for icon in ('previous_comic', 'next_comic', 'more')]
+        for button in buttons[:2]:
+            button._toolbar_borderless = True
+        buttons[0].enabled = False
+        mount_actions(self.controller, self.owner, buttons)
+        self.assertEqual(action_groups(buttons), [[button] for button in buttons])
+        for button in buttons[:2]:
+            self.assertTrue(button._ios_action_item.hidesSharedBackground)
+        self.assertFalse(buttons[0]._ios_action_item.enabled)
+        self.assertFalse(buttons[2]._ios_action_item.hidesSharedBackground)
+
     def test_context_menu_keeps_primary_action_and_removed_menu_restores_target(self):
         button = Button('more', 'Document actions')
         button._impl.native.menu = NS(children=['menu'])

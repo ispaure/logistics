@@ -241,6 +241,13 @@ return; it cannot establish whether the network changed while it was suspended.
 
 ## Preferences and storage
 
+**Reset → Clear cached documents** reviews legacy imported EPUB, CBZ/ZIP and
+text/Markdown documents. **Clear redundant copies…** deletes only copies identical
+to an available original, including the cleared import's reading records. It keeps
+original files, unsaved editing drafts, changed copies, standalone app documents
+and copies whose originals cannot be verified. Normal local opens read the file
+in its folder directly and do not create these imports.
+
 The launcher icon includes light and dark artwork. On supported iOS versions it
 also includes a monochrome variant for tinted icons; Android 13+ launchers can use
 the monochrome artwork for themed icons. The system or launcher controls this

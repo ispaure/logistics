@@ -1,5 +1,11 @@
 # Document workflows
 
+When creating, saving a copy, or renaming a file, edit only the base name. The
+extension stays visible in grey inside the filename field and cannot be edited.
+For a new document, choose its format to change the extension. Folder names stay
+fully editable, including dots.
+
+
 ## File actions and long names
 
 In a file browser list, touch and hold a file or folder, or tap its **⋯** button,
@@ -132,8 +138,12 @@ or unlocking; their presence does not confirm the source file still exists.
 An already open document can retain its in-memory content after source deletion.
 Imported text and retained book/comic copies are separate documents on the device:
 deleting the original does not delete these copies. Book/comic rows in Recent
-show **Saved copy on device**. Use **Delete local copy** in Settings → Books &
-Comics → Saved books & comics to remove a retained book or comic and its history.
+show **Saved copy on device**. Use **Settings → Reset → Clear cached documents** to review old imported copies.
+Clearing removes only imports whose bytes match a verified, available original;
+it preserves unsaved drafts, changed copies and copies whose original is missing.
+This includes imported text/Markdown as well as EPUB and CBZ/ZIP. Book/comic
+progress and bookmarks attached to a cleared import are removed. Ordinary local
+opens now use the original file directly; text edits remain unsaved until Save.
 Use **Document actions → Delete document…** to remove an app-stored text document.
 Reopening a file from Home or Recent shows a small activity bar and an
 **Opening file…** status below the current view. Cloud files show

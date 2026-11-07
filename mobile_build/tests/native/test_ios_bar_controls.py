@@ -12,6 +12,18 @@ from mobile.ios_reader_chrome import action_groups
 
 
 class AppleBarControlTests(TestCase):
+    def test_reader_content_projection_restores_glass_after_native_bar(self):
+        from mobile.ios_reader_chrome import content_control
+        for icon, expected in (('close', True), ('more', True), ('previous_comic', False)):
+            impl = type('Button', (), {'__module__': 'toga_iOS.widgets.button'})()
+            impl._native_bar_control = True
+            button = NS(control_icon=icon, _impl=impl)
+            with patch('mobile.appearance.paint_surface') as paint:
+                content_control(button)
+            self.assertFalse(impl._native_bar_control)
+            self.assertEqual(getattr(impl, '_native_glass_control', False), expected)
+            paint.assert_called_once_with(impl, 0)
+
     def test_semantic_navigation_and_document_tools_share_separate_glass(self):
         buttons = [NS(control_icon=name) for name in ('previous_comic', 'next_comic', 'speaker', 'more')]
         self.assertEqual(action_groups(buttons), [buttons[:2], buttons[2:]])

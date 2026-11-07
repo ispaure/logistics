@@ -167,7 +167,7 @@ class MobileUITests(unittest.TestCase):
             app.refresh_downloads(seed_download(app.downloads, 'fixture.txt', b'Private cloud fixture\n'))
             self.assertEqual(len(app.downloads.items()), 1)
             app.loop.run_until_complete(app.open_download())
-            self.assertEqual(app.editor.value, 'Private cloud fixture\n')
+            self.assertEqual(app.private_sessions.active.crypt_text.value, 'Private cloud fixture\n')
             app.show_cloud()
             app.loop.run_until_complete(app.clear_cloud())
             self.assertTrue(app.cloud_client.forgotten)

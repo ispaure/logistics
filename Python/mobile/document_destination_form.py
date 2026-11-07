@@ -44,7 +44,12 @@ def build_destination_form(picker, *, source_label, source_folder):
     picker.picker_entries = toga.Selection(style=Pack(height=48))
     from .browser_ui import FileBrowser as NativeBrowser
     picker.editor_browser = NativeBrowser(folder_visible=picker.folder_path_visible, selected=picker.browser_editor_selected, open_folder=picker.browser_editor_folder, navigate=picker.browser_editor_location, open_file=picker.browser_editor_file, contextual_selection=False, preview=False)
-    picker.save_as_name = toga.TextInput(value=name, placeholder='File name', style=Pack(height=48))
+    from .filename_input import FilenameInput
+    directory = mode == 'open'
+    if getattr(destination_action, 'kind', '') == 'move':
+        directory = destination_action.provider.entry(destination_action.path)['directory']
+    picker.save_as_name = FilenameInput(value=name, directory=directory,
+                                       placeholder='File name', style=Pack(height=48))
     picker.creation_type = None
     if creation is not None:
         from .document_choices import available_choices

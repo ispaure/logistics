@@ -90,3 +90,21 @@ class RemoteClient:
 
     def cancel(self):
         pass
+
+
+async def open_legacy_import(app, path):
+    """Explicitly seed/reopen an old imported document for compatibility checks."""
+    from commonUtils.runtime.resources.documents import LocalDocuments
+    from mobile.resource_imports import ResourceImports
+    imports = ResourceImports(app.private_root)
+    old = imports.find(path)
+    if path.suffix.lower() in {'.epub', '.cbz', '.zip'}:
+        key = old['resource'] if old else app.reader_manager().catalog.library_store.import_book(LocalDocuments(), path)['id']
+        imports.remember(path, 'library', key)
+        return await app.open_book(key)
+    key = old['resource'] if old else app.store.import_document(LocalDocuments(), path).id
+    imports.remember(path, 'managed-text', key)
+    opened = app.open_document(key)
+    if opened:
+        app.show_documents()
+    return opened

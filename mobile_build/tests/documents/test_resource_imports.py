@@ -226,28 +226,16 @@ class ResourceImportTests(unittest.TestCase):
             fixture_cleanup.callback(app.main_window.close)
             app.show_cloud(present=False)
             app.loop.run_until_complete(app.open_download(path=path))
-            owner = app.reader_manager().active
-            self.assertIsNotNone(owner, app.cloud_status.value)
-            self.assertIsNotNone(owner.book_reader, app.cloud_status.value)
-            self.assertEqual(owner.book_record['kind'], 'epub')
+            owner = app.private_sessions.active
+            self.assertIsNotNone(owner.crypt_reader.book)
             identity = owner.session.id
             app.loop.run_until_complete(app.open_download(path=path))
-            self.assertEqual(app.reader_manager().active.session.id, identity)
-            self.assertEqual(len(app.readers.catalog.library_store.items()[0]), 1)
-            # Legacy imports acquire a persistent source when reopened from Local.
-            store = app.readers.catalog.library_store
-            key = owner.session.resource
+            self.assertEqual(app.private_sessions.active.session.id, identity)
+            self.assertEqual(app.reader_manager().catalog.library_store.stored_files()[0], [])
             self.assertTrue(app.close_session(identity))
-            record, _ = store.read_record(key)
-            record.pop('source_path')
-            store.path(key, '.json').write_text(json.dumps(record))
-            app._document_folder_sources = {}
             self.assertTrue(app.loop.run_until_complete(app.open_download(path=path)))
-            self.assertEqual(store.read_record(key)[0]['source_path'], str(path))
-            # A second open of an active reader must not invalidate progress.
-            self.assertTrue(app.loop.run_until_complete(app.open_download(path=path)))
-            active = app.reader_manager().active
-            store.progress(active.book_record, active.book_record['position'])
+            self.assertEqual(app.private_sessions.active.crypt_reader.source.provider.root, path.parent)
+            self.assertEqual(app.reader_manager().catalog.library_store.stored_files()[0], [])
 
     def test_relocated_collection_keeps_existing_identity_and_rejects_other_paths(self):
         with TemporaryDirectory() as directory:
@@ -284,16 +272,18 @@ class ResourceImportTests(unittest.TestCase):
                 app.refresh_downloads(path)
                 with patch('features.rclone.mobile.downloads.collection_path', side_effect=OSError('SD card unavailable')):
                     app.loop.run_until_complete(app.open_download())
-                self.assertEqual(app.editor.value, 'original', app.cloud_status.value)
-                key = app.current.id
-                app.editor.value = 'kept draft'
+                owner = app.private_sessions.active
+                self.assertEqual(owner.crypt_text.value, 'original')
+                key = owner.session.id
+                owner.crypt_text.value = 'kept draft'
                 app.loop.run_until_complete(app.open_download())
-                self.assertEqual(app.current.id, key)
-                self.assertEqual(app.editor.value, 'kept draft')
-                raw = (root / 'resource-imports.json').read_text()
-                self.assertNotIn('same.md', raw)
-                self.assertNotIn('kept draft', raw)
-                self.assertEqual(ResourceImports(root).find(path)['resource'], key)
+                self.assertEqual(app.private_sessions.active.session.id, key)
+                self.assertEqual(owner.crypt_text.value, 'kept draft')
+                self.assertFalse((root / 'resource-imports.json').exists())
+                self.assertIsNone(ResourceImports(root).find(path))
+                self.assertEqual(path.read_text(), 'original')
+                app.loop.run_until_complete(owner.save_crypt())
+                self.assertEqual(path.read_text(), 'kept draft')
                 linked = root / 'linked.md'
                 linked.symlink_to(path)
                 with self.assertRaises(ValueError):

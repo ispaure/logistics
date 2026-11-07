@@ -87,6 +87,8 @@ class FolderPreview:
             if self.sidebar_snapshot is not None:
                 left._impl.native.addSubview(self.sidebar_snapshot)
                 self.sidebar_snapshot.frame = left._impl.native.bounds
+        from .scroll_edges import fill_bottom
+        fill_bottom(self.view, self.browser.native_list, self.browser._tile_scroll)
         self.task = None
         if captured:
             # Keep an actual list in the parent controller before the live

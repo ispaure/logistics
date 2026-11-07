@@ -117,7 +117,9 @@ class RecentDeletionProbe(LogisticsMobile):
 
             from tests.logisticsmobile.fixtures import make_books
             book, _ = make_books(root)
-            assert await self.open_download(path=book)
+            from commonUtils.runtime.resources.documents import LocalDocuments
+            imported = self.reader_manager().catalog.library_store.import_book(LocalDocuments(), book)
+            assert await self.open_book(imported['id'])
             owner = self.readers.active
             for _ in range(300):
                 if not owner.book_busy:

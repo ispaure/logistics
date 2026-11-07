@@ -52,6 +52,8 @@ class WorkspaceColumns:
         from toga.style.pack import COLUMN
         self.sidebar_box = toga.Box(children=[master.main],
             style=Pack(direction=COLUMN, flex=1, margin=12))
+        from .scroll_edges import fill_bottom
+        fill_bottom(self.sidebar_box, *master.view()._bottom_scrolls)
         self.sidebar_box.app, self.sidebar_box.window = self.app, self.app.main_window
         self.sidebar.content = self.sidebar_box._impl
         from .appearance import apple_color

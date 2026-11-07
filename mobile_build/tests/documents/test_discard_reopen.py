@@ -71,7 +71,8 @@ class FileDiscardTests(unittest.TestCase):
                     path = self.folder / ('import-discard.' + suffix)
                     original = b'Saved imported baseline'
                     path.write_bytes(original)
-                    self.assertTrue(await self.app.open_download(path=path))
+                    from mobile_build.tests.support.readers import open_legacy_import
+                    self.assertTrue(await open_legacy_import(self.app, path))
                     owner = self.app.editor_view
                     owner.editor.value = 'Discard imported edit'
                     self.assertTrue(owner.document.modified)
@@ -80,7 +81,8 @@ class FileDiscardTests(unittest.TestCase):
                         await asyncio.gather(*self.app._document_close_tasks.values())
                     await asyncio.sleep(.3)
                     await asyncio.gather(*self.app.store._writes)
-                    self.assertTrue(await self.app.open_download(path=path))
+                    from mobile_build.tests.support.readers import open_legacy_import
+                    self.assertTrue(await open_legacy_import(self.app, path))
                     self.assertEqual(self.app.editor_view.document.text, 'Saved imported baseline')
                     self.assertFalse(self.app.editor_view.document.modified)
                     self.assertEqual(path.read_bytes(), original)
@@ -92,7 +94,8 @@ class FileDiscardTests(unittest.TestCase):
             for path in self.paths[:2]:
                 with self.subTest(suffix=path.suffix):
                     original = path.read_bytes()
-                    self.assertTrue(await self.app.open_download(path=path))
+                    from mobile_build.tests.support.readers import open_legacy_import
+                    self.assertTrue(await open_legacy_import(self.app, path))
                     owner = self.app.readers.active
                     owner.show_book_metadata()
                     initial = dict(owner.book_metadata_initial)
@@ -102,7 +105,8 @@ class FileDiscardTests(unittest.TestCase):
                         self.app.request_close_session(owner.session.id)
                         await asyncio.gather(*self.app._document_close_tasks.values())
                     self.assertNotIn(owner.session.id, self.app.workspace.sessions)
-                    self.assertTrue(await self.app.open_download(path=path))
+                    from mobile_build.tests.support.readers import open_legacy_import
+                    self.assertTrue(await open_legacy_import(self.app, path))
                     reopened = self.app.readers.active
                     reopened.show_book_metadata()
                     self.assertEqual(reopened.book_metadata_initial, initial)

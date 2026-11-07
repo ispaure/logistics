@@ -42,6 +42,8 @@ class ReaderController(ReaderHost, ReaderUI):
                 # Explicit reopen must reload the chapter after a blank/failed
                 # native load, flushing pending position writes first.
                 await self.move_book_page(self.book_record['position'])
+            else:
+                await self.comic_controller().refresh_comic_neighbors()
             return True
         token = self.app.workspace.token(self.session.id)
         await super().open_book(key, password=password)
@@ -56,6 +58,8 @@ class ReaderController(ReaderHost, ReaderUI):
             self.suspend()
         self.manager.update_session(self)
         self.app.save_workspace()
+        if self.book_reader is not None and self.book_record['kind'] == 'comic':
+            await self.comic_controller().refresh_comic_neighbors()
         return self.book_reader is not None
 
     async def display_book_page(self, index, *, preserve_speech=False):

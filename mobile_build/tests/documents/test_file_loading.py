@@ -155,7 +155,8 @@ class FileLoadingTests(TestCase):
 
     def delayed_open(self, *, fail=False, back=False, download=False):
         started, release = Event(), Event()
-        target, method = (self.app.store, 'import_document') if download else (self.copies, 'open')
+        from services.documents.provider_documents import ProviderDocuments
+        target, method = (ProviderDocuments, 'open') if download else (self.copies, 'open')
         original = getattr(target, method)
 
         def read(*args, **kwargs):
@@ -179,13 +180,13 @@ class FileLoadingTests(TestCase):
                     self.assertTrue(self.app.routes.back())
                     self.assertIs(self.app.body, origin)
                 release.set()
-                self.assertEqual(await task, not fail and not (download and back))
+                self.assertEqual(await task, not fail)
                 self.assertIs(self.app.body, origin)
                 self.assertFalse(self.app.routes.screens['home'])
             finally:
                 release.set()
                 await task
-        with patch.object(target, method, side_effect=read):
+        with patch.object(target, method, autospec=download, side_effect=read):
             self.app.loop.run_until_complete(exercise())
 
     def test_failure_restores_opening_screen(self):

@@ -15,8 +15,7 @@ def document_copies(provider):
 async def open_provider_document(app, provider, path, *, destination=None, fullscreen=False, **options):
     """Resolve format dispatch before presenting a storage-neutral editor."""
     from pathlib import Path
-    from commonUtils.formats.code_syntax import SOURCE_EXTENSIONS
-    from services.documents.storage import DocumentResource, DocumentPolicy
+    from services.documents.storage import DocumentResource
     if not app.require_document_feature(path):
         return False
     from services.documents.mobile_reading import reading_capabilities
@@ -36,10 +35,9 @@ async def open_provider_document(app, provider, path, *, destination=None, fulls
         if getattr(provider, 'remote_storage', False):
             raise ValueError('Cloud notebooks are read-only. Create a local copy before opening.')
         return await open_notebook(app, resource=DocumentResource(provider, path, max_bytes=MAX_ARCHIVE), destination=destination)
-    from features.images.document import IMAGE_EXTENSIONS
-    if suffix in SOURCE_EXTENSIONS or suffix in IMAGE_EXTENSIONS or not DocumentPolicy.for_provider(provider).persistent:
-        return await app.open_crypt(copies=copies, key=key, destination=destination, **options)
-    return await app.open_download(path=provider._locate(path), destination=destination)
+    # ProviderDocuments owns format validation and bounded text fallback. Keep
+    # local sources here too; routing them through imports duplicates the file.
+    return await app.open_crypt(copies=copies, key=key, destination=destination, **options)
 
 
 from features.video.formats import VIDEO_EXTENSIONS

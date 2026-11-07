@@ -10,9 +10,14 @@ def free_top_band(regions, width, safe_top, required_width, *, row_height=60):
            if w > 0 and h > 0 and y <= safe_top and y + h > 0]
     if not top or any(x > 0 and x + w < width for x, y, w, h in top):
         return None
+    # Centre the controls in the actual system band, rather than pinning their
+    # 48pt targets six points below the display edge. Recheck the entire moved
+    # row against live reserved regions, including detached activity bubbles.
+    row_top = (safe_top - row_height) / 2
+    row_bottom = row_top + row_height
     intervals = [(0., float(width))]
-    for x, y, w, h in top:
-        if y >= row_height:
+    for x, y, w, h in regions:
+        if w <= 0 or h <= 0 or y >= row_bottom or y + h <= row_top:
             continue
         updated = []
         for left, right in intervals:
@@ -30,8 +35,9 @@ def free_top_band(regions, width, safe_top, required_width, *, row_height=60):
         return None
     left, right = max(choices, key=lambda pair: pair[1] - pair[0])
     from .ios_system_occlusions import control_top_clearance
-    reserve = max(row_height, control_top_clearance(regions, 0, width, 0, target=row_height))
-    return dict(left=left, right=right, width=width, row_height=row_height, reserve=reserve)
+    reserve = max(row_bottom, control_top_clearance(regions, 0, width, 0, target=row_height))
+    return dict(left=left, right=right, width=width, row_height=row_height,
+                row_top=row_top, reserve=reserve)
 
 
 def notebook_geometry(geometry, regions, contract, *, origin_x=0, margins=(0, 0, 0)):
@@ -47,7 +53,7 @@ def notebook_geometry(geometry, regions, contract, *, origin_x=0, margins=(0, 0,
     if any(w > 0 and h > 0 and x < right + 8 and x + w > left - 8
            for x, y, w, h in regions):
         return None
-    return dict(geometry, reserve=max(geometry['row_height'], geometry['reserve'] - 48),
+    return dict(geometry, reserve=max(geometry['row_top'] + geometry['row_height'], geometry['reserve'] - 48),
                 full_reserve=geometry['reserve'], content_clearance=48, toolbar_max_width=256)
 
 
@@ -177,7 +183,7 @@ def project(app, view, destination, controller):
     from toga.style.pack import COLUMN, ROW
     title_host = toga.Box(style=Pack(flex=1, height=row_height - 12, margin_left=8, margin_right=8))
     row = toga.Box(style=Pack(direction=ROW, align_items='center', height=row_height - 12,
-        margin_top=6, margin_bottom=6, margin_left=geometry['left'] + 8,
+        margin_top=geometry['row_top'] + 6, margin_bottom=6, margin_left=geometry['left'] + 8,
         margin_right=width - geometry['right'] + 8))
     # Cancel only the reader widget's existing content padding for this header.
     # Native/window safe-area insets are never made negative or rewritten.
@@ -188,6 +194,8 @@ def project(app, view, destination, controller):
         if button.parent is not None:
             button.parent.remove(button)
         button.app, button.window = app, app.main_window
+        from .ios_reader_chrome import content_control
+        content_control(button)
         row.add(button)
         if index + 1 == leading_count:
             row.add(title_host)
