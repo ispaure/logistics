@@ -230,8 +230,28 @@ class SessionTransitions:
         host.__dict__.setdefault('_reader_closing', set()).add(key)
         readers = getattr(host, 'readers', None)
         owner = readers.controllers.get(key) if readers is not None else None
-        pending = owner.request_position_flush() if owner is not None else None
-        if pending is None:
+        pending = None
+        if owner is not None:
+            if getattr(owner, '_exit_task', None) is not None:
+                return True
+            if owner.book_busy or owner.request_position_flush() is not None:
+                async def wait_for_book_close():
+                    while host.active_host and host.workspace.accepts(token):
+                        if owner.book_busy:
+                            await owner._book_idle.wait()
+                            continue
+                        progress = getattr(owner, '_book_progress', None)
+                        if progress is None:
+                            return True
+                        await progress.flush()
+                        if progress.pending is not None:
+                            return False
+                        if not owner.book_busy:
+                            return True
+                    return False
+
+                pending = wait_for_book_close()
+        else:
             private = host.provider_sessions().controllers.get(key)
             progress = getattr(private, '_provider_progress', None)
             if private is not None and (private.operation_busy
@@ -256,9 +276,11 @@ class SessionTransitions:
             if getattr(owner, '_exit_task', None) is None:
                 async def finish():
                     try:
-                        await pending
-                        if host.active_host and host.workspace.accepts(token):
+                        ready = await pending
+                        if ready is not False and host.active_host and host.workspace.accepts(token):
                             host.request_close_session(key)
+                        elif ready is False:
+                            host._reader_closing.discard(key)
                     finally:
                         owner._exit_task = None
                 owner._exit_task = host.loop.create_task(finish())

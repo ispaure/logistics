@@ -285,7 +285,18 @@ class ReaderSessionTests(unittest.TestCase):
                 app.loop.run_until_complete(app.open_book(first['id']))
                 self.assertEqual(app.reader_manager().active.book_record['position'], 1)
                 self.assertEqual(app.readers.active.session.id, first_session)
-                self.assertTrue(app.close_session(first_session))
+                async def close_during_reload():
+                    first_owner.set_book_busy(True)
+                    self.assertTrue(app.request_reader_close(first_session))
+                    close_task = first_owner._exit_task
+                    self.assertTrue(app.request_reader_close(first_session))
+                    self.assertIs(first_owner._exit_task, close_task)
+                    await asyncio.sleep(0)
+                    self.assertFalse(close_task.done())
+                    self.assertIn(first_session, app.readers.controllers)
+                    first_owner.set_book_busy(False)
+                    await asyncio.wait_for(close_task, 5)
+                app.loop.run_until_complete(close_during_reload())
                 self.assertNotIn(first_session, app.readers.controllers)
                 self.assertTrue(app.reader_manager().catalog.library_store.path(first['id'], '.epub').exists())
             finally:

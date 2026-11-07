@@ -31,10 +31,31 @@ def host_interpreter(cache):
 
 def prepare(cache, result):
     settings = json.loads(Path(__file__).with_name('mobile_runtime_tools.json').read_text())
-    return cpython_mobile.prepare_android(cache, result, settings['cpython'],
-        library_relative=settings['preparation']['android_library'],
+    pin = settings['cpython']
+    library_relative = settings['preparation']['android_library']
+    build = cache.resolve() / 'cross-build' / pin['android_target']
+    prefix = build / 'prefix'
+    abi = 'python' + pin['version'].rsplit('.', 1)[0]
+    headers = [prefix / 'include' / abi / name for name in ('Python.h', 'pyconfig.h')]
+    extensions = prefix / 'lib' / abi / 'lib-dynload'
+
+    def installed():
+        return all(path.is_file() for path in headers) and extensions.is_dir()
+
+    if (cache / library_relative).is_file() and (build / 'Makefile').is_file():
+        # An interrupted make install can publish the library before headers
+        # and extension modules. Resume the pinned install in the owned prefix.
+        with workspace_lock(cache.parent / 'mobile-runtime.lock'):
+            if not installed():
+                source(cache, pin)
+                command(['make', 'install', f'prefix={prefix}'], build, 1800)
+    cpython_mobile.prepare_android(cache, result, pin,
+        library_relative=library_relative,
         host_configure_args=settings['preparation']['host_configure_args'],
         command=command, prepare_source=source, prepare_wheels=runtime_wheels)
+    if not installed():
+        result.unlink(missing_ok=True)
+        raise ValueError('Pinned Android runtime installation is missing headers or extension modules.')
 
 
 def test(root, cache, serial, output):
@@ -51,7 +72,8 @@ def test(root, cache, serial, output):
             code = native_command(cpython_testbed.android_test_command(serial, payload,
                 ['-m', 'mobile.smoke', '--target', 'android', '--local-source-sha256', manifest['source_sha256']]),
                 cache, 1800, stdout=log, stderr=subprocess.STDOUT, check=False)
-        if code:raise RuntimeError('Pinned Android runtime testbed failed: '+str(code))
+        if code:
+            raise RuntimeError(f'Pinned Android runtime testbed failed ({code}). See {output.with_suffix(".log")}.')
         report=tools.verify(output.with_suffix('.log'),'android',output,local_manifest=payload/'source.json')
         if report['source']!=manifest:raise ValueError('Runtime source identity changed.')
 

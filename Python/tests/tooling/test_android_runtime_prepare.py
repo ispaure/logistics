@@ -19,12 +19,26 @@ class AndroidRuntimePrepareTests(unittest.TestCase):
             cache.mkdir()
             pin = json.loads(Path(mobile_runtime.__file__).with_name('mobile_runtime_tools.json').read_text())['cpython']
             host = cache / 'cross-build/build/python.exe'
-            library = cache / 'cross-build' / pin['android_target'] / 'prefix/lib/libpython3.14.so'
+            android = cache / 'cross-build' / pin['android_target']
+            prefix = android / 'prefix'
+            library = prefix / 'lib/libpython3.14.so'
+            header = prefix / 'include/python3.14/Python.h'
+
+            def install():
+                header.parent.mkdir(parents=True, exist_ok=True)
+                header.write_bytes(b'compiled header')
+                header.with_name('pyconfig.h').write_bytes(b'configured header')
+                (prefix / 'lib/python3.14/lib-dynload').mkdir(parents=True, exist_ok=True)
             if conflicting_directory:
                 (host.parent / 'python').mkdir(parents=True)
                 library.parent.mkdir(parents=True)
                 library.write_bytes(b'previous library')
             def build(argv, cwd, timeout):
+                if argv[0] == 'make':
+                    self.assertEqual(cwd, android.resolve())
+                    self.assertEqual(argv, ['make', 'install', f'prefix={prefix.resolve()}'])
+                    install()
+                    return
                 self.assertEqual(cwd, cache)
                 if argv[3] == 'build':
                     host.parent.mkdir(parents=True, exist_ok=True)
@@ -33,6 +47,8 @@ class AndroidRuntimePrepareTests(unittest.TestCase):
                 else:
                     library.parent.mkdir(parents=True, exist_ok=True)
                     library.write_bytes(b'compiled Android library')
+                    (android / 'Makefile').touch()
+                    install()
             def query(argv, **kwargs):
                 if argv[0] == 'xcrun':
                     return str(root / 'sdk')
@@ -49,6 +65,11 @@ class AndroidRuntimePrepareTests(unittest.TestCase):
                 mobile_runtime.prepare(cache, result)
                 self.assertTrue(json.loads(result.read_text())['reused'])
                 self.assertEqual(command.call_count, 2)
+                header.unlink()
+                mobile_runtime.prepare(cache, result)
+                self.assertTrue(header.is_file())
+                self.assertTrue(json.loads(result.read_text())['reused'])
+                self.assertEqual(command.call_count, 3)
                 host.write_bytes(b'changed interpreter')
                 with self.assertRaisesRegex(ValueError, 'artifacts changed'):
                     mobile_runtime.prepare(cache, result)

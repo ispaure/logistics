@@ -19,7 +19,8 @@ def bridge_for(owner, provider):
 
 
 def resume_visible_epub(app):
-    if not app.active_host or app.screen_privacy.inactive or any(gate.locked for gate in app.screen_privacy.gates()):
+    privacy = getattr(app, 'screen_privacy', None)
+    if privacy is None or not app.active_host or privacy.inactive or any(gate.locked for gate in privacy.gates()):
         return
     key = app.visible_reader()
     if key is None:
