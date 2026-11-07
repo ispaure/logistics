@@ -39,7 +39,7 @@ class NotesHeaderProbe(NotesDrawersProbe):
     async def probe(self):
         from rubicon.objc import CGPoint
         output = Path(self.paths.cache)
-        report = dict(success=False, samples=[], native_breadcrumb_swipes=False)
+        report = dict(success=False, samples=[], breadcrumb_swipes=[], native_breadcrumb_swipes=False)
         drive_touches = (output / 'drive-notes-touches').exists()
         owner = None
         try:
@@ -177,6 +177,8 @@ class NotesHeaderProbe(NotesDrawersProbe):
                         assert (before - scroll.horizontal_position) * direction > 5, (
                             direction, before, scroll.horizontal_position)
                         assert owner.sidebar.side is None, ('Breadcrumb swipe opened a drawer', direction, owner.sidebar.side)
+                        report['breadcrumb_swipes'].append(dict(orientation=orientation,
+                            direction=direction, before=before, after=scroll.horizontal_position))
                     for _ in range(100):
                         if await owner.web.evaluate_javascript(
                                 'window.notesDrawersBase===' + json.dumps(owner.base)
