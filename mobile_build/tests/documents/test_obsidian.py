@@ -413,7 +413,7 @@ class ObsidianTests(unittest.TestCase):
         self.assertTrue(self.run_async(owner.open_note('Vault/Projects/Plan.MD')))
         self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
         selected = next(row for row in owner.rows.children if any(getattr(child, 'vault_path', None) == owner.path for child in row.children))
-        self.assertEqual(selected._impl._surface_roles[0], 'hover')
+        self.assertEqual(selected._impl._surface_roles[0], 'notes_selection')
         owner.reflow(390)
         self.assertIs(owner.toolbar.parent, owner.view)
         self.assertEqual(list(owner.sidebar.view.children), [owner.article])

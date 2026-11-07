@@ -71,6 +71,7 @@ class StorageTransitionTests(QtTestCase):
 
     def test_first_notebook_save_installs_the_private_guard(self):
         from commonUtils.runtime.resources.local import LocalFiles
+        from features.notebooks.editor import Editor
         from features.notebooks.notebook import Notebook, MAX_ARCHIVE
         from features.notebooks.storage import NotebookDocument
         from features.notebooks.ui.workspace import NotebookWorkspace, NotebookWindow
@@ -84,11 +85,12 @@ class StorageTransitionTests(QtTestCase):
             window = NotebookWindow()
             panel = NotebookWorkspace(window, library=False)
             window.setCentralWidget(panel)
-            panel.editor, panel.operation, panel._pending_choice = SimpleNamespace(checkpoint=None), Mock(), None
+            book = Notebook.new()
+            panel.editor, panel.operation, panel._pending_choice = Editor(book), Mock(), None
             from features.notebooks.bridge import Bridge
             panel.bridge = panel._pending_canvas = Bridge()
             panel._pending_operation = panel.operation
-            document = NotebookDocument(Notebook.new(), resource=DocumentResource(provider, 'Saved.rmdoc', max_bytes=MAX_ARCHIVE))
+            document = NotebookDocument(book, resource=DocumentResource(provider, 'Saved.rmdoc', max_bytes=MAX_ARCHIVE))
             panel.saved(document, None)
             self.assertIs(window._private_view_guard.provider, provider)
             session.forget(provider.context)

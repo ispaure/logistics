@@ -302,7 +302,9 @@ class BrowserWindowTests(QtTestCase):
         extension = RegisteredContribution('comics', 'Comics', BrowserExtensionContribution(_install_browser_extension))
         window = self.window([extension])
         self.assertFalse(window.file_browser.services)
-        self.assertEqual(len(window.file_browser.activation_handlers), 1)
+        from services.documents.ui.markdown import activate_markdown
+        self.assertEqual(len(window.file_browser.activation_handlers), 2)
+        self.assertIn(activate_markdown, window.file_browser.activation_handlers)
         self.assertEqual(window.file_browser.navigation.library, self.root)
         index = window.file_browser.model.index(str(self.path))
         menu = window.file_browser.context_menu_for(index)
@@ -399,8 +401,12 @@ class BrowserWindowTests(QtTestCase):
         controller = binding.controller
         original_handlers = window.file_browser.activation_handlers
         # Books and Comics share one feature toggle; independent editors stay installed.
+        reader_handlers = {handler for handler in original_handlers
+                           if getattr(getattr(handler, '__self__', None), 'feature', None) is not None
+                           and handler.__self__.feature.id in ('books', 'comics')}
+        self.assertEqual(len(reader_handlers), 2)
         other_handlers = tuple(handler for handler in original_handlers
-                               if handler.__self__.feature.id not in ('books', 'comics'))
+                               if handler not in reader_handlers)
         index = window.file_browser.model.index(str(self.path))
         window.file_browser.tree.selectionModel().setCurrentIndex(index,
             qt.QItemSelectionModel.SelectionFlag.ClearAndSelect | qt.QItemSelectionModel.SelectionFlag.Rows)

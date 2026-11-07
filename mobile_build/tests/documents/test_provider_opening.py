@@ -20,9 +20,9 @@ class ProviderOpeningTests(unittest.IsolatedAsyncioTestCase):
     def fixture(self, *, remote=False):
         root = TemporaryDirectory()
         self.addCleanup(root.cleanup)
-        reader = NS(editable=True, read_only=False, kind='.md', name='Note.md', labels=['Page 1'], source=NS(check=Mock(),close=Mock(),expected=(1,)))
+        reader = NS(editable=True, read_only=False, kind='.md', name='Note.md', text='# Note', labels=['Page 1'], source=NS(check=Mock(),close=Mock(),expected=(1,)))
         copies = NS(remote_storage=remote, open=Mock(return_value=reader))
-        owner = NS(require_document_feature=Mock(return_value=True), cloud_busy=False, crypt_password=NS(value=''), _crypt_cancel=None,
+        owner = NS(document_access=Mock(), require_document_feature=Mock(return_value=True), cloud_busy=False, crypt_password=NS(value=''), _crypt_cancel=None,
                    private_dirty=Mock(return_value=False), set_document_busy=Mock(),
                    private_comic_mode=Mock(return_value='single'),
                    format_services=NS(comic_sharing=Mock(return_value=False)),

@@ -196,6 +196,8 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
                 if readers is not None:
                     tasks = readers.flush_progress()
                     if tasks:
+                        if any(task.get_loop() is not asyncio.get_running_loop() for task in tasks):
+                            raise OSError('Finish saving reading progress in the previous workspace.')
                         await asyncio.wait(tasks)
                     if not valid():
                         raise asyncio.CancelledError

@@ -160,13 +160,14 @@ class ProviderPresentationTests(unittest.TestCase):
     def test_provider_epub_fallback_preserves_anchor_bookmarks_and_motion_callbacks(self):
         from unittest.mock import Mock
         import toga
+        from features.books.mobile.typography import DEFAULTS
         from mobile.provider_presentation import prepare_epub_page
         button = toga.Button('Tools')
         panel = SimpleNamespace(text=toga.MultilineTextInput(), tools=SimpleNamespace(
             button=button, widget=toga.Box(children=[button]), panel=toga.Box()),
             chapters=SimpleNamespace(render=Mock()))
         host = SimpleNamespace(preferences=SimpleNamespace(values={
-            'reading_theme': 'light', 'epub_font_size': '18', 'reading_margin': '12'}))
+            **DEFAULTS, 'reading_theme': 'light', 'epub_font_size': '18', 'reading_margin': '12'}))
         controller = SimpleNamespace(_provider_epub_target='section', open_provider_epub_chapter=Mock())
         chapter = SimpleNamespace(anchors={'section': 21}, length=200)
         view = SimpleNamespace(crypt_reader=SimpleNamespace(book=SimpleNamespace(spine=['one', 'two']),
@@ -180,6 +181,8 @@ class ProviderPresentationTests(unittest.TestCase):
             self.assertIs(prepare_epub_page(host, controller, view, ('<p>Text</p>', chapter)), panel)
             self.assertEqual(factory.call_args.kwargs['offset'], 21)
             self.assertIs(factory.call_args.kwargs['on_chapter'], controller.open_provider_epub_chapter)
+            controller.provider_epub_view = panel
+            controller.page_footer = view.page_footer
             factory.call_args.kwargs['on_position'](32)
             self.assertEqual(view._provider_epub_locations, {'two': 32})
             view.page_footer.chapter_progress.assert_called_once_with(1, 2, 32, 200)

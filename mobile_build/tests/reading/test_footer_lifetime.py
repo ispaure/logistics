@@ -53,6 +53,7 @@ class Footer:
     def __init__(self):
         self._layout_app = NS(loop=Loop())
         self.visible = True
+        self.epub_pagination = None
         self.refresh_edges = Mock()
         self.edge_timer_diagnostic = Mock()
 
@@ -146,7 +147,7 @@ class FooterLifetimeTests(unittest.TestCase):
     def test_real_close_guard_preserves_then_permanently_retires_footer(self):
         close = definitions('Python/mobile/reader_sessions.py', 'Readers', 'close')
         events = []
-        owner = NS(book_busy=False, page_footer=NS(dispose=lambda: events.append('retire')),
+        owner = NS(book_busy=False, request_position_flush=Mock(return_value=None), page_footer=NS(dispose=lambda: events.append('retire')),
                    suspend=lambda: events.append('suspend'))
         app = NS(workspace=NS(close=Mock(return_value=False)), save_workspace=Mock(), reader_closed=Mock())
         manager = NS(controllers={'key': owner}, app=app, active=object())

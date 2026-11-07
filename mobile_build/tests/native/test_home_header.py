@@ -13,7 +13,7 @@ TEST_STAGE = TestStage.REGRESSION
 
 class HomeHeaderTests(TestCase):
     def test_overview_actions_use_the_selected_tab_navigation_owner(self):
-        from mobile.destination_actions import sync_native_host
+        from mobile.destination_actions import project_header, sync_native_host
         child, outer = Mock(), Mock()
         child.isNavigationBarHidden.return_value = True
         outer.isNavigationBarHidden.return_value = False
@@ -21,10 +21,10 @@ class HomeHeaderTests(TestCase):
         adapter = NS(outer_navigation=outer, navigation_for=Mock(return_value=child))
         app = NS(routes=NS(apple=True, screens={'documents': []}),
                  native_host=NS(adapter=adapter), home_unlock_candidates=lambda: [])
-        with (patch('mobile.destination_actions.project_header') as project,
+        with (patch('mobile.destination_actions.project_header', wraps=project_header) as project,
               patch('mobile.ios_system_occlusions.reserve_bar_clearance') as configure):
             sync_native_host(app, view, 'documents')
-        project.assert_not_called()
+        project.assert_called_once_with(app, view, 'documents')
         outer.setNavigationBarHidden.assert_called_once_with(True, animated=False)
         child.setNavigationBarHidden.assert_called_once_with(False, animated=False)
         adapter.navigation_for.assert_called_once_with('documents')

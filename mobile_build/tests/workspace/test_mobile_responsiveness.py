@@ -70,8 +70,8 @@ class ResponsivenessTests(unittest.TestCase):
         with patch('mobile.workspaces_screen.source_tab') as style:
             app.folder_local_buttons['Rclone'].on_press()
             self.assertEqual(style.call_args_list, [
-                unittest.mock.call(app.folder_local_buttons['Rclone'], True),
-                unittest.mock.call(app.folder_local_buttons['Others'], False)])
+                unittest.mock.call(app.folder_local_buttons['Rclone'], True, quiet=True),
+                unittest.mock.call(app.folder_local_buttons['Others'], False, quiet=True)])
             style.reset_mock()
             app.update_folder_list(app.folder_all_choices)
             style.assert_not_called()

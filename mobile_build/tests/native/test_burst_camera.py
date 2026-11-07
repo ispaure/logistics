@@ -22,9 +22,9 @@ class CameraHomeTests(unittest.TestCase):
         from features.images.mobile import burst_camera
         with patch.object(burst_camera, 'available', return_value=True), patch.object(burst_camera, 'present') as present:
             self.app.build_home()
-            button = self.app.home_content.children[-1]
+            heading, button = self.app.home_content.children[-2:]
+            self.assertEqual(heading.text, 'Camera')
             self.assertEqual(button.text, 'Burst camera')
-            self.assertEqual(self.app.home_sections.before.text, 'Camera')
             button.on_press()
             present.assert_called_once_with(self.app)
 

@@ -359,12 +359,12 @@ async def _exercise_library(app, fixtures, epub, comic, passed):
             bridge_ready=owner.epub_view._chapter_bridge.ready,
             allowed_url=getattr(owner.epub_view._impl, '_allowed_url', None),
             native_url=owner.epub_view.url)
-    def trace(reader, epoch, index, action, offset):
+    def trace(reader, epoch, index, action, offset, **kwargs):
         state = event_state(reader, epoch, index, action)
         events.append(state)
         if action in {'next', 'previous'}:
             print('LOGISTICS_EPUB_EVENT=' + json.dumps(state), flush=True)
-        return original_event(reader, epoch, index, action, offset)
+        return original_event(reader, epoch, index, action, offset, **kwargs)
     from unittest.mock import patch
     with patch.object(owner, 'epub_event', side_effect=trace):
         await wait_for_reader(owner)

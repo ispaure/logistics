@@ -907,16 +907,17 @@ class PrivateSessionTests(unittest.TestCase):
         manager = self.app.private_sessions
         readers = [owner.crypt_reader for owner in (first, second)]
         tokens = [self.app.workspace.token(owner.session.id) for owner in (first, second)]
-        manager.positions['synthetic'] = {'index': 0}
-        positions = dict(manager.positions)
         progress = second._provider_progress
+        state = progress.state
+        position = state.load()
         progress.worker = object()  # Actual-borrow marker; completion is owner-controlled.
         try:
             self.assertFalse(self.app.clear_private_reader(discard=True))
             self.assertFalse(lifecycle(self.app).request_exit())
             self.assertTrue(self.app.active_host)
             self.assertEqual(list(manager.controllers.values()), [first, second])
-            self.assertEqual(manager.positions, positions)
+            self.assertIs(progress.state, state)
+            self.assertEqual(state.load(), position)
             for owner, reader, token in zip((first, second), readers, tokens):
                 self.assertIs(owner.crypt_reader, reader)
                 self.assertTrue(self.app.workspace.accepts(token))
