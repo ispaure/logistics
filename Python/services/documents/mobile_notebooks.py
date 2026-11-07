@@ -596,9 +596,6 @@ async def notes_editor(app, library, path):
     provider = library.provider
     resource = DocumentResource(provider, path, max_bytes=MAX_ARCHIVE)
     panel = LibraryPanel(app, library=False)
-    if type(panel.view._impl).__module__.startswith('toga_iOS.'):
-        from features.notebooks.mobile.native_tools import NativeDrawingTools
-        panel.native_drawing_tools = NativeDrawingTools(panel)
     epoch = library.epoch
     try:
         book = await asyncio.to_thread(lambda: Notebook.read(resource.read(
