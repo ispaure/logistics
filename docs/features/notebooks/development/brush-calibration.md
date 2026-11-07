@@ -148,3 +148,10 @@ or upload; a move after 2,000 points processed only its two-point tail. Pen-up
 replayed no geometry and retained identical pixels. The private environment,
 source/SDK snapshots and caches were removed afterward. This does not establish
 physical tablet responsiveness or reproduce firmware texture algorithms.
+
+The renderer builds opaque coverage for consecutive same-color Highlighter
+strokes, then multiplies their tint into the page once. This keeps repeated
+passes and crossings in a single stroke uniform while letting underlying
+ink and template rules show through. Across intervening marks, the latest
+pass of a color still owns its overlap. The Pages Overview uses the same
+brush renderer at thumbnail size.

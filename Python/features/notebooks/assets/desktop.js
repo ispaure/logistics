@@ -166,7 +166,7 @@ window.notebookPagePreviews = rows => {
     card.dataset.page = row.index;
     card.setAttribute('aria-label', 'Page ' + (row.index + 1) + (row.warning ? ': preview unavailable' : ''));
     card.setAttribute('aria-current', String(row.index === state.index));
-    image.src = row.image;
+    paintPagePreview(row, image);
     image.alt = '';
     caption.textContent = 'Page ' + (row.index + 1);
     card.append(image, caption);
@@ -179,6 +179,7 @@ window.notebookPagePreviews = rows => {
   }
   previewStart = rows.length ? rows.at(-1).index + 1 : previewStart;
   $('morePages').hidden = previewStart >= state.count;
+  $('morePages').disabled = false;
   $('overviewStatus').textContent = ''
 };
 createZoomControls($('zoomControls'));

@@ -1,53 +1,44 @@
-"""Bounded ink thumbnails requested by desktop and mobile page overviews."""
-import base64
-import math
-
-from .brushes import PALETTE, NATIVE_HIGHLIGHTS
+"""Bounded scene data for the shared WebView brush renderer."""
 from .ink import WIDTH, HEIGHT
+from .templates import available, background, settings
 
 BATCH = 16
-POINTS = 2048
+POINTS = 8192
+BATCH_POINTS = 16384
 STROKES = 256
 
 
 def page_previews(book, start):
     if type(start) is not int or not 0 <= start < len(book.pages):
         raise ValueError('Invalid page overview range.')
-    previews = []
+    previews, remaining = [], BATCH_POINTS
     for index in range(start, min(start + BATCH, len(book.pages))):
         ink = book.page(index)
-        visible = {key for key, _, shown in ink.layers if shown}
-        strokes = [stroke for stroke in ink.strokes if stroke.layer in visible and stroke.points]
-        strokes = strokes[::max(1, math.ceil(len(strokes) / STROKES))]
-        budget = max(2, POINTS // max(1, len(strokes)))
-        paths = []
+        page = book.pages[index]
+        order = {key: i for i, key in enumerate(ink.order)}
+        visible = {key: i for i, (key, _, shown) in enumerate(ink.layers) if shown}
+        strokes = [s for s in ink.strokes if s.layer in visible and s.points]
+        strokes.sort(key=lambda s: (visible[s.layer], order.get(s.id, len(order))))
+        if len(strokes) > STROKES:
+            strokes = [strokes[i * (len(strokes) - 1) // (STROKES - 1)] for i in range(STROKES)]
+        total = sum(len(s.points) for s in strokes)
+        if min(total, POINTS) > remaining:
+            break
+        remaining -= min(total, POINTS)
+        minimum = sum(min(2, len(s.points)) for s in strokes)
+        items = []
         for stroke in strokes:
-            points = stroke.points[::max(1, math.ceil(len(stroke.points) / (budget - 1)))]
-            if points[-1] is not stroke.points[-1]:
-                points = [*points, stroke.points[-1]]
-            color = PALETTE.get(stroke.color, '#000000')
-            opacity = 1
-            rgba = stroke.color_rgba or (NATIVE_HIGHLIGHTS.get(stroke.color) if stroke.tool == 18 else None)
-            if rgba:
-                r, g, b, a = rgba
-                color, opacity = f'#{r:02x}{g:02x}{b:02x}', a / 255
-            geometry = 'M' + ' L'.join(f'{p[0]:.1f},{p[1]:.1f}' for p in points)
-            if len(points) == 1:
-                geometry += ' l0,.1'
-            width = max(2, sum(p[3] for p in points) / len(points))
-            paths.append(f'<path d="{geometry}" stroke="{color}" stroke-width="{width:.1f}" opacity="{opacity:.2f}"/>')
-        svg = (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WIDTH} {HEIGHT}">'
-               '<rect width="100%" height="100%" fill="white"/>'
-               + template_artwork(book, book.pages[index]) +
-               '<g fill="none" stroke-linecap="round" stroke-linejoin="round">' + ''.join(paths) + '</g></svg>')
-        previews.append(dict(index=index, image='data:image/svg+xml;base64,' + base64.b64encode(svg.encode()).decode(),
-                             warning=ink.warning, template=book.pages[index].template))
+            points = stroke.points
+            if total > POINTS and len(points) > 2:
+                count = 2 + (len(points) - 2) * (POINTS - minimum) // (total - minimum)
+                points = [points[i * (len(points) - 1) // (count - 1)] for i in range(count)]
+            # The renderer uses stored widths, never pressure, for saved ink.
+            items.append(dict(tool=stroke.tool, color=stroke.color, color_rgba=stroke.color_rgba,
+                              points=[[round(x, 2), round(y, 2), 0, width] for x, y, _, width in points]))
+        paper = settings(book, page)
+        artwork = (background(page.template, paper['format'])
+                   if book.content.get('fileType') != 'pdf' and paper['visible'] and available(book, page)
+                   else None)
+        previews.append(dict(index=index, width=WIDTH, height=HEIGHT, items=items,
+                             background=artwork, warning=ink.warning, template=page.template))
     return previews
-
-
-def template_artwork(book, page):
-    from .templates import settings, svg, available
-    paper = settings(book, page)
-    if book.content.get('fileType') == 'pdf' or not paper['visible'] or not available(book, page):
-        return ''
-    return svg(page.template, paper['format'])
