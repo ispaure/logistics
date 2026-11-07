@@ -44,11 +44,13 @@ renderEraserChoices();
   header.className = 'mobile-head';
   let railLeft = 0, railRight = 0;
   window.notebookViewportInsets = ([left, right, home] = [0, 0, 0]) => {
+    const railChanged = left !== railLeft || right !== railRight;
     railLeft = left;
     railRight = right;
     document.body.style.setProperty('--notebook-rail-left', left + 'px');
     document.body.style.setProperty('--notebook-rail-right', right + 'px');
     document.body.style.setProperty('--notebook-home-bottom', home + 'px');
+    if (railChanged) scheduleViewportResize();
     repositionBrushPanel();
     if (eraserDialog.open) positionPanel(eraserDialog, control('erase'));
     if (presetMenu.open) presetMenu.close();

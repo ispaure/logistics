@@ -17,6 +17,7 @@ function fixture(mobile = true) {
   const $=id=>{if(!nodes.has(id))nodes.set(id,node(id));return nodes.get(id)};
   const c={console,Map,Set,Math,$,innerWidth:400,innerHeight:600,
     document:{body:{classList:{contains:name=>classes.has(name)}},createElement:()=>node('new'),head:{append(){}},elementFromPoint:()=>$('paper')},
+    getComputedStyle:()=>({paddingLeft:'0px',paddingRight:'0px'}),
     window:{addEventListener(){}},canvas:$('paper'),state:{width:1000,height:1500},active:null,pan:null,paperView:'pro',
     resize(){const value=$('zoom').value;scale=['page','fit'].includes(value)?1:Number(value);vm.runInContext('updateZoomChrome()',c)},
     setTimeout(fn,delay){const id=++serial;timers.set(id,{fn,deadline:now+delay});return id},clearTimeout:id=>timers.delete(id),
