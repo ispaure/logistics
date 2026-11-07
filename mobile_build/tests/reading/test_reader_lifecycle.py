@@ -3,9 +3,11 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+import asyncio
 import base64
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest import TestCase
 from unittest.mock import patch
 import toga
@@ -218,7 +220,22 @@ class ReaderLifecycleTests(TestCase):
             self.assertTrue(await self.app.open_crypt(copies=self.app.crypt_copies, key=key))
             owner = self.app.private_sessions.active
             owner.provider_epub_view.offset = 120
-            owner.crypt_view._reader_close_button.on_press()
+            release_progress = asyncio.Event()
+            progress = SimpleNamespace(worker=None, task=None, capture=lambda: None, close=lambda: None)
+
+            async def write_progress():
+                await release_progress.wait()
+                progress.worker = None
+
+            with patch.object(owner, '_provider_progress', progress, create=True):
+                progress.worker = progress.task = asyncio.create_task(write_progress())
+                try:
+                    owner.crypt_view._reader_close_button.on_press()
+                    self.assertIsNotNone(owner._exit_task)
+                    self.assertIn(owner.session.id, self.app.workspace.sessions)
+                finally:
+                    release_progress.set()
+                await owner._exit_task
             self.assert_closed(owner)
             self.assertIsNone(owner.crypt_reader)
             self.assertTrue(await self.app.open_crypt(copies=self.app.crypt_copies, key=key))

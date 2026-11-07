@@ -217,11 +217,25 @@ class SessionTransitions:
             owner.request_position_flush()
         else:
             private = host.provider_sessions().controllers.get(key)
-            if private is not None and private.operation_busy:
+            progress = getattr(private, '_provider_progress', None)
+            if private is not None and (private.operation_busy
+                                        or getattr(progress, 'worker', None) is not None):
                 owner = private
                 if getattr(owner, '_exit_task', None) is not None:
                     return True
-                pending = private.operation_idle.wait()
+
+                async def wait_for_private_close():
+                    import asyncio
+                    while host.active_host and host.workspace.accepts(token):
+                        if private.operation_busy:
+                            await private.operation_idle.wait()
+                            continue
+                        progress = getattr(private, '_provider_progress', None)
+                        if getattr(progress, 'worker', None) is None:
+                            break
+                        await asyncio.wait({progress.task})
+
+                pending = wait_for_private_close()
         if pending is not None:
             if getattr(owner, '_exit_task', None) is None:
                 async def finish():
