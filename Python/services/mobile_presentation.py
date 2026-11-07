@@ -112,6 +112,11 @@ class MobilePresentation:
     register_layout: Callable[..., Any]
     filename_input: Callable[..., Any]
     fill_scroll_bottom: Callable[..., Any]
+    accessible_name: Callable[[Any, str], Any]
+    bind_apple_hold: Callable[[Any, Any, Callable], Any]
+    notebook_toolbar_clearance: tuple[int, int]
+    refresh_notebook_layout: Callable[[Any], None]
+    clear_notebook_rail: Callable[[Any], None]
 
     favourite_resource: Callable | None = None
     reset_reader_layout: Callable[[Any], None] = lambda view: None
