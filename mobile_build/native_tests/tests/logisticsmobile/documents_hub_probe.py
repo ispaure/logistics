@@ -71,14 +71,19 @@ class DocumentsHubProbe(DocumentWorkspaceProbe):
                     report['samples'].append(dict(destination=destination, orientation=orientation, unlock=position))
                 positions.append(position)
                 await capture_window(self, Path(self.paths.cache) / f'documents-hub-{orientation}-{destination}.png')
-            for position in positions[1:]:
+            # Documents keeps its native bar even when another destination
+            # projects its unlock shortcut into a free part of the top band.
+            for position in (positions[1:2] if self.routes.apple else positions[1:]):
                 assert abs(position[0] - positions[0][0]) <= 2, positions
                 assert abs(position[1] - positions[0][1]) <= 2, positions
             assert not hasattr(self.body.children[0], '_workspace_frame')
+            report.setdefault('collections', []).append(self.check_collection_frames(control_frame, orientation))
             self.document_view_buttons['Libraries'].on_press()
             await self._notes_discovery_task
             await self.hub_controller()._document_comics_discovery
-            assert self.document_notes_list.children[0].text == 'Notes'
+            # A synthetic locked copy inserts guidance before the Notes heading.
+            assert any(isinstance(widget, toga.Label) and widget.text == 'Notes'
+                       for widget in self.document_notes_list.children)
             assert self.document_comics_list.children[0].text == 'Comics'
             assert any(getattr(w, 'text', '') == 'Notes' and isinstance(w, toga.Button)
                        for w in walk(self.document_notes_list))
@@ -115,7 +120,31 @@ class DocumentsHubProbe(DocumentWorkspaceProbe):
         report['cases'].extend(['filename_only_local_and_received', 'direct_notes_and_comics_lists',
                                 'shared_unlock_placement', 'no_documents_hamburger', 'unlock_disappears'])
 
+    def check_collection_frames(self, frame, orientation):
+        from mobile.documents_hub import SIDEBAR_BREAKPOINT
+        from mobile.fold_layout import division
+
+        hub = self.hub_controller()
+        nav = frame(self, hub._document_collection_navigation)
+        detail = frame(self, hub._document_collection_detail)
+        fold = division(self, hub._document_collection_body)
+        width = self.adaptive.content_width('documents', margin=32)
+        sidebar = fold.vertical if fold is not None else width >= SIDEBAR_BREAKPOINT
+        controls = {name: frame(self, button) for name, button in self.document_view_buttons.items()}
+        sample = dict(orientation=orientation, nav=nav, detail=detail, controls=controls,
+                      sidebar=sidebar, fold=vars(fold) if fold else None)
+        if sidebar:
+            assert detail['x'] >= nav['x'] + nav['width'] + (fold.width if fold else 16) - 2, sample
+        else:
+            assert detail['y'] >= nav['y'] + nav['height'] + (fold.height if fold else 0) - 2, sample
+        for control in controls.values():
+            assert control['height'] >= 46 and control['width'] >= 43, sample
+            assert control['x'] >= nav['x'] - 1, sample
+            assert control['x'] + control['width'] <= nav['x'] + nav['width'] + 1, sample
+        return sample
+
     async def check_retained_toolbar_rotation(self, report, native_geometry):
+        from .sync_status_probe import control_frame
         commands = {'Open document', 'New document', 'Search documents',
                     'Document actions', 'Unlock LocalCrypt'}
         samples = report['retained_toolbar_rotation'] = []
@@ -130,8 +159,10 @@ class DocumentsHubProbe(DocumentWorkspaceProbe):
                     await rotate(self, orientation, settle=.5)
                     assert self.documents_view == name and self.document_results.children[0] is selected
                     geometry = native_geometry(self)
+                    layout = self.check_collection_frames(control_frame, orientation)
                     items = [item for item in geometry['items'] if item['label'] in commands]
-                    sample = dict(tab=name, unlock=unlock, orientation=orientation, geometry=geometry)
+                    sample = dict(tab=name, unlock=unlock, orientation=orientation,
+                                  geometry=geometry, collections=layout)
                     samples.append(sample)
                     frames = {item['label']: item['frame'] for item in items}
                     assert frames and len(frames) == len(items), sample

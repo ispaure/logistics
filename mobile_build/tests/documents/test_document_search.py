@@ -17,7 +17,7 @@ class LocalDocumentSearchTests(TestCase):
     def setUp(self):
         self.app = create_app(self)
 
-    def test_libraries_default_and_heart_opens_and_removes_existing_favourites(self):
+    def test_libraries_default_and_favourites_opens_and_removes_existing_entries(self):
         import toga
         from mobile.favourites import catalog
         from mobile_build.tests.workspace.test_hub_documents import widgets
@@ -32,11 +32,11 @@ class LocalDocumentSearchTests(TestCase):
         app.show_documents_hub()
         self.assertEqual(list(app.document_view_buttons), ['Libraries', 'Favourites', 'Open', 'Recent', 'Saved'])
         self.assertEqual(list(app.document_results.children), [app.document_libraries_list])
-        heart = app.document_view_buttons['Favourites']
-        self.assertEqual(heart.accessible_name, 'Favourites')
-        self.assertEqual(heart.control_icon, 'favourite')
-        self.assertEqual(heart.style.width, 48)
-        heart.on_press()
+        favourites = app.document_view_buttons['Favourites']
+        self.assertEqual(favourites.accessible_name, 'Favourites')
+        self.assertEqual(favourites.text, 'Favourites')
+        self.assertEqual(favourites.style.height, 48)
+        favourites.on_press()
         self.assertEqual(list(app.document_results.children), [app.document_favourites_list])
         button = next(w for w in widgets(app.document_favourites_list)
                       if isinstance(w, toga.Button) and w.text == path.name)
@@ -158,10 +158,59 @@ class LocalDocumentSearchTests(TestCase):
         app.show_documents_hub()
         app.document_search.value = ''
         self.assertIsNotNone(app.document_views.parent)
-        parent = app.document_views.parent
-        self.assertEqual(parent.children.index(app.document_views),
-                         parent.children.index(app._documents_status_row) + 1)
+        hub = app.hub_controller()
+        self.assertIs(app.document_views.parent, hub._document_collection_header)
+        self.assertEqual(hub._document_collection_title.text, 'Recent')
         self.assertEqual(list(app.document_results.children), [app.document_recent_list])
+
+    def test_collections_keep_their_rows_and_controls_across_width_and_fold_changes(self):
+        from mobile.fold_layout import Division
+        from toga.style.pack import COLUMN, ROW
+
+        app = self.app
+        app.show_documents_hub()
+        hub = app.hub_controller()
+        controls = list(app.document_view_buttons.values())
+        app.document_view_buttons['Recent'].on_press()
+        body = hub._document_collection_body
+        nav = hub._document_collection_navigation
+        detail = hub._document_collection_detail
+        with (patch.object(app.adaptive, 'content_width', return_value=260) as width,
+              patch('mobile.fold_layout.division', return_value=None) as fold):
+            app.reflow_documents_hub()
+            self.assertEqual(body.style.direction, COLUMN)
+            self.assertEqual([len(row.children) for row in app.document_views.children], [3, 2])
+            width.return_value = 350
+            app.reflow_documents_hub()
+            self.assertEqual(len(app.document_views.children), 1)
+            self.assertEqual(app.document_view_buttons['Recent']._impl._surface_roles[:2],
+                             ('transparent', 'accent'))
+
+            width.return_value = 600
+            app.reflow_documents_hub()
+            self.assertEqual(body.style.direction, ROW)
+            self.assertEqual(nav.style.width, 160)
+            self.assertEqual(app.document_view_buttons['Recent']._impl._surface_roles[:2],
+                             ('hover', 'accent'))
+
+            fold.return_value = Division(x=278, y=0, width=27, height=400)
+            app.reflow_documents_hub()
+            self.assertEqual(nav.style.width, 278)
+            self.assertEqual(detail.style.margin_left, 27)
+
+            fold.return_value = Division(x=0, y=210, width=600, height=22)
+            app.reflow_documents_hub()
+            self.assertEqual(body.style.direction, COLUMN)
+            self.assertEqual(nav.style.height, 210)
+            self.assertEqual(detail.style.margin_top, 22)
+            self.assertEqual(detail.style.margin_left, 0)
+
+            fold.return_value = None
+            width.return_value = 350
+            app.reflow_documents_hub()
+            self.assertEqual(detail.style.margin_top, 0)
+            self.assertEqual(list(app.document_view_buttons.values()), controls)
+            self.assertEqual(list(app.document_results.children), [app.document_recent_list])
 
     def test_replaced_query_and_credentials_cannot_publish_late_worker(self):
         app = self.app

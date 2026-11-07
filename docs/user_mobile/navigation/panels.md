@@ -11,16 +11,20 @@ desktop Logistics. High contrast / E Ink adds a black divider down the full
 content edge of the rail. Resizing preserves the selected destination.
 
 Home offers **Open file…**, **New document**, five recent files and **See all in
-Documents**. Documents lists every open session under **All open** and shows closed Recent entries as compact rows without
-text-preview cards. Tap a filename to continue. The **×** button closes an open
-session through the existing unsaved-change guard. Card overview is permanently
-off and has no Settings switch. Other saved text and Markdown files appear under
-**Saved documents**. **Search documents** filters open, recent and saved filenames.
-Home's Recent entries share one rounded block, including **See all in Documents**.
-Documents uses separate rounded blocks for populated **All open**, **Recent** and **Saved
-documents** lists, with inset dividers between rows. Empty sections and unmatched
-searches show plain informational text outside the blocks. Home also keeps its
-empty Recent message outside the **See all in Documents** action block.
+Documents**. Documents starts on **Libraries**, with separate lists for Notes and
+Comics. The collection selector also offers **Favourites**, **Open**, **Recent**
+and **Saved**. The selector sits above the list in compact windows and beside it
+when the window has room. On iPhone Duo, an active fold can separate the selector
+from the list. Resizing keeps the selected collection.
+
+Tap a filename to continue. The **×** button closes an open session through the
+unsaved-change guard. **Recent** shows closed entries and **Saved** shows other
+saved files. **Search documents** searches local filenames. Exiting search
+returns to the selected collection.
+
+Populated lists use rounded groups with inset dividers. Empty sections and
+unmatched searches show informational text. Home's Recent entries share one
+rounded block with **See all in Documents**.
 Status appears in one smaller grey line below each filename, such as
 **Open · Unsaved · Recovered**, using the system font. Other warnings remain in
 that summary. Close buttons stay inside open-document rows.
@@ -32,8 +36,8 @@ appearance, including after switching modes. This also applies to shared browser
 reader and speech buttons.
 Settings groups feature options under Text & Markdown, Books & Comics, LM Chat
 and Workspaces; reader appearance stays in each open reader. Home provides the
-Open/New actions; Documents provides **Open Books & Comics library**. Chat has
-its own bottom navigation destination.
+Open/New actions. Documents also offers Open, New and Search in its shared
+action bar. Chat has its own navigation destination.
 
 The library is a searchable list of configured library folders. Tap a folder to
 browse its books and comics. Contents/bookmarks and appearance have separate tools, keeping the reading
@@ -165,8 +169,8 @@ current folder name above a smaller storage description and indicators, with
 ## Panel layout
 
 Home hides its redundant top navigation title while retaining its bottom tab.
-Documents and Workspaces use their existing navigation titles without a second
-large heading. Settings starts directly with its grouped controls. Both Home and
+Documents shows its title above the collection selector. Workspaces uses its
+existing navigation title. Settings starts directly with its grouped controls. Both Home and
 the bottom navigation use the desktop Workspaces stack-of-three glyph.
 On iOS, Chat measures floating-tab overlap to keep the composer and Send control
 above the navigation bar, including while the keyboard is open and drafts grow.
@@ -188,8 +192,8 @@ saves them. Unencrypted ZIPs must be selected again next time. **Forget saved
 credentials** removes retained ZIPs and their device key. Previously saved
 credentials remain saved until explicitly forgotten.
 
-Documents lists open files below its compact New/Open toolbar. The menu opens immediately using cached shortcuts, then refreshes
-available folders in the background. Chat opens on its first tab selection.
+The **Open** collection lists active sessions. The toolbar’s **Open document**
+action browses local files. Chat opens on its first tab selection.
 On iPhone, plain text actions retain at least a 44-point-wide hit area around
 their text or icon, bounded by their own controls. Bordered rows and icon controls
 retain their full visible touch targets.

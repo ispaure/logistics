@@ -107,7 +107,9 @@ def sync_native_host(app, view, destination):
         from .home_header import sync
         if sync(app, view):
             overview = False
-    elif not app.routes.screens[destination] and hasattr(view, '_destination_actions'):
+    elif destination == 'files' and not app.routes.screens[destination] and hasattr(view, '_destination_actions'):
+        # The Documents collection selector owns the body. Keep its commands
+        # in the native navigation bar so system placement also owns hit testing.
         if project_header(app, view, destination):
             overview = False
     outer = adapter.outer_navigation
