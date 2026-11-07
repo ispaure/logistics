@@ -479,7 +479,7 @@ not show hover previews. Missing, binary and external web links have no preview.
 
 Select **Notes Library** below Documents in the sidebar, then **Open Library** to
 choose a local folder or unlocked LocalCrypt copy. Explicit opens accept folders
-without an `.obsidian` marker. A marked local workspace also offers **Open as Notes
+without a library marker. A marked local workspace also offers **Open as Notes
 Library** in its Actions panel. Libraries open in the separate Notes Library
 destination, with outer library tabs and inner document tabs/split groups.
 Cloud-only libraries must be downloaded or synced first; individual remote

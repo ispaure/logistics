@@ -6,6 +6,7 @@ from threading import RLock
 from services.documents.storage import DocumentResource, DocumentSizeExceeded, document_remote
 from services.documents.access import can_write
 
+LIBRARY_MARKER = '.noteslibrary'
 MARKDOWN = {'.md', '.markdown'}
 TEXT = {'.json', '.jsonc', '.js', '.mjs', '.cjs', '.css', '.txt', '.csv',
         '.yaml', '.yml', '.toml', '.ini', '.xml', '.html', '.py', '.ts'}
@@ -94,8 +95,42 @@ def vault_root(provider, directory, rows):
     if not callable(getattr(provider, 'relative', None)):
         return None
     directory = provider.relative(directory)
-    marker = posixpath.join(directory, '.obsidian')
-    return directory if any(row['path'] == marker and row['directory'] for row in rows) else None
+    marker = posixpath.join(directory, LIBRARY_MARKER)
+    obsidian = posixpath.join(directory, '.obsidian')
+    if any(row['path'] == (obsidian if row['directory'] else marker) for row in rows):
+        return directory
+    return None
+
+
+def create_library(provider, parent, name, *, cancelled=lambda: False):
+    from io import BytesIO
+    from commonUtils.persistence.publication import mutation_lock
+    from commonUtils.runtime.operations import check_cancelled
+    from commonUtils.runtime.resources.paths import resource_name
+    from commonUtils.runtime.resources.provider import require_capability
+
+    name = resource_name(name.strip())
+    if name.startswith('.'):
+        raise ValueError('Choose a folder name that does not start with a dot.')
+    if not local_library(provider):
+        raise ValueError('Choose an on-device location.')
+    require_capability(provider, 'create')
+    require_capability(provider, 'delete')
+    folder = posixpath.join(provider.relative(parent), name)
+    with mutation_lock, operation(provider, lambda: False):
+        check_cancelled(cancelled)
+        provider.mkdir(folder)
+        revision = provider.entry(folder)['revision']
+        try:
+            check_cancelled(cancelled)
+            provider.create_file(posixpath.join(folder, LIBRARY_MARKER), BytesIO(), cancelled=cancelled)
+        except Exception:
+            try:
+                provider.remove_empty(folder, revision)
+            except (OSError, ValueError) as cleanup:
+                raise ValueError('Could not finish creating the library. Inspect the new folder before retrying.') from cleanup
+            raise
+    return folder
 
 
 class NotesLibrary:

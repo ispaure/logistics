@@ -28,7 +28,7 @@ not create, rename or move files, even when Alt/Option enables page editing.
 
 **Notes Library** is Logistics' workspace for writing notes. Sidebar entries keep
 their actual filenames. Use **Open as Notes Library** in the workspace action
-panel for a local folder containing an `.obsidian` directory. Browsing folders
+panel for a local folder containing a `.noteslibrary` file or an `.obsidian` directory. Browsing folders
 opens their files directly without a mode prompt.
 
 For writable libraries, use **New Document**, **New folder** and **Rename…**
@@ -103,7 +103,7 @@ be edited in the formatted Markdown view.
 
 
 From a Local or unlocked LocalCrypt location's actions page, choose **Open as Notes
-Library** when the root contains an `.obsidian` directory. The reader opens in
+Library** when the root contains a `.noteslibrary` file or an `.obsidian` directory. The reader opens in
 the Notes Library destination with a folder/page sidebar, note history and read-aloud controls.
 Library mode is local-only on every platform: download or sync a cloud folder
 first. Individual remote Markdown files remain available in the read-only viewer.
