@@ -395,7 +395,7 @@ class CreationProbe(LogisticsMobile):
             from services.documents.storage import DocumentResource
             provider = CryptFiles(self.private_root / 'LocalCryptFolders', self.cloud_client, remote)
             DocumentResource.publish(provider, 'Existing.txt', b'Encrypted fixture', max_bytes=1024)
-            report['cases'].append(await self.create_in('Encrypted.txt', 'LocalCrypt: ' + remote))
+            report['cases'].append(await self.create_in('Encrypted.txt', remote + ' - Encrypted Copy'))
             self.show_home()
             form = await self.new_form()
             form.save_as_name.value = 'My notebook'

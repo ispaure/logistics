@@ -62,7 +62,7 @@ async def exercise_files(app, passed):
     row = next(row for row in app.cloud_rows.values() if row['path'].endswith('fixture.txt'))
     await app.download_remote_item(row)
     picker = app.editor_picker()
-    shared = picker.editor_storage_roots['Shared files']
+    shared = picker.editor_storage_roots['Shared Files']
     assert not shared.include_collections
     assert not any(row['name'] in ('Local', 'Received Files') for row in shared.list())
     picker.save_as_name.value = 'selected-download.txt'
