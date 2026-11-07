@@ -14,6 +14,20 @@ from commonUtils.testing import waiting
 
 
 class RotationSettlingTests(unittest.IsolatedAsyncioTestCase):
+    async def test_direct_rotation_failure_records_state_without_changing_deadline(self):
+        for observation in (None, RuntimeError('observer unavailable')):
+            failure = AssertionError('native acknowledgement timed out')
+            app = NS(main_window=object())
+            with patch.object(rotation_checks, 'NativeRotation'), \
+                    patch.object(rotation_checks.sys, 'platform', 'ios'), \
+                    patch.object(rotation_checks, 'wait_until', new=AsyncMock(side_effect=failure)) as wait, \
+                    patch.object(rotation_checks, 'rotation_failure_snapshot', side_effect=observation) as capture:
+                with self.assertRaises(AssertionError) as caught:
+                    await rotation_checks.rotate(app, 'landscape-left', timeout=.1)
+                self.assertIs(caught.exception, failure)
+                self.assertEqual(wait.call_args.kwargs['timeout'], .1)
+                capture.assert_called_once_with(app, panel='native-request', cycle=-1, orientation='landscape-left')
+
     async def test_transient_native_morph_is_remeasured_before_acceptance(self):
         with patch.object(rotation_checks, 'assert_visible_controls',
                           side_effect=[AssertionError('button still morphing'), 4]) as audit, \
