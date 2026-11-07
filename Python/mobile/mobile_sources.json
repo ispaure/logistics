@@ -26,6 +26,7 @@
     "browser_location.py",
     "browser_preview.py",
     "browser_ui.py",
+    "cached_documents.py",
     "chapter_drawer.py",
     "chat_fixture.py",
     "comic_feedback.py",

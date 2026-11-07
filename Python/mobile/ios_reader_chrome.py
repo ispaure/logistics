@@ -5,6 +5,17 @@ _hosts = weakref.WeakValueDictionary()
 _installed = False
 
 
+def content_control(button):
+    """Restore inline UIKit glass when a reader leaves the navigation bar."""
+    if not type(button._impl).__module__.startswith('toga_iOS.'):
+        return
+    from .appearance import paint_surface
+    button._impl._native_bar_control = False
+    if getattr(button, 'control_icon', None) in {'close', 'more', 'overflow'}:
+        button._impl._native_glass_control = True
+    paint_surface(button._impl, 0)
+
+
 def bar_control(button):
     """Use UIKit's bar background, retaining the live button and its menu."""
     from .appearance import paint_surface
@@ -188,6 +199,8 @@ def install():
                 changed = compact_apple_reader(container) or changed
             if changed and container.content is not None:
                 container.content.interface.refresh()
+            from .scroll_edges import reserve_container
+            reserve_container(container)
             # Observe effective geometry, not the intermediate safe layout.
             notify_viewport(container)
         finally:

@@ -93,7 +93,8 @@ class StartupModelTests(TestCase):
                 fixtures = root / 'fixtures'
                 fixtures.mkdir()
                 epub, _ = make_books(fixtures)
-                self.assertTrue(app.loop.run_until_complete(app.open_download(path=epub)))
+                from mobile_build.tests.support.readers import open_legacy_import
+                self.assertTrue(app.loop.run_until_complete(open_legacy_import(app, epub)))
                 app.loop.run_until_complete(app.next_book_page())
                 selected = app.workspace.active
                 app.checkpoint()

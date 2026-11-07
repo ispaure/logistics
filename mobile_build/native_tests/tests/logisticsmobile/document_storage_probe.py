@@ -177,18 +177,18 @@ class DocumentStorageProbe(LogisticsMobile):
             report['cases'].append('localcrypt-metadata-' + name)
             if password:
                 continue
-            # Ordinary archive imports retain their established saved-copy policy.
+            # Ordinary local archives edit their source without an imported copy.
             ordinary = local.root / ('Ordinary-' + name)
             with DocumentResource(crypt, name, max_bytes=32*1024*1024, independent=False) as resource:
                 ordinary.write_bytes(resource.read())
             assert await self.open_download(path=ordinary)
-            owner = self.readers.active
-            await self.wait(lambda: not owner.book_busy)
-            owner.show_book_metadata()
-            owner.book_metadata_fields[field].value = 'Ordinary metadata acceptance'
-            await owner.save_book_metadata()
-            assert owner.book_metadata_status.text == 'Metadata saved to the imported copy.', owner.book_metadata_status.text
-            await self.wait(lambda: not owner.book_busy)
+            owner = self.private_sessions.active
+            await self.wait(lambda: not owner.operation_busy)
+            owner.edit_crypt_metadata()
+            owner.crypt_metadata_fields[field].value = 'Ordinary metadata acceptance'
+            await owner.save_crypt_metadata()
+            assert not owner.private_dirty(), owner.crypt_metadata_status.text
+            assert self.reader_manager().catalog.library_store.stored_files()[0] == []
             assert self.close_session(owner.session.id)
             await asyncio.sleep(.2)
             report['cases'].append('local-metadata-' + name)
