@@ -643,6 +643,14 @@ class HubDocumentTests(unittest.TestCase):
         self.assertIs(app.body.children[0], app.document_view)
         self.assertEqual(app.editor.value, '# A retained draft')
 
+    def test_home_launch_actions_share_the_unoutlined_accent_style(self):
+        with patch('features.images.mobile.burst_camera.available', return_value=True):
+            home = self.app.build_home()
+        buttons = {widget.text: widget for widget in widgets(home.content) if hasattr(widget, 'on_press')}
+        for title in ('Open Document', 'New Document', 'Burst camera'):
+            with self.subTest(title=title):
+                self.assertEqual(buttons[title]._impl._surface_roles, ('surface', 'accent', False))
+
     def test_open_document_links_have_direct_close_controls_in_both_views(self):
         import toga
         app = self.app

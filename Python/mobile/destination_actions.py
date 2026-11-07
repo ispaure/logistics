@@ -2,7 +2,7 @@
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
-from .appearance import surface
+from .appearance import action_button, surface
 from .control_icons import icon_button
 
 
@@ -36,10 +36,15 @@ def prepare(app, view, destination):
         search._toolbar_symbol = 'magnifyingglass'
         view._document_search_button = search
         view._document_search_close = icon_button('close', 'Exit document search', on_press=app.close_document_search)
-        new = icon_button('compose', 'New document', on_press=app.new_hub_document)
+        new = action_button(icon_button('compose', 'New document', on_press=app.new_hub_document))
         opener._toolbar_symbol, new._toolbar_symbol = 'folder', 'plus'
         buttons.extend([opener, new, search])
     view._destination_actions = (header, buttons)
+    if destination == 'home' and hasattr(view, '_home_primary_actions'):
+        from .fold_layout import is_iphone_duo
+        if is_iphone_duo():
+            from .home_header import use_document_menu
+            use_document_menu(app, view)
     def apple_actions():
         actions = selected(app, buttons)
         if destination == 'documents':
@@ -52,8 +57,12 @@ def prepare(app, view, destination):
         # Horizontal groups run left-to-right; vertical groups run top-to-bottom.
         # Keep Unlock outermost horizontally and first in a vertical action rail.
         vertical = vertical_edge(controller)
-        if destination == 'home' and vertical:
-            return [*actions, *getattr(view, '_home_primary_buttons', ())]
+        if destination == 'home':
+            more = getattr(view, '_home_document_menu', None)
+            if more is not None:
+                return [more, *actions]
+            if vertical:
+                return [*actions, *getattr(view, '_home_primary_buttons', ())]
         if buttons[0] in actions and not vertical:
             actions = [*actions[1:], actions[0]]
         return actions

@@ -158,10 +158,11 @@ class DesktopCredentialCipher:
 
 
 class MobileCredentialCipher:
-    def __init__(self, provider, app):
-        self.provider, self.app = provider, app
+    def __init__(self, provider, app=None, *, client=None):
+        self.provider, self.app, self.client = provider, app, client
 
     def credentials(self):
+        expected = self.client if self.app is None else getattr(self.app, "cloud_client", None)
         for source in sources(self.provider):
             client = getattr(source, "client", None)
             remote = getattr(source, "remote", None)
@@ -170,7 +171,7 @@ class MobileCredentialCipher:
                 continue
             if identity is None:
                 identity = client.connection_identity(remote)
-            if identity is None or client is not getattr(self.app, "cloud_client", None):
+            if identity is None or client is not expected:
                 continue
             # Distinct packages can have identical connection fingerprints.
             # Only the package that owns this admitted alias can supply its key.

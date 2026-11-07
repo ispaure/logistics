@@ -30,6 +30,20 @@ class HomeHeaderTests(TestCase):
         adapter.navigation_for.assert_called_once_with('documents')
         self.assertEqual([call.args[0] for call in configure.call_args_list], [outer, child])
 
+    def test_cold_duo_prepares_menu_without_a_hinge_or_native_navigation_adapter(self):
+        from mobile.destination_actions import prepare
+        row = toga.Box(children=[toga.Button('Open Document'), toga.Button('New Document')])
+        content = toga.Box(children=[row])
+        content._home_primary_actions = row
+        content._home_primary_buttons = tuple(row.children)
+        app = NS(routes=NS(apple=False), show_home_unlock=Mock(), home_unlock_candidates=lambda: [])
+        with patch('mobile.fold_layout.is_iphone_duo', return_value=True), patch(
+                'mobile.fold_layout.has_fold', side_effect=AssertionError('Home is not mounted yet')):
+            prepare(app, content, 'home')
+        self.assertIsNone(row.parent)
+        self.assertEqual([title for title, _ in content._home_document_menu._home_commands.actions],
+                         ['Open Document', 'New Document'])
+
     def test_preparing_wrapped_home_keeps_header_metadata(self):
         from mobile.destination_actions import prepare
         row = toga.Box(children=[toga.Button('Open'), toga.Button('New')])

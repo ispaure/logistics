@@ -1,9 +1,35 @@
 """Rooted library search, daily-note discovery and verified file commands."""
 from pathlib import PurePosixPath
+from sqlite3 import Error as DatabaseError
 from commonUtils.runtime.operations import OperationCancelled, check_cancelled
 from commonUtils.search.names import natural_name_key
 from commonUtils.search.providers import SearchResult, search_resources
 from services.documents.mutations import delete_document_tree, copy_document_tree, copy_document_sibling
+
+
+def directory_index(library):
+    """Admit only known ordinary filesystem providers to the shared cache."""
+    from services.documents.locations import ordinary_index_provider
+
+    provider = library.provider
+    if not ordinary_index_provider(provider):
+        return None
+    from commonUtils.filesystem.index import DirectoryCache
+    from commonUtils.filesystem.local_access import check_local_path
+    folder = provider._locate(library.root)
+    check_local_path(folder, recursive=True)
+    return DirectoryCache(database=library.index_database), folder
+
+
+def indexed_children(library, snapshot, folder):
+    parent = library.provider._locate(folder)
+    entries = snapshot.children(parent, limit=10001)
+    return library.visible_rows([
+        dict(name=item.path.name, path=library.contained(
+             item.path.relative_to(library.provider.root).as_posix()),
+             directory=item.directory, size=item.size)
+        for item in entries if not item.symlink and not item.path.name.startswith('.')
+    ])
 
 
 def search(library, query, *, include_text, visible=None, cancelled=lambda: False, progress=None,
@@ -11,9 +37,11 @@ def search(library, query, *, include_text, visible=None, cancelled=lambda: Fals
     """Search the library boundary; hosts own scheduling and progress publication."""
     folder_pages = {}
 
+    children = library.search_children
+
     def listing(folder, *, cancelled):
         try:
-            rows = library.folders(folder, cancelled=cancelled)
+            rows = children(folder, cancelled=cancelled)
         except ValueError as error:
             if cancelled():
                 raise OperationCancelled() from error
@@ -40,9 +68,33 @@ def search(library, query, *, include_text, visible=None, cancelled=lambda: Fals
     notify = progress
     if collapse_folder_notes and progress is not None:
         notify = lambda result: progress(project(result))
-    result = search_resources(library.provider, library.root, query, cancelled=cancelled,
-        list_children=listing, read_text=library.read_text if include_text else None,
-        progress=notify)
+    read_text = library.read_text if include_text else None
+
+    def run(report):
+        folder_pages.clear()
+        return search_resources(library.provider, library.root, query, cancelled=cancelled,
+            list_children=listing, read_text=read_text, progress=report)
+
+    index = directory_index(library) if not include_text else None
+    result = None
+    if index is not None:
+        cache, root = index
+        try:
+            saved = cache.peek(root, partial=False, cancelled=cancelled) if notify is not None else None
+            if saved is not None:
+                with saved:
+                    children = lambda folder, **kwargs: indexed_children(library, saved, folder)
+                    previous = run(None)
+                    notify(SearchResult(previous.rows, previous.scanned, False, previous.errors))
+            with cache.get(root, cancelled=cancelled, validate_files=False) as current:
+                if current.complete and not current.errors:
+                    children = lambda folder, **kwargs: indexed_children(library, current, folder)
+                    result = run(notify)
+        except (OSError, DatabaseError):
+            pass  # Search remains available if the disposable index cannot be read or updated.
+    if result is None:
+        children = library.search_children
+        result = run(notify)
     return project(result) if collapse_folder_notes else result
 
 

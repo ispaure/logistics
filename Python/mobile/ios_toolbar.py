@@ -54,7 +54,9 @@ def bar_item(button, *, prominent=False, symbol=None):
     item.accessibilityLabel = str(title)
     icon = getattr(button, 'control_icon', None)
     from .appearance import apple_color
-    item.tintColor = apple_color('text') if icon in {'more', 'overflow'} else None
+    accent = prominent or getattr(button, 'action_role', None) == 'primary'
+    tint = 'text' if icon in {'more', 'overflow'} else 'accent' if accent else None
+    item.tintColor = apple_color(tint) if tint is not None else None
     item.title = ('Save' if icon == 'save' else
                   str(button.text or title) if icon is None else str(title))
     symbol = symbol or getattr(button, '_toolbar_symbol', None)
@@ -74,9 +76,6 @@ def bar_item(button, *, prominent=False, symbol=None):
     item.action = None if primary_menu else SEL('onPress:')
     item.enabled = button.enabled
     item.style = 2 if prominent else 0
-    if prominent:
-        from .appearance import apple_color
-        item.tintColor = apple_color('accent')
     if item.respondsToSelector(SEL('setSharesBackground:')):
         item.sharesBackground = not prominent and getattr(button, 'control_icon', None) != 'close'
     if item.respondsToSelector(SEL('setHidesSharedBackground:')):
@@ -120,7 +119,7 @@ def action_state(buttons):
                   getattr(button, '_toolbar_symbol', None), getattr(button, '_toolbar_group', None),
                   getattr(button, '_toolbar_prominent', False), getattr(button, '_toolbar_priority', False),
                   getattr(button, '_toolbar_horizontal', False), (LIGHT['accent'], DARK['accent']),
-                  getattr(button, '_toolbar_borderless', False),
+                  getattr(button, '_toolbar_borderless', False), getattr(button, 'action_role', None),
                   identity(button._impl.native.menu), identity(button._impl.native.imageForState(0)))
                  for button in buttons)
 

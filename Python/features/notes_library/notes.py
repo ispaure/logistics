@@ -101,10 +101,11 @@ def vault_root(provider, directory, rows):
 
 
 class NotesLibrary:
-    def __init__(self, provider, root='', *, connection_index=None):
+    def __init__(self, provider, root='', *, connection_index=None, index_database=None):
         if not local_library(provider):
             raise ValueError('Notes Library requires a local copy. Download or sync this folder first.')
         self.provider, self.root = provider, provider.relative(root)
+        self.index_database = index_database
         self._link_folders = {}
         self._resolved_links = {}
         self._link_lock = RLock()
@@ -199,6 +200,12 @@ class NotesLibrary:
             raise ValueError('Folder exceeds the 10,000-entry limit.')
         return sorted((row for row in rows if not row['name'].startswith('.')),
             key=lambda row: (not row['directory'], row['name'].casefold()))
+
+    def search_children(self, path, *, cancelled=lambda: False):
+        indexed = getattr(self.provider, 'indexed_list', None)
+        if indexed is None:
+            return self.folders(path, cancelled=cancelled)
+        return self.visible_rows(indexed(self.contained(path), cancelled=cancelled))
 
     def entry(self, path):
         if hasattr(self.provider, 'stat') and not hasattr(self.provider, 'entry'):
@@ -313,7 +320,7 @@ class NotesLibrary:
             move_document_resource(self.provider, source, destination, cancelled=cancelled)
         return destination
 
-    def image_source(self, path, *, cancelled=lambda: False, on_video=None):
+    def image_source(self, path, *, cancelled=lambda: False, on_video=None, batch=False):
         from services.documents.markdown_media import MarkdownMedia
         path = self.contained(path)
         with self._link_lock:
@@ -323,8 +330,48 @@ class NotesLibrary:
                 self._media[path] = MarkdownMedia(self.provider, path, root=self.root, entry=self.entry,
                                                  max_image_bytes=MAX_NOTE_IMAGES,
                                                  resolve=lambda target: self.link(path, target)[0])
-            return self._media[path].render_source(
-                resolve=lambda target: self.link(path, target, cancelled=cancelled)[0], on_video=on_video)
+            first_suffix = None
+            first_matches = None
+            inventory = None
+
+            def matches(name, lookup):
+                nonlocal first_suffix, first_matches, inventory
+                if first_suffix is None:
+                    first_matches = lookup(name)
+                    first_suffix = name
+                if inventory is None:
+                    if name == first_suffix:
+                        return first_matches
+                    inventory = self._media_paths(cancelled)
+                return [candidate for candidate in inventory.get(PurePosixPath(name).name, ())
+                        if candidate == name or candidate.endswith('/' + name)]
+
+            return self._media[path].render_source(resolve=lambda target:
+                self.link(path, target, cancelled=cancelled, media_matches=matches if batch else None)[0],
+                on_video=on_video)
+
+    def _media_paths(self, cancelled):
+        """Build one bounded, render-local inventory for multiple fallback links."""
+        from commonUtils.runtime.operations import check_cancelled
+        pending, names, count = [self.root], {}, 0
+        while pending:
+            check_cancelled(lambda: self._links_closed or cancelled())
+            folder = pending.pop()
+            rows = (self.search_children(folder, cancelled=cancelled)
+                    if hasattr(self.provider, 'indexed_list') else self._link_listing(folder, cancelled))
+            count += len(rows)
+            if count > 10000:
+                raise ValueError('Note lookup exceeds the 10,000-entry limit. Use an explicit note path.')
+            for row in rows:
+                check_cancelled(cancelled)
+                if row['name'].startswith('.'):
+                    continue
+                child = self.contained(row['path'])
+                if row['directory']:
+                    pending.append(child)
+                else:
+                    names.setdefault(row['name'], []).append(child)
+        return names
 
     def release_media(self, current, *, active=lambda: True):
         with self._link_lock:
@@ -341,14 +388,14 @@ class NotesLibrary:
         if source is not None:
             source.close()
 
-    def link(self, current, target, *, cancelled=lambda: False):
+    def link(self, current, target, *, cancelled=lambda: False, media_matches=None):
         from .link_policy import resolve_link
         from commonUtils.runtime.operations import check_cancelled
         requested_cancelled = cancelled
         cancelled = lambda: self._links_closed or requested_cancelled()
         with operation(self.provider, cancelled):
             check_cancelled(cancelled)
-            cacheable = (not document_remote(self.provider)
+            cacheable = (media_matches is None and not document_remote(self.provider)
                          and callable(getattr(self.provider, 'transfer_location', None))
                          and not callable(getattr(self.provider, 'find_note_paths', None)))
             key = current, target
@@ -418,8 +465,9 @@ class NotesLibrary:
                             matches.append(child)
                 return matches
 
+            lookup = suffix_matches if media_matches is None else lambda name: media_matches(name, suffix_matches)
             result = resolve_link(current, target, root=self.root, contained=self.contained,
-                                  exists=exists, suffix_matches=suffix_matches, cancelled=cancelled)
+                                  exists=exists, suffix_matches=lookup, cancelled=cancelled)
             # Providers with indexed lookup own its invalidation; do not cache
             # those results without directory dependencies from the lookup.
             if dependencies and cacheable and all(self._link_stamp(folder, cancelled=cancelled) == stamp for folder, stamp in dependencies.items()):

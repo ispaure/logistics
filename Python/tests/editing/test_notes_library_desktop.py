@@ -1123,17 +1123,18 @@ class NotesLibraryDesktopTests(QtTestCase):
     def test_close_waits_for_cancelled_background_scan(self):
         from threading import Event
         from shiboken6 import isValid
+        from commonUtils.filesystem.index import DirectoryCache
         with self.temporary_directory() as directory:
             root = Path(directory)
             window = self.open_library(root)
             entered, release = Event(), Event()
-            original = window.library.folders
+            original = DirectoryCache.get
             def slow(*args, **kwargs):
                 entered.set()
                 release.wait(5)
                 return original(*args, **kwargs)
             try:
-                with patch.object(window.library, 'folders', side_effect=slow):
+                with patch.object(DirectoryCache, 'get', autospec=True, side_effect=slow):
                     window.search.setText('query')
                     window.filter()
                     self.wait_until(entered.is_set)

@@ -122,6 +122,15 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
         self.storage_namespace = namespace
         self.location = LocalCryptLocation(Path(root).parent, remote, namespace,
                                            storage_root, create=False, cipher_identity=self.identity)
+        from services.documents.credential_state import MobileCredentialCipher
+        from ..directory_index import DirectoryIndex
+        index_root = getattr(client, 'directory_index_root', None)
+        self._directory_index = DirectoryIndex(self, index_root, MobileCredentialCipher(self, client=client))
+        credential_state = getattr(client, 'credential_state', None)
+        if credential_state is not None:
+            with credential_state.lock:
+                self._access.check()
+                credential_state.observers.add(self._directory_index)
 
     @property
     def closed(self):
@@ -143,6 +152,9 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
 
     def close(self):
         self._access.close()
+        index = getattr(self, '_directory_index', None)
+        if index is not None:
+            index.close()
 
     def operation(self, cancelled):
         return self._access.operation(cancelled)

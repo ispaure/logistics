@@ -84,6 +84,14 @@ class ToolbarTests(TestCase):
     def test_prominent_confirmation_uses_chosen_accent(self):
         self.assertEqual(bar_item(Button(None, 'Move here'), prominent=True).tintColor, 'accent')
 
+    def test_primary_command_uses_accent_without_pinning_or_tinting_folder_icons(self):
+        new, folder = Button('compose', 'New document'), Button('folder_hub', 'Open document')
+        new.action_role = 'primary'
+        items = mount_actions(self.controller, self.owner, [folder, new], overflow=False)
+        self.assertIsNone(items[0].tintColor)
+        self.assertEqual(items[1].tintColor, 'accent')
+        self.assertIsNone(self.controller.navigationItem.pinnedTrailingGroup)
+
     def test_optional_actions_use_native_overflow_groups_and_restore_horizontal_placement(self):
         find, more = Button('find', 'Search this folder'), Button('more', 'Folder actions')
         more._impl.native.menu = NS(children=['folder-action'])

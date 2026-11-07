@@ -186,6 +186,14 @@ resolve to any supported document. Extensionless links first probe exact files
 in the current folder and library root before trying the `.md` note suffix.
 Connection scans index supported file paths but read bodies only from Markdown.
 
+Filename queries on admitted ordinary local providers reuse the shared
+directory-index snapshots. Search publishes saved rows while the worker
+reconciles the tree, then replaces them with refreshed results. Content search
+reads source on demand. Embedded-media preparation keeps direct path
+precedence and shares a bounded suffix inventory within a render when multiple
+links need a library-wide lookup. Normal navigation still checks current
+provider access and ambiguous matches.
+
 Desktop `ui/library_text.py` embeds the shared `CodeEdit`, `SyntaxHighlighter` and
 `SearchPanel` without creating an external editor window or a local-file recovery
 session. `DocumentResource` owns the source baseline and verified provider writes;

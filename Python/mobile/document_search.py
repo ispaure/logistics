@@ -39,8 +39,9 @@ def _scan_locations(app, roots, query, *, cancelled):
                 continue
             # SharedFiles excludes collection roots here. Its recursive hook
             # otherwise includes them, so use the guarded ordinary list path.
+            listing = getattr(provider, 'indexed_list', provider.list)
             def children(folder, *, cancelled):
-                return [row for row in provider.list(folder, cancelled=cancelled)
+                return [row for row in listing(folder, cancelled=cancelled)
                         if app.folder_path_visible(row['path'], directory=row['directory'])]
             result = search_resources(provider, '', query, cancelled=cancelled,
                                       list_children=children)

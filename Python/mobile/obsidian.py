@@ -9,7 +9,8 @@ from features.notes_library.mobile.notes_library import VaultBrowser as _VaultBr
 class VaultBrowser(_VaultBrowser):
     def __init__(self, app, provider, root, destination):
         from .composition.presentation import notes_host
-        super().__init__(notes_host(app), provider, root, destination)
+        super().__init__(notes_host(app), provider, root, destination,
+                         index_database=app.private_root / 'Cache' / 'directory-index.sqlite3')
         from .layout_participants import participants
         self._layout_subscription = participants(app).register('notes-library', self,
             lambda owner, frame: owner.reflow(frame.content_width(owner.destination, margin=0)), order=50)

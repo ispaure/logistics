@@ -45,6 +45,71 @@ class NotesLibraryTests(unittest.TestCase):
     tearDown = test_obsidian.ObsidianTests.tearDown
     run_async = test_obsidian.ObsidianTests.run_async
 
+    def test_recent_library_close_returns_to_home_or_documents(self):
+        from mobile.obsidian import open_vault
+
+        async def exercise():
+            self.app.show_home()
+            owner = await open_vault(self.app, self.provider, 'Vault')
+            self.assertTrue(await owner.open_note('Vault/Home.md'))
+            recent = next(session for session, _ in self.app.recent_items()
+                          if session.title == 'Home.md')
+            owner.close()
+            for destination, show in (('home', self.app.show_home),
+                                      ('documents', self.app.show_documents_hub)):
+                with self.subTest(destination=destination):
+                    show()
+                    await self.app.recent_opener(recent)()
+                    reopened = self.app.vault_browser
+                    self.assertEqual(reopened.path, 'Home.md')
+                    self.assertEqual(self.app.native_host.state.destination, destination)
+                    self.assertEqual(self.app._reader_returns[reopened.session.id][0], destination)
+                    reopened.close()
+                    self.assertEqual(self.app.native_host.state.destination, destination)
+                    self.assertFalse(any(route.startswith('notes-library:')
+                                         for route, _, _ in self.app.routes.screens[destination]))
+
+        self.run_async(exercise())
+
+    def test_filename_index_reuses_cached_rows_then_reports_a_rename(self):
+        from features.notes_library.library_files import search
+
+        library = NotesLibrary(LocalFiles(self.root), 'Vault',
+                               index_database=self.root / 'notes-test.sqlite3')
+        try:
+            self.assertEqual([row['path'] for row in search(library, 'Plan', include_text=False).rows],
+                             ['Vault/Projects/Plan.MD'])
+            (self.vault / 'Projects/Plan.MD').rename(self.vault / 'Projects/New Plan.MD')
+            updates = []
+            with patch.object(library, 'folders', side_effect=AssertionError('Expected the shared index')):
+                result = search(library, 'Plan', include_text=False, progress=updates.append)
+            self.assertEqual([row['path'] for row in updates[0].rows], ['Vault/Projects/Plan.MD'])
+            self.assertFalse(updates[0].complete)
+            self.assertEqual([row['path'] for row in result.rows], ['Vault/Projects/New Plan.MD'])
+        finally:
+            library.close()
+
+    def test_media_render_shares_suffix_inventory_and_keeps_direct_precedence(self):
+        from services.documents.markdown_media import MarkdownMedia
+
+        for name in ('one.png', 'two.png', 'three.png'):
+            (self.vault / 'Projects' / name).touch()
+        (self.vault / 'three.png').touch()
+        library = NotesLibrary(LocalFiles(self.root), 'Vault')
+        try:
+            with patch.object(MarkdownMedia, 'render_source', side_effect=lambda **kw: kw['resolve']), \
+                    patch.object(library, '_media_paths', wraps=library._media_paths) as inventory:
+                resolve = library.image_source('Vault/Home.md', batch=True)
+                self.assertEqual(resolve('one.png'), 'Vault/Projects/one.png')
+                self.assertEqual(resolve('two.png'), 'Vault/Projects/two.png')
+                self.assertEqual(resolve('three.png'), 'Vault/three.png')
+                self.assertEqual(resolve('Projects/three.png'), 'Vault/Projects/three.png')
+                with self.assertRaisesRegex(ValueError, 'not found'):
+                    resolve('missing.png')
+                inventory.assert_called_once()
+        finally:
+            library.close()
+
     def test_folder_note_artwork_uses_file_icon_blue(self):
         from PIL import Image, ImageColor
         from services.appearance_palette import FILE_ICON_BLUE

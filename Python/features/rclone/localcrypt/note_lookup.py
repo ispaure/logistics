@@ -19,6 +19,12 @@ class CryptNoteLookup:
     directory paths, `_note_check` validates access, and `_note_guard` validates
     physical folders without repeating platform storage-selection checks.
     """
+    def indexed_list(self, path='', *, cancelled=lambda: False):
+        index = getattr(self, '_directory_index', None)
+        if index is None:
+            return self.list(path, cancelled=cancelled)
+        return index.listing(self.relative(path), cancelled=cancelled)
+
     def _decode_note_entries(self, entries, cancelled):
         def check():
             check_cancelled(cancelled)

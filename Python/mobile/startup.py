@@ -167,10 +167,19 @@ async def restore_cloud_in_background(app):
     await asyncio.sleep(1 / 60)
     if not app.active_host:
         return
+    def refresh_home_actions():
+        host = getattr(app, 'native_host', None)
+        if app.active_host and host is not None and host.state.destination == 'home':
+            app.adaptive.render()
+
     try:
         restore = app.start_cloud_restore()
+        # The retained ZIP index becomes readable as soon as the vault opens.
+        # Reproject the Home action while saved credentials restore in parallel.
+        refresh_home_actions()
         if restore is not None:
             await restore
+            refresh_home_actions()
     except asyncio.CancelledError:
         raise
     except Exception:

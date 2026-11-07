@@ -63,7 +63,11 @@ class NotesDrawerTests(unittest.TestCase):
             self.assertEqual(owner.sidebar.side, 'links')
             owner.sidebar.show_detail()
             self.assertTrue(await owner.open_note('Vault/Home.md'))
-            self.assertTrue(owner.sidebar.open_swipe(1))
+            self.assertFalse(owner.sidebar.open_swipe(1))
+            self.assertFalse(owner.sidebar.open_swipe(-1))
+            self.assertIsNone(owner.sidebar.side)
+            owner.follow_link(owner.web, owner.base + '?drawer=files')
+            self.assertEqual(owner.sidebar.side, 'files')
             owner.dispose()
         self.run_async(exercise())
 

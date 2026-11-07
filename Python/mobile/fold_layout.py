@@ -52,6 +52,14 @@ def division(owner, widget, *, include_inactive=False):
     return None
 
 
+def is_iphone_duo():
+    """Identify the Duo before UIKit attaches the Home view to a display."""
+    import os
+    import sys
+    return (sys.platform == 'ios'
+            and (os.environ.get('SIMULATOR_MODEL_IDENTIFIER') or os.uname().machine) == 'iPhone19,4')
+
+
 def has_fold(owner, widget):
     app = getattr(owner, 'app', owner)
     return bool(getattr(app, '_hinge_status', 0) or
