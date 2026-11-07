@@ -151,8 +151,9 @@ async def exercise_pdf_edge_links(app):
                 if x != .5:
                     edge(location)
                 tap_handler = canvas.on_tap
+                jump, clear_return = canvas.jump_link, canvas.clear_return
                 attempt = dict(target=x, point=location, native_size=[native.getWidth(), native.getHeight()],
-                               density=density, taps=[])
+                               density=density, taps=[], navigation=[])
                 proof['last_finger_attempt'] = attempt
 
                 def record_tap(image_x, image_y):
@@ -162,12 +163,32 @@ async def exercise_pdf_edge_links(app):
                     sample['consumed'] = tap_handler(image_x, image_y)
                     return sample['consumed']
 
-                canvas.on_tap = record_tap
+                def record_navigation(event):
+                    navigation = owner.crypt_reader.pdf_navigation
+                    attempt['navigation'].append(dict(event=event, page=navigation.indices,
+                        selection=owner.crypt_page.value, busy=owner.cloud_busy,
+                        can_start=owner.provider_document().can_start(), link_alive=canvas.link_alive(),
+                        undo=canvas.return_page, elapsed=asyncio.get_running_loop().time()-started))
+
+                async def record_jump(index):
+                    record_navigation('jump started')
+                    try:
+                        await jump(index)
+                    finally:
+                        record_navigation('jump finished')
+
+                def record_clear_return():
+                    record_navigation('undo cleared')
+                    clear_return()
+
+                started = asyncio.get_running_loop().time()
+                canvas.on_tap, canvas.jump_link, canvas.clear_return = record_tap, record_jump, record_clear_return
                 try:
                     await gesture(native, location)
                     await wait(lambda: canvas.return_page is not None, 'Native finger link did not navigate')
                 finally:
-                    canvas.on_tap = tap_handler
+                    record_navigation('tap check ended')
+                    canvas.on_tap, canvas.jump_link, canvas.clear_return = tap_handler, jump, clear_return
                 assert owner.crypt_reader.pdf_navigation.indices[0] == 2
                 await idle()
                 if x != .5:
