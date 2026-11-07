@@ -221,7 +221,7 @@ async def reopen(app, row, *, error_title='Open favourite'):
     return False
 
 
-def populate(app, container, *, heading=True):
+def populate(app, container, *, heading=True, row_font=None):
     if heading:
         container.add(toga.Label('Favourites', style=Pack(font_size=20, font_weight='bold', margin_top=12)))
     try:
@@ -231,6 +231,7 @@ def populate(app, container, *, heading=True):
         rows = []
     if 'store' in locals() and store.errors:
         container.add(toga.Label(store.errors[0], style=Pack(font_size=12)))
+    buttons = []
     for row in rows:
         async def open_row(widget=None, row=row, **kwargs):
             await reopen(app, row)
@@ -244,9 +245,19 @@ def populate(app, container, *, heading=True):
                 app.refresh_hub('documents')
             except (OSError, ValueError, PermissionError) as error:
                 await app.main_window.dialog(toga.InfoDialog('Remove favourite', str(error)))
-        container.add(toga.Box(children=[
-            toga.Button(row['title'], on_press=open_row, style=Pack(height=48, flex=1)),
-            toga.Button('Remove', on_press=remove, style=Pack(height=48)),
-        ], style=Pack(direction=ROW)))
-    if not rows:
+        opener = toga.Button(row['title'], on_press=open_row, style=Pack(height=48, flex=1))
+        if row_font is not None:
+            from .appearance import list_button
+            from .browser_ui import middle_filename
+            opener.style.font_size = row_font
+            middle_filename(list_button(opener))
+        buttons.append(toga.Box(children=[opener,
+            toga.Button('Remove', on_press=remove, style=Pack(height=48))],
+            style=Pack(direction=ROW)))
+    if row_font is not None:
+        from .hub_controls import document_list
+        container.add(document_list(buttons, 'No favourite files.'))
+    elif buttons:
+        container.add(*buttons)
+    else:
         container.add(toga.Label('No favourite files.', style=Pack(margin_bottom=8)))

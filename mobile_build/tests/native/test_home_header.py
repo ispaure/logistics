@@ -21,9 +21,10 @@ class HomeHeaderTests(TestCase):
         adapter = NS(outer_navigation=outer, navigation_for=Mock(return_value=child))
         app = NS(routes=NS(apple=True, screens={'documents': []}),
                  native_host=NS(adapter=adapter), home_unlock_candidates=lambda: [])
-        with patch('mobile.destination_actions.project_header', return_value=False), patch(
-                'mobile.ios_system_occlusions.reserve_bar_clearance') as configure:
+        with (patch('mobile.destination_actions.project_header') as project,
+              patch('mobile.ios_system_occlusions.reserve_bar_clearance') as configure):
             sync_native_host(app, view, 'documents')
+        project.assert_not_called()
         outer.setNavigationBarHidden.assert_called_once_with(True, animated=False)
         child.setNavigationBarHidden.assert_called_once_with(False, animated=False)
         adapter.navigation_for.assert_called_once_with('documents')
@@ -64,12 +65,12 @@ class HomeHeaderTests(TestCase):
         regions = self.enterContext(patch('mobile.ios_toolbar.system_occlusions', return_value=((443, 0, 226, 82),)))
         callbacks = [button.on_press for button in buttons]
         for _ in range(2):
-            self.assertTrue(project_header(app, view, 'documents'))
+            self.assertTrue(project_header(app, view, 'files'))
             self.assertEqual(header.children[0].children, buttons)
             self.assertEqual(header.children[0].style.height, 48)
             self.assertEqual(header.style.margin_left, 0)
             regions.return_value = ((180, 0, 489, 82),)
-            self.assertFalse(project_header(app, view, 'documents'))
+            self.assertFalse(project_header(app, view, 'files'))
             self.assertIsNone(view._destination_top_band)
             self.assertIsNone(header.parent)
             self.assertEqual(header.style.height, original_height)

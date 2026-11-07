@@ -45,9 +45,10 @@ def find_libraries(provider, *, cancelled=lambda: False):
     return found
 
 
-def populate(app, container, *, title='Notes Library', refresh=True):
+def populate(app, container, *, title='Notes Library', refresh=True, title_style=None, row_font=None):
     container.clear()
-    container.add(toga.Label(title, style=Pack(font_size=19, font_weight='bold', margin_top=16, margin_bottom=8)))
+    container.add(toga.Label(title, style=title_style or
+                             Pack(font_size=19, font_weight='bold', margin_top=16, margin_bottom=8)))
     if not app.feature_enabled('notes_library'):
         container.add(toga.Label('Notes Library is disabled.'))
         return
@@ -133,6 +134,8 @@ def populate(app, container, *, title='Notes Library', refresh=True):
                 location = label.removesuffix(' - Encrypted Copy')
                 caption = PurePosixPath(root).name or location
                 button = toga.Button(caption, on_press=open_library, style=Pack(height=48))
+                if row_font is not None:
+                    button.style.font_size = row_font
                 list_button(button)
                 surface(button, radius=0, background='transparent', outlined=False, eink_outlined=False)
                 kinds = [('storage_local', 'On-device library')]
@@ -155,4 +158,7 @@ def populate(app, container, *, title='Notes Library', refresh=True):
             return
     app._notes_discovery_task = app.loop.create_task(scan())
     if refresh:
-        container.add(toga.Button('Refresh libraries', on_press=lambda widget: populate(app, container), style=Pack(height=48)))
+        container.add(toga.Button('Refresh libraries',
+            on_press=lambda widget: populate(app, container, title=title,
+                title_style=title_style.copy() if title_style is not None else None, row_font=row_font),
+            style=Pack(height=48)))
