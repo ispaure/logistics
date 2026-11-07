@@ -22,10 +22,9 @@ class NativeDrawingTools:
         self.epoch = 0
         self.observer_exit = None
 
-    def wide_phone(self, controller):
-        from .viewport import tablet_viewport
+    def wide_landscape(self, controller):
         panel = self.panel()
-        if panel is None or panel.web is None or tablet_viewport(panel.web) is not False:
+        if panel is None:
             return False
         native = controller.view
         size = native.bounds.size
@@ -54,7 +53,6 @@ class NativeDrawingTools:
                 return False  # Older lists remain reachable in the scrolling toolbar.
             strip_width += TOOLBAR_PRESET_LIMIT * 44
         return (width - style.margin_left - style.margin_right >= MINIMUM_TITLE_WIDTH + strip_width + 16
-                and not self.wide_phone(controller)
                 and not self.stacked_portrait(controller)
                 and 'Accessibility' not in size
                 and not getattr(panel.view, '_reader_fullscreen', False)
@@ -211,6 +209,7 @@ class NativeDrawingTools:
     @staticmethod
     def paint_preset(button, row, accessible_name):
         from rubicon.objc import ObjCClass
+        button._preset_id = row['preset_id']
         visual = (row['label'], tuple(row['preset']), tuple(row['rgb']))
         if getattr(button, '_preset_visual', None) == visual:
             return
@@ -246,9 +245,9 @@ class NativeDrawingTools:
                 if (panel is not None and self.epoch == epoch and self.current()
                         and not panel.busy and not panel.native_input_pending):
                     action = dict(name=name, anchor=self.anchor(name))
-                    visual = getattr(self.buttons[name], '_preset_visual', None)
-                    if visual is not None:
-                        action['preset'] = ','.join(map(str, visual[1]))
+                    preset_id = getattr(self.buttons[name], '_preset_id', None)
+                    if preset_id is not None:
+                        action['preset'] = preset_id
                     if hold:
                         action['hold'] = True
                     await self.refresh(action)

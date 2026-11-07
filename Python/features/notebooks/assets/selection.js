@@ -7,7 +7,7 @@ selectionActions.innerHTML = '<button id="copyStrokes" type="button">Copy</butto
 document.body.append(selectionActions);
 const pasteStrokes = document.createElement('button');
 pasteStrokes.id = 'pasteStrokes'; pasteStrokes.type = 'button'; pasteStrokes.textContent = 'Paste strokes';
-pasteStrokes.style.cssText='position:fixed;right:12px;bottom:max(12px,env(safe-area-inset-bottom));z-index:1;min-height:44px';
+pasteStrokes.style.cssText='position:fixed;right:calc(var(--notebook-rail-right, 0px) + 12px);bottom:max(12px,env(safe-area-inset-bottom));z-index:1;min-height:44px';
 document.body.append(pasteStrokes);
 function selectionLocked() { return busy || state.warning || state.read_only || state.password_required }
 function selectionVisible(s) { return state.layers.some(row => row[0] === s.layer && row[2]) }
@@ -125,7 +125,9 @@ function selectionRender() {
   if(!b)return;
   const r=canvas.getBoundingClientRect(),u=selectionUnit();
   const panel=selectionActions.getBoundingClientRect();
-  selectionActions.style.left=Math.max(4,Math.min(innerWidth-panel.width-4,r.left+(b[0]+b[2])/2/u-panel.width/2))+'px';
+  const center = r.left + (b[0] + b[2]) / 2 / u - panel.width / 2;
+  selectionActions.style.left = 'clamp(calc(var(--notebook-rail-left, 0px) + 4px), ' + center +
+    'px, calc(100vw - var(--notebook-rail-right, 0px) - ' + (panel.width + 4) + 'px))';
   selectionActions.style.top=Math.max(4,Math.min(floor-panel.height-8,r.top+b[3]/u+12))+'px'
   if(!pasteStrokes.hidden) {
     const a=selectionActions.getBoundingClientRect(),p=pasteStrokes.getBoundingClientRect();
@@ -136,6 +138,7 @@ function selectionRender() {
 function paintSelection() {
   selectionRender();if(mode!=='select')return;
   const u=selectionUnit();ctx.save();ctx.strokeStyle='#2877cb';ctx.fillStyle='white';ctx.lineWidth=1.5*u;ctx.setLineDash([6*u,5*u]);
+  window.clipNotebookControls?.(ctx);
   if(selectionGesture?.kind==='lasso'&&points.length) {
     ctx.beginPath();ctx.moveTo(points[0][0],points[0][1]);for(const p of points.slice(1))ctx.lineTo(p[0],p[1]);ctx.stroke()
   } else {

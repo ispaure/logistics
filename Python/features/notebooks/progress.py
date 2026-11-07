@@ -19,6 +19,7 @@ def open_notebook_progress(book, root, *, resource=None, draft_path=None, app=No
 
 def restore_notebook_progress(editor, saved):
     editor.index = page_index(editor.notebook, saved)
+    editor.eraser_kind = 'whole' if saved.get('eraser_kind') == 'whole' else 'partial'
     colors = saved.get('brush_colors')
     editor.brush_colors = {
         tool: color for tool, brush in BRUSHES.items()
@@ -40,4 +41,5 @@ def page_location(editor):
 
 
 def notebook_progress_state(editor, location=None):
-    return dict(page_location(editor) if location is None else location, brush_colors=editor.brush_colors.copy())
+    return dict(page_location(editor) if location is None else location,
+                brush_colors=editor.brush_colors.copy(), eraser_kind=editor.eraser_kind)

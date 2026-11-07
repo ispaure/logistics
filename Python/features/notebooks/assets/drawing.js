@@ -24,25 +24,26 @@ function brushFor(tool) {
   return brushes[aliases[tool] ?? tool] || brushes[17]
 }
 
-let normalWidth = '2';
+let normalWidth = '2', rememberBrushOptions = true;
 const colorByBrush = new Map(Object.entries(state.brush_colors || {}).map(([tool, color]) => [Number(tool), color]));
 let paletteBrush;
 function brushOptions() {
   const tool = Number($('tool').value), brush = brushFor(tool), color = $('color');
-  if (paletteBrush !== undefined && color.value !== '') colorByBrush.set(paletteBrush, Number(color.value));
+  const previousColor = Number(color.value), previousWidth = $('width').value;
+  if (rememberBrushOptions && paletteBrush !== undefined && color.value !== '') colorByBrush.set(paletteBrush, Number(color.value));
   options('color', brush.colors.map(id => Object.entries(state.colors).find(([name, value]) => value === id)));
-  const rememberedColor = colorByBrush.get(tool);
+  const rememberedColor = rememberBrushOptions ? colorByBrush.get(tool) : previousColor;
   color.value = brush.colors.includes(rememberedColor) ? rememberedColor : brush.colors[0];
   paletteBrush = tool;
-  if ($('width').options.length > 1) normalWidth = $('width').value;
+  if (rememberBrushOptions && $('width').options.length > 1) normalWidth = $('width').value;
   options('width', brush.fixed_width ? [['Fixed', 1]] : Object.entries(state.widths));
-  $('width').value = brush.fixed_width ? '1' : normalWidth;
+  $('width').value = brush.fixed_width ? '1' : rememberBrushOptions ? normalWidth : previousWidth || '2';
   warmSelectedGraphite();
 }
 
 $('color').addEventListener('change', () => {
   const {tool, color} = chosenInk();
-  if (!brushFor(tool).colors.includes(color) || colorByBrush.get(tool) === color) return;
+  if (!rememberBrushOptions || !brushFor(tool).colors.includes(color) || colorByBrush.get(tool) === color) return;
   colorByBrush.set(tool, color);
   if (state.brush_colors) send({op: 'brush-color', tool, color});
 });

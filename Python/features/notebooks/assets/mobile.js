@@ -50,6 +50,9 @@ renderEraserChoices();
     document.body.style.setProperty('--notebook-rail-right', right + 'px');
     document.body.style.setProperty('--notebook-home-bottom', home + 'px');
     repositionBrushPanel();
+    if (eraserDialog.open) positionPanel(eraserDialog, control('erase'));
+    if (presetMenu.open) presetMenu.close();
+    selectionRender();
   };
   window.notebookPortraitBand = enabled => {
     const usable = enabled === true && !!state.native_close && !!state.native_actions &&
@@ -68,8 +71,6 @@ renderEraserChoices();
   header.insertBefore(dock, more);
   let tools = document.createElement('div');
   tools.className = 'mobile-tools';
-  if (state.native_actions && state.tablet === false)
-    header.classList.add('phone-writing-tools');
   dock.append(tools);
   let workingPreset, activePreset = null;
   let brushToggle = makeButton(17, 'Brush, color and width', () => {
@@ -103,15 +104,6 @@ renderEraserChoices();
       ['undo', 'Undo'],
       ['redo', 'Redo']
     ]) tools.append(iconButton(control(id), id, id === 'select' ? 'Select / move' : label, label));
-  const quickBrushes = document.createElement('div');
-  quickBrushes.className = 'quick-choices';
-  quickBrushes.setAttribute('role', 'group');
-  quickBrushes.setAttribute('aria-label', 'Brushes');
-  const quickColors = document.createElement('div');
-  quickColors.className = 'quick-choices';
-  quickColors.setAttribute('role', 'group');
-  quickColors.setAttribute('aria-label', 'Ink colors');
-  header.append(quickBrushes, quickColors);
   let hideTools = makeButton('hide', 'Hide tools', () => setToolsHidden(true));
   hideTools.id = 'hideTools';
 
@@ -216,7 +208,7 @@ renderEraserChoices();
     b.lastChild.textContent = label;
     b.onclick = () => {
       control('width').value = value;
-      sync()
+      saveBrushSlot()
     };
     widths.append(b)
   }
@@ -587,7 +579,8 @@ renderEraserChoices();
         row.visible = !!button;
         if (button) {
           row.label = button.title;
-          row.preset = button.dataset.preset.split(',').map(Number);
+          row.preset = button.dataset.brush.split(',').map(Number);
+          row.preset_id = button.dataset.preset;
           row.rgb = button.dataset.nativeColor.match(/\d+/g).map(Number);
         }
       }
@@ -607,7 +600,7 @@ renderEraserChoices();
         if (target && !target.hidden && !target.disabled && !header.inert && !dock.inert &&
             (!action.preset || action.preset === target.dataset?.preset)) {
           dismissToolPanels(target);
-          if (action.hold && target.dataset?.preset) showPresetActions(target, target.dataset.preset.split(',').map(Number));
+          if (action.hold && target.dataset?.preset) showPresetActions(target);
           else if (!action.hold) target.click();
         }
       } finally { nativeToolAnchor = null; }
@@ -657,6 +650,9 @@ renderEraserChoices();
     }
   }
   $('closeEraser').hidden = true;
+  onEraserKindChanged = kind => {
+    if (state.eraser_kind !== undefined) send({op: 'eraser-kind', kind});
+  };
   showEraserSettings = () => {
     if (!sheet.hidden) closeSheet(false);
     eraserDialog.show();
@@ -665,11 +661,11 @@ renderEraserChoices();
   };
   eraserDialog.addEventListener('close', () => control('erase').setAttribute('aria-expanded', 'false'));
   control('erase').setAttribute('aria-expanded', 'false');
-  const selectEraser = control('erase').onclick;
   control('erase').onclick = () => {
     if (active !== null) return;
     if (eraserDialog.open) eraserDialog.close();
-    else selectEraser()
+    else if (mode === 'erase') showEraserSettings();
+    else selectEraser();
   };
   function dismissToolPanels(target) {
     if (presetMenu.open && !presetMenu.contains(target)) presetMenu.close();
@@ -680,7 +676,27 @@ renderEraserChoices();
     if (eraserDialog.open && !eraserDialog.contains(target) &&
         !control('erase').contains(target)) eraserDialog.close()
   }
-  document.addEventListener('pointerdown', e => dismissToolPanels(e.target), true);
+  function inSideRail(x) {
+    return (railLeft > 0 && x < railLeft) || (railRight > 0 && x >= innerWidth - railRight);
+  }
+  window.clipNotebookControls = target => {
+    if (!railLeft && !railRight) return;
+    const box = canvas.getBoundingClientRect();
+    if (!box.width) return;
+    const scale = state.width / box.width;
+    target.beginPath();
+    target.rect((railLeft - box.left) * scale, 0, (innerWidth - railLeft - railRight) * scale, state.height);
+    target.clip();
+  };
+  document.addEventListener('pointerdown', e => {
+    if (inSideRail(e.clientX) && $('viewport').contains(e.target)) {
+      cancelPageTouch();
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      return;
+    }
+    dismissToolPanels(e.target);
+  }, true);
   const paper = control('paperWrap');
   paper.addEventListener('selectstart', e => e.preventDefault());
   paper.addEventListener('contextmenu', e => e.preventDefault());
@@ -701,6 +717,7 @@ renderEraserChoices();
   document.addEventListener('selectionchange', clearPaperSelection);
   const startPointer = canvas.onpointerdown;
   canvas.onpointerdown = e => {
+    if (inSideRail(e.clientX)) return;
     // The Android native pen bridge calls this handler directly.
     dismissToolPanels(canvas);
     // WebKit need not emit selectionchange for a programmatic/nonselectable
@@ -789,7 +806,7 @@ renderEraserChoices();
     send({op: 'add-brush-preset', preset: currentPreset()});
   }
 
-  function showPresetActions(button, preset) {
+  function showPresetActions(button) {
     if (active !== null || !button.isConnected || (presetMenu.open && presetMenuOpener === button)) return;
     if (!sheet.hidden) closeSheet(false);
     if (eraserDialog.open) eraserDialog.close();
@@ -799,12 +816,12 @@ renderEraserChoices();
     removePreset.setAttribute('aria-label', 'Delete preset ' + button.title);
     removePreset.onclick = () => {
       presetMenu.close();
-      if (active === null) send({op: 'remove-brush-preset', preset});
+      if (active === null) send({op: 'remove-brush-preset', id: button.dataset.preset});
     };
     removePreset.focus({preventScroll: true});
   }
 
-  function bindPresetHold(button, preset) {
+  function bindPresetHold(button) {
     button.style.touchAction = 'pan-x';
     let timer, start, held = false;
     const cancel = () => {
@@ -817,7 +834,7 @@ renderEraserChoices();
       start = [event.clientX, event.clientY];
       timer = setTimeout(() => {
         held = true;
-        showPresetActions(button, preset);
+        showPresetActions(button);
       }, 500);
     });
     button.addEventListener('pointermove', event => {
@@ -828,17 +845,17 @@ renderEraserChoices();
       event.preventDefault();
       cancel();
       held = true;
-      showPresetActions(button, preset);
+      showPresetActions(button);
     });
     button.addEventListener('keydown', event => {
       if (event.key === 'Delete' || event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
         event.preventDefault();
-        showPresetActions(button, preset);
+        showPresetActions(button);
       }
     });
     button.onclick = event => {
       if (held && event.detail !== 0) return;
-      if (active === null) tapBrushSlot(button, preset);
+      if (active === null) tapBrushSlot(button, presetFor(button.dataset.preset));
     };
   }
 
@@ -854,16 +871,52 @@ renderEraserChoices();
       return;
     }
     if (eraserDialog.open) eraserDialog.close();
+    if (!preset) return;
     activePreset = key;
-    const [tool, color, width] = preset;
-    control('tool').value = tool;
-    control('tool').onchange();
-    control('color').value = color;
-    control('color').dispatchEvent(new Event('change'));
-    control('width').value = width;
+    applyBrushSlot(preset, true);
     selected.clear();
     draw();
     sync();
+  }
+
+  function applyBrushSlot([tool, color, width], activate = false) {
+    rememberBrushOptions = false;
+    control('tool').value = tool;
+    if (activate) control('tool').onchange();
+    else brushOptions();
+    control('color').value = color;
+    control('width').value = width;
+    rememberBrushOptions = activePreset === null;
+  }
+
+  function visiblePresets() {
+    const updates = new Map(queue.filter(action => action.op === 'update-brush-preset')
+      .map(action => [action.id, action.preset]));
+    return (state.brush_presets || []).map(entry => ({
+      id: entry.id, brush: updates.get(entry.id) || entry.brush
+    }));
+  }
+
+  function presetFor(id) {
+    return visiblePresets().find(entry => entry.id === id)?.brush;
+  }
+
+  function saveBrushSlot() {
+    const brush = currentPreset();
+    if (activePreset !== null && presetFor(activePreset)?.join(',') !== brush.join(',')) {
+      send({op: 'update-brush-preset', id: activePreset, preset: brush});
+    }
+    sync();
+  }
+
+  function restoreBrushSlot() {
+    if (activePreset === null) return;
+    const brush = presetFor(activePreset);
+    if (brush) applyBrushSlot(brush);
+    else {
+      activePreset = null;
+      applyBrushSlot(workingPreset);
+    }
   }
 
   if (state.brush_preset_limit) {
@@ -874,30 +927,40 @@ renderEraserChoices();
     });
   }
 
-  let presetSignature = '';
   function syncPresets() {
-    const presets = state.brush_presets || [];
-    const signature = JSON.stringify(presets);
-    if (signature !== presetSignature) {
-      presetSignature = signature;
-      if (presetButtons.contains(brushPanelOpener)) closeSheet(false);
-      if (presetMenu.open) presetMenu.close();
-      presetButtons.replaceChildren();
-      for (const preset of presets) {
-        const [tool, color, width] = preset;
+    const presets = visiblePresets();
+    const ids = new Set(presets.map(entry => entry.id));
+    for (const button of [...presetButtons.children]) {
+      if (ids.has(button.dataset.preset)) continue;
+      if (brushPanelOpener === button) closeSheet(false);
+      if (presetMenuOpener === button && presetMenu.open) presetMenu.close();
+      button.remove();
+    }
+    for (const [index, {id, brush}] of presets.entries()) {
+      let button = [...presetButtons.children].find(b => b.dataset.preset === id);
+      if (!button) {
+        button = makeButton(brush[0], 'Brush preset', null);
+        button.dataset.preset = id;
+        bindPresetHold(button);
+        button.setAttribute('aria-haspopup', 'dialog');
+        button.setAttribute('aria-keyshortcuts', 'Delete Shift+F10');
+        button.setAttribute('aria-expanded', 'false');
+      }
+      if (presetButtons.children[index] !== button) {
+        presetButtons.insertBefore(button, presetButtons.children[index] || null);
+      }
+      if (button.dataset.brush !== brush.join(',')) {
+        const [tool, color, width] = brush;
         const brushName = Object.keys(state.tools).find(name => state.tools[name] === tool);
         const colorName = Object.keys(state.colors).find(name => state.colors[name] === color);
         const fixed = brushFor(tool).fixed_width;
         const widthName = fixed ? 'Fixed' : Object.keys(state.widths)[width - 1];
-        const button = makeButton(tool, brushName, null);
-        bindPresetHold(button, preset);
+        button.dataset.brush = brush.join(',');
         button.dataset.nativeColor = paletteColor(tool, color);
-        button.dataset.preset = preset.join(',');
-        button.setAttribute('aria-haspopup', 'dialog');
-        button.setAttribute('aria-keyshortcuts', 'Delete Shift+F10');
-        button.setAttribute('aria-expanded', 'false');
         button.title = [brushName, colorName, widthName].join(' · ');
-        button.append(colorDisc(paletteColor(tool, color), 'current-ink'));
+        button.setAttribute('aria-label', 'Use preset ' + button.title);
+        button.innerHTML = svg(brushNib(tool));
+        button.append(colorDisc(button.dataset.nativeColor, 'current-ink'));
         if (!fixed) {
           const marks = document.createElement('span');
           marks.className = 'preset-width';
@@ -905,16 +968,12 @@ renderEraserChoices();
           marks.textContent = '•'.repeat(width);
           button.append(marks);
         }
-        presetButtons.append(button);
       }
+      button.setAttribute('aria-pressed', String(mode === 'ink' && id === activePreset));
     }
     const current = currentPreset().join(',');
-    for (const button of presetButtons.children) {
-      button.setAttribute('aria-label', 'Use preset ' + button.title);
-      button.setAttribute('aria-pressed', String(mode === 'ink' && button.dataset.preset === activePreset));
-    }
     addPreset.hidden = presets.length >= presetLimit;
-    addPreset.disabled = presets.some(preset => preset.join(',') === current);
+    addPreset.disabled = presets.some(entry => entry.brush.join(',') === current);
   }
 
   window.notebookBrushPresetUpdate = (presets, error) => {
@@ -928,18 +987,20 @@ renderEraserChoices();
       document.activeElement === removePreset || !document.activeElement?.getClientRects().length);
     state.brush_presets = presets;
     if (!error && action?.op === 'add-brush-preset' && action.preset.join(',') === currentPreset().join(',')) {
-      activePreset = action.preset.join(',');
+      activePreset = presets.find(entry => entry.brush.join(',') === action.preset.join(','))?.id ?? null;
     }
+    window.notebookBrushColorUpdate('');
+    restoreBrushSlot();
     sync();
     if (restorePresetFocus && !error) {
       (addPreset.hidden || addPreset.disabled ? brushToggle : addPreset).focus({preventScroll: true});
     }
     if (error) showNotice(error);
-    window.notebookBrushColorUpdate('');
   };
   window.notebookRefreshBrushPresets = presets => {
     if (active !== null || busy) return false;
     state.brush_presets = presets;
+    restoreBrushSlot();
     sync();
     return true;
   };
@@ -958,7 +1019,6 @@ renderEraserChoices();
     if (toolSignature !== next) {
       toolSignature = next;
       grid.replaceChildren();
-      quickBrushes.replaceChildren();
       for (let [name, value] of Object.entries(state.tools)) {
         let b = document.createElement('button');
         b.className = 'brush-card';
@@ -973,22 +1033,16 @@ renderEraserChoices();
           t.onchange();
           selected.clear();
           draw();
-          sync()
+          saveBrushSlot()
         };
         grid.append(b);
-        const shortcut = b.cloneNode(true);
-        shortcut.className = 'icon';
-        shortcut.title = name;
-        shortcut.querySelector('span').remove();
-        shortcut.onclick = () => { if (active === null && !busy) b.click(); };
-        quickBrushes.append(shortcut)
+
       }
     }
     const colors = t.value + ':' + JSON.stringify([...c.options].map(o => [o.textContent, o.value]));
     if (colorSignature !== colors) {
       colorSignature = colors;
       swatches.replaceChildren();
-      quickColors.replaceChildren();
       for (let option of c.options) {
         let b = document.createElement('button');
         b.className = 'swatch';
@@ -999,17 +1053,14 @@ renderEraserChoices();
         b.onclick = () => {
           c.value = option.value;
           c.dispatchEvent(new Event('change'));
-          sync()
+          saveBrushSlot()
         };
         swatches.append(b);
-        const shortcut = b.cloneNode(true);
-        shortcut.className = 'quick-swatch';
-        shortcut.onclick = () => { if (active === null && !busy) b.click(); };
-        quickColors.append(shortcut)
+
       }
     }
-    for (let b of [...grid.children, ...quickBrushes.children]) b.setAttribute('aria-pressed', String(b.dataset.tool === t.value));
-    for (let b of [...swatches.children, ...quickColors.children]) b.setAttribute('aria-pressed', String(b.dataset.color === c.value));
+    for (let b of grid.children) b.setAttribute('aria-pressed', String(b.dataset.tool === t.value));
+    for (let b of swatches.children) b.setAttribute('aria-pressed', String(b.dataset.color === c.value));
     const ink = chosenInk();
     const sample = strokeSample.querySelector('path');
     sample.style.stroke = paletteColor(ink.tool, ink.color);
@@ -1024,11 +1075,7 @@ renderEraserChoices();
       b.setAttribute('aria-pressed', String(Number(b.dataset.width) === Number(control('width').value)));
     }
     const current = [ink.tool, ink.color, ink.width];
-    if (activePreset === null || activePreset !== current.join(',') ||
-        !state.brush_presets?.some(preset => preset.join(',') === activePreset)) {
-      activePreset = null;
-      workingPreset = current;
-    }
+    if (activePreset === null) workingPreset = current;
     // The unsaved brush slot retains its settings while a saved slot is in use.
     const [workingTool, workingColor, workingWidth] = workingPreset || current;
     const name = Object.keys(state.tools).find(label => state.tools[label] === workingTool);
@@ -1072,6 +1119,7 @@ renderEraserChoices();
   const baseRender = render;
   render = function() {
     baseRender();
+    restoreBrushSlot();
     sync()
   };
   sync();

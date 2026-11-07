@@ -672,9 +672,9 @@ space. Native acceptance records the adjusted inset and content offset; DOM
 rectangles alone cannot prove the rendered window position.
 
 In sufficiently wide landscape content-title rows, the iOS notebook host mounts
-five native drawing targets alongside the retained title. These invoke the
-original brush, eraser, selection, Undo and Redo handlers; they do not own another
-editing model. The DOM toolbar hides only while the native strip renews its
+the compact native drawing toolbar beside the title and storage label.
+Brush slots, Erase, Select, Undo and Redo invoke the same canvas handlers as
+the mobile WebView toolbar. The DOM toolbar hides only while the native strip renews its
 lease. Recovery waits for current contacts and queued edits to finish before
 changing paper geometry. Native queries are bounded, serialized per canvas and
 never cancel an outstanding WebKit completion. Retirement rejects stale state

@@ -46,10 +46,9 @@ horizontally on narrow phones to reach every tool. Android's **Close (X)** and
 title, Close, page overview, template/layers, view/input and actions controls;
 Duo places these in its side rail when applicable. In narrow iPhone portrait
 windows, including the folded Duo, the notebook name and location are centered
-above the drawing tools. Wider layouts can place the drawing controls beside
-the title. In a wide iPhone landscape window, the name sits at the upper
-left and the drawing row offers brush and ink color choices directly. Swipe
-either choice group horizontally to reach more options. The reader accounts
+above the drawing tools. In wide landscape layouts, the file name and storage
+label sit on the left and the compact drawing toolbar sits on the right.
+Tap the active brush to open the drawer for brush and ink color choices. The reader accounts
 for space occupied by system activity. Choose **Notebook actions → Hide tools**
 to leave **Show tools** on the canvas. Hiding and restoring tools keeps the
 paper in place and preserves your brush, color and width. The native iOS Close remains available.
@@ -79,8 +78,8 @@ The original brush icons are shared with the desktop editor.
 Tap **+** in the drawing toolbar to save the current brush, ink color, and width
 as a preset. Presets appear between the working brush and **+** in the same row.
 Once there are three brush slots, **+** disappears. Touch and hold a saved brush
-to open **Delete preset**. Changing a setting in the drawer creates a working
-configuration you can save when a slot is available. Presets are shared across
+to open **Delete preset**. Changing the brush, color, or width in the drawer
+updates the selected slot in place. Presets are shared across
 notebooks on this device and persist after restarting the app.
 
 Open **Notebook actions** for **Pages Overview**, **Layers** (the **Page template
@@ -103,8 +102,8 @@ Controls follow the device's light or dark appearance using the app's Slate
 colors. Paper and PDF backgrounds stay white with a thin black page outline.
 The mobile page starts just below the drawing tools. The iOS canvas extends to
 the bottom of the display. Where iOS shows a side
-rail, the canvas extends behind its soft blur and the drawing controls stay
-clear of the rail. The ink colors follow the notebook format.
+rail, the canvas extends behind its soft blur. Drawing tools, page controls,
+and floating menus stay within the tappable area beside the rail. The ink colors follow the notebook format.
 The bottom zoom bar is hidden initially. Pinching or changing zoom reveals **−**,
 **+**, the current percentage and **Reset** for three seconds after the last zoom
 change. Showing or hiding it does not move the paper. **Reset** restores the
@@ -259,14 +258,14 @@ for line counts, saved-format versus viewing choices and reMarkable compatibilit
 
 ## Eraser types and sizes
 
-Press **Erase** to select the eraser and open its settings. **Erase parts of
-strokes** is the default: only ink under the eraser path is removed, leaving
+Press **Erase** to select the eraser. Press it again to open its settings.
+**Erase parts of strokes** is the default. It removes ink under the eraser path, leaving
 the rest of a long stroke intact. Choose **Small**, **Medium** (the default) or
 **Large**, or switch to **Erase whole strokes**. Settings float below the
 toolbar; tap the eraser icon again, tap outside, or start erasing
 outside the panel to close it. That first gesture erases immediately. Both types respect hidden
-layers and support Undo/Redo. The selected type and size remain active while
-you work in that editor.
+layers and support Undo/Redo. The notebook remembers the selected eraser type
+across reopenings. The size remains active while you work in the editor.
 
 ## Saving from Notes Library
 

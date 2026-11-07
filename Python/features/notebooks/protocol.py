@@ -22,7 +22,7 @@ MODEL_COMMANDS = frozenset({
 })
 HOST_COMMANDS = frozenset({
     'save', 'save-as', 'export', 'transfer', 'library', 'show-in-folder', 'document-location', 'delete-file', 'page-previews',
-    'brush-color',
+    'brush-color', 'eraser-kind',
 })
 
 
@@ -43,6 +43,7 @@ def validate_action(action):
         'page': {'index': int}, 'move-page': {'index': int},
         'page-previews': {'start': int},
         'brush-color': {'tool': int, 'color': int},
+        'eraser-kind': {'kind': str},
         'stroke': {'points': list}, 'add-layer': {'name': str},
         'rename': {'name': str}, 'layer-visible': {'layer': str, 'visible': bool},
         'erase': ({'points': list, 'radius': int} if 'points' in action else {'ids': list}), 'transform': {'ids': list},
@@ -53,6 +54,8 @@ def validate_action(action):
         raise ValueError('Invalid single-use paste choice.')
     if op == 'unlock-pdf' and len(action['password']) > 1024:
         raise ValueError('Password is too long.')
+    if op == 'eraser-kind' and action['kind'] not in ('partial', 'whole'):
+        raise ValueError('Invalid eraser type.')
     if op == 'brush-color':
         from .brushes import native_color
         native_color(action['tool'], action['color'])
@@ -108,8 +111,8 @@ def update_script(state, error=''):
     return 'window.notebookUpdate(' + json.dumps(state, allow_nan=False) + ',' + json.dumps(error) + ')'
 
 
-def brush_color_script(status):
-    error = 'Could not save the notebook brush color.' if status in {'write-failed', 'locked', 'fenced'} else ''
+def brush_color_script(status, setting='brush color'):
+    error = f'Could not save the notebook {setting}.' if status in {'write-failed', 'locked', 'fenced'} else ''
     return 'window.notebookBrushColorUpdate(' + json.dumps(error) + ')'
 
 

@@ -196,7 +196,7 @@ def mount_apple_title(view, controller, title):
     stacked_notebook = (tools is not None and not controls and band is None
                         and tools.stacked_portrait(controller))
     wide_notebook = (tools is not None and not controls and band is None
-                     and not getattr(view, '_reader_fullscreen', False) and tools.wide_phone(controller))
+                     and not getattr(view, '_reader_fullscreen', False) and tools.wide_landscape(controller))
     leading = compact_tools or wide_notebook
     if tools is not None and not compact_tools and tools.header is not None:
         tools.close()
