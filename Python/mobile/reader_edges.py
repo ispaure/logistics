@@ -91,28 +91,32 @@ def layout_notebook_rail(web, container, left, right):
     if binding is None:
         # WebKit owns its scroll-edge effect. A material sibling lets UIKit
         # blur the live canvas, including DOM scrolling and fresh ink.
-        effect = ObjCClass('UIBlurEffect').effectWithStyle(7)  # System thin material.
+        effect = ObjCClass('UIBlurEffect').effectWithStyle(6)  # System ultra-thin material.
         blur = ObjCClass('UIVisualEffectView').alloc().initWithEffect(effect)
         blur.userInteractionEnabled = False
         blur.accessibilityElementsHidden = True
         mask_view = ObjCClass('UIView').alloc().init()
         mask = ObjCClass('CAGradientLayer').layer()
         mask_view.layer.addSublayer(mask)
-        blur.maskView = mask_view
         binding = web._notebook_rail_binding = (blur, mask_view, mask)
     blur, mask_view, mask = binding
     if native_value(blur, 'superview') != parent:
         parent.insertSubview(blur, aboveSubview=native)
-    frame = native.frame
     area = container.native.convertRect(container.native.bounds, toView=parent)
     width = left or right
     x = area.origin.x if left else area.origin.x + area.size.width - width
-    blur.frame = CGRect((x, frame.origin.y), (width, frame.size.height))
+    # Match the host edge above the canvas too. Starting at the WKWebView's
+    # top would cut a horizontal line across the material beside the toolbar.
+    blur.frame = CGRect((x, area.origin.y), (width, area.size.height))
     mask_view.frame = mask.frame = blur.bounds
     colors = ObjCClass('UIColor')
-    mask.colors = [ObjCInstance(colors.clearColor.CGColor), ObjCInstance(colors.blackColor.CGColor)]
-    mask.locations = [0, .58]
+    mask.colors = [ObjCInstance(colors.blackColor.colorWithAlphaComponent(alpha).CGColor)
+                   for alpha in (0, .12, .5, .88, 1)]
+    mask.locations = [0, .2, .45, .7, 1]
     mask.startPoint, mask.endPoint = (CGPoint(1, .5), CGPoint(0, .5)) if left else (CGPoint(0, .5), CGPoint(1, .5))
+    # UIKit copies the mask for its internal effect views. Give it the mask
+    # after setting its geometry so first open and rotation use the same bounds.
+    blur.maskView = mask_view
 
 
 def compact_apple_reader(container, *, notebook=None):
