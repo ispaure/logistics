@@ -348,8 +348,7 @@ class ChatUI:
         return max(0, container.height - self.chat_view.style.margin_top - self.chat_view.style.margin_bottom)
 
     def fit_chat_keyboard(self):
-        from mobile.keyboard import picker_keyboard_visible
-        keyboard = picker_keyboard_visible(self.app, self.native_host.adapter)
+        keyboard = self.chat_keyboard_visible()
         self.chat_compact_keyboard = keyboard and self.chat_available_height() < 210
         display = NONE if self.chat_compact_keyboard else PACK
         for item in (self.chat_header, self.chat_conversation_heading, self.chat_setup_box, self.chat_status_box):
