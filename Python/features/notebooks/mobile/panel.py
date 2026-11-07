@@ -486,10 +486,8 @@ class NotebookPanel:
                 await canvas.wait(self.delete_document())
             if op == 'library':
                 if hasattr(self, 'session'):
-                    # Match the other document editors: close with their normal
-                    # save/discard guard, then return to the Home overview.
                     # The first ACK may already have dispatched a new worker.
-                    self.app.__dict__.setdefault('_reader_returns', {})[self.session.id] = ('home', None, False)
+                    # Use the reader's guarded close and its recorded origin.
                     self.app.request_reader_close(self.session.id)
                 else:
                     self.library()

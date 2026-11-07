@@ -403,6 +403,29 @@ class ShowInFolderTests(TestCase):
             await second.browser.close()
         app.loop.run_until_complete(exercise())
 
+    def test_notebook_close_restores_the_nested_workspace_browser(self):
+        from features.notebooks.notebook import Notebook
+        app = self.app
+
+        async def exercise():
+            app.set_feature_enabled('notebooks', True, refresh=False)
+            (self.path.parent / 'Sketch.rmdoc').write_bytes(Notebook.new('Sketch').to_bytes())
+            await app.show_files(location=('Local files', 'Projects/Reports'))
+            browser = app.file_browser
+            entry = next(item for item in browser.entries if item.payload['name'] == 'Sketch.rmdoc')
+            await browser.select(entry)
+            await app.browser_file_open(entry.payload)
+            panel = app.notebook_panel
+            panel.view._reader_close_button.on_press()
+            if getattr(panel, '_native_close_task', None) is not None:
+                await panel._native_close_task
+            self.assertTrue(panel.closed)
+            self.assertEqual(app.native_host.state.destination, 'files')
+            self.assertEqual(app.file_path, 'Projects/Reports')
+            self.assertIs(app.file_browser, browser)
+
+        app.loop.run_until_complete(exercise())
+
     def test_closing_document_clears_retained_browser_selection(self):
         app = self.app
         async def exercise():
