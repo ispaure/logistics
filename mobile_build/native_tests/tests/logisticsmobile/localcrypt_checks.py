@@ -48,10 +48,13 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
         # These cases test private-session lifetime, not native dialog taps.
         # Complete Cancel explicitly instead of leaving a modal over later cases.
         with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='cancel')) as decision:
-            app.close_crypt()
-            pending = getattr(owner, '_exit_task', None)
-            if pending is not None:
-                await asyncio.wait_for(asyncio.shield(pending), 60)
+            assert app.close_crypt()
+            # An in-flight page operation can defer close first. Closing can
+            # then queue its own final reading-position checkpoint.
+            for task_name in ('_exit_task', '_progress_close_task'):
+                pending = getattr(owner, task_name, None)
+                if pending is not None:
+                    await asyncio.wait_for(asyncio.shield(pending), 60)
             pending = getattr(app, '_document_close_tasks', {}).get(owner.session.id)
             if pending is not None:
                 await asyncio.wait_for(asyncio.shield(pending), 60)
