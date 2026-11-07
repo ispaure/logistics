@@ -234,13 +234,14 @@ async def geometry(app, panel, orientation, output, index):
         native_scroll=dict(adjusted_top=float(inset.top), offset_y=float(offset.y)))
     if orientation == 'portrait' and os.environ.get('LOGISTICS_NATIVE_PEN_EXPECT_OPEN') == '1':
         assert [round(size.width),round(size.height)] == [669,951], record
-        assert band is not None, record
+        assert band is None, record
         assert status_bottom <= paper_top < 206, record
     if orientation == 'landscape-left':
         assert band is None, record
     controller = app.native_host.adapter.content_controller(app.native_host.state.destination)
-    tools = panel.native_drawing_tools
-    if orientation == 'landscape-left' and tools.fits(controller):
+    tools = getattr(panel, 'native_drawing_tools', None)
+    assert tools is None, 'Notebook drawing controls must stay in the canvas'
+    if orientation == 'landscape-left' and tools is not None and tools.fits(controller):
         assert tools.current() and len(tools.buttons) == 5, 'Landscape title/tool row did not mount'
         title = panel.view._document_title_view
         assert_native_owner(title.superview, tools.header._title_content._impl.native, 'landscape title host')

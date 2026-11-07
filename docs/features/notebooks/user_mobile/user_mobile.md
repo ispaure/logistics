@@ -37,21 +37,27 @@ strokes while preserving corners, pressure changes and stroke width within small
 bounds. Calligraphy retains every sample. Opening or saving existing handwriting
 does not reduce its points; the live pen preview is unchanged.
 
-The document fills the area beneath a compact drawing toolbar containing the
+The document fills the area beneath a canvas header containing the filename,
+storage location and a compact drawing toolbar with the
 working brush, **Add current brush preset (+)**, **Erase**, **Select / move**,
 **Undo** and **Redo**. The toolbar
 stays above the paper instead of covering handwriting. Swipe the drawing strip
 horizontally on narrow phones to reach every tool. Android's **Close (X)** and
-**Notebook actions (… )** share that row. iOS/iPadOS retains the native notebook
-title, Close, page overview, template/layers, view/input and actions controls;
-Duo places these in its side rail when applicable. In narrow iPhone portrait
-windows, including the folded Duo, the notebook name and location are centered
-above the drawing tools. In wide iPhone Duo and iPad landscape windows with enough room, the filename
-and storage label sit near the first third of the usable header, and the
-drawing tools sit near the second third. The header leaves space at both
-edges. On Duo, the same drawing toolbar and brush icons stay available as
-you change orientation. The swipe-to-add-page control stays inside
+**Notebook actions (… )** share that row. iOS/iPadOS retains native Close, page
+overview, template/layers, view/input and actions controls; Duo places these in
+its side rail when applicable. The filename and drawing tools share a row when
+there is room. Narrow screens place the filename and storage label above the
+tools. Tap the filename to see its location. Every orientation uses the same
+canvas brush icons and color indicators, without switching to a native drawing
+strip. The swipe-to-add-page control stays inside
 the area beside the side rail.
+
+Notebooks opened inside Notes Library keep these drawing tools and all three
+panels: **Pages Overview**, **Page template and layers**, and **View and input**.
+They are available from the library's Note actions menu and the canvas's Notebook
+actions menu, with native action buttons in the iOS/iPadOS navigation bar or Duo
+side rail. **Save a copy…** leaves the library file and current draft attached;
+**Show in folder** reveals the containing library folder.
 Tap the active brush to open the drawer for brush and ink color choices. The reader accounts
 for space occupied by system activity. Choose **Notebook actions → Hide tools**
 to leave **Show tools** on the canvas. Hiding and restoring tools keeps the

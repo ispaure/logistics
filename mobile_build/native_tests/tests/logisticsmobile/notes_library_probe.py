@@ -355,16 +355,20 @@ class NotesLibraryProbe(LogisticsMobile):
             await capture_window(self, evidence / 'notes-remarkable.png')
             if self._is_apple():
                 await rotate(self, 'landscape-left')
-                controller = self.native_host.adapter.content_controller(owner.destination)
-                tools = canvas.panel.native_drawing_tools
-                if tools.wide_landscape(controller) and owner._notes_available >= 720 and not owner.sidebar.expanded:
+                await self.wait_js(canvas.panel.web,
+                    "!document.body.classList.contains('native-drawing-tools') && "
+                    "$('notebookIdentity').getBoundingClientRect().height >= 44 && "
+                    "$('brushToggle').getBoundingClientRect().height >= 44")
+                assert not hasattr(canvas.panel, 'native_drawing_tools')
+                assert len(owner.native_note_buttons()) == 4
+                for name in ('pages', 'layers', 'view'):
+                    await canvas.notebook_action(name)
                     await self.wait_js(canvas.panel.web,
-                        "document.body.classList.contains('native-drawing-tools')")
-                    assert tools.header is owner.secondary and tools.current()
-                    assert owner.back_button.parent is owner.forward_button.parent is tools.header
-                    assert tools.strip.parent is tools.header
-                    await capture_window(self, evidence / 'notes-remarkable-landscape.png')
-                    report['notebook_inline_history_tools'] = True
+                        "!$('mobileSheet').hidden && $('mobileSheet').dataset.panel === " + repr(name))
+                await canvas.panel.web.evaluate_javascript(
+                    "document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))")
+                await capture_window(self, evidence / 'notes-remarkable-landscape.png')
+                report['notebook_canvas_header_and_actions'] = True
                 await rotate(self, 'portrait')
             from features.notebooks.notebook import Notebook
             sketch = root / 'Sketch.rmdoc'

@@ -14,6 +14,12 @@ def rect(width=669, height=951, x=0, y=0):
 
 
 class BandGeometryTests(unittest.TestCase):
+    def test_canvas_header_cannot_be_replaced_by_native_top_band(self):
+        view = NS(_canvas_document_title=True)
+        with patch.object(band, 'restore') as restore:
+            self.assertFalse(band.project(object(), view, 'documents', object()))
+            restore.assert_called_once_with(view)
+
     def test_actual_inner_portrait_moves_controls_into_free_column_with_safe_page_clearance(self):
         value = band.free_top_band(((535, 0, 134, 82),), 669, 82, 5 * 48 + 44 + 32)
         self.assertEqual(value, dict(left=0, right=535, width=669, row_height=60, row_top=11, reserve=90))

@@ -179,3 +179,24 @@ body.native-drawing-tools header.mobile-head{display:none}
 /* Only an acknowledged native portrait band may borrow this DOM clearance. */
 body.notebook-portrait-band header.mobile-head{max-width:min(352px,calc(100% - 8px));min-height:48px;margin-top:4px}
 body.notebook-portrait-band #restoreTools{top:4px;left:calc(50% + var(--notebook-tools-shift));right:auto;transform:translateX(-50%);max-width:352px}
+
+/* One live canvas header owns the filename and drawing controls on every host. */
+header.canvas-document-header{
+  width:calc(var(--notebook-safe-width) - 16px);max-width:calc(var(--notebook-safe-width) - 16px);
+  border-radius:0;box-shadow:none;background:transparent;gap:12px;justify-content:center;
+}
+#notebookIdentity{
+  display:flex;flex-direction:column;justify-content:center;min-width:96px;max-width:280px;
+  flex:1 1 30%;border:0;padding:2px 8px;line-height:1.3;text-align:center;
+}
+#notebookIdentity span{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.notebook-filename{font-size:17px;font-weight:600}
+.notebook-storage{font-size:12px;color:var(--muted)}
+header.canvas-document-header .mobile-dock{flex:0 1 auto}
+@media(max-width:639px){
+  header.canvas-document-header{flex-wrap:wrap;gap:4px;justify-content:center}
+  header.canvas-document-header #notebookIdentity{flex-basis:100%;max-width:100%;order:-1}
+  header.canvas-document-header .mobile-dock{max-width:calc(100% - 96px)}
+  header.canvas-document-header:has(>button[hidden]) .mobile-dock{max-width:calc(100% - 48px)}
+  header.canvas-document-header:has(>button[hidden]):has(>button:last-child[hidden]) .mobile-dock{max-width:100%}
+}

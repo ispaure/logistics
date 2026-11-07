@@ -808,6 +808,99 @@ class NotesLibraryTests(unittest.TestCase):
 
         self.run_async(exercise())
 
+    def test_notebook_keeps_canvas_header_and_all_panel_commands_in_library(self):
+        from dataclasses import replace
+        from unittest.mock import AsyncMock, patch
+        from mobile.obsidian import open_vault
+        from features.notebooks.notebook import Notebook
+        path = self.vault / 'Drawing.rmdoc'
+        path.write_bytes(Notebook.new('Drawing').to_bytes())
+
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            self.assertTrue(await owner.open_note('Vault/Drawing.rmdoc'))
+            editor = owner.embedded
+            editor.panel.web.evaluate_javascript = AsyncMock(return_value=None)
+            state = editor.panel.state()
+            self.assertTrue(state['canvas_header'])
+            self.assertFalse(state['native_actions'])
+            self.assertTrue(state['has_source'])
+            self.assertTrue(state['can_delete'])
+            self.assertFalse(hasattr(editor.panel, 'native_drawing_tools'))
+            self.assertEqual(state['display_name'], 'Drawing.rmdoc')
+            self.assertEqual(owner.view._native_reader_title(), owner.library_title)
+            actions = dict(owner.reader_actions.actions)
+            with patch.object(editor.panel.web, 'evaluate_javascript', new_callable=AsyncMock) as evaluate:
+                for label, name in [('Pages Overview', 'pages'), ('Page template and layers', 'layers'),
+                                    ('View and input…', 'view'), ('Notebook actions…', 'document')]:
+                    await actions[label]()
+                    evaluate.assert_awaited_with('window.notebookNativeAction?.("' + name + '")')
+            buttons = [object(), object(), object(), object()]
+            editor.panel.view._native_reader_buttons = lambda: buttons
+            owner.host = replace(owner.host, apple=True)
+            self.assertEqual(owner.native_note_buttons(), buttons)
+            owner.host = replace(owner.host, apple=False)
+            self.assertEqual(owner.native_note_buttons(), [owner.links_button])
+            with patch.object(owner, 'browse_parent', new_callable=AsyncMock) as reveal:
+                editor.panel.busy = True  # The navigation bridge admits this command.
+                await editor.panel.perform({'op': 'show-in-folder'})
+                reveal.assert_awaited_once()
+                self.assertFalse(editor.busy)
+            with patch.object(owner, 'delete_entry', new_callable=AsyncMock) as delete:
+                await editor.panel.perform({'op': 'delete-file'})
+                delete.assert_awaited_once_with('Vault/Drawing.rmdoc')
+            with patch.object(owner, 'close') as close:
+                await editor.panel.perform({'op': 'library'})
+                close.assert_called_once()
+            epoch = owner.epoch
+            async def change_library(script):
+                owner.epoch += 1
+            with patch.object(editor.panel.web, 'evaluate_javascript', side_effect=change_library), \
+                    patch.object(owner, 'delete_entry', new_callable=AsyncMock) as delete:
+                await editor.panel.perform({'op': 'delete-file'})
+                delete.assert_not_awaited()
+            owner.epoch = epoch
+            with patch.object(owner.library, 'supports', return_value=False), \
+                    patch.object(owner, 'delete_entry', new_callable=AsyncMock) as delete:
+                self.assertFalse(editor.panel.state()['can_delete'])
+                await editor.panel.perform({'op': 'delete-file'})
+                delete.assert_not_awaited()
+            owner.close()
+
+        self.run_async(exercise())
+
+    def test_notebook_save_copy_keeps_library_binding_and_unsaved_draft(self):
+        from unittest.mock import AsyncMock, patch
+        from mobile.obsidian import open_vault
+        from features.notebooks.notebook import Notebook
+        path = self.vault / 'Drawing.rmdoc'
+        original = Notebook.new('Drawing').to_bytes()
+        path.write_bytes(original)
+
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
+            self.assertTrue(await owner.open_note('Vault/Drawing.rmdoc'))
+            editor = owner.embedded
+            editor.panel.web.evaluate_javascript = AsyncMock(return_value=None)
+            resource = editor.panel.document.resource
+            editor.panel.editor.apply({'op': 'add-page'})
+            copied = []
+            async def export(app, name, source):
+                copied.append((name, source().read()))
+                return True
+            with patch.object(editor.panel, 'confirm_export', new_callable=AsyncMock, return_value=True), \
+                    patch('commonUtils.ui.native.documents.export_stream', side_effect=export):
+                await editor.panel.perform({'op': 'save-as'})
+            self.assertEqual(copied[0][0], 'Drawing.rmdoc')
+            self.assertEqual(len(Notebook.read(copied[0][1]).pages), 2)
+            self.assertIs(editor.panel.document.resource, resource)
+            self.assertTrue(editor.dirty)
+            self.assertEqual(path.read_bytes(), original)
+            self.assertEqual(owner.path, 'Vault/Drawing.rmdoc')
+            owner.close()
+
+        self.run_async(exercise())
+
     def test_json_and_view_scripts_use_embedded_code_input_and_preserve_source_bytes(self):
         from dataclasses import replace
         from unittest.mock import AsyncMock

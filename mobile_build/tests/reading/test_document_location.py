@@ -12,6 +12,24 @@ from mobile.reader_controls import ReadingFrame
 
 
 class DocumentLocationTests(unittest.TestCase):
+    def test_canvas_header_owns_filename_and_suppresses_duplicate_native_title(self):
+        from mobile.document_location import side_title_reader
+        view = toga.Box()
+        view._canvas_document_title = True
+        with patch('mobile.document_location.storage_identity', return_value=('On-device', False, False)):
+            install_document_location(view)
+        row = view._document_location_row
+        controller = NS(navigationItem=NS(titleView=None))
+        placeholder = object()
+        with patch('mobile.document_location.empty_bar_title', return_value=placeholder), \
+                patch('mobile.folder_title.storage_title') as native_title:
+            for title in ('Sketch.rmdoc', 'Renamed.rmdoc'):
+                mount_apple_title(view, controller, title)
+                self.assertIs(controller.navigationItem.titleView, placeholder)
+                self.assertIsNone(row.parent)
+                self.assertIs(side_title_reader(view), view)
+            native_title.assert_not_called()
+
     def test_android_hold_resolves_current_path_each_time(self):
         from mobile.document_location import bind_android_hold
         view = Mock()

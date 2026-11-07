@@ -211,6 +211,11 @@ def notebook_title(panel):
     return Path(path).name if path else panel.editor.notebook.name
 
 
+def notebook_storage_status(panel):
+    from mobile.document_location import storage_identity
+    return storage_identity(panel.document.resource if panel.document is not None else None)[0]
+
+
 def notebook_location(panel):
     from .storage import display_path
     if panel.editor is None or panel.closed:
@@ -410,9 +415,8 @@ def install_notebook_controls(panel):
     buttons.append(more)
     panel.view._native_reader_toolbar = toga.Box(children=buttons)
     panel.view._native_reader_buttons = lambda: buttons
-    from features.notebooks.mobile.native_tools import NativeDrawingTools
-    panel.native_drawing_tools = NativeDrawingTools(panel)
-    panel.view._native_drawing_tools = panel.native_drawing_tools
+    # Drawing controls stay in the canvas, including beside its filename.
+    # The native host owns only navigation and notebook actions.
 
 
 async def show_notebook_in_folder(panel):
@@ -531,16 +535,54 @@ async def notes_editor(app, library, path):
 
         def state(self):
             state = super().state()
-            state.update(native_close=True, notes_library=True, has_source=False, can_delete=False)
+            state.update(native_close=True, native_actions=False, notes_library=True,
+                         has_source=True, can_delete=library.library.supports('delete'))
             return state
 
         async def perform(self, action, **options):
-            if action.get('op') in ('library', 'save-as', 'transfer', 'show-in-folder', 'delete-file'):
-                if self.web is not None:
-                    from features.notebooks.protocol import update_script
-                    await self.web.evaluate_javascript(update_script(self.state()))
+            op = action.get('op')
+            if op in ('library', 'show-in-folder', 'delete-file'):
+                canvas = options.get('canvas') or self.bridge
+                web, epoch, path = self.web, library.epoch, library.path
+                def current():
+                    return (canvas is self.bridge and canvas.active and self.web is web
+                            and not self.closed and library.valid() and library.epoch == epoch
+                            and library.path == path and getattr(library.embedded, 'panel', None) is self)
+                if (self.closed or self.web is None or not library.valid()
+                        or not current()):
+                    return
+                from features.notebooks.protocol import update_script
+                from features.notebooks.bridge import RetiredCanvas
+                from features.notebooks.mobile.panel import NotebookResponseTimeout
+                # Release the canvas queue before library navigation/save guards.
+                try:
+                    await self._respond(web, update_script(self.state()), canvas)
+                except RetiredCanvas:
+                    return
+                except NotebookResponseTimeout:
+                    self._response_unavailable()
+                    return
+                if not current():
+                    return
+                if op == 'library':
+                    library.close()
+                elif op == 'show-in-folder':
+                    await library.browse_parent()
+                elif library.library.supports('delete'):
+                    await library.delete_entry(path)
                 return
             return await super().perform(action, **options)
+
+        async def prepare_save_as(self):
+            return notebook_title(self), await asyncio.to_thread(self.editor.notebook.to_bytes)
+
+        async def save_as(self, prepared):
+            # A copy must not retarget the library tab or silently abandon its draft.
+            from io import BytesIO
+            from commonUtils.ui.native.documents import export_stream
+            if await self.confirm_export():
+                name, data = prepared
+                await export_stream(app, name, lambda: BytesIO(data))
 
     class Embedded:
         kind = 'notebook'
@@ -573,22 +615,22 @@ async def notes_editor(app, library, path):
             await self.flush()
             await self.panel.perform({'op': 'save'})
             return not self.dirty
-        def sync_drawing_toolbar(self, row, before, width):
-            tools = getattr(self.panel, 'native_drawing_tools', None)
-            if tools is None:
-                return 0
-            app = self.panel.app
-            controller = app.native_host.adapter.content_controller(library.destination)
-            if row.parent is None or not tools.fits(controller, inline_width=width):
-                if tools.header is not None:
-                    tools.close()
-                return 0
-            tools.mount(row, controller, before=before)
-            return tools.strip.style.width
+        async def notebook_action(self, name):
+            if not self.panel.closed and self.panel.web is not None:
+                import json
+                await self.panel.web.evaluate_javascript('window.notebookNativeAction?.(' + json.dumps(name) + ')')
 
         async def notebook_actions(self, widget=None, **kwargs):
-            if not self.panel.closed and self.panel.web is not None:
-                await self.panel.web.evaluate_javascript("window.notebookNativeAction?.('document')")
+            await self.notebook_action('document')
+
+        def notebook_commands(self):
+            return [(label, lambda name=name: self.notebook_action(name)) for label, name in (
+                ('Pages Overview', 'pages'), ('Page template and layers', 'layers'),
+                ('View and input…', 'view'), ('Notebook actions…', 'document'))]
+
+        def native_buttons(self):
+            controls = getattr(self.panel.view, '_native_reader_buttons', None)
+            return controls() if controls is not None else []
 
         def dispose(self):
             self.panel.dispose()

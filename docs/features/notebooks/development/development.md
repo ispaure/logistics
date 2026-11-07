@@ -644,11 +644,10 @@ an interrupted in-progress pointer gesture is not a completed saved stroke.
 
 ## Mobile editor presentation
 
-`mobile/surface.py` enhances the default offline canvas with a floating top icon
-strip, an anchored notebook dropdown, and separate writing-tool, layer, page
-overview and view/input sheets. The document
-viewport fills the editor; no layout space is reserved for persistent title,
-status or navigation rows. A hide-tools state leaves one restore button and
+`mobile/surface.py` enhances the default offline canvas with a responsive header,
+an anchored notebook dropdown, and separate writing-tool, layer, page
+overview and view/input sheets. The document viewport fills the editor below
+the header. A hide-tools state leaves one restore button and
 preserves drawing settings and scroll position. Routine status lives in the
 notebook dropdown; errors also appear in a dismissible alert. It reparents
 existing controls, preserving the common command handlers and model values.
@@ -659,28 +658,32 @@ and leave the background inert while open. The floating dock remains compact in
 portrait and landscape; drawing actions have at least 44 × 44 CSS-pixel targets.
 The mobile source manifest includes both presentation and icon modules.
 
-On eligible iOS corner-status layouts, the native projection retains its full
-clearance until the current canvas acknowledges the compact portrait CSS.
-The acknowledgement is tied to the canvas, bridge and geometry epoch. A measured
-352-pixel tool column must avoid every reserved system region. The compact DOM
-row guarantees at least 48 pixels of clearance; Hide tools retains a noninteractive
-spacer so the paper cannot move beneath the status area. Other readers and
-unsupported geometry retain their previous spacing.
+The canvas header remains inside the host's usable content area, with measured
+side-rail insets applied to its layout. Hide tools retains a noninteractive
+spacer so the paper does not move when controls disappear.
 The notebook-owned iOS WebView disables additional automatic scroll insets
 before attachment, matching the host-owned clearance and native pen coordinate
 space. Native acceptance records the adjusted inset and content offset; DOM
 rectangles alone cannot prove the rendered window position.
 
-In sufficiently wide landscape content-title rows, the iOS notebook host mounts
-the compact native drawing toolbar beside the title and storage label.
-Brush slots, Erase, Select, Undo and Redo invoke the same canvas handlers as
-the mobile WebView toolbar. The DOM toolbar hides only while the native strip renews its
-lease. Recovery waits for current contacts and queued edits to finish before
-changing paper geometry. Native queries are bounded, serialized per canvas and
-never cancel an outstanding WebKit completion. Retirement rejects stale state
-and restores the ordinary toolbar. The real-browser native probe checks popup
-double taps, dismissal when selecting another tool and stable paper geometry
-while a contact is held.
+The mobile canvas owns the filename, storage subtitle and drawing toolbar in a
+single responsive header. Wide allocations place the filename beside the tools;
+narrow allocations stack them and retain horizontal tool scrolling. Native iOS
+composition keeps navigation and notebook panel actions, but never mounts the
+legacy native drawing strip. The canvas title replaces its separate native title
+and excludes this surface from native top-band projection.
+
+Notes Library publishes the notebook's native panel buttons and explicit menu
+commands for Pages Overview, templates/layers and view/input. Its canvas menu
+also stays reachable. Library-owned close, folder reveal and deletion acknowledge
+the canvas before invoking library guards, then recheck canvas and library
+identity. Save a copy captures bytes before acknowledging the queue and leaves
+the library resource binding and dirty state intact.
+
+The browser header probe checks six phone/Duo/tablet allocations, actual hit
+targets, popup access, changing brush icons and stable hide/restore geometry.
+Host regressions cover panel parity and library copy/navigation ownership;
+these checks do not certify a physical device.
 
 The close button, drawing tools and notebook actions share one floating row.
 Spacing contracts down to 320 CSS pixels while retaining 44 × 44 targets.
