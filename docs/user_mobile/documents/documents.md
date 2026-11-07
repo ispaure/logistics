@@ -162,10 +162,11 @@ change that format’s size (12–32); it is saved on this device. Markdown sour
 formatted editing and preview share one size, and text viewing and editing share
 one size. Existing shared sizes migrate to all three settings.
 
-Settings → Books & Comics → Saved books & comics lists retained imports and their
-space usage. Close removes an open view. Delete local copy removes that retained
-import and its reading records after confirmation; it leaves the original source
-file alone.
+Settings → Reset → Clear cached documents lists legacy imports and their space
+usage. Clear redundant copies removes imports whose bytes match an available
+original, including their reading records. Original files, editing drafts, changed
+copies and copies without verified originals are retained. Ordinary local opens
+read the existing file directly; closing a reader does not remove that file.
 
 ## Remote files
 

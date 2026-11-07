@@ -78,19 +78,15 @@ class StorageReaderOpeningTests(unittest.TestCase):
                     drawer.provider_client, drawer.provider_generation = client, client.generation
                     return await drawer.open_file(dict(path=filename, directory=False))
                 self.assertTrue(app.loop.run_until_complete(open_file()), getattr(app, 'cloud_status', 'No status'))
-                if storage != 'localcrypt' and suffix != '.pdf':
-                    reader = app.readers.active.book_reader
-                    self.assertIsNotNone(reader)
-                    self.assertEqual(app.readers.active.book_record['kind'], 'epub' if suffix == '.epub' else 'comic')
+                reader = app.private_sessions.active.crypt_reader
+                self.assertEqual(reader.kind, suffix)
+                if suffix == '.epub':
+                    self.assertIsNotNone(reader.book)
+                elif suffix == '.pdf':
+                    self.assertEqual(reader.pdf.count, 3)
                 else:
-                    reader = app.private_sessions.active.crypt_reader
-                    self.assertEqual(reader.kind, suffix)
-                    if suffix == '.epub':
-                        self.assertIsNotNone(reader.book)
-                    elif suffix == '.pdf':
-                        self.assertEqual(reader.pdf.count, 3)
-                    else:
-                        self.assertEqual(len(reader.labels), 2)
+                    self.assertEqual(len(reader.labels), 2)
+                self.assertEqual(app.reader_manager().catalog.library_store.stored_files()[0], [])
                 expected = 'documents' if entry == 'drawer' else 'files' if entry == 'files' else 'home'
                 self.assertEqual(app.native_host.state.destination, expected)
                 if storage == 'localcrypt':
@@ -123,8 +119,10 @@ class StorageReaderOpeningTests(unittest.TestCase):
                 (local / 'broken.epub').write_bytes(b'invalid archive fixture')
                 drawer.provider = LocalFiles(local)
                 app.adaptive.menu_open['documents'] = True
-                self.assertFalse(app.loop.run_until_complete(drawer.open_file(dict(path='broken.epub'))))
-                self.assertIn('Open failed:', drawer.status.value)
+                from unittest.mock import AsyncMock, patch
+                with patch.object(app.main_window, 'dialog', AsyncMock()):
+                    self.assertFalse(app.loop.run_until_complete(drawer.open_file(dict(path='broken.epub'))))
+                self.assertIn('Document opening failed:', drawer.status.value)
                 self.assertEqual(app.native_host.state.destination, 'documents')
                 self.assertTrue(app.adaptive.menu_open['documents'])
             finally:

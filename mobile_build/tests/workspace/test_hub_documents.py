@@ -502,10 +502,12 @@ class HubDocumentTests(unittest.TestCase):
         self.assertIsNone(drawer.extensions)
         self.assertTrue(app.loop.run_until_complete(drawer.open_folder({'path': 'Library'})))
         self.assertEqual({entry.label for entry in drawer.browser.entries}, set(names))
-        with patch.object(app, 'open_download', new_callable=AsyncMock) as reader:
+        with patch.object(app, 'open_crypt', new_callable=AsyncMock) as reader:
             for name in names[:3]:
                 self.assertTrue(app.loop.run_until_complete(drawer.open_file({'path': 'Library/' + name})))
-                reader.assert_awaited_with(path=folder / name, destination='home')
+                self.assertEqual(reader.await_args.kwargs['copies'].provider.root, folder.parent)
+                self.assertEqual(reader.await_args.kwargs['key'], 'Library/' + name)
+                self.assertEqual(reader.await_args.kwargs['destination'], 'home')
 
     def test_home_browse_refreshes_local_root_after_other_views_and_search(self):
         import toga
@@ -905,12 +907,12 @@ class HubDocumentTests(unittest.TestCase):
             app.loop.run_until_complete(app.new_hub_document())
         form = app.editor_picker()
         self.assertIn(form.creation_formats.cards, form.name_view.children)
-        form.save_as_name.value = 'Trip.markdown'
+        form.save_as_name.value = 'Trip'
         form.creation_formats.buttons['Markdown (.md)'].on_press()
         app.loop.run_until_complete(form.choose_creation_location())
         app.loop.run_until_complete(form.browser_editor_location(('Local', '')))
         app.loop.run_until_complete(app.editor_picker().confirm_editor_file())
-        self.assertEqual(app.private_sessions.active.crypt_reader.name, 'Trip.markdown')
+        self.assertEqual(app.private_sessions.active.crypt_reader.name, 'Trip.md')
         self.assertEqual(app.private_sessions.active.crypt_text.value, '')
         self.assertEqual(app.private_sessions.active.session.kind, 'markdown')
         document_routes = list(app.routes.screens['documents'])

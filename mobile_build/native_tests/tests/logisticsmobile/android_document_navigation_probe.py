@@ -290,7 +290,7 @@ class AndroidDocumentNavigationProbe(LogisticsMobile):
             assert before >= 350, 'Native swipe did not scroll the folder'
             selected, tree, origin = browser.selected, browser.tree, self.body
             assert await self.open_download(path=folder / 'Retained 010.txt')
-            owner = self.editor_view
+            owner = self.private_sessions.active
             await self.settle_keyboard()
             await self.action('back-restores-filtered-scrolled-folder')
             assert owner.session.id not in self.workspace.sessions

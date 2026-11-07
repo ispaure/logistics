@@ -435,10 +435,10 @@ class AndroidBackTests(unittest.TestCase):
         app.loop.run_until_complete(app.show_files())
         origin = app.body
         app.loop.run_until_complete(app.open_download(path=comic))
-        reader = app.readers.active
-        self.assertTrue(reader.reader_immersive)
+        reader = app.private_sessions.active
+        self.assertTrue(reader.crypt_immersive)
         panel = app.body
-        reader.show_reader_tools()
+        reader.show_private_tools()
         self.assertTrue(self.routes.system_back())
         self.assertIs(app.body, panel)
         self.assertTrue(self.routes.system_back())
@@ -460,9 +460,9 @@ class AndroidBackTests(unittest.TestCase):
             entry = next(row for row in browser.entries if row.label == filename)
             app.loop.run_until_complete(browser.activate_entry(entry))
             if filename.endswith('.cbz'):
-                owner = app.readers.active
+                owner = app.private_sessions.active
                 panel = app.body
-                owner.show_reader_tools()
+                owner.show_private_tools()
                 self.assertTrue(self.routes.system_back())
                 self.settle()
                 self.assertIs(app.body, panel)
@@ -513,7 +513,8 @@ class AndroidBackTests(unittest.TestCase):
         folder = app.private_root / 'fixtures'
         folder.mkdir()
         epub, _ = make_books(folder)
-        app.loop.run_until_complete(app.open_download(path=epub))
+        from mobile_build.tests.support.readers import open_legacy_import
+        app.loop.run_until_complete(open_legacy_import(app, epub))
         reader = app.readers.active
         reader.chapter_sidebar.show_sidebar()
         panel = app.body

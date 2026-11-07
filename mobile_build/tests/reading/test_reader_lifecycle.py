@@ -17,7 +17,7 @@ from features.text_editor.resources import LocalTextCopies
 from features.rclone.mobile.remote_readers import RemoteReaders
 from mobile_build.tests.support.app import create_app
 from mobile_build.tests.support.localcrypt import seed_offline_copy
-from mobile_build.tests.support.readers import RemoteClient
+from mobile_build.tests.support.readers import RemoteClient, open_legacy_import
 from mobile_build.tests.support.pdf import PDF, native_pdf
 
 
@@ -188,14 +188,14 @@ class ReaderLifecycleTests(TestCase):
         path = self.root / 'book.epub'
         path.write_bytes(epub_bytes())
         async def exercise():
-            self.assertTrue(await self.app.open_download(path=path))
+            self.assertTrue(await open_legacy_import(self.app, path))
             owner = self.app.readers.active
             self.assert_close_control(owner.library_view)
             owner.epub_event(owner.book_reader, owner.book_epoch, 0, 'position', 120)
             owner.library_view._reader_close_button.on_press()
             await owner._exit_task
             self.assert_closed(owner)
-            self.assertTrue(await self.app.open_download(path=path))
+            self.assertTrue(await open_legacy_import(self.app, path))
             resumed = self.app.readers.active
             self.assertEqual(resumed.epub_offset, 120)
             resumed.library_view._reader_close_button.on_press()
@@ -290,7 +290,7 @@ class ReaderLifecycleTests(TestCase):
     def test_metadata_back_returns_to_document_and_reopening_keeps_draft(self):
         from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
         _, comic = make_books(self.root)
-        self.run_async(self.app.open_download(path=comic))
+        self.run_async(open_legacy_import(self.app, comic))
         owner = self.app.readers.active
         owner.show_book_metadata()
         owner.book_metadata_fields['Title'].value = 'Keep this metadata draft'
@@ -309,7 +309,7 @@ class ReaderLifecycleTests(TestCase):
         from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
         _, comic = make_books(self.root)
         async def exercise():
-            self.assertTrue(await self.app.open_download(path=comic))
+            self.assertTrue(await open_legacy_import(self.app, comic))
             owner = self.app.readers.active
             self.assert_close_control(owner.library_view)
             owner.show_book_metadata()

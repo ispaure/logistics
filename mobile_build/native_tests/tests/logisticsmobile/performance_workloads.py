@@ -71,7 +71,7 @@ async def measure_workloads(app):
         lambda: app.open_download(path=folder / 'fixture-0000.txt')))
     _, comic = make_books(folder)
     await app.open_download(path=comic)
-    samples.append(await measure_operation('comic-next-page', app.next_book_page))
+    samples.append(await measure_operation('comic-next-page', app.private_sessions.active.next_private_page))
     async def streaming():
         previous = []
         for index in range(1, 21):

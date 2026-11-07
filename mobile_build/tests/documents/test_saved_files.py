@@ -17,6 +17,70 @@ from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
 
 
 class SavedFilesTests(unittest.TestCase):
+    def test_reset_cleanup_removes_only_verified_imports_and_keeps_editing_drafts(self):
+        from mobile_build.tests.support.app import create_app
+        from mobile.cached_documents import import_index
+        from mobile.settings.categories import SettingsCategories
+        app = create_app(self)
+        folder = app.private_root / 'LocalFiles'
+        folder.mkdir(exist_ok=True)
+        imports = import_index(app)
+        documents = {}
+        for name in ('clean.txt', 'draft.md', 'changed.txt', 'missing.txt', 'live.txt'):
+            path = folder / name
+            path.write_text('Original')
+            document = app.store.import_document(LocalDocuments(), path)
+            imports.remember(path, 'managed-text', document.id)
+            documents[name] = document
+        draft = documents['draft.md']
+        draft.text = 'Unsaved recovered edits'
+        app.store.checkpoint(draft)
+        changed = documents['changed.txt']
+        changed.text = 'Saved only in imported document'
+        app.store.save(changed)
+        (folder / 'missing.txt').unlink()
+        standalone = app.store.create('New standalone document.txt', b'Keep')
+        app.open_document(documents['live.txt'].id)
+        app.editor_view.editor.value = 'Live unsaved edits'
+        page = SettingsCategories(app).reset()
+        def walk(view):
+            yield view
+            for child in view.children:
+                yield from walk(child)
+        button = next(widget for widget in walk(page) if getattr(widget, 'text', '') == 'Clear cached documents')
+        button.on_press()
+        self.assertIn('5 saved file(s)', app.saved_files_summary.text)
+        with patch.object(app.main_window, 'dialog', AsyncMock(return_value=True)):
+            app.loop.run_until_complete(app.delete_all_saved_files())
+        self.assertFalse(app.store.path(documents['clean.txt'].id, '.data').exists())
+        self.assertIsNone(import_index(app).find(folder / 'clean.txt'))
+        for name in ('draft.md', 'changed.txt', 'missing.txt', 'live.txt'):
+            self.assertTrue(app.store.path(documents[name].id, '.data').exists(), name)
+        self.assertEqual(app.store.open(draft.id).text, 'Unsaved recovered edits')
+        self.assertEqual(app.store.open(changed.id).text, 'Saved only in imported document')
+        self.assertEqual(app.editor_view.editor.value, 'Live unsaved edits')
+        self.assertEqual(app.store.open(standalone.id).text, 'Keep')
+        self.assertEqual((folder / 'clean.txt').read_text(), 'Original')
+        self.assertIn('4 kept', app.saved_files_status.text)
+
+    def test_cleanup_keeps_books_when_original_is_missing_or_copy_has_unique_edits(self):
+        from mobile_build.tests.support.app import create_app
+        app = create_app(self)
+        folder = app.private_root / 'fixtures'
+        folder.mkdir()
+        epub, comic = make_books(folder)
+        store = app.reader_manager().catalog.library_store
+        book = store.import_book(LocalDocuments(), epub)
+        volume = store.import_book(LocalDocuments(), comic)
+        epub.unlink()
+        with store.path(volume['id'], '.cbz').open('ab') as stream:
+            stream.write(b'Unique saved metadata')
+        with patch.object(app.main_window, 'dialog', AsyncMock(return_value=True)):
+            app.loop.run_until_complete(app.delete_all_saved_files())
+        self.assertTrue(store.path(book['id'], '.epub').exists())
+        self.assertTrue(store.path(volume['id'], '.cbz').exists())
+        self.assertIn('2 kept', app.saved_files_status.text)
+
     def drain(self, app):
         async def finish():
             while pending := [task for task in asyncio.all_tasks() if task is not asyncio.current_task()]:

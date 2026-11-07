@@ -111,6 +111,8 @@ class SettingsCategories:
         box = self.category('Reset')
         from .reader_history import controls as history_controls
         history_controls(app, box)
+        box.add(page_button('Clear cached documents', on_press=app.show_saved_files,
+                            style=Pack(height=48)))
         box.add(page_button('Erase all app data…', destructive=True, on_press=app.show_app_reset, style=Pack(height=48)))
         box.add(SettingsLabel('Delete private files, local app data, settings and metadata. Review the full scope before confirming.'))
         return box

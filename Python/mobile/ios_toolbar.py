@@ -79,6 +79,8 @@ def bar_item(button, *, prominent=False, symbol=None):
         item.tintColor = apple_color('accent')
     if item.respondsToSelector(SEL('setSharesBackground:')):
         item.sharesBackground = not prominent and getattr(button, 'control_icon', None) != 'close'
+    if item.respondsToSelector(SEL('setHidesSharedBackground:')):
+        item.hidesSharedBackground = bool(getattr(button, '_toolbar_borderless', False))
     if item.respondsToSelector(SEL('setAxisBehavior:')):
         item.axisBehavior = 1 if getattr(button, '_toolbar_horizontal', False) else 0
     if item.respondsToSelector(SEL('setVisibilityPriority:')):
@@ -96,7 +98,9 @@ def action_groups(buttons):
         if key is None:
             key = ('comic-navigation' if icon in ('previous_comic', 'next_comic')
                    else 'document-tools')
-        if icon in ('close', 'save') or getattr(button, '_toolbar_prominent', False):
+        if (icon in ('close', 'save') or getattr(button, '_toolbar_prominent', False)
+                or getattr(button, '_toolbar_borderless', False)):
+            # UIKit ignores hidesSharedBackground inside a multi-item group.
             key = id(button)
         if groups and groups[-1][0] == key:
             groups[-1][1].append(button)
@@ -116,6 +120,7 @@ def action_state(buttons):
                   getattr(button, '_toolbar_symbol', None), getattr(button, '_toolbar_group', None),
                   getattr(button, '_toolbar_prominent', False), getattr(button, '_toolbar_priority', False),
                   getattr(button, '_toolbar_horizontal', False), (LIGHT['accent'], DARK['accent']),
+                  getattr(button, '_toolbar_borderless', False),
                   identity(button._impl.native.menu), identity(button._impl.native.imageForState(0)))
                  for button in buttons)
 

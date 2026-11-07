@@ -140,9 +140,8 @@ def provider_navigation(reader):
 
 
 def adjacent_comic(entries, current, direction):
-    """Entries are (identity, display name), already filtered by host policy."""
-    from features.comics.pages import natural_key
-    ordered = sorted(entries, key=lambda item: natural_key(item[1]))
+    """Alphabetical filenames, with a stable tie-break for case-only names."""
+    ordered = sorted(entries, key=lambda item: (item[1].casefold(), item[1], item[0]))
     index = next((i for i, item in enumerate(ordered) if item[0] == current), None)
     if index is None:
         return None

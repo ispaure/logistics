@@ -44,6 +44,15 @@ def comic_pages(selector, back):
         style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
 
 
+def file_navigation_button(name, label, *, on_press=None):
+    """A full-size file target whose glyph blends into reader chrome."""
+    from .appearance import surface
+    button = icon_button(name, label, on_press=on_press, enabled=False)
+    button._toolbar_borderless = True
+    return surface(button, radius=0, background='transparent', foreground='text',
+                   outlined=False, eink_outlined=False)
+
+
 class ComicHeader:
     """File navigation above the page; page navigation remains in the footer."""
     def __init__(self, more, *, previous=None, following=None):
@@ -64,9 +73,9 @@ class ComicHeader:
                     self.busy = False
                     self.sync(*self.available)
             return switch
-        self.previous = icon_button('previous_comic', 'Previous comic', on_press=handler(previous))
-        self.following = icon_button('next_comic', 'Next comic', on_press=handler(following))
-        self.sync(previous is not None, following is not None)
+        self.previous = file_navigation_button('previous_comic', 'Previous comic file', on_press=handler(previous))
+        self.following = file_navigation_button('next_comic', 'Next comic file', on_press=handler(following))
+        self.sync(False, False)
         self.widget = toga.Box(children=[toga.Box(style=Pack(flex=1)),
             self.previous, self.following, more], style=Pack(direction=ROW))
 

@@ -264,15 +264,15 @@ def _mount_reader(self, view, controls, comic, neighbors):
         view.crypt_view._native_reader_buttons = lambda: [view.reader_speech_button, view.crypt_actions]
     elif comic:
         view.crypt_view._native_reader_buttons = lambda: [
-            *([view.comic_header.previous] if view.comic_header.available[0] else []),
-            *([view.comic_header.following] if view.comic_header.available[1] else []), view.crypt_actions]
+            view.comic_header.previous, view.comic_header.following, view.crypt_actions]
     elif view.crypt_reader.kind == '.pdf':
         view.crypt_view._native_reader_buttons = lambda: [view.pdf_tools.button, view.crypt_actions]
     else:
         view.fit_button = icon_button('fit', 'Fit image', on_press=self.fit_private_page)
         if image:
             from features.images.mobile.navigation import install
-            view.image_file_buttons = install(self, view, icon_button=icon_button)
+            from .reader_controls import file_navigation_button
+            view.image_file_buttons = install(self, view, icon_button=file_navigation_button)
             for button in view.image_file_buttons:
                 header.insert(len(header.children) - 1, button)
         view.crypt_view._native_reader_buttons = lambda: [*getattr(view, 'image_file_buttons', ()), view.fit_button, view.crypt_actions]

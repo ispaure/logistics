@@ -59,7 +59,7 @@ Comics owns:
   sibling import is now lazy so importing these decisions is portable.
 - `collection/pages.py` and `features/images/validation.py`: mobile page-format/image bounds.
 - `mobile/navigation.py`: validated spread loading, forward/backward spread bounds
-  and naturally ordered neighboring identities supplied by the host.
+  and alphabetically ordered neighboring file identities supplied by the mobile host.
 - `mobile/composite.py`: bounded, memory-only native bitmap composition with
   common-height proportional pages, manga order and transparent gutter. The gutter
   is computed from the fitted viewport to retain the desktop's eight-point spacing.

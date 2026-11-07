@@ -548,8 +548,8 @@ class ShowInFolderTests(TestCase):
         async def exercise():
             app.show_home()
             self.assertTrue(await app.open_download(path=path))
-            app.show_preview()
-            self.assertIn('Show in folder', [label for label, _ in app.editor_view.preview_actions.actions])
+            owner = app.private_sessions.active
+            self.assertIn('Show in folder', [label for label, _ in owner.crypt_actions_menu.actions])
         app.loop.run_until_complete(exercise())
 
     def test_encrypted_reader_reveals_scoped_folder_and_preserves_session(self):
