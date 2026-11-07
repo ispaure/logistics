@@ -727,6 +727,9 @@ class NotesLibraryPanelTests(unittest.TestCase):
                 original_render()
             owner.render_tree = render
             def scan(*args, progress, **kwargs):
+                if progress is None:
+                    # The saved filename index can have no matches for the new query.
+                    return SearchResult([], 0, True, [])
                 result = SearchResult([dict(path='Vault/Projects/Plan.MD', name='Plan.MD', directory=False)], 1, False, [])
                 progress(result)
                 entered.set()
