@@ -393,7 +393,7 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
     await app.save_crypt()
     assert app.private_dirty() and 'failed' in app.provider_sessions().active.crypt_title.text.lower()
     assert (app.crypt_copies.root / reader.key / 'data').read_bytes() == original
-    app.discard_crypt()
+    assert await app.discard_crypt(), 'Stale LocalCrypt draft did not discard'
     await app.clear_cloud()
     await app.refresh_crypt()
     assert all('Locked copy' in label for label in app.crypt_labels)
