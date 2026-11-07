@@ -306,7 +306,8 @@ def record_android_stall(path, row):
                 ('screen.png', ['exec-out', 'screencap', '-p']),
                 ('windows.txt', ['shell', 'dumpsys', 'window', 'windows']),
                 ('input-method.txt', ['shell', 'dumpsys', 'input_method']),
-                ('last-anr.txt', ['shell', 'dumpsys', 'activity', 'lastanr'])):
+                ('last-anr.txt', ['shell', 'dumpsys', 'activity', 'lastanr']),
+                ('logcat.txt', ['logcat', '-b', 'all', '-d', '-t', '400'])):
             remaining = deadline - time.monotonic()
             if remaining <= 0:
                 break
@@ -314,7 +315,9 @@ def record_android_stall(path, row):
                 capture_output=True, timeout=min(5, remaining), check=False)
             path.with_name('android-focus-stall-' + name).write_bytes(result.stdout)
             record['commands'][name] = result.returncode
-        record['status'] = ('captured' if len(record['commands']) == 4
+            if name == 'windows.txt' and b'Application Not Responding: com.android.systemui}' in result.stdout:
+                record['external_blocker'] = 'com.android.systemui ANR dialog'
+        record['status'] = ('captured' if len(record['commands']) == 5
                             and not any(record['commands'].values()) else 'partial')
     except (OSError, subprocess.SubprocessError) as error:
         record.update(status='capture-error', error=str(error)[:500])
