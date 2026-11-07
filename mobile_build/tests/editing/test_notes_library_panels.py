@@ -139,7 +139,7 @@ class NotesLibraryPanelTests(unittest.TestCase):
             self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
             self.assertFalse(hasattr(owner, 'panel_menu'))
             self.assertFalse(hasattr(owner, 'panel_footer'))
-            self.assertEqual(owner.tree.children[1:3], [owner.panel_actions, owner.panel_body])
+            self.assertEqual(owner.files_content.children, [owner.panel_actions, owner.rows_scroll])
             self.assertEqual(owner.panel_actions.style.justify_content, 'center')
             self.assertEqual(sum(hasattr(child, 'on_press') for child in owner.panel_actions.children), 3)
             owner.dispose()
@@ -452,6 +452,7 @@ class NotesLibraryPanelTests(unittest.TestCase):
     def test_tabs_mount_only_the_selected_content_and_preserve_search(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            pane_children = tuple(owner.tree.children)
             self.assertEqual(owner.panel_body.children, [owner.files_content])
             self.assertIsNone(owner.calendar_scroll.parent)
             self.assertEqual(owner.panel_tabs['Files'].style.font_weight, 'bold')
@@ -462,19 +463,21 @@ class NotesLibraryPanelTests(unittest.TestCase):
             owner.search.value = 'Plan'
             await owner.search_task
             self.assertEqual(owner.panel_tab, 'Search')
+            self.assertEqual(tuple(owner.tree.children), pane_children)
             self.assertIs(owner.search.parent, owner.search_content)
             self.assertIsNone(owner.search_mode.parent)
             self.assertIs(owner.rows_scroll.parent, owner.search_content)
-            self.assertIsNone(owner.panel_actions.parent)
+            self.assertIsNone(owner.files_content.parent)
             owner.select_panel_tab('Calendar')
+            self.assertEqual(tuple(owner.tree.children), pane_children)
             self.assertEqual(owner.panel_body.children, [owner.calendar_scroll])
-            self.assertIsNone(owner.panel_actions.parent)
             self.assertIsNone(owner.files_content.parent)
             self.assertEqual(owner.panel_tabs['Calendar'].style.font_weight, 'bold')
             self.assertEqual(owner.panel_tabs['Calendar']._impl._surface_roles[:2], ('transparent', 'accent'))
             self.assertEqual(owner.panel_tabs['Files']._impl._surface_roles[:2], ('transparent', 'muted'))
             await owner.calendar_task
             owner.select_panel_tab('Files')
+            self.assertEqual(tuple(owner.tree.children), pane_children)
             self.assertEqual(owner.panel_body.children, [owner.files_content])
             self.assertIsNone(owner.calendar_scroll.parent)
             self.assertEqual(owner.search.value, 'Plan')
@@ -482,7 +485,7 @@ class NotesLibraryPanelTests(unittest.TestCase):
             self.assertEqual({child.vault_path for row in owner.rows.children for child in row.children
                               if hasattr(child, 'vault_path')},
                              {'Vault/Projects', 'Vault/attachment.txt', 'Vault/Home.md'})
-            self.assertIs(owner.panel_actions.parent, owner.tree)
+            self.assertIs(owner.panel_actions.parent, owner.files_content)
             owner.select_panel_tab('invalid')
             self.assertEqual(owner.panel_body.children, [owner.files_content])
         self.run_async(exercise())

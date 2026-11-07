@@ -238,8 +238,9 @@ async def geometry(app, panel, orientation, output, index):
         assert status_bottom <= paper_top < 206, record
     if orientation == 'landscape-left':
         assert band is None, record
-    if orientation == 'landscape-left' and app.presentation.native_notebook_toolbar:
-        tools = panel.native_drawing_tools
+    controller = app.native_host.adapter.content_controller(app.native_host.state.destination)
+    tools = panel.native_drawing_tools
+    if orientation == 'landscape-left' and tools.fits(controller):
         assert tools.current() and len(tools.buttons) == 5, 'Landscape title/tool row did not mount'
         title = panel.view._document_title_view
         assert_native_owner(title.superview, tools.header._title_content._impl.native, 'landscape title host')
@@ -261,6 +262,8 @@ async def geometry(app, panel, orientation, output, index):
             await asyncio.sleep(.05)
         else:
             raise AssertionError('Mounted native tools did not replace the DOM toolbar')
+        if tools.wide_landscape(controller):
+            assert tools.header.style.margin_left >= 16 and tools.header.style.margin_right >= 16, record
         record['native_drawing_targets'] = targets
         record['title_and_tools_same_row'] = True
     elif orientation == 'landscape-left':

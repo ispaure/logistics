@@ -6,7 +6,7 @@ destination with library tabs and document groups; mobile opens libraries from
 Documents and uses adaptive Files and Links panels. Cloud folders must first be
 downloaded or synced locally.
 
-An `.obsidian` directory enables automatic discovery; the desktop **Open Library**
+A `.noteslibrary` file or an `.obsidian` directory enables discovery. The desktop **Open Library**
 picker also accepts unmarked folders. The separate [Obsidian integration](../obsidian/obsidian.md)
 launches the external desktop application.
 

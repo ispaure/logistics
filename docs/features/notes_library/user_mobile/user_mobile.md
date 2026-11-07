@@ -75,14 +75,19 @@ controls follow the document pane when Files is visible alongside it.
 
 ## Notes Library and Documentation Library
 
-Open **Documents → Notes Library** to see libraries found in Local and unlocked
-LocalCrypt storage. Discovery looks for an `.obsidian` directory at the storage
-root and up to two folders below it. Use **Refresh libraries** after adding or
-moving one. Library buttons show a local disk icon and, for encrypted storage,
-an open lock instead of a `LocalCrypt:` text prefix. Unlock credentials first to
-see encrypted libraries. Workspaces
-opens folders directly without a Notes Library prompt or menu choice. Notes
-Library keeps actual filenames in its sidebar.
+Open **Documents → Libraries** to see Notes Libraries. To create one, choose
+**New Notes Library…**, pick a storage location, browse to the parent folder,
+and enter a name for your library folder. Use **New folder** if you need to add
+a parent folder first. **Create library here** makes the named folder, writes
+an empty `.noteslibrary` marker inside it, and opens the library. The storage
+picker offers Local, Received Files, Shared Files where writable, and unlocked
+LocalCrypt locations.
+
+Discovery checks the storage root and up to two folders below it. A
+`.noteslibrary` file or an existing `.obsidian` directory marks a library.
+For a library deeper in storage, open its folder from the File Browser.
+Encrypted library buttons show an open lock alongside the local disk icon.
+Notes Library keeps actual filenames in its sidebar.
 
 In writable libraries, **••• → New folder…** creates a folder beside the selected
 note or inside the selected folder. **Rename selected…** changes the name in its current folder.
@@ -131,9 +136,8 @@ creation, renaming or moving. Notes editing and file organization belong to
 Logistics' Notes Library.
 
 
-From **Documents → Notes Library**, choose a Local or unlocked LocalCrypt library
-when the folder contains an `.obsidian` directory. Cloud folders never offer
-library mode; download or sync a local copy first. Individual cloud Markdown
+Open a discovered library from **Documents → Libraries**. For a cloud folder,
+download or sync a local copy before opening it in library mode. Individual cloud Markdown
 files can still be opened in the standalone read-only viewer.
 
 On narrow screens, **Files** opens over the full-width document. Use the

@@ -93,14 +93,18 @@ class LibraryPanels:
         self.sidebar.set_files_scrolls(self.calendar_scroll, *(
             getattr(state['rows'], 'native_list', state['scroll']) for state in self._row_panels.values()
         ))
+        # Keep the tab strip mounted while changing panels. The commands move
+        # with Files, so switching tabs only replaces content below the strip.
         self.panel_body = toga.Box(children=[self.files_content], style=Pack(direction=COLUMN, flex=1))
-        self.panel_body.style.margin_left = self.panel_body.style.margin_right = 4
-        self.panel_body.style.margin_top = 8
+        for content in (self.rows_scroll, self.search_content, self.calendar_scroll):
+            content.style.margin_left = content.style.margin_right = 4
+            content.style.margin_top = 8
         # Symmetric flex spaces make Pack allocate the complete pane width.
         # Justify alone leaves a fixed-width command row at its intrinsic width.
         self.panel_actions = toga.Box(children=[toga.Box(style=Pack(flex=1))],
             style=Pack(direction=ROW, gap=4, justify_content='center'))
-        self.tree.add(tabs, self.panel_actions, self.panel_body)
+        self.files_content.insert(0, self.panel_actions)
+        self.tree.add(tabs, self.panel_body)
         self.search_mode.items = ['Search within Documents', 'Search in File Names']
         self.search_mode.value = 'Search in File Names'
         self.search_mode.on_change = self.search_scope_changed
@@ -117,6 +121,7 @@ class LibraryPanels:
         scope = self.search_mode.value
         if scope == self._search_scope:
             return
+        self.release_search_focus()
         self.search_generation += 1
         if self.search_task is not None:
             if not self.search_task.done():
@@ -142,6 +147,12 @@ class LibraryPanels:
     def resume_search_interface(self):
         if self.search_paused or self.search_query != (self.search.value or ''):
             self.search_changed()
+
+    def release_search_focus(self):
+        # Release the keyboard before UIKit detaches its first responder.
+        impl = self.search._impl
+        if type(impl).__module__.startswith('toga_iOS.'):
+            impl.native.resignFirstResponder()
 
     def invalidate_search_interfaces(self):
         for state in self._search_interfaces.values():
@@ -226,13 +237,11 @@ class LibraryPanels:
     def select_panel_tab(self, name):
         if not self.valid() or name not in self.panel_tabs:
             return
+        if self.panel_tab == 'Search' and name != 'Search':
+            self.release_search_focus()
         if name in ('Files', 'Search'):
             self.select_panel_rows(self._search_scope if name == 'Search' else name)
         self.panel_tab = name
-        if name == 'Files' and self.panel_actions.parent is None:
-            self.tree.insert(1, self.panel_actions)
-        elif name != 'Files' and self.panel_actions.parent is self.tree:
-            self.tree.remove(self.panel_actions)
         selected = {'Files': self.files_content, 'Search': self.search_content,
                     'Calendar': self.calendar_scroll}[name]
         if self.panel_body.children != [selected]:

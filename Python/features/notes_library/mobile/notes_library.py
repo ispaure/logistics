@@ -406,11 +406,19 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                     background='notes_selection' if selected else 'transparent',
                     foreground='accent' if selected else 'text',
                     outlined=False, eink_selected=selected)
-        controls = [button for button in self.secondary.children if button is not self.breadcrumb_scroll]
+        controls = [button for button in (self.back_button, self.forward_button, self.edit, self.reader_actions_button)
+                    if button.parent is self.secondary]
         available = article_width - left - right
         gap = self.secondary.style.gap
+        sync_tools = getattr(self.embedded, 'sync_drawing_toolbar', None)
+        drawing_width = 0
+        if sync_tools is not None:
+            remaining = available - len(controls) * (48 + gap) - 112
+            drawing_width = sync_tools(self.secondary, self.reader_actions_button, remaining)
+            if drawing_width:
+                drawing_width += gap
         # Preserve a useful breadcrumb viewport without adding another toolbar row.
-        width = round(48 * .6) if available - len(controls) * (48 + gap) < 160 else 48
+        width = round(48 * .6) if not drawing_width and available - len(controls) * (48 + gap) < 160 else 48
         title_width = round(48 * .8) if not self.sidebar.wide and width < 48 else 48
         for button in self.view._notes_title_controls:
             if button.style.width != title_width:
@@ -423,7 +431,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                     native = impl.native
                     padding = impl.scale_in(2 if width < 48 else 12)
                     native.setPaddingRelative(padding, native.getPaddingTop(), padding, native.getPaddingBottom())
-        self._breadcrumb_width = max(0, available - len(controls) * (width + gap))
+        self._breadcrumb_width = max(0, available - drawing_width - len(controls) * (width + gap))
         self.refresh_breadcrumbs()
 
     def native_note_buttons(self):
@@ -533,6 +541,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             if self.library.writable and getattr(self.embedded, 'kind', None) != 'file':
                 actions.append(('Save', self.embedded.save))
             if getattr(self.embedded, 'kind', None) == 'notebook':
+                if self.host.apple:
+                    actions.append(('Notebook actions…', self.embedded.notebook_actions))
                 if self.embedded.writable:
                     actions.append(('✓ Save and Close', self.save_and_close_notebook))
                 else:

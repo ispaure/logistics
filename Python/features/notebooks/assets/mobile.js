@@ -208,7 +208,7 @@ renderEraserChoices();
     b.title = label;
     b.setAttribute('aria-label', label + ' stroke');
     b.dataset.width = value;
-    b.innerHTML = svg('<path stroke-width="' + (value * 1.5) + '" d="M3 14q9-12 18 0"/>') + '<small></small>';
+    b.innerHTML = '<svg viewBox="0 0 60 32" aria-hidden="true"><path d="M16 16h28" fill="none" stroke="currentColor" stroke-linecap="round"/></svg><small></small>';
     b.lastChild.textContent = label;
     b.onclick = () => {
       control('width').value = value;
@@ -1069,14 +1069,18 @@ renderEraserChoices();
     const sample = strokeSample.querySelector('path');
     sample.style.stroke = paletteColor(ink.tool, ink.color);
     sample.style.strokeWidth = String(Math.min(7, Math.max(.9, brushFor(ink.tool).widths[ink.width - 1] * .4)));
-    for (let b of widths.querySelectorAll('button')) {
-      let fixed = brushFor(Number(t.value)).fixed_width;
-      b.hidden = fixed && b.dataset.width !== '1';
-      let label = fixed ? 'Fixed' : Object.keys(state.widths)[Number(b.dataset.width) - 1];
-      b.title = label;
-      b.lastChild.textContent = label;
-      b.setAttribute('aria-label', label + ' stroke');
-      b.setAttribute('aria-pressed', String(Number(b.dataset.width) === Number(control('width').value)));
+    const fixed = brushFor(ink.tool).fixed_width;
+    // A horizontal finger stroke also gives directional brushes a defined angle.
+    const fingerSample = [[16, 16, fallbackPressure], [44, 16, fallbackPressure]];
+    for (const button of widths.querySelectorAll('button')) {
+      const width = Number(button.dataset.width);
+      button.hidden = fixed && width !== 1;
+      button.querySelector('path').setAttribute('stroke-width', strokePoint(fingerSample, 1, ink.tool, width)[3]);
+      const label = fixed ? 'Fixed' : Object.keys(state.widths)[width - 1];
+      button.title = label;
+      button.lastChild.textContent = label;
+      button.setAttribute('aria-label', label + ' stroke');
+      button.setAttribute('aria-pressed', String(width === ink.width));
     }
     const current = [ink.tool, ink.color, ink.width];
     if (activePreset === null) workingPreset = current;

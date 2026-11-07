@@ -157,6 +157,11 @@ def populate(app, container, *, title='Notes Library', refresh=True, title_style
         except (asyncio.CancelledError, OperationCancelled):
             return
     app._notes_discovery_task = app.loop.create_task(scan())
+    async def create(widget=None, **kwargs):
+        if valid():
+            await app.editor_picker().show_editor_browser('folder')
+
+    container.add(toga.Button('New Notes Library…', on_press=create, style=Pack(height=48)))
     if refresh:
         container.add(toga.Button('Refresh libraries',
             on_press=lambda widget: populate(app, container, title=title,

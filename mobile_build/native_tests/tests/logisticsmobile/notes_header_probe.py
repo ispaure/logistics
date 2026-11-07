@@ -204,7 +204,7 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 assert list(owner.panel_tabs) == ['Files', 'Search', 'Calendar']
                 assert owner.search.parent is owner.search_content
                 assert owner.rows_scroll.parent is owner.files_content
-                assert owner.tree.children[1:3] == [owner.panel_actions, owner.panel_body]
+                assert owner.files_content.children == [owner.panel_actions, owner.rows_scroll]
                 assert sum(hasattr(child, 'on_press') for child in owner.panel_actions.children) == 3
                 if not owner.sidebar.expanded:
                     overlay = owner.sidebar.overlay
@@ -221,16 +221,16 @@ class NotesHeaderProbe(NotesDrawersProbe):
                 await asyncio.sleep(.3)
                 assert owner.search_rows
                 assert owner.rows_scroll.parent is owner.search_content
-                assert owner.panel_actions.parent is None
+                assert owner.files_content.parent is None
                 await capture_window(self, evidence / ('sidebar-search-' + orientation + '.png'))
                 owner.select_panel_tab('Calendar')
                 await owner.calendar_task
                 await asyncio.sleep(.3)
                 assert owner.panel_body.children == [owner.calendar_scroll]
-                assert owner.panel_actions.parent is None
+                assert owner.files_content.parent is None
                 await capture_window(self, evidence / ('sidebar-calendar-' + orientation + '.png'))
                 owner.select_panel_tab('Files')
-                assert owner.panel_actions.parent is owner.tree
+                assert owner.panel_actions.parent is owner.files_content
                 owner.sidebar.show_detail()
                 await asyncio.sleep(.3)
                 report['samples'].append(dict(orientation=orientation, expanded=owner.sidebar.expanded,

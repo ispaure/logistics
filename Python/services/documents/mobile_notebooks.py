@@ -524,6 +524,11 @@ async def notes_editor(app, library, path):
     from .storage import DocumentResource
 
     class LibraryPanel(NotebookPanel):
+        async def canvas_loaded(self, widget=None, **kwargs):
+            await super().canvas_loaded(widget, **kwargs)
+            if widget is self.web and getattr(library.embedded, 'panel', None) is self:
+                library.refresh_chrome()
+
         def state(self):
             state = super().state()
             state.update(native_close=True, notes_library=True, has_source=False, can_delete=False)
@@ -568,6 +573,23 @@ async def notes_editor(app, library, path):
             await self.flush()
             await self.panel.perform({'op': 'save'})
             return not self.dirty
+        def sync_drawing_toolbar(self, row, before, width):
+            tools = getattr(self.panel, 'native_drawing_tools', None)
+            if tools is None:
+                return 0
+            app = self.panel.app
+            controller = app.native_host.adapter.content_controller(library.destination)
+            if row.parent is None or not tools.fits(controller, inline_width=width):
+                if tools.header is not None:
+                    tools.close()
+                return 0
+            tools.mount(row, controller, before=before)
+            return tools.strip.style.width
+
+        async def notebook_actions(self, widget=None, **kwargs):
+            if not self.panel.closed and self.panel.web is not None:
+                await self.panel.web.evaluate_javascript("window.notebookNativeAction?.('document')")
+
         def dispose(self):
             self.panel.dispose()
 
