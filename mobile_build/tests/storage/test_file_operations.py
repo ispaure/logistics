@@ -407,6 +407,19 @@ class FileOperationTests(unittest.TestCase):
                 destination.resolve()
         resolve.assert_not_called()
 
+    def test_confirmed_delete_rejects_a_replacement_at_the_same_path(self):
+        path = 'first.txt'
+        revision = self.source.entry(path)['revision']
+        request = FileOperationRequest('delete', self.source, path, expected_revision=revision)
+        original = self.source.root / path
+        original.rename(original.with_name('renamed.txt'))
+        original.write_text('replacement')
+
+        with self.assertRaisesRegex(ValueError, 'selected item changed'):
+            request.execute(lambda: False)
+        self.assertEqual(original.read_text(), 'replacement')
+        self.assertTrue(original.with_name('renamed.txt').exists())
+
     def test_invalid_names_and_protected_root_never_mutate_storage(self):
         for request in (FileOperationRequest('new', self.source, '', '../bad'),
                         FileOperationRequest('rename', self.source, 'first.txt', '../bad'),

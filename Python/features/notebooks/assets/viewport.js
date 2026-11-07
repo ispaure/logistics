@@ -96,7 +96,7 @@ function render() {
   if (state.background) {
     if (background.getAttribute('src') !== state.background) background.src = state.background;
   } else background.removeAttribute('src');
-  $('title').textContent = state.name;
+  $('title').textContent = state.display_name ?? state.name;
   if (document.activeElement !== $('notebookName')) $('notebookName').value = state.name;
   $('pageinfo').textContent = (state.index + 1) + ' / ' + state.count;
   $('warning').textContent = state.warning || '';

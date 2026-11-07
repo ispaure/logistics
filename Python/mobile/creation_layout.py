@@ -82,7 +82,7 @@ class CreationLocation:
         mount(bar, self.path, self.caption_index if folder else None)
         mount(bar, bar.caption, None if folder else self.caption_index)
         if not folder:
-            p.picker_header.folder_name.text = 'Locations' if label == 'All files' else label
+            p.picker_header.folder_name.text = label
 
     def set_enabled(self, enabled):
         for child in self.crumbs.children:

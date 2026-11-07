@@ -188,7 +188,8 @@ class NativeNotebookLifecycleTests(unittest.IsolatedAsyncioTestCase):
         with TemporaryDirectory() as directory:
             workspace = Workspace(Path(directory).resolve())
             session = workspace.open('notebook', uuid4().hex, 'notebook')
-            notebook = NS(native_transport=True, document=NS(dirty=False), editor=NS(notebook=NS(name='Synthetic')), closed=False)
+            notebook = NS(native_transport=False, has_native_canvas=True, document=NS(dirty=False),
+                          editor=NS(notebook=NS(name='Synthetic')), closed=False)
             async def flush(): notebook.document.dirty = True
             notebook.flush_input = flush
             host = NS(workspace=workspace, active_host=True, loop=asyncio.get_running_loop(), text_views={},
@@ -310,7 +311,7 @@ class NativeNotebookCloseFactoryTests(unittest.TestCase):
             self.assertEqual(dialog.call_count,2)
             web.evaluate_javascript.assert_not_called()
             self.assertFalse(query.done())
-            self.assertEqual(app._reader_returns[session.id],('home',None,False))
+            self.assertNotIn(session.id, getattr(app, '_reader_returns', {}))
             self.assertTrue(dialog.call_args.args[3]())
             self.assertNotIn(session.id,app.workspace.sessions)
             panel.dispose.assert_called_once()

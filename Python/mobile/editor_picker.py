@@ -334,7 +334,7 @@ class EditorPicker:
         for_app(self.app).changed()
         ordinary = self.app.ordinary_file_roots(
             include_collections=getattr(destination_action, 'kind', '') != 'download')
-        self.editor_storage_roots = ({'All files': ordinary['Shared files'], 'Local': None,
+        self.editor_storage_roots = ({'Shared Files': ordinary['Shared files'], 'Local': None,
             'Received Files': ordinary['Received Files']} if creation is not None else dict(ordinary))
         if destination_action is not None:
             self.editor_storage_roots = dict(ordinary if getattr(destination_action, 'kind', '') == 'download' else self.app.file_roots)
@@ -844,7 +844,7 @@ class EditorPicker:
         if self.cloud_busy or self.entering_creation_folder():
             return False
         label, folder = location
-        if (self.operation.creation is not None and label == 'All files') or label == 'Shared files':
+        if label in ('Shared Files', 'Shared files'):
             # Collection roots have their own providers, just as in Workspaces.
             # In particular, iOS protects the shared Local directory itself.
             from services.documents.locations import collection_path
@@ -954,7 +954,7 @@ class EditorPicker:
         if not self.cloud_busy and not self.entering_creation_folder():
             if (not self.picker_folder.value and self.operation.creation is not None
                     and self.save_as_storage.value in ('Local', 'Received Files')):
-                return await self.browser_editor_location(('All files', ''))
+                return await self.browser_editor_location(('Shared Files', ''))
             self.picker_folder.value = self.picker_folder.value.rpartition('/')[0]
             await self.refresh_editor_browser()
 
