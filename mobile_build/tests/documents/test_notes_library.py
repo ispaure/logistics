@@ -298,13 +298,18 @@ class NotesLibraryTests(unittest.TestCase):
 
     def test_provider_root_stays_reachable_in_full_breadcrumb_path(self):
         from mobile.obsidian import open_vault
+        parent = 'Projects/Long names for the complete project archive/2026 design references'
+        directory = self.vault / parent
+        directory.mkdir(parents=True)
+        (directory / 'Plan.md').write_text('# Plan')
         async def exercise():
             owner = await open_vault(self.app, LocalFiles(self.vault), '', 'documents')
-            self.assertTrue(await owner.open_note('Projects/Plan.MD'))
+            self.assertTrue(await owner.open_note(parent + '/Plan.md'))
             owner.reflow(320)
             links = [child for child in owner.breadcrumbs.children if hasattr(child, 'breadcrumb_folder')]
-            self.assertEqual([child.breadcrumb_folder for child in links], ['', 'Projects'])
-            self.assertEqual(links[0].text, owner.library_title)
+            self.assertEqual([child.text for child in links], [owner.library_title, *parent.split('/')])
+            self.assertEqual(links[0].breadcrumb_folder, '')
+            self.assertGreater(sum(child.style.width for child in links), owner._breadcrumb_width)
             await links[0].on_press()
             self.assertTrue(owner.sidebar.sidebar_open)
             owner.dispose()
