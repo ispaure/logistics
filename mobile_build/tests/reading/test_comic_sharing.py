@@ -22,6 +22,43 @@ from services.documents.readers import PrivateReader
 
 
 class ComicSharingTests(unittest.TestCase):
+    def test_navigation_waits_for_automatic_layout_reload(self):
+        self.navigation_during_reload(retire=False)
+
+    def test_navigation_waiting_for_layout_does_not_touch_a_replaced_reader(self):
+        self.navigation_during_reload(retire=True)
+
+    def navigation_during_reload(self, *, retire):
+        from mobile_build.tests.support.app import create_app
+        from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
+        app = create_app(self)
+        app.preferences.save(comic_layout='single')
+        with TemporaryDirectory() as directory:
+            _, comic = make_books(Path(directory))
+            record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), comic)
+            async def exercise():
+                await app.open_book(record['id'])
+                owner = app.reader_manager().active
+                owner.comic_navigation.layout_reload = True
+                owner.set_book_busy(True)
+                pending = asyncio.create_task(owner.move_comic(1))
+                await asyncio.sleep(0)
+                self.assertFalse(pending.done(), 'Page action was dropped during automatic reload')
+                if not retire:
+                    # A second geometry update can start another fit before
+                    # the waiting navigation resumes from the first one.
+                    owner.set_book_busy(False)
+                    owner.set_book_busy(True)
+                    await asyncio.sleep(0)
+                    self.assertFalse(pending.done(), 'Page action was dropped between consecutive reloads')
+                if retire:
+                    owner.book_epoch += 1
+                owner.comic_navigation.layout_reload = False
+                owner.set_book_busy(False)
+                await pending
+                self.assertEqual(owner.book_record['position'], 0 if retire else 1)
+            app.loop.run_until_complete(exercise())
+
     def test_defaults_and_saved_choices_restore_after_sharing_for_both_readers(self):
         for choices in ({}, {'comic_layout': 'single', 'comic_split_wide': 'false'}):
             with self.subTest(choices=choices), TemporaryDirectory() as directory:
