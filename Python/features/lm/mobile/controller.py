@@ -163,6 +163,7 @@ class ChatController(ChatUI):
     _impl = HostService("_impl")
     active_host = HostService("active_host")
     adaptive = HostService("adaptive")
+    chat_keyboard_visible = HostService("chat_keyboard_visible")
     loop = HostService("loop")
     main_window = HostService("main_window")
     native_host = HostService("native_host")
