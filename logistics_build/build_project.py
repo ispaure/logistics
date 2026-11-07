@@ -430,7 +430,8 @@ class LogisticsProject:
         if pattern:
             command += ('--pattern', pattern)
         phases = (Phase('fedora', command, str(snapshot), timeout=5400, stop_grace=240,
-                        artifacts=(str(results / 'result.json'),)),)
+                        artifacts=(str(results / 'result.json'),),
+                        resources={'host.parallels-vm:' + guest['uuid'].strip('{}').lower(): 1}),)
         source['selected_guests'] = [{'distribution': 'fedora', 'name': guest['name'],
                                       'uuid': guest['uuid'], 'initial_state': guest['status']}]
         source['linux_coverage'] = 'fedora'
@@ -467,7 +468,9 @@ class LogisticsProject:
             command += ('--shutdown',)
         source.update(selected_guest=guest, focused_pattern=pattern)
         return Plan('Logistics', 'Focused Windows contracts' if pattern else 'Complete local Windows tests', source,
-                    (Phase('windows', command, str(snapshot), timeout=7200, stop_grace=240, artifacts=(str(results / 'result.json'),)),),
+                    (Phase('windows', command, str(snapshot), timeout=7200, stop_grace=240,
+                           artifacts=(str(results / 'result.json'),),
+                           resources={'host.parallels-vm:' + guest['uuid'].strip('{}').lower(): 1}),),
                     str(workspace), backend='Local Parallels VM')
 
     def android_emulator_plan(self, operation, source, snapshot, workspace, options, env, pattern):

@@ -212,6 +212,7 @@ class ManagerAdapterTests(unittest.TestCase):
             plan = project.make_plan('Test', 'linux', 'Local Parallels VM')
             self.assertEqual([phase.id for phase in plan.phases], ['test-structure', 'fedora'])
             self.assertEqual(plan.source['linux_coverage'], 'fedora')
+            self.assertEqual(plan.phases[-1].resources, {'host.parallels-vm:fedora-id': 1})
             provider.return_value.selected.assert_called_once_with('Synthetic Fedora')
             self.assertTrue(all(phase.cwd == str(project.private / 'snapshots/fixture') for phase in plan.phases))
             self.assertTrue(all(phase.artifacts for phase in plan.phases if phase.kind == 'test'))
@@ -240,6 +241,24 @@ class ManagerAdapterTests(unittest.TestCase):
         self.assertEqual(command[command.index('--distribution') + 1], 'fedora')
         self.assertIn('--container-image', command)
         self.assertEqual(plan.source['linux_coverage'], 'fedora')
+
+    def test_windows_guest_resource_is_independent_of_the_checkout(self):
+        root = Path(__file__).resolve().parents[3]
+        values = manager_settings.defaults(root / 'mobile_build')
+        values['vm.windows'] = 'Dedicated Windows'
+        source = dict(fingerprint='fixture', selection='HEAD')
+        with patch('logistics_build.build_project.materialize'), \
+                patch('logistics_build.guest_source_readiness.ensure', return_value={}), \
+                patch('build_manager.parallels.Parallels') as provider:
+            provider.return_value.selected.return_value = dict(
+                uuid='{12345678-90AB-CDEF-1234-567890ABCDEF}', name='Dedicated Windows', status='running')
+            projects = [LogisticsProject(root / name) for name in ('first-checkout', 'second-checkout')]
+            plans = [project.windows_vm_plan('Test', dict(source), project.private / 'windows', values, '')
+                     for project in projects]
+        self.assertNotEqual(plans[0].workspace, plans[1].workspace)
+        for plan in plans:
+            self.assertEqual(plan.phases[0].resources,
+                             {'host.parallels-vm:12345678-90ab-cdef-1234-567890abcdef': 1})
 
     def test_descriptor_exposes_existing_ios_build_operation(self):
         root = Path(__file__).resolve().parents[3]
