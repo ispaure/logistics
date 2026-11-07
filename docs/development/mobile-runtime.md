@@ -154,12 +154,21 @@ isolated native overlay smoke test.
 
 Workspace navigation sizes are defined in `mobile.ui_metrics`: 17 native
 pt/sp body text, 16 control text, 13 caption text and 48 pt/dp touch targets.
-`toga_font_size()` converts native design sizes by 72/96 because both pinned Toga
-mobile font backends multiply explicit fonts by 96/72. Pack requires integer
-font sizes, so the helper rounds (17 native becomes 13 Toga, about 17.3 native).
-Do not apply this conversion
-to geometry or direct UIKit/Android font APIs. Android retains system sp scaling
-and reported density; there is no BOOX model multiplier or physical-DPI detection.
+`LogisticsMobile.__init__` installs `ui_metrics.install_font_units()` before
+constructing widgets. The app-process adapter converts explicit fonts by 72/96
+at `TogaApplicator.set_font`, because the pinned Toga 0.5.7 iOS and Android font
+backends multiply them by 96/72. All application, feature and shared widgets
+therefore declare `Pack(font_size=17)` for approximately 17 native pt/sp; later
+style changes follow the same path. Styles retain logical sizes for layout.
+Do not pre-convert individual screens or reader preference values. Toga requires
+integral font sizes, so rounding happens once at this boundary (17 native becomes
+13 Toga, about 17.3 native). Installation is idempotent across app/scene creation.
+System-default fonts and non-mobile backends pass through. WebView CSS, geometry
+and direct UIKit/Android font APIs do not use this adapter. Android retains system
+sp scaling and reported density; there is no BOOX model multiplier or physical-DPI
+detection. Host regression checks cover initial and changed fonts, repeat
+installation, preserved font attributes, native defaults, platform isolation and
+reader source/web size parity; native rendering still needs simulator acceptance.
 `folder_hub_style` and `folder_hub_ui` consume these metrics; native file lists
 use 48-unit rows on both platforms (the Java adapter mirrors the constants).
 Android scroll-position calculations must use the same row height as binding.
@@ -1632,9 +1641,9 @@ repeat visits, cross-document Edit and checkpoint/token vetoes.
 ## Settings implementation owners
 
 Settings option titles use the shared 16 pt/sp control size; descriptions use
-the 13 pt/sp caption size, converted through `ui_metrics.toga_font_size` for
-Toga's font units on both mobile backends. Descriptions explain the option's
-effect briefly; longer text is reserved for consequences such as retained drafts
+the 13 pt/sp caption size, declared in logical units and converted by the shared
+font adapter on both mobile backends. Descriptions explain the option's effect
+briefly; longer text is reserved for consequences such as retained drafts
 or session security. `test_settings_ui.py` checks the title/caption hierarchy,
 and `test_settings_navigation.py` checks wrapping in narrow and folded panes.
 

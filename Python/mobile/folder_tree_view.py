@@ -15,7 +15,7 @@ from .folder_hub_style import (
     ENTRY_ICON_SLOT, ENTRY_ICON_SIZE, tree_anchor, tree_guide, TREE_LABEL_GAP,
     align_group_label,
 )
-from .ui_metrics import TOUCH_TARGET, BODY_TEXT, toga_font_size
+from .ui_metrics import TOUCH_TARGET, BODY_TEXT
 
 
 @dataclass
@@ -208,7 +208,7 @@ class FolderTreeView:
                 folder_row(row)
             else:
                 record.group = surface(toga.Label(title,
-                    style=Pack(height=20, margin_top=14, margin_bottom=14, font_size=toga_font_size(BODY_TEXT),
+                    style=Pack(height=20, margin_top=14, margin_bottom=14, font_size=BODY_TEXT,
                                margin_left=TREE_LABEL_GAP if len(path) > 1 else 0,
                                font_weight='bold', flex=1)), radius=0,
                     background='transparent', foreground='text', outlined=False)

@@ -1,6 +1,6 @@
 """Workspaces presentation using native controls and dynamic app colour roles."""
 from .appearance import surface as app_surface
-from .ui_metrics import TOUCH_TARGET, BODY_TEXT, toga_font_size
+from .ui_metrics import TOUCH_TARGET, BODY_TEXT
 
 SOURCE_LABELS = {'Local': 'Local', 'rclone': 'Cloud', 'Network shares': 'Home Server'}
 ROW_HEIGHT = TOUCH_TARGET
@@ -164,7 +164,7 @@ def folder_row(row):
 def folder_name(button):
     """Shared single-line title metrics, inside the row's own surface."""
     button.style.height = ROW_HEIGHT
-    button.style.font_size = toga_font_size(BODY_TEXT)
+    button.style.font_size = BODY_TEXT
     button.style.font_weight = 'normal'
     if type(button._impl).__module__.startswith('toga_android.'):
         # Keep the platform's default button family from changing row metrics.

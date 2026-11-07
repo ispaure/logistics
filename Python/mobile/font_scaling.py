@@ -1,7 +1,7 @@
 """Per-format text sizing, shared by settings and native pinch gestures."""
 import logging
 import weakref
-from commonUtils.ui.native.text_size import TextSizeBinding, native_backend
+from commonUtils.ui.native.text_size import TextSizeBinding
 
 FONT_KEYS = ('markdown_font_size', 'text_font_size', 'epub_font_size')
 
@@ -54,17 +54,6 @@ def bind(host, widget, kind, *, web=False, formatted=None):
 
 
 class FontBinding(TextSizeBinding):
-    def apply(self, size):
-        super().apply(size)
-        widget = self.widget()
-        if (not self.web and not self.closed and widget is not None and self.alive()
-                and font_key(self.kind()) == 'markdown_font_size'
-                and native_backend(widget).startswith(('toga_iOS.', 'toga_android.'))):
-            # Markdown preferences use CSS pixels, as do both WebView surfaces.
-            # Toga Pack fonts use CSS points (96/72 native units per point).
-            from .ui_metrics import toga_font_size
-            widget.style.font_size = toga_font_size(size)
-
     def __init__(self, app, widget, kind, *, web=False, formatted=None):
         self.app = weakref.ref(app)
         self.kind = kind if callable(kind) else lambda: kind

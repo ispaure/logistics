@@ -13,10 +13,10 @@ from services.build_version import BuildVersion, installed_build
 from commonUtils.ui.native import forms as _forms
 from commonUtils.ui.native.forms import wrap_text, FittedLabel as SettingsLabel
 from commonUtils.ui.native.password_input import PasswordInput
-from ..ui_metrics import CONTROL_TEXT, CAPTION_TEXT, toga_font_size
+from ..ui_metrics import CONTROL_TEXT, CAPTION_TEXT
 
-OPTION_FONT_SIZE = toga_font_size(CONTROL_TEXT)
-NOTE_FONT_SIZE = toga_font_size(CAPTION_TEXT)
+OPTION_FONT_SIZE = CONTROL_TEXT
+NOTE_FONT_SIZE = CAPTION_TEXT
 
 
 def page(title):

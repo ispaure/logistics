@@ -10,6 +10,10 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import AsyncMock, patch
 
+import toga
+from toga.style import Pack, TogaApplicator
+from toga_dummy.utils import EventLog
+
 from mobile.app import LogisticsMobile
 from mobile.preferences import Preferences
 from mobile.font_scaling import FONT_KEYS, refresh
@@ -17,19 +21,78 @@ from mobile.font_scaling import FONT_KEYS, refresh
 
 class FontScalingTests(unittest.TestCase):
     def test_ios_markdown_source_uses_webview_units_on_open_and_refresh(self):
-        with patch('mobile.font_scaling.native_backend', return_value='toga_iOS.widgets'):
+        with patch('mobile.ui_metrics.native_backend', return_value='toga_iOS.widgets'):
             self.app.preferences.values['markdown_font_size'] = '16'
             self.app.create_chosen_document('md')
             owner = self.app.editor_view
-            self.assertEqual(owner.editor.style.font_size, 12)
+            self.assertEqual(owner.editor.style.font_size, 16)
             owner.editor.value = '# Unsaved draft'
             self.app.preferences.values['markdown_font_size'] = '24'
             refresh(self.app)
-            self.assertEqual(owner.editor.style.font_size, 18)
+            self.assertEqual(owner.editor.style.font_size, 24)
+            self.assertEqual(self.applied_font(owner.editor).size, 18)
             owner.apply_split(0)
-            self.assertEqual(owner.editor.style.font_size, 18)
+            self.assertEqual(owner.editor.style.font_size, 24)
+            self.assertEqual(self.applied_font(owner.editor).size, 18)
             self.assertEqual(owner.editor.value, '# Unsaved draft')
             self.assertEqual(owner.formatted.font_size, 24)
+
+    @staticmethod
+    def applied_font(widget):
+        return EventLog.performed_actions(widget, 'set font')[-1]['font']
+
+    def test_mobile_font_adapter_covers_initial_fonts_and_later_style_changes(self):
+        from commonUtils.ui.native.forms import FittedLabel
+        for backend in ('toga_iOS.widgets.label', 'toga_android.widgets.label'):
+            for base, args in ((toga.Label, ('Caption',)), (FittedLabel, ('Shared label',)),
+                               (toga.Button, ('Action',)), (toga.TextInput, ())):
+                with self.subTest(backend=backend, widget=base):
+                    widget_type = type('MobileControl', (base,), {'backend_name': backend})
+                    widget = widget_type(*args, style=Pack(font_size=16, height=48))
+                    self.assertEqual(widget.style.font_size, 16)
+                    self.assertEqual(self.applied_font(widget).size, 12)
+                    widget.style.font_size = 24
+                    self.assertEqual(widget.style.font_size, 24)
+                    self.assertEqual(self.applied_font(widget).size, 18)
+                    widget.style.font_weight = 'bold'
+                    self.assertEqual(self.applied_font(widget).size, 18)
+                    self.assertEqual(self.applied_font(widget).weight, 'bold')
+                    self.assertEqual(widget.style.height, 48)
+
+    def test_font_adapter_installs_once_and_preserves_font_attributes_and_defaults(self):
+        from mobile.ui_metrics import install_font_units
+        original = TogaApplicator.set_font
+        install_font_units()
+        install_font_units()
+        self.assertIs(TogaApplicator.set_font, original)
+        label_type = type('MobileLabel', (toga.Label,), {'backend_name': 'toga_iOS.widgets.label'})
+        label = label_type('Text', style=Pack(font_size=17, font_family='monospace',
+                                            font_weight='bold', font_style='italic'))
+        font = self.applied_font(label)
+        self.assertEqual((font.size, font.family, font.weight, font.style, font.variant),
+                         (13, 'monospace', 'bold', 'italic', 'normal'))
+        self.assertEqual(label.style.font_size, 17)
+        default = label_type('System default')
+        self.assertEqual(self.applied_font(default).size, -1)
+
+    def test_font_adapter_does_not_convert_other_backends(self):
+        for backend in ('toga_cocoa.widgets.label', 'toga_winforms.widgets.label',
+                        'toga_gtk.widgets.label', 'toga_dummy.widgets.label'):
+            with self.subTest(backend=backend):
+                label_type = type('OtherLabel', (toga.Label,), {'backend_name': backend})
+                label = label_type('Text', style=Pack(font_size=16))
+                self.assertEqual(self.applied_font(label).size, 16)
+
+    def test_settings_and_workspace_controls_are_not_converted_twice(self):
+        from mobile.ui_metrics import BODY_TEXT, CAPTION_TEXT, CONTROL_TEXT
+        from mobile.folder_hub_style import folder_name
+        from mobile.settings.forms import OPTION_FONT_SIZE, NOTE_FONT_SIZE
+        self.assertEqual((OPTION_FONT_SIZE, NOTE_FONT_SIZE), (CONTROL_TEXT, CAPTION_TEXT))
+        label_type = type('MobileLabel', (toga.Label,), {'backend_name': 'toga_android.widgets.label'})
+        label = label_type('Body')
+        folder_name(label)
+        self.assertEqual(label.style.font_size, BODY_TEXT)
+        self.assertEqual(self.applied_font(label).size, 13)
 
     def setUp(self):
         self.directory = TemporaryDirectory()

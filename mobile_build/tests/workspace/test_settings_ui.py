@@ -565,9 +565,9 @@ class SettingsUITests(unittest.TestCase):
                 section = group.parent
                 self.assertIs(section.children[section.children.index(group) + 1], row._settings_note)
                 self.assertTrue(row._settings_note.text)
-                from mobile.ui_metrics import CAPTION_TEXT, CONTROL_TEXT, toga_font_size
-                self.assertEqual(row._settings_note.style.font_size, toga_font_size(CAPTION_TEXT))
-                self.assertEqual(label.style.font_size, toga_font_size(CONTROL_TEXT))
+                from mobile.ui_metrics import CAPTION_TEXT, CONTROL_TEXT
+                self.assertEqual(row._settings_note.style.font_size, CAPTION_TEXT)
+                self.assertEqual(label.style.font_size, CONTROL_TEXT)
                 self.assertLess(row._settings_note.style.font_size, label.style.font_size)
             self.assertEqual(app.restore_choice.parent._settings_note.text.replace('\n', ' '),
                              'Resume the last active document when the app starts.')
