@@ -452,3 +452,15 @@ async def show_folder_location(app, location, *, on_selected=None):
         if on_selected is not None and browser.selected == entry.identity:
             return await on_selected(browser, entry)
     return entry is not None
+
+
+
+def comic_file_entries(app, session, owner):
+    """Resolve original-folder siblings through the document storage boundary."""
+    from commonUtils.runtime.resources.local import LocalFiles
+    from features.comics.mobile.navigation import folder_comics
+    location = folder_location(app, session, owner)
+    if not location or location.get('cached') or 'path' not in location:
+        return None, []
+    path = location['path']
+    return path, folder_comics(LocalFiles(path.parent).list(''), path.name)

@@ -51,17 +51,8 @@ class ComicController:
         self.app = owner
         self.file_neighbors = (False, False)
 
-    def file_entries(self):
-        """Local imports keep their source folder; cached UUIDs are not siblings."""
-        from mobile.document_sources import folder_location
-        from .navigation import folder_comics
-        from commonUtils.runtime.resources.local import LocalFiles
-        location = folder_location(self.app.app, self.app.session, self.app)
-        if not location or location.get('cached') or 'path' not in location:
-            return None, []
-        path = location['path']
-        rows = LocalFiles(path.parent).list('')
-        return path, folder_comics(rows, path.name)
+    file_entries = HostAttribute("comic_file_entries")
+    open_comic_neighbor = HostAttribute("open_comic_neighbor")
 
     def sync_comic_neighbors(self):
         header = getattr(self.app, 'comic_header', None)
@@ -163,15 +154,7 @@ class ComicController:
             return
         target = adjacent_comic(entries, path.name, direction)
         if target is not None:
-            from mobile.document_imports import open_local_document
-            immersive = self.reader_immersive
-            target_path = path.parent / target
-            opened = await open_local_document(self.app.app, target_path,
-                                               destination=self.presentation_destination)
-            if opened:
-                owner = self.app.app.private_sessions.active
-                if owner.crypt_immersive != immersive:
-                    owner.toggle_private_reading_mode()
+            if await self.open_comic_neighbor(path.parent / target):
                 self.manager.close(self.app.session.id)
 
     async def previous_comic_file(self, widget=None, **kwargs):
