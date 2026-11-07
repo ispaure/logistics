@@ -8,6 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from commonUtils.runtime.resources.local import LocalFiles
+from commonUtils.testing.waiting import wait_until
 from features.text_editor.resources import LocalTextCopies
 from features.rclone.localcrypt.mobile.resources import encrypted_copies
 from mobile.file_operations import FileOperationRequest
@@ -86,8 +87,9 @@ async def exercise_destination_edges(app):
     picker.save_as_storage.items = list(picker.editor_storage_roots)
     for label in ('Edge first', 'Edge second', 'Edge first', 'Edge second'):
         picker.save_as_storage.value = label
-        await picker._storage_refresh
-        assert picker.editor_picker_location == (label, '')
+        await wait_until(lambda: picker.editor_picker_location == (label, '')
+                         and picker._storage_refresh is not None and picker._storage_refresh.done(),
+                         timeout=10, message=lambda: (label, picker.editor_picker_location))
         assert not picker.picker_parent.enabled
     for name in ('bad/name', '../escape'):
         picker.save_as_name.value = name
@@ -175,7 +177,8 @@ async def exercise_destination_edges(app):
                 return bool(insets is not None and insets.isVisible(ime))
             def input_ready():
                 return bool(native.isAttachedToWindow() and native.hasWindowFocus()
-                            and native.hasFocus() and manager.isActive(native) and manager.isAcceptingText())
+                            and native.hasFocus() and manager.isActive(native)
+                            and manager.isAcceptingText() and not manager.isFullscreenMode())
             keyboard_settled = await settled_keyboard(request_keyboard, keyboard_visible,
                                                        ready=input_ready, attempts=60)
         else:
@@ -216,6 +219,8 @@ async def exercise_destination_edges(app):
             sample['input_active'] = bool(manager.isActive(native))
             sample['input_accepting_text'] = bool(manager.isAcceptingText())
             sample['input_attached'] = bool(native.isAttachedToWindow())
+            sample['fullscreen_ime'] = bool(manager.isFullscreenMode())
+            sample['ime_options'] = int(native.getImeOptions())
             if not keyboard_settled:
                 print('LOGISTICS_NATIVE_ANDROID_STALL=' + json.dumps(dict(
                     reason='destination-keyboard', orientation=orientation)), flush=True)
@@ -223,7 +228,6 @@ async def exercise_destination_edges(app):
                 # windows alive briefly for the hosted screenshot/window dump.
                 await asyncio.sleep(15)
             assert keyboard_settled, sample
-            sample['fullscreen_ime'] = bool(manager.isFullscreenMode())
             assert not sample['fullscreen_ime'], sample
             if sample['keyboard_visible']:
                 bounds = app._impl.native.getWindowManager().getCurrentWindowMetrics().getBounds()

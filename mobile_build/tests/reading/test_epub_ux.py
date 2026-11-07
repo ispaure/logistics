@@ -273,6 +273,40 @@ class EpubUXTests(unittest.TestCase):
 
             app.loop.run_until_complete(exercise())
 
+    def test_private_chapter_request_survives_progress_write(self):
+        from types import SimpleNamespace
+        with TemporaryDirectory() as directory, mobile_app(root=Path(directory)) as app:
+            epub, _ = make_books(Path(directory))
+            private = PrivateReader('Private.epub', epub.read_bytes())
+            app.show_cloud()
+
+            async def exercise():
+                with patch.object(app.crypt_copies, 'open', return_value=private):
+                    self.assertTrue(await app.open_crypt(copies=app.crypt_copies, key='a' * 32))
+                owner = app.private_sessions.active
+                release = asyncio.Event()
+                progress = SimpleNamespace(worker=None, task=None, capture=lambda: None)
+
+                async def save():
+                    await release.wait()
+                    progress.worker = None
+
+                with patch.object(owner, '_provider_progress', progress):
+                    progress.worker = progress.task = asyncio.create_task(save())
+                    owner.crypt_page.value = private.labels[1]
+                    read = asyncio.create_task(owner.read_crypt_page())
+                    try:
+                        await asyncio.sleep(0)
+                        self.assertFalse(read.done())
+                        self.assertEqual(owner.provider_epub_view.index, 0)
+                    finally:
+                        release.set()
+                        await asyncio.gather(read, progress.task)
+                self.assertEqual(owner.provider_epub_view.index, 1)
+                self.assertEqual(owner._provider_displayed_index, 1)
+
+            app.loop.run_until_complete(exercise())
+
     def test_private_hamburger_opens_contents_and_bookmarks_without_moving_passage(self):
         with TemporaryDirectory() as directory, mobile_app(root=Path(directory)) as app:
             root = Path(directory)

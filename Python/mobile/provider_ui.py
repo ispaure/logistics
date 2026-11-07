@@ -463,9 +463,19 @@ class ProviderUI(FilesUI):
     async def read_crypt_page(self, widget=None, *, preserve_speech=False, **kwargs):
         document = self.provider_document()
         current = document.capture()
-        if not current() or not document.can_start():
+        reader = self.crypt_reader
+        if not current() or self.cloud_busy or reader is None or reader.editable:
             return
-        if self.cloud_busy or self.crypt_reader is None or self.crypt_reader.editable:
+        progress = getattr(self, '_provider_progress', None)
+        if progress is not None and progress.worker is not None:
+            # The progress write briefly owns the same source as the page read.
+            # Keep this selection only while the reader and intent remain current.
+            selection = self.crypt_page.value
+            await asyncio.wait({progress.task})
+            if (not current() or self.manager.active is not self
+                    or self.crypt_page.value != selection):
+                return
+        if not document.can_start() or self.cloud_busy:
             return
         panel = getattr(self, 'provider_epub_view', None)
         if not preserve_speech and panel is not None and hasattr(panel, 'close_read_aloud'):
