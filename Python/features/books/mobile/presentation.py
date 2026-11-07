@@ -353,6 +353,7 @@ class ChapterBridge:
                 return False
             if action in {'position', 'next', 'previous'} and 0 <= offset <= 16 * 1024 * 1024:
                 query = parse_qs(urlsplit(url).query)
+                self.offset = offset
                 try:
                     page, count, columns = (int(query[key][0]) for key in ('page', 'pages', 'columns'))
                     layout = query['layout'][0]
@@ -362,7 +363,6 @@ class ChapterBridge:
                             self.on_pagination(self.pagination_state)
                 except (KeyError, ValueError, IndexError):
                     pass
-                self.offset = offset
                 self.at_end = parse_qs(urlsplit(url).query).get('end', ['0'])[0] == '1'
                 if self.on_event:
                     self.on_event(action, offset)

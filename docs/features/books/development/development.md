@@ -509,28 +509,34 @@ inherit interface font changes, and slate/dark themes still adopt shared accent
 tint changes. `test_books_reader.py` covers skipped imports, reading-size updates
 and successive slate color notifications.
 
-## Whole-book screen-page progress
+## Whole-book screen pages and text progress
 
 `features.books.locations.LayoutPages` holds per-spine screen-page counts for one
 layout. Both hosts display percentage, global page (or spread range), then chapter.
-The percentage uses the last visible page divided by the total. Unknown counts
-show “Counting pages…” and disable seeking. Layout changes invalidate the counts;
-saved positions remain UTF-16 text anchors. Ready scrubbers map directly to a
-chapter and local screen page.
+Unknown screen-page counts show “Counting pages…” and disable the scrubber.
+Layout changes invalidate page counts. Ready scrubbers map directly to a chapter
+and local screen page.
 
 Desktop `BookProgress` measures one missing chapter per event-loop step in a hidden
-`BookText` with the live geometry, font, stylesheet and EPUB resource loader. Each
+`BookText` with the live geometry, font, stylesheet and EPUB resource loader. Its
+percentage uses the last visible page divided by the total. Each
 measurement clears its document and book reference before deletion. Closing stops
 the timer and releases the counter's reader/book references.
 
-Mobile `MobilePagination` measures sanitized chapters in inert offscreen columns
-inside the retained WebView, using the live column geometry and typography and
-waiting for images and fonts. Bridge notifications carry page, page count, column
-count and layout key. Only numeric counts and a weak book reference survive between
-chapter bindings. Disposal cancels the owned counting task, detaches callbacks and
-removes measurement DOM content. Chapter preparation stays in that task; no private
-background worker can outlive disposal. Plain-text fallback reports page counts as
-unavailable instead of estimating them.
+Mobile `MobilePagination` scans sanitized chapter text after opening. It uses the
+same UTF-16 offsets as saved positions and bookmarks. The percentage divides
+the preceding chapters' combined length plus the current text offset by the total
+text length. These lengths survive a layout change. An EPUB with no text shows
+its screen-page count without a percentage.
+
+The mobile screen-page counter measures sanitized chapters in inert offscreen
+columns inside the retained WebView. It uses the live geometry and typography
+and waits for images and fonts. Only numeric counts and a weak book reference
+survive between chapter bindings. Disposal cancels the owned tasks, detaches
+callbacks and removes measurement DOM content. Imported EPUB preparation runs
+in a worker. Provider EPUB preparation yields between chapters so the bridge can
+retire it synchronously. Plain-text fallback reports screen-page counts as
+unavailable.
 
 `test_books_layout_progress.py` covers unequal chapter counts and spread/seek math;
 `test_books_reader.py` compares hidden counts with live chapter rendering and checks
