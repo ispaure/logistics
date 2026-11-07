@@ -44,6 +44,7 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
     async def close_copy():
         from unittest.mock import AsyncMock, patch
         owner = app.provider_sessions().active
+        dirty = owner.private_dirty()
         # These cases test private-session lifetime, not native dialog taps.
         # Complete Cancel explicitly instead of leaving a modal over later cases.
         with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='cancel')) as decision:
@@ -55,6 +56,8 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
             if pending is not None:
                 await asyncio.wait_for(asyncio.shield(pending), 60)
                 decision.assert_awaited_once()
+        if not dirty:
+            assert owner.session.id not in app.private_sessions.controllers, 'Clean private reader did not close'
         # UIKit restores retained folder rows after a reader pop. Finish that
         # navigation before starting another listing on the same browser.
         pending = app.routes.folders.task
@@ -185,9 +188,21 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
     privacy.lock_password.value = 'wrong-password'
     await privacy.unlock()
     assert app.main_window.content is privacy.lock_view
+    def lock_state():
+        gates = privacy.gates()
+        return dict(inactive=privacy.inactive, interrupted=privacy.interrupted,
+                    unlock_busy=privacy.unlock_busy, lifecycle_revision=privacy.wifi_revision,
+                    gates=[dict(identity=id(gate), locked=gate.locked, revision=gate.revision,
+                                reason=gate.reason, configured=gate.proof is not None)
+                           for gate in gates])
+
     privacy.lock_password.value = 'synthetic-session-password'
+    before_unlock = lock_state()
+    input_accepted = privacy.lock_password.value == 'synthetic-session-password'
     await privacy.unlock()
-    assert app.main_window.content is not privacy.lock_view
+    assert app.main_window.content is not privacy.lock_view, dict(
+        before=before_unlock, after=lock_state(), input_accepted=input_accepted,
+        status=privacy.lock_status.text)
     assert app.provider_sessions().active.crypt_reader.name == 'note.md'
     passed.append('native_localcrypt_resume_password_lock')
     passed.append('native_localcrypt_snapshot_shield')
