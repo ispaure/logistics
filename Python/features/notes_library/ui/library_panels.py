@@ -103,8 +103,11 @@ class LibraryPanels(LibraryConnections):
             self._search_interfaces.append(dict(search=control, search_results=results,
                 search_more=more, search_notice=notice, search_rows=[], search_shown=50,
                 search_query=None, search_paused=False))
-        self._search_scope = 0
-        for name, value in self._search_interfaces[0].items():
+        self._search_scope = 1
+        self.search_mode.setCurrentIndex(self._search_scope)
+        self.search_inputs.setCurrentIndex(self._search_scope)
+        self.search_footers.setCurrentIndex(self._search_scope)
+        for name, value in self._search_interfaces[self._search_scope].items():
             setattr(self, name, value)
         self.search_mode.currentIndexChanged.connect(self.select_search_scope)
         side.insertWidget(0, self.search_mode)
