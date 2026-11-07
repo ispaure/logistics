@@ -103,10 +103,11 @@ def surface(widget, *, outlined=True, **kwargs):
     return app_surface(widget, outlined=outlined, eink_outlined=outlined, **kwargs)
 
 
-def source_tab(button, selected):
+def source_tab(button, selected, *, quiet=False):
     button.enabled = True
     button.style.font_weight = 'bold' if selected else 'normal'
-    surface(button, radius=8, background='surface' if selected else 'alternate',
+    active, idle = ('hover', 'transparent') if quiet else ('surface', 'alternate')
+    surface(button, radius=8, background=active if selected else idle,
             foreground='text' if selected else 'muted', outlined=False,
             eink_selected=selected)
     backend = type(button._impl).__module__
