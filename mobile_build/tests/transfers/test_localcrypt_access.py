@@ -207,6 +207,23 @@ class Client:
 
 
 class LocalCryptAccessTests(unittest.TestCase):
+    def test_localcrypt_index_receives_credential_changes_without_refreshing_as_a_window(self):
+        from features.rclone.mobile.cloud import CloudClient
+        from features.rclone.mobile.credential_state import NativeCredentialState
+        from mobile.screen_privacy import ScreenPrivacy
+
+        with TemporaryDirectory() as root:
+            client = Client()
+            state = client.credential_state = NativeCredentialState()
+            provider = self.provider(root, client)
+            self.addCleanup(provider.close)
+            index = provider._directory_index
+            with patch.object(CloudClient, 'credential_state', state):
+                ScreenPrivacy.refresh_other_windows(object())
+            self.assertFalse(index.closed)
+            state.publish('clear', {}, {})
+            self.assertTrue(index.closed)
+
     def test_native_write_progress_reports_bytes_and_cancels_without_reading_plaintext(self):
         from threading import Event
         from features.rclone.localcrypt.mobile.resources import write_progress

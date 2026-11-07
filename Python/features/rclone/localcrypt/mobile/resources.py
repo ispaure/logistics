@@ -130,7 +130,7 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
         if credential_state is not None:
             with credential_state.lock:
                 self._access.check()
-                credential_state.observers.add(self._directory_index)
+                credential_state.document_observers.add(self._directory_index)
 
     @property
     def closed(self):
