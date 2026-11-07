@@ -1812,6 +1812,8 @@ and [Duo design guidelines](https://developer.apple.com/design/human-interface-g
 Actions use real `UIBarButtonItem` objects in container-owned navigation bars,
 with groups, visibility priorities and `verticalBarCompressionBehavior`.
 UIKit owns placement, compression and overflow around changing system activity.
+When the bars are vertical, navigation items prefer keeping the destination tabs
+visible so toolbar actions compress first.
 Optional drawer/Search actions join regular vertical item groups so they can
 overflow; Back/Close retain their navigation placement. Existing overflow menus
 use `additionalOverflowItems` with live providers. Activity changes do not replace

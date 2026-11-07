@@ -178,7 +178,8 @@ def reserve_bar_clearance(controller):
     if content is not None:
         item = content.navigationItem
         if item.respondsToSelector(SEL('setVerticalBarCompressionBehavior:')):
-            behavior = 1 if vertical_edge(content) else 0
+            # UIKit's PrefersTabBar lets vertical toolbar items overflow first.
+            behavior = 2 if vertical_edge(content) else 0
             if int(item.verticalBarCompressionBehavior) != behavior:
                 item.verticalBarCompressionBehavior = behavior
     previous = getattr(controller, '_logistics_occlusion_top', 0)
