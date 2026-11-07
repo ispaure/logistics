@@ -26,6 +26,33 @@ class FolderSourceTabTests(unittest.TestCase):
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
 
+    def test_device_caption_uses_native_class_not_window_width(self):
+        from types import SimpleNamespace as NS
+        from unittest.mock import patch
+        from mobile.workspaces_screen import device_label
+        for idiom, expected in ((0, 'Phone'), (1, 'Tablet')):
+            app = NS(_impl=type('Impl', (), {'__module__': 'toga_iOS.app'})())
+            with patch.dict('sys.modules', {'rubicon': NS(), 'rubicon.objc': NS(
+                    ObjCClass=lambda name: NS(currentDevice=NS(userInterfaceIdiom=idiom)))}):
+                self.assertEqual(device_label(app), expected)
+        for width, expected in ((400, 'Phone'), (700, 'Tablet')):
+            native = NS(getResources=lambda: NS(getConfiguration=lambda: NS(smallestScreenWidthDp=width)))
+            app = NS(_impl=type('Impl', (), {'__module__': 'toga_android.app', 'native': native})())
+            self.assertEqual(device_label(app), expected)
+
+    def test_workspace_display_labels_preserve_filter_keys(self):
+        app = self.app
+        app.show_locations()
+        self.assertEqual(app.folder_local_buttons['Rclone'].text, 'Rclone Copies')
+        self.assertEqual(app.folder_local_buttons['Others'].text, 'On This Phone')
+        app.change_folder_source('rclone')
+        self.assertEqual(app.folder_cloud_tab.text, 'Rclone Remotes')
+        self.assertEqual(list(app.folder_local_header.children), [app.folder_cloud_tabs])
+        app.change_folder_source('Network shares')
+        self.assertFalse(app.folder_local_header.children)
+        app.change_folder_source('Local')
+        self.assertEqual(list(app.folder_local_header.children), [app.folder_local_tabs])
+
     def test_native_review_uses_dedicated_managed_folder_route(self):
         from mobile_build.tests.support.app import mobile_app
         from mobile_build.native_tests.tests.logisticsmobile.ui_review import open_review_folder_from_shared_files
@@ -171,7 +198,7 @@ class FolderSourceTabTests(unittest.TestCase):
         app.show_locations()
         ordinary = dict(source='Local', kind='local', name='Notes-2026-10', value='Notes-2026-10')
         managed = dict(source='Local', kind='job', name='Server-Books', remote='Server-Books', value='job')
-        encrypted = dict(source='LocalCrypt', kind='crypt', name='Private', remote='Private', value='LocalCrypt: Private')
+        encrypted = dict(source='LocalCrypt', kind='crypt', name='Private', remote='Private', value='Private - Encrypted Copy')
         browser = dict(source='Local', kind='shared-local', name='Shared Files', value='', browser_root=True)
         choices = {'Notes-2026-10': ordinary, 'Server-Books': managed, 'Private': encrypted, 'All files': browser}
         app.update_folder_list(choices)
@@ -194,7 +221,7 @@ class FolderSourceTabTests(unittest.TestCase):
         app.folder_local_buttons['Others'].on_press()
         self.assertNotIn(shared_name, app.folder_buttons)
         app.change_folder_source('rclone')
-        self.assertFalse(app.folder_local_header.children)
+        self.assertEqual(list(app.folder_local_header.children), [app.folder_cloud_tabs])
         app.change_folder_source('Local')
         self.assertTrue(app.folder_local_header.children)
 
@@ -454,15 +481,15 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertIs(parent.children[0], header)
         app.file_changing_location = True
         try:
-            app.file_roots['LocalCrypt: Secret'] = 'Secret'
+            app.file_roots['Secret - Encrypted Copy'] = 'Secret'
             app.file_storage.items = list(app.file_roots)
-            app.file_storage.value = 'LocalCrypt: Secret'
+            app.file_storage.value = 'Secret - Encrypted Copy'
             app.refresh_file_source_tabs()
             app.refresh_file_source_tabs()
             self.assertIsNone(app.file_source_tabs.parent)
             self.assertEqual(app.file_source_buttons, {})
             self.assertIs(parent.children[0], header)
-            self.assertEqual(app.file_storage.value, 'LocalCrypt: Secret')
+            self.assertEqual(app.file_storage.value, 'Secret - Encrypted Copy')
             app.file_storage.value = 'Local files'
             app.refresh_file_source_tabs()
             self.assertIsNone(app.file_source_tabs.parent)

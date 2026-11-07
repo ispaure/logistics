@@ -5,6 +5,7 @@ from toga.style import Pack
 from toga.style.pack import CENTER, COLUMN, ROW
 
 from commonUtils.ui.native.forms import FittedLabel
+from services.folders.labels import local_source_label, RCLONE_REMOTES
 
 from .appearance import accessible_name, batch_surfaces
 from .folder_hub import credential_choices, source_choices
@@ -13,6 +14,36 @@ from .folder_hub_style import (
 )
 from .folder_tree_view import FolderTreeView
 from .ui_metrics import CAPTION_TEXT, CONTROL_TEXT, TOUCH_TARGET, toga_font_size
+
+
+def device_label(app):
+    """Use device identity, rather than the current pane/window width."""
+    backend = type(app._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        from rubicon.objc import ObjCClass
+        return 'Tablet' if int(ObjCClass('UIDevice').currentDevice.userInterfaceIdiom) == 1 else 'Phone'
+    if backend.startswith('toga_android.'):
+        config = app._impl.native.getResources().getConfiguration()
+        return 'Tablet' if int(config.smallestScreenWidthDp) >= 600 else 'Phone'
+    return 'Phone'
+
+
+def subtab_button(label, *, on_press=None):
+    """Keep full captions readable in narrow workspace sidebars."""
+    button = toga.Button(label, on_press=on_press,
+                         style=Pack(flex=1, height=TOUCH_TARGET, font_size=toga_font_size(CONTROL_TEXT)))
+    backend = type(button._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        button._impl.native.titleLabel.numberOfLines = 2
+        button._impl.native.titleLabel.lineBreakMode = 0
+        button._impl.native.titleLabel.textAlignment = 1
+    elif backend.startswith('toga_android.'):
+        native = button._impl.native
+        padding = button._impl.scale_in(4)
+        native.setPaddingRelative(padding, 0, padding, 0)
+        native.setSingleLine(False)
+        native.setMaxLines(2)
+    return button
 
 
 class WorkspacesScreen:
@@ -60,10 +91,14 @@ class WorkspacesScreen:
                     self.preferences.save(workspace_local_group=selected)
                 except (OSError, ValueError) as error:
                     self.set_folder_loading('Could not remember workspace tab: ' + str(error))
-            button = toga.Button(group, on_press=select_local,
-                                 style=Pack(flex=1, height=TOUCH_TARGET, font_size=toga_font_size(CONTROL_TEXT)))
+            button = subtab_button(local_source_label(group, device=device_label(self.app)), on_press=select_local)
             self.folder_local_buttons[group] = button
             self.folder_local_tabs.add(button)
+        self.folder_cloud_tab = subtab_button(RCLONE_REMOTES)
+        source_tab(self.folder_cloud_tab, True)
+        accessible_name(self.folder_cloud_tab, RCLONE_REMOTES + ' selected')
+        self.folder_cloud_tabs = toga.Box(children=[self.folder_cloud_tab],
+                                         style=Pack(direction=ROW, margin_bottom=8))
         self.folder_local_header = toga.Box(style=Pack(direction=COLUMN))
         self.folder_list = toga.Box(style=Pack(direction=COLUMN))
         self.folder_tab_views = {}
@@ -173,16 +208,18 @@ class WorkspacesScreen:
         selected = self.folder_credentials.get(credential)
         local_group = self.folder_local_group if self.folder_source == 'Local' else None
         visible = source_choices(choices, self.folder_source, network_remotes, local_group=local_group)
-        if self.folder_source == 'Local':
-            if not self.folder_local_header.children:
-                self.folder_local_header.add(self.folder_local_tabs)
-            if self.folder_local_styled != local_group:
-                for group, button in self.folder_local_buttons.items():
-                    source_tab(button, group == local_group)
-                    accessible_name(button, group + (' selected' if group == local_group else ''))
-                self.folder_local_styled = local_group
-        elif self.folder_local_header.children:
-            self.folder_local_header.remove(self.folder_local_tabs)
+        subtab = (self.folder_local_tabs if self.folder_source == 'Local' else
+                  self.folder_cloud_tabs if self.folder_source == 'rclone' else None)
+        if list(self.folder_local_header.children) != ([subtab] if subtab is not None else []):
+            for child in list(self.folder_local_header.children):
+                self.folder_local_header.remove(child)
+            if subtab is not None:
+                self.folder_local_header.add(subtab)
+        if self.folder_source == 'Local' and self.folder_local_styled != local_group:
+            for group, button in self.folder_local_buttons.items():
+                source_tab(button, group == local_group)
+                accessible_name(button, button.text + (' selected' if group == local_group else ''))
+            self.folder_local_styled = local_group
         credential_filter = self.folder_source == 'rclone' or local_group == 'Rclone'
         if credential_filter and selected is not None:
             visible = credential_choices(visible, selected)

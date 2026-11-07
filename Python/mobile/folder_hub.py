@@ -286,5 +286,5 @@ def folder_row_presentation(title, entry, source, loaded_remotes, crypt_remotes)
         or any(copy['source'] == 'LocalCrypt' for copy in entry.get('copies', ())))))
     state = ('locked' if target.get('locked') else 'unlocked' if remote in loaded_remotes else 'locked') if encrypted else None
     icon = 'folder_' + state if state else 'folder'
-    description = storage + (', ' + state if state else '')
+    description = storage.replace('LocalCrypt', 'Encrypted Copy') + (', ' + state if state else '')
     return FolderRowPresentation(title, icon, description, state)

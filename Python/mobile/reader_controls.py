@@ -28,7 +28,7 @@ def provider_comic_path(copies, reader):
         return f'{copies.remote}:{key}'
     provider = getattr(copies, 'provider', None)
     if provider is not None and getattr(provider, 'private', False):
-        return f"LocalCrypt: {getattr(provider, 'remote', '')}/{key}"
+        return f"{getattr(provider, 'remote', '')} - Encrypted Copy/{key}"
     path = getattr(getattr(reader, 'source', None), 'path', None)
     if path is not None and Path(path).is_absolute():
         return str(path)

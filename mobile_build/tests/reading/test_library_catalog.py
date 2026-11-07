@@ -49,7 +49,7 @@ class LibraryCatalogTests(unittest.TestCase):
             records, failures = discover_libraries(root, [job], client, ['Remote'])
             self.assertEqual(failures, 0)
             self.assertEqual([(row['name'], row['folder'], row['source']) for row in records],
-                             [('Comics', 'Collection/Comics', 'LocalCrypt: Remote')])
+                             [('Comics', 'Collection/Comics', 'Remote - Encrypted Copy')])
             self.assertIsInstance(records[0]['provider'], CryptFiles)
             self.assertEqual(records[0]['provider'].root, namespace)
             self.assertEqual(discover_libraries(root, [job]), ([], 0))

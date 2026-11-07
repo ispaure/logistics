@@ -62,7 +62,7 @@ def populate(app, container, *, title='Notes Library', refresh=True):
 
     fit_label('notes-discovery-status', status)
     if app.home_unlock_candidates():
-        unlock_hint = FittedLabel('Unlock LocalCrypt to include encrypted libraries.', style=Pack(font_size=12))
+        unlock_hint = FittedLabel('Unlock encrypted copies to include their libraries.', style=Pack(font_size=12))
         container.insert(0, unlock_hint)
         fit_label('notes-discovery-unlock', unlock_hint)
     token = object()
@@ -89,8 +89,8 @@ def populate(app, container, *, title='Notes Library', refresh=True):
                 location = linked.location
                 linked.close()
                 # A copy named after its remote needs only one name in the hub.
-                remote_label = 'LocalCrypt: ' + location.remote
-                if label == f'{remote_label} · {location.remote}':
+                remote_label = location.remote + ' - Encrypted Copy'
+                if label == f'{location.remote} · {location.remote} - Encrypted Copy':
                     label = remote_label
                 factories.append((label, lambda location=location: native_service(client).localcrypt.open(location)))
         found, errors = [], []
@@ -129,8 +129,8 @@ def populate(app, container, *, title='Notes Library', refresh=True):
                     finally:
                         if provider is not None and hasattr(provider, 'close'):
                             provider.close()
-                encrypted = label.startswith('LocalCrypt: ')
-                location = label.removeprefix('LocalCrypt: ')
+                encrypted = label.endswith(' - Encrypted Copy')
+                location = label.removesuffix(' - Encrypted Copy')
                 caption = PurePosixPath(root).name or location
                 button = toga.Button(caption, on_press=open_library, style=Pack(height=48))
                 list_button(button)

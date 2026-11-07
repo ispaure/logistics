@@ -37,12 +37,12 @@ class PullChoiceTests(QtTestCase):
                         choice.assert_not_called()
 
     def test_popup_default_and_each_choice_including_cancel(self):
-        for label in ('LocalCrypt (recommended)', 'Regular Local copy', 'Cancel'):
+        for label in ('Encrypted Copy (recommended)', 'Regular Copy', 'Cancel'):
             with self.subTest(label=label), patch.object(actions, 'pull_remote', return_value=True) as local, \
                  patch.object(actions, 'pull_encrypted_copy', return_value=True) as encrypted:
                 def click():
                     dialog = qt.QApplication.activeModalWidget()
-                    self.assertEqual(dialog.defaultButton().text(), 'LocalCrypt (recommended)')
+                    self.assertEqual(dialog.defaultButton().text(), 'Encrypted Copy (recommended)')
                     self.assertIn('remain readable', dialog.informativeText())
                     if label == 'Cancel':
                         dialog.button(qt.QMessageBox.StandardButton.Cancel).click()
@@ -51,7 +51,7 @@ class PullChoiceTests(QtTestCase):
                 qt.QTimer.singleShot(0, click)
                 result = pull_new_copy('Secret', Path('/fixture/accounts.session'))
                 self.assertEqual(result, label != 'Cancel')
-                if label.startswith('LocalCrypt'):
+                if label.startswith('Encrypted Copy'):
                     encrypted.assert_called_once_with('Secret', Path('/fixture/accounts.session'), review=True)
                     local.assert_not_called()
                 elif label.startswith('Regular'):

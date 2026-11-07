@@ -1,4 +1,5 @@
 """Local mobile folder providers; crypt naming/bytes stay in the native bridge."""
+from services.folders.labels import encrypted_copy_label
 from services.documents.locations import collection_path, _modified_time
 from contextlib import contextmanager
 import base64
@@ -493,7 +494,7 @@ def encrypted_library_sources(root, jobs, client, remotes):
         try:
             identity = client.request('crypt_path', remote=remote, path='', directory=True)['identity']
             if (collection_path(root, True) / identity).is_dir():
-                sources.append((encrypted_storage(root, client, remote), '', 'LocalCrypt: ' + remote))
+                sources.append((encrypted_storage(root, client, remote), '', encrypted_copy_label(remote)))
             for job in jobs:
                 job = resolved_job(client, job)
                 cipher = loaded_copy_cipher(client, job)
@@ -506,7 +507,7 @@ def encrypted_library_sources(root, jobs, client, remotes):
                 provider = native_service(client).localcrypt.open(LocalCryptLocation(
                     collection_path(root, True), remote, namespace=job['identity'], storage_root=root, create=False, cipher_identity=job['cipher_identity']))
                 folder = provider.mapping(job['prefix'], directory=True, decode=True)
-                sources.append((provider, folder, 'LocalCrypt: ' + remote))
+                sources.append((provider, folder, encrypted_copy_label(remote)))
         except (OSError, ValueError):
             failures += 1
     return sources, failures

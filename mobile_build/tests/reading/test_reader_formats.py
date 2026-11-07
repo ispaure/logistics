@@ -229,7 +229,7 @@ class ReaderFormatTests(unittest.TestCase):
         remote = SimpleNamespace(remote_storage=True, remote='Cloud', password='must-not-appear')
         self.assertEqual(provider_comic_path(remote, reader), 'Cloud:Comics/Issue 1.cbz')
         crypt = SimpleNamespace(provider=SimpleNamespace(private=True, remote='Secret'), password='must-not-appear')
-        self.assertEqual(provider_comic_path(crypt, reader), 'LocalCrypt: Secret/Comics/Issue 1.cbz')
+        self.assertEqual(provider_comic_path(crypt, reader), 'Secret - Encrypted Copy/Comics/Issue 1.cbz')
         local = SimpleNamespace(provider=SimpleNamespace(private=False))
         self.assertEqual(provider_comic_path(local, reader), '/private/ciphertext')
 

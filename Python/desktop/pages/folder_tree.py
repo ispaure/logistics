@@ -42,7 +42,7 @@ class FolderTreePresentation:
 
         if source_type == 'local':
             entries = local_entries(page._sources)
-            category = page.local_source_tabs.tabText(page.local_source_tabs.currentIndex())
+            category = page.local_source_tabs.tabData(page.local_source_tabs.currentIndex())
             if category is not None:
                 entries = [entry for entry in entries if local_entry_category(entry, page._sources) == category]
             credential = page.credential_combo.currentData()
@@ -116,7 +116,7 @@ class FolderTreePresentation:
                 if index == len(name_parts) - 1:
                     item.setData(0, pyside.Qt.ItemDataRole.UserRole, entry)
                     page._style_folder_item(item, entry)
-                    item.setToolTip(0, '\n'.join(filter(None, (entry.name, copy_labels[entry_key],
+                    item.setToolTip(0, '\n'.join(filter(None, (entry.name, copy_labels[entry_key].replace('LocalCrypt', 'Encrypted Copy'),
                         entry_labels.get(entry_key, ''), str(entry.local.path) if entry.local is not None else ''))))
                     page._entry_items[entry_key] = item
 
