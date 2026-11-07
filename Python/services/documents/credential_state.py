@@ -170,19 +170,31 @@ class MobileCredentialCipher:
                 continue
             if identity is None:
                 identity = client.connection_identity(remote)
-            if client is not getattr(self.app, "cloud_client", None):
+            if identity is None or client is not getattr(self.app, "cloud_client", None):
                 continue
-            for record in getattr(client, "package_records", ()):
-                if (
-                    not record.get("saved")
-                    and record.get("document_cache_id")
-                    and identity
-                    in (
-                        *record.get("identities", {}).values(),
-                        *record.get("crypt_identities", {}).values(),
-                    )
-                ):
-                    return client, record["document_cache_id"]
+            # Distinct packages can have identical connection fingerprints.
+            # Only the package that owns this admitted alias can supply its key.
+            owners = [
+                record
+                for record in getattr(client, "package_records", ())
+                if any(
+                    remote in record.get(field, ())
+                    for field in ("remotes", "identities", "crypt_identities")
+                )
+            ]
+            if len(owners) != 1:
+                continue
+            record = owners[0]
+            if (
+                not record.get("saved")
+                and record.get("document_cache_id")
+                and identity
+                in (
+                    record.get("identities", {}).get(remote),
+                    record.get("crypt_identities", {}).get(remote),
+                )
+            ):
+                return client, record["document_cache_id"]
         raise PermissionError(
             "Unlock the password-protected credential ZIP to save reader state."
         )
