@@ -226,6 +226,7 @@ class NotebookPanel:
 
     def state(self):
         state = document_state(self.editor, self.document)
+        state['eraser_kind'] = self.editor.eraser_kind
         state['brush_preset_limit'] = TOOLBAR_PRESET_LIMIT
         state['brush_presets'] = read_presets(self.app.preferences.values.get(BRUSH_PRESETS, '[]'))
         if self.document is not None and self.document.resource is not None:
@@ -511,7 +512,7 @@ class NotebookPanel:
                 ack_dispatched = True
             return await self._respond(web, script, canvas, release_busy=release_busy)
         try:
-            if action.get('op') in ('add-brush-preset', 'remove-brush-preset'):
+            if action.get('op') in ('add-brush-preset', 'remove-brush-preset', 'update-brush-preset'):
                 try:
                     presets = change_preset(self.app.preferences, action)
                     message = ''
@@ -524,15 +525,19 @@ class NotebookPanel:
                 self._brush_presets_sent = raw
                 return
             op = validate_action(action)
-            if op == 'brush-color':
-                editor.brush_colors[action['tool']] = action['color']
+            if op in ('brush-color', 'eraser-kind'):
+                if op == 'brush-color':
+                    editor.brush_colors[action['tool']] = action['color']
+                else:
+                    editor.eraser_kind = action['kind']
                 self._position_sequence = position_sequence
                 status = None
                 if progress is not None:
                     observation = progress.observe(notebook_progress_state(editor))
                     status = ('fenced' if observation is None else
                               await canvas.wait(asyncio.to_thread(progress.flush, observation)))
-                await respond(brush_color_script(status), acknowledges=True)
+                await respond(brush_color_script(status, 'eraser type' if op == 'eraser-kind' else 'brush color'),
+                              acknowledges=True)
                 return
             if op in {'save', 'save-as', 'export'} and self.native_transport:
                 pending = self.native_input_pending

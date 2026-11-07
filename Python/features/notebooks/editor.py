@@ -13,6 +13,7 @@ class Editor:
         self.checkpoint_unconfirmed = False
         self.index = 0
         self.brush_colors = {}
+        self.eraser_kind = 'partial'
         self.undo = []
         self.redo = []
         self._stroke_clipboard = []

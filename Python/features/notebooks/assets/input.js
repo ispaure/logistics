@@ -313,8 +313,8 @@ window.logisticsNativePen = (action, id, samples, width, height) => {
     }
   }
 };
-// The tool button always selects the eraser and exposes its editable settings.
-let eraserKind = 'partial', eraserRadius = 16;
+let eraserKind = state.eraser_kind === 'whole' ? 'whole' : 'partial', eraserRadius = 16;
+let onEraserKindChanged = () => {};
 const eraserDialog = document.createElement('dialog');
 eraserDialog.id = 'eraserDialog';
 eraserDialog.setAttribute('aria-labelledby', 'eraserTitle');
@@ -331,15 +331,20 @@ for (const [kind, id, caption] of [
   const button = $(id);
   button.textContent = caption;
   button.onclick = () => {
+    if (eraserKind === kind) return;
     eraserKind = kind;
-    for (const [value, control] of [['partial', 'eraserPartial'], ['whole', 'eraserWhole']]) {
-      $(control).setAttribute('aria-pressed', String(value === kind))
-    }
+    syncEraserKind();
+    onEraserKindChanged(kind);
     selected.clear();
     draw();
     if (typeof syncChrome === 'function') syncChrome()
   }
 }
+function syncEraserKind() {
+  $('eraserPartial').setAttribute('aria-pressed', String(eraserKind === 'partial'));
+  $('eraserWhole').setAttribute('aria-pressed', String(eraserKind === 'whole'));
+}
+syncEraserKind();
 $('eraserSize').onchange = () => eraserRadius = Number($('eraserSize').value);
 $('closeEraser').onclick = () => eraserDialog.close();
 eraserDialog.onclick = e => {if (e.target === eraserDialog) {
@@ -348,13 +353,16 @@ eraserDialog.onclick = e => {if (e.target === eraserDialog) {
 }};
 let showEraserSettings = () => eraserDialog.showModal();
 $('erase').setAttribute('aria-haspopup', 'dialog');
-$('erase').onclick = () => {
-  if (active !== null) return;
+function selectEraser() {
   mode = 'erase';
   $('erase').classList.add('active');
   $('select').classList.remove('active');
   selected.clear();
   draw();
+}
+$('erase').onclick = () => {
+  if (active !== null) return;
+  selectEraser();
   if (!eraserDialog.open) showEraserSettings()
 };
 $('select').onclick = () => {

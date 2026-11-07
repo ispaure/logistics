@@ -49,6 +49,7 @@ function paintPicture(p, target = ctx, outline = true) {
   target.restore();
   if (outline && p.id === imageSelection && mode === 'capture') {
     target.save(); target.strokeStyle = '#2877cb'; target.fillStyle = 'white'; target.lineWidth = 3;
+    window.clipNotebookControls?.(target);
     target.beginPath(); target.moveTo(...a); for (const q of p.corners.slice(1)) target.lineTo(...q); target.closePath(); target.stroke();
     for (const q of imageHandles(p)) { target.beginPath(); target.arc(q[0],q[1],8*state.width/canvas.getBoundingClientRect().width,0,Math.PI*2); target.fill(); target.stroke() }
     target.restore()

@@ -107,7 +107,7 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
                 action = bridge.command(message)
                 if action:
                     received.append(action)
-                    if action['op'] in ('add-brush-preset', 'remove-brush-preset'):
+                    if action['op'] in ('add-brush-preset', 'remove-brush-preset', 'update-brush-preset'):
                         presets = change_preset(preferences, action)
                         self.runJavaScript(f'window.notebookBrushPresetUpdate({json.dumps(presets)}, "")')
                         return
@@ -188,6 +188,8 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
             assert js("$('mobileSheet').hidden && mode==='select'"), 'Native Select must dismiss brush popup'
             eraser_anchor = json.dumps(dict(name='erase', anchor=[265, -48, 44, 48]))
             js('window.notebookNativeTools(' + eraser_anchor + ')')
+            assert js("mode==='erase' && !$('eraserDialog').open")
+            js('window.notebookNativeTools(' + eraser_anchor + ')')
             assert js("$('eraserDialog').open")
             js('window.notebookNativeTools(' + eraser_anchor + ')')
             assert js("!$('eraserDialog').open"), 'Rapid native eraser tap must close its popup'
@@ -210,10 +212,10 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
             assert not js("document.body.classList.contains('notebook-portrait-band')")
             view.resize(880, 620)
             wait(lambda: js("innerWidth === 880"))
-            assert js("[...document.querySelectorAll('.quick-choices')].every(row => row.clientWidth >= 88)")
-            js("document.querySelector('.quick-choices [data-tool=\"17\"]').click()")
-            assert js("$('tool').value") == '17'
-            js("document.querySelector('.quick-choices [data-color=\"6\"]').click()")
+            assert js("!document.querySelector('.quick-choices')")
+            js("$('brushToggle').click();$('brushToggle').click()")
+            assert js("!$('mobileSheet').hidden")
+            js("document.querySelector('.swatch[data-color=\"6\"]').click();$('brushToggle').click()")
             assert js("$('color').value") == '6'
             canvas_top = js("$('paper').getBoundingClientRect().top")
             for _ in range(3):
@@ -223,16 +225,15 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
                 assert js("$('paper').getBoundingClientRect().top") == canvas_top
             view.resize(390, 844)
             wait(lambda: js("innerWidth === 390"))
-            assert js("[...document.querySelectorAll('.quick-choices')].every(row => !row.clientWidth)")
 
             js("window.notebookNativeAction('pages')")
             wait(lambda: js("document.querySelectorAll('.page-previews button').length === 1"))
             assert js("!$('mobileSheet').hidden && $('mobileSheet').dataset.panel === 'pages'")
             js("window.notebookNativeTools(false);document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))")
-            assert js("window.notebookRefreshBrushPresets([[17,6,2],[18,13,1]])")
+            assert js("window.notebookRefreshBrushPresets([{id:'blue',brush:[17,6,2]},{id:'yellow',brush:[18,13,1]}])")
             state = json.loads(js("window.notebookNativeTools(null)"))
             assert not state['add-preset']['visible'] and state['preset-0']['preset'] == [17, 6, 2]
-            js("window.notebookNativeTools({name:'preset-0',preset:'17,6,2',hold:true,anchor:[220,-48,44,48]})")
+            js("window.notebookNativeTools({name:'preset-0',preset:'blue',hold:true,anchor:[220,-48,44,48]})")
             assert js("$('brushPresetMenu').open && $('mobileSheet').hidden")
             js("document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}))")
             js("window.notebookNativeAction('pages')")
@@ -443,6 +444,9 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
 
         for opener, closed in [("$('brushToggle')", "$('mobileSheet').hidden"),
                                ("$('erase')", "!eraserDialog.open")]:
+            if 'erase' in opener:
+                click_element(opener)
+                assert js("mode==='erase' && !eraserDialog.open")
             click_element(opener)
             assert not js(closed)
             if 'erase' in opener:
@@ -535,22 +539,38 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         # Pin through the drawing toolbar, select with one tap, and open and
         # dismiss the drawer only on repeated taps of the same slot.
         js("$('brushToggle').click();document.querySelector('.brush-card[data-tool=\"17\"]').click();document.querySelector('.swatch[data-color=\"6\"]').click();document.querySelector('[data-width=\"3\"]').click();$('addBrushPreset').click()")
-        wait(lambda: js("!!document.querySelector('[data-preset=\"17,6,3\"]')&&!busy"))
+        wait(lambda: js("!!document.querySelector('[data-brush=\"17,6,3\"]')&&!busy"))
         js("$('brushToggle').click();$('brushToggle').click();document.querySelector('.swatch[data-color=\"7\"]').click();document.querySelector('[data-width=\"1\"]').click();$('addBrushPreset').click()")
-        wait(lambda: js("!!document.querySelector('[data-preset=\"17,7,1\"]')&&!busy"))
-        assert read_presets(Preferences(root / 'preferences').values[PREFERENCE]) == [[17, 6, 3], [17, 7, 1]]
+        wait(lambda: js("!!document.querySelector('[data-brush=\"17,7,1\"]')&&!busy"))
+        assert [entry['brush'] for entry in read_presets(Preferences(root / 'preferences').values[PREFERENCE])] == [[17, 6, 3], [17, 7, 1]]
         assert js("""[...document.querySelectorAll('.mobile-tools button')].slice(0,4)
-            .map(b=>b.id || b.dataset.preset).join('/')==='brushToggle/17,6,3/17,7,1/addBrushPreset'
+            .map(b=>b.id || b.dataset.brush).join('/')==='brushToggle/17,6,3/17,7,1/addBrushPreset'
             && $('addBrushPreset').hidden
             && document.querySelector('.mobile-tools [data-preset]').getBoundingClientRect().top
                  === $('brushToggle').getBoundingClientRect().top""")
-        blue_slot = 'document.querySelector(\'[data-preset="17,6,3"]\')'
+        blue_slot = 'document.querySelector(\'[data-brush="17,6,3"]\')'
         click_element(blue_slot)
         assert js(f"""$('mobileSheet').hidden && {blue_slot}.getAttribute('aria-pressed')==='true'
             && $('brushToggle').getAttribute('aria-pressed')==='false'
             && $('tool').value==='17' && $('color').value==='6' && $('width').value==='3'""")
         click_element(blue_slot)
         assert js(f"!$('mobileSheet').hidden && {blue_slot}.getAttribute('aria-expanded')==='true'")
+        slot_ids = js("JSON.stringify([...document.querySelectorAll('[data-preset]')].map(b=>b.dataset.preset))")
+        working_label = js("$('brushToggle').title")
+        js("""document.querySelector('.swatch[data-color="10"]').click();
+            document.querySelector('[data-width="2"]').click();
+            document.querySelector('.brush-card[data-tool="16"]').click()""")
+        wait(lambda: js('!busy'))
+        blue_slot = 'document.querySelector(\'[data-brush="16,10,2"]\')'
+        assert js(f"!$('mobileSheet').hidden && {blue_slot}.getAttribute('aria-expanded')==='true'")
+        assert js("JSON.stringify([...document.querySelectorAll('[data-preset]')].map(b=>b.dataset.preset))") == slot_ids
+        assert js("$('brushToggle').title") == working_label
+        click_element("document.querySelector('[data-brush=\"17,7,1\"]')")
+        assert js("$('color').value==='7' && $('width').value==='1' && $('mobileSheet').hidden")
+        click_element(blue_slot)
+        assert js("$('tool').value==='16' && $('color').value==='10' && $('width').value==='2'")
+        click_element(blue_slot)
+        assert [entry['brush'] for entry in read_presets(Preferences(root / 'preferences').values[PREFERENCE])] == [[16, 10, 2], [17, 7, 1]]
         QTest.qWait(150)
         view.grab().save(str(output / 'presets-drawer-390x844.png'))
         click_element(blue_slot)
@@ -560,18 +580,29 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         click_element(blue_slot)
         js("$('viewport').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}))")
         assert js("$('mobileSheet').hidden")
-        click_element('document.querySelector(\'[data-preset="17,7,1"]\')')
+        click_element('document.querySelector(\'[data-brush="17,7,1"]\')')
         click_element(blue_slot, hold=True)
         assert js("$('brushPresetMenu').open && $('mobileSheet').hidden")
         assert js(f"{blue_slot}.getAttribute('aria-pressed')==='false' && $('color').value==='7'")
         QTest.qWait(50)
         view.grab().save(str(output / 'preset-delete-390x844.png'))
         click_element("document.querySelector('#brushPresetMenu button')")
-        wait(lambda: js("!document.querySelector('[data-preset=\"17,6,3\"]')&&!busy"))
+        wait(lambda: js("!document.querySelector('[data-brush=\"16,10,2\"]')&&!busy"))
         assert js("!$('addBrushPreset').hidden && !$('brushPresetMenu').open")
-        assert read_presets(Preferences(root / 'preferences').values[PREFERENCE]) == [[17, 7, 1]]
+        assert [entry['brush'] for entry in read_presets(Preferences(root / 'preferences').values[PREFERENCE])] == [[17, 7, 1]]
         js("$('zoom').value='page';$('zoom').onchange();$('viewport').scrollTop=0")
         assert js("Math.abs($('paperWrap').getBoundingClientRect().top-$('viewport').getBoundingClientRect().top)<1")
+        js("window.notebookViewportInsets([0,84,34]);showSwipePage()")
+        assert js("""(()=>{const button=$('swipeAddPage'), r=button.getBoundingClientRect();
+            return !button.hidden && r.right<=innerWidth-84
+              && document.elementFromPoint(r.x+r.width/2,r.y+r.height/2).closest('button')===button
+              && $('viewport').getBoundingClientRect().right===innerWidth})()""")
+        js("hideSwipePage();window.notebookNativeAction('pages')")
+        wait(lambda: js("document.querySelectorAll('.page-previews button').length > 0"))
+        assert js("""(()=>{const bounds=$('mobileSheet').getBoundingClientRect();
+            return bounds.right<=innerWidth-84 && [...document.querySelectorAll('#mobileSheet button')]
+              .filter(b=>b.getClientRects().length).every(b=>b.getBoundingClientRect().right<=innerWidth-84)})()""")
+        view.grab().save(str(output / 'overview-safe-rail.png'))
         (output / 'mobile-ui.json').write_text(json.dumps(dict(status='passed', sizes=reports, toolbar=toolbar_reports,
             brush=12, color=6, real_mouse_input=True, undo=True, redo=True,
             focus_mode=True, view_preserved=True, stable_canvas_origin=True, error_visible=True,

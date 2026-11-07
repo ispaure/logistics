@@ -21,7 +21,12 @@ check(frameBatchedInk===expectedFrameBatching,'Wrong desktop/mobile paint schedu
 check(getComputedStyle($('inkLayers')).isolation==='isolate','Live and saved ink must share an isolated blend group');
 check(!state.native_pen||!ctx.getContextAttributes().desynchronized,'Native preview must not share a desynchronized canvas front buffer');
 check(eraserKind==='partial'&&eraserRadius===16,'Partial eraser must be the default');
-$('erase').click();check(mode==='erase'&&eraserDialog.open,'Eraser button must show settings');
+$('erase').click();
+if (document.body.classList.contains('notebook-mobile')) {
+  check(mode==='erase'&&!eraserDialog.open,'First mobile eraser tap must select only');
+  $('erase').click();
+}
+check(mode==='erase'&&eraserDialog.open,'Eraser settings must open');
 if(document.querySelector('#brushes')){
   const panel=eraserDialog.getBoundingClientRect(),anchor=$('erase').getBoundingClientRect();
   check(!eraserDialog.matches(':modal'),'Desktop eraser settings must not block the document');

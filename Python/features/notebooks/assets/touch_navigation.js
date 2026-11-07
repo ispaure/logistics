@@ -20,7 +20,7 @@ function showSwipePage() {
   if (state.read_only || state.password_required || state.warning) return;
   const box = $('viewport').getBoundingClientRect();
   offeredPage = state.page_id ?? state.index;
-  swipeAddPage.style.right = Math.max(12, innerWidth-box.right+12)+'px';
+  swipeAddPage.style.right = 'max(calc(var(--notebook-rail-right, 0px) + 12px), ' + (innerWidth - box.right + 12) + 'px)';
   swipeAddPage.style.top = Math.max(box.top+8, box.top+(box.height-76)/2)+'px';
   swipeAddPage.hidden = false;
   swipeAddPage.style.display = 'flex'

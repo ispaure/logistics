@@ -122,7 +122,8 @@ def project(app, view, destination, controller):
     notebook_tools = getattr(view, '_native_drawing_tools', None)
     if (vertical_edge(controller) or getattr(view, '_reader_fullscreen', False)
             or getattr(app, '_reader_chrome_hidden', False) or prompt or close is None
-            or (notebook_tools is not None and notebook_tools.stacked_portrait(controller))
+            or (notebook_tools is not None and (notebook_tools.stacked_portrait(controller)
+                                                or notebook_tools.wide_landscape(controller)))
             or abs(float(origin.y)) > .5 or not hasattr(view, '_document_storage_status')
             or hasattr(view, '_document_title_controls')):
         restore(view)
