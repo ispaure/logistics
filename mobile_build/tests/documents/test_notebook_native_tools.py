@@ -91,14 +91,15 @@ class NativeToolsTests(unittest.IsolatedAsyncioTestCase):
     async def test_hidden_lease_keeps_strip_mounted_but_hides_flattened_buttons(self):
         strip = self.manager.strip
         buttons = self.manager.buttons.copy()
-        self.manager.query = AsyncMock(side_effect=[json.dumps(self.state), 'null', json.dumps(self.state)])
+        self.manager.query = AsyncMock(side_effect=[json.dumps(self.state), 'null', None, json.dumps(self.state)])
         await self.manager.refresh()
         self.assertTrue(buttons['undo'].enabled)
-        await self.manager.refresh()
-        self.assertIs(self.manager.strip, strip)
-        self.assertIs(strip.parent, self.manager.header)
-        self.assertTrue(strip._impl.native.hidden)
-        self.assertTrue(all(button._impl.native.hidden and not button.enabled for button in buttons.values()))
+        for _ in range(2):
+            await self.manager.refresh()
+            self.assertIs(self.manager.strip, strip)
+            self.assertIs(strip.parent, self.manager.header)
+            self.assertTrue(strip._impl.native.hidden)
+            self.assertTrue(all(button._impl.native.hidden and not button.enabled for button in buttons.values()))
         await self.manager.refresh()
         self.assertIs(self.manager.strip, strip)
         self.assertFalse(strip._impl.native.hidden)

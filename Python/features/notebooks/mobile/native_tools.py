@@ -1,6 +1,7 @@
 """Native drawing targets mirror the live canvas controls, never its model."""
 import asyncio
 import json
+from traceback import extract_tb
 import weakref
 
 TOOLS = ('pen', 'erase', 'select', 'undo', 'redo')
@@ -148,7 +149,9 @@ class NativeDrawingTools:
         raw = await self.query(script)
         if self.epoch != epoch or self.web is not web or self.header is not header or not self.current():
             return
-        value = json.loads(raw)
+        # WK can return None before the canvas installs its JavaScript hook.
+        # Keep observing, with native buttons hidden until a lease is available.
+        value = json.loads(raw) if raw is not None else None
         if value is None:
             self.strip._impl.native.hidden = True
             for button in self.buttons.values():
@@ -214,7 +217,8 @@ class NativeDrawingTools:
             raise
         except Exception as error:
             if self.epoch == epoch:
-                self.observer_exit = type(error).__name__
+                site = extract_tb(error.__traceback__)[-1]
+                self.observer_exit = f'{type(error).__name__} at {site.name}:{site.lineno}'
                 self.close()
 
     def close(self):
