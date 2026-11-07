@@ -163,8 +163,9 @@ rclone folders. Remote-only folders appear under Cloud once credentials load.
 Tap a folder under **Local** to browse its device copy; tap it under **Cloud**
 to browse its online copy, including the mapped subfolder for a partial pull.
 The **•••** menu keeps the same available browse, Push/Pull and folder-management
-actions on both tabs. The Cloud **Credential** selector defaults to **All**; choose a credential
-ZIP to filter its folders. Returning from another source resets it to **All**.
+actions on both tabs. In **Cloud**, the credential picker beside **Rclone Remotes**
+starts at **All**. Choose a credential ZIP to filter its folders. Returning from
+another source resets it to **All**.
 The remote names and credential filters come from loaded configurations and retained
 password-protected ZIP metadata. Locked entries ask for their ZIP password when opened;
 populating this tab does not ping online services. On iPad, all windows use the

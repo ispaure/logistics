@@ -161,6 +161,7 @@ list padding. Incoming-file notices appear above the tree. The retained iOS
 sidebar uses the same policy when it moves into its native column wrapper.
 `test_scroll_edges.py` covers rotation and repeated clearance updates;
 `workspace_edges_probe.py` measures native viewport bottoms and final-row access.
+It also checks that the Cloud label and picker share one row through rotation.
 On November 6, 2026, the focused native probe passed on iPhone, iPad, closed/open/
 partially folded Duo simulators and Android phone/tablet emulators, including
 portrait/landscape round trips. Every measured viewport ended at its allocated
@@ -1356,15 +1357,17 @@ coverage in `test_workspace_navigation` checks retained controls, compact/wide
 rotation, Back, content-width thresholds and posture-only reflow;
 `test_fold_layout` checks flat ratios and reserved-region allocation.
 
-The mobile Workspaces places rclone, Local and Network shares source controls
-above its credential row. `folder_hub.source_choices` partitions logical folders
+The mobile Workspaces uses quiet source tabs above the tree. Cloud shows the
+native credential picker inline beside the static **Rclone Remotes** label.
+In a narrow iOS pane, the **Credential** caption can yield space to the field,
+which keeps its accessible name. Local → Rclone Copies shows its own credential
+row. `folder_hub.source_choices` partitions logical folders
 by their remote ownership, retaining all associated Local/LocalCrypt/Remote copies
 within that source. Direct SMB connections use the existing `Network shares` and
 `Session network shares` package associations, including retained metadata after
 locking. Imported ZIPs, including ZIPs containing SMB remotes, remain under rclone.
-Rendering uses cached associations without querying the native bridge. Only
-rclone displays the credential selector; changing source clears collapsed groups
-and resets the credential to All. The source survives rebuilding the hub during
+Rendering uses cached associations without querying the native bridge.
+Changing source clears collapsed groups and resets the credential to All. The source survives rebuilding the hub during
 the current app session. Setup actions appear only for unconfigured sources:
 Home Server offers **Add share…**, and Cloud offers **Add Remote…**. A cached
 `folder_configured_sources` snapshot includes loaded, saved, session and retained

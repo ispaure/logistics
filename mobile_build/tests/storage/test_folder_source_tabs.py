@@ -46,8 +46,12 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(app.folder_local_buttons['Rclone'].text, 'Rclone Copies')
         self.assertEqual(app.folder_local_buttons['Others'].text, 'On This Phone')
         app.change_folder_source('rclone')
-        self.assertEqual(app.folder_cloud_tab.text, 'Rclone Remotes')
-        self.assertEqual(list(app.folder_local_header.children), [app.folder_cloud_tabs])
+        self.assertEqual(app.folder_cloud_label.text, 'Rclone Remotes')
+        self.assertFalse(app.folder_local_header.children)
+        self.assertEqual(list(app.folder_picker_header.children),
+                         [app.folder_cloud_label, app.folder_credential_row])
+        self.assertEqual(app.folder_picker_header.style.direction, 'row')
+        self.assertIs(app.folder_credential.parent, app.folder_credential_row)
         app.change_folder_source('Network shares')
         self.assertFalse(app.folder_local_header.children)
         app.change_folder_source('Local')
@@ -161,7 +165,7 @@ class FolderSourceTabTests(unittest.TestCase):
         app.folder_source_buttons['rclone'].on_press()
         self.assertEqual(app.folder_credential.value, 'All')
         self.assertEqual(set(app.folder_buttons), {'Personal drive', 'Work drive'})
-        self.assertIs(app.folder_picker_header.children[0], app.folder_credential_row)
+        self.assertIs(app.folder_picker_header.children[-1], app.folder_credential_row)
 
     def test_source_actions_follow_tab_without_leaving_empty_toolbar_or_duplicate_share(self):
         app = self.app
@@ -221,7 +225,7 @@ class FolderSourceTabTests(unittest.TestCase):
         app.folder_local_buttons['Others'].on_press()
         self.assertNotIn(shared_name, app.folder_buttons)
         app.change_folder_source('rclone')
-        self.assertEqual(list(app.folder_local_header.children), [app.folder_cloud_tabs])
+        self.assertFalse(app.folder_local_header.children)
         app.change_folder_source('Local')
         self.assertTrue(app.folder_local_header.children)
 

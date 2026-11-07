@@ -167,10 +167,10 @@ password leaves the file encryption keys unchanged.
 
 ### Mobile Workspaces source tabs
 
-On Android and iOS, Workspaces opens on **Local**. The **Cloud** source uses **Credential: All**.
-Choose a package to filter its folders and their downloaded Local/LocalCrypt copies.
-The **Local** and **Home Server** tabs display separate folder trees and hide the
-credential selector. Returning to Cloud selects All again. Directly added SMB/Mac
+On Android and iOS, Workspaces opens on **Local**. In **Cloud**, the credential
+picker beside **Rclone Remotes** starts at **All**. Choose a package to filter its
+folders and their downloaded Local/LocalCrypt copies. **Local → Rclone Copies**
+has its own picker. Returning to Cloud selects All again. Directly added SMB/Mac
 connections and their copies appear under Home Server; SMB remotes imported
 from a credential ZIP remain under Cloud with that package. On iOS, Local browses
 files directly in `Logisticks` and subfolders beside the managed `Local` folder.

@@ -15,11 +15,12 @@ from services.documents.locations import collection_path
 
 from .appearance import action_button
 from .folder_hub import folder_browse_copy
+from .ui_metrics import TOUCH_TARGET
 from .workspaces_screen import WorkspacesScreen
 
 
 def reflow_folder_notice(app, width=None):
-    """Fit the asynchronous incoming-files notice to its actual owning pane."""
+    """Fit the Workspaces header and incoming notice to their owning pane."""
     notice = getattr(app, 'incoming_notice', None)
     if notice is None:
         return
@@ -32,6 +33,37 @@ def reflow_folder_notice(app, width=None):
         else:
             width = app.adaptive.content_width('files', margin=32)
     fit_text(notice, max(24, width))
+    picker = getattr(app, 'folder_credential', None)
+    if picker is not None and type(picker._impl).__module__.startswith('toga_iOS.') and width > 0:
+        fit_folder_credential(app, width)
+
+
+def fit_folder_credential(app, width):
+    """Keep the picker inline even when a narrow UIKit column needs a shorter label."""
+    picker = app.folder_credential
+    row = app.folder_credential_row
+    if row.parent is None:
+        return
+    caption = app.folder_credential_label
+    cloud = app.folder_cloud_label
+    in_cloud = cloud.parent is not None
+
+    def occupied(label):
+        hint = label.intrinsic.width
+        return getattr(hint, 'value', hint or 0) + label.style.margin_right
+
+    available = width - (occupied(cloud) if in_cloud else 0)
+    # Keep a bounded field even when a long credential name increases the
+    # native intrinsic width. The picker and its accessibility label stay intact.
+    caption_width = occupied(caption)
+    show_caption = available >= caption_width + picker._MIN_WIDTH
+    if show_caption and caption.parent is None:
+        row.insert(0, caption)
+    elif not show_caption and caption.parent is row:
+        row.remove(caption)
+    field_width = max(TOUCH_TARGET, int(available - (caption_width if show_caption else 0)))
+    row.style.flex = 0 if in_cloud else 1
+    picker.style.width = min(180, field_width) if in_cloud else field_width
 
 
 class FolderHubUI(WorkspacesScreen):

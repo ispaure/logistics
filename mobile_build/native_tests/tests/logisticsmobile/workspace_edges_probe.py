@@ -24,12 +24,25 @@ class WorkspaceEdgesProbe(DocumentWorkspaceProbe):
         evidence = Path(self.paths.cache) / 'viewer-layout'
         evidence.mkdir(exist_ok=True)
         report['samples'] = []
+        report['cloud_headers'] = []
         for orientation in ('portrait', 'landscape-left', 'landscape-right', 'portrait'):
             if not self.routes.apple:
                 (Path(self.paths.cache) / 'creation-orientation').write_text(orientation)
             await rotate(self, orientation, settle=.5)
             self.show_locations()
+            self.change_folder_source('rclone')
             await asyncio.sleep(.3)
+            scope = control_frame(self, self.folder_cloud_label)
+            picker = control_frame(self, self.folder_credential)
+            header = control_frame(self, self.folder_picker_header)
+            report['cloud_headers'].append(dict(orientation=orientation, scope=scope, picker=picker, header=header))
+            assert scope['x'] + scope['width'] <= picker['x'] + 1
+            assert picker['x'] + picker['width'] <= header['x'] + header['width'] + 1
+            assert abs(scope['y'] + scope['height'] / 2 - picker['y'] - picker['height'] / 2) <= 2
+            if self.routes.apple:
+                assert picker['width'] <= 180
+            await capture_window(self, evidence / f'cloud-{orientation}.png')
+            self.change_folder_source('Local')
             # A long synthetic source tree exercises the actual retained scroll.
             for child in list(self.folder_list.children):
                 self.folder_list.remove(child)

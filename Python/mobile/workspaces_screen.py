@@ -76,7 +76,7 @@ class WorkspacesScreen:
         self._build_folder_source_tabs()
         self.folder_local_group = getattr(self, 'folder_local_group', self.preferences.values['workspace_local_group'])
         self.folder_local_styled = None
-        self.folder_local_tabs = toga.Box(style=Pack(direction=ROW, margin_bottom=8))
+        self.folder_local_tabs = toga.Box(style=Pack(direction=ROW, margin_bottom=4))
         self.folder_local_buttons = {}
         for group in ('Rclone', 'Others'):
             def select_local(widget=None, selected=group, **kwargs):
@@ -94,11 +94,9 @@ class WorkspacesScreen:
             button = subtab_button(local_source_label(group, device=device_label(self.app)), on_press=select_local)
             self.folder_local_buttons[group] = button
             self.folder_local_tabs.add(button)
-        self.folder_cloud_tab = subtab_button(RCLONE_REMOTES)
-        source_tab(self.folder_cloud_tab, True)
-        accessible_name(self.folder_cloud_tab, RCLONE_REMOTES + ' selected')
-        self.folder_cloud_tabs = toga.Box(children=[self.folder_cloud_tab],
-                                         style=Pack(direction=ROW, margin_bottom=8))
+        self.folder_cloud_label = surface(toga.Label(RCLONE_REMOTES, style=Pack(
+            font_size=CAPTION_TEXT, margin_right=12)),
+            background='transparent', foreground='muted', outlined=False)
         self.folder_local_header = toga.Box(style=Pack(direction=COLUMN))
         self.folder_list = toga.Box(style=Pack(direction=COLUMN))
         self.folder_tab_views = {}
@@ -123,6 +121,7 @@ class WorkspacesScreen:
             accessory.isAccessibilityElement = False
             native.rightView = accessory
             native.rightViewMode = 3  # UITextFieldViewModeAlways
+            self.folder_cloud_label.style.flex = 1
             native.accessibilityHint = 'Opens the list of credentials'
         self.folder_transfers_button = toga.Button('Transfers', on_press=self.show_transfers, style=Pack(height=TOUCH_TARGET, font_size=CONTROL_TEXT, flex=1))
         toolbar_button(self.folder_transfers_button, 'arrow.up.arrow.down')
@@ -139,20 +138,19 @@ class WorkspacesScreen:
             self.folder_add_share_button._impl.native.accessibilityLabel = 'Add SMB / Mac share'
         elif backend.startswith('toga_android.'):
             self.folder_add_share_button._impl.native.setContentDescription('Add SMB / Mac share')
-        self.folder_credential_row = toga.Box(children=[surface(toga.Label('Credential',
-                style=Pack(font_size=CAPTION_TEXT, width=80, margin_right=12)),
-                background='window', foreground='muted', outlined=False),
-                self.folder_credential], style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12))
-        self.folder_picker_header = toga.Box(style=Pack(direction=COLUMN))
+        self.folder_credential_label = surface(toga.Label('Credential', style=Pack(
+            font_size=CAPTION_TEXT, margin_right=6)),
+            background='transparent', foreground='muted', outlined=False)
+        self.folder_credential_row = toga.Box(children=[self.folder_credential_label, self.folder_credential],
+                                             style=Pack(direction=ROW, align_items=CENTER, flex=1))
+        self.folder_picker_header = toga.Box(style=Pack(direction=ROW, align_items=CENTER))
         self.folder_source_actions = toga.Box(style=Pack(direction=ROW))
         self.folder_loading_box = toga.Box(style=Pack(direction=COLUMN))
         incoming = getattr(self.app, 'incoming_status', '')
         self.app.incoming_notice = FittedLabel(incoming,
             style=Pack(display='pack' if incoming else 'none', font_size=12, margin_top=4))
-        self.folder_source_tabs.style.flex = 1
-        self.folder_source_tabs.style.margin_bottom = 0
         self.app._files_status_row = toga.Box(children=[self.folder_source_tabs],
-            style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12))
+            style=Pack(direction=ROW, align_items=CENTER, margin_bottom=4))
         scroll = folder_scroll(self.folder_list)
         box = toga.Box(children=[self.app._files_status_row, self.folder_local_header, self.folder_picker_header, self.folder_source_actions,
             self.folder_loading_box, self.app.incoming_notice, scroll],
@@ -210,16 +208,13 @@ class WorkspacesScreen:
         selected = self.folder_credentials.get(credential)
         local_group = self.folder_local_group if self.folder_source == 'Local' else None
         visible = source_choices(choices, self.folder_source, network_remotes, local_group=local_group)
-        subtab = (self.folder_local_tabs if self.folder_source == 'Local' else
-                  self.folder_cloud_tabs if self.folder_source == 'rclone' else None)
-        if list(self.folder_local_header.children) != ([subtab] if subtab is not None else []):
-            for child in list(self.folder_local_header.children):
-                self.folder_local_header.remove(child)
-            if subtab is not None:
-                self.folder_local_header.add(subtab)
+        if local_group is not None and not self.folder_local_header.children:
+            self.folder_local_header.add(self.folder_local_tabs)
+        elif local_group is None and self.folder_local_header.children:
+            self.folder_local_header.remove(self.folder_local_tabs)
         if self.folder_source == 'Local' and self.folder_local_styled != local_group:
             for group, button in self.folder_local_buttons.items():
-                source_tab(button, group == local_group)
+                source_tab(button, group == local_group, quiet=True)
                 accessible_name(button, button.text + (' selected' if group == local_group else ''))
             self.folder_local_styled = local_group
         credential_filter = self.folder_source == 'rclone' or local_group == 'Rclone'
@@ -227,13 +222,18 @@ class WorkspacesScreen:
             visible = credential_choices(visible, selected)
         if self.folder_source_styled != self.folder_source:
             for source, button in self.folder_source_buttons.items():
-                source_tab(button, source == self.folder_source)
+                source_tab(button, source == self.folder_source, quiet=True)
                 accessible_name(button, SOURCE_LABELS[source] + (' selected' if source == self.folder_source else ''))
             self.folder_source_styled = self.folder_source
-        if credential_filter and not self.folder_picker_header.children:
-            self.folder_picker_header.add(self.folder_credential_row)
-        elif not credential_filter and self.folder_picker_header.children:
-            self.folder_picker_header.remove(self.folder_credential_row)
+        scope = [self.folder_cloud_label] if self.folder_source == 'rclone' else []
+        if credential_filter:
+            scope.append(self.folder_credential_row)
+        if list(self.folder_picker_header.children) != scope:
+            for child in list(self.folder_picker_header.children):
+                self.folder_picker_header.remove(child)
+            self.folder_picker_header.add(*scope)
+            from .folder_hub_ui import reflow_folder_notice
+            reflow_folder_notice(self.app)
         source_actions(self.app)
         visible = {name: entry for name, entry in visible.items()
                    if self.folder_path_visible(name) and self.folder_path_visible(entry.get('remote') or '')}
@@ -253,9 +253,7 @@ class WorkspacesScreen:
         """Build source selectors with each callback bound to its own source."""
         self.folder_source_styled = None
         self.folder_source_buttons = {}
-        self.folder_source_tabs = surface(toga.Box(
-            style=Pack(direction=ROW, margin_bottom=12)),
-            radius=11, background='alternate', outlined=False)
+        self.folder_source_tabs = toga.Box(style=Pack(direction=ROW, flex=1))
         for source in (('Local', 'rclone', 'Network shares') if self.app.feature_enabled('rclone') else ('Local',)):
             def select_source(widget=None, selected=source, **kwargs):
                 if self.folder_source != selected:
