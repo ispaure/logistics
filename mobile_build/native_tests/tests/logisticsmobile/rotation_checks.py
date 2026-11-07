@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 import sys
 
-from commonUtils.testing.rotation import NativeRotation
+from commonUtils.testing.rotation import NativeRotation, ORIENTATIONS
 from commonUtils.testing.waiting import wait_until, wait_for_assertion
 from .settings import ROTATION_SETTLE, CONTROL_SETTLE_TIMEOUT
 
@@ -77,12 +77,23 @@ async def rotate(app, orientation, *, settle=ROTATION_SETTLE, timeout=None):
     def rejected(error):
         print('LOGISTICS_ROTATION_REJECTED=' + json.dumps(dict(
             orientation=orientation, error=error)), flush=True)
+    def acknowledged():
+        # UIKit can reject the request callback while still applying the pose.
+        # This response only passes after the active scene reports the exact
+        # requested orientation. The caller still checks settled layout.
+        if sys.platform == 'ios' and rotation.errors and all(
+                'BSActionErrorDomain Code=1' in error and 'response-not-possible' in error
+                for error in rotation.errors):
+            scene = app.main_window._impl.native.windowScene
+            return int(scene.interfaceOrientation) == ORIENTATIONS[orientation][1]
+        return rotation.acknowledged(orientation)
+
     with section(app, 'rotation-dispatch', orientation=orientation):
         rotation.request(orientation, on_rejected=rejected)
     try:
         with section(app, 'rotation-acknowledgement', orientation=orientation):
             from commonUtils.testing.settings import ROTATION_TIMEOUT
-            await wait_until(lambda: rotation.acknowledged(orientation),
+            await wait_until(acknowledged,
                              timeout=ROTATION_TIMEOUT if timeout is None else timeout,
                              message='Native rotation did not complete: ' + orientation)
     except AssertionError:
