@@ -346,6 +346,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
 
     def _prepare_library_epub_view(self, reader, epoch, index, prepared_epub):
         """Bind chapter events to the captured reader and epoch before mounting."""
+        from .reading.epub_resume import appearance
+        self._epub_appearance = appearance(self.preferences.values)
         self.epub_text, self.epub_offset, content = prepared_epub
         self.epub_view = chapter_view(content, getattr(self, 'epub_view', None), offset=self.epub_offset,
             on_event=lambda action, value: self.epub_event(reader, epoch, index, action, value),
@@ -432,7 +434,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             self.select_chapter(widget, **kwargs)
 
     async def previous_book_page(self, widget=None, **kwargs):
-        if self.book_record:
+        if self.book_record and not self.book_busy:
             if self.book_record['kind'] == 'epub' and self.epub_view._chapter_bridge.turn(-1):
                 return
             if self.book_record['kind'] == 'comic':
@@ -441,7 +443,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             await self.move_book_page(self.book_record['position'] - 1)
 
     async def next_book_page(self, widget=None, **kwargs):
-        if self.book_record:
+        if self.book_record and not self.book_busy:
             if self.book_record['kind'] == 'epub' and self.epub_view._chapter_bridge.turn(1):
                 return
             if self.book_record['kind'] == 'comic':

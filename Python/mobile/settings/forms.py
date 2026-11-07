@@ -109,7 +109,7 @@ def settings_presentation(section):
             note.style.margin_left = note.style.margin_right = 16
             note.style.margin_bottom = 20
             section.add(note)
-        elif isinstance(child, toga.Selection):
+        elif isinstance(child, (toga.Selection, toga.NumberInput)):
             child.style.font_size = OPTION_FONT_SIZE
             surface(child, radius=0, background='transparent', outlined=False, eink_outlined=False)
             child.style.margin_top = 4

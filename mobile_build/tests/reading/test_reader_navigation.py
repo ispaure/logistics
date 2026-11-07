@@ -51,6 +51,8 @@ class ReaderNavigationTests(unittest.TestCase):
                     self.assertTrue(app.routes.screens['documents'])
                     # Reselect from a nested reader page goes straight to the list.
                     owner.show_reader_appearance()
+                    self.assertTrue(app.routes.back())
+                    self.assertIs(app.body, panel)
                     tap('documents')
                     self.assertEqual(app.native_host.state.destination, 'documents')
                     self.assertIs(app.body, app.routes.roots['documents'])
@@ -368,13 +370,16 @@ class VolumePageTests(unittest.IsolatedAsyncioTestCase):
             prefs = Preferences(Path(folder).resolve())
             self.assertEqual(prefs.values['epub_volume_pages'], 'false')
             self.assertEqual(prefs.values['comic_volume_pages'], 'false')
+            from types import SimpleNamespace
+            import toga
+            from mobile.settings.epub import epub
+            app = SimpleNamespace(preferences=prefs, settings_status=toga.Label(''))
             with patch('features.books.mobile.appearance.sys.platform', 'android'):
-                book = ReaderAppearance(prefs.values, lambda widget: None)
-                comic = ReaderAppearance(prefs.values, lambda widget: None, kind='comic')
+                book = epub(app)
+                comic = ReaderAppearance(prefs.values, lambda widget: None)
                 self.assertFalse(book.volume_pages.value)
                 self.assertFalse(comic.volume_pages.value)
                 book.volume_pages.value = True
-                prefs.save(**book.settings())
                 saved = Preferences(Path(folder).resolve())
                 self.assertEqual(saved.values['epub_volume_pages'], 'true')
                 self.assertEqual(saved.values['comic_volume_pages'], 'false')
@@ -383,9 +388,9 @@ class VolumePageTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(prefs.values['epub_volume_pages'], 'true')
                 self.assertEqual(prefs.values['comic_volume_pages'], 'true')
             with patch('features.books.mobile.appearance.sys.platform', 'ios'):
-                book = ReaderAppearance(prefs.values, lambda widget: None)
+                book = epub(app)
                 self.assertIsNone(book.volume_pages)
-                self.assertNotIn('epub_volume_pages', book.settings())
+                self.assertNotIn('epub_volume_pages', book.epub_controls)
             with self.assertRaises(ValueError):
                 prefs.save(epub_volume_pages='yes')
             with self.assertRaises(ValueError):

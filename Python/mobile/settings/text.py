@@ -6,13 +6,17 @@ from ..preferences import DEFAULTS
 from .forms import page, SettingsLabel, switch_row, group_rows, OPTION_FONT_SIZE
 
 
-def text_size(app, title, key):
+def text_size(app, title, key, *, register=True, status=None):
     box = page(title)
+    if status is None:
+        status = app.settings_status
     from ..control_icons import icon_button
     box.add(SettingsLabel(title + ' font size', style=Pack(font_weight='bold')))
     choice = toga.Selection(items=[str(size) for size in range(12, 33)],
         value=app.preferences.values[key], style=Pack(height=48))
-    setattr(app, key + '_choice', choice)
+    if register:
+        setattr(app, key + '_choice', choice)
+    box.font_choice = choice
     def save_size(widget, **kwargs):
         from ..font_scaling import refresh
         if choice.value == app.preferences.values[key]:
@@ -25,10 +29,10 @@ def text_size(app, title, key):
                 choice.value = app.preferences.values[key]
             finally:
                 choice.on_change = save_size
-            app.settings_status.text = str(error)
+            status.text = str(error)
             return
         refresh(app)
-        app.settings_status.text = ''
+        status.text = ''
     choice.on_change = save_size
 
     def reset(widget, **kwargs):
@@ -47,8 +51,18 @@ def text_size(app, title, key):
     if title in {'Markdown', 'EPUB'}:
         justify_key = title.lower() + '_justify'
         justify = toga.Switch('Justify text', value=app.preferences.values[justify_key] == 'true', style=Pack(height=48))
-        setattr(app, justify_key + '_choice', justify)
+        if register:
+            setattr(app, justify_key + '_choice', justify)
+        box.justify_choice = justify
         box.add(switch_row(app, 'Justify text', justify,
             'Align text to both the left and right edges.'))
-        justify.on_change = app.save_preferences
+        from .forms import save_boolean_switch
+
+        def save_justify(widget, **kwargs):
+            from ..font_scaling import refresh
+            if save_boolean_switch(app.preferences, widget, justify_key, save_justify, status):
+                refresh(app)
+                status.text = ''
+
+        justify.on_change = save_justify
     return box

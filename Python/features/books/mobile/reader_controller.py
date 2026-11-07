@@ -124,11 +124,17 @@ class EpubController:
                 self.set_book_busy(False)
 
     async def epub_boundary(self, index, direction):
+        view = getattr(self, "epub_view", None)
+        bridge = getattr(view, "_chapter_bridge", None)
+        if bridge is None or bridge.input_suspended:
+            return
         task = getattr(self, "_epub_location_task", None)
         if task is not None:
             self.request_position_flush()
             await task
-        if self.book_reader is not None and self.book_record["position"] == index:
+        if (self.book_reader is not None and self.book_record["position"] == index
+                and self.epub_view is view and view._chapter_bridge is bridge
+                and not bridge.input_suspended):
             target = index + direction
             if 0 <= target < len(self.book_reader.spine):
                 self._epub_target = 0 if direction > 0 else 16 * 1024 * 1024

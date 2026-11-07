@@ -71,6 +71,11 @@ class SettingsCategories:
         return text_size(self.app, title, key)
 
 
+    def epub(self):
+        from .epub import epub
+        return epub(self.app)
+
+
     def camera(self):
         app = self.app
         from features.images.mobile.burst_camera import settings_controls
@@ -152,7 +157,7 @@ CATEGORIES = (
              icon='edit', required_features=('text_editor', 'notes_library')),
     Category('Text', 'text_size', ('Text', 'text_font_size'),
              icon='edit', required_features=('text_editor', 'notes_library')),
-    Category('EPUB', 'text_size', ('EPUB', 'epub_font_size'), icon='books', required_features=('books',)),
+    Category('EPUB', 'epub', icon='books', required_features=('books',)),
     Category('Books & Comics', 'books', icon='books', required_features=('comics', 'pdf')),
     Category('LM Chat', 'chat', icon='chat', required_features=('lm',)),
     Category('Workspaces', 'workspaces', icon='folder'),

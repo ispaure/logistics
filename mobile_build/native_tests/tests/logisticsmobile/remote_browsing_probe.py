@@ -272,7 +272,10 @@ class RemoteProbe(LogisticsMobile):
                     if filename in ('comic.cbz', 'book.epub'):
                         assert 'Appearance…' in labels
                         owner.crypt_actions_menu.invoke(owner.show_provider_layout)
-                        assert owner.provider_appearance in self.body.children
+                        if filename == 'book.epub':
+                            assert self.routes.screens['settings'][-1][0] == 'epub-settings'
+                        else:
+                            assert owner.provider_appearance in self.body.children
                         assert self.routes.back()
                         assert owner.crypt_view in self.body.children
                     owner.crypt_actions_menu.invoke(owner.show_private_tools)

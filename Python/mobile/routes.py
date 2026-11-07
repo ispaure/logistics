@@ -196,7 +196,12 @@ class MobileRoutes(Routes):
     def return_to(self, destination):
         if self.app.select_destination(destination) is not False:
             self.host.activate(destination)
-            self.render(destination)
+            adaptive = self.app.adaptive
+            if (destination == 'documents' and adaptive.split is not None
+                    and adaptive.in_detail and adaptive.detail_routes):
+                self.app.route_changed(adaptive.detail_routes[-1][1])
+            else:
+                self.render(destination)
 
     def back(self):
         if self._retired:

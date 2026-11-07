@@ -4,6 +4,7 @@ from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -310,13 +311,38 @@ class ReaderSessionTests(unittest.TestCase):
                 self.assertTrue(owner.reader_immersive)
                 self.assertEqual(len(owner.library_view.children), 2)
                 owner.toggle_reading_mode()
-                owner.show_reader_appearance()
-                owner.reader_font.value, owner.reader_margin.value, owner.reader_theme.value = '20', '24', 'dark'
+                app.show_settings(present=False)
+                settings = app.settings_navigation.sections['EPUB']
+                origin = app.native_host.state.destination
+                original = owner.epub_view._chapter_bridge
+                self.assertTrue(owner.show_reader_appearance())
+                self.assertEqual(app.native_host.state.destination, 'settings')
+                page = app.routes.body('settings').children[-1].content
+                self.assertEqual(set(page.epub_controls), {'epub_font_size', 'epub_justify', 'reading_font',
+                    'line_spacing', 'reading_width', 'reading_margin', 'reading_theme'})
+                from mobile.routes import contains
+                self.assertTrue(all(contains(page, control) for control in page.epub_controls.values()))
+                self.assertEqual(set(page.epub_controls), set(settings.epub_controls))
+                page.font_choice.value = '30'
+                reset = page.font_choice.parent.children[1]
+                self.assertEqual(reset.accessible_name, 'Reset EPUB font size to default')
+                reset.on_press()
+                self.assertEqual(app.preferences.values['epub_font_size'], '16')
+                page.font_choice.value = '20'
+                page.epub_controls['reading_margin'].value = '24'
+                page.epub_controls['reading_theme'].value = 'dark'
                 with patch.object(owner.epub_view, 'set_content', wraps=owner.epub_view.set_content) as content:
-                    app.loop.run_until_complete(owner.apply_reader_appearance())
+                    self.assertTrue(app.routes.back())
+                    app.loop.run_until_complete(asyncio.sleep(0))
+                    app.loop.run_until_complete(owner._epub_resume_task)
+                self.assertEqual(app.native_host.state.destination, origin)
+                self.assertEqual(app.visible_reader(), owner.session.id)
+                self.assertIsNot(owner.epub_view._chapter_bridge, original)
                 self.assertIn('padding:0 24px', content.call_args.args[1])
                 self.assertEqual(owner.book_record['position'], 1)
                 self.assertEqual(app.preferences.values['reading_theme'], 'dark')
+                self.assertEqual(settings.epub_controls['reading_theme'].value, 'dark')
+                self.assertEqual(settings.font_choice.value, '20')
             finally:
                 app.main_window.close()
                 close_loop(app.loop)

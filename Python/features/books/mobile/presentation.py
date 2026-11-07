@@ -25,7 +25,8 @@ SCRIPT = r'''
  document.documentElement.style.overflow='hidden';
  Object.assign(document.body.style,{overflow:'hidden',height:'100vh',boxSizing:'border-box'});
  Object.assign(pages.style,{columnFill:'auto',columnGap:'0px',position:'relative'});
- let motionEnabled=options.motion!==false;
+ let motionEnabled=options.motion!==false, suspended=!!options.suspended;
+ const usableViewport=()=>innerWidth>32 && innerHeight>32;
  let page=0, pageWidth=1, pageCount=1, columns=1, stride=1, viewportWidth=1, geometry=null, touch=null, disposed=false, pageAnimation=null;
  const stopMotion=()=>{if(pageAnimation){pageAnimation.cancel();pageAnimation=null;}};
  const reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
@@ -167,6 +168,7 @@ SCRIPT = r'''
  const clearSelectionCache = () => {selectedCache=null;};
  const rememberSelection = () => {const range=selectedRange();if(range) selectedCache=range;};
  const resized = () => {
+   if(suspended || !usableViewport()) return;
    const range=selectedRange() || selectedCache;
    layout();
    if(speechAnchor!==null) {
@@ -257,7 +259,10 @@ SCRIPT = r'''
    measurement: () => measurement,
    seekPage: value => {place(value);anchor=visible(true);notify('position',anchor);},
    seek,
+   suspend: () => {suspended=true;stopMotion();},
+   resume: () => {suspended=false;resized();return true;},
    turn: direction => {
+     if(suspended || !usableViewport())return;
      selectedCache=null;getSelection().removeAllRanges();
      if ((direction>0 && page===lastPage()) || (direction<0 && page===0)) {
        notify(direction>0?'next':'previous',visible()); return;
@@ -293,6 +298,8 @@ class ChapterBridge:
         self.on_event, self.on_link = on_event, on_link
         self.ready = False
         self.closed = False
+        self.native_pagination = False
+        self.input_suspended = False
         self.at_end = False
         self.geometry_provider = None
         self.geometry = None
@@ -305,7 +312,8 @@ class ChapterBridge:
         if self.closed:
             return
         self.ready = True
-        options = json.dumps(dict(root=self.root, offset=self.offset, motion=self.motion_enabled))
+        options = json.dumps(dict(root=self.root, offset=self.offset, motion=self.motion_enabled,
+                                  suspended=self.input_suspended))
         self.view.evaluate_javascript(SCRIPT.replace('OPTIONS', options, 1))
         self.refresh_geometry(force=True)
 
@@ -341,6 +349,8 @@ class ChapterBridge:
                 offset = int(parse_qs(urlsplit(url).query)['offset'][0])
             except (KeyError, ValueError, IndexError):
                 return False
+            if self.input_suspended and action in {'next', 'previous'}:
+                return False
             if action in {'position', 'next', 'previous'} and 0 <= offset <= 16 * 1024 * 1024:
                 query = parse_qs(urlsplit(url).query)
                 try:
@@ -374,9 +384,18 @@ class ChapterBridge:
             self.view.evaluate_javascript(
                 f'window.reader && window.reader.highlight({int(start)}, {int(end)})')
 
+    def suspend_input(self):
+        self.input_suspended = True
+        if self.ready:
+            self.view.evaluate_javascript('window.reader && window.reader.suspend()')
+
     def turn(self, direction):
+        if self.input_suspended:
+            return True
         if not self.ready:
-            return False
+            # Native WebViews report readiness asynchronously. A tap while
+            # loading must not fall back to advancing an entire chapter.
+            return self.native_pagination
         self.view.evaluate_javascript(f'window.reader && window.reader.turn({1 if direction > 0 else -1})')
         return True
 
@@ -392,7 +411,8 @@ class ChapterBridge:
         if self.pagination_task is not None:
             self.pagination_task.cancel()
             self.pagination_task = None
-        self.view.evaluate_javascript('window.reader && window.reader.dispose()')
+        self.view.evaluate_javascript('window.reader && window.reader.root === '
+                                      + json.dumps(self.root) + ' && window.reader.dispose()')
 
 
 def _bind_chapter_navigation(view, handler, backend):
@@ -432,6 +452,7 @@ def chapter_view(content, view=None, *, offset=0, on_event=None, on_link=None, m
         previous.dispose()
     root = 'https://logistics.invalid/' + uuid4().hex + '/'
     bridge = ChapterBridge(view, root=root, offset=offset, on_event=on_event, on_link=on_link, motion_enabled=motion_enabled)
+    bridge.native_pagination = backend.startswith(('toga_iOS.', 'toga_android.'))
     view._chapter_bridge = bridge
     _bind_chapter_navigation(view, bridge.navigation, backend)
     view.on_webview_load = bridge.loaded

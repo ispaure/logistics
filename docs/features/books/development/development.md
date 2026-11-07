@@ -419,6 +419,25 @@ Empty-state entry points and library-row actions remain in content. The reader
 uses the host's separate native reader action contract. Android retains its
 catalogue header.
 
+## Mobile EPUB settings and return to reading
+
+The EPUB category and the reader’s Appearance command use the Settings EPUB
+page factory. The shortcut pushes a Settings route with the originating reader’s
+destination as its Back target. Settings save individually and the font size
+uses the shared reset control. Comic appearance retains its separate layout form.
+
+The shortcut retains the current chapter and pauses page turns while Settings is
+open. On return the host resumes the live bridge at its current anchor or
+reloads the same chapter when its appearance changed or the native bridge was
+lost. Provider-backed readers retain their private WebView for this visit and
+still follow the existing privacy and memory retirement policy.
+
+Focused validation exercised native Back on a disposable iPhone Duo simulator
+with imported and provider-backed synthetic books. It checked unchanged and
+edited settings, recovery of a lost bridge, and a single page turn after return.
+Mobile host checks cover the shared settings controls, reset, and suppression of
+turns while the native bridge loads or is suspended.
+
 ## Mobile EPUB motion policy
 
 The host supplies `motion_enabled` when creating either imported or private

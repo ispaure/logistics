@@ -203,13 +203,12 @@ class FontScalingTests(unittest.TestCase):
         self.assertTrue(owner.document.modified)
 
     def test_epub_appearance_and_renderer_share_justification_preference(self):
-        from features.books.mobile.appearance import ReaderAppearance
         from features.books.mobile.typography import css, options
-        values = self.app.preferences.values
-        form = ReaderAppearance(values, lambda widget: None)
+        self.app.show_settings()
+        form = self.app.settings_navigation.sections['EPUB']
         self.assertFalse(form.justify_choice.value)
         form.justify_choice.value = True
-        self.app.preferences.save(**form.settings())
+        self.assertEqual(self.app.preferences.values['epub_justify'], 'true')
         typography = options(self.app.preferences.values)
         self.assertTrue(typography['justify'])
         self.assertIn('p,li{text-align:var(--logistics-text-align,justify)}', css(16, 16, 'system', **typography))
