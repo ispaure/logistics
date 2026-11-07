@@ -9,6 +9,17 @@ TOOLS = ('pen', 'erase', 'select', 'undo', 'redo')
 PRESET_TOOLS = ('pen', 'preset-0', 'preset-1', 'add-preset', *TOOLS[1:])
 STRIP_WIDTH = len(TOOLS) * 44
 MINIMUM_TITLE_WIDTH = 96
+LANDSCAPE_INSET = 16
+LANDSCAPE_GAP = 12
+
+
+def landscape_slots(width, strip_width):
+    """Place the title and tools at thirds, clamping to the usable band."""
+    width = max(0, width - 2 * LANDSCAPE_INSET)
+    tool_start = min(width - strip_width, width * 2 / 3 - strip_width / 2)
+    title_width = min(280, max(MINIMUM_TITLE_WIDTH, 2 * (tool_start - LANDSCAPE_GAP - width / 3)))
+    title_start = max(0, min(width / 3 - title_width / 2, tool_start - LANDSCAPE_GAP - title_width))
+    return title_start, title_width, max(LANDSCAPE_GAP, tool_start - title_start - title_width)
 
 
 class NativeDrawingTools:
@@ -21,6 +32,7 @@ class NativeDrawingTools:
         self.pending = {}
         self.epoch = 0
         self.observer_exit = None
+        self.title_spacers = None
 
     def wide_landscape(self, controller):
         panel = self.panel()
@@ -38,30 +50,49 @@ class NativeDrawingTools:
         size = controller.view.bounds.size
         return 0 < size.width < 540 and size.height > size.width
 
-    def fits(self, controller):
+    def available_width(self, controller):
         panel = self.panel()
-        if (panel is None or panel.closed or not getattr(panel, '_canvas_ready', False)
-                or not getattr(panel.app.presentation, 'native_notebook_toolbar', True)):
-            return False
         native = controller.view
-        size = str(controller.traitCollection.preferredContentSizeCategory)
         width = float(native.safeAreaLayoutGuide.layoutFrame.size.width)
+        container = getattr(panel.view._impl, 'container', None)
+        if container is not None:
+            measured = float(container.native.bounds.size.width) - container.left_inset - container.right_inset
+            if measured > 0:
+                width = min(width, measured)
         style = panel.view.style
+        return width - style.margin_left - style.margin_right
+
+    def fits(self, controller, *, inline_width=None):
+        panel = self.panel()
+        if panel is None or panel.closed or not getattr(panel, '_canvas_ready', False) or controller is None:
+            return False
+        landscape = self.wide_landscape(controller)
+        if not landscape and not getattr(panel.app.presentation, 'native_notebook_toolbar', True):
+            return False
+        if inline_width is not None and not landscape:
+            return False
+        size = str(controller.traitCollection.preferredContentSizeCategory)
         strip_width = STRIP_WIDTH
         if hasattr(panel, '_brush_presets_sent'):
             presets = read_presets(panel.app.preferences.values.get(PREFERENCE, '[]'))
             if len(presets) > TOOLBAR_PRESET_LIMIT:
                 return False  # Older lists remain reachable in the scrolling toolbar.
             strip_width += TOOLBAR_PRESET_LIMIT * 44
-        return (width - style.margin_left - style.margin_right >= MINIMUM_TITLE_WIDTH + strip_width + 16
+        width = self.available_width(controller) if inline_width is None else inline_width
+        required = strip_width + LANDSCAPE_GAP
+        if inline_width is None:
+            required = strip_width + MINIMUM_TITLE_WIDTH + (
+                2 * LANDSCAPE_INSET + LANDSCAPE_GAP if landscape else 16)
+        return (width >= required
                 and not self.stacked_portrait(controller)
                 and 'Accessibility' not in size
                 and not getattr(panel.view, '_reader_fullscreen', False)
                 and panel.app.presentation.fold_division(panel.web) is None)
 
-    def mount(self, header, controller):
+    def mount(self, header, controller, *, before=None):
         panel = self.panel()
         if self.header is header and self.web is panel.web and self.controller == controller:
+            self.reflow_landscape()
             return
         self.close()
         import toga
@@ -76,9 +107,11 @@ class NativeDrawingTools:
             ('add-preset', 'plus', '+'))})
         self.header, self.web = header, panel.web
         self.controller = controller
-        header.style.direction = ROW
-        header.style.align_items = 'center'
-        header._title_content = toga.Box(style=Pack(flex=1, height=48, margin_left=8, margin_right=8))
+        if before is None:
+            header.style.direction = ROW
+            header.style.align_items = 'center'
+            header._title_content = toga.Box(style=Pack(flex=1, height=48, margin_left=8, margin_right=8))
+            self.title_spacers = (toga.Box(), toga.Box())
         self.strip = toga.Box(style=Pack(direction=ROW, width=STRIP_WIDTH, height=48))
         for name in names:
             async def click(widget=None, name=name, **kwargs):
@@ -96,9 +129,38 @@ class NativeDrawingTools:
             self.buttons[name] = button
             if button.style.display != 'none':
                 self.strip.add(button)
-        header.add(header._title_content, self.strip)
+        if before is None:
+            leading, gap = self.title_spacers
+            header.add(leading, header._title_content, gap, self.strip)
+            self.reflow_landscape()
+        else:
+            header.insert(list(header.children).index(before), self.strip)
         self.observer_exit = None
         self.task = panel.app.loop.create_task(self.observe())
+
+    def reflow_landscape(self):
+        if self.title_spacers is None:
+            return
+        from toga.style.pack import NONE
+        leading, gap = self.title_spacers
+        title = self.header._title_content
+        if self.wide_landscape(self.controller):
+            inset = LANDSCAPE_INSET
+            start, width, spacing = landscape_slots(self.available_width(self.controller), self.strip.style.width)
+            values = (start, width, spacing, 0, 0)
+        else:
+            inset = 0
+            values = (0, NONE, 0, 1, 8)
+        start, width, spacing, flex, title_margin = values
+        for style, properties in (
+            (leading.style, dict(width=start)),
+            (gap.style, dict(width=spacing)),
+            (title.style, dict(width=width, flex=flex, margin_left=title_margin, margin_right=title_margin)),
+            (self.header.style, dict(margin_left=inset, margin_right=inset)),
+        ):
+            for key, value in properties.items():
+                if getattr(style, key) != value:
+                    setattr(style, key, value)
 
     async def query(self, script, *, web=None):
         web = web or self.web
@@ -204,8 +266,10 @@ class NativeDrawingTools:
                 self.paint_preset(button, row, panel.app.presentation.accessible_name)
             surface(button, background='hover' if row['active'] else 'surface', foreground='text')
             visible_index += visible
-        if 'add-preset' in value:
-            self.strip.style.width = 44 * visible_index
+        width = 44 * visible_index
+        if 'add-preset' in value and self.strip.style.width != width:
+            self.strip.style.width = width
+            self.reflow_landscape()
 
     @staticmethod
     def paint_preset(button, row, accessible_name):
@@ -313,7 +377,7 @@ class NativeDrawingTools:
             # Own only this bounded response task; no notebook/model mutation.
             panel.app.loop.create_task(restore())
         header, self.header = self.header, None
-        if header is not None and hasattr(header, '_title_content'):
+        if header is not None and self.title_spacers is not None:
             title = getattr(header, '_mounted_title', None)
             if title is not None and title.superview == header._title_content._impl.native:
                 header._impl.native.addSubview(title)
@@ -324,5 +388,9 @@ class NativeDrawingTools:
             from toga.style.pack import COLUMN
             header.style.direction = COLUMN
             header.style.height = 37
+            header.style.margin_left = header.style.margin_right = 0
+        elif header is not None and self.strip is not None and self.strip.parent is header:
+            header.remove(self.strip)
+        self.title_spacers = None
         self.strip = self.web = self.controller = None
         self.buttons = {}
