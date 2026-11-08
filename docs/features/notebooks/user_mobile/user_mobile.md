@@ -26,8 +26,12 @@ asks for a new location and preserves the draft. Save As offers **Local files**,
 **Shared files**, **Received Files** and available unlocked locations. Two files
 with the same name in different folders remain separate documents. Explicitly
 choosing **Quit without saving** discards only that draft.
-Ordinary notebook checkpoints support recovery; private drafts
-stay in memory until Save writes verified ciphertext. Private notebooks appear
+For ordinary notebooks, Logistics keeps a local recovery copy of completed edits,
+including pasted cutouts and finished strokes. After an unexpected close, reopen
+the same notebook to recover those edits and the last recorded page. Use **Save**
+to update the original file. A gesture in progress or an edit still being saved
+can be lost if the app stops. Private drafts stay in memory until **Save** writes
+verified ciphertext. Private notebooks appear
 in the open Documents list while unlocked, without ordinary Recent or saved
 workspace entries. Exporting or saving private content to ordinary storage asks
 before creating a decrypted copy. Save or explicitly discard unsaved private
@@ -202,14 +206,16 @@ camera cutouts, navigation and keyboard space.
 
 Use **Undo**, **Redo**, **Erase**, and **Select / move** to edit.
 In **Select / move**, draw a dashed lasso with your finger or pen, even when
-**Draw with finger** is off. Only fully enclosed visible strokes are selected.
+**Draw with finger** is off. Only fully enclosed visible strokes and images are
+selected. Tap a visible image with your finger or pen to select it directly in
+**Select / move** or **Capture**.
 Drag inside the selection box to move it; drag a square corner to scale uniformly
 or the upper circle to rotate. Moving farther from the centre makes rotation
 finer. The **Copy**, **Cut** and **Delete** icons appear beside the box, on the
-right when there is room and on the left otherwise. **Paste strokes**
+right when there is room and on the left otherwise. **Paste selection**
 pastes into the current page at the original page position, independently of zoom
-or scroll. A successful mobile paste consumes the stroke clipboard and hides
-**Paste strokes**; Copy again to paste another selection. A failed save keeps the
+or scroll. A successful mobile paste consumes the selection clipboard and hides
+**Paste selection**; Copy again to paste another selection. A failed save keeps the
 clipboard available for retry. This is separate from Capture's reusable image
 clipboard. Cancelled gestures do not save edits.
 Open **Notebook actions → Pages Overview** for selectable page thumbnails, the

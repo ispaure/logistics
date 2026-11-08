@@ -251,7 +251,7 @@ function draw(highlight = mode === 'ink' ? activeHighlight() : null, region = nu
     paintBackground(ctx);
   }
   let visible = new Set(state.layers.filter(x => x[2]).map(x => x[0]));
-  const items = sceneItems(selectionStrokes()).filter(s => visible.has(s.layer) && !wholeErasePreview.has(s.id));
+  const items = sceneItems(selectionStrokes(), selectionPictures()).filter(s => visible.has(s.layer) && !wholeErasePreview.has(s.id));
   if (continuousInk)
     for (let action of queue)
       if (action.op === 'stroke') items.push({

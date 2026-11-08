@@ -313,6 +313,36 @@ console.log(JSON.stringify({passed:true,bare_command_does_not_paint:true,pen_pai
         self.assertEqual(editor.state()['page_id'],second)
         self.assertEqual(editor.index,0)
 
+    def test_mixed_selection_transform_cut_paste_and_recovery(self):
+        with TemporaryDirectory() as directory:
+            repo = Repository(directory)
+            book = Notebook.new()
+            book.add_page()
+            key = repo.create(book)
+            editor = Editor(book, lambda value: repo.save(key, value))
+            editor.apply(dict(op='stroke', points=[[30, 30, .5], [70, 70, .5]]))
+            editor.apply(paste_action())
+            page = book.page(0)
+            ids = [page.strokes[0].id, page.images[0].id]
+            editor.apply(dict(op='transform', ids=ids, dx=10, dy=20))
+            self.assertEqual(editor.state()['selection_ids'], ids)
+            self.assertEqual(book.page(0).images[0].corners[0], [110, 120])
+            editor.apply(dict(op='cut-strokes', ids=ids))
+            self.assertFalse(book.page(0).strokes or book.page(0).images)
+            editor.apply(dict(op='page', index=1))
+            editor.apply(dict(op='paste-strokes', single_use=True))
+            restored = repo.open(key)
+            self.assertEqual(restored.page(1).images[0].corners[0], [110, 120])
+            self.assertEqual(restored.page(1).strokes[0].points[0][:2], [40, 50])
+            self.assertEqual(editor.state()['selection_ids'], book.page(1).order)
+            self.assertEqual(image_payloads(restored, 1)[0]['src'], png_source())
+            editor.apply(dict(op='undo'))
+            self.assertFalse(repo.open(key).page(1).images)
+            editor.apply(dict(op='redo'))
+            self.assertEqual(image_payloads(repo.open(key), 1)[0]['src'], png_source())
+            editor.apply(dict(op='erase', ids=[book.page(1).images[0].id]))
+            self.assertFalse(repo.open(key).page(1).images)
+
     def test_empty_password_pdf_opens_without_prompt(self):
         editor=Editor(locked_book(password=''))
         self.assertIsNotNone(editor.pdf_data())

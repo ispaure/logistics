@@ -565,7 +565,7 @@ class NotebookPanel:
         progress = self.progress
         position_sequence = canvas.sequence
         previous_page = page_location(editor)
-        previous_ink = list(editor.notebook.page(editor.index).strokes) if action.get('op') == 'erase' else None
+        previous_ink = list(editor.notebook.page(editor.index).strokes) if action.get('op') == 'erase' and 'points' in action else None
         ack_dispatched = False
         async def respond(script, *, acknowledges=False, release_busy=True):
             nonlocal ack_dispatched
@@ -736,7 +736,7 @@ class NotebookPanel:
             try:
                 if action['op'] == 'stroke' and not error:
                     script = stroke_script(editor, self.document)
-                elif action['op'] == 'erase' and not error:
+                elif previous_ink is not None and not error:
                     script = ink_patch_script(editor, self.document, previous_ink)
                 elif error and action['op'] in {'save', 'save-as', 'export'}:
                     # These operations do not mutate ink. An error ACK would

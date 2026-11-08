@@ -107,8 +107,19 @@ def document_state(editor, document):
     return state
 
 
+def canvas_state_json(state):
+    """Serialize one image source per distinct PNG, even after repeated pastes."""
+    pictures = state.get('images')
+    if pictures:
+        sources = {}
+        images = [dict(picture, src=sources.setdefault(picture['src'], len(sources)))
+                  for picture in pictures]
+        state = dict(state, images=images, image_sources=list(sources))
+    return json.dumps(state, allow_nan=False)
+
+
 def update_script(state, error=''):
-    return 'window.notebookUpdate(' + json.dumps(state, allow_nan=False) + ',' + json.dumps(error) + ')'
+    return 'window.notebookUpdate(' + canvas_state_json(state) + ',' + json.dumps(error) + ')'
 
 
 def brush_color_script(status, setting='brush color'):

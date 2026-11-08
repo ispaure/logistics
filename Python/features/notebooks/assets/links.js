@@ -81,7 +81,7 @@ document.addEventListener('pointerdown', e => {
   if (linkGesture && e.pointerId !== linkGesture.id) linkGesture.cancelled = true
 }, true);
 canvas.onpointerdown = e => {
-  if (typeof mode !== 'undefined' && mode === 'select') return linkDown(e);
+  if (typeof mode !== 'undefined' && (mode === 'select' || mode === 'capture')) return linkDown(e);
   const mobile = document.body.classList.contains('notebook-mobile');
   const mac = /Mac|iPhone|iPad/.test(navigator.platform);
   const allowed = mobile ? e.pointerType === 'touch' && !penTouchBlocked() :

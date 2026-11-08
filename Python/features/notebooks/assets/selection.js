@@ -1,4 +1,4 @@
-// Native ink selection. A submitted transform keeps its preview until acknowledgement.
+// Notebook object selection. Keep gesture previews visible until the host acknowledges them.
 let selectionGesture = null, pendingSelection = null, selectionPage = state.page_id ?? state.index;
 const selectionActions = document.createElement('div');
 selectionActions.id = 'selectionActions';
@@ -12,7 +12,7 @@ selectionActions.innerHTML = [
   '" title="' + label + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + path + '</svg></button>').join('');
 document.body.append(selectionActions);
 const pasteStrokes = document.createElement('button');
-pasteStrokes.id = 'pasteStrokes'; pasteStrokes.type = 'button'; pasteStrokes.textContent = 'Paste strokes';
+pasteStrokes.id = 'pasteStrokes'; pasteStrokes.type = 'button'; pasteStrokes.textContent = 'Paste selection';
 pasteStrokes.style.cssText='position:fixed;right:calc(var(--notebook-rail-right, 0px) + 12px);bottom:max(12px,env(safe-area-inset-bottom));z-index:1;min-height:44px';
 document.body.append(pasteStrokes);
 function selectionLocked() { return busy || state.warning || state.read_only || state.password_required }
@@ -107,10 +107,48 @@ function selectionContains(stroke,path) {
 function selectionStrokes() {
   return pendingSelection && queue.includes(pendingSelection.action) ? pendingSelection.strokes : state.strokes
 }
+function selectionPictures() {
+  return pendingSelection && queue.includes(pendingSelection.action) ? pendingSelection.pictures : state.images || []
+}
+function selectionContainsPicture(picture, index) {
+  const corners = picture.corners;
+  if (index.path.length < 3 || !corners.every(point => selectionInside(point, index))) return false;
+  const xs = corners.map(point => point[0]), ys = corners.map(point => point[1]);
+  const edges = selectionCandidates(index, [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)]);
+  // A concave notch can enter a quad even with all four corners inside.
+  // Clip each nearby lasso edge against the quad's open interior.
+  const cross = (a, b, p) => (b[0]-a[0])*(p[1]-a[1]) - (b[1]-a[1])*(p[0]-a[0]);
+  const direction = Math.sign(cross(corners[0], corners[1], corners[2]));
+  function enters({a, b}) {
+    let first = 0, last = 1;
+    for (let i = 0; i < 4; i++) {
+      const p = corners[i], q = corners[(i+1)%4];
+      const start = direction * cross(p, q, a) - 1e-8;
+      const end = direction * cross(p, q, b) - 1e-8;
+      if (start <= 0 && end <= 0) return false;
+      if (start <= 0) first = Math.max(first, start / (start-end));
+      if (end <= 0) last = Math.min(last, start / (start-end));
+      if (first >= last) return false;
+    }
+    return true;
+  }
+  return !index.exhausted && !edges.some(enters);
+}
+function selectionItems() { return [...selectionStrokes(), ...selectionPictures()] }
 function selectionBounds() {
-  const rows=selectionStrokes().filter(s=>selected.has(s.id)&&selectionVisible(s));
-  if(!rows.length)return null;
-  return rows.flatMap(s=>s.points).reduce((b,p)=>[Math.min(b[0],p[0]-p[3]/2),Math.min(b[1],p[1]-p[3]/2),Math.max(b[2],p[0]+p[3]/2),Math.max(b[3],p[1]+p[3]/2)],[Infinity,Infinity,-Infinity,-Infinity])
+  if (!selected.size) return null;
+  const bounds = [Infinity, Infinity, -Infinity, -Infinity];
+  for (const item of selectionItems()) {
+    if (!selected.has(item.id) || !selectionVisible(item)) continue;
+    for (const [x, y, , width = 0] of item.corners || item.points) {
+      const radius = width / 2;
+      bounds[0] = Math.min(bounds[0], x - radius);
+      bounds[1] = Math.min(bounds[1], y - radius);
+      bounds[2] = Math.max(bounds[2], x + radius);
+      bounds[3] = Math.max(bounds[3], y + radius);
+    }
+  }
+  return Number.isFinite(bounds[0]) ? bounds : null;
 }
 function selectionUnit() { return state.width/canvas.getBoundingClientRect().width }
 function selectionHandles(b) {
@@ -121,7 +159,7 @@ function selectionRender() {
   const page=state.page_id ?? state.index;
   if(selectionPage!==page) { selected.clear();selectionGesture=null;selectionPage=page }
   const shown=new Set(state.layers.filter(row=>row[2]).map(row=>row[0]));
-  const visibleIds=new Set(state.strokes.filter(s=>shown.has(s.layer)).map(s=>s.id));
+  const visibleIds=new Set(selectionItems().filter(s=>shown.has(s.layer)).map(s=>s.id));
   selected=new Set([...selected].filter(id=>visibleIds.has(id)));
   const b=mode==='select'?selectionBounds():null;
   // Inline display wins over the hidden attribute in some WebViews.
@@ -185,13 +223,14 @@ function selectionDown(e) {
   const h=handles.findIndex(p=>Math.hypot(p[0]-q[0],p[1]-q[1])<=14*u);
   let kind=h===4?'rotate':h>=0?'scale':b&&q[0]>=b[0]&&q[0]<=b[2]&&q[1]>=b[1]&&q[1]<=b[3]?'move':'lasso';
   start=last=q;points=[q];
-  selectionGesture={kind,rows:state.strokes.filter(s=>selected.has(s.id)),cx:b?(b[0]+b[2])/2:0,cy:b?(b[1]+b[3])/2:0,dx:0,dy:0,scale:1,angle:0,lastAngle:0};
+  selectionGesture={kind,rows:selectionItems().filter(s=>selected.has(s.id)),cx:b?(b[0]+b[2])/2:0,cy:b?(b[1]+b[3])/2:0,dx:0,dy:0,scale:1,angle:0,lastAngle:0};
   if(kind==='lasso')selected.clear();
   active=e.pointerId;canvas.style.touchAction='none';if(!e.nativePen)canvas.setPointerCapture(active);draw()
 }
 function selectionMove(e) {
   if(e.pointerId!==active||!selectionGesture)return;
   e.preventDefault();last=coord(e);const g=selectionGesture;
+  g.moved ||= Math.hypot(last[0]-start[0],last[1]-start[1]) > 6*selectionUnit();
   if(g.kind==='lasso') {
     const samples=e.getCoalescedEvents?e.getCoalescedEvents():[];
     for(const ev of [...samples,e]) {const p=coord(ev),prev=points.at(-1);if(Math.hypot(p[0]-prev[0],p[1]-prev[1])>=2*selectionUnit()){if(points.length<2048)points.push(p);else g.overflow=true}}
@@ -205,8 +244,17 @@ function selectionMove(e) {
       const angle=Math.atan2(last[1]-g.cy,last[0]-g.cx)-Math.atan2(start[1]-g.cy,start[0]-g.cx);
       let delta=angle-g.lastAngle;delta=Math.atan2(Math.sin(delta),Math.cos(delta));g.angle+=delta;g.lastAngle=angle
     }
-    const c=Math.cos(g.angle),s=Math.sin(g.angle),rows=new Map(g.rows.map(row=>[row.id,{...row,points:row.points.map(p=>{const x=(p[0]-g.cx)*g.scale,y=(p[1]-g.cy)*g.scale;return [g.cx+x*c-y*s+g.dx,g.cy+x*s+y*c+g.dy,p[2],p[3]*g.scale]})}]));
-    state.strokes=state.strokes.map(row=>rows.get(row.id)||row)
+    const c = Math.cos(g.angle), s = Math.sin(g.angle);
+    function transform(point) {
+      const x = (point[0]-g.cx)*g.scale, y = (point[1]-g.cy)*g.scale;
+      return [g.cx+x*c-y*s+g.dx, g.cy+x*s+y*c+g.dy];
+    }
+    const rows = new Map(g.rows.map(row => [row.id, row.corners
+      ? {...row, corners:row.corners.map(transform)}
+      : {...row, points:row.points.map(p => [...transform(p), p[2], p[3]*g.scale])}]));
+    state.strokes = state.strokes.map(row => rows.get(row.id) || row);
+    if (state.images) state.images = state.images.map(row => rows.get(row.id) || row);
+
   }
   draw()
 }
@@ -215,12 +263,15 @@ function selectionFinish(e,cancelled=false) {
   if(!cancelled)selectionMove(e);
   const g=selectionGesture,path=points;active=null;points=[];selectionGesture=null;
   if(e.pointerType==='pen'||penContactActive)notePenContact(false);
+  const tapped = !cancelled && !g.moved && typeof topPictureAt === 'function' ? topPictureAt(last) : null;
   if(g.kind==='lasso') {
-    if(!cancelled&&!g.overflow) {
+    if (tapped) selected = new Set([tapped.id]);
+    else if(!cancelled&&!g.overflow) {
       const index=selectionPrepare(path),ids=[];
-      for(const stroke of state.strokes) {
-        if(index.exhausted)break;
-        if(selectionVisible(stroke)&&selectionContains(stroke,index))ids.push(stroke.id)
+      for (const item of selectionItems()) {
+        if (index.exhausted) break;
+        if (selectionVisible(item) && (item.corners
+            ? selectionContainsPicture(item,index) : selectionContains(item,index))) ids.push(item.id);
       }
       selected=new Set(index.exhausted?[]:ids);
       if(index.exhausted)$('status').textContent='Selection too complex. Draw a smaller outline.'
@@ -228,13 +279,15 @@ function selectionFinish(e,cancelled=false) {
     if(g.overflow)$('status').textContent='Lasso too long. Draw a shorter outline.'
   }
   else {
-    const preview = state.strokes;
-    const originals = new Map(g.rows.map(stroke => [stroke.id, stroke]));
-    state.strokes = state.strokes.map(stroke => originals.get(stroke.id) || stroke);
-    if (!cancelled && (g.dx || g.dy || g.angle || g.scale !== 1)) {
+    const preview = {strokes:state.strokes, pictures:state.images || []};
+    const originals = new Map(g.rows.map(item => [item.id,item]));
+    state.strokes = state.strokes.map(item => originals.get(item.id) || item);
+    if (state.images) state.images = state.images.map(item => originals.get(item.id) || item);
+    if (tapped) selected = new Set([tapped.id]);
+    else if (!cancelled && (g.dx || g.dy || g.angle || g.scale !== 1)) {
       const action = {op:'transform', ids:[...selected], dx:g.dx, dy:g.dy, scale:g.scale,
         angle:g.angle, cx:g.cx, cy:g.cy};
-      pendingSelection = {action, strokes:preview};
+      pendingSelection = {action, ...preview};
       send(action);
       if (!queue.includes(action)) pendingSelection = null;
     }

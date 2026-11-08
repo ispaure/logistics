@@ -21,7 +21,7 @@ class Editor:
         self.eraser_kind = 'partial'
         self.undo = []
         self.redo = []
-        self._stroke_clipboard = []
+        self._selection_clipboard = []
         self._selection_ids = []
         self._backgrounds = OrderedDict()
         self._unlocked_pdf = None
@@ -249,17 +249,22 @@ class Editor:
 
     def restore(self, snapshot):
         book = self.notebook
-        book.pages, book.members, book.metadata, self.index = snapshot
-        book.structure_dirty = book.metadata_dirty = True
+        pages, members, metadata, index = snapshot
+        # Ink-only history can reuse the already published archive and page blobs.
+        structure_changed = (len(book.pages) != len(pages) or book.members != members
+                             or any((a.id, a.record, a.template) != (b.id, b.record, b.template)
+                                    for a, b in zip(book.pages, pages)))
+        book.pages, book.members, book.metadata, self.index = pages, members, metadata, index
+        book.structure_dirty |= structure_changed
+        book.metadata_dirty = True
 
     def apply(self, action):
         op = validate_action(action)
         book = self.notebook
         self._selection_ids = []
         if op == 'copy-strokes':
-            ink = book.page(self.index)
-            self._stroke_clipboard = deepcopy(self.selected_strokes(ink, action['ids']))
-            self._selection_ids = [s.id for s in self._stroke_clipboard]
+            self._selection_clipboard = self.copy_selection(action['ids'])
+            self._selection_ids = [item.id for item, _ in self._selection_clipboard]
             return
         if op == 'unlock-pdf':
             self.pdf_data(action['password'])
@@ -289,8 +294,9 @@ class Editor:
                 source.pop()
                 target.append(previous)
             return
-        selection_indexes = []
-        clipboard = self._stroke_clipboard
+        selection_ids = []
+        pasted_indexes = []
+        clipboard = self._selection_clipboard
         try:
             left = self.canvas_left()
             right = WIDTH - left
@@ -300,30 +306,33 @@ class Editor:
             if op == 'cut-strokes':
                 if ink.warning:
                     raise ValueError(ink.warning)
-                clipboard = deepcopy(self.selected_strokes(ink, action['ids']))
-                ids = {s.id for s in clipboard}
-                ink.strokes = [s for s in ink.strokes if s.id not in ids]
-                ink.order = [key for key in ink.order if key not in ids]
-                if ink.images:
-                    ink.ordering_dirty = True
+                clipboard = self.copy_selection(action['ids'])
+                self.remove_selection(ink, {item.id for item, _ in clipboard})
             elif op == 'paste-strokes':
                 from uuid import uuid4
+                from .images import add_picture
                 from .ink import MAX_PAGE_POINTS
                 if ink.warning:
                     raise ValueError(ink.warning)
                 visible = [key for key, _, shown in ink.layers if shown]
-                if not visible or not self._stroke_clipboard:
-                    raise ValueError('Copy strokes and choose a visible ink layer first.')
-                copies = deepcopy(self._stroke_clipboard)
-                if sum(len(s.points) for s in [*ink.strokes, *copies]) > MAX_PAGE_POINTS:
+                if not visible or not clipboard:
+                    raise ValueError('Copy a selection and choose a visible layer first.')
+                point_count = sum(len(s.points) for s in ink.strokes)
+                point_count += sum(len(item.points) for item, data in clipboard if data is None)
+                if point_count > MAX_PAGE_POINTS:
                     raise ValueError('Too many points on this page.')
-                for stroke in copies:
+                for item, data in clipboard:
+                    if data is not None:
+                        add_picture(book, self.index, data, visible[-1], item.corners)
+                        pasted_indexes.append(('images', len(ink.images) - 1))
+                        continue
+                    stroke = deepcopy(item)
                     if any(not left <= x <= right or not 0 <= y <= height for x, y, _, _ in stroke.points):
                         raise ValueError('Keep pasted strokes inside the page.')
                     stroke.id, stroke.layer = uuid4().hex, visible[-1]
-                selection_indexes = list(range(len(ink.strokes), len(ink.strokes) + len(copies)))
-                ink.strokes = [*ink.strokes, *copies]
-                ink.order = [*ink.order, *(s.id for s in copies)]
+                    ink.strokes.append(stroke)
+                    ink.order = [*ink.order, stroke.id]
+                    pasted_indexes.append(('strokes', len(ink.strokes) - 1))
                 if action.get('single_use') is True:
                     clipboard = []
                 if ink.images:
@@ -379,21 +388,22 @@ class Editor:
                 if ink.warning:
                     raise ValueError(ink.warning)
                 import math
-                self.selected_strokes(ink, action['ids'])
+                from .images import validate_corners
+                self.selected_items(ink, action['ids'])
                 selected_ids = set(action['ids'])
                 dx, dy = action['dx'], action['dy']
                 scale, angle = action.get('scale', 1), action.get('angle', 0)
                 cx, cy = action.get('cx', 0), action.get('cy', 0)
                 cosine, sine = math.cos(angle), math.sin(angle)
+                def transform(x, y):
+                    return [cx + scale * ((x-cx)*cosine - (y-cy)*sine) + dx,
+                            cy + scale * ((x-cx)*sine + (y-cy)*cosine) + dy]
+
+                selection_ids = action['ids']
                 for index, stroke in enumerate(ink.strokes):
-                    if stroke.id in selected_ids:
-                        selection_indexes.append(index)
-                        if (dx, dy, scale, angle) == (0, 0, 1, 0):
-                            continue
+                    if stroke.id in selected_ids and (dx, dy, scale, angle) != (0, 0, 1, 0):
                         moved = deepcopy(stroke)
-                        moved.points = [[cx + scale * ((x-cx)*cosine - (y-cy)*sine) + dx,
-                                         cy + scale * ((x-cx)*sine + (y-cy)*cosine) + dy,
-                                         p, w * scale] for x, y, p, w in stroke.points]
+                        moved.points = [[*transform(x, y), p, w * scale] for x, y, p, w in moved.points]
                         moved.scale *= scale
                         if not math.isfinite(moved.scale) or moved.scale <= 0:
                             raise ValueError('Invalid native stroke scale.')
@@ -402,6 +412,11 @@ class Editor:
                                for x, y, p, w in moved.points):
                             raise ValueError('Keep transformed strokes inside the page and supported width range.')
                         ink.strokes[index] = moved
+                for index, picture in enumerate(ink.images):
+                    if picture.id in selected_ids and (dx, dy, scale, angle) != (0, 0, 1, 0):
+                        corners = [transform(x, y) for x, y in picture.corners]
+                        validate_corners(corners)
+                        ink.images[index] = type(picture)(picture.id, picture.layer, picture.resource, corners)
             elif op == 'erase':
                 old_ids = {s.id for s in ink.strokes}
                 if ink.warning:
@@ -413,7 +428,10 @@ class Editor:
                     ink.strokes = erase(ink.strokes, ink.layers, action['points'],
                                         action['radius'] * self.eraser_scale(), action.get('kind') == 'whole')
                 else:
-                    ink.strokes = [s for s in ink.strokes if s.id not in action['ids']]
+                    ids = set(action['ids'])
+                    shown = {key for key, _, visible in ink.layers if visible}
+                    ids.difference_update(p.id for p in ink.images if p.layer not in shown)
+                    self.remove_selection(ink, ids)
                 fragments, owner = {}, None
                 for stroke in ink.strokes:
                     if stroke.id in old_ids:
@@ -460,8 +478,11 @@ class Editor:
             checkpoint_error = error
         else:
             checkpoint_error = None
-        self._stroke_clipboard = clipboard
-        self._selection_ids = [book.page(self.index).strokes[i].id for i in selection_indexes]
+        self._selection_clipboard = clipboard
+        if pasted_indexes:
+            ink = book.page(self.index)
+            selection_ids = [getattr(ink, group)[i].id for group, i in pasted_indexes]
+        self._selection_ids = selection_ids
         self.undo.append(previous)
         del self.undo[:-50]
         self.redo.clear()
@@ -469,15 +490,29 @@ class Editor:
             raise checkpoint_error
 
     @staticmethod
-    def selected_strokes(ink, ids):
+    def selected_items(ink, ids):
         shown = {key for key, _, visible in ink.layers if visible}
         wanted = set(ids)
-        chosen = [s for s in ink.strokes if s.id in wanted and s.layer in shown]
+        chosen = [s for s in [*ink.strokes, *ink.images] if s.id in wanted and s.layer in shown]
         if not wanted or {s.id for s in chosen} != wanted:
-            raise ValueError('Select visible strokes first.')
+            raise ValueError('Select visible strokes or images first.')
         # Follow scene order when copied ink overlaps images or other strokes.
         order = {key: i for i, key in enumerate(ink.order)}
         return sorted(chosen, key=lambda s: order.get(s.id, len(order)))
+
+    def copy_selection(self, ids):
+        from .images import Picture, picture_assets
+        ink = self.notebook.page(self.index)
+        read = picture_assets(self.notebook, self.index)
+        return [(deepcopy(item), read(item) if isinstance(item, Picture) else None)
+                for item in self.selected_items(ink, ids)]
+
+    @staticmethod
+    def remove_selection(ink, ids):
+        ink.ordering_dirty |= bool(ink.images)
+        ink.strokes = [s for s in ink.strokes if s.id not in ids]
+        ink.images = [p for p in ink.images if p.id not in ids]
+        ink.order = [key for key in ink.order if key not in ids]
 
     def state(self):
         from .templates import CATALOG, FORM_TEMPLATES, settings, background, view_bounds, template_name, available, TEMPLATE_NOTICE, description
@@ -504,7 +539,7 @@ class Editor:
             paper_bounds = dict(paper_bounds, x=paper_bounds['x'] - left)
             for image in images:
                 image['corners'] = [[x - left, y] for x, y in image['corners']]
-        return dict(stroke_clipboard=bool(self._stroke_clipboard), selection_ids=self._selection_ids, links=self.page_links() if pdf and not locked else [], password_required=locked, images=images,
+        return dict(stroke_clipboard=bool(self._selection_clipboard), selection_ids=self._selection_ids, links=self.page_links() if pdf and not locked else [], password_required=locked, images=images,
                     scene_order=ink.order, page_id=page.id, name=self.notebook.name, index=self.index, count=len(self.notebook.pages),
                     width=WIDTH - 2 * left, height=self.page_height(), pdf_paper=paper_bounds, tools=TOOLS, colors=COLORS,
                     brushes=EXPANDED_BRUSHES if expanded else BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS,

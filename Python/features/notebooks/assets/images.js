@@ -13,11 +13,16 @@ document.querySelector('header').append(captureToggle);
 document.body.append(captureTools);
 const pdfUnlock = document.createElement('form');
 pdfUnlock.id = 'pdfUnlock';
-pdfUnlock.innerHTML = '<label>PDF password <input id="pdfPassword" type="password" autocomplete="off" maxlength="1024" required></label><button type="submit">Unlock PDF</button>';
+pdfUnlock.innerHTML = '<label>PDF password <input id="pdfPassword" type="password" autocomplete="off" maxlength="1024" required></label><button id="unlockPDF" type="submit">Unlock PDF</button><span id="pdfUnlockStatus" role="status"></span>';
 document.body.insertBefore(pdfUnlock, $('viewport'));
 pdfUnlock.onsubmit = e => {
   e.preventDefault();
-  if (!busy) { const password = $('pdfPassword').value; $('pdfPassword').value = ''; send({op:'unlock-pdf', password}) }
+  if (busy) return;
+  const password = $('pdfPassword').value;
+  $('pdfPassword').value = '';
+  $('unlockPDF').disabled = true;
+  $('pdfUnlockStatus').textContent = 'Unlocking notebook…';
+  send({op:'unlock-pdf', password});
 };
 function imagePageIdentity() { return state.page_id || 'index:' + state.index }
 function imageVisible(p) { return state.layers.some(row => row[0] === p.layer && row[2]) }
@@ -25,15 +30,36 @@ function selectedPicture() { return (state.images || []).find(p => p.id === imag
 function imageRender() {
   captureTools.hidden = mode !== 'capture' || !!state.password_required;
   pdfUnlock.hidden = !state.password_required;
+  $('unlockPDF').disabled = busy;
   $('viewport').style.visibility = state.password_required ? 'hidden' : '';
-  if (imageRender.page !== state.index) { imageSelection = null; imageGesture = null; imageRender.page = state.index }
-  const pictures = state.images || [], sources = new Set(pictures.map(p => p.src));
-  for (const key of imageCache.keys()) if (!sources.has(key)) imageCache.delete(key);
-  for (const p of pictures) if (!imageCache.has(p.src)) {
-    const img = new Image(); imageCache.set(p.src, img);
-    img.onload = () => { if (imageCache.get(p.src) === img && active === null) draw() };
-    img.onerror = () => $('status').textContent = 'Unable to decode a notebook image.';
-    img.src = p.src
+  const page = imagePageIdentity();
+  if (imageRender.page !== page) {
+    imageSelection = null;
+    imageGesture = null;
+    forceImageLasso = false;
+    imageRender.page = page;
+  }
+  const pictures = state.images || [];
+  if (state.image_sources) {
+    for (const picture of pictures) picture.src = state.image_sources[picture.src];
+    delete state.image_sources;
+  }
+  const sources = new Set(state.password_required ? [] : pictures.filter(imageVisible).map(picture => picture.src));
+  for (const [src, img] of imageCache) {
+    if (sources.has(src)) continue;
+    imageCache.delete(src);
+    img.onload = img.onerror = null;
+    img.removeAttribute('src');
+  }
+  for (const src of sources) {
+    if (imageCache.has(src)) continue;
+    const img = new Image();
+    imageCache.set(src, img);
+    img.onload = () => { if (imageCache.get(src) === img && active === null) draw() };
+    img.onerror = () => {
+      if (imageCache.get(src) === img) $('status').textContent = 'Unable to decode a notebook image.';
+    };
+    img.src = src;
   }
   $('capture').classList.toggle('active', mode === 'capture');
   $('capture').setAttribute('aria-pressed', String(mode === 'capture'));
@@ -60,11 +86,20 @@ function imageHandles(p) {
   const offset = 36*state.width/canvas.getBoundingClientRect().width;
   return [c, [mid[0] - (d[0]-a[0])/length*offset, mid[1] - (d[1]-a[1])/length*offset]]
 }
-function sceneItems(strokes = state.strokes) {
-  const rows = [...strokes, ...(state.images || [])], map = new Map(rows.map(p => [p.id,p]));
-  const order = state.scene_order || [], known = new Set(order);
-  // Layers always retain their own stacking; Arrange only affects one layer.
-  return state.layers.flatMap(layer => [...order.map(id => map.get(id)).filter(Boolean), ...rows.filter(p => !known.has(p.id))].filter(p => p.layer === layer[0]))
+function sceneItems(strokes = state.strokes, pictures = state.images || []) {
+  const rows = [...strokes, ...pictures];
+  const remaining = new Map(rows.map(item => [item.id, item]));
+  const layers = new Map(state.layers.map(([id]) => [id, []]));
+  for (const id of state.scene_order || []) {
+    const item = remaining.get(id);
+    if (item) layers.get(item.layer)?.push(item);
+    remaining.delete(id);
+  }
+  for (const item of remaining.values()) layers.get(item.layer)?.push(item);
+  return [...layers.values()].flat();
+}
+function topPictureAt(point) {
+  return sceneItems().reverse().find(item => item.corners && imageVisible(item) && imageContains(item, point));
 }
 function imageContains(p, q) {
   const [a,b,,d] = p.corners, ux=b[0]-a[0],uy=b[1]-a[1],vx=d[0]-a[0],vy=d[1]-a[1],det=ux*vy-uy*vx;
@@ -156,7 +191,7 @@ canvas.onpointerdown = e => {
   const q=coord(e),current=selectedPicture(),radius=16*state.width/canvas.getBoundingClientRect().width;
   let kind='move',hit=null;
   if(current && !forceImageLasso) { const handles=imageHandles(current);const i=handles.findIndex(p=>Math.hypot(p[0]-q[0],p[1]-q[1])<radius);if(i>=0) { hit=current;kind=i===0?'scale':'rotate' } }
-  hit=hit || (!forceImageLasso && [...sceneItems()].reverse().find(p=>p.corners && imageVisible(p) && imageContains(p,q)));
+  hit=hit || (!forceImageLasso && topPictureAt(q));
   imageSelection=hit?.id || null;active=e.pointerId; start=last=q;points=[q];
   if(e.pointerType==='pen')notePenContact(true);
   if(!e.nativePen)canvas.setPointerCapture(active);
@@ -183,7 +218,13 @@ function finishImage(e,cancelled=false) {
   if(gesture) {
     const corners=p?.corners;state.images=state.images.map(p=>p.id===gesture.original.id?gesture.original:p);
     if(!cancelled && corners && JSON.stringify(corners)!==JSON.stringify(gesture.corners))send({op:'image-transform',id:p.id,corners})
-  } else if(!cancelled)captureCutout(path);
+  } else if (!cancelled) {
+    const tapRadius = 6 * state.width / canvas.getBoundingClientRect().width;
+    if (path.every(point => Math.hypot(point[0] - start[0], point[1] - start[1]) <= tapRadius)) {
+      imageSelection = topPictureAt(last)?.id || null;
+      imageRender();
+    } else captureCutout(path);
+  }
   draw();flushUpdate()
 }
 canvas.onpointerup=e=>finishImage(e);
