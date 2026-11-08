@@ -43,6 +43,7 @@ function templateControls() {
     defaultViewportZoom = false;
     resetViewportPosition = true;
     documentPaperView = paperView = $('paperView').value;
+    if ($('zoom').value === 'compact-height') assignZoomValue('fit');
     resize();
   }
 }
@@ -51,7 +52,9 @@ function paperBounds() {
   // Automatic phone framing magnifies the centered Move-width region without
   // cropping the rest of the native page. Stroke-dependent crop edges cannot
   // then clamp scrolling before that region reaches the viewport center.
-  if (documentPaperView === null && defaultViewportZoom && mobileViewport() && paperView === 'move')
+  const phoneStrip = documentPaperView === null && defaultViewportZoom && mobileViewport() &&
+    paperView === 'move' && $('zoom').value === 'fit';
+  if (phoneStrip && !state.pdf_paper)
     return {x: 0, y: 0, width: state.width, height: state.height};
   if (state.pdf_paper) {
     const b = state.pdf_paper;
@@ -132,23 +135,26 @@ function resize() {
     style = getComputedStyle(viewport);
   const bounds = paperBounds();
   displayedPaperBounds = bounds;
+  const zoom = $('zoom').value;
+  const availableWidth = Math.max(1, viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
+  let availableHeight = viewport.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+  for (const id of ['warning', 'templateNotice']) {
+    const notice = $(id), css = getComputedStyle(notice);
+    availableHeight -= notice.getBoundingClientRect().height + (parseFloat(css.marginTop) || 0) + (parseFloat(css.marginBottom) || 0)
+  }
+  availableHeight = Math.max(1, availableHeight);
+  const pageHeight = compactTemplate() && documentPaperView !== 'pro' ? compactPaper().height : bounds.height;
+  const heightFit = availableHeight / pageHeight;
   let fitWidth = bounds.width;
   if (documentPaperView === null && defaultViewportZoom && mobileViewport()) {
-    if (paperView === 'move') fitWidth = (state.move_paper || {width: 821}).width;
+    if (paperView === 'move' && zoom === 'fit') fitWidth = compactPaper().width;
     else if (fitLandscapePdf()) fitWidth = backgroundContentBounds()?.width ?? bounds.width;
   }
-  let fit = Math.max(1, viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)) / fitWidth;
-  let zoom = $('zoom').value,
-    scale;
-  if (zoom === 'page') {
-    let available = viewport.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
-    for (let id of ['warning', 'templateNotice']) {
-      let notice = $(id),
-        css = getComputedStyle(notice);
-      available -= notice.getBoundingClientRect().height + (parseFloat(css.marginTop) || 0) + (parseFloat(css.marginBottom) || 0)
-    }
-    scale = Math.min(Math.max(1, viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)) / bounds.width, Math.max(1, available) / bounds.height, 1);
-  } else scale = zoom === 'fit' ? Math.min(fit, mobileViewport() ? maxZoom : 1) : Number(zoom);
+  let scale;
+  if (zoom === 'page') scale = Math.min(availableWidth / bounds.width, availableHeight / bounds.height, mobileViewport() ? maxZoom : 1);
+  else if (zoom === 'compact-height') scale = Math.min(availableHeight / compactPaper().height, maxZoom);
+  else if (zoom === 'fit') scale = Math.min(availableWidth / fitWidth, mobileViewport() ? maxZoom : 1);
+  else scale = Number(zoom);
   canvas.style.width = (state.width * scale) + 'px';
   canvas.style.height = (state.height * scale) + 'px';
   const wrap = $('paperWrap'), layers = $('inkLayers'), background = $('pdfBackground');
@@ -177,7 +183,7 @@ function resize() {
     resize.nativeWidth = state.width;
     resize.nativeHeight = state.height
   }
-  if (typeof updateZoomChrome === 'function') updateZoomChrome();
+  if (typeof updateZoomChrome === 'function') updateZoomChrome(heightFit);
   finishViewportZoom(previousZoom);
   draw()
 }
@@ -216,7 +222,7 @@ function paintBackground(target, image = $('pdfBackground')) {
 }
 
 function fitLandscapePdf() {
-  return !state.template_editable && !!state.background && innerWidth > innerHeight &&
+  return $('zoom').value === 'fit' && !state.template_editable && !!state.background && innerWidth > innerHeight &&
     !document.body.classList.contains('notebook-laptop');
 }
 

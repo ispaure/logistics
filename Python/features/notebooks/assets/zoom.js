@@ -16,14 +16,24 @@ function viewportLayoutKey() {
   return [viewport.clientWidth, viewport.clientHeight, style.paddingLeft, style.paddingRight, innerWidth, innerHeight,
     document.body.classList.contains('notebook-laptop')].join(':')
 }
+function compactPaper() {
+  return state.compact_paper || state.move_paper || {width: 821, height: 1460}
+}
+function compactTemplate() {
+  return state.template_editable && state.template_settings?.format === 'move'
+}
 function defaultViewportChoice() {
   if (!mobileViewport()) return {view: paperView, zoom: 'fit'};
   if (document.body.classList.contains('notebook-laptop')) return {view: 'pro', zoom: 'fit'};
-  if (innerWidth > innerHeight) return {view: 'pro', zoom: 'fit'};
+  if (innerWidth > innerHeight) {
+    if (state.iphone_duo && innerHeight >= 560)
+      return {view: compactTemplate() ? 'move' : 'pro', zoom: 'compact-height'};
+    return {view: 'pro', zoom: 'fit'}
+  }
   const widePortrait = state.iphone_duo ? innerWidth >= 650 : innerWidth >= 700;
-  if (state.tablet === true || widePortrait) return {view: 'pro', zoom: 'page'};
-  if (state.pdf_paper && state.width > 1404) return {view: 'pro', zoom: 'fit'};
-  return {view: 'move', zoom: 'fit'};
+  if (state.tablet === true || widePortrait)
+    return {view: state.iphone_duo && compactTemplate() ? 'move' : 'pro', zoom: 'page'};
+  return {view: 'move', zoom: 'fit'}
 }
 function assignZoomValue(value) {
   value = String(value);
@@ -59,7 +69,7 @@ function prepareViewportZoom() {
     const choice = defaultViewportChoice();
     if (documentPaperView !== null) {
       choice.view = documentPaperView;
-      if (documentPaperView === 'move') choice.zoom = 'fit';
+      if (documentPaperView === 'move' || choice.zoom === 'compact-height') choice.zoom = 'fit';
     }
     if (paperView !== choice.view || changed) resetViewportPosition = true;
     paperView = choice.view;
@@ -76,8 +86,7 @@ function finishViewportZoom(previous) {
   } else if (resetViewportPosition) {
     // Center the canonical Move strip independently of existing ink and the
     // full native page which remains reachable by panning.
-    const move = state.move_paper || {x: 291.5, width: 821};
-    viewport.scrollLeft += rect.left + (paperView === 'move' ? move.x + move.width / 2 : state.width / 2) * rect.width / state.width - viewportCenterX(viewport, box);
+    viewport.scrollLeft += rect.left + rect.width / 2 - viewportCenterX(viewport, box);
     viewport.scrollTop = 0
   }
   resetViewportPosition = false;
@@ -106,10 +115,11 @@ function revealZoomControls() {
     zoomControlsTimer = null
   }, 3000)
 }
-function updateZoomChrome() {
+function updateZoomChrome(heightFitScale) {
   appliedZoom = $('zoom').value;
   const scale = canvas.getBoundingClientRect().width / state.width;
-  const label = Math.round(scale * 100) + '%';
+  const relative = heightFitScale ? scale / heightFitScale : 1;
+  const label = mobileViewport() ? relative.toFixed(1) + '×' : Math.round(scale * 100) + '%';
   if ($('zoomLevel') && $('zoomLevel').textContent !== label) $('zoomLevel').textContent = label;
   if ($('zoomOut')) $('zoomOut').disabled = scale <= minZoom + .0001;
   if ($('zoomIn')) $('zoomIn').disabled = scale >= maxZoom - .0001

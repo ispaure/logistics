@@ -122,6 +122,7 @@ class RemarkableExportTests(unittest.TestCase):
         self.assertAlmostEqual(state['width'], 954 / PDF_SCALE)
         self.assertAlmostEqual(state['height'], 1696 / PDF_SCALE)
         self.assertEqual(state['pdf_paper']['x'], 0)
+        self.assertEqual(state['brushes'][17]['widths'][1], 12.5)
         left = (1404 - state['width']) / 2
         self.assertAlmostEqual(state['strokes'][0]['points'][0][0], points[0][0] - left)
         self.assertEqual(state['strokes'][0]['points'][0][1], 4800)
@@ -133,6 +134,9 @@ class RemarkableExportTests(unittest.TestCase):
         editor.apply(dict(op='stroke', points=[[100, 4910, .5], [110, 4920, .5]]))
         saved = book.page(0).strokes[-1]
         self.assertAlmostEqual(saved.points[0][0], 100 + left)
+        self.assertEqual(saved.points[0][3], 12.5)
+        self.assertAlmostEqual(saved.scale, 2 * 227 / 72)
+        self.assertEqual(book.page(0).strokes[0].points[0][3], 3.5)
         self.assertAlmostEqual(editor.canvas_stroke(saved)['points'][0][0], 100)
         stroke_data = json.JSONDecoder().raw_decode(stroke_script(editor, None).split('(', 1)[1])[0]
         self.assertAlmostEqual(stroke_data['points'][0][0], 100)
