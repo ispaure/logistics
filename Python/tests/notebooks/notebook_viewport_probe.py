@@ -92,6 +92,7 @@ def main(output):
 
         def snapshot():
             settle()
+            js('revealZoomControls()')
             return json.loads(js(SNAPSHOT))
 
         def load(width, height, *, tablet=False, native_actions=False, extra_state=None):
@@ -138,11 +139,13 @@ def main(output):
                 ('closed-phone-landscape', 844, 390, False, 'width'),
                 ('ipad-portrait', 820, 1180, True, 'page'),
                 ('narrow-ipad-portrait', 600, 1000, True, 'page'),
-                ('duo-open-portrait', 951, 1340, False, 'page'),
-                ('duo-open-landscape', 1340, 951, False, 'width'),
+                ('duo-front-portrait', 466, 678, False, 'move'),
+                ('duo-open-portrait', 669, 951, False, 'page'),
+                ('duo-open-landscape', 951, 669, False, 'width'),
                 ('wide-ipad-landscape', 1690, 1180, True, 'width'),
             ]:
-                value = load(width, height, tablet=tablet, native_actions=True)
+                value = load(width, height, tablet=tablet, native_actions=True,
+                             extra_state=dict(iphone_duo=name.startswith('duo-')))
                 check_default(value, kind)
                 report['defaults'].append(dict(name=name, measured=value))
                 QTest.qWait(100)
@@ -163,6 +166,28 @@ def main(output):
             assert abs(value['scale'] * 821 - value['availableWidth']) < 2, value
             assert abs(value['moveCenter'] - value['contentCenter'][0]) < 2, value
             report['move_imported_pdf_page'] = value
+
+            # The journal has a Move-shaped PDF centered inside a wider ink canvas.
+            value = load(951, 669, native_actions=True, extra_state=dict(
+                template_editable=False, notebook_viewport_insets=[0, 86, 0],
+                background='data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" '
+                           'width="954" height="1696"/%3E'))
+            wait_until(lambda: js("$('pdfBackground').naturalWidth > 0"), 'landscape PDF raster')
+            value = snapshot()
+            raster_width = 1872 * 954 / 1696 * value['scale']
+            assert abs(raster_width - value['availableWidth']) < 2, value
+            assert abs(value['moveCenter'] - value['availableWidth']/2) < 2, value
+            report['landscape_pdf_width'] = value
+
+            native_width = 954 * 226 / 72
+            native_height = 1696 * 226 / 72
+            value = load(466, 678, native_actions=True, extra_state=dict(
+                iphone_duo=True, template_editable=False, width=native_width, height=native_height,
+                pdf_paper=dict(x=0, y=0, width=native_width, height=native_height)))
+            assert value['view'] == 'pro', value
+            assert abs(value['wrap']['width'] - value['availableWidth']) < 2, value
+            assert value['scrollLeft'] == 0, value
+            report['wide_pdf_in_narrow_window'] = value
 
             load(390, 844, native_actions=True)
             js("$('paperView').value='move';$('paperView').onchange()")

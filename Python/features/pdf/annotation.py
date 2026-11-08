@@ -1,17 +1,18 @@
 """Create an editable, self-contained PDF-backed notebook beside its source."""
 from pathlib import PurePosixPath
 
-from features.notebooks.notebook import Notebook, MAX_ARCHIVE, MAX_PAGES
+from features.notebooks.notebook import Notebook, MAX_ARCHIVE
 from services.documents.storage import DocumentResource
 from .document import PDFDocument, MAX_PDF
 
 LABEL = 'Duplicate as .rmdoc to annotate'
+MAX_ANNOTATION_PAGES = 1000
 
 
 def notebook_from_pdf(data, name):
     pdf = PDFDocument(data)
     try:
-        if pdf.count > MAX_PAGES:
+        if pdf.count > MAX_ANNOTATION_PAGES:
             raise ValueError('PDF annotation supports at most 1,000 pages.')
         book = Notebook.new(name)
         for _ in range(pdf.count - 1):

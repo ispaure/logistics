@@ -46,12 +46,13 @@ class Editor:
             self._background = (key, image)
         return self._background[1]
 
-    def pdf_bounds(self):
-        """Recognize our physical-size exports without changing older PDF views."""
+    def pdf_bounds(self, page_index=None, *, reader=None):
+        """Place physical-size backgrounds in the original native ink units."""
         book = self.notebook
         if book.content.get('fileType') != 'pdf':
             return None
-        index = book.pages[self.index].record.get('redir', {}).get('value', -1)
+        page_index = self.index if page_index is None else page_index
+        index = book.pages[page_index].record.get('redir', {}).get('value', -1)
         if index < 0:
             return None
         data = self.pdf_data()
@@ -59,12 +60,15 @@ class Editor:
             return None
         key = (data, index)
         if self._pdf_geometry[0] != key:
-            from io import BytesIO
             import math
-            from pypdf import PdfReader
             from .remarkable_export import PDF_SCALE
-            reader = PdfReader(BytesIO(data))
-            if not reader.metadata or reader.metadata.get('/LogisticsNativeUnits') != '226':
+            if reader is None:
+                from io import BytesIO
+                from pypdf import PdfReader
+                reader = PdfReader(BytesIO(data))
+            marked_export = reader.metadata and reader.metadata.get('/LogisticsNativeUnits') == '226'
+            native_pdf = book.content.get('formatVersion') == 2 and book.content.get('zoomMode') == 'fitToHeight'
+            if not marked_export and not native_pdf:
                 self._pdf_geometry = (key, None)
                 return None
             page = reader.pages[index]
@@ -133,6 +137,45 @@ class Editor:
         bounds = self.pdf_bounds()
         return max(HEIGHT, bounds['height']) if bounds else HEIGHT
 
+    def canvas_left(self):
+        # The notebook model uses the legacy center at WIDTH / 2 even when
+        # imported ink extends to negative x or past WIDTH. The canvas starts
+        # at its visible left edge; the archive keeps the original coordinates.
+        bounds = self.pdf_bounds()
+        return min(0, bounds['x']) if bounds else 0
+
+    def canvas_stroke(self, stroke):
+        payload = stroke.payload()
+        left = self.canvas_left()
+        if left:
+            payload['points'] = [[x - left, y, pressure, width] for x, y, pressure, width in payload['points']]
+        return payload
+
+    @staticmethod
+    def native_action(action, left):
+        if not left:
+            return action
+        op = action['op']
+        if op == 'erase' and 'points' in action:
+            return dict(action, points=[[x + left, y, pressure] for x, y, pressure in action['points']])
+        if op in ('paste-image', 'image-transform'):
+            from .images import validate_corners
+            validate_corners(action['corners'])
+            return dict(action, corners=[[x + left, y] for x, y in action['corners']])
+        if op == 'transform':
+            return dict(action, cx=action.get('cx', 0) + left)
+        return action
+
+    def page_previews(self, start):
+        from .previews import page_previews
+        data = self.pdf_data()
+        if data is None:
+            return page_previews(self.notebook, start)
+        from io import BytesIO
+        from pypdf import PdfReader
+        reader = PdfReader(BytesIO(data))
+        return page_previews(self.notebook, start, pdf_bounds=lambda index: self.pdf_bounds(index, reader=reader))
+
     def snapshot(self):
         book = self.notebook
         pages = []
@@ -192,6 +235,10 @@ class Editor:
         selection_indexes = []
         clipboard = self._stroke_clipboard
         try:
+            left = self.canvas_left()
+            right = WIDTH - left
+            height = self.page_height()
+            action = self.native_action(action, left)
             ink = book.page(self.index)
             if op == 'cut-strokes':
                 if ink.warning:
@@ -214,7 +261,7 @@ class Editor:
                 if sum(len(s.points) for s in [*ink.strokes, *copies]) > MAX_PAGE_POINTS:
                     raise ValueError('Too many points on this page.')
                 for stroke in copies:
-                    if any(not 0 <= x <= WIDTH or not 0 <= y <= self.page_height() for x, y, _, _ in stroke.points):
+                    if any(not left <= x <= right or not 0 <= y <= height for x, y, _, _ in stroke.points):
                         raise ValueError('Keep pasted strokes inside the page.')
                     stroke.id, stroke.layer = uuid4().hex, visible[-1]
                 selection_indexes = list(range(len(ink.strokes), len(ink.strokes) + len(copies)))
@@ -226,7 +273,8 @@ class Editor:
                     ink.ordering_dirty = True
             elif op == 'stroke':
                 ink.add(action['points'], action.get('tool', 17), action.get('color', 0),
-                        action.get('width', 2), action.get('layer'), page_height=self.page_height())
+                        action.get('width', 2), action.get('layer'), page_height=height,
+                        x_bounds=(left, right), x_offset=left)
             elif op == 'paste-image':
                 from .images import paste
                 paste(book, self.index, action)
@@ -291,7 +339,7 @@ class Editor:
                         moved.scale *= scale
                         if not math.isfinite(moved.scale) or moved.scale <= 0:
                             raise ValueError('Invalid native stroke scale.')
-                        if any(not 0 <= x <= WIDTH or not 0 <= y <= self.page_height()
+                        if any(not left <= x <= right or not 0 <= y <= height
                                or not math.isfinite(w) or not 0 <= w <= 65535 / 4
                                for x, y, p, w in moved.points):
                             raise ValueError('Keep transformed strokes inside the page and supported width range.')
@@ -301,7 +349,7 @@ class Editor:
                 if ink.warning:
                     raise ValueError(ink.warning)
                 if 'points' in action:
-                    if any(p[1] > self.page_height() for p in action['points']):
+                    if any(not left <= x <= right or y > height for x, y, _ in action['points']):
                         raise ValueError('Eraser is outside the page.')
                     from .eraser import erase
                     ink.strokes = erase(ink.strokes, ink.layers, action['points'],
@@ -383,14 +431,21 @@ class Editor:
         template_description = ('This document has fixed PDF backgrounds. Notebook template changes are unavailable.'
             if pdf else description(page.template, artwork_available=template_available))
         from .images import image_payloads
-        locked = self.notebook.content.get('fileType') == 'pdf' and self.pdf_data() is None
-        return dict(stroke_clipboard=bool(self._stroke_clipboard), selection_ids=self._selection_ids, links=self.page_links() if pdf and not locked else [], password_required=locked, images=image_payloads(self.notebook, self.index),
+        locked = pdf and self.pdf_data() is None
+        paper_bounds = self.pdf_bounds()
+        left = self.canvas_left()
+        images = image_payloads(self.notebook, self.index)
+        if left:
+            paper_bounds = dict(paper_bounds, x=paper_bounds['x'] - left)
+            for image in images:
+                image['corners'] = [[x - left, y] for x, y in image['corners']]
+        return dict(stroke_clipboard=bool(self._stroke_clipboard), selection_ids=self._selection_ids, links=self.page_links() if pdf and not locked else [], password_required=locked, images=images,
                     scene_order=ink.order, page_id=page.id, name=self.notebook.name, index=self.index, count=len(self.notebook.pages),
-                    width=WIDTH, height=self.page_height(), pdf_paper=self.pdf_bounds(), tools=TOOLS, colors=COLORS,
+                    width=WIDTH - 2 * left, height=self.page_height(), pdf_paper=paper_bounds, tools=TOOLS, colors=COLORS,
                     brushes=BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS,
                     highlight_ids=HIGHLIGHT_IDS, native_highlights=NATIVE_HIGHLIGHTS,
                     shaders=SHADERS, widths=WIDTHS,
-                    strokes=[s.payload() for s in ink.strokes], layers=ink.layers,
+                    strokes=[self.canvas_stroke(s) for s in ink.strokes], layers=ink.layers,
                     warning=ink.warning, template=page.template,
                     template_name=template_name(page.template),
                     templates=CATALOG, template_formats=sorted(FORM_TEMPLATES), template_notice=TEMPLATE_NOTICE, template_description=template_description,

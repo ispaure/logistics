@@ -20,7 +20,10 @@ function defaultViewportChoice() {
   if (!mobileViewport()) return {view: paperView, zoom: 'fit'};
   if (document.body.classList.contains('notebook-laptop')) return {view: 'pro', zoom: 'fit'};
   if (innerWidth > innerHeight) return {view: 'pro', zoom: 'fit'};
-  return state.tablet === true || innerWidth >= 700 ? {view: 'pro', zoom: 'page'} : {view: 'move', zoom: 'fit'}
+  const widePortrait = state.iphone_duo ? innerWidth >= 650 : innerWidth >= 700;
+  if (state.tablet === true || widePortrait) return {view: 'pro', zoom: 'page'};
+  if (state.pdf_paper && state.width > 1404) return {view: 'pro', zoom: 'fit'};
+  return {view: 'move', zoom: 'fit'};
 }
 function assignZoomValue(value) {
   value = String(value);

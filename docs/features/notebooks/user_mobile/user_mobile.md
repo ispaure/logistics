@@ -5,7 +5,8 @@ annotate**. This creates and opens a notebook in the PDF's folder, with the same
 base name and the PDF pages behind editable ink. An existing `.rmdoc` shows an
 error; neither that file nor the PDF is replaced. The folder must support
 creating files. PDF-backed pages can be duplicated inside their notebook,
-but cannot be copied to another notebook; overview thumbnails show ink only.
+but cannot be copied to another notebook. PDF overview thumbnails show ink at
+the page's scale.
 
 A notebook is a document type in **New document**: choose **Notebook (.rmdoc)**,
 enter its name, choose **First page template** and its template size, then choose a folder in ordinary Local storage or an unlocked
@@ -258,8 +259,9 @@ an existing PDF-backed notebook retains its embedded PDF.
 
 Portrait phones and the closed Duo fit the centered **Paper Pro Move** width.
 Portrait iPads and the wide opened Duo show the whole **Paper Pro** page.
-Landscape fits the full page width across the display; laptop mode fits the
-page width across its writing area. Zooming in from the default Move view exposes
+Landscape fits the notebook page or its PDF background across the available
+width. A wide native PDF also fits its full width on a narrow phone. Laptop
+mode fits the page width across its writing area. Zooming in from the default Move view exposes
 the surrounding page while keeping the viewed paper position. Choose a manual
 **Paper view** in Layers to use the same framing across all pages of the open
 document. Page changes and Reset zoom retain this choice; reopening restores
