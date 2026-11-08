@@ -40,8 +40,8 @@ function imageRender() {
   $('pasteImage').disabled = !imageClipboard || busy || state.read_only || !!state.warning || state.password_required;
   $('imageActions').hidden = !selectedPicture() || mode !== 'capture';
 }
-function paintPicture(p, target = ctx, outline = true) {
-  const img = imageCache.get(p.src), [a,b,,d] = p.corners;
+function paintPicture(p, target = ctx, outline = true, img = imageCache.get(p.src)) {
+  const [a,b,,d] = p.corners;
   if (!img || !img.complete || !img.naturalWidth) return;
   target.save();
   target.transform(b[0]-a[0], b[1]-a[1], d[0]-a[0], d[1]-a[1], a[0], a[1]);
