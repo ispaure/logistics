@@ -206,11 +206,14 @@ class ReaderChrome:
             self.reader_tools_view = tree
 
     def library_document_location(self):
-        from .document_sources import folder_location
+        from .document_sources import folder_location, workspace_display_path
         if self.book_record:
             name = self.book_record['name']
             location = folder_location(self.app, self.session, self)
-            return f"{name}\n\n{location['path']}" if location else name
+            if location:
+                path = workspace_display_path(self.app, location['path'])
+                return f'{name}\n\n{path}'
+            return name
 
     def reflow_chapters(self):
         sidebar = getattr(self, 'chapter_sidebar', None)

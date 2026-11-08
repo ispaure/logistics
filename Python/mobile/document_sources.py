@@ -382,6 +382,23 @@ def ordinary_browser_location(app, path):
     return None
 
 
+def workspace_display_path(app, path):
+    """Use the same admitted roots as Show in folder for a local breadcrumb."""
+    physical = Path(path)
+    if physical.is_absolute():
+        try:
+            location = ordinary_browser_location(app, physical)
+        except (OSError, ValueError, RuntimeError):
+            location = None
+        if location is not None:
+            label, _, row = location
+            folders = ['Workspaces', 'Local']
+            if label != 'Local files':
+                folders.append('Shared Files' if label == 'Shared files' else label)
+            return ' → '.join((*folders, *Path(row['path']).parts))
+    return str(path)
+
+
 async def show_folder_location(app, location, *, on_selected=None):
     """Reveal and select an admitted reader source in the shared file browser."""
     if location is None or not app.checkpoint():
