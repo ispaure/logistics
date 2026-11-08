@@ -64,3 +64,23 @@ class PagePreviewTests(unittest.TestCase):
         self.assertEqual((items[0]['tool'], items[0]['color_rgba']), (23, (48, 74, 224, 77)))
         self.assertEqual([item['color'] for item in items[1:]], [3, 4, 5, 14, 15, 16])
         self.assertTrue(all(item['color_rgba'] is None for item in items[1:]))
+
+    def test_pasted_images_follow_scene_order_visibility_and_page_offset(self):
+        from features.notebooks.editor import Editor
+        from Python.tests.notebooks.image_fixtures import paste_action
+
+        book = Notebook.new()
+        editor = Editor(book)
+        editor.apply(paste_action())
+        ink = book.page(0)
+        picture = ink.images[0]
+        ink.add([[10, 20, .5]])
+        ink.add_layer('Hidden')
+        hidden = ink.layers[-1][0]
+        editor.apply(dict(paste_action(), layer=hidden))
+        ink.layers = [(key, name, key != hidden) for key, name, _ in ink.layers]
+        bounds = dict(x=-10, y=0, width=1424, height=1872)
+        image, stroke = page_previews(book, 0, pdf_bounds=lambda _: bounds)[0]['items']
+        self.assertEqual(image['src'], paste_action()['src'])
+        self.assertEqual(image['corners'], [[x + 10, y] for x, y in picture.corners])
+        self.assertEqual(stroke['points'][0][:2], [20, 20])

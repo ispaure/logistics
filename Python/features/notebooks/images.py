@@ -148,21 +148,29 @@ class Picture:
         return dict(id=self.id, layer=self.layer, corners=self.corners)
 
 
-def image_payloads(book, index):
+def image_data(book, index, *, layers=None):
     import re
     ink = book.page(index)
     resources = {r.uuid: r.name for b in ink._blocks if isinstance(b, ImageResources) for r in b.resources}
     resources.update({r.uuid: r.name for r in ink.image_resources})
-    result = []
     for image in ink.images:
+        if layers is not None and image.layer not in layers:
+            continue
         name = resources.get(image.resource, '')
         if not re.fullmatch(r'[A-Za-z0-9_-]+\.png', name):
             raise ValueError('Invalid image resource name.')
         data = book.members.get(f'{book.id}/{book.pages[index].id}/{name}')
         if data is None:
             raise ValueError('Missing notebook image resource.')
-        result.append(dict(**image.payload(), src='data:image/png;base64,' + base64.b64encode(data).decode()))
-    return result
+        yield image, data
+
+
+def image_source(data):
+    return 'data:image/png;base64,' + base64.b64encode(data).decode()
+
+
+def image_payloads(book, index):
+    return [dict(**image.payload(), src=image_source(data)) for image, data in image_data(book, index)]
 
 
 def paste(book, index, action):

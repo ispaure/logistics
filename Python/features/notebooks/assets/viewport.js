@@ -188,7 +188,7 @@ function resize() {
   draw()
 }
 
-function previewErase(samples, radius = eraserRadius) {
+function previewErase(samples, radius = pageEraserRadius()) {
   // Image pixels are immutable under the ink eraser; reconcile on acknowledgement.
   if (state.images?.length) return;
   if (!samples.length) return;

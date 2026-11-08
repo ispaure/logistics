@@ -27,7 +27,7 @@ const wholeErasePreview = new Set();
 let wholeEraseCandidates = [];
 
 function sweepHitsSegment(a, b, c, d) {
-  const reach = eraserRadius + Math.max(a[3], b[3]) / 2;
+  const reach = pageEraserRadius() + Math.max(a[3], b[3]) / 2;
   if (Math.max(a[0], b[0]) + reach < Math.min(c[0], d[0]) ||
       Math.min(a[0], b[0]) - reach > Math.max(c[0], d[0]) ||
       Math.max(a[1], b[1]) + reach < Math.min(c[1], d[1]) ||
@@ -41,7 +41,7 @@ function sweepHitsSegment(a, b, c, d) {
   const cuts = slope ? [-projection / slope, (1 - projection) / slope]
     .filter(t => t > 0 && t < 1).sort((a, b) => a - b) : [];
   const boundaries = [0, ...cuts, 1];
-  const radius = eraserRadius + a[3] / 2, dr = (b[3] - a[3]) / 2;
+  const radius = pageEraserRadius() + a[3] / 2, dr = (b[3] - a[3]) / 2;
   for (let i = 1; i < boundaries.length; i++) {
     const lo = boundaries[i - 1], hi = boundaries[i];
     const u = projection + slope * (lo + hi) / 2;
@@ -61,10 +61,11 @@ function sweepHitsSegment(a, b, c, d) {
 }
 
 function previewWholeErase(from, to) {
-  const left = Math.min(from[0], to[0]) - eraserRadius;
-  const top = Math.min(from[1], to[1]) - eraserRadius;
-  const right = Math.max(from[0], to[0]) + eraserRadius;
-  const bottom = Math.max(from[1], to[1]) + eraserRadius;
+  const radius = pageEraserRadius();
+  const left = Math.min(from[0], to[0]) - radius;
+  const top = Math.min(from[1], to[1]) - radius;
+  const right = Math.max(from[0], to[0]) + radius;
+  const bottom = Math.max(from[1], to[1]) + radius;
   for (const {stroke, bounds: [l, t, r, b]} of wholeEraseCandidates) {
     if (wholeErasePreview.has(stroke.id) || l > right || t > bottom || r < left || b < top) continue;
     const samples = stroke.points;
@@ -232,7 +233,7 @@ function finish(e, cancelled = false) {
   points = [];
   if (mode === 'erase') {
     wholeEraseCandidates = [];
-    if (eraserKind === 'partial') pendingErase = {points: captured, radius: eraserRadius};
+    if (eraserKind === 'partial') pendingErase = {points: captured, radius: pageEraserRadius()};
     send({
       op: 'erase',
       points: captured,
@@ -317,6 +318,7 @@ window.logisticsNativePen = (action, id, samples, width, height) => {
   }
 };
 let eraserKind = state.eraser_kind === 'whole' ? 'whole' : 'partial', eraserRadius = 16;
+function pageEraserRadius() { return eraserRadius * (state.eraser_scale ?? 1) }
 let onEraserKindChanged = () => {};
 const eraserDialog = document.createElement('dialog');
 eraserDialog.id = 'eraserDialog';

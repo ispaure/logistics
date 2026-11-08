@@ -3,7 +3,7 @@ from copy import copy, deepcopy
 
 from .protocol import validate_action, RecoveryIncomplete
 from .ink import WIDTH, HEIGHT, TOOLS, COLORS
-from .brushes import BRUSHES, EXPANDED_BRUSHES, PALETTE, HIGHLIGHTS, HIGHLIGHT_IDS, NATIVE_HIGHLIGHTS, SHADERS, WIDTHS
+from .brushes import BRUSHES, EXPANDED_BRUSHES, EXPANDED_INK_SCALE, PALETTE, HIGHLIGHTS, HIGHLIGHT_IDS, NATIVE_HIGHLIGHTS, SHADERS, WIDTHS
 
 
 class Editor:
@@ -49,6 +49,12 @@ class Editor:
     def expanded_pdf_layout(self):
         content = self.notebook.content
         return content.get('fileType') == 'pdf' and content.get('formatVersion') == 2 and content.get('zoomMode') == 'fitToHeight'
+
+    def expanded_ink(self):
+        return self.expanded_pdf_layout() and self.pdf_bounds() is not None
+
+    def eraser_scale(self):
+        return EXPANDED_INK_SCALE if self.expanded_ink() else 1
 
     def pdf_bounds(self, page_index=None, *, reader=None):
         """Place physical-size backgrounds in the original native ink units."""
@@ -296,7 +302,7 @@ class Editor:
                 ink.add(action['points'], action.get('tool', 17), action.get('color', 0),
                         action.get('width', 2), action.get('layer'), page_height=height,
                         x_bounds=(left, right), x_offset=left,
-                        expanded=self.expanded_pdf_layout() and self.pdf_bounds() is not None)
+                        expanded=self.expanded_ink())
             elif op == 'paste-image':
                 from .images import paste
                 paste(book, self.index, action)
@@ -375,7 +381,7 @@ class Editor:
                         raise ValueError('Eraser is outside the page.')
                     from .eraser import erase
                     ink.strokes = erase(ink.strokes, ink.layers, action['points'],
-                                        action['radius'], action.get('kind') == 'whole')
+                                        action['radius'] * self.eraser_scale(), action.get('kind') == 'whole')
                 else:
                     ink.strokes = [s for s in ink.strokes if s.id not in action['ids']]
                 fragments, owner = {}, None
@@ -473,7 +479,7 @@ class Editor:
                     width=WIDTH - 2 * left, height=self.page_height(), pdf_paper=paper_bounds, tools=TOOLS, colors=COLORS,
                     brushes=EXPANDED_BRUSHES if expanded else BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS,
                     highlight_ids=HIGHLIGHT_IDS, native_highlights=NATIVE_HIGHLIGHTS,
-                    shaders=SHADERS, widths=WIDTHS,
+                    shaders=SHADERS, widths=WIDTHS, eraser_scale=self.eraser_scale(),
                     strokes=[self.canvas_stroke(s) for s in ink.strokes], layers=ink.layers,
                     warning=ink.warning, template=page.template,
                     template_name=template_name(page.template),

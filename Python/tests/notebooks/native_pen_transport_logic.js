@@ -2,7 +2,7 @@ const fs = require('fs'), vm = require('vm'), assert = require('assert');
 const path=process.argv[2] || require('path').join(__dirname,'../../features/notebooks/assets/input.js'), source=fs.readFileSync(path,'utf8');
 new vm.Script(source); // Parse the full actual candidate asset.
 let start=source.indexOf('let nativePenContact =');
-let end=source.indexOf('// The tool button',start);
+let end=source.indexOf('let eraserKind =',start);
 let code=source.slice(0,source.indexOf('// Bounded content-free input diagnostics'))+source.slice(source.indexOf('function coord('),source.indexOf('function distance('))+source.slice(start,end);
 let events=[];
 const context={window:{},state:{native_pen:true,width:100,height:100},innerWidth:200,innerHeight:100,active:null,

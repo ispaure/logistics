@@ -149,7 +149,8 @@ class RemarkableExportTests(unittest.TestCase):
         self.assertAlmostEqual(patch_data['strokes'][0]['points'][0][0], 100)
         with self.assertRaisesRegex(ValueError, 'outside the page'):
             editor.apply(dict(op='erase', points=[[state['width'] + 1, 4910, .5]], radius=16))
-        editor.apply(dict(op='erase', kind='whole', points=[[100, 4910, .5]], radius=16))
+        self.assertGreater(state['eraser_scale'] * 16, 40)
+        editor.apply(dict(op='erase', kind='whole', points=[[100, 4870, .5]], radius=16))
         self.assertEqual(len(book.page(0).strokes), 1)
 
         reopened = Notebook.read(book.to_bytes())

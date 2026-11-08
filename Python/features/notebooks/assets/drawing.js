@@ -376,7 +376,7 @@ function strokeBounds(points, padding) {
   return bounds;
 }
 
-function paintOrderedInk(items, target = ctx, showSelection = true, region = null) {
+function paintOrderedInk(items, target = ctx, showSelection = true, region = null, pictures = null) {
   const colors = new Map(), runs = [];
   for (const item of items) {
     if (item.corners || !item.points.length || brushFor(item.tool).family !== 'highlighter') {
@@ -400,8 +400,9 @@ function paintOrderedInk(items, target = ctx, showSelection = true, region = nul
   const transform = target.getTransform();
   for (const run of runs) {
     if (run.item) {
-      if (run.item.corners) paintPicture(run.item, target, showSelection);
-      else line(run.item, target, showSelection);
+      if (run.item.corners) {
+        if (!pictures || pictures.has(run.item)) paintPicture(run.item, target, showSelection, pictures?.get(run.item));
+      } else line(run.item, target, showSelection);
       continue;
     }
     const [left, top, right, bottom] = run.bounds;
@@ -479,7 +480,21 @@ async function paintPagePreview(page, image) {
       // A failed background decode must still leave the ink visible.
     }
   }
-  paintOrderedInk(page.items, target, false);
+  const pictures = new Map();
+  for (const item of page.items) {
+    if (!item.corners) continue;
+    const picture = new Image();
+    picture.src = item.src;
+    try {
+      await picture.decode();
+    } catch {
+      continue;
+    }
+    if (!image.isConnected) return;
+    pictures.set(item, picture);
+  }
+  if (!image.isConnected) return;
+  paintOrderedInk(page.items, target, false, null, pictures);
   image.src = preview.toDataURL();
 }
 
