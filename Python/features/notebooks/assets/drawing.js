@@ -1,5 +1,4 @@
-const palette = state.palette,
-  brushes = state.brushes;
+const palette = state.palette;
 const aliases = {
   0: 12,
   1: 14,
@@ -21,7 +20,7 @@ let draftBounds = null,
   previewCount = 0;
 
 function brushFor(tool) {
-  return brushes[aliases[tool] ?? tool] || brushes[17]
+  return state.brushes[aliases[tool] ?? tool] || state.brushes[17]
 }
 
 let normalWidth = '2', rememberBrushOptions = true;
@@ -249,7 +248,7 @@ function geometry(target, p, family, beforePoint = null) {
   if (family === 'calligraphy') {
     // A fixed broad nib. Recover its span from each stored perpendicular width;
     // imported pressure/width is never applied a second time.
-    let angle = brushes[21].nib_angle, ratio = brushes[21].nib_ratio,
+    let {nib_angle: angle, nib_ratio: ratio} = brushFor(21),
       ux = Math.cos(angle), uy = Math.sin(angle), vx = -uy, vy = ux;
     let nib = p.map((point, i) => {
       let before = i ? p[i - 1] : beforePoint || p[Math.min(1, p.length - 1)],

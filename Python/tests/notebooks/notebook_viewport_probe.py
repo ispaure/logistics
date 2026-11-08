@@ -13,6 +13,7 @@ from PySide6.QtTest import QTest
 from PySide6.QtWebEngineCore import QWebEnginePage
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from features.notebooks.bridge import Bridge
+from features.notebooks.brushes import EXPANDED_BRUSHES
 from features.notebooks.editor import Editor
 from features.notebooks.mobile.surface import mobile_editor_html
 from features.notebooks.notebook import Notebook
@@ -38,6 +39,7 @@ SNAPSHOT = r"""JSON.stringify((()=>{
    resizeFrame,viewportResizePending,active,seq,busy,queue,
    availableWidth:v.clientWidth-parseFloat(css.paddingLeft)-parseFloat(css.paddingRight),
    availableHeight:v.clientHeight-parseFloat(css.paddingTop)-parseFloat(css.paddingBottom),
+   zoomLabel:$('zoomLevel').textContent,
    reset:{label:reset.getAttribute('aria-label'),visible:!!reset.getClientRects().length,
      inert:!!reset.closest('[inert]'),rect:button.toJSON()}};
 })())"""
@@ -121,6 +123,10 @@ def main(output):
             elif kind == 'width':
                 assert b['x'] == 0 and b['width'] == 1404, value
                 assert abs(wrap['width'] - value['availableWidth']) < 2, value
+            elif kind == 'compact-height':
+                assert abs(1460 * value['scale'] - value['availableHeight']) < 2, value
+                assert value['maxScrollTop'] > 0 and value['scrollTop'] == 0, value
+                assert value['zoomLabel'] == '1.3×', value
             else:
                 assert b['x'] == 0 and b['width'] == 1404, value
                 assert wrap['width'] <= value['availableWidth'] + 2, value
@@ -141,7 +147,7 @@ def main(output):
                 ('narrow-ipad-portrait', 600, 1000, True, 'page'),
                 ('duo-front-portrait', 466, 678, False, 'move'),
                 ('duo-open-portrait', 669, 951, False, 'page'),
-                ('duo-open-landscape', 951, 669, False, 'width'),
+                ('duo-open-landscape', 951, 669, False, 'compact-height'),
                 ('wide-ipad-landscape', 1690, 1180, True, 'width'),
             ]:
                 value = load(width, height, tablet=tablet, native_actions=True,
@@ -181,13 +187,29 @@ def main(output):
 
             native_width = 954 * 226 / 72
             native_height = 1696 * 226 / 72
-            value = load(466, 678, native_actions=True, extra_state=dict(
-                iphone_duo=True, template_editable=False, width=native_width, height=native_height,
-                pdf_paper=dict(x=0, y=0, width=native_width, height=native_height)))
-            assert value['view'] == 'pro', value
-            assert abs(value['wrap']['width'] - value['availableWidth']) < 2, value
-            assert value['scrollLeft'] == 0, value
-            report['wide_pdf_in_narrow_window'] = value
+            compact_pdf = dict(iphone_duo=True, template_editable=False, width=native_width, height=native_height,
+                               brushes=EXPANDED_BRUSHES, compact_paper=dict(width=native_width, height=native_height),
+                               pdf_paper=dict(x=0, y=0, width=native_width, height=native_height))
+            for name, width, height in [('front', 466, 678), ('portrait', 669, 951), ('landscape', 951, 669)]:
+                value = load(width, height, native_actions=True, extra_state=compact_pdf)
+                assert js('strokePoints([[100,100,.5],[110,100,.5]],17,2)[0][3]') == 12.5
+                if name == 'front':
+                    assert abs(value['wrap']['width'] - value['availableWidth']) < 2, value
+                    assert value['maxScrollTop'] > 0 and value['zoomLabel'] != '1.0×', value
+                else:
+                    assert abs(value['wrap']['height'] - value['availableHeight']) < 2, value
+                    assert value['zoomLabel'] == '1.0×', value
+                assert value['scrollLeft'] == 0 and value['scrollTop'] == 0, value
+                report['compact_pdf_' + name] = value
+
+            larger_pdf = dict(compact_pdf, width=native_width * 1.3, height=native_height * 1.3,
+                              pdf_paper=dict(x=0, y=0, width=native_width * 1.3, height=native_height * 1.3))
+            value = load(669, 951, native_actions=True, extra_state=larger_pdf)
+            assert value['zoomLabel'] == '1.0×' and value['maxScrollTop'] == 0, value
+            view.resize(951, 669)
+            value = snapshot()
+            assert value['zoomLabel'] == '1.3×' and value['maxScrollTop'] > 0 and value['scrollTop'] == 0, value
+            report['larger_pdf_after_rotation'] = value
 
             load(390, 844, native_actions=True)
             js("$('paperView').value='move';$('paperView').onchange()")

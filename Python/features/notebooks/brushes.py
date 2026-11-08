@@ -65,6 +65,23 @@ BRUSHES = {
 }
 
 
+# Expanded PDF scenes use a different unit for the same brush size.
+EXPANDED_INK_SCALE = (227 / 72) / NATIVE_SCALES[0]
+
+
+def expanded_profile(brush):
+    result = dict(brush, widths=tuple(width * EXPANDED_INK_SCALE for width in brush['widths']))
+    if 'pressure_widths' in brush:
+        result['pressure_widths'] = tuple(
+            (pressure, tuple(width * EXPANDED_INK_SCALE for width in widths))
+            for pressure, widths in brush['pressure_widths'])
+    return result
+
+
+EXPANDED_BRUSHES = {tool: expanded_profile(brush) for tool, brush in BRUSHES.items()}
+EXPANDED_BRUSHES[17]['widths'] = (6.25, 12.5, 19)
+
+
 def native_color(tool, color):
     if type(tool) is not int or tool not in BRUSHES or type(color) is not int or color not in BRUSHES[tool]['colors']:
         raise ValueError('Choose a color supported by this brush.')
@@ -75,8 +92,9 @@ def native_color(tool, color):
     return color, None
 
 
-def native_scale(tool, width):
-    return NATIVE_SCALES[0 if BRUSHES[tool].get('fixed_width') else int(width) - 1]
+def native_scale(tool, width, *, expanded=False):
+    scale = NATIVE_SCALES[0 if BRUSHES[tool].get('fixed_width') else int(width) - 1]
+    return scale * EXPANDED_INK_SCALE if expanded else scale
 
 
 def pressure_width(brush, width, pressure):
@@ -92,8 +110,8 @@ def pressure_width(brush, width, pressure):
     return curve[-1][1][width - 1]
 
 
-def stroke_points(points, tool, width):
-    brush = BRUSHES[tool]
+def stroke_points(points, tool, width, *, expanded=False):
+    brush = (EXPANDED_BRUSHES if expanded else BRUSHES)[tool]
     result = []
     for index, (x, y, pressure) in enumerate(points):
         value = pressure_width(brush, width, pressure)

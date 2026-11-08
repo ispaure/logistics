@@ -258,14 +258,17 @@ These restrictions apply when converting notebook templates to PDF backgrounds;
 an existing PDF-backed notebook retains its embedded PDF.
 
 Portrait phones and the closed Duo fit the centered **Paper Pro Move** width.
-Portrait iPads and the wide opened Duo show the whole **Paper Pro** page.
-Landscape fits the notebook page or its PDF background across the available
-width. A wide native PDF also fits its full width on a narrow phone. Laptop
-mode fits the page width across its writing area. Zooming in from the default Move view exposes
+Portrait iPads and the open Duo fit the whole page. In open Duo landscape,
+the compact page height fills the available space. A larger page opens centered
+at the top and you can scroll down to see the rest. Other landscape layouts
+fit the available width. The mobile zoom readout shows **1.0×** when the
+current page height matches the available height.
+
+Zooming in from the default Move view exposes
 the surrounding page while keeping the viewed paper position. Choose a manual
 **Paper view** in Layers to use the same framing across all pages of the open
 document. Page changes and Reset zoom retain this choice; reopening restores
-automatic framing. Template changes do not change Paper view.
+automatic framing. An explicit Paper view takes precedence over the template’s format.
 See [page templates and paper sizes](../user/user.md#page-templates-and-paper-sizes)
 for line counts, saved-format versus viewing choices and reMarkable compatibility.
 

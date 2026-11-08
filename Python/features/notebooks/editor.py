@@ -3,7 +3,7 @@ from copy import copy, deepcopy
 
 from .protocol import validate_action, RecoveryIncomplete
 from .ink import WIDTH, HEIGHT, TOOLS, COLORS
-from .brushes import BRUSHES, PALETTE, HIGHLIGHTS, HIGHLIGHT_IDS, NATIVE_HIGHLIGHTS, SHADERS, WIDTHS
+from .brushes import BRUSHES, EXPANDED_BRUSHES, PALETTE, HIGHLIGHTS, HIGHLIGHT_IDS, NATIVE_HIGHLIGHTS, SHADERS, WIDTHS
 
 
 class Editor:
@@ -46,6 +46,10 @@ class Editor:
             self._background = (key, image)
         return self._background[1]
 
+    def expanded_pdf_layout(self):
+        content = self.notebook.content
+        return content.get('fileType') == 'pdf' and content.get('formatVersion') == 2 and content.get('zoomMode') == 'fitToHeight'
+
     def pdf_bounds(self, page_index=None, *, reader=None):
         """Place physical-size backgrounds in the original native ink units."""
         book = self.notebook
@@ -67,8 +71,7 @@ class Editor:
                 from pypdf import PdfReader
                 reader = PdfReader(BytesIO(data))
             marked_export = reader.metadata and reader.metadata.get('/LogisticsNativeUnits') == '226'
-            native_pdf = book.content.get('formatVersion') == 2 and book.content.get('zoomMode') == 'fitToHeight'
-            if not marked_export and not native_pdf:
+            if not marked_export and not self.expanded_pdf_layout():
                 self._pdf_geometry = (key, None)
                 return None
             page = reader.pages[index]
@@ -274,7 +277,8 @@ class Editor:
             elif op == 'stroke':
                 ink.add(action['points'], action.get('tool', 17), action.get('color', 0),
                         action.get('width', 2), action.get('layer'), page_height=height,
-                        x_bounds=(left, right), x_offset=left)
+                        x_bounds=(left, right), x_offset=left,
+                        expanded=self.expanded_pdf_layout() and self.pdf_bounds() is not None)
             elif op == 'paste-image':
                 from .images import paste
                 paste(book, self.index, action)
@@ -433,6 +437,12 @@ class Editor:
         from .images import image_payloads
         locked = pdf and self.pdf_data() is None
         paper_bounds = self.pdf_bounds()
+        expanded = self.expanded_pdf_layout() and paper_bounds is not None
+        move_paper = view_bounds([], True)
+        compact_paper = move_paper
+        if expanded:
+            from .remarkable_export import PDF_SCALE
+            compact_paper = dict(width=954 / PDF_SCALE, height=1696 / PDF_SCALE)
         left = self.canvas_left()
         images = image_payloads(self.notebook, self.index)
         if left:
@@ -442,7 +452,7 @@ class Editor:
         return dict(stroke_clipboard=bool(self._stroke_clipboard), selection_ids=self._selection_ids, links=self.page_links() if pdf and not locked else [], password_required=locked, images=images,
                     scene_order=ink.order, page_id=page.id, name=self.notebook.name, index=self.index, count=len(self.notebook.pages),
                     width=WIDTH - 2 * left, height=self.page_height(), pdf_paper=paper_bounds, tools=TOOLS, colors=COLORS,
-                    brushes=BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS,
+                    brushes=EXPANDED_BRUSHES if expanded else BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS,
                     highlight_ids=HIGHLIGHT_IDS, native_highlights=NATIVE_HIGHLIGHTS,
                     shaders=SHADERS, widths=WIDTHS,
                     strokes=[self.canvas_stroke(s) for s in ink.strokes], layers=ink.layers,
@@ -451,6 +461,6 @@ class Editor:
                     templates=CATALOG, template_formats=sorted(FORM_TEMPLATES), template_notice=TEMPLATE_NOTICE, template_description=template_description,
                     template_settings=paper, template_editable=not pdf,
                     template_available=template_available,
-                    move_paper=view_bounds([], True),
+                    move_paper=move_paper, compact_paper=compact_paper,
                     background=self.background() if pdf else background(page.template, paper['format']) if paper['visible'] and template_available else None,
                     undo=bool(self.undo), redo=bool(self.redo))

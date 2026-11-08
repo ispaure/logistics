@@ -215,7 +215,7 @@ class InkPage:
             ss.SceneGroupItemBlock(root, CrdtSequenceItem(CrdtId(0, 13), end, end, 0, layer)),
         ]))
 
-    def add(self, points, tool=17, color=0, width=2, layer=None, *, page_height=HEIGHT, x_bounds=(0, WIDTH), x_offset=0):
+    def add(self, points, tool=17, color=0, width=2, layer=None, *, page_height=HEIGHT, x_bounds=(0, WIDTH), x_offset=0, expanded=False):
         if self.warning:
             raise ValueError(self.warning)
         if type(width) not in (int, float) or width not in WIDTHS.values():
@@ -232,14 +232,14 @@ class InkPage:
             if not x_bounds[0] <= x <= x_bounds[1] or not 0 <= y <= page_height or not 0 <= pressure <= 1:
                 raise ValueError('Stroke is outside the page.')
             clean.append([x, y, pressure])
-        clean = stroke_points(clean, tool, int(width))
+        clean = stroke_points(clean, tool, int(width), expanded=expanded)
         from .sampling import simplify_stroke
         clean = simplify_stroke(clean, tool, native_x_origin=WIDTH / 2)
         visible = [key for key, name, shown in self.layers if shown]
         layer = layer or (visible[-1] if visible else None)
         if layer not in visible:
             raise ValueError('Choose a visible ink layer.')
-        stroke = Stroke(uuid4().hex, layer, tool, native, clean, native_scale(tool, width), rgba)
+        stroke = Stroke(uuid4().hex, layer, tool, native, clean, native_scale(tool, width, expanded=expanded), rgba)
         self.strokes.append(stroke)
         self.order = [*self.order, stroke.id]
         return stroke
