@@ -54,7 +54,7 @@ function showPageFeedback(from) {
     undoPageJump.setAttribute('aria-label', 'Go back to page ' + (from + 1));
     undoPageJump.hidden = false
   }
-  if (from === null || !mobile) pageFeedbackTimer = setTimeout(clearPageFeedback, 3000)
+  pageFeedbackTimer = setTimeout(clearPageFeedback, 3000)
 }
 function navigateWithPageFeedback(index, from = null) {
   const action = {op: 'page', index};
