@@ -445,8 +445,10 @@ class CloudUI(LocalCryptUI):
             return False
         return self.credential_workflow.require_remote_credentials(remote, identity=identity, resume=resume, checked=checked)
 
-    def show_retained_unlock(self, key, remote=None, *, identity=None, resume=None, destination='files', choices=None):
-        return self.credential_workflow.show_retained_unlock(key, remote, identity=identity, resume=resume, destination=destination, choices=choices)
+    def show_retained_unlock(self, key, remote=None, *, identity=None, resume=None, destination='files', choices=None,
+                             preserve_creation_picker=False):
+        return self.credential_workflow.show_retained_unlock(key, remote, identity=identity, resume=resume,
+            destination=destination, choices=choices, preserve_creation_picker=preserve_creation_picker)
 
     async def restore_cloud(self, widget=None, *, initial=False, **kwargs):
         return await self.credential_workflow.restore_cloud(widget, initial=initial, **kwargs)

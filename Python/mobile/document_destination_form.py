@@ -36,7 +36,7 @@ def build_destination_form(picker, *, source_label, source_folder):
     creation, destination_action = operation.creation, operation.destination_action
     library = mode == 'folder'
     name_label = 'Library folder name' if library else 'File name'
-    roots = list(picker.editor_storage_roots)
+    roots = [*picker.editor_storage_roots, *picker.editor_locked_roots]
     picker.editor_picker_rows = {}
     picker.save_as_storage = toga.Selection(items=roots, style=Pack(height=48))
     picker.picker_folder = toga.TextInput(placeholder='Folder within storage', style=Pack(height=48))

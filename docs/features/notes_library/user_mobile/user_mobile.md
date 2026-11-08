@@ -80,8 +80,9 @@ Open **Documents → Libraries** to see Notes Libraries. To create one, choose
 and enter a name for your library folder. Use **New folder** if you need to add
 a parent folder first. **Create library here** makes the named folder, writes
 an empty `.noteslibrary` marker inside it, and opens the library. The storage
-picker offers Local, Received Files, Shared Files where writable, and unlocked
-LocalCrypt locations.
+picker offers the same locations as New document, including on-device rclone
+sync copies. Local copies are plaintext. Selecting a locked LocalCrypt copy
+with a retained credential ZIP prompts for the ZIP password.
 
 Discovery checks the storage root and up to two folders below it. A
 `.noteslibrary` file or an existing `.obsidian` directory marks a library.

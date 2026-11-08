@@ -65,10 +65,13 @@ class CredentialLoadPresentation:
                 and (navigation is None or cloud.navigation_generation == navigation)
                 and (generation is None or getattr(client, 'generation', 0) == generation))
 
-    def prepare_publication(self):
+    def prepare_publication(self, *, preserve_creation_picker=False):
         if not self.cloud.clear_private_reader():
             return False
-        self.cloud.clear_private_catalog()
+        if preserve_creation_picker:
+            self.cloud.clear_private_catalog(preserve_creation_picker=True)
+        else:
+            self.cloud.clear_private_catalog()
         return True
 
     async def refresh_kinds(self):
@@ -470,7 +473,8 @@ class CredentialWorkflow:
             cloud.cloud_import_message.text = import_hint('Load the credential ZIP for ' + remote + '. Retained password-protected ZIPs need their ZIP password to unlock again.')
         return False
 
-    def show_retained_unlock(self, key, remote=None, *, identity=None, resume=None, destination='files', choices=None, package_name=None):
+    def show_retained_unlock(self, key, remote=None, *, identity=None, resume=None, destination='files', choices=None,
+                             package_name=None, preserve_creation_picker=False):
         cloud = self.cloud
         cache = cloud.retained_packages()
         password = cloud.credential_unlock_password = PasswordInput(placeholder='ZIP password', style=Pack(height=44))
@@ -512,7 +516,7 @@ class CredentialWorkflow:
                 if not self._current(client, navigation=origin, generation=generation):
                     status.text = 'Credentials changed. Return to Credential Packages and try again.'
                     return
-                if not self.presentation.prepare_publication():
+                if not self.presentation.prepare_publication(preserve_creation_picker=preserve_creation_picker):
                     raise ValueError('Save or discard private edits before unlocking another credential.')
                 client, origin = cloud.cloud_client, cloud.navigation_generation
                 result = await self.loader.unlock(client,

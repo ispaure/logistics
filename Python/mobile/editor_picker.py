@@ -101,6 +101,8 @@ class EditorPicker:
         self.editor_picker_rows = {}
         self.editor_picker_location = None
         self.editor_storage_roots = {}
+        self.editor_storage_folders = {}
+        self.editor_locked_roots = {}
         self.editor_linked_roots = {}
         self._work = None
         self._epoch = 0
@@ -147,6 +149,8 @@ class EditorPicker:
         self.editor_picker_rows = {}
         self.editor_picker_location = None
         self.editor_storage_roots = {}
+        self.editor_storage_folders = {}
+        self.editor_locked_roots = {}
         self.editor_linked_roots = {}
         if hasattr(self, 'editor_browser'):
             self.editor_browser.stop()
@@ -333,27 +337,27 @@ class EditorPicker:
         self.notebook_templates = None
         from .protection import for_app
         for_app(self.app).changed()
-        ordinary = self.app.ordinary_file_roots(
-            include_collections=getattr(destination_action, 'kind', '') != 'download')
-        roots = ordinary
-        if creation is not None:
-            # Creation starts in the shared root, with the collections alongside it.
-            roots = {'Shared files': ordinary['Shared files'], **ordinary}
-        elif destination_action is not None and getattr(destination_action, 'kind', '') != 'download':
-            roots = self.app.file_roots
-        self.editor_storage_roots = destination_location_labels(roots)
-        if self.app.feature_enabled('rclone'):
-            if mode == 'folder' or getattr(destination_action, 'kind', '') == 'download':
-                unlocked = {}
-                existing = self.existing_crypt_locations(roots=unlocked)
-                # A loaded cipher is also a valid destination before its first
-                # local file exists. Resolution creates that LocalCrypt lazily.
-                self.editor_storage_roots.update({label: location[0] for label, location in unlocked.items()})
-            else:
-                existing = self.existing_crypt_locations()
-            self.editor_storage_roots.update(existing)
-        self.editor_linked_roots = self.linked_crypt_locations() if self.app.feature_enabled('rclone') else {}
-        self.editor_storage_roots.update(self.editor_linked_roots)
+        if creation is not None or mode == 'folder':
+            self.creation_storage()
+        else:
+            action = getattr(destination_action, 'kind', '')
+            roots = (self.app.file_roots if destination_action is not None and action != 'download'
+                     else self.app.ordinary_file_roots(include_collections=action != 'download'))
+            self.editor_storage_roots = destination_location_labels(roots)
+            self.editor_storage_folders = {}
+            self.editor_locked_roots = {}
+            self.editor_linked_roots = {}
+            if self.app.feature_enabled('rclone'):
+                if action == 'download':
+                    unlocked = {}
+                    existing = self.existing_crypt_locations(roots=unlocked)
+                    # Downloads can initialize unlocked LocalCrypt storage.
+                    self.editor_storage_roots.update({label: location[0] for label, location in unlocked.items()})
+                else:
+                    existing = self.existing_crypt_locations()
+                self.editor_storage_roots.update(existing)
+                self.editor_linked_roots = self.linked_crypt_locations()
+                self.editor_storage_roots.update(self.editor_linked_roots)
         source_store = getattr(getattr(self.operation.origin, 'owner', None), '_crypt_reader_store', None)
         source_provider = getattr(source_store, 'provider', None)
         source_reader = getattr(getattr(self.operation.origin, 'owner', None), 'crypt_reader', None)
@@ -376,6 +380,61 @@ class EditorPicker:
             return
         self.show_view(panel, route='text-destination', title=title)
         await self.load_picker_location()
+
+    def creation_storage(self, *, include_encrypted=True):
+        """Use the same on-device destination inventory for both creation forms."""
+        from .local_sources import synced_local_folders
+        roots = self.app.ordinary_file_roots()
+        self.editor_storage_roots = destination_location_labels({'Shared files': roots['Shared files'], **roots})
+        self.editor_storage_folders = {}
+        self.editor_locked_roots = {}
+        self.editor_linked_roots = {}
+        if not self.app.feature_enabled('rclone'):
+            return
+        local_folders = synced_local_folders(self.app.mirror_store(), visible=self.folder_path_visible)
+        self.editor_storage_folders.update(local_folders)
+        self.editor_storage_roots.update(dict.fromkeys(local_folders, roots['Local files']))
+        if include_encrypted:
+            self.editor_storage_roots.update({
+                label: remote for label, remote in self.existing_crypt_locations().items()
+                if self.folder_path_visible(getattr(remote, 'remote', remote))})
+            self.editor_linked_roots = self.linked_crypt_locations(
+                folders=self.editor_storage_folders, locked=self.editor_locked_roots)
+            self.editor_storage_roots.update(self.editor_linked_roots)
+
+    def refresh_creation_storage(self, *, include_encrypted):
+        label = self.save_as_storage.value
+        locked = self.editor_locked_roots
+        self.creation_storage(include_encrypted=include_encrypted)
+        if not include_encrypted:
+            # A wrong password must still allow another attempt after Back.
+            self.editor_locked_roots = locked
+        self._changing_location = True
+        try:
+            self.save_as_storage.items = [*self.editor_storage_roots, *self.editor_locked_roots]
+            self.save_as_storage.value = label if label in self.editor_storage_roots else 'Local'
+        finally:
+            self._changing_location = False
+
+    async def unlock_creation_storage(self, label):
+        key, remote, identity, unlocked = self.editor_locked_roots[label]
+        if not await self.browser_editor_location(('Local', '')):
+            return False
+        operation = self.operation
+
+        async def resume():
+            if self.operation is not operation or not self.visible():
+                return
+            self.refresh_creation_storage(include_encrypted=True)
+            if unlocked in self.editor_storage_roots:
+                await self.browser_editor_location((unlocked, ''))
+            else:
+                self.save_as_status.value = 'The encrypted copy is no longer available.'
+
+        self.app.show_cloud(present=False)
+        self.app.show_retained_unlock(key, remote, identity=identity, resume=resume,
+            destination=self.app.native_host.state.destination, preserve_creation_picker=True)
+        return False
 
     def show_creation_name(self, widget=None, **kwargs):
         if self.cloud_busy:
@@ -576,8 +635,9 @@ class EditorPicker:
         return ('.rmdoc',) if self.creating_notebook() else SOURCE_EXTENSIONS
 
     def has_parent_folder(self):
-        return bool(self.picker_folder.value) or (self.operation.creation is not None
-            and self.save_as_storage.value in ('Local', 'Received Files'))
+        label = self.save_as_storage.value
+        return self.picker_folder.value != self.editor_storage_folders.get(label, '') or (
+            self.operation.creation is not None and label in ('Local', 'Received Files'))
 
     def update_picker_actions(self):
         ready = (not self.cloud_busy and self.editor_picker_location ==
@@ -857,6 +917,9 @@ class EditorPicker:
         if self.cloud_busy or self.entering_creation_folder():
             return False
         label, folder = location
+        start = self.editor_storage_folders.get(label, '')
+        if start and folder != start and not folder.startswith(start + '/'):
+            location = label, start
         if label == 'Shared Files':
             # Collection roots have their own providers, just as in Workspaces.
             # In particular, iOS protects the shared Local directory itself.
@@ -878,7 +941,7 @@ class EditorPicker:
         if (self.panel is None or (self.panel is self.name_panel and not self.creation_layout.paired)
                 or getattr(self, '_changing_location', False)):
             return
-        if self.creation is not None:
+        if self.creation is not None or self.operation.mode == 'folder':
             # Native selectors may echo a programmatic change after navigation
             # has already started (or completed) the matching directory read.
             location = self.save_as_storage.value, self.picker_folder.value
@@ -893,7 +956,7 @@ class EditorPicker:
                     self._changing_location = False
             return
         self.hide_new_folder()
-        self.picker_folder.value = ''
+        self.picker_folder.value = self.editor_storage_folders.get(self.save_as_storage.value, '')
         pending = getattr(self, '_storage_refresh', None)
         if pending is not None and not pending.done():
             pending.cancel()
@@ -906,6 +969,8 @@ class EditorPicker:
         if self.cloud_busy:
             return
         label, folder = self.save_as_storage.value, self.picker_folder.value
+        if label in self.editor_locked_roots:
+            return await self.unlock_creation_storage(label)
         work = self._begin_work()
         previous_destination = self.picker_destination.text
         if self.creation is not None:
@@ -966,7 +1031,7 @@ class EditorPicker:
             self._finish_work(work)
 
     async def parent_editor_folder(self, widget=None, **kwargs):
-        if not self.cloud_busy and not self.entering_creation_folder():
+        if not self.cloud_busy and not self.entering_creation_folder() and self.has_parent_folder():
             if (not self.picker_folder.value and self.operation.creation is not None
                     and self.save_as_storage.value in ('Local', 'Received Files')):
                 return await self.browser_editor_location(('Shared Files', ''))
