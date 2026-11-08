@@ -493,7 +493,6 @@ async function paintPagePreview(page, image) {
     if (!image.isConnected) return;
     pictures.set(item, picture);
   }
-  if (!image.isConnected) return;
   paintOrderedInk(page.items, target, false, null, pictures);
   image.src = preview.toDataURL();
 }
