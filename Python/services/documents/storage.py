@@ -4,7 +4,7 @@ Providers retain encoding, credentials and publication mechanics. This session
 adds a document baseline, bounded input, independent lifetime and host privacy
 policy, without introducing a second storage backend or writing recovery data.
 """
-from contextlib import nullcontext
+from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
@@ -309,6 +309,34 @@ def export_local_document(path, data, *, max_bytes, validate=lambda data: None,
         revision = None
     return DocumentResource.publish(provider, target.name, data, max_bytes=max_bytes,
                                     expected_revision=revision, validate=validate, cancelled=cancelled)
+
+
+@contextmanager
+def stage_local_document_export(path, *, cancelled=lambda: False):
+    """Give a streaming export a private stage and publish it without replacement."""
+    import os
+    from tempfile import NamedTemporaryFile
+    from commonUtils.filesystem.local_access import check_local_path
+    from commonUtils.persistence.publication import rename_exclusive
+
+    target = Path(path).absolute()
+    check_local_path(target)
+    check_cancelled(cancelled)
+    if os.path.lexists(target):
+        raise FileExistsError('A file already exists at the chosen destination.')
+    stage = None
+    try:
+        with NamedTemporaryFile(prefix='.document-export-', dir=target.parent, delete=False) as stream:
+            stage = Path(stream.name)
+            yield stream
+            stream.flush()
+            os.fsync(stream.fileno())
+        check_local_path(target)
+        check_cancelled(cancelled)
+        rename_exclusive(stage, target)
+    finally:
+        if stage is not None:
+            stage.unlink(missing_ok=True)
 
 
 def local_document_resource(path, *, max_bytes):
