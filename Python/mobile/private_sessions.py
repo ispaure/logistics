@@ -440,7 +440,8 @@ class PrivateSessions:
         from .external_display import sync as sync_external
         sync_external(self.app)
 
-    async def open(self, copies, key, *, prepared=None, destination=None, privacy_gate=None, edit=False):
+    async def open(self, copies, key, *, prepared=None, destination=None, privacy_gate=None, edit=False,
+                   image_immersive=None):
         import asyncio
         if self.terminal or not self.app.active_host:
             return False
@@ -485,6 +486,9 @@ class PrivateSessions:
                 except (OSError, ValueError):
                     return await self.opening_rejected('Unlock this document before opening it again.')
             existing.presentation_destination = destination
+            if image_immersive is not None and getattr(existing.crypt_reader, 'image_document', False):
+                existing.crypt_immersive = image_immersive
+                existing.reading_frame.set_immersive(image_immersive, comic=False, image=True)
             self.app.document_password.value = ''
             self.bind(existing)
             resume = existing.resume_crypt()
@@ -534,6 +538,7 @@ class PrivateSessions:
             return await self.opening_rejected(str(error))
         token = self.app.workspace.token(session.id)
         owner._opening_origin, owner._opening_token, owner._open_presented = origin, token, False
+        owner.initial_image_immersive = image_immersive
         def retire_open():
             bound = self.active is owner
             self.close(session.id, discard=True, force=True)
@@ -571,7 +576,7 @@ class PrivateSessions:
             raise
         finally:
             password = None
-            owner._opening_origin = owner._opening_token = None
+            owner._opening_origin = owner._opening_token = owner.initial_image_immersive = None
             owner._independent_operation = False
             if remote_open:
                 self.app.set_cloud_busy(False)

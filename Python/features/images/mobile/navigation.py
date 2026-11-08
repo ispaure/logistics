@@ -27,19 +27,28 @@ def install(owner, view, *, icon_button):
                 button.enabled = available
 
     async def switch(direction):
+        from mobile.page_animation import capture_replacement_slide, finish_replacement_slide
         if owner.cloud_busy or owner.crypt_reader is not reader or provider is None:
             return
         token = owner.workspace.token(owner.session.id)
+        navigation = owner.app.navigation_generation
         try:
             rows = await asyncio.to_thread(provider.list, reader.key.rpartition('/')[0])
             if (not owner.active_host or owner.crypt_reader is not reader
+                    or owner.app.navigation_generation != navigation
                     or not owner.workspace.accepts(token) or owner.manager.active is not owner):
                 return
             target = adjacent_image(rows, reader.key, direction)
-            if target is not None and await owner.manager.open(store, target, destination=owner.presentation_destination):
+            if target is None:
+                return
+            preferences = owner.preferences.values
+            slide = capture_replacement_slide(owner.crypt_content, direction, preferences)
+            if await owner.manager.open(store, target, destination=owner.presentation_destination,
+                                        image_immersive=owner.crypt_immersive):
                 active = owner.manager.active
                 if (active is not None and active is not owner and active.crypt_reader is not None
                         and active.session.resource == owner.manager.identity(store, target)):
+                    finish_replacement_slide(active.crypt_content, slide, direction, preferences)
                     owner.manager.close(owner.session.id)
         except Exception as error:
             if owner.crypt_reader is reader:
@@ -51,6 +60,11 @@ def install(owner, view, *, icon_button):
     async def following(widget=None, **kwargs):
         await move(1)
 
+    def swipe(direction):
+        if not busy and owner.crypt_reader is reader:
+            owner.loop.create_task(move(direction))
+
+    view.crypt_image.on_page = swipe
     buttons.extend([icon_button('back', 'Previous image', on_press=previous),
                     icon_button('forward', 'Next image', on_press=following)])
     for button in buttons:

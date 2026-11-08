@@ -150,6 +150,28 @@ def finish_page_slide(content, direction, preferences):
     transaction.commit()
 
 
+def capture_replacement_slide(content, direction, preferences):
+    """Detach the outgoing snapshot so it can follow a replacement reader."""
+    begin_page_slide(content, direction, preferences)
+    impl = content._impl
+    state = getattr(impl, '_ios_page_slide', None)
+    if state is not None:
+        impl._ios_page_slide = None
+    return state
+
+
+def finish_replacement_slide(content, state, direction, preferences):
+    impl = content._impl
+    if state is not None:
+        container = getattr(impl, 'container', None)
+        if container is None:
+            return
+        cancel_page_slide(content)
+        state.root = container.native
+        impl._ios_page_slide = state
+    finish_page_slide(content, direction, preferences)
+
+
 def sync_preferences(app):
     """Push the host policy into retained rich EPUBs on either mobile backend."""
     preferences = getattr(app, 'preferences', None)
