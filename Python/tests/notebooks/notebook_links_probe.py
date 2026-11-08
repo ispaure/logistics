@@ -29,7 +29,7 @@ const event=(type,kind='touch',dx=0,dy=0,keys={})=>{
     clientY:r.top+(b.y+b.height*.2)/state.height*r.height+dy,pressure:.5,...keys}))
 };
 const reset=()=>{queue=[];busy=false;commands.length=0;active=null;pan=null;points=[];linkGesture=null;
-  touchContacts.clear();touchPinch=null;touchZoomBlocked=false;pageTouch=null;hideSwipePage();addingSwipePage=false;resetPenRejection();clearLinkReturn();pendingLinkJump=null;linkFeedback.hidden=true;state.index=0;state.native_pen=false};
+  touchContacts.clear();touchPinch=null;touchZoomBlocked=false;pageTouch=null;hideSwipePage();addingSwipePage=false;resetPenRejection();clearPageFeedback();pendingPageFeedback=null;linkFeedback.hidden=true;state.index=0;state.native_pen=false};
 const tap=(kind,keys={})=>{event('pointerdown',kind,0,0,keys);event('pointerup',kind,0,0,keys)};
 const mobile=mobileViewport();
 if(mobile){
@@ -149,11 +149,18 @@ def main():
                     idle_color = view.grab().toImage().pixelColor(*sample)
                     assert max(pressed_color.red(), pressed_color.green(), pressed_color.blue()) < 80, pressed_color.name()
                     assert min(idle_color.red(), idle_color.green(), idle_color.blue()) > 180, idle_color.name()
-                # Use the real browser timer: acknowledgement starts a 3-second undo window.
-                javascript(view, "pendingLinkJump={from:0,to:2};queue=[{op:'page',index:2}];busy=true;window.notebookUpdate({...state,index:2})")
+                # Use the real browser timer for link return and the mobile page badge.
+                javascript(view, "navigateWithPageFeedback(2,0);window.notebookUpdate({...state,index:2})")
                 assert javascript(view, '!undoPageJump.hidden')
                 QTest.qWait(3150)
-                assert javascript(view, 'undoPageJump.hidden && linkReturn===null')
+                if mobile:
+                    assert javascript(view, '!undoPageJump.hidden && linkReturn===0')
+                    javascript(view, "navigateWithPageFeedback(1);window.notebookUpdate({...state,index:1})")
+                    assert javascript(view, "!pageFeedback.hidden && undoPageJump.hidden && pageFeedbackLabel.textContent.startsWith('Page 2 ')")
+                    QTest.qWait(3150)
+                    assert javascript(view, 'pageFeedback.hidden')
+                else:
+                    assert javascript(view, 'undoPageJump.hidden && linkReturn===null')
                 view.grab().save(str(args.output / ('mobile.png' if mobile else 'desktop.png')))
             finally:
                 view.close()

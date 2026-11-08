@@ -129,20 +129,23 @@ function render() {
   resize();
 }
 
-function resize() {
-  const previousZoom = prepareViewportZoom();
-  let viewport = $('viewport'),
-    style = getComputedStyle(viewport);
-  const bounds = paperBounds();
-  displayedPaperBounds = bounds;
-  const zoom = $('zoom').value;
+function pageViewportSpace() {
+  const viewport = $('viewport'), style = getComputedStyle(viewport);
   const availableWidth = Math.max(1, viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight));
   let availableHeight = viewport.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
   for (const id of ['warning', 'templateNotice']) {
     const notice = $(id), css = getComputedStyle(notice);
     availableHeight -= notice.getBoundingClientRect().height + (parseFloat(css.marginTop) || 0) + (parseFloat(css.marginBottom) || 0)
   }
-  availableHeight = Math.max(1, availableHeight);
+  return {width: availableWidth, height: Math.max(1, availableHeight)}
+}
+
+function resize() {
+  const previousZoom = prepareViewportZoom();
+  const bounds = paperBounds();
+  displayedPaperBounds = bounds;
+  const zoom = $('zoom').value;
+  const {width: availableWidth, height: availableHeight} = pageViewportSpace();
   const pageHeight = compactTemplate() && documentPaperView !== 'pro' ? compactPaper().height : bounds.height;
   const heightFit = availableHeight / pageHeight;
   let fitWidth = bounds.width;

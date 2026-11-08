@@ -46,10 +46,18 @@ class SettingsCategories:
         preview = toga.Switch('Notebooks: muted Paper Pro colors',
             value=self.app.preferences.values['notebook_paper_preview'] == 'true',
             style=Pack(height=48))
-        preview.on_change = lambda widget, **kw: self.app.preferences.save(
-            notebook_paper_preview='true' if widget.value else 'false')
+        def changed(widget, **kw):
+            self.app.preferences.save(notebook_paper_preview='true' if widget.value else 'false')
+
+        def refresh():
+            preview.on_change = None
+            preview.value = self.app.preferences.values['notebook_paper_preview'] == 'true'
+            preview.on_change = changed
+
+        preview.on_change = changed
+        box._settings_on_open = refresh
         box.add(switch_row(self.app, 'Notebook preview', preview,
-            'Turn off for vivid colors. Reopen notebooks to apply. This preview leaves saved ink colors unchanged.'))
+            'Turn off for vivid colors. This setting applies to all notebooks, including PDF backgrounds and thumbnails.'))
         return box
 
 

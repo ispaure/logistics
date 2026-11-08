@@ -207,7 +207,7 @@ function finish(e, cancelled = false) {
     if (!cancelled && !gesture.cancelled && gesture.paging && !busy &&
         performance.now() - gesture.time < 900 && Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy) * 1.5) {
       let index = state.index + (dx < 0 ? 1 : -1);
-      if (index >= 0 && index < state.count) send({op: 'page', index})
+      if (index >= 0 && index < state.count) navigateWithPageFeedback(index)
     }
     return
   }
@@ -323,7 +323,7 @@ let onEraserKindChanged = () => {};
 const eraserDialog = document.createElement('dialog');
 eraserDialog.id = 'eraserDialog';
 eraserDialog.setAttribute('aria-labelledby', 'eraserTitle');
-eraserDialog.innerHTML = '<h2 id="eraserTitle">Eraser</h2><div class="eraser-types" role="group" aria-label="Eraser type"><button id="eraserPartial" type="button" aria-label="Erase parts of strokes" aria-pressed="true"></button><button id="eraserWhole" type="button" aria-label="Erase whole strokes" aria-pressed="false"></button></div><label id="eraserSizeControl">Size <select id="eraserSize" aria-label="Eraser size"><option value="8">Small</option><option value="16" selected>Medium</option><option value="32">Large</option></select></label><button id="closeEraser" type="button">Done</button>';
+eraserDialog.innerHTML = '<div class="eraser-settings"><h2 id="eraserTitle">Eraser</h2><div class="eraser-types" role="group" aria-label="Eraser type"><button id="eraserPartial" type="button" aria-label="Erase parts of strokes" aria-pressed="true"></button><button id="eraserWhole" type="button" aria-label="Erase whole strokes" aria-pressed="false"></button></div><label id="eraserSizeControl">Size <select id="eraserSize" aria-label="Eraser size"><option value="8">Small</option><option value="16" selected>Medium</option><option value="32">Large</option></select></label><button id="closeEraser" type="button">Done</button></div>';
 document.body.append(eraserDialog);
 function renderEraserChoices() {
   $('eraserPartial').innerHTML = icon(glyphs.erase) + '<span>Partial</span>';

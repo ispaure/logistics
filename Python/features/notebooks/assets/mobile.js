@@ -51,8 +51,7 @@ renderEraserChoices();
     document.body.style.setProperty('--notebook-rail-right', right + 'px');
     document.body.style.setProperty('--notebook-home-bottom', home + 'px');
     if (railChanged) scheduleViewportResize();
-    repositionBrushPanel();
-    if (eraserDialog.open) positionPanel(eraserDialog, control('erase'));
+    repositionToolPanels();
     if (presetMenu.open) presetMenu.close();
     if (!swipeAddPage.hidden) showSwipePage();
     selectionRender();
@@ -419,7 +418,8 @@ renderEraserChoices();
   selectButton.setAttribute('aria-expanded', 'false');
   selectButton.onclick = () => {
     if (active !== null || busy) return;
-    if (mode === 'select' || mode === 'capture') openSheet('selection', selectButton);
+    if (toolPanelOpener === selectButton) closeSheet();
+    else if (mode === 'select' || mode === 'capture') openSheet('selection', selectButton);
     else selectLasso();
   };
   control('zoom').add(new Option('Fit page', 'page'));
@@ -450,6 +450,39 @@ renderEraserChoices();
   let grayLabel = document.createElement('label');
   grayLabel.append(control('grayscale'), document.createTextNode('Grayscale preview'));
   vp.append(grayLabel);
+  const paperPreview = document.createElement('select');
+  paperPreview.id = 'paperPreview';
+  paperPreview.add(new Option('Muted (default)', 'muted'));
+  paperPreview.add(new Option('Vivid', 'vivid'));
+  field(vp, 'Notebook colors', paperPreview);
+  const paperPreviewHint = document.createElement('p');
+  paperPreviewHint.className = 'helper';
+  paperPreviewHint.textContent = 'Applies to all notebooks, including PDF backgrounds and page thumbnails.';
+  vp.append(paperPreviewHint);
+  const mutedPaper = () => document.body.classList.contains('muted-paper-preview');
+  const showPaperPreview = muted => {
+    document.body.classList.toggle('muted-paper-preview', muted);
+    paperPreview.value = muted ? 'muted' : 'vivid';
+  };
+  showPaperPreview(mutedPaper());
+  paperPreview.onchange = () => {
+    const muted = paperPreview.value === 'muted';
+    if (active !== null || busy) {
+      showPaperPreview(mutedPaper());
+      return;
+    }
+    send({op: 'paper-preview', muted});
+  };
+  window.notebookRefreshPaperPreview = muted => {
+    if (busy) return false;
+    showPaperPreview(muted);
+    return true;
+  };
+  window.notebookPaperPreviewUpdate = (muted, error) => {
+    showPaperPreview(muted);
+    window.notebookBrushColorUpdate('');
+    if (error) showNotice(error);
+  };
   let hint = document.createElement('p');
   hint.textContent = 'Swipe left or right with a finger to change pages. Drag with two fingers to pan; pinch with two fingers to zoom. Swipe past the last page for the + Page button. Stylus input always draws. Ballpoint, Pencil, Marker, Paintbrush, Calligraphy and Shader respond to pen pressure. Grayscale changes the preview only.';
   vp.append(hint);
@@ -528,13 +561,13 @@ renderEraserChoices();
       return;
     }
     if (eraserDialog.open) eraserDialog.close();
-    if (brushPanelOpener) closeSheet(false);
+    if (toolPanelOpener) closeSheet(false);
     returnFocus = opener || document.activeElement;
     for (let k of Object.keys(panels)) panels[k].hidden = k !== key && !(fold && panels[k].parentElement === laptopTools);
     $('sheetTitle').textContent = names[key];
     sheet.dataset.panel = key;
     selectButton.setAttribute('aria-expanded', String(key === 'selection'));
-    const menu = key === 'document', floating = key === 'brush', nonmodal = menu || floating;
+    const menu = key === 'document', floating = key === 'brush' || key === 'selection', nonmodal = menu || floating;
     sheet.setAttribute('role', menu ? 'menu' : 'dialog');
     sheet.setAttribute('aria-modal', String(!nonmodal));
     documentDropdown.deactivate();
@@ -542,10 +575,10 @@ renderEraserChoices();
     backdrop.hidden = nonmodal;
     closer.hidden = nonmodal;
     if (floating) {
-      brushPanelOpener = opener?.matches('[data-preset]') ? opener : brushToggle;
-      brushPanelOpener.setAttribute('aria-expanded', 'true');
-      brushPanelAnchor = nativeToolAnchor;
-      positionPanel(sheet, brushPanelOpener);
+      toolPanelOpener = key === 'selection' ? selectButton : (opener?.matches('[data-preset]') ? opener : brushToggle);
+      toolPanelOpener.setAttribute('aria-expanded', 'true');
+      toolPanelAnchor = nativeToolAnchor;
+      positionPanel(sheet, toolPanelOpener);
     }
     else {
       sheet.style.removeProperty('top');
@@ -564,9 +597,10 @@ renderEraserChoices();
     header.inert = !nonmodal;
     dock.inert = !nonmodal;
     restore.inert = !nonmodal;
-    zoomControls.inert = !nonmodal;
+    zoomControls.inert = pageFeedback.inert = !nonmodal;
     $('viewport').inert = !nonmodal;
     if (menu) documentDropdown.activate();
+    else if (key === 'selection') (mode === 'capture' ? captureButton : lassoButton).focus({preventScroll: true});
     else (floating ? grid.querySelector('[aria-pressed=true]') || grid.firstElementChild : closer).focus({preventScroll: true})
   }
 
@@ -588,7 +622,7 @@ renderEraserChoices();
 
   // Native drawing controls invoke these original DOM handlers and read
   // their real state. A short lease restores the DOM toolbar if the host stalls.
-  let nativeToolsLease = null, nativeToolAnchor = null, brushPanelAnchor = null, brushPanelOpener = null;
+  let nativeToolsLease = null, nativeToolAnchor = null, toolPanelAnchor = null, toolPanelOpener = null, eraserPanelAnchor = null;
   window.notebookNativeTools = action => {
     // A retained/older host must never replace the unified canvas header.
     if (state.canvas_header) return JSON.stringify(null);
@@ -655,13 +689,13 @@ renderEraserChoices();
     sheet.hidden = backdrop.hidden = true;
     selectButton.setAttribute('aria-expanded', 'false');
     documentDropdown.deactivate();
-    brushPanelOpener?.setAttribute('aria-expanded', 'false');
-    brushPanelOpener = null;
-    brushPanelAnchor = null;
+    toolPanelOpener?.setAttribute('aria-expanded', 'false');
+    toolPanelOpener = null;
+    toolPanelAnchor = null;
     header.inert = false;
     dock.inert = false;
     restore.inert = false;
-    zoomControls.inert = false;
+    zoomControls.inert = pageFeedback.inert = false;
     $('viewport').inert = false;
     if (!restoreFocus) return;
     const fallback = more.hidden ? brushToggle : more;
@@ -677,16 +711,15 @@ renderEraserChoices();
 
   // Floating tool panels leave the initiating outside pointer event untouched.
   function positionPanel(panel, opener) {
-    const anchor = (panel === sheet ? brushPanelAnchor : nativeToolAnchor) || opener.getBoundingClientRect();
+    const nativeAnchor = panel === sheet ? toolPanelAnchor : panel === eraserDialog ? eraserPanelAnchor : nativeToolAnchor;
+    const anchor = nativeAnchor || opener.getBoundingClientRect();
     const width = panel.getBoundingClientRect().width;
     const top = Math.max(8, Math.min(anchor.bottom + 8, innerHeight - 64));
     const left = Math.max(railLeft + 8, Math.min(anchor.left, innerWidth - railRight - width - 8));
     panel.style.top = top + 'px';
     panel.style.left = left + 'px';
-    if (panel === sheet) {
-      panel.style.setProperty('--drawer-top', top + 'px');
-      panel.style.setProperty('--drawer-notch', Math.max(14, Math.min(width - 14, anchor.left + anchor.width / 2 - left)) + 'px');
-    }
+    panel.style.setProperty('--drawer-top', top + 'px');
+    panel.style.setProperty('--drawer-notch', Math.max(14, Math.min(width - 14, anchor.left + anchor.width / 2 - left)) + 'px');
   }
   $('closeEraser').hidden = true;
   onEraserKindChanged = kind => {
@@ -694,11 +727,16 @@ renderEraserChoices();
   };
   showEraserSettings = () => {
     if (!sheet.hidden) closeSheet(false);
+    eraserPanelAnchor = nativeToolAnchor;
     eraserDialog.show();
     positionPanel(eraserDialog, control('erase'));
     control('erase').setAttribute('aria-expanded', 'true')
   };
-  eraserDialog.addEventListener('close', () => control('erase').setAttribute('aria-expanded', 'false'));
+  eraserDialog.addEventListener('close', () => {
+    if (eraserDialog.open) return;
+    eraserPanelAnchor = null;
+    control('erase').setAttribute('aria-expanded', 'false')
+  });
   control('erase').setAttribute('aria-expanded', 'false');
   control('erase').onclick = () => {
     if (active !== null) return;
@@ -710,8 +748,7 @@ renderEraserChoices();
     if (presetMenu.open && !presetMenu.contains(target)) presetMenu.close();
     if (!sheet.hidden && sheet.dataset.panel === 'document' &&
         !sheet.contains(target) && !more.contains(target)) closeSheet(false);
-    if (!sheet.hidden && sheet.dataset.panel === 'brush' &&
-        !sheet.contains(target) && !brushPanelOpener?.contains(target)) closeSheet(false);
+    if (toolPanelOpener && !sheet.contains(target) && !toolPanelOpener.contains(target)) closeSheet(false);
     if (eraserDialog.open && !eraserDialog.contains(target) &&
         !control('erase').contains(target)) eraserDialog.close()
   }
@@ -767,13 +804,13 @@ renderEraserChoices();
   window.addEventListener('resize', () => {
     if (presetMenu.open) presetMenu.close();
     if (fold) window.notebookFold(fold);
-    repositionBrushPanel();
-    if (eraserDialog.open) positionPanel(eraserDialog, control('erase'))
+    repositionToolPanels();
   });
-  function repositionBrushPanel() {
-    if (brushPanelOpener) positionPanel(sheet, brushPanelOpener);
+  function repositionToolPanels() {
+    if (toolPanelOpener) positionPanel(sheet, toolPanelOpener);
+    if (eraserDialog.open) positionPanel(eraserDialog, control('erase'));
   }
-  dock.addEventListener('scroll', repositionBrushPanel);
+  dock.addEventListener('scroll', repositionToolPanels);
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape' && presetMenu.open) {
       e.preventDefault();
@@ -791,7 +828,7 @@ renderEraserChoices();
       e.preventDefault();
       closeSheet()
     }
-    if (e.key === 'Tab' && sheet.dataset.panel !== 'brush') {
+    if (e.key === 'Tab' && !toolPanelOpener) {
       let focus = [...sheet.querySelectorAll('button,input,select')].filter(el => !el.disabled && el.getClientRects().length);
       let first = focus[0],
         last = focus[focus.length - 1];
@@ -841,7 +878,7 @@ renderEraserChoices();
 
   function pinBrush() {
     if (active !== null || addPreset.hidden || queue.some(action => action.op === 'add-brush-preset')) return;
-    if (brushPanelOpener) closeSheet(false);
+    if (toolPanelOpener) closeSheet(false);
     send({op: 'add-brush-preset', preset: currentPreset()});
   }
 
@@ -899,7 +936,7 @@ renderEraserChoices();
   }
 
   function tapBrushSlot(button, preset) {
-    if (brushPanelOpener === button) {
+    if (toolPanelOpener === button) {
       closeSheet();
       return;
     }
@@ -971,7 +1008,7 @@ renderEraserChoices();
     const ids = new Set(presets.map(entry => entry.id));
     for (const button of [...presetButtons.children]) {
       if (ids.has(button.dataset.preset)) continue;
-      if (brushPanelOpener === button) closeSheet(false);
+      if (toolPanelOpener === button) closeSheet(false);
       if (presetMenuOpener === button && presetMenu.open) presetMenu.close();
       button.remove();
     }

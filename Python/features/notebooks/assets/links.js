@@ -1,12 +1,17 @@
 // Link gestures own no ink commands. Only completed taps can navigate.
-let linkGesture = null, pendingLinkJump = null, linkReturn = null, linkTimer = null;
+let linkGesture = null, pendingPageFeedback = null, linkReturn = null, pageFeedbackTimer = null;
+const pageFeedback = document.createElement('div');
+pageFeedback.id = 'pageNavigationFeedback';
+pageFeedback.hidden = true;
+const pageFeedbackLabel = document.createElement('span');
+pageFeedbackLabel.setAttribute('role', 'status');
 const undoPageJump = document.createElement('button');
 undoPageJump.id = 'undoPageJump';
 undoPageJump.type = 'button';
-undoPageJump.textContent = 'Undo page jump';
+undoPageJump.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5-5 5 5 5M3 10h10a7 7 0 0 1 7 7v2"/></svg>Go back';
 undoPageJump.hidden = true;
-undoPageJump.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:1000;min-height:44px;padding:8px 20px';
-document.body.append(undoPageJump);
+pageFeedback.append(pageFeedbackLabel, undoPageJump);
+document.body.append(pageFeedback);
 const linkFeedback = document.createElement('canvas');
 linkFeedback.id = 'linkFeedback';
 linkFeedback.hidden = true;
@@ -32,12 +37,33 @@ function showLinkFeedback(link) {
     width * canvas.width, height * canvas.height, 0, 0, linkFeedback.width, linkFeedback.height);
   linkFeedback.hidden = false
 }
-function clearLinkReturn() {
-  clearTimeout(linkTimer); linkReturn = null; undoPageJump.hidden = true
+function clearPageFeedback() {
+  clearTimeout(pageFeedbackTimer);
+  pageFeedbackTimer = null;
+  linkReturn = null;
+  pageFeedback.hidden = undoPageJump.hidden = true
+}
+function showPageFeedback(from) {
+  const mobile = mobileViewport();
+  clearPageFeedback();
+  if (!mobile && from === null) return;
+  linkReturn = from;
+  pageFeedback.hidden = false;
+  pageFeedbackLabel.textContent = 'Page ' + (state.index + 1) + ' of ' + state.count;
+  if (from !== null) {
+    undoPageJump.setAttribute('aria-label', 'Go back to page ' + (from + 1));
+    undoPageJump.hidden = false
+  }
+  if (from === null || !mobile) pageFeedbackTimer = setTimeout(clearPageFeedback, 3000)
+}
+function navigateWithPageFeedback(index, from = null) {
+  const action = {op: 'page', index};
+  pendingPageFeedback = {action, from};
+  send(action)
 }
 undoPageJump.onclick = () => {
   if (busy || active !== null || linkReturn === null) return;
-  const index = linkReturn; clearLinkReturn(); send({op: 'page', index})
+  navigateWithPageFeedback(linkReturn)
 };
 function notebookLinkAt(e) {
   if (!state.links?.length) return;
@@ -91,16 +117,14 @@ canvas.onpointerup = e => {
     if (owned && !gesture.cancelled && paging && !busy && state.index === gesture.index &&
         performance.now()-gesture.time < 900 && Math.abs(dx) >= 48 && Math.abs(dx) > Math.abs(dy)*1.5) {
       const index = state.index+(dx < 0 ? 1 : -1);
-      if (index >= 0 && index < state.count) send({op: 'page', index})
+      if (index >= 0 && index < state.count) navigateWithPageFeedback(index)
     }
     return
   }
   e.preventDefault();
   if (gesture.link.index !== state.index) {
-    clearLinkReturn();
-    pendingLinkJump = {from: state.index, to: gesture.link.index};
     showLinkFeedback(gesture.link);
-    send({op: 'page', index: gesture.link.index})
+    navigateWithPageFeedback(gesture.link.index, state.index)
   }
 };
 function cancelLink(e) {
@@ -111,16 +135,15 @@ canvas.onpointercancel = cancelLink;
 canvas.onlostpointercapture = cancelLink;
 const linkUpdate = window.notebookUpdate;
 window.notebookUpdate = (next, error) => {
-  const completed = queue[0];
-  if (next.index !== state.index) clearLinkReturn();
+  const completed = queue[0], previous = state.page_id ?? state.index;
   linkUpdate(next, error);
-  if (pendingLinkJump && completed?.op === 'page') {
+  if (state !== next) return;  // The command can wait for an active stroke.
+  if ((next.page_id ?? next.index) !== previous) clearPageFeedback();
+  if (pendingPageFeedback && completed === pendingPageFeedback.action) {
+    const {action, from} = pendingPageFeedback;
+    pendingPageFeedback = null;
     linkFeedback.hidden = true;
     linkFeedback.width = linkFeedback.height = 0;
-    if (!error && next.index === pendingLinkJump.to) {
-      linkReturn = pendingLinkJump.from; undoPageJump.hidden = false;
-      linkTimer = setTimeout(clearLinkReturn, 3000)
-    }
-    pendingLinkJump = null
+    if (!error && next.index === action.index) showPageFeedback(from)
   }
 };

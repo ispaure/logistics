@@ -7,8 +7,8 @@ function checkLinkGestures(source) {
     const commands=[], listeners={};
     const viewport={scrollLeft:0,scrollTop:0,append(){}};
     const context={console,Math,document:{body:{classList:{contains:()=>mobile},append(){}},
-      createElement:()=>({style:{},setAttribute(){},getContext:()=>({drawImage(){}})}),addEventListener:(name,callback)=>listeners[name]=callback},
-      navigator:{platform},performance:{now:()=>now},
+      createElement:()=>({style:{},setAttribute(){},append(){},getContext:()=>({drawImage(){}})}),addEventListener:(name,callback)=>listeners[name]=callback},
+      mobileViewport:()=>mobile,navigator:{platform},performance:{now:()=>now},
       setTimeout(callback,ms){timer={callback,ms};return timer},clearTimeout(){timer=null},
       canvas:{width:100,height:100,onpointerdown(){fallback++},onpointermove(){},onpointerup(){},onpointercancel(){},
         setPointerCapture(){},getBoundingClientRect:()=>({width:100,height:100,left:0,top:0})},
@@ -23,7 +23,7 @@ function checkLinkGestures(source) {
     vm.createContext(context);vm.runInContext(source,context);
     const run=s=>vm.runInContext(s,context);
     const check=(value,label)=>{if(!value)throw Error(`${mobile}/${platform}: ${label}`);results.push(label)};
-    const reset=()=>{context.state.index=0;context.queue=[];context.busy=false;context.active=null;context.pan=null;commands.length=0;now+=2000;run('linkGesture=null;clearLinkReturn();pendingLinkJump=null')};
+    const reset=()=>{context.state.index=0;context.queue=[];context.busy=false;context.active=null;context.pan=null;commands.length=0;now+=2000;run('linkGesture=null;clearPageFeedback();pendingPageFeedback=null')};
     const event=(kind='touch',x=30,y=20,keys={})=>({pointerType:kind,pointerId:1,button:0,clientX:x,clientY:y,preventDefault(){},...keys});
     const keys=mobile?{}:platform==='MacIntel'?{metaKey:true}:{ctrlKey:true};
     const kind=mobile?'touch':'mouse';
@@ -31,10 +31,18 @@ function checkLinkGestures(source) {
     tap();check(commands.length===1&&commands[0].index===2,'Completed authorized tap follows');
     check(run('!linkFeedback.hidden'),'Pending link shows feedback');
     context.window.notebookUpdate({...context.state,index:2});
-    check(run('linkFeedback.hidden&&linkReturn===0&&!undoPageJump.hidden')&&timer.ms===3000,'Acknowledged jump offers 3-second undo');
-    run('undoPageJump.onclick()');check(commands.at(-1).index===0,'Undo returns');
+    check(run("linkFeedback.hidden&&linkReturn===0&&!undoPageJump.hidden&&pageFeedbackLabel.textContent==='Page 3 of 4'") &&
+      (mobile ? timer===null : timer.ms===3000),'Acknowledged jump shows the current page and offers Go back');
+    run('undoPageJump.onclick()');check(commands.at(-1).index===0,'Go back returns');
+    context.window.notebookUpdate({...context.state,index:2},'failed');
+    check(run('linkReturn===0&&!undoPageJump.hidden'),'Failed return keeps Go back available');
+    run('undoPageJump.onclick()');context.window.notebookUpdate({...context.state,index:0});
+    check(run('linkReturn===null&&undoPageJump.hidden'),'Confirmed return retires Go back');
     reset();tap();context.window.notebookUpdate({...context.state,index:0},'failed');check(run('linkFeedback.hidden&&undoPageJump.hidden'),'Failure clears feedback and has no undo');
-    reset();tap();context.window.notebookUpdate({...context.state,index:2});timer.callback();check(run('linkReturn===null&&undoPageJump.hidden'),'Expiry clears undo');
+    reset();tap();context.window.notebookUpdate({...context.state,index:2});
+    if (mobile) context.window.notebookUpdate({...context.state,index:1});
+    else timer.callback();
+    check(run('linkReturn===null&&undoPageJump.hidden'),'Moving to another page or expiry clears the return');
     reset();let e=event(kind,30,20,keys);context.canvas.onpointerdown(e);context.canvas.onpointermove(event(kind,60,20,keys));context.canvas.onpointermove(e);context.canvas.onpointerup(e);
     check(commands.length===0,'Move out and back does not follow');
     reset();context.canvas.onpointerdown(e);now+=601;context.canvas.onpointerup(e);check(commands.length===0,'Hold does not follow');

@@ -2,9 +2,10 @@
 const vm = require('node:vm');
 function checkTouchNavigation(sources) {
   const listeners={document:{},viewport:{},window:{},canvas:{}};
-  const commands=[],frames=new Map(),nodes=new Map();let now=1000,frame=0,width=2000,height=3000,checks=0;
+  const commands=[],frames=new Map(),nodes=new Map(),timers=new Map();let now=1000,frame=0,width=2000,height=3000,checks=0;
+  let fitSpace = {width: 400, height: 600};
   class Node {
-    constructor(id){this.id=id;this.value='2';this.checked=false;this.style={};this.hidden=false;this.children=[];this.clientWidth=400;this.clientHeight=600;this.scrollLeft=500;this.scrollTop=600;this.options=[{value:'2'}];this.classList={contains:()=>false,add(){},remove(){},toggle(){}}}
+    constructor(id){this.id=id;this.value='2';this.checked=false;this.style={};this.hidden=false;this.children=[];this.clientWidth=400;this.clientHeight=600;this.scrollLeft=500;this.scrollTop=600;this.options=[{value:'2'}];const classes=new Set();this.classList={contains:name=>classes.has(name),add:name=>classes.add(name),remove:name=>classes.delete(name),toggle(name,force){if(force)classes.add(name);else classes.delete(name)}}}
     addEventListener(type,fn){const group=this.id==='viewport'?'viewport':this.id==='paper'?'canvas':null;if(group)(listeners[group][type]??=[]).push(fn)}
     setAttribute(){}append(...rows){this.children.push(...rows)}contains(node){return node===canvas||node===this}closest(){return null}
     getBoundingClientRect(){return this===canvas?{left:-viewport.scrollLeft,top:-viewport.scrollTop,width,height,right:width-viewport.scrollLeft,bottom:height-viewport.scrollTop}:{left:0,top:0,width:400,height:600,right:400,bottom:600}}
@@ -23,8 +24,9 @@ function checkTouchNavigation(sources) {
     active:null,pan:null,mode:'ink',busy:false,queue:[],points:[],selected:new Set(),start:null,last:null,
     pendingInk:null,continuousInk:false,frameBatchedInk:false,viewportResizePending:false,deferredUpdate:null,pageSwipe:true,previewCount:0,inkSettings:null,paperView:'pro',
     getComputedStyle:()=>({paddingLeft:'0',paddingRight:'0'}),
+    pageViewportSpace:()=>fitSpace,paperBounds:()=>({width:1000,height:1500}),
     requestAnimationFrame(fn){frames.set(++frame,fn);return frame},cancelAnimationFrame(id){frames.delete(id)},
-    setTimeout(){return 1},clearTimeout(){},
+    setTimeout(fn,ms){timers.set(++frame,{fn,ms});return frame},clearTimeout(id){timers.delete(id)},
     resize(){width=1000*Number($('zoom').value);height=1500*Number($('zoom').value)},
     chosenInk:()=>({tool:17,color:0,width:2,layer:'L'}),draw(){},cancelPreview(){},flushPreview(){},strokePoints:p=>p,nativeColor:()=>({}),
     previewErase(){},brushFor:()=>({family:'ballpoint'}),commitDraft(){},schedulePreview(){},
@@ -35,9 +37,17 @@ function checkTouchNavigation(sources) {
   const run=text=>vm.runInContext(text,context),check=(v,label)=>{if(!v)throw Error(label);checks++};
   const event=(type,x=200,y=300,id=9,kind='touch',target=canvas)=>({type,pointerId:id,pointerType:kind,button:0,clientX:x,clientY:y,pressure:.5,target,preventDefault(){this.prevented=true},stopImmediatePropagation(){this.stopped=true}});
   function dispatch(e){for(const f of listeners.document[e.type]||[]){f(e);if(e.stopped)return}for(const f of listeners.viewport[e.type]||[]){f(e);if(e.stopped)return}if(e.target===canvas)canvas['on'+e.type]?.(e)}
-  function reset(){run('cancelTouchZoom();resetPenRejection();pageTouch=null;pan=null;active=null;linkGesture=null;hideSwipePage();addingSwipePage=false;defaultViewportZoom=false;points=[]');context.state={index:0,count:3,width:1000,height:1500,layers:[['L','Ink',true]],strokes:[],links:[]};context.busy=false;context.queue=[];commands.length=0;context.mode='ink';$('finger').checked=false;$('zoom').value='2';width=2000;height=3000;viewport.scrollLeft=500;viewport.scrollTop=600;now+=2000}
+  function paintFrame(){for(const [id,fn] of [...frames]){frames.delete(id);fn()}}
+  function reset(){fitSpace={width:400,height:600};run('cancelTouchZoom();resetPenRejection();pageTouch=null;pan=null;active=null;linkGesture=null;pendingPageFeedback=null;clearPageFeedback();hideSwipePage();addingSwipePage=false;defaultViewportZoom=false;points=[]');context.state={index:0,count:3,width:1000,height:1500,layers:[['L','Ink',true]],strokes:[],links:[]};context.busy=false;context.queue=[];commands.length=0;context.mode='ink';$('finger').checked=false;$('zoom').value='2';width=2000;height=3000;viewport.scrollLeft=500;viewport.scrollTop=600;now+=2000}
   function swipe(dx,dy=0,target=canvas){dispatch(event('pointerdown',200,300,9,'touch',target));dispatch(event('pointermove',200+dx,300+dy,9,'touch',target));dispatch(event('pointerup',200+dx,300+dy,9,'touch',target))}
   reset();swipe(-100);check(commands.length===1&&commands[0].index===1,'zoomed single-finger swipe changes page');check(viewport.scrollLeft===500&&viewport.scrollTop===600,'single-finger swipe never pans');
+  check(run('pageFeedback.hidden'),'swipe waits for page acknowledgement');
+  context.window.notebookUpdate({...context.state,index:1});
+  check(run("!pageFeedback.hidden&&undoPageJump.hidden&&pageFeedbackLabel.textContent==='Page 2 of 3'"),'swipe shows current page');
+  const badgeTimer=timers.get(run('pageFeedbackTimer'));
+  check(badgeTimer.ms===3000,'page count is transient');
+  badgeTimer.fn();
+  check(run('pageFeedback.hidden'),'page count disappears after timeout');
   reset();swipe(0,-150);check(!commands.length&&viewport.scrollTop===600,'single-finger vertical drag never pans');
   reset();swipe(-100,0,viewport);check(commands[0]?.index===1&&viewport.scrollLeft===500,'margin swipe pages without panning');
   reset();context.state.links=[{rect:[0,0,1,1],index:2}];swipe(-100);check(commands.length===1&&commands[0].index===1,'swipe over link pages rather than follows link');
@@ -49,7 +59,36 @@ function checkTouchNavigation(sources) {
   reset();context.state.index=2;context.state.read_only=true;swipe(-100);check(run('swipeAddPage.hidden')&&!commands.length,'read-only page offers no creation');
   reset();swipe(100);check(!commands.length,'first-page back swipe stays bounded');
   reset();dispatch(event('pointerdown',100,100,1));dispatch(event('pointerdown',200,100,2));dispatch(event('pointermove',130,120,1));dispatch(event('pointermove',230,120,2));dispatch(event('pointerup',230,120,2));check(Math.abs(viewport.scrollLeft-470)<.001&&Math.abs(viewport.scrollTop-580)<.001,'two fingers pan horizontally and vertically');check(!commands.length,'two-finger pan never changes pages');const position=[viewport.scrollLeft,viewport.scrollTop];dispatch(event('pointermove',10,120,1));dispatch(event('pointerup',10,120,1));check(!commands.length&&viewport.scrollLeft===position[0]&&viewport.scrollTop===position[1],'remaining finger does not navigate or pan');
-  reset();dispatch(event('pointerdown',100,100,1));dispatch(event('pointerdown',200,100,2));dispatch(event('pointermove',250,100,2));dispatch(event('pointerup',250,100,2));dispatch(event('pointerup',100,100,1));check(Math.abs(width-3000)<.001&&!commands.length,'two-finger pinch retained');
+  reset();
+  const finger=(type,id,x,y=100)=>dispatch(event(type,x,y,id));
+  const pair=()=>{finger('pointerdown',1,100);finger('pointerdown',2,200)};
+  const endPair=()=>{finger('pointerup',2,200);finger('pointerup',1,100)};
+  const snapped=()=>$('paperWrap').classList.contains('fit-snapped');
+  run('defaultViewportZoom=true');
+  pair();finger('pointermove',1,130,120);finger('pointermove',2,237,120);paintFrame();
+  check(width===2000&&run('defaultViewportZoom')&&!snapped(),'small spread drift pans without changing fit');
+  check(viewport.scrollLeft===466.5&&viewport.scrollTop===580,'pan tracks the midpoint with drift');
+  finger('pointermove',2,285,120);paintFrame();
+  check(width===2000&&run("touchPinch.mode==='pan'"),'pan lock holds for the rest of the contact');
+  endPair();
+
+  reset();pair();finger('pointermove',2,250);endPair();
+  check(Math.abs(width-2586.2)<.001&&!commands.length,'obvious pinch zooms even with one finger stationary');
+
+  reset();fitSpace={width:2650,height:1000};
+  pair();finger('pointermove',2,250);paintFrame();
+  check(width===2650&&snapped(),'pinch within five percent snaps exactly to page width');
+  finger('pointermove',2,243);paintFrame();
+  check(width===2650&&snapped(),'fit sticks through minor spacing changes');
+  finger('pointermove',2,236);paintFrame();
+  check(width<2650&&!snapped(),'deliberate movement releases width fit');
+  endPair();
+
+  reset();fitSpace={width:500,height:1800};
+  pair();finger('pointermove',2,150);paintFrame();
+  check(width===1200&&snapped(),'pinch within five percent snaps exactly to page height');
+  finger('pointercancel',2,150);finger('pointercancel',1,100);
+  check(!snapped(),'cancelled touch clears fit feedback');
   reset();dispatch(event('pointerdown'));dispatch(event('pointercancel'));dispatch(event('pointerup',100));check(!commands.length,'cancelled swipe cannot navigate');
   reset();dispatch(event('pointerdown'));run("notePenHover('native',true);notePenHover('native',false)");now+=2000;dispatch(event('pointerup',100));check(!commands.length,'pen proximity cancels candidate beyond grace');
   reset();dispatch(event('pointerdown'));now+=1000;dispatch(event('pointerup',100));check(!commands.length,'long drag cannot page');

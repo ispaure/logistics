@@ -124,19 +124,17 @@ function updateZoomChrome(heightFitScale) {
   if ($('zoomOut')) $('zoomOut').disabled = scale <= minZoom + .0001;
   if ($('zoomIn')) $('zoomIn').disabled = scale >= maxZoom - .0001
 }
-function setZoom(value, anchor = null, paperPoint = null) {
+function setZoom(value, anchor = null, paperPoint = null, touch = null) {
   if (active !== null) {
     $('zoom').value = appliedZoom;
     return
   }
-  let numeric = Number(value);
+  const numeric = Number(value);
   if (!['page', 'fit'].includes(value)) {
     if (!Number.isFinite(numeric) || numeric <= 0) return;
     value = String(Math.round(Math.min(maxZoom, Math.max(minZoom, numeric)) * 10000) / 10000);
   }
   const viewport = $('viewport'), box = viewport.getBoundingClientRect(), before = canvas.getBoundingClientRect();
-  const zoomChanged = ['page', 'fit'].includes(value) ? value !== appliedZoom :
-    Math.abs(Number(value) - before.width / state.width) > .0001;
   const x = anchor?.x ?? viewportCenterX(viewport, box),
     y = anchor?.y ?? box.top + viewport.clientHeight / 2;
   const px = paperPoint?.[0] ?? Math.max(0, Math.min(1, (x - before.left) / before.width)),
@@ -150,6 +148,9 @@ function setZoom(value, anchor = null, paperPoint = null) {
   }
   defaultViewportZoom = false;
   resetViewportPosition = false;
+  if (touch) value = String(touchFitScale(Number(value), touch));
+  const zoomChanged = ['page', 'fit'].includes(value) ? value !== appliedZoom :
+    Math.abs(Number(value) - before.width / state.width) > .0001;
   assignZoomValue(value);
   // This explicit zoom has its own anchor; it must not restore a stale layout
   // snapshot if the user pinches just after an orientation change.
@@ -215,13 +216,35 @@ zoomViewport.addEventListener('gestureend', event => {
 }, {passive: false});
 
 const touchContacts = new Map();
-let touchPinch = null, pinchFrame = null, touchZoomBlocked = false;
+let touchPinch = null, pinchFrame = null, touchZoomBlocked = false, touchFitTimer = null;
+function clearTouchFit() {
+  if (touchFitTimer !== null) clearTimeout(touchFitTimer);
+  touchFitTimer = null;
+  $('paperWrap').classList.remove('fit-snapped')
+}
+function touchFitScale(scale, touch) {
+  const space = pageViewportSpace(), paper = paperBounds();
+  const fits = {width: space.width / paper.width, height: space.height / paper.height};
+  const error = axis => Math.abs(scale / fits[axis] - 1);
+  const available = axis => fits[axis] >= minZoom && fits[axis] <= maxZoom;
+  // A wider exit band keeps the fit from flickering as finger spacing drifts.
+  if (!(touch.fit && available(touch.fit) && error(touch.fit) <= .08)) {
+    touch.fit = null;
+    for (const axis of ['width', 'height']) {
+      if (available(axis) && error(axis) <= .05 && (!touch.fit || error(axis) < error(touch.fit)))
+        touch.fit = axis;
+    }
+  }
+  $('paperWrap').classList.toggle('fit-snapped', touch.fit !== null);
+  return touch.fit ? fits[touch.fit] : scale
+}
 function cancelTouchZoom() {
   if (touchContacts.has(active)) finish({pointerId: active}, true);
   if (pan && touchContacts.has(pan.id)) pan = null;
   if (pinchFrame !== null) cancelAnimationFrame(pinchFrame);
   pinchFrame = null;
   touchPinch = null;
+  clearTouchFit();
   touchContacts.clear();
   touchZoomBlocked = false;
   trackpadGesture = null
@@ -235,8 +258,30 @@ function touchPair() {
 function applyTouchPinch() {
   pinchFrame = null;
   if (!touchPinch) return;
-  const pair = touchPair();
-  if (pair) setZoom(touchPinch.scale * pair.distance / touchPinch.distance, pair, touchPinch.point)
+  const pair = touchPair(), touch = touchPinch;
+  if (!pair) return;
+  if (!touch.mode) {
+    const spread = pair.distance - touch.start.distance;
+    const travel = Math.hypot(pair.x - touch.start.x, pair.y - touch.start.y);
+    const threshold = Math.max(16, touch.start.distance * .14);
+    if (Math.abs(spread) > Math.max(threshold, travel * 1.25)) {
+      const rect = canvas.getBoundingClientRect();
+      touch.mode = 'zoom';
+      // Consume the initial dead zone so crossing it doesn't jump the page.
+      touch.distance = Math.max(1, touch.start.distance + Math.sign(spread) * threshold);
+      touch.scale = rect.width / state.width;
+      touch.point = [(touch.last.x - rect.left) / rect.width, (touch.last.y - rect.top) / rect.height]
+    } else if (travel >= 12 && travel >= Math.abs(spread)) {
+      touch.mode = 'pan'
+    }
+  }
+  if (touch.mode === 'zoom') {
+    setZoom(touch.scale * Math.max(1, pair.distance) / touch.distance, pair, touch.point, touch)
+  } else {
+    zoomViewport.scrollLeft -= pair.x - touch.last.x;
+    zoomViewport.scrollTop -= pair.y - touch.last.y
+  }
+  touch.last = pair
 }
 zoomViewport.addEventListener('pointerdown', event => {
   if (event.pointerType !== 'touch') return;
@@ -245,14 +290,13 @@ zoomViewport.addEventListener('pointerdown', event => {
   event.preventDefault();
   touchContacts.set(event.pointerId, {x: event.clientX, y: event.clientY});
   if (touchContacts.size >= 2 && !touchPinch) {
-    // A second finger changes a finger-drawn preview into a zoom, without saving ink.
+    // A second finger takes over the gesture without saving a finger-drawn preview.
     if (active !== null) finish({pointerId: active}, true);
     pan = null;
     touchZoomBlocked = true;
-    touchPinch = {ids: [...touchContacts.keys()].slice(0, 2)};
-    const pair = touchPair(), rect = canvas.getBoundingClientRect();
-    Object.assign(touchPinch, {distance: Math.max(1, pair.distance), scale: rect.width / state.width,
-      point: [(pair.x - rect.left) / rect.width, (pair.y - rect.top) / rect.height]})
+    clearTouchFit();
+    touchPinch = {ids: [...touchContacts.keys()].slice(0, 2), mode: null, fit: null};
+    touchPinch.start = touchPinch.last = touchPair()
   }
   if (touchZoomBlocked) {
     event.preventDefault();
@@ -282,7 +326,11 @@ function finishTouchZoom(event) {
     }
     event.preventDefault();
     event.stopImmediatePropagation();
-    if (touchPinch?.ids.includes(event.pointerId)) touchPinch = null
+    if (touchPinch?.ids.includes(event.pointerId)) {
+      if (touchPinch.fit && event.type === 'pointerup') touchFitTimer = setTimeout(clearTouchFit, 400);
+      else clearTouchFit();
+      touchPinch = null
+    }
   } else if (event.target !== canvas && pan?.id === event.pointerId) {
     finish(event, event.type !== 'pointerup')
   }

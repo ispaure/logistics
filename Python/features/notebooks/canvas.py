@@ -14,8 +14,6 @@ def editor_html(state, bridge, *, console_bridge=False, desktop=False, mobile=Fa
         raise ValueError('Choose one notebook presentation.')
     from services.appearance_palette import css_variables
     style = css_variables() + '\n' + asset('base.css')
-    if paper_preview:
-        style += '\n#paperWrap,#pagePreviews img,.page-previews img{filter:saturate(.55) contrast(.88) brightness(1.04)}'
     chrome = asset('controls.html')
     presentation = ''
     if desktop:
@@ -50,7 +48,10 @@ const canvasPixelLimit=__CANVAS_PIXEL_LIMIT__;
     engine = engine.replace('__BRIDGE__', json.dumps(bridge))
     # Compose before inserting state to protect titles containing template markers.
     template = asset('document.html').replace('__STYLE__', style).replace('__CHROME__', chrome)
-    template = template.replace('__PRESENTATION_CLASS__', 'notebook-desktop' if desktop else 'notebook-mobile' if mobile else '')
+    classes = ['notebook-desktop' if desktop else 'notebook-mobile'] if desktop or mobile else []
+    if paper_preview:
+        classes.append('muted-paper-preview')
+    template = template.replace('__PRESENTATION_CLASS__', ' '.join(classes))
     template = template.replace('__ENGINE__', engine).replace(
         '__PRESENTATION__', '<script>\n' + presentation + '\n</script>')
     return template.replace('__STATE__', json.dumps(state, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c'))
