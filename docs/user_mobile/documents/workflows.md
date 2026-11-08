@@ -18,18 +18,19 @@ continue, or **Cancel** to return to browsing. Holding an item does not delete i
 ## Receive files from another app
 
 On iPhone or iPad, choose **Share → Logisticks**, wait for the receiving result,
-then tap **Done**. Open Logisticks and browse **Workspaces → Local → On This Phone**.
+then tap **Done**. Open Logisticks and browse **Workspaces → Local → On My Phone**
+or **On My Tablet**.
 In Apple's Files app these files are directly inside **On My iPhone/iPad → Logisticks**.
 The share extension saves attachments while the main app is closed. The main app
 publishes complete handoffs when opened.
 
 On Android, share one or more files to **Logisticks**, wait for the result, then
-tap **Open Logisticks**. The same **On This Phone** view opens the ordinary files
+tap **Open Logisticks**. The same view opens the ordinary files
 directory. With a selected collection drive, this is `<drive>/Logistics/Files`.
 With app internal storage selected, it is inside app storage. Completed handoffs
 wait in app storage while a selected drive is unavailable.
 
-The upgrade moves existing **Received Files** contents into **On This Phone**.
+The upgrade moves existing **Received Files** contents into this location.
 If a name is already taken, the moved item gets a numbered suffix. The app
 retains the original system-owned iOS Inbox.
 
@@ -88,7 +89,7 @@ actions. The main Browse action is prominent; Delete local folder is separated
 and uses destructive styling. Pull/Push direction is shown for mapped copies.
 Deletion still requires confirmation, and Push retains its existing review. Local browsing uses app-managed files rather than
 the entire device filesystem. **New document** asks for a name and file type. Tap **Choose location**, select
-**On This Phone** (**On This Tablet** on tablets), an individual rclone copy, or
+**On My Phone** (**On My Tablet** on tablets), an individual rclone copy, or
 another writable location, then tap **Create here**.
 A retained credential ZIP can unlock its LocalCrypt copy from the picker. New files
 are created in that browsable location. Cloud remains read-only; use reviewed

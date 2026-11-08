@@ -804,7 +804,7 @@ reads. The update used the existing app identity and preserved its data.
 ### Incoming files and Inbox
 
 `mobile/incoming_files.py` publishes complete handoffs to the ordinary files
-root exposed as **On This Phone**. iOS uses the public Documents root. Android
+root exposed as **On My Phone**. iOS uses the public Documents root. Android
 uses `<collection-base>/Files`. The ordinary provider excludes the managed
 copy folder, legacy reserved names and temporary intake files.
 

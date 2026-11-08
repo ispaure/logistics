@@ -255,8 +255,8 @@ appearance, separately from the app's system-following surfaces and reader theme
 
 ### File storage
 
-**Workspaces → Local → On This Phone** opens ordinary files, including incoming
-shares. **Rclone Copies** holds the managed ordinary copies. Destination pickers
+In **Workspaces → Local**, **On My Phone** or **On My Tablet** opens ordinary
+files, including incoming shares. **Rclone Copies** holds the managed ordinary copies. Destination pickers
 list the two locations separately.
 
 On iPhone and iPad, open **On My iPhone/iPad → Logisticks** in Apple's Files app.
@@ -282,7 +282,8 @@ the update is installed, so the previous storage layout can be visible to a
 trusted computer until the updated app has been opened and migration completes.
 
 On Android, open **Settings → Workspaces → File storage…**.
-The current location covers Rclone Copies, LocalCrypt and On This Phone. Choose
+The current location covers Rclone Copies, LocalCrypt and the ordinary files
+shown under **On My Phone** or **On My Tablet**. Choose
 **Change location**, select a drive, then **Continue** to review the copy before
 confirming **Copy and switch**. Selecting or reviewing a drive changes no files.
 **Folder paths** shows exact paths and whether the folders contain files.

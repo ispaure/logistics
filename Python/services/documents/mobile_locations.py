@@ -5,7 +5,6 @@ from pathlib import Path, PurePosixPath
 COPIES = 'Rclone Copies'
 ENCRYPTED_COPIES = 'Rclone Copies Encrypted'
 ENCRYPTED_ALIAS = 'RcloneCopiesEncrypted://'
-PHONE = 'On This Phone'
 FILES = 'Files'
 RECEIVED = 'Received Files'
 FILES_ALIAS = 'Files://'

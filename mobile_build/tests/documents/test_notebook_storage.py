@@ -350,6 +350,49 @@ class NotebookStorageTests(unittest.TestCase):
         self.run_async(panel.perform({'op': 'save'}))
         self.assertEqual(len(Notebook.read(source.read_bytes()).page(0).strokes), 2)
 
+    def test_shared_ios_notebook_save_accepts_metadata_change_but_preserves_external_edits(self):
+        import os
+        from services.documents.locations import _shared_local_roots
+        from services.documents.migrations.ios_storage import prepare_storage
+        from services.documents.mobile_locations import _enabled
+
+        with TemporaryDirectory() as public:
+            documents = Path(public)
+            prepare_storage(documents, self.root, exclude_backup=lambda path: None,
+                            move=Path.rename, public_layout=True)
+            self.addCleanup(_enabled.discard, self.root)
+            self.addCleanup(_shared_local_roots.pop, self.root, None)
+            (documents / 'Projects').mkdir()
+            self.run_async(self.app.choose_document_type())
+            picker = self.app.editor_picker()
+            picker.creation_type.value = 'Remarkable Document (.rmdoc)'
+            picker.save_as_name.value = 'Sketch'
+            self.run_async(picker.choose_creation_location())
+            self.assertTrue(self.run_async(picker.browser_editor_location(('On My Phone', 'Projects'))))
+            self.run_async(picker.confirm_editor_file())
+            source = documents / 'Projects/Sketch.rmdoc'
+            self.assertTrue(source.is_file(), picker.save_as_status.value)
+            source.chmod(0o644)
+            panel = self.app.notebook_panel
+            resource = panel.document.resource
+            self.stroke(panel)
+            source.chmod(0o600)
+            self.assertNotEqual(resource.check()['revision'], resource.revision)
+            self.run_async(panel.perform({'op': 'save'}))
+            self.assertFalse(panel.document.dirty)
+            self.assertEqual(len(Notebook.read(source.read_bytes()).page(0).strokes), 1)
+
+            self.stroke(panel)
+            before = source.stat()
+            external = source.read_bytes().replace(b'PK', b'XX', 1)
+            source.write_bytes(external)
+            os.utime(source, ns=(before.st_atime_ns, before.st_mtime_ns))
+            self.assertEqual(resource.check()['revision'][:4], resource.revision[:4])
+            self.run_async(panel.perform({'op': 'save'}))
+            self.assertTrue(panel.document.dirty)
+            self.assertIn('File changed', panel.status.text)
+            self.assertEqual(source.read_bytes(), external)
+
     def test_private_save_as_to_local_requires_confirmation_and_retargets_editor(self):
         panel = self.create()
         self.stroke(panel)

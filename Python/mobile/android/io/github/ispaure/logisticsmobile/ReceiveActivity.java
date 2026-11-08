@@ -28,7 +28,9 @@ public final class ReceiveActivity extends Activity {
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setPadding(32, 48, 32, 24);
         status = new TextView(this);
-        status.setText("Receiving files into On This Phone…");
+        final String deviceFiles = getResources().getConfiguration().smallestScreenWidthDp >= 600
+            ? "On My Tablet" : "On My Phone";
+        status.setText("Receiving files into " + deviceFiles + "…");
         layout.addView(status);
         Button cancel = new Button(this);
         cancel.setText("Cancel remaining files");
@@ -50,7 +52,8 @@ public final class ReceiveActivity extends Activity {
         // Configuration changes are handled in the manifest. A restored activity
         // must not replay a delivery whose streams might already be consumed.
         if (state != null) {
-            status.setText("Receiving was interrupted. Complete files are waiting in On This Phone; share missing files again.");
+            status.setText("Receiving was interrupted. Complete files are waiting in " + deviceFiles
+                + "; share missing files again.");
             cancel.setEnabled(false); open.setEnabled(true); return;
         }
         final Intent incoming = getIntent();
@@ -78,7 +81,7 @@ public final class ReceiveActivity extends Activity {
                     catch (Exception error) { if (!cancelled) failed++; }
                 }
             } catch (Exception error) { failed++; }
-            final String message = saved + " file(s) received. Open Logisticks to find them in On This Phone."
+            final String message = saved + " file(s) received. Open Logisticks to find them in " + deviceFiles + "."
                 + (failed > 0 ? " Some files could not be received; share them again." : "")
                 + (cancelled ? " Remaining files cancelled." : "");
             runOnUiThread(() -> { status.setText(message); cancel.setEnabled(false); open.setEnabled(true); });

@@ -559,20 +559,23 @@ class FilesUI:
         if location is None:
             self.file_browser.history.clear()
         self.file_browser.set_entries(self.file_provider, self.file_path, rows, location=location)
-        managed_root = (self.file_storage.value == 'Local files' and not self.file_path
-                        and self.local_browser_root() == 'Shared files')
-        name = (Path(self.file_path).name if self.file_path else
-                'Local' if managed_root else
-                'On this device' if self.file_storage.value in ('Local files', 'Shared files') else self.file_storage.value)
+        label = self.file_storage.value
+        managed_root = label == 'Local files' and self.local_browser_root() == 'Shared files'
+        name = ('Local' if managed_root else 'On this device'
+                if label in ('Local files', 'Shared files') else label)
         from services.documents.mobile_locations import COPIES, enabled
         from .local_sources import device_files_label
-        if not self.file_path and enabled(self.private_root):
-            name = {'Local files': COPIES, 'Shared files': device_files_label(self.app)}.get(self.file_storage.value, name)
+        root_title = ''
+        if enabled(self.private_root):
+            if label == 'Shared files':
+                root_title = device_files_label(self.app)
+            elif label == 'Local files':
+                root_title = COPIES
         self.file_browser.location_bar.update_provider(self.file_path,
-            self.file_provider, name=name)
+            self.file_provider, name=Path(self.file_path).name if self.file_path else root_title or name)
         from .folder_navigation import record
-        record(getattr(self, 'app', self), self.files_view, self.file_browser, 'browser', self.file_storage.value,
-               self.file_path, self.browser_file_location)
+        record(getattr(self, 'app', self), self.files_view, self.file_browser, 'browser', label,
+               self.file_path, self.browser_file_location, root_title=root_title)
 
     def selected_file(self):
         row = self.file_rows.get(self.file_selection.value)

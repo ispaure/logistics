@@ -27,6 +27,8 @@ class FolderScreen:
     root_title: str = ''
 
     def __post_init__(self):
+        if self.root_title:
+            return
         provider = getattr(self.browser, 'search_provider', None)
         provider = getattr(provider, 'provider', provider)
         if getattr(provider, 'private', False) and not getattr(provider, 'remote_storage', False):
@@ -162,11 +164,11 @@ def clear_snapshot(entry):
         entry.snapshot = None
 
 
-def record(app, view, browser, kind, source, path, navigate):
+def record(app, view, browser, kind, source, path, navigate, *, root_title=''):
     """Publish only successfully loaded locations; failed listings keep the stack."""
     view._folder_screen = FolderScreen(view, browser, navigate, source, path, kind,
                                       base=getattr(view, '_folder_return_count', 0),
-                                      scope=getattr(view, '_folder_scope', ''))
+                                      scope=getattr(view, '_folder_scope', ''), root_title=root_title)
     routes = getattr(app, 'routes', None)
     if routes is None or not routes.apple or routes.folders.restoring:
         return
@@ -254,7 +256,7 @@ class FolderNavigation:
         if entry_source == info.source and entry_path in paths:
             paths = paths[paths.index(entry_path):]
         desired = [FolderScreen(info.view, info.browser, info.navigate, info.source, path, info.kind,
-                               base=info.base, scope=info.scope)
+                               base=info.base, scope=info.scope, root_title=info.root_title)
                    for path in paths]
         if (entry_source, entry_path, info.source) == ('Shared files', '', 'Local files'):
             # iOS Documents exposes Local as a child, but opening it switches
@@ -279,6 +281,7 @@ class FolderNavigation:
             else:
                 retained = self.screens[destination, entry.route]
                 retained.view, retained.browser, retained.navigate = info.view, info.browser, info.navigate
+                retained.root_title = entry.root_title
             title = entry.title
             retained = self.screens[destination, entry.route]
             if (entry.source, entry.path) == (info.source, info.path):

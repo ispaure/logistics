@@ -17,8 +17,7 @@ def device_label(app):
 
 
 def device_files_label(app):
-    from services.folders.labels import local_source_label
-    return local_source_label('Others', device=device_label(app))
+    return f'On My {device_label(app)}'
 
 
 def destination_location_labels(app, roots):

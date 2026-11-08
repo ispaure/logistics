@@ -1269,7 +1269,7 @@ UIKit scene activation can also arrive while the startup window is still being
 built. Scene callbacks record activity immediately and dispatch privacy/focus
 handlers only after the privacy owner exists.
 
-On This Phone opens the ordinary files provider. Its guarded root is iOS
+On My Phone opens the ordinary files provider. Its guarded root is iOS
 Documents or Android's Files directory. Rclone Copies is a separate provider
 and selector entry. The ordinary provider filters managed paths from listings
 and rejects those paths in direct access, search and mutations. The existing
