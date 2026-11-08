@@ -22,6 +22,7 @@ class ScreenPrivacy:
         self.disposed = False
         self.inactive = False
         self.interrupted = False
+        self.browser_refresh_pending = False
         self.captured = False
         self.observers = []
         self.shield = None
@@ -186,6 +187,7 @@ class ScreenPrivacy:
         if self.disposed:
             return
         self.inactive = True  # Deny reentrant playback before native/UI effects.
+        self.browser_refresh_pending = True
         # Native shielding and player callbacks can fail or reenter the loop.
         # Invalidate outstanding authentication before invoking any of them.
         self.wifi_revision = getattr(self, 'wifi_revision', 0) + 1
@@ -390,6 +392,12 @@ class ScreenPrivacy:
         # Reveal only after all required protection effects completed.
         if self.backend.startswith('toga_iOS.'):
             self.set_ios_shield(hidden)
+        if (getattr(self, 'browser_refresh_pending', False) and not self.inactive
+                and not getattr(self, 'interrupted', False) and not hidden and not any(gate.locked for gate in gates)
+                and getattr(self.app, 'scene_active', True) is not False):
+            self.browser_refresh_pending = False
+            from .browser_ui import schedule_visible_file_browser_refresh
+            schedule_visible_file_browser_refresh(self.app)
 
     def sync_lock_view(self, gates):
         """Replace the entire navigation root; routes may update safely behind it."""

@@ -55,6 +55,7 @@ class FileDrawer:
             self.browser.scroll_container(), self.workspaces_button],
             style=Pack(direction=COLUMN, flex=1))
         self.browser_widget = self.widget
+        self.browser_widget._refresh_file_listing = self.refresh
         if destination == 'documents':
             self.menu_content = toga.Box(style=Pack(direction=COLUMN, margin=12))
             self.widget = toga.ScrollContainer(horizontal=False, content=self.menu_content, style=Pack(flex=1))

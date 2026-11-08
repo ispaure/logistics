@@ -260,6 +260,7 @@ class FilesUI:
             self.file_browser.location_bar,
             self.file_browser.scroll_container()],
             style=Pack(direction=COLUMN, margin=12, flex=1))
+        self.files_view._refresh_file_listing = self.browse_files
         from .scroll_edges import fill_bottom
         fill_bottom(self.files_view, self.file_browser.native_list, self.file_browser._tile_scroll)
         self.files_view._folder_entry_location = location or (self.local_browser_root(), '')

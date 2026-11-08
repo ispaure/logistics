@@ -160,6 +160,10 @@ class CloudUI(LocalCryptUI):
             self.remote_browser.location_bar,
             self.remote_browser.scroll_container()],
             style=Pack(direction=COLUMN, margin=12, flex=1))
+        async def refresh_listing():
+            if self.cloud_open_remote and not self.remote_browser.closed:
+                await self.browse_cloud(preserve_path=True)
+        self.cloud_view._refresh_file_listing = refresh_listing
         self.app.presentation.fill_scroll_bottom(self.cloud_view, self.remote_browser.native_list, self.remote_browser._tile_scroll)
 
     async def browse_cloud_path(self, widget=None, **kwargs):
