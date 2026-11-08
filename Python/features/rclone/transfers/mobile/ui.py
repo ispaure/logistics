@@ -58,34 +58,55 @@ class MirrorUI(TransferReviewUI):
         identity = self.cloud_client.request('crypt_path', remote=remote, path='', directory=True)['identity']
         return self.mirror_store().guard(collection_path(self.private_root, True) / identity)
 
-    def linked_crypt_locations(self):
+    def linked_crypt_locations(self, *, folders=None, locked=None):
         if not self.app.feature_enabled('rclone'):
             return {}
         result = {}
         client = getattr(self, 'cloud_client', None)
-        if client is None or not hasattr(client, 'request'):
-            return result
         from features.rclone.localcrypt.mobile.locations import LocalCryptLocation
         from features.rclone.mobile.service import native_service
-        store = self.mirror_store()
         from features.rclone.transfers.mobile.jobs import loaded_copy_cipher, resolved_job
+        store = self.mirror_store()
+        candidates = self.app.home_unlock_candidates() if locked is not None else ()
         for job in store.jobs.values():
-            job = resolved_job(client, job)
-            cipher = loaded_copy_cipher(client, job)
-            remote = cipher or job['remote']
-            if not job['crypt'] or remote not in getattr(self, 'cloud_crypt_remotes', ()):
+            if not job['crypt']:
                 continue
+            if folders is not None and not all(self.app.folder_path_visible(name)
+                    for name in (job['remote'], job['target'])):
+                continue
+            label = encrypted_copy_label(job['target'])
             try:
-                if (not cipher and client.connection_identity(remote) != job['identity']) or not store.target(job).exists():
+                if not store.guard(store.target(job)).is_dir():
                     continue
-                provider = native_service(client).localcrypt.open(LocalCryptLocation(
-                    collection_path(self.private_root, True), remote, namespace=job['identity'],
-                    storage_root=self.private_root, create=False, cipher_identity=job['cipher_identity']))
-                # Name the actual saved copy, keeping distinct storage namespaces
-                # selectable without adding a transfer-status annotation.
-                result[encrypted_copy_label(remote + ' · ' + job['target'])] = provider
             except (OSError, ValueError):
                 continue
+            provider = None
+            try:
+                if client is not None and hasattr(client, 'request'):
+                    resolved = resolved_job(client, job)
+                    cipher = loaded_copy_cipher(client, resolved)
+                    remote = cipher or resolved['remote']
+                    if (remote in getattr(self, 'cloud_crypt_remotes', ())
+                            and (cipher or client.connection_identity(remote) == job['identity'])):
+                        provider = native_service(client).localcrypt.open(LocalCryptLocation(
+                            collection_path(self.private_root, True), remote, namespace=job['identity'],
+                            storage_root=self.private_root, create=False, cipher_identity=job['cipher_identity']))
+                        if folders is not None:
+                            folders[label] = provider.mapping(job['prefix'], directory=True, decode=True)
+                        else:
+                            label = encrypted_copy_label(remote + ' · ' + job['target'])
+                        result[label] = provider
+                        continue
+            except (OSError, ValueError):
+                if provider is not None:
+                    provider.close()
+            for key, item in candidates:
+                name = job['remote']
+                if item['remotes'].get(name) != job['identity']:
+                    name = item.get('aliases', {}).get(name)
+                if item['remotes'].get(name) == job['identity']:
+                    locked[label + ' (Locked)'] = key, name, job['identity'], label
+                    break
         return result
 
     def mirror_store(self):

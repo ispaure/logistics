@@ -9,6 +9,21 @@ def destination_location_labels(roots):
     return {labels.get(label, label): provider for label, provider in roots.items()}
 
 
+def synced_local_folders(store, *, visible):
+    """Shortcut only mapped folders present in the ordinary Local collection."""
+    result = {}
+    for job in store.jobs.values():
+        if job['crypt'] or not all(visible(name) for name in (job['remote'], job['target'])):
+            continue
+        try:
+            if store.guard(store.target(job)).is_dir():
+                folder = job['target']
+                result[f'{folder} - Local Copy'] = folder
+        except (OSError, ValueError):
+            continue
+    return dict(sorted(result.items(), key=lambda item: item[0].casefold()))
+
+
 class SharedFiles(LocalFiles):
     def __init__(self, root, *, include_collections=True):
         super().__init__(root)

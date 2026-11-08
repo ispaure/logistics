@@ -116,7 +116,7 @@ class ProviderUI(FilesUI):
         self.provider_document().dispose()
         return True
 
-    def clear_private_catalog(self):
+    def clear_private_catalog(self, *, preserve_creation_picker=False):
         self.app.routes.folders.invalidate_private()
         factory = getattr(self.app, 'folder_controller', None)
         if factory is not None:
@@ -143,7 +143,13 @@ class ProviderUI(FilesUI):
                 drawer.status.text = 'Private folders locked. Choose an available location.'
             if drawer.destination == 'documents':
                 drawer.refresh_menu()
-        self.editor_picker().clear()
+        picker = self.editor_picker()
+        if (preserve_creation_picker and picker.panel is not None
+                and picker.save_as_storage.value == 'Local'
+                and picker.editor_picker_location == ('Local', '')):
+            picker.refresh_creation_storage(include_encrypted=False)
+        else:
+            picker.clear()
         ordinary = self.ordinary_file_roots() if hasattr(self, 'files_view') else {}
         previous_roots = getattr(self, 'file_roots', {})
         for label, provider in list(ordinary.items()):

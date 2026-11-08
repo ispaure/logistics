@@ -548,6 +548,88 @@ class DocumentCreationTests(unittest.TestCase):
                     side_effect=lambda resource=None, inline_video=False, **options: toga.WebView(**options))):
             app.loop.run_until_complete(exercise())
 
+    def test_creation_forms_share_actual_synced_copy_destinations(self):
+        import toga
+        from features.notes_library.notes import LIBRARY_MARKER
+
+        app = self.app
+        app.cloud_client = client = CreationClient()
+        app.cloud_crypt_remotes = {'Network only', 'Missing', 'Locked'}
+        store = app.mirror_store()
+        for target, remote, crypt, exists in (
+                ('Office', 'Office', False, True),
+                ('Deleted', 'Deleted', False, False),
+                ('Missing', 'Missing', True, False),
+                ('Locked', 'Locked', True, True),
+                ('legacy-Old', 'legacy-Old', False, True)):
+            prefix = 'Projects'.encode().hex() if crypt else ''
+            connection = 'c' * 64 if remote == 'Locked' else client.connection
+            job = dict(id=target, remote=remote, target=target, crypt=crypt, prefix=prefix, identity=connection,
+                       cipher_identity=client.identity if crypt else '')
+            store.jobs[target] = job
+            if exists:
+                store.target(job).mkdir(parents=True)
+
+        locked = 'Locked - Encrypted Copy (Locked)'
+        unlocked = 'Locked - Encrypted Copy'
+        package = ('zip-key', {'remotes': {'Locked': 'c' * 64}})
+        local = 'Office - Local Copy'
+        office = store.target(store.jobs['Office'])
+        (office / 'Existing' / 'Nested').mkdir(parents=True)
+        (office / 'Readme.txt').write_text('Ordinary file')
+
+        async def exercise():
+            picker = app.editor_picker()
+            for mode, name in (('save', 'Draft.md'), ('folder', 'Journal')):
+                creation = ('home', len(app.routes.screens['home']), 0) if mode == 'save' else None
+                await picker.show_editor_browser(mode, name, b'' if creation else None, creation=creation)
+                if creation:
+                    await picker.choose_creation_location()
+                self.assertEqual({row.value for row in picker.save_as_storage.items},
+                                 {'Local', 'Shared Files', 'Received Files', local, locked})
+                if mode == 'save':
+                    self.assertTrue(await picker.browser_editor_location((local, '')))
+                    self.assertEqual(picker.editor_picker_location, (local, 'Office'))
+                    self.assertFalse(picker.picker_parent.enabled)
+                    await picker.confirm_editor_file()
+                    self.assertEqual((store.target(store.jobs['Office']) / 'Draft.md').read_bytes(), b'')
+                else:
+                    picker.save_as_storage.value = local
+                    picker.change_editor_storage()
+                    await picker._storage_refresh
+                    self.assertEqual(picker.editor_picker_location, (local, 'Office'))
+                    self.assertEqual([entry.label for entry in picker.editor_browser.entries], ['Existing'])
+                    row = next(iter(picker.editor_picker_rows.values()))
+                    await picker.browser_editor_folder(row)
+                    self.assertEqual([entry.label for entry in picker.editor_browser.entries], ['Nested'])
+                    picker.change_editor_storage()  # Native selection can echo after navigation.
+                    await asyncio.sleep(0)
+                    self.assertEqual(picker.picker_folder.value, 'Office/Existing')
+                    await picker.parent_editor_folder()
+                    self.assertEqual(picker.editor_picker_location, (local, 'Office'))
+
+                    await picker.browser_editor_location((locked, ''))
+                    unlock.assert_called_once()
+                    self.assertEqual(unlock.call_args.args, ('zip-key', 'Locked'))
+                    self.assertEqual(unlock.call_args.kwargs['identity'], 'c' * 64)
+                    app.clear_private_catalog(preserve_creation_picker=True)
+                    self.assertEqual(picker.save_as_name.value, name)
+                    client.connection = 'c' * 64
+                    await unlock.call_args.kwargs['resume']()
+                    self.assertEqual(picker.editor_picker_location, (unlocked, 'Projects'))
+                    self.assertFalse(picker.picker_parent.enabled)
+                    await picker.confirm_editor_file()
+                    marker = store.target(store.jobs['Locked']) / name.encode().hex() / LIBRARY_MARKER.encode().hex()
+                    self.assertEqual(marker.read_bytes(), b'cipher:')
+
+        with (patch.object(app, 'home_unlock_candidates', return_value=[package]),
+              patch.object(app, 'folder_path_visible', side_effect=lambda name, **kwargs: not str(name).startswith('legacy-')),
+              patch.object(app, 'show_cloud'),
+              patch.object(app, 'show_retained_unlock') as unlock,
+              patch('services.documents.mobile_views.document_webview',
+                    side_effect=lambda resource=None, inline_video=False, **options: toga.WebView(**options))):
+            app.loop.run_until_complete(exercise())
+
     def test_failed_notes_marker_write_removes_only_new_empty_folder(self):
         from commonUtils.runtime.resources.local import LocalFiles
         from features.notes_library.notes import create_library

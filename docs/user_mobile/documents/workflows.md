@@ -92,7 +92,8 @@ actions. The main Browse action is prominent; Delete local folder is separated
 and uses destructive styling. Pull/Push direction is shown for mapped copies.
 Deletion still requires confirmation, and Push retains its existing review. Local browsing uses app-managed files rather than
 the entire device filesystem. **New document** asks for a name and file type. Tap **Next**, select a writable Local,
-Received Files or unlocked LocalCrypt folder, then **Create here**. New files
+Received Files, Shared Files, or an existing rclone sync copy, then **Create here**.
+A retained credential ZIP can unlock its LocalCrypt copy from the picker. New files
 are created in that browsable location. Cloud remains read-only; use reviewed
 Push for changes. Cancel before creation creates nothing. The
 [document guide](documents.md) owns the current creation controls and navigation.
