@@ -15,9 +15,12 @@ undoPageJump.onclick = () => {
   const index = linkReturn; clearLinkReturn(); send({op: 'page', index})
 };
 function notebookLinkAt(e) {
-  const [x, y] = coord(e), b = state.pdf_paper || {x: 0, y: 0, width: state.width, height: state.height};
-  const px = (x-b.x)/b.width, py = (y-b.y)/b.height;
-  return (state.links || []).find(link => {
+  if (!state.links?.length) return;
+  const bounds = backgroundContentBounds();
+  if (!bounds) return;
+  const [x, y] = coord(e);
+  const px = (x - bounds.x) / bounds.width, py = (y - bounds.y) / bounds.height;
+  return state.links.find(link => {
     const [l,t,r,b] = link.rect; return px >= l && px <= r && py >= t && py <= b
   })
 }

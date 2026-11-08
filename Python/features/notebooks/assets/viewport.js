@@ -132,9 +132,12 @@ function resize() {
     style = getComputedStyle(viewport);
   const bounds = paperBounds();
   displayedPaperBounds = bounds;
-  const fitWidth = documentPaperView === null && defaultViewportZoom && mobileViewport() && paperView === 'move' ?
-    (state.move_paper || {width: 821}).width : bounds.width;
-  let fit = Math.max(.1, (viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)) / fitWidth);
+  let fitWidth = bounds.width;
+  if (documentPaperView === null && defaultViewportZoom && mobileViewport()) {
+    if (paperView === 'move') fitWidth = (state.move_paper || {width: 821}).width;
+    else if (fitLandscapePdf()) fitWidth = backgroundContentBounds()?.width ?? bounds.width;
+  }
+  let fit = Math.max(1, viewport.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight)) / fitWidth;
   let zoom = $('zoom').value,
     scale;
   if (zoom === 'page') {
@@ -163,11 +166,16 @@ function resize() {
     height = Math.max(1, Math.floor(state.height * backingScale));
   // Assigning unchanged dimensions also reallocates canvas storage. A page
   // change needs a redraw, not three replacement GPU-backed bitmaps.
-  if (canvas.width !== width || canvas.height !== height) {
+  const backingChanged = canvas.width !== width || canvas.height !== height;
+  if (backingChanged) {
     canvas.width = width;
-    canvas.height = height;
+    canvas.height = height
+  }
+  if (backingChanged || resize.nativeWidth !== state.width || resize.nativeHeight !== state.height) {
     ctx.setTransform(canvas.width / state.width, 0, 0, canvas.height / state.height, 0, 0);
-    sizeDraft()
+    sizeDraft();
+    resize.nativeWidth = state.width;
+    resize.nativeHeight = state.height
   }
   if (typeof updateZoomChrome === 'function') updateZoomChrome();
   finishViewportZoom(previousZoom);
@@ -193,16 +201,31 @@ function previewErase(samples, radius = eraserRadius) {
   ctx.restore()
 }
 
-function paintBackground(target, image = $('pdfBackground')) {
-  if (!state.background || !image.complete || !image.naturalWidth) return;
+function backgroundContentBounds(image = $('pdfBackground')) {
+  if (!state.background || !image.complete || !image.naturalWidth) return null;
   const bounds = state.pdf_paper || {x: 0, y: 0, width: state.width, height: state.height};
   const scale = Math.min(bounds.width / image.naturalWidth, bounds.height / image.naturalHeight);
   const width = image.naturalWidth * scale, height = image.naturalHeight * scale;
-  target.drawImage(image, bounds.x + (bounds.width - width) / 2,
-    bounds.y + (bounds.height - height) / 2, width, height);
+  return {x: bounds.x + (bounds.width - width) / 2, y: bounds.y + (bounds.height - height) / 2,
+    width, height};
 }
 
-$('pdfBackground').addEventListener('load', () => draw());
+function paintBackground(target, image = $('pdfBackground')) {
+  const bounds = backgroundContentBounds(image);
+  if (bounds) target.drawImage(image, bounds.x, bounds.y, bounds.width, bounds.height);
+}
+
+function fitLandscapePdf() {
+  return !state.template_editable && !!state.background && innerWidth > innerHeight &&
+    !document.body.classList.contains('notebook-laptop');
+}
+
+$('pdfBackground').addEventListener('load', () => {
+  if (mobileViewport() && documentPaperView === null && defaultViewportZoom && fitLandscapePdf()) {
+    resetViewportPosition = true;
+    scheduleViewportResize();
+  } else draw();
+});
 
 function draw(highlight = mode === 'ink' ? activeHighlight() : null, region = null) {
   if (typeof imageRender === 'function') imageRender();

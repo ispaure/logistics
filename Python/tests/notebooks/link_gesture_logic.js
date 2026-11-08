@@ -12,6 +12,7 @@ function checkLinkGestures(source) {
       setTimeout(callback,ms){timer={callback,ms};return timer},clearTimeout(){timer=null},
       canvas:{onpointerdown(){fallback++},onpointermove(){},onpointerup(){},onpointercancel(){},
         setPointerCapture(){},getBoundingClientRect:()=>({width:100,height:100,left:0,top:0})},
+      backgroundContentBounds:()=>({x:0,y:0,width:context.state.width,height:context.state.height}),
       state:{index:0,count:4,width:100,height:100,links:[{rect:[.1,.1,.5,.3],index:2}]},
       busy:false,active:null,pan:null,pageSwipe:true,queue:[],penTouchBlocked:()=>false,
       coord:e=>[e.clientX,e.clientY],$:()=>viewport,

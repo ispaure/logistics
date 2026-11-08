@@ -66,7 +66,7 @@ def validate_action(action):
                 or not 1 <= len(path) <= 100_000
                 or any(not isinstance(p, list) or len(p) != 3
                        or any(type(v) not in (int, float) or not math.isfinite(v) for v in p)
-                       or not 0 <= p[0] <= 1404 or not 0 <= p[1] <= 1_000_000 or not 0 <= p[2] <= 1 for p in path)):
+                       or not 0 <= p[0] <= 1_000_000 or not 0 <= p[1] <= 1_000_000 or not 0 <= p[2] <= 1 for p in path)):
             raise ValueError('Invalid eraser path or size.')
     elif op in {'erase', 'transform', 'copy-strokes', 'cut-strokes'}:
         ids = action['ids']
@@ -117,7 +117,7 @@ def brush_color_script(status, setting='brush color'):
 
 
 def stroke_script(editor, document):
-    stroke = editor.notebook.page(editor.index).strokes[-1].payload()
+    stroke = editor.canvas_stroke(editor.notebook.page(editor.index).strokes[-1])
     return ('window.notebookStrokeUpdate(' + json.dumps(stroke, allow_nan=False)
             + ',' + json.dumps(save_status(document)) + ')')
 
@@ -127,6 +127,6 @@ def ink_patch_script(editor, document, previous):
     strokes = editor.notebook.page(editor.index).strokes
     old = {s.id: s for s in previous}
     patch = dict(order=[s.id for s in strokes], scene_order=editor.notebook.page(editor.index).order,
-                 strokes=[s.payload() for s in strokes if old.get(s.id) is not s],
+                 strokes=[editor.canvas_stroke(s) for s in strokes if old.get(s.id) is not s],
                  undo=bool(editor.undo), redo=bool(editor.redo), save_status=save_status(document))
     return 'window.notebookInkUpdate(' + json.dumps(patch, allow_nan=False) + ')'

@@ -101,6 +101,52 @@ class RemarkableExportTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             editor.apply(dict(op='erase', points=[[700, height + 1, .5]], radius=16))
 
+    def test_native_pdf_fit_to_height_uses_the_pdf_ink_coordinate_space(self):
+        from pypdf import PdfWriter
+        from features.notebooks.protocol import ink_patch_script, stroke_script
+        from features.pdf.annotation import notebook_from_pdf
+        writer = PdfWriter()
+        writer.add_blank_page(width=954, height=1696)
+        output = BytesIO()
+        writer.write(output)
+        book = notebook_from_pdf(output.getvalue(), 'Native PDF')
+        book.content.update(formatVersion=2, zoomMode='fitToHeight')
+        editor = Editor(book)
+
+        # Existing scene coordinates are centered on the legacy 1404-unit
+        # origin, including points outside its former editable bounds.
+        points = [[-400, 4800, .5], [-390, 4810, .5]]
+        book.page(0).add(points, page_height=5500, x_bounds=(-800, 2200))
+        with patch.object(editor, 'background', return_value=None):
+            state = editor.state()
+        self.assertAlmostEqual(state['width'], 954 / PDF_SCALE)
+        self.assertAlmostEqual(state['height'], 1696 / PDF_SCALE)
+        self.assertEqual(state['pdf_paper']['x'], 0)
+        left = (1404 - state['width']) / 2
+        self.assertAlmostEqual(state['strokes'][0]['points'][0][0], points[0][0] - left)
+        self.assertEqual(state['strokes'][0]['points'][0][1], 4800)
+        self.assertEqual(book.page(0).strokes[0].points[0][:2], points[0][:2])
+        preview, = editor.page_previews(0)
+        self.assertEqual((preview['width'], preview['height']), (state['width'], state['height']))
+        self.assertAlmostEqual(preview['items'][0]['points'][0][0], points[0][0] - left, places=2)
+
+        editor.apply(dict(op='stroke', points=[[100, 4910, .5], [110, 4920, .5]]))
+        saved = book.page(0).strokes[-1]
+        self.assertAlmostEqual(saved.points[0][0], 100 + left)
+        self.assertAlmostEqual(editor.canvas_stroke(saved)['points'][0][0], 100)
+        stroke_data = json.JSONDecoder().raw_decode(stroke_script(editor, None).split('(', 1)[1])[0]
+        self.assertAlmostEqual(stroke_data['points'][0][0], 100)
+        patch_data = json.loads(ink_patch_script(editor, None, book.page(0).strokes[:-1]).split('(', 1)[1][:-1])
+        self.assertAlmostEqual(patch_data['strokes'][0]['points'][0][0], 100)
+        with self.assertRaisesRegex(ValueError, 'outside the page'):
+            editor.apply(dict(op='erase', points=[[state['width'] + 1, 4910, .5]], radius=16))
+        editor.apply(dict(op='erase', kind='whole', points=[[100, 4910, .5]], radius=16))
+        self.assertEqual(len(book.page(0).strokes), 1)
+
+        reopened = Notebook.read(book.to_bytes())
+        self.assertEqual(reopened.page(0).strokes[0].points[0][:2], points[0][:2])
+        self.assertEqual(reopened.members[reopened.id + '.pdf'], output.getvalue())
+
     def test_existing_pdf_view_is_not_reinterpreted_as_a_template_export(self):
         from pypdf import PdfWriter
         book = Notebook.new()

@@ -8,15 +8,26 @@ or stored handwriting.
 | --- | --- |
 | Narrow phone or closed Duo in portrait | Fit the centered Paper Pro Move width |
 | iPad or wide opened Duo in portrait | Show the whole Paper Pro page |
-| Phone, tablet or opened/closed Duo in landscape | Fit the full Paper Pro page width |
+| Phone, tablet or opened/closed Duo in landscape | Fit the notebook page or rendered PDF to the available width |
 | Duo laptop writing area | Fit the full page width across the writing area |
 
 Native device identity distinguishes an iPad from a narrow phone window. Android
 uses the current smallest screen-width configuration; portable browser previews
-fall back to geometry. Portrait windows at least 700 CSS pixels wide use the
-whole-page default. The canonical Move strip is 821 page units wide, centered
+fall back to geometry. The whole-page default starts at 650 CSS pixels on Duo to
+include its 669-point inner portrait screen, and at 700 CSS pixels on other
+phones. The canonical Move strip is 821 page units wide, centered
 within the 1404-unit native page. Existing surrounding ink remains reachable by
 panning and does not shrink that default strip to fit the entire drawing.
+Landscape PDF fitting uses the rendered background width so margins created
+when centering a narrower PDF on the ink canvas do not reduce its scale.
+
+Native format-2 PDF notebooks with `fitToHeight` use their embedded PDF crop
+box in 226-dpi ink units, matching the coordinate space used for native ink.
+The canvas expands when the background exceeds the legacy 1404 × 1872 frame.
+The bridge translates horizontal coordinates for display and edits around the
+original native center. A narrow mobile window fits a wide PDF so its full
+width and navigation tabs are reachable. PDF link rectangles are mapped to the
+painted raster, including any margins around it.
 
 A deliberate zoom preserves the current page scale and center through rotation,
 opening/closing and laptop transitions, subject to the document's scroll edges.

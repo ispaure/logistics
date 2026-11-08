@@ -17,6 +17,7 @@ function checkTouchNavigation(sources) {
     document:{...eventTarget('document'),body:{append(){},classList:{contains:x=>x==='notebook-mobile'}},createElement:()=>new Node('new'),elementFromPoint:()=>canvas,hidden:false},
     window:{...eventTarget('window'),notebookUpdate(next){context.state=next;context.queue.shift();context.busy=false}},
     navigator:{platform:'MacIntel'},performance:{now:()=>now},$: $,canvas,ctx:{},
+    backgroundContentBounds:()=>({x:0,y:0,width:context.state.width,height:context.state.height}),
     state:{index:0,count:3,width:1000,height:1500,layers:[['L','Ink',true]],strokes:[],links:[]},
     active:null,pan:null,mode:'ink',busy:false,queue:[],points:[],selected:new Set(),start:null,last:null,
     pendingInk:null,continuousInk:false,frameBatchedInk:false,viewportResizePending:false,deferredUpdate:null,pageSwipe:true,previewCount:0,inkSettings:null,paperView:'pro',

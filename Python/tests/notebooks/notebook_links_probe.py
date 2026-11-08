@@ -20,7 +20,10 @@ const commands=[];
 send = action => {commands.push(action);queue.push(action);busy=true};
 canvas.setPointerCapture=()=>{};$('viewport').setPointerCapture=()=>{};
 const event=(type,kind='touch',dx=0,dy=0,keys={})=>{
-  const r=canvas.getBoundingClientRect(),b=state.pdf_paper||{x:0,y:0,width:state.width,height:state.height};
+  const r=canvas.getBoundingClientRect();
+  // This fixture's PDF is 300×600 and fills the notebook height. Its
+  // link rectangles are centered within that narrower rendered area.
+  const b={x:(state.width-state.height/2)/2,y:0,width:state.height/2,height:state.height};
   canvas.dispatchEvent(new PointerEvent(type,{bubbles:true,cancelable:true,pointerType:kind,pointerId:9,button:0,
     clientX:r.left+(b.x+b.width*.3)/state.width*r.width+dx,
     clientY:r.top+(b.y+b.height*.2)/state.height*r.height+dy,pressure:.5,...keys}))
@@ -37,6 +40,11 @@ if(mobile){
     check(!undoPageJump.hidden&&linkReturn===0,'Undo shown after navigation acknowledgement');
     undoPageJump.click();check(commands.at(-1).index===0,'Undo returns to originating page');
   }
+  reset();$('finger').checked=false;
+  const marginX=(state.width-state.height/2)/2;
+  const offset=(marginX*.8-marginX-state.height*.15)/state.width*canvas.getBoundingClientRect().width;
+  event('pointerdown','touch',offset);event('pointerup','touch',offset);
+  check(!commands.some(a=>a.op==='page'),'Blank margin beside the PDF never follows a link');
   reset();tap('pen');check(!commands.some(a=>a.op==='page'),'Pen never follows link');
   reset();event('pointerdown');event('pointermove','touch',70);event('pointermove');event('pointerup');
   check(!commands.some(a=>a.op==='page'),'Move out and back never follows link');
@@ -117,7 +125,7 @@ def main():
                                     mobile=mobile, desktop=not mobile))
             view.show()
             try:
-                wait_until(lambda: javascript(view, "typeof undoPageJump !== 'undefined' && !!$('zoomLevel')"), 'link editor ready')
+                wait_until(lambda: javascript(view, "typeof undoPageJump !== 'undefined' && !!$('zoomLevel') && $('pdfBackground').naturalWidth > 0"), 'link editor ready')
                 result = javascript(view, CHECKS)
                 assert result, 'JavaScript checks failed; inspect console'
                 reports.append(dict(mobile=mobile, checks=json.loads(result)))

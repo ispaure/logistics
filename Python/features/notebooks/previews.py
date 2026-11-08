@@ -8,7 +8,7 @@ BATCH_POINTS = 16384
 STROKES = 256
 
 
-def page_previews(book, start):
+def page_previews(book, start, *, pdf_bounds=None):
     if type(start) is not int or not 0 <= start < len(book.pages):
         raise ValueError('Invalid page overview range.')
     previews, remaining = [], BATCH_POINTS
@@ -27,6 +27,9 @@ def page_previews(book, start):
         remaining -= min(total, POINTS)
         minimum = sum(min(2, len(s.points)) for s in strokes)
         items = []
+        bounds = pdf_bounds(index) if pdf_bounds else None
+        left = min(0, bounds['x']) if bounds else 0
+        height = max(HEIGHT, bounds['height']) if bounds else HEIGHT
         for stroke in strokes:
             points = stroke.points
             if total > POINTS and len(points) > 2:
@@ -34,11 +37,11 @@ def page_previews(book, start):
                 points = [points[i * (len(points) - 1) // (count - 1)] for i in range(count)]
             # The renderer uses stored widths, never pressure, for saved ink.
             items.append(dict(tool=stroke.tool, color=stroke.color, color_rgba=stroke.color_rgba,
-                              points=[[round(x, 2), round(y, 2), 0, width] for x, y, _, width in points]))
+                              points=[[round(x - left, 2), round(y, 2), 0, width] for x, y, _, width in points]))
         paper = settings(book, page)
         artwork = (background(page.template, paper['format'])
                    if book.content.get('fileType') != 'pdf' and paper['visible'] and available(book, page)
                    else None)
-        previews.append(dict(index=index, width=WIDTH, height=HEIGHT, items=items,
+        previews.append(dict(index=index, width=WIDTH - 2 * left, height=height, items=items,
                              background=artwork, warning=ink.warning, template=page.template))
     return previews

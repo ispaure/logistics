@@ -307,8 +307,7 @@ class NotebookWorkspace(qt.QWidget):
                 page.runJavaScript(brush_color_script(status))
                 return
             if op == 'page-previews':
-                from ..previews import page_previews
-                rows = page_previews(self.editor.notebook, action['start'])
+                rows = self.editor.page_previews(action['start'])
                 self.web.page().runJavaScript('window.notebookPagePreviews(' + json.dumps(rows, separators=(',', ':')) + ')')
             elif op == 'library':
                 from commonUtils.ui.document_host import current_document_host
