@@ -153,14 +153,12 @@ def main():
                 javascript(view, "navigateWithPageFeedback(2,0);window.notebookUpdate({...state,index:2})")
                 assert javascript(view, '!undoPageJump.hidden')
                 QTest.qWait(3150)
+                assert javascript(view, 'pageFeedback.hidden && undoPageJump.hidden && linkReturn===null')
                 if mobile:
-                    assert javascript(view, '!undoPageJump.hidden && linkReturn===0')
                     javascript(view, "navigateWithPageFeedback(1);window.notebookUpdate({...state,index:1})")
                     assert javascript(view, "!pageFeedback.hidden && undoPageJump.hidden && pageFeedbackLabel.textContent.startsWith('Page 2 ')")
                     QTest.qWait(3150)
                     assert javascript(view, 'pageFeedback.hidden')
-                else:
-                    assert javascript(view, 'undoPageJump.hidden && linkReturn===null')
                 view.grab().save(str(args.output / ('mobile.png' if mobile else 'desktop.png')))
             finally:
                 view.close()

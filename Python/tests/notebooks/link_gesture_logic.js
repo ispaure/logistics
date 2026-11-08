@@ -32,7 +32,7 @@ function checkLinkGestures(source) {
     check(run('!linkFeedback.hidden'),'Pending link shows feedback');
     context.window.notebookUpdate({...context.state,index:2});
     check(run("linkFeedback.hidden&&linkReturn===0&&!undoPageJump.hidden&&pageFeedbackLabel.textContent==='Page 3 of 4'") &&
-      (mobile ? timer===null : timer.ms===3000),'Acknowledged jump shows the current page and offers Go back');
+      timer?.ms===3000,'Acknowledged jump shows the current page and offers Go back for three seconds');
     run('undoPageJump.onclick()');check(commands.at(-1).index===0,'Go back returns');
     context.window.notebookUpdate({...context.state,index:2},'failed');
     check(run('linkReturn===0&&!undoPageJump.hidden'),'Failed return keeps Go back available');
@@ -40,9 +40,11 @@ function checkLinkGestures(source) {
     check(run('linkReturn===null&&undoPageJump.hidden'),'Confirmed return retires Go back');
     reset();tap();context.window.notebookUpdate({...context.state,index:0},'failed');check(run('linkFeedback.hidden&&undoPageJump.hidden'),'Failure clears feedback and has no undo');
     reset();tap();context.window.notebookUpdate({...context.state,index:2});
-    if (mobile) context.window.notebookUpdate({...context.state,index:1});
-    else timer.callback();
-    check(run('linkReturn===null&&undoPageJump.hidden'),'Moving to another page or expiry clears the return');
+    timer.callback();
+    check(run('linkReturn===null&&undoPageJump.hidden&&pageFeedback.hidden'),'Expiry hides the page feedback and clears the return');
+    reset();tap();context.window.notebookUpdate({...context.state,index:2});
+    context.window.notebookUpdate({...context.state,index:1});
+    check(run('linkReturn===null&&undoPageJump.hidden'),'Moving to another page clears the return');
     reset();let e=event(kind,30,20,keys);context.canvas.onpointerdown(e);context.canvas.onpointermove(event(kind,60,20,keys));context.canvas.onpointermove(e);context.canvas.onpointerup(e);
     check(commands.length===0,'Move out and back does not follow');
     reset();context.canvas.onpointerdown(e);now+=601;context.canvas.onpointerup(e);check(commands.length===0,'Hold does not follow');
