@@ -60,6 +60,8 @@ drive or in app storage on Android. **Local → Rclone Copies** lists
 individual downloaded and synced folders.
 When you open a local folder directly from Workspaces, Back from that folder
 returns to Workspaces. Inside a subfolder, Back first returns to its parent.
+When you return to Logisticks, the open file browser refreshes its current folder
+so files added from outside the app appear there.
 List mode uses compact native rows on both iOS and Android.
 LocalCrypt uses the same single folder header, without a second source strip.
 Choose another source in Workspaces. Workspace actions are in the header menu;

@@ -74,6 +74,34 @@ def sync_browser_population(app, body=None):
     return
 
 
+def schedule_visible_file_browser_refresh(app):
+    """Refresh the mounted browser through its existing listing workflow."""
+    def refresh_action(widget):
+        action = getattr(widget, '_refresh_file_listing', None)
+        if action is not None:
+            return action
+        if isinstance(widget, toga.ScrollContainer) and widget.content is not None:
+            return refresh_action(widget.content)
+        for child in widget.children:
+            if (action := refresh_action(child)) is not None:
+                return action
+        return None
+
+    body = getattr(app, 'body', None)
+    action = refresh_action(body) if body is not None else None
+    if action is not None:
+        async def refresh():
+            privacy = app.screen_privacy
+            if (app.active_host and app.body is body and not privacy.disposed
+                    and not privacy.inactive and not privacy.interrupted and not privacy.resume_locked
+                    and getattr(app, 'scene_active', True) is not False
+                    and not getattr(app, '_storage_changing', False)
+                    and refresh_action(body) == action):
+                await action()
+
+        app.loop.create_task(refresh())
+
+
 class LogisticsBrowserPresentation(BrowserPresentation):
     command = staticmethod(apply_icon)
     command_style = staticmethod(browser_command)

@@ -4,6 +4,7 @@ from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -31,6 +32,48 @@ class UXWorkflowTests(unittest.TestCase):
         close_loop(self.app.loop)
         LogisticsMobile.storage_root = None
         self.directory.cleanup()
+
+    def test_returning_to_the_app_refreshes_only_the_visible_file_browser(self):
+        from services.documents.locations import collection_path
+
+        app = self.app
+        folder = collection_path(app.private_root) / 'Notes'
+        folder.mkdir(parents=True)
+        (folder / 'Existing.txt').touch()
+
+        async def exercise():
+            await app.show_files(location=('Local files', 'Notes'))
+            browser = app.file_browser
+            refresh = app.files_view._refresh_file_listing
+            refreshed = asyncio.Event()
+            refresh_count = 0
+
+            async def observe():
+                nonlocal refresh_count
+                await refresh()
+                refresh_count += 1
+                refreshed.set()
+
+            app.files_view._refresh_file_listing = observe
+            app.screen_privacy.conceal()
+            (folder / 'Existing.txt').unlink()
+            (folder / 'External.txt').touch()
+            app.screen_privacy.reveal()
+            app.screen_privacy.reveal()  # iOS can report activation twice.
+            await asyncio.wait_for(refreshed.wait(), 2)
+            self.assertEqual(app.file_path, 'Notes')
+            self.assertEqual([entry.label for entry in browser.entries], ['External.txt'])
+            self.assertEqual(refresh_count, 1)
+
+            app.show_locations()
+            app.screen_privacy.conceal()
+            (folder / 'While Hidden.txt').touch()
+            app.screen_privacy.reveal()
+            await asyncio.sleep(0)
+            self.assertEqual(refresh_count, 1)
+            self.assertEqual([entry.label for entry in browser.entries], ['External.txt'])
+
+        app.loop.run_until_complete(exercise())
 
     def test_recovery_is_not_reported_as_saved_and_conflict_has_a_resolution(self):
         app = self.app
