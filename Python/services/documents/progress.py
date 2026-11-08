@@ -241,9 +241,10 @@ def open_progress(provider, path, root, *, kind, revision=None, app=None, check=
         raise ValueError('Invalid reader locator kind.')
     if type(locator_version) is not int or not 1 <= locator_version <= 2**31 - 1:
         raise ValueError('Invalid reader locator version.')
+    private_root = getattr(app, 'private_root', Path(root))
     root = Path(root).resolve()
     canonical, protected, logical = progress_source(
-        provider, path, app=app, private_root=getattr(app, 'private_root', root),
+        provider, path, app=app, private_root=private_root,
         managed_roots=managed_roots,
     )
     if identity is not None and identity != canonical:
@@ -279,6 +280,16 @@ def open_progress(provider, path, root, *, kind, revision=None, app=None, check=
     if canonical[0] == 'local':
         mode = ProgressMode.LOCAL
         stores = tuple(LocalCheckpoints(root, canonical, kind, bookmarks=marked) for marked in (False, True))
+        from .mobile_locations import alias_path, split_alias
+        from .migrations.mobile_layout import legacy_reference
+        alias = split_alias(canonical[1] + canonical[2]) if canonical[1].endswith('://') else None
+        if alias is not None:
+            physical = alias_path(private_root, alias).resolve()
+            old, binding = legacy_reference(private_root, physical)
+            if old is not None:
+                for marked, store in enumerate(stores):
+                    store.legacy = LocalCheckpoints(root, old, kind, bookmarks=bool(marked))
+                    store.legacy_revision = binding
     elif protected is not None:
         encrypted = CredentialState(
             protected, logical, root, kind=kind, revision=revision, app=app, check=validate,
@@ -291,7 +302,11 @@ def open_progress(provider, path, root, *, kind, revision=None, app=None, check=
             pass
         else:
             mode = ProgressMode.ENCRYPTED
-            stores = tuple(EncryptedCheckpoints(store, legacy_path, canonical[-2])
+            from .mobile_locations import ENCRYPTED_ALIAS
+            namespace = canonical[2]
+            alias = (namespace[1] if isinstance(namespace, tuple) and namespace[1].startswith(ENCRYPTED_ALIAS)
+                     else None)
+            stores = tuple(EncryptedCheckpoints(store, legacy_path, canonical[-2], namespace=alias)
                            for store in (encrypted, encrypted.bookmarks))
     return DocumentProgress(root, canonical, kind, locator_version, revision, mode,
                             stores, validate, revoked, generation)
@@ -353,10 +368,36 @@ class DocumentProgress:
             record = store.read(store.identity())
             identity = record['identity']
         else:
-            identity, record = store.identity, store.read()
+            identity = store.identity
+            try:
+                record = store.read()
+            except FileNotFoundError:
+                record = self._read_legacy_local(section, store)
+                if record['revision'] == self.revision and record['locator_version'] == self.locator_version:
+                    with checkpoint_write_lock(self.root):
+                        self._validate(section)
+                        try:
+                            store.write(record, lambda: self._validate(section), overwrite=False)
+                        except FileExistsError:
+                            record = store.read()
         record = self._record(section, identity, record)
         if record['sequence']:
             _next_sequence(record['sequence'])
+        return record
+
+    def _read_legacy_local(self, section, store):
+        if store.legacy is None:
+            raise FileNotFoundError
+        record = self._record(section, store.legacy.identity, store.legacy.read())
+        record = dict(record, identity=store.identity)
+        binding = store.legacy_revision
+        if binding is not None:
+            before, after = binding
+            if record['revision'] == revision_binding(tuple(before))[0]:
+                # Same-volume moves can change ctime without changing the file.
+                current = json.loads(self._legacy_revision)
+                if isinstance(current, list) and current[:4] == after[:4]:
+                    record['revision'] = self.revision
         return record
 
     def _load(self, section):
@@ -483,7 +524,10 @@ class DocumentProgress:
             original = self._record(section, record['identity'] if self.mode is ProgressMode.ENCRYPTED else identity,
                                     record)
         except FileNotFoundError:
-            original = None
+            try:
+                original = self._read_legacy_local(section, store) if self.mode is ProgressMode.LOCAL else None
+            except FileNotFoundError:
+                original = None
         if original is not None and original['sequence'] >= pending.observation.sequence:
             _next_sequence(original['sequence'])
             raise _Stale('Newer reader progress is already saved.')

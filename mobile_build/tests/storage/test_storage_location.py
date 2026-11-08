@@ -147,6 +147,77 @@ class CollectionStorageTests(unittest.TestCase):
         self.private.mkdir()
         self.volume.mkdir()
 
+    def test_public_upgrade_and_drive_switch_keep_stable_document_aliases(self):
+        from services.documents.mobile_locations import _enabled, storage_reference
+        from services.documents.migrations.mobile_layout import prepare_android
+        from services.documents.progress_identity import local_document_path
+        from mobile.incoming_files import inbox_path
+        from mobile.local_sources import device_files
+
+        self.addCleanup(_enabled.discard, self.private)
+        jobs, _, job, _ = self.seed()
+        copy = jobs.target(job) / 'note.txt'
+        legacy_received = inbox_path(self.private)
+        original = legacy_received / 'Shared.epub'
+        original.write_bytes(b'book')
+        (self.private / 'settings.json').write_bytes(b'private')
+        prepare_android(self.private)
+        phone = device_files(self.private)
+        self.assertEqual([row['name'] for row in phone.list()], ['Shared.epub'])
+        self.assertEqual(local_document_path(self.private, str(original)), phone.root / 'Shared.epub')
+        self.assertEqual(storage_reference(self.private, phone.root / 'Shared.epub'), 'Files://Shared.epub')
+        with self.assertRaises(ValueError):
+            phone.mkdir('rClOnE cOpIeS')
+        self.assertFalse(legacy_received.exists())
+        self.assertEqual(collection_path(self.private).name, 'Rclone Copies')
+        current_copy = local_document_path(self.private, str(copy))
+        reference = storage_reference(self.private, current_copy)
+        self.assertTrue(reference.startswith('RcloneCopies://'))
+        self.assertEqual(current_copy.read_bytes(), b'first')
+        switch_location(self.private, self.volume)
+        phone = device_files(self.private)
+        self.assertEqual(local_document_path(self.private, 'Files://Shared.epub'), phone.root / 'Shared.epub')
+        self.assertEqual((phone.root / 'Shared.epub').read_bytes(), b'book')
+        self.assertEqual(local_document_path(self.private, reference), jobs.target(job) / 'note.txt')
+        self.assertEqual((self.private / 'settings.json').read_bytes(), b'private')
+
+    def test_public_upgrade_on_removable_storage_without_exclusive_rename(self):
+        from commonUtils.filesystem.snapshots import file_revision
+        from commonUtils.runtime.platform import OS
+        from commonUtils.runtime.resources.local import LocalFiles
+        from services.documents.mobile_locations import _enabled
+        from services.documents.migrations.mobile_layout import prepare_layout
+        from services.documents.progress import open_progress
+        from services.documents.locations import selection
+
+        self.addCleanup(_enabled.discard, self.private)
+        self.seed()
+        switch_location(self.private, self.volume)
+        base = self.volume / 'Logistics'
+        encrypted_inode = (base / 'LocalCrypt').stat().st_ino
+        original = base / 'Received Files/Book.pdf'
+        original.write_bytes(b'shared PDF')
+        old = open_progress(LocalFiles(original.parent), original.name, self.private,
+                            kind='pdf', revision=file_revision(original))
+        old.flush(old.observe({'page': 2, 'bookmarks': [1]}))
+        old.retire()
+
+        def unsupported(source, destination):
+            raise OSError(errno.EINVAL, 'The removable filesystem rejects rename flags')
+
+        with patch('commonUtils.runtime.platform.get_os', return_value=OS.ANDROID):
+            prepare_layout(self.private, base, token=selection(self.private)['token'], move=unsupported)
+        target = base / 'Files/Book.pdf'
+        self.assertEqual(target.read_bytes(), b'shared PDF')
+        self.assertFalse(original.parent.exists())
+        self.assertEqual(len(list((base / 'Rclone Copies').iterdir())), 1)
+        self.assertEqual(collection_path(self.private, True), base / 'Rclone Copies Encrypted')
+        self.assertEqual(collection_path(self.private, True).stat().st_ino, encrypted_inode)
+        reopened = open_progress(LocalFiles(target.parent), target.name, self.private,
+                                 kind='pdf', revision=file_revision(target))
+        self.assertEqual(reopened.load(), {'page': 2, 'bookmarks': [1]})
+        reopened.retire()
+
     def seed(self):
         store, client = MirrorJobs(self.private), MirrorClient()
         local, _ = store.create(client, 'Remote', 'folder')

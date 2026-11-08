@@ -437,6 +437,30 @@ print(json.dumps([loaded, state.load_status.value]))
         self.assertEqual(legacy.load(), {'page': 7, 'bookmarks': [4]})
         self.assertEqual(len(list((self.root / 'ReaderPositions').glob('*.zip'))), 1)
 
+    def test_encrypted_copy_alias_reads_legacy_bookmarks_only_after_unlock(self):
+        from features.rclone.localcrypt.mobile.resources import CryptFiles
+
+        provider = self.unlock('old-password')
+        provider.storage_namespace = 'b' * 64
+        legacy = self.private_progress(provider)
+        self.assertIs(legacy.save({'page': 5, 'bookmarks': [2]}), ProgressStatus.SAVED)
+        old_binding = legacy._stores[1].identity()
+        legacy.retire()
+        provider.reader_storage_alias = CryptFiles.reader_storage_alias
+        session.forget(self.context)
+        locked = self.private_progress(provider)
+        self.assertIs(locked.mode, ProgressMode.SESSION_MEMORY)
+        self.assertEqual(locked.load(), {})
+        locked.retire()
+
+        self.unlock('old-password')
+        reopened = self.private_progress(provider)
+        self.assertEqual(reopened.identity[2], ('private', 'RcloneCopiesEncrypted://' + 'b' * 64))
+        self.assertEqual(reopened.load(), {'page': 5, 'bookmarks': [2]})
+        self.assertNotEqual(reopened._stores[1].identity(), old_binding)
+        self.assertIs(reopened.save({'bookmarks': [2, 4]}), ProgressStatus.SAVED)
+        self.assertTrue(reopened._stores[1].store.checkpoint_path(reopened._stores[1].identity()).is_file())
+
     def test_revocation_during_encryption_preserves_prior_checkpoint(self):
         provider = self.unlock('old-password')
         state = self.private_progress(provider)

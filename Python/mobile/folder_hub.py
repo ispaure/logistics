@@ -1,5 +1,6 @@
 """Discover logical mobile folders without creating crypt storage or copying files."""
 from services.documents.locations import collection_path
+from services.documents.mobile_locations import enabled
 from pathlib import Path
 from dataclasses import dataclass
 from features.rclone.transfers.mobile.jobs import copy_target
@@ -38,7 +39,7 @@ def hub_entries(root, jobs, remotes=(), crypt_locations=()):
         if target.is_dir() and not target.is_symlink():
             add(job['remote'], 'LocalCrypt' if job['crypt'] else 'Local', ('job', job['id']))
             if not job['crypt']:
-                mapped.add(job['target'])
+                mapped.add(job['target'].split('/', 1)[0] if enabled(root) else job['target'])
     represented = {job['remote'] for job in jobs.values() if job['crypt']}
     for label, remote in crypt_locations:
         if remote not in represented:
@@ -47,7 +48,7 @@ def hub_entries(root, jobs, remotes=(), crypt_locations=()):
     if local.is_dir() and not local.is_symlink():
         for path in local.iterdir():
             if path.is_dir() and not path.is_symlink() and path.name not in mapped:
-                add(path.name, 'Local', ('local', path.name))
+                add(path.name, 'Local', ('copy-folder' if enabled(root) else 'local', path.name))
     for remote in visible_remotes(remotes):
         add(remote, 'Remote', ('remote', remote))
     return [(name, folder_parts(name), entries[name]) for name in sorted(entries, key=str.casefold)]
@@ -96,6 +97,11 @@ def credential_choices(choices, remotes):
 def source_choices(choices, source, network_remotes=(), *, local_group=None):
     """Expose downloaded copies locally while retaining their remote actions."""
     network_remotes = set(network_remotes)
+    def in_local_group(copy):
+        if local_group == 'Rclone':
+            return bool(copy.get('remote')) or copy['kind'] == 'copy-folder'
+        return copy['kind'] in {'shared-local', 'device-folder', 'inbox'}
+
     def owner(entry):
         categories = {copy.get('catalog_category') for copy in [entry, *entry.get('copies', ())]}
         if 'Home Server' in categories:
@@ -111,9 +117,7 @@ def source_choices(choices, source, network_remotes=(), *, local_group=None):
             copies = [copy for copy in (entry.get('copies') or [entry])
                       if copy['source'] in ('Local', 'LocalCrypt')]
             if local_group is not None:
-                copies = [copy for copy in copies
-                          if (bool(copy.get('remote')) if local_group == 'Rclone' else
-                              copy.get('browser_root') or copy['kind'] == 'inbox')]
+                copies = [copy for copy in copies if in_local_group(copy)]
             return bool(copies)
         return (owner(entry) == source and (source != 'rclone' or any(copy['source'] == 'Remote'
                 for copy in [entry, *entry.get('copies', ())])))
@@ -123,8 +127,7 @@ def source_choices(choices, source, network_remotes=(), *, local_group=None):
         # Keep browse/menu actions within the selected local group too.
         for name, entry in list(result.items()):
             copies = [copy for copy in (entry.get('copies') or [entry])
-                      if (bool(copy.get('remote')) if local_group == 'Rclone' else
-                          copy.get('browser_root') or copy['kind'] == 'inbox')
+                      if in_local_group(copy)
                       and (local_group == 'Rclone' or copy['source'] == 'Local')]
             primary = next(copy for copy in copies if copy['source'] in ('Local', 'LocalCrypt'))
             result[name] = {**entry, **primary, 'copies': copies}
@@ -233,7 +236,7 @@ def discover_folder_choices(snapshot):
                 crypt[label] = remote
     # Rendering and menu opening must never enter the native bridge. A
     # credential load updates this discovery snapshot.
-    choices = {'All files': dict(source='Local', kind='shared-local', value='', name='Shared Files', copies=[], browser_root=True)}
+    choices = ordinary_browser_choices(snapshot.private_root)
     descriptors = _folder_copy_descriptors(snapshot, remotes, crypt)
     # A remote name denotes the same folder across credential packages.
     groups = project_catalog(descriptors, grouping='name')
@@ -257,14 +260,40 @@ def discover_folder_choices(snapshot):
         elif (primary['kind'] == 'crypt' and primary['remote'] in snapshot.remote_names
               and not any(copy['source'] == 'Remote' for copy in copies)):
             entry['copies'].append(dict(primary, source='Remote', kind='remote', value=(primary['remote'], '')))
+        if group.name in choices and choices[group.name].get('device_root'):
+            key = group.name + ' (on device)'
+            while key in choices:
+                key += ' (on device)'
+            choices[key] = choices.pop(group.name)
         choices[group.name] = entry
     from .incoming_files import inbox_path
-    received = inbox_path(snapshot.private_root)
-    title = received.name
-    while title in choices:
-        title += ' (received)'
-    choices[title] = dict(source='Local', kind='inbox', value='', name=received.name, copies=[])
+    if enabled(snapshot.private_root):
+        from .local_sources import PhoneFiles
+        try:
+            rows = PhoneFiles(snapshot.private_root).list_names()
+        except OSError:
+            rows = ()  # Keep the other sources usable when the device drive is unavailable.
+        for row in rows:
+            if not row['directory'] or row['name'].startswith('.'):
+                continue
+            name, key = row['name'], row['name']
+            while key in choices:
+                key += ' (on device)'
+            choices[key] = dict(source='Local', kind='device-folder', value=row['path'], name=name, copies=[])
+    else:
+        received = inbox_path(snapshot.private_root)
+        title = received.name
+        while title in choices:
+            title += ' (received)'
+        choices[title] = dict(source='Local', kind='inbox', value='', name=received.name, copies=[])
     return FolderDiscoveryResult(choices, tuple(crypt.items()) if roots else snapshot.crypt_locations)
+
+
+def ordinary_browser_choices(private_root):
+    device_root = enabled(private_root)
+    return {'All files': dict(source='Local', kind='shared-local', value='',
+                              name='All files' if device_root else 'Shared Files',
+                              copies=[], browser_root=True, device_root=device_root)}
 
 
 @dataclass(frozen=True)
@@ -278,6 +307,8 @@ class FolderRowPresentation:
 def folder_row_presentation(title, entry, source, loaded_remotes, crypt_remotes):
     """Project folder labels and lock state without constructing native controls."""
     target = folder_browse_copy(entry, source)
+    if target['kind'] == 'device-folder':
+        title = target['name']
     storage = (folder_storage_label(entry) if source == 'Network shares'
                else target['source'])
     remote = target.get('remote') or entry.get('remote')

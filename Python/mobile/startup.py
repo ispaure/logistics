@@ -76,10 +76,26 @@ class StartupScreen:
 
     def show_step(self, index, name):
         self.status.text = name
+        self.progress.stop()
+        self.progress.max = len(STEPS)
         self.progress.value = index
         self.detail.text = f'Step {index + 1} of {len(STEPS)}'
 
+    def show_migration(self, name, done, total):
+        self.status.text = name
+        warning = 'Don’t turn off your device\nor switch apps during the migration.'
+        if total is None:
+            self.progress.max = None
+            self.progress.start()
+            self.detail.text = warning
+        else:
+            self.progress.stop()
+            self.progress.max = total
+            self.progress.value = done
+            self.detail.text = f'{done} of {total}\n{warning}'
+
     def failed(self):
+        self.progress.stop()
         self.status.text = 'Couldn’t finish starting Logisticks.'
         self.detail.text = 'Close and reopen the app to try again.'
 
@@ -90,6 +106,8 @@ def load_startup_models(root, workspace_root):
     from .documents import DocumentStore
     from .recent_documents import RecentDocuments
     from .workspace import Workspace
+    from services.documents.migrations.references import upgrade_local_references
+    upgrade_local_references(root)
     preferences = Preferences(workspace_root)
     store = DocumentStore(root / 'Documents')
     recent = RecentDocuments(workspace_root, private_root=root)
@@ -117,6 +135,22 @@ def load_startup_models(root, workspace_root):
             workspace.close(session.id, guard=lambda value: True)
     store.summaries()
     return dict(preferences=preferences, store=store, recent=recent, workspace=workspace, display=display)
+
+
+async def prepare_storage_on_worker(app, operation):
+    from services.worker_retirement import drain_worker
+    loop = asyncio.get_running_loop()
+    screen = app.startup_screen
+
+    def report(label, done, total):
+        loop.call_soon_threadsafe(screen.show_migration, label, done, total)
+
+    worker = asyncio.create_task(asyncio.to_thread(operation, report))
+    try:
+        return await asyncio.shield(worker)
+    except asyncio.CancelledError:
+        await drain_worker(worker)
+        raise
 
 
 async def finish_startup(app):

@@ -175,6 +175,10 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
 
     async def _prepare_startup_phase(self, index):
         from .startup import StartupPhase
+        if index == StartupPhase.STORAGE:
+            from .startup import prepare_storage_on_worker
+            self.private_root = await prepare_storage_on_worker(self, self._startup_storage_job())
+            return
         if index != StartupPhase.PREFERENCES:
             return
         from .startup import load_startup_models
@@ -230,7 +234,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         """Yield before each phase, preserving native draw and worker boundaries."""
         from .startup import STEPS, StartupPhase
         yield STEPS[StartupPhase.STORAGE]
-        root = self._prepare_startup_storage()
+        root = self.private_root if getattr(self, '_async_startup', False) else self._prepare_startup_storage()
         yield STEPS[StartupPhase.PREFERENCES]
         models, workspace_root = self._prepare_startup_preferences(root)
         yield STEPS[StartupPhase.DOCUMENTS]
@@ -247,14 +251,30 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         self._attach_startup_window(restored_document)
 
     def _prepare_startup_storage(self):
+        self.private_root = self._startup_storage_job()(lambda label, done, total: None)
+        return self.private_root
+
+    def _startup_storage_job(self):
+        """Capture native paths on the UI thread before handing off file I/O."""
         root = Path(self.storage_root or self.paths.data)
-        if type(self._impl).__module__.startswith('toga_iOS.') and self.storage_root is None:
+        backend = type(self._impl).__module__
+        if backend.startswith('toga_iOS.') and self.storage_root is None:
             from .app_reset import finish_ios_reset
-            finish_ios_reset(self, Path(self.paths.config).parent / 'Logistics')
-            from .ios_storage import prepare_for_app
-            root = prepare_for_app(self)
-        self.private_root = root
-        return root
+            from services.documents.migrations.ios_storage import prepare_ios
+            private = Path(self.paths.config).parent / 'Logistics'
+            finish_ios_reset(self, private)
+            def prepare(report):
+                from rubicon.objc.runtime import autoreleasepool
+                with autoreleasepool():
+                    return prepare_ios(root, private, report=report)
+            return prepare
+        if backend.startswith('toga_android.') and self.storage_root is None:
+            from services.documents.migrations.mobile_layout import prepare_android
+            def prepare(report):
+                prepare_android(root, report=report)
+                return root
+            return prepare
+        return lambda report: root
 
     def _prepare_startup_preferences(self, root):
         host_identity = str(root.resolve()) + ':' + getattr(self, 'window_id', 'primary')
@@ -300,6 +320,9 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         self.document_status = BrowserStatusLabel(value='')
         self.document_password = PasswordInput()
         self.store = models['store'] if models is not None else DocumentStore(root / 'Documents')
+        if models is None:
+            from services.documents.migrations.references import upgrade_local_references
+            upgrade_local_references(root)
         from .recent_documents import RecentDocuments, MAX_RECENT
         self.recent_documents = models['recent'] if models is not None else RecentDocuments(workspace_root, private_root=root)
         self.workspace = models['workspace'] if models is not None else Workspace(workspace_root)

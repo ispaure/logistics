@@ -316,7 +316,7 @@ class CredentialState:
                 "Protected reader history needs the previous ZIP password. Use Settings → Reader history migration."
             ) from error
 
-    def binding(self, *, create=False, remote_name=None):
+    def binding(self, *, create=False, remote_name=None, namespace=None):
         self.cipher.identity
         source = next(
             (
@@ -339,7 +339,7 @@ class CredentialState:
             payload = json.dumps(
                 [
                     self.authority(),
-                    str(source),
+                    str(source) if namespace is None else namespace,
                     remote if remote_name is None else remote_name,
                     self.document,
                     self.kind,

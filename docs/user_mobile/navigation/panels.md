@@ -124,7 +124,7 @@ transfer cancellation handle. LocalCrypt operations that need the cloud engine
 remain serialized.
 
 Home’s **Workspaces** opens the same folder list each time. Choosing
-**Shared Files** refreshes the shared root and clears an old
+**On This Phone** opens the ordinary files root and clears an old
 search filter. Local browsing does not wait for a credential restore or an
 unrelated cloud request.
 

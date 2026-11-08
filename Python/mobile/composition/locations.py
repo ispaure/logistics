@@ -5,6 +5,9 @@ from mobile.locations_controller import LocationHost
 
 def locations_host(app):
     def local_folder():
+        from services.documents.mobile_locations import enabled, storage_reference
+        if enabled(app.private_root) and app.file_storage.value in ('Local files', 'Shared files'):
+            return storage_reference(app.private_root, app.file_provider.root / app.file_path)
         if app.file_storage.value != 'Local files':
             raise ValueError('Encrypted folder paths stay private and cannot be pinned for restoration.')
         return app.file_path
@@ -33,6 +36,12 @@ def locations_host(app):
     async def open_local(path):
         if not app.active_host:
             return
+        from services.documents.mobile_locations import COPIES_ALIAS, split_alias
+        alias = split_alias(path)
+        if alias is not None:
+            prefix, relative = alias
+            label = 'Local files' if prefix == COPIES_ALIAS else 'Shared files'
+            return await app.show_files(location=(label, '/'.join(relative.parts)))
         opened = await app.show_local_location()
         if opened is False or not app.active_host:
             return

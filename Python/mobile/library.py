@@ -95,8 +95,9 @@ class LibraryStore(LibraryEdits):
             raise ValueError('Invalid library record; it was preserved.')
         document_name(record['name'])
         source = record.get('source_path')
+        from services.documents.mobile_locations import split_alias
         if source is not None and (not isinstance(source, str) or not source or len(source) > 4096
-                                   or not Path(source).is_absolute()):
+                                   or not (Path(source).is_absolute() or split_alias(source) is not None)):
             raise ValueError('Invalid library source path.')
         digest = record.get('digest')
         if not isinstance(digest, str) or len(digest) != 64 or any(c not in '0123456789abcdef' for c in digest):
@@ -231,7 +232,8 @@ class LibraryStore(LibraryEdits):
             if type(provider) is LocalDocuments:
                 source = Path(reference).absolute()
                 if not source.resolve().is_relative_to(self.root):
-                    record['source_path'] = str(source)
+                    from services.documents.mobile_locations import storage_reference
+                    record['source_path'] = storage_reference(self.root.parent, source)
             self.decode_record(key, json.dumps(record).encode())
             atomic_write_json(self.path(key, '.json'), record, max_bytes=MAX_RECORD, durable_directory=True)
             self.remember_verified(destination, record['digest'], expected=published.expected)
@@ -247,12 +249,14 @@ class LibraryStore(LibraryEdits):
         path = Path(path).absolute()
         if path.resolve().is_relative_to(self.root):
             return
+        from services.documents.mobile_locations import storage_reference
+        reference = storage_reference(self.root.parent, path)
         from commonUtils.persistence.publication import mutation_lock
         with mutation_lock, self._record_io_lock:
             record, _ = self.read_record(key)
-            if record.get('source_path') == str(path):
+            if record.get('source_path') == reference:
                 return
-            record = dict(record, source_path=str(path), revision=record['revision'] + 1)
+            record = dict(record, source_path=reference, revision=record['revision'] + 1)
             self.decode_record(key, json.dumps(record).encode())
             atomic_write_json(self.path(key, '.json'), record, max_bytes=MAX_RECORD, durable_directory=True)
 

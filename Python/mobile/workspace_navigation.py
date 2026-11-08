@@ -7,7 +7,7 @@ import weakref
 
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN, ROW
+from toga.style.pack import CENTER, COLUMN, ROW
 from .appearance import list_button
 from .adaptive_workspace import AdaptiveWorkspace
 from .file_drawer import FileDrawer, detach
@@ -691,12 +691,6 @@ class WorkspaceFrame:
                 self.header.remove(self.pair)
         columns = getattr(navigation, 'file_columns', None)
         if columns is not None and destination == 'files':
-            if getattr(self, 'folder_root', False):
-                if not hasattr(self, 'folder_placeholder'):
-                    self.folder_placeholder = toga.Box(children=[toga.Label('Choose a workspace',
-                        style=Pack(margin=16))], style=Pack(direction=COLUMN, flex=1))
-                if self.folder_placeholder not in self.row.children:
-                    self.row.add(self.folder_placeholder)
             return
         left = self._leading_pane(opened)
         if left is None:
@@ -717,9 +711,7 @@ class WorkspaceFrame:
         elif navigation.wide and destination == 'files':
             if getattr(self, 'folder_root', False):
                 # Keep a stable two-pane overview before a location is opened.
-                if not hasattr(self, 'folder_placeholder'):
-                    self.folder_placeholder = toga.Box(children=[toga.Label('Choose a workspace',
-                        style=Pack(margin=16))], style=Pack(direction=COLUMN, flex=1))
+                self._folder_prompt()
                 left = self.main
             elif getattr(self, 'folder_detail', False):
                 root = navigation.app.routes.roots['files']
@@ -736,6 +728,23 @@ class WorkspaceFrame:
                 frame = getattr(view, '_workspace_frame', None)
                 left = frame.main if frame else view
         return left
+
+    def _folder_prompt(self):
+        if not hasattr(self, 'folder_placeholder'):
+            self.folder_placeholder = toga.Box(
+                children=[toga.Label('Choose a workspace', style=Pack(margin=16, text_align=CENTER))],
+                style=Pack(direction=COLUMN, flex=1, align_items=CENTER, justify_content=CENTER))
+        return self.folder_placeholder
+
+    def mount_native_folder_prompt(self):
+        """Fill the allocated native detail pane instead of keeping a Pack split width."""
+        prompt = self._folder_prompt()
+        del prompt.style.width
+        del prompt.style.height
+        prompt.style.margin_left = prompt.style.margin_top = 0
+        prompt.style.flex = 1
+        if prompt not in self.row.children:
+            self.row.add(prompt)
 
     def _render_drawer(self, left):
         """Mount the compact browser while retaining the covered document."""

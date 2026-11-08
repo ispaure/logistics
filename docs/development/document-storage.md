@@ -54,6 +54,26 @@ The updated main app also opened an existing `.rmdoc` from Workspaces → Receiv
 Files on the physical Boox; its data was preserved and only the main Logistics
 package remained installed.
 
+The mobile public-layout upgrade uses a private, per-location journal. It
+records old and new relative paths before moving received files and renaming
+the managed collection. Direct files and explicitly marked Notes Libraries
+outside known copy targets move to the ordinary files root. Other unclassified
+folders remain browsable in Rclone Copies. iOS preserves same-volume file
+identity. Android verifies copied files on filesystems that reject exclusive
+file rename.
+
+Ordinary document references use `Files://` or `RcloneCopies://` plus the
+relative path. Each alias resolves against the current storage root. Recent
+documents, favourites, pins, notebook source bindings and new import records
+can use these aliases. The reader progress store uses the same namespaces and
+checks legacy checkpoint bindings when a document is next opened. It writes
+compatible legacy positions and bookmarks under the new key. Encrypted
+copies use `RcloneCopiesEncrypted://` with the existing credential and copy
+identities. Legacy bookmarks are resolved after unlock and use the alias when
+saved again. Both managed folders move by directory rename. The temporary
+upgrade lives under `services/documents/migrations/`. Startup keeps its progress
+screen visible while the upgrade worker runs.
+
 `mobile.resource_imports.ResourceImports` rereads its schema-1 index for each
 lookup and before each remember/forget operation. A process-wide mutation lock
 serializes reload, delta and atomic publication across index instances. Remember

@@ -548,6 +548,72 @@ class DocumentCreationTests(unittest.TestCase):
                     side_effect=lambda resource=None, inline_video=False, **options: toga.WebView(**options))):
             app.loop.run_until_complete(exercise())
 
+    def test_tablet_notes_picker_and_local_tab_use_individual_folders(self):
+        import toga
+        from features.notes_library.notes import LIBRARY_MARKER
+        from services.documents.mobile_locations import _enabled
+        from services.documents.migrations.mobile_layout import prepare_android
+
+        app = self.app
+        self.addCleanup(_enabled.discard, self.root)
+        prepare_android(self.root)
+        (self.root / 'Files/Projects/Archive').mkdir(parents=True)
+        (self.root / 'Files/2026-Notes').mkdir()
+        (self.root / 'Rclone Copies/Reference').mkdir()
+        async def exercise():
+            app.show_documents_hub()
+            button = next(item for item in app.document_notes_list.children
+                          if getattr(item, 'text', '') == 'New Notes Library…')
+            await button.on_press()
+            picker = app.editor_picker()
+            self.assertEqual(picker.editor_picker_location, ('On This Tablet', ''))
+            self.assertEqual(list(picker.editor_storage_roots), ['On This Tablet', 'Reference - Local Copy'])
+            self.assertEqual({row['name'] for row in picker.editor_picker_rows.values()}, {'Projects', '2026-Notes'})
+            picker.save_as_name.value = 'Rclone Copies'
+            await picker.confirm_editor_file()
+            self.assertIn('reserved', picker.save_as_status.value)
+            picker.save_as_name.value = 'Journal'
+            await picker.confirm_editor_file()
+            self.assertTrue((self.root / 'Files/Journal' / LIBRARY_MARKER).is_file())
+            self.assertEqual(app.vault_browser.root, 'Journal')
+            app.vault_browser.dispose()
+            app.show_locations()
+            overview = app.body
+            app.folder_local_buttons['Others'].on_press()
+            await asyncio.sleep(0)
+            self.assertIs(app.body, overview)
+            self.assertEqual(app.folder_local_buttons['Others'].text, 'On This Tablet')
+            tab = app.folder_tab_views['Local', 'Others']
+            root = tab.nodes['All files',]
+            self.assertEqual(root.button.text, 'On This Tablet')
+            self.assertIsNotNone(root.guide)
+            self.assertEqual(set(tab.nodes), {('All files',), ('All files', 'Projects'),
+                                             ('All files', '2026-Notes'), ('All files', 'Journal')})
+            self.assertIs(tab.nodes['All files', 'Projects'].row.parent, root.child_content)
+            await root.button.on_press()
+            self.assertEqual(app.file_loaded_location, ('Shared files', ''))
+            app.show_locations()
+            await app.folder_buttons['Projects'].on_press()
+            self.assertEqual(app.file_loaded_location, ('Shared files', 'Projects'))
+            self.assertEqual(app.file_provider.root, self.root / 'Files')
+            from mobile.file_operations import FileOperationRequest
+            (self.root / 'Files/Projects/Move.txt').write_text('move me')
+            await picker.show_destination('Move.txt', FileOperationRequest('move', app.file_provider, 'Projects/Move.txt'))
+            self.assertEqual(list(picker.editor_storage_roots), ['On This Tablet', 'Reference - Local Copy'])
+            self.assertTrue(await picker.browser_editor_location(('Reference - Local Copy', '')))
+            self.assertEqual(picker.editor_picker_location, ('Reference - Local Copy', 'Reference'))
+            self.assertFalse(picker.picker_parent.enabled)
+            picker.cancel_text_destination()
+            app.show_locations()
+            app.folder_local_buttons['Rclone'].on_press()
+            self.assertNotIn('Rclone Copies', app.folder_buttons)
+            self.assertIn('Reference', app.folder_buttons)
+
+        with (patch('mobile.local_sources.device_label', return_value='Tablet'),
+              patch('services.documents.mobile_views.document_webview',
+                    side_effect=lambda resource=None, inline_video=False, **options: toga.WebView(**options))):
+            app.loop.run_until_complete(exercise())
+
     def test_creation_forms_share_actual_synced_copy_destinations(self):
         import toga
         from features.notes_library.notes import LIBRARY_MARKER

@@ -1,12 +1,59 @@
 """Ordinary mobile browse roots, excluding private control and encrypted storage."""
 from commonUtils.runtime.resources.local import LocalFiles
-from services.documents.locations import shared_documents_path
+from services.documents.locations import MobileLocalFiles, local_folder_snapshot, shared_documents_path
+from services.documents.mobile_locations import enabled, phone_path, reserved_phone_name
 
 
-def destination_location_labels(roots):
-    """Name ordinary destinations consistently and retain provider-specific labels."""
+def device_label(app):
+    """Use device identity, rather than the current pane/window width."""
+    backend = type(app._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        from rubicon.objc import ObjCClass
+        return 'Tablet' if int(ObjCClass('UIDevice').currentDevice.userInterfaceIdiom) == 1 else 'Phone'
+    if backend.startswith('toga_android.'):
+        config = app._impl.native.getResources().getConfiguration()
+        return 'Tablet' if int(config.smallestScreenWidthDp) >= 600 else 'Phone'
+    return 'Phone'
+
+
+def device_files_label(app):
+    from services.folders.labels import local_source_label
+    return local_source_label('Others', device=device_label(app))
+
+
+def destination_location_labels(app, roots):
+    """Keep the collection root out of the picker, while retaining named copies."""
     labels = {'Local files': 'Local', 'Shared files': 'Shared Files'}
+    if isinstance(roots.get('Shared files'), PhoneFiles):
+        labels['Shared files'] = device_files_label(app)
+        roots = {label: provider for label, provider in roots.items() if label != 'Local files'}
     return {labels.get(label, label): provider for label, provider in roots.items()}
+
+
+class PhoneFiles(MobileLocalFiles):
+    """Ordinary files, including received shares, separate from managed storage."""
+
+    def __init__(self, private_root):
+        self.private_root = private_root
+        root = phone_path(private_root)
+        root.mkdir(parents=True, exist_ok=True)
+        super().__init__(root)
+
+    def _guard(self, path):
+        if phone_path(self.private_root) != self.root:
+            raise ValueError('Collection location changed. Reopen the file browser.')
+        parts = path.relative_to(self.root).parts
+        if parts and reserved_phone_name(parts[0]):
+            raise ValueError('This folder name is reserved by Logisticks.')
+        return super()._guard(path)
+
+    def list(self, path='', *, cancelled=lambda: False):
+        return local_folder_snapshot(self, path, cancelled=cancelled,
+                                     root_name_visible=lambda name: not reserved_phone_name(name))
+
+    def list_names(self, path='', *, cancelled=lambda: False):
+        return local_folder_snapshot(self, path, cancelled=cancelled, names_only=True,
+                                     root_name_visible=lambda name: not reserved_phone_name(name))
 
 
 def synced_local_folders(store, *, visible):
@@ -21,6 +68,18 @@ def synced_local_folders(store, *, visible):
                 result[f'{folder} - Local Copy'] = folder
         except (OSError, ValueError):
             continue
+    if enabled(store.root):
+        from services.documents.locations import collection_path
+        try:
+            base = collection_path(store.root)
+            if base.is_dir():
+                mapped = {job['target'].split('/', 1)[0] for job in store.jobs.values() if not job['crypt']}
+                for child in base.iterdir():
+                    if (child.name not in mapped and not child.name.startswith('.') and visible(child.name)
+                            and child.is_dir() and not child.is_symlink()):
+                        result[f'{child.name} - Local Copy'] = child.name
+        except OSError:
+            pass  # The device drive can disappear while opening the picker.
     return dict(sorted(result.items(), key=lambda item: item[0].casefold()))
 
 
@@ -122,5 +181,7 @@ class DeviceFiles(LocalFiles):
 
 
 def device_files(private_root, *, include_collections=True):
+    if enabled(private_root):
+        return PhoneFiles(private_root)
     return (shared_files(private_root, include_collections=include_collections)
             or DeviceFiles(private_root, include_collections=include_collections))

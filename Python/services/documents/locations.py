@@ -79,9 +79,16 @@ def collection_base(private_root):
 
 
 def collection_path(private_root, crypt=False):
+    from .mobile_locations import COPIES, ENCRYPTED_COPIES, enabled
+    from .migrations.mobile_layout import ensure_android_layout
     if not crypt and Path(private_root) in _shared_local_roots:
-        return _unlinked(_shared_local_roots[Path(private_root)])
+        local = _shared_local_roots[Path(private_root)]
+        return _unlinked(local.with_name(COPIES) if enabled(private_root) else local)
     base = collection_base(private_root)
+    if enabled(private_root):
+        if Path(private_root) not in _shared_local_roots:
+            ensure_android_layout(private_root, base)
+        return _unlinked(base / (ENCRYPTED_COPIES if crypt else COPIES))
     external = base != Path(private_root)
     return _unlinked(base / (('LocalCrypt' if crypt else 'Local') if external
                              else ('LocalCryptFolders' if crypt else 'LocalFiles')))
@@ -157,7 +164,7 @@ def ordinary_index_provider(provider):
             and not provider.private and not getattr(provider, 'session_only', False))
 
 
-def local_folder_snapshot(provider, path='', *, cancelled=lambda: False, names_only=False):
+def local_folder_snapshot(provider, path='', *, cancelled=lambda: False, names_only=False, root_name_visible=None):
     """List an ordinary mobile folder with provider guards at both boundaries."""
     path = provider.relative(path)
     folder = provider._locate(path)
@@ -170,6 +177,8 @@ def local_folder_snapshot(provider, path='', *, cancelled=lambda: False, names_o
     with os.scandir(folder) as children:
         for child in children:
             check_cancelled(cancelled)
+            if not path and root_name_visible is not None and not root_name_visible(child.name):
+                continue
             if child.is_symlink() or (hasattr(Path, 'is_junction') and Path(child.path).is_junction()):
                 raise ValueError('Linked storage is not supported.')
             check_local_path(child.path)
@@ -303,13 +312,13 @@ def _destination(private_root, volume):
     if volume is not None and (base.is_relative_to(private_root) or private_root.is_relative_to(base)):
         raise ValueError('Collection locations cannot contain each other.')
     names = ('Local', 'LocalCrypt', 'Received Files') if volume is not None else ('LocalFiles', 'LocalCryptFolders', 'Received Files')
+    from .mobile_locations import COPIES, ENCRYPTED_COPIES, FILES, enabled
+    if enabled(private_root):
+        names = (COPIES, ENCRYPTED_COPIES, FILES)
     return base, [_unlinked(base / name) for name in names]
 
 
-def _activate(private_root, volume, base):
-    if volume is None:
-        _unlinked(Path(private_root) / CONFIG).unlink(missing_ok=True)
-        return
+def _drive_token(base):
     marker = _unlinked(base / MARKER)
     if marker.exists():
         token = marker.read_text()
@@ -321,6 +330,14 @@ def _activate(private_root, volume, base):
             stream.write(token)
             stream.flush()
             _sync(stream)
+    return token
+
+
+def _activate(private_root, volume, base):
+    if volume is None:
+        _unlinked(Path(private_root) / CONFIG).unlink(missing_ok=True)
+        return
+    token = _drive_token(base)
     atomic_write_json(_unlinked(Path(private_root) / CONFIG), dict(volume=str(volume), token=token))
 
 
@@ -329,6 +346,7 @@ def recover_location(private_root, volume, *, progress=None):
     report = _Progress(progress)
     report.update('Checking location')
     base, trees = _destination(private_root, volume)
+    _prepare_retained_layout(private_root, volume, base)
     found = False
     for tree in trees:
         try:
@@ -353,7 +371,7 @@ def start_empty_location(private_root, volume, *, progress=None):
     report = _Progress(progress)
     report.update('Checking files')
     base, trees = _destination(private_root, volume)
-    for tree in trees:
+    for tree in [*trees, *_legacy_mobile_trees(private_root, base)]:
         if _inventory(tree, report):
             raise FileExistsError('This location contains files. Use existing files here, or erase this location first.')
     base.mkdir(parents=True, exist_ok=True)
@@ -371,7 +389,7 @@ def describe_location(private_root, volume):
     chosen = selection(private_root)
     active = Path(chosen['volume']) / 'Logistics' if chosen else Path(private_root)
     folders = []
-    for tree in trees:
+    for tree in [*trees, *(path for path in _legacy_mobile_trees(private_root, base) if path.exists())]:
         if tree.exists() and not tree.is_dir():
             raise ValueError('A collection folder is a file: ' + str(tree))
         state = 'contains files or folders' if tree.exists() and any(tree.iterdir()) else 'empty' if tree.exists() else 'not created'
@@ -389,7 +407,7 @@ def wipe_destination(private_root, volume, *, progress=None):
     if base == active:
         raise ValueError('This is the active collection. Recover or switch to another location before wiping this backup.')
     stages = list(base.glob('.storage-copy-*')) if base.exists() else []
-    targets = trees + stages
+    targets = trees + _legacy_mobile_trees(private_root, base) + stages
     marker = _unlinked(base / MARKER) if volume is not None else None
     if marker is not None and marker.exists() and not marker.is_file():
         raise ValueError('Collection marker must be a regular file.')
@@ -472,10 +490,10 @@ def switch_location(private_root, volume, *, progress=None):
         return False
     if source_base.is_relative_to(destination_base) or destination_base.is_relative_to(source_base):
         raise ValueError('Collection locations cannot contain each other.')
+    _, destinations = _destination(private_root, volume)
+    _prepare_retained_layout(private_root, volume, destination_base)
     sources = [collection_path(private_root, crypt) for crypt in (False, True)]
-    sources.append(source_base / 'Received Files')
-    destinations = [destination_base / name for name in (
-        ('Local', 'LocalCrypt', 'Received Files') if volume is not None else ('LocalFiles', 'LocalCryptFolders', 'Received Files'))]
+    sources.append(source_base / destinations[2].name)
     report = _Progress(progress)
     report.update('Checking source files')
     trees = [_PlannedTree(source, target, _inventory(source, report))
@@ -508,3 +526,17 @@ def switch_location(private_root, volume, *, progress=None):
     _activate(private_root, volume, destination_base)
     report.update('Complete', force=True)
     return True
+
+def _legacy_mobile_trees(private_root, base):
+    from .mobile_locations import RECEIVED, enabled
+    from .migrations.mobile_layout import legacy_collection_name, legacy_encrypted_name
+    return ([_unlinked(base / name) for name in (legacy_collection_name(private_root, base),
+                                                 legacy_encrypted_name(private_root, base), RECEIVED)]
+            if enabled(private_root) else [])
+
+
+def _prepare_retained_layout(private_root, volume, base):
+    from .migrations.mobile_layout import prepare_layout
+    if not any(path.exists() for path in _legacy_mobile_trees(private_root, base)):
+        return
+    prepare_layout(private_root, base, token=_drive_token(base) if volume is not None else None)

@@ -47,6 +47,7 @@ class LocalCheckpoints:
     def __init__(self, root, document, kind, *, bookmarks):
         self.root = self.directory(root, document, bookmarks=bookmarks)
         self.identity = sha256(encode([document, kind])).hexdigest()
+        self.legacy = self.legacy_revision = None
 
     @staticmethod
     def directory(root, document, *, bookmarks):
@@ -106,14 +107,15 @@ def clear_local_checkpoints(directory):
 
 
 class EncryptedCheckpoints:
-    def __init__(self, store, legacy_path, remote_name):
+    def __init__(self, store, legacy_path, remote_name, *, namespace=None):
         self.store, self.remote_name = store, remote_name
+        self.namespace = namespace
         self.legacy_path = str(legacy_path) if legacy_path is not None else store.document
         self.legacy_remote = next((source.remote for source in sources(store.provider)
                                    if getattr(source, 'remote', None)), '')
 
     def identity(self, *, create=False):
-        return self.store.binding(create=create, remote_name=self.remote_name)
+        return self.store.binding(create=create, remote_name=self.remote_name, namespace=self.namespace)
 
     def read(self, identity):
         try:
@@ -127,17 +129,20 @@ class EncryptedCheckpoints:
         from copy import copy
 
         legacy = copy(self.store)
-        current = (self.store.document, self.remote_name)
-        for path in dict.fromkeys((self.store.document, self.legacy_path)):
+        from itertools import product
+        current = (self.store.document, self.remote_name, self.namespace)
+        candidates = product(dict.fromkeys((self.store.document, self.legacy_path)),
+                             dict.fromkeys((self.remote_name, self.legacy_remote)),
+                             dict.fromkeys((self.namespace, None)))
+        for path, remote_name, namespace in candidates:
+            if (path, remote_name, namespace) == current:
+                continue
             legacy.document = path
-            for remote_name in dict.fromkeys((self.remote_name, self.legacy_remote)):
-                if (path, remote_name) == current:
-                    continue
-                binding = legacy.binding(remote_name=remote_name)
-                try:
-                    return legacy.read_checkpoint(binding)
-                except FileNotFoundError:
-                    pass
+            binding = legacy.binding(remote_name=remote_name, namespace=namespace)
+            try:
+                return legacy.read_checkpoint(binding)
+            except FileNotFoundError:
+                pass
         raise FileNotFoundError
 
     def write(self, record, validate):

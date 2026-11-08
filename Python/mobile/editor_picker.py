@@ -343,11 +343,14 @@ class EditorPicker:
             action = getattr(destination_action, 'kind', '')
             roots = (self.app.file_roots if destination_action is not None and action != 'download'
                      else self.app.ordinary_file_roots(include_collections=action != 'download'))
-            self.editor_storage_roots = destination_location_labels(roots)
+            self.editor_storage_roots = destination_location_labels(self.app, roots)
             self.editor_storage_folders = {}
             self.editor_locked_roots = {}
             self.editor_linked_roots = {}
             if self.app.feature_enabled('rclone'):
+                from services.documents.mobile_locations import enabled
+                if enabled(self.app.private_root):
+                    self.add_local_copy_destinations(roots)
                 if action == 'download':
                     unlocked = {}
                     existing = self.existing_crypt_locations(roots=unlocked)
@@ -383,17 +386,14 @@ class EditorPicker:
 
     def creation_storage(self, *, include_encrypted=True):
         """Use the same on-device destination inventory for both creation forms."""
-        from .local_sources import synced_local_folders
         roots = self.app.ordinary_file_roots()
-        self.editor_storage_roots = destination_location_labels({'Shared files': roots['Shared files'], **roots})
+        self.editor_storage_roots = destination_location_labels(self.app, {'Shared files': roots['Shared files'], **roots})
         self.editor_storage_folders = {}
         self.editor_locked_roots = {}
         self.editor_linked_roots = {}
         if not self.app.feature_enabled('rclone'):
             return
-        local_folders = synced_local_folders(self.app.mirror_store(), visible=self.folder_path_visible)
-        self.editor_storage_folders.update(local_folders)
-        self.editor_storage_roots.update(dict.fromkeys(local_folders, roots['Local files']))
+        self.add_local_copy_destinations(roots)
         if include_encrypted:
             self.editor_storage_roots.update({
                 label: remote for label, remote in self.existing_crypt_locations().items()
@@ -401,6 +401,12 @@ class EditorPicker:
             self.editor_linked_roots = self.linked_crypt_locations(
                 folders=self.editor_storage_folders, locked=self.editor_locked_roots)
             self.editor_storage_roots.update(self.editor_linked_roots)
+
+    def add_local_copy_destinations(self, roots):
+        from .local_sources import synced_local_folders
+        folders = synced_local_folders(self.app.mirror_store(), visible=self.folder_path_visible)
+        self.editor_storage_folders.update(folders)
+        self.editor_storage_roots.update(dict.fromkeys(folders, roots['Local files']))
 
     def refresh_creation_storage(self, *, include_encrypted):
         label = self.save_as_storage.value
@@ -412,13 +418,16 @@ class EditorPicker:
         self._changing_location = True
         try:
             self.save_as_storage.items = [*self.editor_storage_roots, *self.editor_locked_roots]
-            self.save_as_storage.value = label if label in self.editor_storage_roots else 'Local'
+            self.save_as_storage.value = label if label in self.editor_storage_roots else next(iter(self.editor_storage_roots))
         finally:
             self._changing_location = False
 
     async def unlock_creation_storage(self, label):
         key, remote, identity, unlocked = self.editor_locked_roots[label]
-        if not await self.browser_editor_location(('Local', '')):
+        from services.documents.mobile_locations import enabled
+        from .local_sources import device_files_label
+        label_on_device = device_files_label(self.app) if enabled(self.app.private_root) else 'Local'
+        if not await self.browser_editor_location((label_on_device, '')):
             return False
         operation = self.operation
 

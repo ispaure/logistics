@@ -9,10 +9,49 @@
 - (void)showCover:(UIImage *)cover fromController:(UIViewController *)controller;
 - (void)clearCover;
 - (UIWindow *)connectScene:(UIWindowScene *)scene token:(id)token;
+- (void)refreshSceneGeometry:(UIWindowScene *)scene;
 - (void)disconnectScene:(UIWindowScene *)scene;
 @end
 
 #if __has_include(<UIKit/UIHingeInteraction.h>)
+@interface LogisticsPortraitCoverController : UIViewController
+@property (nonatomic, strong) UIImageView *coverImage;
+@property (nonatomic) BOOL lockPortrait;
+@end
+
+@implementation LogisticsPortraitCoverController
+- (UIInterfaceOrientationMask)supportedInterfaceOrientations { return UIInterfaceOrientationMaskPortrait; }
+- (UIInterfaceOrientation)preferredInterfaceOrientationForPresentation { return UIInterfaceOrientationPortrait; }
+- (BOOL)prefersInterfaceOrientationLocked { return self.lockPortrait; }
+
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    if (@available(iOS 27.1, *)) {
+        UIInterfaceOrientation orientation = self.view.window.windowScene.effectiveGeometry.interfaceOrientation;
+        BOOL portrait = orientation == UIInterfaceOrientationPortrait;
+        if (self.lockPortrait != portrait) {
+            self.lockPortrait = portrait;
+            [self setNeedsUpdateOfPrefersInterfaceOrientationLocked];
+        }
+        // The accessory scene can follow system geometry while it connects.
+        // Counter-rotate only its artwork until UIKit grants portrait geometry.
+        CGFloat angle = 0;
+        switch (orientation) {
+            case UIInterfaceOrientationLandscapeLeft: angle = M_PI_2; break;
+            case UIInterfaceOrientationLandscapeRight: angle = -M_PI_2; break;
+            case UIInterfaceOrientationPortraitUpsideDown: angle = M_PI; break;
+            default: break;
+        }
+        CGRect bounds = self.view.bounds;
+        CGSize size = bounds.size;
+        if (UIInterfaceOrientationIsLandscape(orientation)) size = CGSizeMake(size.height, size.width);
+        self.coverImage.bounds = (CGRect){CGPointZero, size};
+        self.coverImage.center = CGPointMake(CGRectGetMidX(bounds), CGRectGetMidY(bounds));
+        self.coverImage.transform = CGAffineTransformMakeRotation(angle);
+    }
+}
+@end
+
 @interface LogisticsReaderCoverDisplay () <AVCaptureVideoDataOutputSampleBufferDelegate>
 @property (nonatomic, weak) UIViewController *readerController;
 @property (nonatomic, strong) UIImage *cover;
@@ -63,7 +102,7 @@
 }
 
 - (void)stopPresentation {
-    ((UIImageView *)self.coverWindow.rootViewController.view).image = nil;
+    ((LogisticsPortraitCoverController *)self.coverWindow.rootViewController).coverImage.image = nil;
     self.coverWindow.hidden = YES;
     self.coverWindow = nil;
     if (@available(iOS 27.1, *)) {
@@ -186,22 +225,36 @@
     image.contentMode = UIViewContentModeScaleAspectFit;
     image.backgroundColor = UIColor.blackColor;
     image.accessibilityLabel = @"Current reading cover";
-    UIViewController *controller = [UIViewController new];
-    controller.view = image;
+    LogisticsPortraitCoverController *controller = [LogisticsPortraitCoverController new];
+    controller.coverImage = image;
+    controller.view.backgroundColor = UIColor.blackColor;
+    [controller.view addSubview:image];
     window.rootViewController = controller;
     self.coverWindow = window;
     self.lastStatus = @"iOS connected the outer-display cover scene.";
     window.hidden = NO;
+    if (@available(iOS 27.1, *)) {
+        [scene requestGeometryUpdateWithPreferences:[[UIWindowSceneGeometryPreferencesIOS alloc]
+            initWithInterfaceOrientations:UIInterfaceOrientationMaskPortrait] errorHandler:nil];
+    }
     return window;
 #else
     return nil;
 #endif
 }
 
+- (void)refreshSceneGeometry:(UIWindowScene *)scene {
+#if __has_include(<UIKit/UIHingeInteraction.h>)
+    if (self.coverWindow.windowScene == scene) {
+        [self.coverWindow.rootViewController.view setNeedsLayout];
+    }
+#endif
+}
+
 - (void)disconnectScene:(UIWindowScene *)scene {
 #if __has_include(<UIKit/UIHingeInteraction.h>)
     if (self.coverWindow.windowScene == scene) {
-        ((UIImageView *)self.coverWindow.rootViewController.view).image = nil;
+        ((LogisticsPortraitCoverController *)self.coverWindow.rootViewController).coverImage.image = nil;
         self.coverWindow = nil;
     }
 #endif

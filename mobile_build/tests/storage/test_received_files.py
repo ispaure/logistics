@@ -69,7 +69,7 @@ class ReceivedFilesTests(TestCase):
             if value.get('done'):
                 raise OSError('interrupted after publication')
             return atomic_write_json(path, value, **kwargs)
-        with patch('mobile.incoming_files.atomic_write_json', side_effect=fail_completion):
+        with patch('services.documents.migrations.legacy_inbox.atomic_write_json', side_effect=fail_completion):
             with self.assertRaisesRegex(OSError, 'interrupted'):
                 inbox_path(self.private)
         received = inbox_path(self.private)
@@ -101,7 +101,7 @@ class ReceivedFilesTests(TestCase):
             if value.get('done'):
                 raise OSError('interrupted')
             return original(path, value, **kwargs)
-        with patch('mobile.incoming_files.atomic_write_json', side_effect=fail_done):
+        with patch('services.documents.migrations.legacy_inbox.atomic_write_json', side_effect=fail_done):
             with self.assertRaises(OSError):
                 inbox_path(self.private)
         target = self.private / 'Received Files/nested/été.txt'

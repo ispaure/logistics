@@ -85,7 +85,7 @@ static const unsigned long long LogisticsFileLimit = 1024ULL * 1024 * 1024;
 + (void)receiveURL:(NSURL *)url {
     if (!url.isFileURL) return;
     // System Documents/Inbox URLs must also be staged: the durable editable
-    // destination is Documents/Received Files, not the system-owned Inbox.
+    // destination is the public Documents root, not the system-owned Inbox.
     // Acquire the grant before returning to UIKit; balance after the worker.
     BOOL access = [url startAccessingSecurityScopedResource];
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{

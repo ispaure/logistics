@@ -50,15 +50,14 @@ does not run Obsidian plugins.
 
 **Local File Browser** opens directly on the current folder, without a source
 button above it. The folder header has Back (‹), Search and an upper-right
-actions menu (circled ellipsis on iOS, vertical dots on Android). On iOS it opens
-Logistics’ shared Files directory, showing other files and folders saved there.
-**Shared Files** shows the other public files and folders, omitting the dedicated
-**Local** and **Received Files** collections. Both collections remain available in Apple’s Files app
-and in destination pickers. No files are moved or duplicated.
-Workspaces lists downloaded/synced copies individually under Local → Rclone Copies.
-Local → On This Phone shows Received Files and Shared Files. **Shared Files** appears underneath
-the folder list and opens the shared directory on iOS.
-On Android, this browser may be empty when there are no other public files.
+actions menu (circled ellipsis on iOS, vertical dots on Android). Choose
+**Local → On This Phone** or **On This Tablet** to see the device root and its
+immediate folders. The sidebar indents those folders beneath the root. Choose
+the root row to open the top level and see files shared from other apps, or
+choose a folder to browse it. This is the **Logisticks** folder in
+Apple's Files app on iOS and the **Files** directory on the selected collection
+drive or in app storage on Android. **Local → Rclone Copies** lists
+individual downloaded and synced folders.
 When you open a local folder directly from Workspaces, Back from that folder
 returns to Workspaces. Inside a subfolder, Back first returns to its parent.
 List mode uses compact native rows on both iOS and Android.
@@ -177,11 +176,9 @@ visible folders; refreshing the hub also refreshes the package choices.
 Credential labels omit `.zip` (including uppercase `.ZIP`). Duplicate labels use
 a number, such as **Personal (2)**. Loaded-package changes refresh a visible hub
 automatically, including changes made in another iPad window.
-**Local** lists imported folders, downloaded/synced copies and, on iOS, folders
-beside `Local` in the `Logisticks` shared directory. **Shared Files** below the
-list opens other public files, omitting the dedicated Local and Received Files
-locations on both platforms. Save pickers and Apple’s Files app still expose
-those locations. **Home Server** contains
+**Local** separates **On This Phone**, where ordinary files and new shares
+appear, from **Rclone Copies**, where downloaded and synced copies appear.
+Save pickers use those same names. **Home Server** contains
 SMB/Mac connections added through **Add share…**, including their managed offline
 copies. SMB remotes imported inside credential ZIPs stay with their package under
 **Cloud**. Local and Home Server hide the credential selector. **Transfers** appears on **Cloud** only while a transfer is active or a stopped

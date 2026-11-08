@@ -38,7 +38,82 @@ class IOSStorageTests(unittest.TestCase):
 
     def prepare(self, **kwargs):
         return prepare_storage(self.documents, self.private,
-                               exclude_backup=self.exclude, move=kwargs.get('move', self.move))
+                               exclude_backup=self.exclude, move=kwargs.get('move', self.move),
+                               public_layout=kwargs.get('public_layout', False))
+
+    def test_public_upgrade_resumes_and_keeps_reading_state_with_the_right_collision(self):
+        from commonUtils.filesystem.snapshots import file_revision
+        from commonUtils.runtime.resources.local import LocalFiles
+        from services.documents.mobile_locations import _enabled
+        from services.documents.progress import open_progress, ProgressStatus
+        from services.documents.progress_identity import local_document_path
+        from mobile.favourites import catalog
+        from mobile.locations import Locations
+        from mobile.recent_documents import RecentDocuments
+
+        self.addCleanup(_enabled.discard, self.private)
+        self.prepare()
+        encrypted = self.private / 'LocalCryptFolders'
+        encrypted.mkdir()
+        (encrypted / 'opaque-name').write_bytes(b'encrypted payload')
+        encrypted_inode = encrypted.stat().st_ino
+        received = self.documents / 'Received Files/Book.pdf'
+        received.write_bytes(b'from another app')
+        loose = self.documents / 'Book.pdf'
+        loose.write_bytes(b'already at the root')
+        (self.documents / 'Local/Journal').mkdir()
+        (self.documents / 'Local/Journal/.noteslibrary').touch()
+        note = self.documents / 'Local/Journal/Entry.md'
+        note.write_text('# entry')
+        (self.documents / 'Local/Unclassified').mkdir()
+        state = open_progress(LocalFiles(self.documents), 'Received Files/Book.pdf', self.private,
+                              kind='pdf', revision=file_revision(received))
+        self.assertEqual(state.flush(state.observe({'page': 4, 'bookmarks': [3]})), ProgressStatus.SAVED)
+        state.retire()
+        recent = RecentDocuments(self.private)
+        recent.remember_file(SimpleNamespace(kind='markdown', title='Entry.md'),
+                             dict(type='local', path=str(note)), opener=dict(kind='notes', root=str(note.parent)))
+        app = SimpleNamespace(private_root=self.private)
+        catalog(app).remember(dict(type='local', path=str(note)), 'Entry.md',
+                              dict(kind='notes', root=str(note.parent)), favourite=True)
+        Locations(self.private).pin('local', 'Journal')
+
+        def interrupt(source, destination):
+            self.move(source, destination)
+            raise OSError('interrupted after move')
+        with self.assertRaisesRegex(OSError, 'interrupted'):
+            self.prepare(public_layout=True, move=interrupt)
+        self.prepare(public_layout=True)
+        renamed = collection_path(self.private, True)
+        self.assertEqual(renamed, self.private / 'Rclone Copies Encrypted')
+        self.assertEqual(renamed.stat().st_ino, encrypted_inode)
+        self.assertEqual((renamed / 'opaque-name').read_bytes(), b'encrypted payload')
+        target = self.documents / 'Book (received 1).pdf'
+        self.assertEqual(target.read_bytes(), b'from another app')
+        self.assertEqual(loose.read_bytes(), b'already at the root')
+        self.assertFalse(received.parent.exists())
+        self.assertTrue((self.documents / 'Rclone Copies/Unclassified').is_dir())
+        self.assertEqual(local_document_path(self.private, str(received)), target)
+        state = open_progress(LocalFiles(self.documents), target.name, self.private,
+                              kind='pdf', revision=file_revision(target))
+        self.assertEqual(state.identity, ('local', 'Files://', target.name))
+        self.assertEqual(state.load(), {'page': 4, 'bookmarks': [3]})
+        self.assertTrue(all(store.location().is_file() for store in state._stores))
+        state.retire()
+        original = open_progress(LocalFiles(self.documents), loose.name, self.private,
+                                 kind='pdf', revision=file_revision(loose))
+        self.assertEqual(original.load(), {})
+        original.retire()
+        item = RecentDocuments(self.private).items[0]
+        self.assertEqual(item['source']['path'], 'Files://Journal/Entry.md')
+        self.assertEqual(item['opener']['root'], 'Files://Journal')
+        from services.documents.migrations.references import upgrade_local_references
+        upgrade_local_references(self.private)
+        favourite = catalog(app).entries()[0]
+        self.assertEqual(favourite['source']['path'], 'Files://Journal/Entry.md')
+        self.assertEqual(favourite['opener']['root'], 'Files://Journal')
+        self.assertEqual(catalog(app).read(normalize=False)['favourites'][0], favourite)
+        self.assertEqual(Locations(self.private).items[0]['path'], 'Files://Journal')
 
     def seed(self):
         jobs = MirrorJobs(self.documents)

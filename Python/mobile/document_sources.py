@@ -198,7 +198,7 @@ def local_reference_available(app, source):
         return True
     try:
         return local_document_path(app, source['path']).is_file()
-    except OSError:
+    except (OSError, ValueError):
         return False
 
 
@@ -393,7 +393,11 @@ def workspace_display_path(app, path):
         if location is not None:
             label, _, row = location
             folders = ['Workspaces', 'Local']
-            if label != 'Local files':
+            from services.documents.mobile_locations import COPIES, enabled
+            from .local_sources import device_files_label
+            if enabled(app.private_root):
+                folders.append({'Local files': COPIES, 'Shared files': device_files_label(app)}.get(label, label))
+            elif label != 'Local files':
                 folders.append('Shared Files' if label == 'Shared files' else label)
             return ' → '.join((*folders, *Path(row['path']).parts))
     return str(path)

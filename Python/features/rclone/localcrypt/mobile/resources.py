@@ -1,6 +1,7 @@
 """Local mobile folder providers; crypt naming/bytes stay in the native bridge."""
 from services.folders.labels import encrypted_copy_label
 from services.documents.locations import collection_path, _modified_time
+from services.documents.mobile_locations import ENCRYPTED_ALIAS
 from contextlib import contextmanager
 import base64
 import os
@@ -95,6 +96,7 @@ def native_transfer(client, record, path, encrypted):
 class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
     private = True
     supports_metadata_collections = True
+    reader_storage_alias = ENCRYPTED_ALIAS
 
     def _ciphertext_temporary(self, path):
         path = self.relative(path)

@@ -25,8 +25,8 @@ discovered Notes libraries followed by configured Comics libraries, under
 **Notes** and **Comics** headings. Tap a library directly to open it.
 
 The upper-right **Search documents** magnifier beside Open and New opens a dedicated
-filename search. It searches filenames recursively through Local,
-Shared Files, Received Files and unlocked LocalCrypt storage, including files and folders
+filename search. It searches filenames recursively through On This Phone,
+Rclone Copies and unlocked LocalCrypt storage, including files and folders
 you have never opened. Results use compact filename rows with **…** actions;
 **Show in folder** reveals the item in the file browser. It does not search file contents or online remotes.
 While text is entered, results replace the collection buttons and lists.
@@ -47,8 +47,8 @@ contains Open, New and Search while Unlock remains directly available.
 
 In **New document**, enter a name and choose Plain text, Markdown or Notebook.
 Tap **Choose location** to leave the keyboard and open the folder browser. Select
-a folder in **Local**, **Shared Files**, **Received Files** or an unlocked **Encrypted Copy**
-location. Changing the file type updates a matching document extension; a name
+a folder in **On This Phone** or **On This Tablet**, an individual rclone copy,
+or an unlocked **Encrypted Copy**. Changing the file type updates a matching document extension; a name
 without an extension receives the selected one. Tap **Create document** to create
 and open the file. On a narrow screen, **Back to name** keeps your chosen folder
 while you edit the name or type. On a tablet or unfolded Duo with enough room,
@@ -58,20 +58,20 @@ The folder arrow navigates within the browser. Android Back dismisses folder
 entry or search and retraces folder navigation first. At the root it returns
 to naming on a narrow screen or exits when both steps are visible. **Cancel**
 returns directly to the screen where you started. The file is
-created in that folder and appears when you browse it from Shared Files. **Save**
+created in that folder and appears when you browse it in Workspaces. **Save**
 writes edits back to the same file. LocalCrypt files stay encrypted on disk;
 cloud locations are read-only and receive changes through reviewed **Push**.
 New documents do not use the private saved-document store. Existing saved
 documents remain available in Documents.
 
-The New Document folder browser starts at **Shared Files**. Choose **Local**
-or **Received Files** to browse those collections. Up returns to **Shared Files**
-from either collection. The Move picker uses the same location names.
+New Document and New Notes Library start at **On This Phone** or **On This Tablet**.
+Choose an individual rclone folder from the location selector to create a file
+or library in that copy. The Move picker uses the same location names.
 To make a subfolder, tap **New folder**, enter its name, then tap **Create folder**. The browser selects the new folder.
 Cancelling the folder entry keeps the current location and your filename.
-On Android this root is a list of locations;
-the form prompts you to choose a folder and keeps **Create document** disabled there. Errors
-appear as messages beneath the destination, with no extra editable field.
+You can create files and ordinary folders at the top level of **On This Phone**.
+The app reserves the managed **Rclone Copies** folder name there. Errors
+appear beneath the destination.
 Correct the name or location and try again. Only existing LocalCrypt copies and
 linked pulled folders appear; loading an encrypted remote alone adds no destination.
 For a notebook, choose **Notebook (.rmdoc)** and a Local or unlocked LocalCrypt folder;

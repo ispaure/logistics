@@ -10,7 +10,9 @@ from services.documents.credential_state import MobileCredentialCipher
 
 
 def catalog(app):
-    return DocumentCatalog(app.private_root)
+    from services.documents.progress_identity import normalize_local_reference
+    return DocumentCatalog(app.private_root, normalize=lambda source, opener:
+                           normalize_local_reference(app.private_root, source, opener))
 
 
 def unlocked_ciphers(app):
@@ -62,9 +64,8 @@ def reference(app, host=None):
     if source is None:
         raise ValueError('This file has no saved opening reference yet.')
     if source['type'] == 'local':
-        source = dict(source, path=str(Path(source['path']).resolve()))
-        if opener.get('kind') == 'notes':
-            opener = dict(opener, root=str(Path(opener['root']).resolve()))
+        from services.documents.progress_identity import normalize_local_reference
+        source, opener = normalize_local_reference(app.private_root, source, opener)
     if source['type'] not in {'local', 'session'} and not saved_connection(app, source['remote'], source['identity']):
         if provider is None:
             provider = SimpleNamespace(client=app.cloud_client, remote=source['remote'], identity=source['identity'])
@@ -102,7 +103,8 @@ def resource_reference(app, provider, path, *, require_cipher=True):
         raise ValueError('This file has no reusable storage reference.')
     cipher = None
     if source['type'] == 'local':
-        source = dict(source, path=str(Path(source['path']).resolve()))
+        from services.documents.progress_identity import normalize_local_reference
+        source, _ = normalize_local_reference(app.private_root, source)
     elif not saved_connection(app, source['remote'], source['identity']):
         cipher = MobileCredentialCipher(provider, app)
         try:
@@ -184,12 +186,16 @@ async def reopen(app, row, *, error_title='Open favourite'):
         if opener.get('kind') != 'notes':
             from .document_sources import reopen_file
             return await reopen_file(app, source, kind=opener.get('kind'))
+        if source['type'] == 'local':
+            from .document_sources import local_document_path
+            physical = local_document_path(app, source['path'])
+            library_root = local_document_path(app, opener['root'])
         current = getattr(app, 'vault_browser', None)
         if current is not None and current.valid():
             if source['type'] == 'local':
-                same = ((current.provider.root / current.root).resolve() == Path(opener['root']).resolve()
+                same = ((current.provider.root / current.root).resolve() == library_root.resolve()
                         and not getattr(current.provider, 'private', False))
-                path = relative_note(source['path'], current.provider.root) if same else None
+                path = relative_note(physical, current.provider.root) if same else None
             else:
                 same = (source['type'] == 'crypt' and current.root == opener['root']
                         and getattr(current.provider, 'identity', None) == source['identity']
@@ -206,9 +212,7 @@ async def reopen(app, row, *, error_title='Open favourite'):
         provider = None
         if source['type'] == 'local':
             from commonUtils.runtime.resources.local import LocalFiles
-            path = Path(source['path'])
-            library_root = Path(opener['root'])
-            provider, path = LocalFiles(library_root), relative_note(path, library_root)
+            provider, path = LocalFiles(library_root), relative_note(physical, library_root)
         elif source['type'] == 'crypt':
             from features.rclone.mobile.service import native_service
             from features.rclone.localcrypt.mobile.locations import LocalCryptLocation

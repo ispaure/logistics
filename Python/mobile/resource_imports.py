@@ -17,6 +17,7 @@ class ResourceImports:
         if Path(root).is_symlink():
             raise ValueError('Import storage cannot be linked.')
         self.root = Path(root).resolve()
+        self.private_root = Path(root)
         if collection_root is not None and Path(collection_root).is_symlink():
             raise ValueError('Import storage cannot be linked.')
         self.collection_root = Path(collection_root).resolve() if collection_root is not None else None
@@ -67,44 +68,63 @@ class ResourceImports:
         self.error = ''
 
     def identity(self, path):
+        return self.identities(path)[0]
+
+    def identities(self, path):
         path = Path(path)
         resolved = path.resolve()
-        if resolved.is_relative_to(self.root):
+        from services.documents.mobile_locations import split_alias, storage_reference
+        from services.documents.migrations.mobile_layout import legacy_reference
+        reference = storage_reference(self.private_root, path)
+        alias = split_alias(reference)
+        if alias is not None:
+            relative = alias[1]
+            old, _ = legacy_reference(self.private_root, resolved)
+            legacy = None
+            if old is not None:
+                if old[1] == 'app:ios-documents':
+                    key = Path(old[2])
+                    legacy = ('LocalFiles/' + Path(*key.parts[1:]).as_posix() if key.parts[:1] == ('Local',)
+                              else 'SharedFiles/' + old[2])
+                else:
+                    legacy = ('LocalFiles/' if old[1].endswith(':local') else 'Received Files/') + old[2]
+            names = (reference,) if legacy is None else (reference, legacy)
+        elif resolved.is_relative_to(self.root):
             relative = resolved.relative_to(self.root)
-            identity = relative.as_posix()
+            names = (relative.as_posix(),)
         elif self.collection_root is not None and resolved.is_relative_to(self.collection_root):
             relative = resolved.relative_to(self.collection_root)
             # Preserve the pre-migration LocalFiles identity when iOS exposes
             # Local in Documents, or Android moves the collection to an SD card.
-            identity = 'LocalFiles/' + relative.as_posix()
+            names = ('LocalFiles/' + relative.as_posix(),)
         elif self.shared_root is not None and resolved.is_relative_to(self.shared_root):
             relative = resolved.relative_to(self.shared_root)
-            identity = 'SharedFiles/' + relative.as_posix()
+            names = ('SharedFiles/' + relative.as_posix(),)
         elif self.received_root is not None and resolved.is_relative_to(self.received_root):
             relative = resolved.relative_to(self.received_root)
-            identity = 'Received Files/' + relative.as_posix()
+            names = ('Received Files/' + relative.as_posix(),)
         else:
             raise ValueError('Choose a file in Local or private Downloads.')
         components = [path, *list(path.parents)[:max(0, len(relative.parts) - 1)]]
         if any(part.is_symlink() for part in components):
             raise ValueError('Linked private-copy imports are not supported.')
-        return sha256(identity.encode()).hexdigest()
+        return tuple(sha256(name.encode()).hexdigest() for name in names)
 
     def find(self, path):
         with mutation_lock:
             self._refresh()
-            return self.items.get(self.identity(path))
+            return next((self.items[key] for key in self.identities(path) if key in self.items), None)
 
     def remember(self, path, provider, resource):
-        key = self.identity(path)
+        key, *legacy = self.identities(path)
         if provider not in PROVIDERS or not uuid(resource):
             raise ValueError('Invalid import identity.')
         with mutation_lock:
             self._refresh()
-            if key not in self.items and len(self.items) >= MAX_ITEMS:
+            updated = {item: value for item, value in self.items.items() if item not in legacy}
+            if key not in updated and len(updated) >= MAX_ITEMS:
                 raise ValueError(f'Private-copy import history is full (limit: {MAX_ITEMS}).')
             # The last published remember for this path replaces its mapping.
-            updated = dict(self.items)
             updated[key] = dict(provider=provider, resource=resource)
             self._publish(updated)
 

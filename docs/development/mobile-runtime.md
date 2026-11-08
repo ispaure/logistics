@@ -1269,17 +1269,11 @@ UIKit scene activation can also arrive while the startup window is still being
 built. Scene callbacks record activity immediately and dispatch privacy/focus
 handlers only after the privacy owner exists.
 
-The local browser presents one On this device source. `SharedFiles` lists the
-iOS Documents root. The main browser omits Local and Received Files because they
-have dedicated Workspaces entries; destination pickers retain them.
-`FilesUI.browser_file_location` routes that child and its descendants into the
-existing CollectionFiles provider; Parent at the collection root returns to
-Documents. The outer provider rejects direct entry access to Local so root mutations
-cannot rename or remove the managed collection; recursive search from Browse All
-Files also omits these collections. Internal Local files and Shared
-files location identities remain distinct for existing pins, managed workflows,
-provider documents and history, but share one source control. No storage migration
-is involved; Android's collection root is unchanged.
+On This Phone opens the ordinary files provider. Its guarded root is iOS
+Documents or Android's Files directory. Rclone Copies is a separate provider
+and selector entry. The ordinary provider filters managed paths from listings
+and rejects those paths in direct access, search and mutations. The existing
+internal browser routing keys continue to select their corresponding providers.
 
 ## Per-format mobile text sizing
 

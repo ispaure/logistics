@@ -30,11 +30,11 @@ explicitly switches to the Documents list.
 ## Android Back
 
 In Workspaces, **Local** has **Rclone Copies** and **On This Phone** tabs. Rclone Copies shows
-ordinary and encrypted local copies associated with remotes. On This Phone shows
-**Received Files** and **Shared Files**. Shared Files opens the browse root;
-ordinary folders are reached inside it. Ordinary names remain
-intact rather than being split into groups at hyphens. These tabs change the
-view, without moving any files. The app remembers the last Local tab on this
+ordinary and encrypted local copies associated with remotes. **On This Phone**
+shows a selectable **On This Phone** root with its immediate folders indented
+beneath it. Choose the root to browse the top level, including files shared from
+other apps, or choose a folder to open it directly. The tablet tab and root are
+called **On This Tablet**. The app remembers the last Local tab on this
 device across restarts, starting with **On This Phone** on first use. A notebook's **× (Close document)** closes its
 session with the usual unsaved-edit choices and returns to the Home overview.
 
