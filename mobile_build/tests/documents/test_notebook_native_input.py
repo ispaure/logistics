@@ -328,7 +328,7 @@ class NativeNotebookResponseSafetyTests(unittest.IsolatedAsyncioTestCase):
         panel.web=NS();panel.view=NS(children=[panel.web]);panel.status=NS(text='')
         panel.app=NS(active_host=True,adaptive=NS(render=Mock()))
         page = NS(id="synthetic-page", strokes=[])
-        panel.editor = NS(index=0, notebook=NS(pages=[page], page=lambda index: page))
+        panel.editor = NS(index=0, notebook=NS(pages=[page], page=lambda index: page), page_previews=Mock(return_value=[]))
         panel.document=NS(resource=object(),recovery=object(),dirty=False,recovery_deleted=False)
         panel.library=Mock();panel.state=lambda:{'native_pen':False}
         return panel
@@ -369,12 +369,11 @@ class NativeNotebookResponseSafetyTests(unittest.IsolatedAsyncioTestCase):
             panel.web=None
         panel.dispose=Mock(side_effect=dispose)
         host=NS(_notebook_views={'key':panel},workspace=NS(close=Mock()),save_workspace=Mock(),reader_closed=Mock(),refresh_document_list=Mock())
-        with patch('features.notebooks.previews.page_previews',return_value=[]):
-            task=asyncio.create_task(panel.perform({'op':'page-previews','start':0}))
-            await asyncio.wait_for(entered.wait(),.5)
-            self.assertFalse(panel.busy)
-            self.assertTrue(documents.close_notebook(host,'key','discard'))
-            await asyncio.wait_for(task,.5)
+        task=asyncio.create_task(panel.perform({'op':'page-previews','start':0}))
+        await asyncio.wait_for(entered.wait(),.5)
+        self.assertFalse(panel.busy)
+        self.assertTrue(documents.close_notebook(host,'key','discard'))
+        await asyncio.wait_for(task,.5)
         self.assertTrue(panel.closed)
         self.assertEqual(panel.status.text,'')
         panel.app.adaptive.render.assert_not_called()
@@ -392,8 +391,7 @@ class NativeNotebookResponseSafetyTests(unittest.IsolatedAsyncioTestCase):
             value=asyncio.get_running_loop().create_future();value.set_result(True);return value
         panel.web.evaluate_javascript=Mock(side_effect=evaluate)
         panel._respond=partial(panel._respond,timeout=.01)
-        with patch('features.notebooks.previews.page_previews',return_value=[]):
-            await asyncio.wait_for(panel.perform({'op':'page-previews','start':0}),.5)
+        await asyncio.wait_for(panel.perform({'op':'page-previews','start':0}),.5)
         scripts=[call.args[0] for call in panel.web.evaluate_javascript.call_args_list]
         self.assertEqual(len(scripts),2)
         self.assertTrue(scripts[0].startswith('window.notebookPagePreviews('))

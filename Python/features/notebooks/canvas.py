@@ -4,6 +4,7 @@ from commonUtils.ui.native.web_dropdown import DROPDOWN_CSS, DROPDOWN_SCRIPT
 from .assets import asset
 from .bridge import MAX_COMMAND
 from .icons import ICON_SCRIPT
+from .protocol import canvas_state_json
 
 
 def editor_html(state, bridge, *, console_bridge=False, desktop=False, mobile=False, stylesheet='', paper_preview=None):
@@ -54,4 +55,4 @@ const canvasPixelLimit=__CANVAS_PIXEL_LIMIT__;
     template = template.replace('__PRESENTATION_CLASS__', ' '.join(classes))
     template = template.replace('__ENGINE__', engine).replace(
         '__PRESENTATION__', '<script>\n' + presentation + '\n</script>')
-    return template.replace('__STATE__', json.dumps(state, ensure_ascii=True, allow_nan=False).replace('<', '\\u003c'))
+    return template.replace('__STATE__', canvas_state_json(state).replace('<', '\\u003c'))

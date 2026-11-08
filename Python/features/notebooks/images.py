@@ -148,21 +148,31 @@ class Picture:
         return dict(id=self.id, layer=self.layer, corners=self.corners)
 
 
-def image_data(book, index, *, layers=None):
+def picture_assets(book, index):
+    """Resolve the current page's native image resources."""
     import re
     ink = book.page(index)
     resources = {r.uuid: r.name for b in ink._blocks if isinstance(b, ImageResources) for r in b.resources}
     resources.update({r.uuid: r.name for r in ink.image_resources})
-    for image in ink.images:
-        if layers is not None and image.layer not in layers:
-            continue
-        name = resources.get(image.resource, '')
+    prefix = f'{book.id}/{book.pages[index].id}/'
+
+    def read(picture):
+        name = resources.get(picture.resource, '')
         if not re.fullmatch(r'[A-Za-z0-9_-]+\.png', name):
             raise ValueError('Invalid image resource name.')
-        data = book.members.get(f'{book.id}/{book.pages[index].id}/{name}')
+        data = book.members.get(prefix + name)
         if data is None:
             raise ValueError('Missing notebook image resource.')
-        yield image, data
+        return data
+
+    return read
+
+
+def image_data(book, index, *, layers=None):
+    read = picture_assets(book, index)
+    for image in book.page(index).images:
+        if layers is None or image.layer in layers:
+            yield image, read(image)
 
 
 def image_source(data):
@@ -170,12 +180,17 @@ def image_source(data):
 
 
 def image_payloads(book, index):
-    return [dict(**image.payload(), src=image_source(data)) for image, data in image_data(book, index)]
+    result, sources = [], {}
+    for image, data in image_data(book, index):
+        src = sources.get(data)
+        if src is None:
+            src = sources[data] = image_source(data)
+        result.append(dict(**image.payload(), src=src))
+    return result
 
 
 def paste(book, index, action):
     """Bound and decode PNG input before touching page state or archive members."""
-    from .ink import allocation
     src = action.get('src')
     if not isinstance(src, str) or not src.startswith('data:image/png;base64,') or len(src) > 4 * 1024 * 1024:
         raise ValueError('Choose a PNG image smaller than 3 MiB.')
@@ -188,8 +203,16 @@ def paste(book, index, action):
         raise ValueError(ink.warning)
     visible = [key for key, _, shown in ink.layers if shown]
     layer = action.get('layer') or (visible[-1] if visible else None)
-    if layer not in visible or len(ink.images) >= 256:
-        raise ValueError('Choose a visible layer; at most 256 images fit on a page.')
+    if layer not in visible:
+        raise ValueError('Choose a visible layer.')
+    add_picture(book, index, data, layer, corners)
+
+
+def add_picture(book, index, data, layer, corners):
+    from .ink import allocation
+    ink = book.page(index)
+    if len(ink.images) >= 256:
+        raise ValueError('At most 256 images fit on a page.')
     author, first, _ = allocation(ink._blocks)
     identity = uuid4()
     resource = Resource(identity.bytes, CrdtId(author, first), str(identity) + '.png')

@@ -1,5 +1,6 @@
 function send(action) {
-  if (action.op !== 'document-location') {
+  if (action.op === 'unlock-pdf') $('status').textContent = 'Unlocking notebook…';
+  else if (action.op !== 'document-location') {
     $('status').textContent = ['export', 'library', 'transfer', 'page'].includes(action.op) ? 'Opening…' : 'Saving…';
   }
   queue.push(action);
@@ -41,6 +42,7 @@ window.notebookUpdate = function(next, error) {
   $('status').textContent = error || state.save_status || 'Saved on this device. Export a copy to share.';
   if (error) queue = [];
   render();
+  if (state.password_required) $('pdfUnlockStatus').textContent = error;
   pump()
 };
 window.notebookBrushColorUpdate = function(error) {

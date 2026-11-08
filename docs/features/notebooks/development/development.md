@@ -1682,7 +1682,12 @@ controls. It is shared by desktop and mobile compositions and explicitly listed
 in the mobile manifest. Capture includes the visible PDF/template background
 and scene objects in layer/sequence order. The clipboard never uses browser
 storage or the system clipboard. Image pages defer partial-eraser raster feedback
-until acknowledgement so the ink mask cannot remove image pixels.
+until acknowledgement so the ink mask cannot remove image pixels. Canvas state
+carries one PNG source per distinct image, and the WebView releases images that
+leave the visible page or layer. Select / move accepts fully enclosed visible
+quads and direct taps. Mixed selection edits use the same durable command as
+stroke edits and preserve layer order when pasted. Ink-only undo and redo reuse
+the published recovery archive and publish the affected page state.
 
 `Editor.pdf_data` decrypts an embedded PDF only for rendering. The notebook member
 remains encrypted, and passwords/decrypted bytes are excluded from checkpoints

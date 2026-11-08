@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import patch
 from urllib.parse import quote
 
 from features.notebooks.bridge import Bridge, RetiredCanvas
@@ -80,6 +81,21 @@ class NotebookProtocolTests(unittest.TestCase):
         self.assertEqual(editor.notebook.name, 'Still editable')
         bridge.retire()
         self.assertIsNone(command(3, {'op': 'delete-page'}))
+
+    def test_ink_undo_redo_reuses_recovery_archive(self):
+        with TemporaryDirectory() as directory:
+            repo = Repository(directory)
+            book = Notebook.new()
+            for _ in range(20):
+                book.add_page()
+            key = repo.create(book)
+            editor = Editor(book, lambda value: repo.save(key, value))
+            editor.apply({'op': 'stroke', 'points': [[20, 30, .5]]})
+            with patch.object(book, 'to_bytes', side_effect=AssertionError('Archive rewrite')):
+                editor.apply({'op': 'undo'})
+                self.assertEqual(repo.open(key).page(0).strokes, [])
+                editor.apply({'op': 'redo'})
+                self.assertEqual(len(repo.open(key).page(0).strokes), 1)
 
     def test_stroke_response_and_full_response_share_unsaved_draft_status(self):
         document = NotebookDocument(Notebook.new())

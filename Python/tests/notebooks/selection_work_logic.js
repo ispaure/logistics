@@ -43,7 +43,7 @@ function checkSelectionGestures(source, inputSource = '', linksSource = '', imag
   const document = {...eventTarget(), body: node(), head: node(), createElement: node, elementFromPoint() {return canvas},
     querySelector(selector) {return selector==='header'?node():null}};
   document.body.classList.contains = value => value === 'notebook-mobile';
-  const sandbox = {console, document, Image: class {constructor() {this.complete=true;this.naturalWidth=16}}, navigator: {platform: 'iPhone'}, canvas, ctx, Map, Set, Math, performance: {now: () => 1000},
+  const sandbox = {console, document, Image: class {constructor() {this.complete=true;this.naturalWidth=16} removeAttribute(name){delete this[name]}}, navigator: {platform: 'iPhone'}, canvas, ctx, Map, Set, Math, performance: {now: () => 1000},
     innerWidth: 1404, innerHeight: 1872,
     getComputedStyle: () => ({paddingLeft:'0px',paddingRight:'0px'}),
     state: {width: 1404, height: 1872, index: 0, layers: [['L', 'Layer', true], ['H', 'Hidden', false]],
@@ -55,6 +55,7 @@ function checkSelectionGestures(source, inputSource = '', linksSource = '', imag
     distance(p, a, b) {const dx=b[0]-a[0],dy=b[1]-a[1],d=dx*dx+dy*dy;
       const t=d?Math.max(0,Math.min(1,((p[0]-a[0])*dx+(p[1]-a[1])*dy)/d)):0;
       return Math.hypot(p[0]-a[0]-t*dx,p[1]-a[1]-t*dy)},
+    backgroundContentBounds: () => ({x:0,y:0,width:1404,height:1872}),
     draw() {if (sandbox.paintSelection) sandbox.paintSelection()}, render() {}, clearDraft() {}, penTouchBlocked: () => false,
     notePenContact() {}, cancelTouchZoom() {}, flushUpdate() {}, cancelPreview() {}, flushPreview() {},
     send(command) {commands.push(command)}, chosenInk: () => ({tool: 17, color: 0, width: 2}),
@@ -101,6 +102,25 @@ function checkSelectionGestures(source, inputSource = '', linksSource = '', imag
   }
   assert.equal(controls.get('finger').checked, false, 'Finger selection does not require finger drawing');
   assert.equal(commands.length, 0, 'Selecting a lasso must not save a transform');
+
+  const picture = (id, x, y, layer='L') => ({
+    id, layer, src:'data:image/png;base64,synthetic',
+    corners:[[x,y],[x+50,y],[x+50,y+60],[x,y+60]]
+  });
+  sandbox.state.images = [picture('image',130,130),picture('partial',295,220),picture('hidden',180,180,'H')];
+  sandbox.selected.clear();
+  lasso();
+  assert.deepEqual([...sandbox.selected], ['A','image'], 'Select only fully enclosed visible images');
+  const wide = {...picture('wide',60,260),corners:[[60,260],[340,260],[340,320],[60,320]]};
+  assert.equal(run(`selectionContainsPicture(${JSON.stringify(wide)}, selectionPrepare(${JSON.stringify(concave)}))`), false);
+  for (const type of ['touch','pen']) {
+    sandbox.selected.clear();
+    canvas.onpointerdown(event(150,150,type));
+    canvas.onpointerup(event(150,150,type));
+    assert.deepEqual([...sandbox.selected], ['image'], `${type} tap selects the visible image`);
+  }
+  sandbox.state.images = [];
+  sandbox.selected = new Set(['A']);
 
   const original = plain(sandbox.state.strokes);
   let bounds = plain(run('selectionBounds()'));
@@ -175,6 +195,29 @@ function checkSelectionGestures(source, inputSource = '', linksSource = '', imag
   }
   sandbox.queue=[];
   if(imagesSource) {
+    const visible = picture('visible',130,130);
+    const hidden = {...picture('hidden',130,130,'H'),src:1};
+    sandbox.state.images = [{...visible,src:0},{...visible,id:'duplicate',src:0},hidden];
+    sandbox.state.image_sources = [visible.src,'data:image/png;base64,hidden'];
+    run('imageRender()');
+    assert.equal(run('imageCache.size'),1,'Repeated cutouts share one visible image source');
+    assert.equal(sandbox.state.images[0].src,visible.src);
+    sandbox.mode='capture';
+    for (const type of ['touch','pen']) {
+      controls.get('newCutout').onclick();
+      canvas.onpointerdown(event(150,150,type));
+      canvas.onpointerup(event(150,150,type));
+      assert.equal(run('imageSelection'),'duplicate','Tap selects the topmost image in New cutout mode');
+    }
+    sandbox.state.images = [];
+    run('imageRender()');
+    assert.equal(run('imageCache.size'),0,'Images are released after a page change');
+    controls.get('pdfPassword').value='test-password';
+    run('pdfUnlock.onsubmit({preventDefault(){}})');
+    assert.equal(controls.get('unlockPDF').disabled,true);
+    assert.match(controls.get('pdfUnlockStatus').textContent,/Unlocking notebook/);
+    assert.equal(commands.at(-1).op,'unlock-pdf');
+    assert.equal(controls.get('pdfPassword').value,'');
     run("imageClipboard={src:'data:image/png;base64,synthetic',width:100,height:80}");
     sandbox.state.stroke_clipboard=true;
     const key=letter=>({key:letter,ctrlKey:true,target:{tagName:'BODY'},preventDefault(){}});
