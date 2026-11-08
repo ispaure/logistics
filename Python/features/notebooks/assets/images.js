@@ -60,8 +60,8 @@ function imageHandles(p) {
   const offset = 36*state.width/canvas.getBoundingClientRect().width;
   return [c, [mid[0] - (d[0]-a[0])/length*offset, mid[1] - (d[1]-a[1])/length*offset]]
 }
-function sceneItems() {
-  const rows = [...state.strokes, ...(state.images || [])], map = new Map(rows.map(p => [p.id,p]));
+function sceneItems(strokes = state.strokes) {
+  const rows = [...strokes, ...(state.images || [])], map = new Map(rows.map(p => [p.id,p]));
   const order = state.scene_order || [], known = new Set(order);
   // Layers always retain their own stacking; Arrange only affects one layer.
   return state.layers.flatMap(layer => [...order.map(id => map.get(id)).filter(Boolean), ...rows.filter(p => !known.has(p.id))].filter(p => p.layer === layer[0]))

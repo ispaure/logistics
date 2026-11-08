@@ -45,8 +45,6 @@ def change_preset(preferences, action):
         brush = action.get('preset')
         validate_preset(brush)
     if op == 'add-brush-preset':
-        if any(entry['brush'] == brush for entry in presets):
-            return presets
         if len(presets) >= TOOLBAR_PRESET_LIMIT:
             raise ValueError('Remove a brush preset before adding another.')
         presets.append({'id': uuid4().hex, 'brush': brush})

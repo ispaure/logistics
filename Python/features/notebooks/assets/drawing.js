@@ -460,8 +460,9 @@ function intersects([l, t, r, b], [left, top, right, bottom]) {
 // selection decoration or page zoom. Each card owns its asynchronous result.
 async function paintPagePreview(page, image) {
   const preview = document.createElement('canvas');
-  preview.width = 288;
-  preview.height = Math.max(1, Math.round(preview.width * page.height / page.width));
+  const scale = 288 / Math.max(page.width, page.height);
+  preview.width = Math.max(1, Math.round(page.width * scale));
+  preview.height = Math.max(1, Math.round(page.height * scale));
   const target = preview.getContext('2d');
   target.setTransform(preview.width / page.width, 0, 0, preview.height / page.height, 0, 0);
   target.fillStyle = 'white';
@@ -472,9 +473,10 @@ async function paintPagePreview(page, image) {
     try {
       await artwork.decode();
       if (!image.isConnected) return;
-      target.drawImage(artwork, 0, 0, page.width, page.height);
+      const bounds = containedBackgroundBounds(artwork, page.pdf_paper || {x: 0, y: 0, width: page.width, height: page.height});
+      target.drawImage(artwork, bounds.x, bounds.y, bounds.width, bounds.height);
     } catch {
-      // A failed template decode must still leave the ink visible.
+      // A failed background decode must still leave the ink visible.
     }
   }
   paintOrderedInk(page.items, target, false);

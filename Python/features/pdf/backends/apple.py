@@ -28,14 +28,14 @@ class ApplePDF:
     def __exit__(self, *args):
         self.document = None
 
-    def render(self, index):
+    def render(self, index, *, edge=PAGE_EDGE):
         import ctypes
         from rubicon.objc import CGSize
         from rubicon.objc.runtime import load_library
         from rubicon.objc import objc_id, ObjCInstance
 
         image = self.document.pageAtIndex(index).thumbnailOfSize(
-            CGSize(PAGE_EDGE, PAGE_EDGE), forBox=1
+            CGSize(edge, edge), forBox=1
         )
         ui = load_library("UIKit")
         ui.UIImagePNGRepresentation.restype = objc_id

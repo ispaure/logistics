@@ -138,12 +138,33 @@ def main(output):
                     assert chosen == [original[0].id], ('Full containment/finger disabled', chosen)
                     assert len(book.page(0).strokes) == 3
                     assert js(view, "getComputedStyle(selectionActions).display==='flex' && !$('copyStrokes').disabled")
+                    assert js(view, """(() => {
+                      const r = canvas.getBoundingClientRect(), box = selectionBounds();
+                      return selectionActions.getBoundingClientRect().left >= r.left + box[2] / selectionUnit()
+                        && ['copyStrokes','cutStrokes','deleteStrokes'].every(id => $(id).querySelector('svg') && $(id).ariaLabel)
+                    })()""")
+                    assert js(view, """(() => {
+                      const original = state.strokes;
+                      state.strokes = original.map(s => selected.has(s.id)
+                        ? {...s,points:s.points.map(p => [p[0]+935,...p.slice(1)])} : s);
+                      selectionRender();
+                      const r = canvas.getBoundingClientRect(), box = selectionBounds();
+                      const fitsLeft = selectionActions.getBoundingClientRect().right < r.left + box[0] / selectionUnit();
+                      state.strokes = original;
+                      selectionRender();
+                      return fitsLeft
+                    })()""")
                     screenshot(view, name + '-lasso-light.png')
                     # Pen movement goes through actual production preview and
                     # queue, then the Python Editor supplies its durable ack.
                     js(view, "(()=>{const b=selectionBounds(),x=(b[0]+b[2])/2,y=(b[1]+b[3])/2;qaPointer('pen',[[x,y],[x+30,y+20]])})()")
+                    before_ack = json.loads(js(view, 'JSON.stringify(selectionStrokes()[0].points)'))
+                    assert abs(before_ack[0][0] - original[0].points[0][0] - 30) < 1e-6
+                    assert js(view, 'pendingSelection !== null && busy')
                     result['actions'].append(ack(view, engine, 'transform'))
                     assert abs(result['actions'][-1]['dx'] - 30) < 1e-6
+                    assert js(view, 'pendingSelection === null')
+                    assert before_ack == book.page(0).strokes[0].points
                     moved = deepcopy(book.page(0).strokes[0].points)
                     js(view, "(()=>{const b=selectionBounds(),p=selectionHandles(b)[2],cx=(b[0]+b[2])/2,cy=(b[1]+b[3])/2;qaPointer('mouse',[p,[cx+(p[0]-cx)*1.2,cy+(p[1]-cy)*1.2]])})()")
                     result['actions'].append(ack(view, engine, 'transform'))
@@ -173,11 +194,18 @@ def main(output):
                     assert not book.page(1).strokes
                     js(view, 'pasteStrokes.click()')
                     result['actions'].append(ack(view, engine, 'paste-strokes'))
+                    if not desktop:
+                        assert js(view, 'pasteStrokes.hidden'), 'Mobile paste consumes the clipboard'
+                        js(view, "$('copyStrokes').click()")
+                        result['actions'].append(ack(view, engine, 'copy-strokes'))
                     js(view, "$('deleteStrokes').click()")
                     result['actions'].append(ack(view, engine, 'erase'))
                     assert not book.page(1).strokes
                     js(view, 'pasteStrokes.click()')
                     result['actions'].append(ack(view, engine, 'paste-strokes'))
+                    if not desktop:
+                        js(view, "$('copyStrokes').click()")
+                        result['actions'].append(ack(view, engine, 'copy-strokes'))
                     js(view, "document.documentElement.style.cssText+=';--surface:#202329;--window:#16191e;--text:#f0f1f3;--border:#69727d;--hover:#353c48;--muted:#c0c5cc;--panel-bg:#202329;--text-color:#f0f1f3';draw()")
                     assert js(view, 'qaSelectionClearance()'), 'Dark presentation controls must not overlap'
                     screenshot(view, name + '-pasted-dark.png')

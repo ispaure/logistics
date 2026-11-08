@@ -174,10 +174,28 @@ class Editor:
         data = self.pdf_data()
         if data is None:
             return page_previews(self.notebook, start)
+        from base64 import b64encode
         from io import BytesIO
         from pypdf import PdfReader
+        from features.pdf.document import PDFDocument
+        from .previews import THUMBNAIL_EDGE
+
         reader = PdfReader(BytesIO(data))
-        return page_previews(self.notebook, start, pdf_bounds=lambda index: self.pdf_bounds(index, reader=reader))
+        pdf = PDFDocument(data)
+        try:
+            with pdf.open() as renderer:
+                def artwork(index):
+                    if 0 <= index < renderer.count:
+                        try:
+                            png = renderer.render(index, edge=THUMBNAIL_EDGE)
+                        except (OSError, ValueError):
+                            return None
+                        return 'data:image/png;base64,' + b64encode(png).decode('ascii')
+
+                return page_previews(self.notebook, start, pdf_artwork=artwork,
+                                     pdf_bounds=lambda index: self.pdf_bounds(index, reader=reader))
+        finally:
+            pdf.close()
 
     def snapshot(self):
         book = self.notebook
@@ -431,6 +449,7 @@ class Editor:
         page = self.notebook.pages[self.index]
         paper = settings(self.notebook, page)
         pdf = self.notebook.content.get('fileType') == 'pdf'
+        mapped_pdf = pdf and page.record.get('redir', {}).get('value', -1) >= 0
         template_available = available(self.notebook, page)
         template_description = ('This document has fixed PDF backgrounds. Notebook template changes are unavailable.'
             if pdf else description(page.template, artwork_available=template_available))
@@ -462,5 +481,5 @@ class Editor:
                     template_settings=paper, template_editable=not pdf,
                     template_available=template_available,
                     move_paper=move_paper, compact_paper=compact_paper,
-                    background=self.background() if pdf else background(page.template, paper['format']) if paper['visible'] and template_available else None,
+                    background=self.background() if mapped_pdf else background(page.template, paper['format']) if paper['visible'] and template_available else None,
                     undo=bool(self.undo), redo=bool(self.redo))

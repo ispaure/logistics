@@ -29,15 +29,16 @@ const event=(type,kind='touch',dx=0,dy=0,keys={})=>{
     clientY:r.top+(b.y+b.height*.2)/state.height*r.height+dy,pressure:.5,...keys}))
 };
 const reset=()=>{queue=[];busy=false;commands.length=0;active=null;pan=null;points=[];linkGesture=null;
-  touchContacts.clear();touchPinch=null;touchZoomBlocked=false;pageTouch=null;hideSwipePage();addingSwipePage=false;resetPenRejection();clearLinkReturn();pendingLinkJump=null;state.index=0;state.native_pen=false};
+  touchContacts.clear();touchPinch=null;touchZoomBlocked=false;pageTouch=null;hideSwipePage();addingSwipePage=false;resetPenRejection();clearLinkReturn();pendingLinkJump=null;linkFeedback.hidden=true;state.index=0;state.native_pen=false};
 const tap=(kind,keys={})=>{event('pointerdown',kind,0,0,keys);event('pointerup',kind,0,0,keys)};
 const mobile=mobileViewport();
 if(mobile){
   for(const finger of [false,true]){
     reset();$('finger').checked=finger;tap('touch');
     check(commands.length===1&&commands[0].op==='page'&&commands[0].index===2,'Finger link with drawing '+finger);
+    check(!linkFeedback.hidden && linkFeedback.getBoundingClientRect().width > 0,'Link bounds show feedback while loading');
     window.notebookUpdate({...state,index:2});
-    check(!undoPageJump.hidden&&linkReturn===0,'Undo shown after navigation acknowledgement');
+    check(linkFeedback.hidden && !undoPageJump.hidden&&linkReturn===0,'Undo shown after navigation acknowledgement');
     undoPageJump.click();check(commands.at(-1).index===0,'Undo returns to originating page');
   }
   reset();$('finger').checked=false;
@@ -49,14 +50,14 @@ if(mobile){
   reset();event('pointerdown');event('pointermove','touch',70);event('pointermove');event('pointerup');
   check(!commands.some(a=>a.op==='page'),'Move out and back never follows link');
   reset();event('pointerdown');event('pointercancel');event('pointerup');
-  check(!commands.some(a=>a.op==='page'),'Cancelled contact never follows link');
+  check(linkFeedback.hidden && !commands.some(a=>a.op==='page'),'Cancelled contact never shows feedback or follows link');
   reset();event('pointerdown');event('pointerdown','touch',30,0,{pointerId:10});event('pointerup');
   check(!commands.some(a=>a.op==='page'),'Multitouch never follows link');
   reset();event('pointerdown');linkGesture.time-=1000;event('pointerup');
   check(!commands.some(a=>a.op==='page'),'Long hold never follows link');
   reset();notePenContact(true);tap('touch');check(commands.length===0,'Palm never follows link');
   reset();tap('touch');window.notebookUpdate({...state,index:0},'Navigation failed');
-  check(undoPageJump.hidden,'Failed navigation has no undo');
+  check(linkFeedback.hidden && undoPageJump.hidden,'Failed navigation clears feedback and has no undo');
   const originalLinks=state.links;
   const navReset=()=>{reset();state.links=[];state.count=3;$('finger').checked=false;setZoom('2');
     $('viewport').scrollLeft=100;$('viewport').scrollTop=150};
@@ -129,6 +130,25 @@ def main():
                 result = javascript(view, CHECKS)
                 assert result, 'JavaScript checks failed; inspect console'
                 reports.append(dict(mobile=mobile, checks=json.loads(result)))
+                if mobile:
+                    # Sample the compositor output while the outgoing page is still visible.
+                    javascript(view, "resetViewportZoom();$('viewport').scrollTop=0;showLinkFeedback(state.links[0])")
+                    x, y = json.loads(javascript(view, '''JSON.stringify((() => {
+                      const r = linkFeedback.getBoundingClientRect();
+                      return [r.left + r.width/2, r.top + r.height/2]
+                    })())'''))
+                    assert 0 <= x < view.width() and 0 <= y < view.height(), (x, y)
+                    QTest.qWait(80)
+                    pressed = view.grab()
+                    scale = pressed.devicePixelRatio()
+                    sample = (round(x * scale), round(y * scale))
+                    pressed_color = pressed.toImage().pixelColor(*sample)
+                    pressed.save(str(args.output / 'mobile-link-feedback.png'))
+                    javascript(view, "linkFeedback.hidden=true")
+                    QTest.qWait(80)
+                    idle_color = view.grab().toImage().pixelColor(*sample)
+                    assert max(pressed_color.red(), pressed_color.green(), pressed_color.blue()) < 80, pressed_color.name()
+                    assert min(idle_color.red(), idle_color.green(), idle_color.blue()) > 180, idle_color.name()
                 # Use the real browser timer: acknowledgement starts a 3-second undo window.
                 javascript(view, "pendingLinkJump={from:0,to:2};queue=[{op:'page',index:2}];busy=true;window.notebookUpdate({...state,index:2})")
                 assert javascript(view, '!undoPageJump.hidden')

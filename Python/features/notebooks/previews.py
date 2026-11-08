@@ -6,9 +6,10 @@ BATCH = 16
 POINTS = 8192
 BATCH_POINTS = 16384
 STROKES = 256
+THUMBNAIL_EDGE = 288
 
 
-def page_previews(book, start, *, pdf_bounds=None):
+def page_previews(book, start, *, pdf_bounds=None, pdf_artwork=None):
     if type(start) is not int or not 0 <= start < len(book.pages):
         raise ValueError('Invalid page overview range.')
     previews, remaining = [], BATCH_POINTS
@@ -38,10 +39,14 @@ def page_previews(book, start, *, pdf_bounds=None):
             # The renderer uses stored widths, never pressure, for saved ink.
             items.append(dict(tool=stroke.tool, color=stroke.color, color_rgba=stroke.color_rgba,
                               points=[[round(x - left, 2), round(y, 2), 0, width] for x, y, _, width in points]))
-        paper = settings(book, page)
-        artwork = (background(page.template, paper['format'])
-                   if book.content.get('fileType') != 'pdf' and paper['visible'] and available(book, page)
-                   else None)
+        redirect = page.record.get('redir', {}).get('value', -1) if book.content.get('fileType') == 'pdf' else -1
+        if redirect >= 0:
+            artwork = pdf_artwork(redirect) if pdf_artwork else None
+        else:
+            paper = settings(book, page)
+            artwork = background(page.template, paper['format']) if paper['visible'] and available(book, page) else None
+        if bounds is not None:
+            bounds = dict(bounds, x=bounds['x'] - left)
         previews.append(dict(index=index, width=WIDTH - 2 * left, height=height, items=items,
-                             background=artwork, warning=ink.warning, template=page.template))
+                             background=artwork, pdf_paper=bounds, warning=ink.warning, template=page.template))
     return previews

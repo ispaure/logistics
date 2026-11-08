@@ -25,10 +25,10 @@ function checkSelectionGestures(source, inputSource = '', linksSource = '', imag
   targetB.dispatchEvent({type:'shared'});
   assert.deepEqual(observed, ['first', 'second', 'other-target']);
   function node() {
-    return {...eventTarget(), set id(value) {controls.set(value, this)}, style: {}, dataset: {}, checked: false,
+    return {...eventTarget(), set id(value) {controls.set(value, this)}, style: {}, dataset: {}, checked: false, clientWidth: 1404,
       classList: {add() {}, remove() {}, toggle() {}, contains() {return false}},
       append() {}, appendChild() {}, insertBefore() {}, setAttribute() {},
-      getBoundingClientRect() {return {left: 0, top: 0, width: 1404, height: 1872}},
+      getBoundingClientRect() {return {left: 0, top: 0, right: 1404, width: 1404, height: 1872}},
       set innerHTML(html) {for (const match of html.matchAll(/id="([^"]+)"/g)) controls.set(match[1], node())}};
   }
   const ctx = new Proxy({}, {get(target, key) {
@@ -45,6 +45,7 @@ function checkSelectionGestures(source, inputSource = '', linksSource = '', imag
   document.body.classList.contains = value => value === 'notebook-mobile';
   const sandbox = {console, document, Image: class {constructor() {this.complete=true;this.naturalWidth=16}}, navigator: {platform: 'iPhone'}, canvas, ctx, Map, Set, Math, performance: {now: () => 1000},
     innerWidth: 1404, innerHeight: 1872,
+    getComputedStyle: () => ({paddingLeft:'0px',paddingRight:'0px'}),
     state: {width: 1404, height: 1872, index: 0, layers: [['L', 'Layer', true], ['H', 'Hidden', false]],
       strokes: [], images: [], scene_order: [], links: [{rect: [0,0,1,1], index: 1}]},
     mode: 'select', selected: new Set(), active: null, busy: false, points: [], start: null, last: null,
