@@ -13,6 +13,7 @@ from .reader_controls import ReadingFrame, PageFooter, page_buttons
 def bind_provider_title(owner):
     """Follow the current reader through saves, renames, and folder moves."""
     from services.documents.storage import display_path, document_display_name
+    from .document_sources import workspace_display_path
     widget = owner.crypt_view
 
     def identity(format_name):
@@ -24,7 +25,8 @@ def bind_provider_title(owner):
         provider = getattr(source, 'provider', None) or getattr(copies, 'provider', copies)
         if format_name:
             return document_display_name(provider, reader.name)
-        return display_path(provider, getattr(source, 'path', None) or reader.key)
+        path = display_path(provider, getattr(source, 'path', None) or reader.key)
+        return workspace_display_path(owner.app, path)
 
     widget._native_reader_title = lambda: identity(format_name=True)
     widget._document_path = lambda: identity(format_name=False)

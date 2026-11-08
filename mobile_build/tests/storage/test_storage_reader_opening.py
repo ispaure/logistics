@@ -31,6 +31,9 @@ class StorageReaderOpeningTests(unittest.TestCase):
             with self.subTest(suffix=suffix):
                 self.check_open('localcrypt', suffix, 'direct', nested=True)
 
+    def test_shared_local_epub_shows_workspaces_breadcrumb(self):
+        self.check_open('shared-local', '.epub', 'direct', nested=True)
+
     def check_open(self, storage, suffix, entry, *, nested=False):
         with TemporaryDirectory() as directory, patch('features.pdf.document.PDFDocument.open', native_pdf):
             root = Path(directory).resolve()
@@ -58,6 +61,7 @@ class StorageReaderOpeningTests(unittest.TestCase):
                     provider._physical(filename).write_bytes(data[::-1])
                 else:
                     provider = LocalFiles(local)
+                    (local / filename).parent.mkdir(parents=True, exist_ok=True)
                     (local / filename).write_bytes(data)
                 self.assertFalse(hasattr(app, 'cloud_view'))
                 async def open_file():
@@ -78,7 +82,11 @@ class StorageReaderOpeningTests(unittest.TestCase):
                     drawer.provider_client, drawer.provider_generation = client, client.generation
                     return await drawer.open_file(dict(path=filename, directory=False))
                 self.assertTrue(app.loop.run_until_complete(open_file()), getattr(app, 'cloud_status', 'No status'))
-                reader = app.private_sessions.active.crypt_reader
+                owner = app.private_sessions.active
+                reader = owner.crypt_reader
+                if storage != 'localcrypt':
+                    expected_path = ' → '.join(('Workspaces', 'Local', *Path(filename).parts))
+                    self.assertEqual(owner.crypt_view._document_path(), expected_path)
                 self.assertEqual(reader.kind, suffix)
                 if suffix == '.epub':
                     self.assertIsNotNone(reader.book)

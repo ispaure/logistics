@@ -228,13 +228,8 @@ def notebook_location(panel):
     document = panel.document
     if document is not None and document.resource is not None:
         resource = document.resource
-        if resource.policy.persistent:
-            from services.documents.locations import shared_documents_path
-            root = shared_documents_path(panel.app.private_root)
-            path = Path(resource.provider.root) / resource.path
-            if root is not None and path.resolve().is_relative_to(root.resolve()):
-                return str(Path('Documents') / path.resolve().relative_to(root.resolve()))
-        return display_path(resource.provider, resource.path)
+        from mobile.document_sources import workspace_display_path
+        return workspace_display_path(panel.app, display_path(resource.provider, resource.path))
     return f'{panel.editor.notebook.name}\n\nNotebook draft'
 
 

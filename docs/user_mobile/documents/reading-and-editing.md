@@ -54,8 +54,10 @@ Actions stay above the content. On iOS and Android, readers and editors share th
 title bar: Close and the relevant browser are on the left, a centered document
 title is in the middle, and supported actions are on the right. Titles use the
 available width. A filename that fits stays still. Longer filenames pause, then
-scroll slowly across the title bar. You can hold the title at any time to see
-the full path. Titles stay still with reduced motion, system high-contrast text, or the Android
+scroll slowly across the title bar. Hold the title to see the document location.
+When a local file is available in Workspaces, the dialog shows a breadcrumb such
+as **Workspaces → Local → Books → Example.epub**. Titles stay still with reduced
+motion, system high-contrast text, or the Android
 **High contrast / E Ink** setting. Comics,
 images and PDF canvases have no added outer margin. Comic page arrows, the slider
 and page count share a single bottom row. Android replaces its inline document/workspace headers
