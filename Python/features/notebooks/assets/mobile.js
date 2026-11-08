@@ -160,6 +160,7 @@ renderEraserChoices();
     layers: 'Page template and layers',
     pages: 'Pages Overview',
     document: 'Notebook',
+    selection: 'Select',
     view: 'View and input'
   };
   for (let key of Object.keys(names)) {
@@ -281,7 +282,7 @@ renderEraserChoices();
   };
   pp.append(morePages);
   let previewHint = document.createElement('p');
-  previewHint.textContent = 'Ink previews; preserved templates and unsupported page content may not appear.';
+  previewHint.textContent = 'Previews include available page backgrounds and ink.';
   pp.append(previewHint);
   window.notebookPagePreviews = rows => {
     if (sheet.hidden || sheet.dataset.panel !== 'pages') return;
@@ -391,16 +392,36 @@ renderEraserChoices();
   legacyName.append(control('notebookName'));
   dp.append(legacyName);
   let vp = panels.view;
+  const selectButton = control('select'), selectLasso = selectButton.onclick;
   const captureButton = control('capture'), toggleCapture = captureButton.onclick;
+  const lassoButton = document.createElement('button');
+  lassoButton.type = 'button';
+  lassoButton.textContent = 'Select and move strokes';
+  lassoButton.onclick = () => {
+    if (active !== null || busy) return;
+    closeSheet();
+    if (mode !== 'select') selectLasso();
+    sync();
+  };
   captureButton.className = '';
   captureButton.textContent = 'Capture cutouts and arrange images';
-  captureButton.setAttribute('aria-label', 'Capture cutouts and arrange images');
   captureButton.onclick = event => {
     if (active !== null || busy) return;
-    closeSheet(false);
-    toggleCapture(event)
+    closeSheet();
+    if (mode !== 'capture') toggleCapture(event);
+    sync();
   };
-  vp.append(captureButton);
+  const selectionChoices = document.createElement('div');
+  selectionChoices.className = 'sheet-actions';
+  selectionChoices.append(lassoButton, captureButton);
+  panels.selection.append(selectionChoices);
+  selectButton.setAttribute('aria-haspopup', 'dialog');
+  selectButton.setAttribute('aria-expanded', 'false');
+  selectButton.onclick = () => {
+    if (active !== null || busy) return;
+    if (mode === 'select' || mode === 'capture') openSheet('selection', selectButton);
+    else selectLasso();
+  };
   control('zoom').add(new Option('Fit page', 'page'));
   field(vp, 'Zoom', control('zoom'));
   const zoomControls = document.createElement('div');
@@ -512,6 +533,7 @@ renderEraserChoices();
     for (let k of Object.keys(panels)) panels[k].hidden = k !== key && !(fold && panels[k].parentElement === laptopTools);
     $('sheetTitle').textContent = names[key];
     sheet.dataset.panel = key;
+    selectButton.setAttribute('aria-expanded', String(key === 'selection'));
     const menu = key === 'document', floating = key === 'brush', nonmodal = menu || floating;
     sheet.setAttribute('role', menu ? 'menu' : 'dialog');
     sheet.setAttribute('aria-modal', String(!nonmodal));
@@ -631,6 +653,7 @@ renderEraserChoices();
   function closeSheet(restoreFocus = true) {
     cancelTitleHold();
     sheet.hidden = backdrop.hidden = true;
+    selectButton.setAttribute('aria-expanded', 'false');
     documentDropdown.deactivate();
     brushPanelOpener?.setAttribute('aria-expanded', 'false');
     brushPanelOpener = null;
@@ -817,7 +840,7 @@ renderEraserChoices();
   }
 
   function pinBrush() {
-    if (active !== null || addPreset.hidden || addPreset.disabled) return;
+    if (active !== null || addPreset.hidden || queue.some(action => action.op === 'add-brush-preset')) return;
     if (brushPanelOpener) closeSheet(false);
     send({op: 'add-brush-preset', preset: currentPreset()});
   }
@@ -987,9 +1010,7 @@ renderEraserChoices();
       }
       button.setAttribute('aria-pressed', String(mode === 'ink' && id === activePreset));
     }
-    const current = currentPreset().join(',');
     addPreset.hidden = presets.length >= presetLimit;
-    addPreset.disabled = presets.some(entry => entry.brush.join(',') === current);
   }
 
   window.notebookBrushPresetUpdate = (presets, error) => {
@@ -1003,13 +1024,13 @@ renderEraserChoices();
       document.activeElement === removePreset || !document.activeElement?.getClientRects().length);
     state.brush_presets = presets;
     if (!error && action?.op === 'add-brush-preset' && action.preset.join(',') === currentPreset().join(',')) {
-      activePreset = presets.find(entry => entry.brush.join(',') === action.preset.join(','))?.id ?? null;
+      activePreset = presets.at(-1)?.id ?? null;
     }
     window.notebookBrushColorUpdate('');
     restoreBrushSlot();
     sync();
     if (restorePresetFocus && !error) {
-      (addPreset.hidden || addPreset.disabled ? brushToggle : addPreset).focus({preventScroll: true});
+      (addPreset.hidden ? brushToggle : addPreset).focus({preventScroll: true});
     }
     if (error) showNotice(error);
   };
@@ -1022,11 +1043,32 @@ renderEraserChoices();
   };
 
   let toolSignature = '',
-    colorSignature = '';
+    colorSignature = '',
+    storageSignature = '';
 
   function sync() {
     identity.firstChild.textContent = state.display_name ?? state.name;
-    identity.lastChild.textContent = state.storage_status || '';
+    const storage = [state.storage_status || '', state.storage_icons || []];
+    const signature = JSON.stringify(storage);
+    if (signature !== storageSignature) {
+      storageSignature = signature;
+      const [label, icons] = storage;
+      const glyphs = icons.map(paths => {
+        const ns = 'http://www.w3.org/2000/svg';
+        const glyph = document.createElementNS(ns, 'svg');
+        glyph.setAttribute('viewBox', '0 0 24 24');
+        glyph.setAttribute('aria-hidden', 'true');
+        for (const path of paths) {
+          const line = document.createElementNS(ns, 'polyline');
+          line.setAttribute('points', path.map(point => point.join(',')).join(' '));
+          glyph.append(line);
+        }
+        return glyph;
+      });
+      const caption = document.createElement('span');
+      caption.textContent = label;
+      identity.lastChild.replaceChildren(...glyphs, caption);
+    }
     identity.title = [state.display_name ?? state.name, state.storage_status].filter(Boolean).join(' · ');
     pageNumber.max = String(state.count);
     if (document.activeElement !== pageNumber) pageNumber.value = String(state.index + 1);
@@ -1111,7 +1153,9 @@ renderEraserChoices();
     brushToggle.title = [name, colorName, widthName].join(' · ');
     brushToggle.setAttribute('aria-label', 'Working brush ' + brushToggle.title);
     brushToggle.setAttribute('aria-pressed', String(mode === 'ink' && activePreset === null));
-    for (let id of ['erase', 'select']) control(id).setAttribute('aria-pressed', String(mode === id));
+    control('erase').setAttribute('aria-pressed', String(mode === 'erase'));
+    selectButton.setAttribute('aria-pressed', String(mode === 'select' || mode === 'capture'));
+    lassoButton.setAttribute('aria-pressed', String(mode === 'select'));
     syncPresets();
   }
   for (let id of ['erase', 'select']) control(id).addEventListener('click', sync);

@@ -5,12 +5,12 @@ function checkLinkGestures(source) {
   for(const mobile of [false,true]) for(const platform of ['MacIntel','Win32','Linux x86_64']) {
     let now=1000, timer=null, fallback=0;
     const commands=[], listeners={};
-    const viewport={scrollLeft:0,scrollTop:0};
+    const viewport={scrollLeft:0,scrollTop:0,append(){}};
     const context={console,Math,document:{body:{classList:{contains:()=>mobile},append(){}},
-      createElement:()=>({style:{}}),addEventListener:(name,callback)=>listeners[name]=callback},
+      createElement:()=>({style:{},setAttribute(){},getContext:()=>({drawImage(){}})}),addEventListener:(name,callback)=>listeners[name]=callback},
       navigator:{platform},performance:{now:()=>now},
       setTimeout(callback,ms){timer={callback,ms};return timer},clearTimeout(){timer=null},
-      canvas:{onpointerdown(){fallback++},onpointermove(){},onpointerup(){},onpointercancel(){},
+      canvas:{width:100,height:100,onpointerdown(){fallback++},onpointermove(){},onpointerup(){},onpointercancel(){},
         setPointerCapture(){},getBoundingClientRect:()=>({width:100,height:100,left:0,top:0})},
       backgroundContentBounds:()=>({x:0,y:0,width:context.state.width,height:context.state.height}),
       state:{index:0,count:4,width:100,height:100,links:[{rect:[.1,.1,.5,.3],index:2}]},
@@ -29,10 +29,11 @@ function checkLinkGestures(source) {
     const kind=mobile?'touch':'mouse';
     const tap=()=>{const e=event(kind,30,20,keys);context.canvas.onpointerdown(e);context.canvas.onpointerup(e)};
     tap();check(commands.length===1&&commands[0].index===2,'Completed authorized tap follows');
+    check(run('!linkFeedback.hidden'),'Pending link shows feedback');
     context.window.notebookUpdate({...context.state,index:2});
-    check(run('linkReturn===0&&!undoPageJump.hidden')&&timer.ms===3000,'Acknowledged jump offers 3-second undo');
+    check(run('linkFeedback.hidden&&linkReturn===0&&!undoPageJump.hidden')&&timer.ms===3000,'Acknowledged jump offers 3-second undo');
     run('undoPageJump.onclick()');check(commands.at(-1).index===0,'Undo returns');
-    reset();tap();context.window.notebookUpdate({...context.state,index:0},'failed');check(run('undoPageJump.hidden'),'Failure has no undo');
+    reset();tap();context.window.notebookUpdate({...context.state,index:0},'failed');check(run('linkFeedback.hidden&&undoPageJump.hidden'),'Failure clears feedback and has no undo');
     reset();tap();context.window.notebookUpdate({...context.state,index:2});timer.callback();check(run('linkReturn===null&&undoPageJump.hidden'),'Expiry clears undo');
     reset();let e=event(kind,30,20,keys);context.canvas.onpointerdown(e);context.canvas.onpointermove(event(kind,60,20,keys));context.canvas.onpointermove(e);context.canvas.onpointerup(e);
     check(commands.length===0,'Move out and back does not follow');

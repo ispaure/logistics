@@ -1,9 +1,15 @@
-// Native ink selection. Gesture previews are discarded before durable commands.
-let selectionGesture = null, selectionPage = state.page_id ?? state.index;
+// Native ink selection. A submitted transform keeps its preview until acknowledgement.
+let selectionGesture = null, pendingSelection = null, selectionPage = state.page_id ?? state.index;
 const selectionActions = document.createElement('div');
 selectionActions.id = 'selectionActions';
-selectionActions.style.cssText = 'position:fixed;z-index:1;display:flex;gap:4px;padding:4px;border:1px solid var(--border);border-radius:8px;background:var(--surface,white);color:var(--text,black)';
-selectionActions.innerHTML = '<button id="copyStrokes" type="button">Copy</button><button id="cutStrokes" type="button">Cut</button><button id="deleteStrokes" type="button">Delete</button>';
+selectionActions.setAttribute('role', 'group');
+selectionActions.setAttribute('aria-label', 'Selection actions');
+selectionActions.innerHTML = [
+  ['copyStrokes', 'Copy', '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>'],
+  ['cutStrokes', 'Cut', '<circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="m8.2 8.2 12 12m-12-4.4L20 4"/>'],
+  ['deleteStrokes', 'Delete', '<path d="M4 7h16m-14 0 1 13h10l1-13M9 7V4h6v3m-5 4v5m4-5v5"/>']
+].map(([id, label, path]) => '<button id="' + id + '" type="button" aria-label="' + label +
+  '" title="' + label + '"><svg viewBox="0 0 24 24" aria-hidden="true">' + path + '</svg></button>').join('');
 document.body.append(selectionActions);
 const pasteStrokes = document.createElement('button');
 pasteStrokes.id = 'pasteStrokes'; pasteStrokes.type = 'button'; pasteStrokes.textContent = 'Paste strokes';
@@ -98,8 +104,11 @@ function selectionContains(stroke,path) {
   }
   return true
 }
+function selectionStrokes() {
+  return pendingSelection && queue.includes(pendingSelection.action) ? pendingSelection.strokes : state.strokes
+}
 function selectionBounds() {
-  const rows=state.strokes.filter(s=>selected.has(s.id)&&selectionVisible(s));
+  const rows=selectionStrokes().filter(s=>selected.has(s.id)&&selectionVisible(s));
   if(!rows.length)return null;
   return rows.flatMap(s=>s.points).reduce((b,p)=>[Math.min(b[0],p[0]-p[3]/2),Math.min(b[1],p[1]-p[3]/2),Math.max(b[2],p[0]+p[3]/2),Math.max(b[3],p[1]+p[3]/2)],[Infinity,Infinity,-Infinity,-Infinity])
 }
@@ -125,10 +134,17 @@ function selectionRender() {
   if(!b)return;
   const r=canvas.getBoundingClientRect(),u=selectionUnit();
   const panel=selectionActions.getBoundingClientRect();
-  const center = r.left + (b[0] + b[2]) / 2 / u - panel.width / 2;
-  selectionActions.style.left = 'clamp(calc(var(--notebook-rail-left, 0px) + 4px), ' + center +
-    'px, calc(100vw - var(--notebook-rail-right, 0px) - ' + (panel.width + 4) + 'px))';
-  selectionActions.style.top=Math.max(4,Math.min(floor-panel.height-8,r.top+b[3]/u+12))+'px'
+  const viewport = $('viewport'), view = viewport.getBoundingClientRect();
+  const paper = $('paperWrap').getBoundingClientRect(), padding = getComputedStyle(viewport);
+  const gap = 8;
+  const left = Math.max(paper.left, view.left + parseFloat(padding.paddingLeft)) + 4;
+  const right = Math.min(paper.right, view.left + viewport.clientWidth - parseFloat(padding.paddingRight)) - 4;
+  const before = r.left + b[0] / u - gap;
+  const after = r.left + b[2] / u + gap;
+  const beside = after + panel.width <= right || right - after >= before - left ? after : before - panel.width;
+  selectionActions.style.left = Math.max(left, Math.min(right - panel.width, beside)) + 'px';
+  const center = r.top + (b[1] + b[3]) / (2 * u) - panel.height / 2;
+  selectionActions.style.top = Math.max(view.top + 4, Math.min(floor - panel.height - 8, center)) + 'px';
   if(!pasteStrokes.hidden) {
     const a=selectionActions.getBoundingClientRect(),p=pasteStrokes.getBoundingClientRect();
     if(a.left<p.right&&p.left<a.right&&a.top<p.bottom&&p.top<a.bottom)
@@ -212,8 +228,16 @@ function selectionFinish(e,cancelled=false) {
     if(g.overflow)$('status').textContent='Lasso too long. Draw a shorter outline.'
   }
   else {
-    const originals=new Map(g.rows.map(s=>[s.id,s]));state.strokes=state.strokes.map(s=>originals.get(s.id)||s);
-    if(!cancelled&&(g.dx||g.dy||g.angle||g.scale!==1))send({op:'transform',ids:[...selected],dx:g.dx,dy:g.dy,scale:g.scale,angle:g.angle,cx:g.cx,cy:g.cy})
+    const preview = state.strokes;
+    const originals = new Map(g.rows.map(stroke => [stroke.id, stroke]));
+    state.strokes = state.strokes.map(stroke => originals.get(stroke.id) || stroke);
+    if (!cancelled && (g.dx || g.dy || g.angle || g.scale !== 1)) {
+      const action = {op:'transform', ids:[...selected], dx:g.dx, dy:g.dy, scale:g.scale,
+        angle:g.angle, cx:g.cx, cy:g.cy};
+      pendingSelection = {action, strokes:preview};
+      send(action);
+      if (!queue.includes(action)) pendingSelection = null;
+    }
   }
   draw();flushUpdate()
 }
@@ -227,6 +251,7 @@ const selectionUpdate=window.notebookUpdate;
 window.notebookUpdate=(next,error)=>{
   const operation=queue[0]?.op;
   selectionUpdate(next,error);
+  if (pendingSelection && !queue.includes(pendingSelection.action)) pendingSelection = null;
   if(!error && ['paste-strokes','transform','copy-strokes','undo','redo','page'].includes(operation)) {selected=new Set(next.selection_ids||[]);draw()}
 };
 $('viewport').addEventListener('scroll',selectionRender,{passive:true});

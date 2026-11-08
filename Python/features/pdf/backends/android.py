@@ -67,13 +67,13 @@ class AndroidPDF:
     def __exit__(self, *args):
         self.document.close()
 
-    def render(self, index):
+    def render(self, index, *, edge=PAGE_EDGE):
         from java import jclass, jint
 
         page = self.document.openPage(index)
         bitmap = None
         try:
-            scale = PAGE_EDGE / max(page.getWidth(), page.getHeight(), 1)
+            scale = edge / max(page.getWidth(), page.getHeight(), 1)
             Bitmap = jclass("android.graphics.Bitmap")
             bitmap = Bitmap.createBitmap(
                 max(1, round(page.getWidth() * scale)),

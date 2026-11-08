@@ -239,8 +239,8 @@ class NotebookPanel:
         state['native_close'] = hasattr(self.view, '_native_reader_buttons')
         state['native_actions'] = hasattr(self, 'native_actions')
         state['canvas_header'] = True
-        from services.documents.mobile_notebooks import notebook_storage_status
-        state['storage_status'] = notebook_storage_status(self)
+        from services.documents.mobile_notebooks import notebook_storage_identity
+        state['storage_status'], state['storage_icons'] = notebook_storage_identity(self)
         state['notebook_viewport_insets'] = getattr(self.view, '_notebook_viewport_insets', (0, 0, 0))
         state['native_pen'] = self.pen_input is not None and bool(getattr(self.pen_input, 'enabled', True))
         if self.pen_input is not None and isinstance(getattr(self.pen_input, 'view_id', None), str):

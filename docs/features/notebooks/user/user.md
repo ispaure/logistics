@@ -37,7 +37,8 @@ dashed lasso with the mouse, pen or finger. Only fully enclosed strokes on visib
 layers are selected; partly enclosed strokes are omitted. Drag inside the resulting
 box to move the selection. Its four square corner handles scale uniformly; the
 circle above its top edge rotates. Moving farther from the centre gives finer
-rotation control. **Copy**, **Cut** and **Delete** appear below the box.
+rotation control. The **Copy**, **Cut** and **Delete** icons appear beside the
+box, on the right when there is room and on the left otherwise.
 **Paste strokes** pastes into the current page at the original page position,
 regardless of zoom or scroll. This private stroke clipboard lasts until the editor
 closes and is separate from Capture's image clipboard. Undo/Redo covers edits;
@@ -145,7 +146,8 @@ reader's **⋯** menu, choose **Duplicate as .rmdoc to annotate** to create and 
 a notebook beside the PDF with the same base name. An existing `.rmdoc` produces
 an error and is preserved. The PDF itself stays unchanged. PDF-backed pages can
 be duplicated and reordered within the notebook; copying their backgrounds to
-another notebook is unavailable. Page overview thumbnails show ink only.
+another notebook is unavailable. Page overview thumbnails show the PDF background
+with ink over it.
 EPUB-backed archives remain unsupported.
 
 The page surface uses 1404 × 1872 notebook units. Supported templates render beneath
@@ -219,7 +221,7 @@ responsiveness.
 Press **Erase** to select the eraser and open its settings. **Erase parts of
 strokes** is the default: only ink under the eraser path is removed, leaving
 the rest of a long stroke intact. Choose **Small**, **Medium** (the default) or
-**Large**. Desktop settings open in a compact dropdown below the eraser button;
+**Large** using the stroke previews. Desktop settings open in a compact dropdown below the eraser button;
 click outside it, press Escape, click the eraser button again, or choose **Done**
 to close it and keep erasing. Press the tool again to
 change its size or switch to **Erase whole strokes**. Both types respect hidden

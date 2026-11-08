@@ -209,7 +209,10 @@ function previewErase(samples, radius = eraserRadius) {
 
 function backgroundContentBounds(image = $('pdfBackground')) {
   if (!state.background || !image.complete || !image.naturalWidth) return null;
-  const bounds = state.pdf_paper || {x: 0, y: 0, width: state.width, height: state.height};
+  return containedBackgroundBounds(image, state.pdf_paper || {x: 0, y: 0, width: state.width, height: state.height});
+}
+
+function containedBackgroundBounds(image, bounds) {
   const scale = Math.min(bounds.width / image.naturalWidth, bounds.height / image.naturalHeight);
   const width = image.naturalWidth * scale, height = image.naturalHeight * scale;
   return {x: bounds.x + (bounds.width - width) / 2, y: bounds.y + (bounds.height - height) / 2,
@@ -245,7 +248,7 @@ function draw(highlight = mode === 'ink' ? activeHighlight() : null, region = nu
     paintBackground(ctx);
   }
   let visible = new Set(state.layers.filter(x => x[2]).map(x => x[0]));
-  const items = sceneItems().filter(s => visible.has(s.layer) && !wholeErasePreview.has(s.id));
+  const items = sceneItems(selectionStrokes()).filter(s => visible.has(s.layer) && !wholeErasePreview.has(s.id));
   if (continuousInk)
     for (let action of queue)
       if (action.op === 'stroke') items.push({

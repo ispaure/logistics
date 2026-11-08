@@ -136,10 +136,9 @@ button{-webkit-appearance:none;appearance:none}
   left:var(--notebook-rail-left);
   right:var(--notebook-rail-right);
 }
-.notebook-mobile #brushPresetMenu,.notebook-mobile #selectionActions {
+.notebook-mobile #brushPresetMenu {
   max-width:calc(var(--notebook-safe-width) - 16px);
 }
-.notebook-mobile #selectionActions{flex-wrap:wrap}
 .notebook-mobile .capture-tools{max-width:min(600px,calc(var(--notebook-safe-width) - 16px))}
 .notebook-mobile #pdfUnlock{max-width:calc(var(--notebook-safe-width) - 24px)}
 .notebook-mobile #zoomControls,.notebook-mobile #undoPageJump,.notebook-mobile #pdfUnlock {
@@ -191,7 +190,8 @@ header.canvas-document-header{
 }
 #notebookIdentity span{display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .notebook-filename{font-size:17px;font-weight:600}
-.notebook-storage{font-size:12px;color:var(--muted)}
+#notebookIdentity .notebook-storage{display:flex;align-items:center;justify-content:center;gap:4px;font-size:12px;color:var(--muted)}
+.notebook-storage svg{flex:none;width:13px;height:13px;color:var(--accent);stroke-width:2}
 header.canvas-document-header .mobile-dock{flex:0 1 auto}
 @media(max-width:639px){
   header.canvas-document-header{flex-wrap:wrap;gap:4px;justify-content:center}

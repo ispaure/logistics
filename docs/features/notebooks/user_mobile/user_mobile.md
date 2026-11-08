@@ -5,8 +5,8 @@ annotate**. This creates and opens a notebook in the PDF's folder, with the same
 base name and the PDF pages behind editable ink. An existing `.rmdoc` shows an
 error; neither that file nor the PDF is replaced. The folder must support
 creating files. PDF-backed pages can be duplicated inside their notebook,
-but cannot be copied to another notebook. PDF overview thumbnails show ink at
-the page's scale.
+but cannot be copied to another notebook. The Pages overview shows ink over the
+PDF background or the page’s available template.
 
 A notebook is a document type in **New document**: choose **Notebook (.rmdoc)**,
 enter its name, choose **First page template** and its template size, then choose a folder in ordinary Local storage or an unlocked
@@ -59,7 +59,9 @@ They are available from the library's Note actions menu and the canvas's Noteboo
 actions menu, with native action buttons in the iOS/iPadOS navigation bar or Duo
 side rail. **Save a copy…** leaves the library file and current draft attached;
 **Show in folder** reveals the containing library folder.
-Tap the active brush to open the drawer for brush and ink color choices. The reader accounts
+Tap the active brush to open the drawer for brush and ink color choices.
+**+** copies the selected brush, color and width into a separate editable preset.
+The reader accounts
 for space occupied by system activity. Choose **Notebook actions → Hide tools**
 to leave **Show tools** on the canvas. Hiding and restoring tools keeps the
 paper in place and preserves your brush, color and width. The native iOS Close remains available.
@@ -203,13 +205,14 @@ In **Select / move**, draw a dashed lasso with your finger or pen, even when
 **Draw with finger** is off. Only fully enclosed visible strokes are selected.
 Drag inside the selection box to move it; drag a square corner to scale uniformly
 or the upper circle to rotate. Moving farther from the centre makes rotation
-finer. **Copy**, **Cut** and **Delete** appear below the box. **Paste strokes**
+finer. The **Copy**, **Cut** and **Delete** icons appear beside the box, on the
+right when there is room and on the left otherwise. **Paste strokes**
 pastes into the current page at the original page position, independently of zoom
 or scroll. A successful mobile paste consumes the stroke clipboard and hides
 **Paste strokes**; Copy again to paste another selection. A failed save keeps the
 clipboard available for retry. This is separate from Capture's reusable image
 clipboard. Cancelled gestures do not save edits.
-Open **Notebook actions → Pages Overview** for selectable ink thumbnails, the
+Open **Notebook actions → Pages Overview** for selectable page thumbnails, the
 page count, previous/next arrows, **Go to page**, and commands to add, duplicate,
 delete, reorder or copy the current page to
 another saved notebook.
@@ -277,7 +280,7 @@ for line counts, saved-format versus viewing choices and reMarkable compatibilit
 Press **Erase** to select the eraser. Press it again to open its settings.
 **Erase parts of strokes** is the default. It removes ink under the eraser path, leaving
 the rest of a long stroke intact. Choose **Small**, **Medium** (the default) or
-**Large**, or switch to **Erase whole strokes**. Settings float below the
+**Large** using the stroke previews, or switch to **Erase whole strokes**. Settings float below the
 toolbar; tap the eraser icon again, tap outside, or start erasing
 outside the panel to close it. That first gesture erases immediately. Both types respect hidden
 layers and support Undo/Redo. The notebook remembers the selected eraser type
@@ -303,8 +306,8 @@ by reMarkable. Native exports reference the tablet’s installed lined backgroun
 
 ## Image cutouts and protected PDFs
 
-Choose **Notebook actions → View and input → Capture cutouts and arrange images**
-to enter the separate Capture mode. Lasso an area of the page to copy
+Tap **Select / move** to select the lasso, then tap it again and choose
+**Capture cutouts and arrange images**. Lasso an area of the page to copy
 its visible background, handwriting and images into the editor clipboard. The
 lasso outline and selection handles are excluded. **Paste** places a separate
 image on the active visible layer; paste again on the same page or switch pages
@@ -342,4 +345,4 @@ to encrypt the entire saved notebook and keeps its unsaved draft in memory.
 
 ## Internal page links
 
-In a PDF-backed `.rmdoc`, tap an internal PDF link with a **finger** to follow it, including when finger drawing is enabled. Pen input keeps drawing. Swipes, pinches and holds do not activate links. **Undo page jump** appears over the bottom of the editor for three seconds; tap it to return.
+In a PDF-backed `.rmdoc`, tap an internal PDF link with a **finger** to follow it, including when finger drawing is enabled. Pen input keeps drawing. The link area inverts in grayscale while its destination opens. Swipes, pinches and holds do not activate links. **Undo page jump** appears over the bottom of the editor for three seconds; tap it to return.

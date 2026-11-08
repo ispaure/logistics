@@ -28,11 +28,11 @@ class QtPDF:
         self.document.close()
         self.buffer.close()
 
-    def render(self, index):
+    def render(self, index, *, edge=PAGE_EDGE):
         from PySide6.QtCore import QBuffer, QIODevice, QSize
 
         size = self.document.pagePointSize(index)
-        scale = PAGE_EDGE / max(size.width(), size.height(), 1)
+        scale = edge / max(size.width(), size.height(), 1)
         image = self.document.render(
             index,
             QSize(

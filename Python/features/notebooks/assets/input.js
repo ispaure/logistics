@@ -321,11 +321,38 @@ let onEraserKindChanged = () => {};
 const eraserDialog = document.createElement('dialog');
 eraserDialog.id = 'eraserDialog';
 eraserDialog.setAttribute('aria-labelledby', 'eraserTitle');
-eraserDialog.innerHTML = '<h2 id="eraserTitle">Eraser</h2><div class="eraser-types" role="group" aria-label="Eraser type"><button id="eraserPartial" type="button" aria-label="Erase parts of strokes" aria-pressed="true"></button><button id="eraserWhole" type="button" aria-label="Erase whole strokes" aria-pressed="false"></button></div><label>Size <select id="eraserSize" aria-label="Eraser size"><option value="8">Small</option><option value="16" selected>Medium</option><option value="32">Large</option></select></label><button id="closeEraser" type="button">Done</button>';
+eraserDialog.innerHTML = '<h2 id="eraserTitle">Eraser</h2><div class="eraser-types" role="group" aria-label="Eraser type"><button id="eraserPartial" type="button" aria-label="Erase parts of strokes" aria-pressed="true"></button><button id="eraserWhole" type="button" aria-label="Erase whole strokes" aria-pressed="false"></button></div><label id="eraserSizeControl">Size <select id="eraserSize" aria-label="Eraser size"><option value="8">Small</option><option value="16" selected>Medium</option><option value="32">Large</option></select></label><button id="closeEraser" type="button">Done</button>';
 document.body.append(eraserDialog);
 function renderEraserChoices() {
   $('eraserPartial').innerHTML = icon(glyphs.erase) + '<span>Partial</span>';
-  $('eraserWhole').innerHTML = icon(glyphs.eraseWhole) + '<span>Whole stroke</span>'
+  $('eraserWhole').innerHTML = icon(glyphs.eraseWhole) + '<span>Whole stroke</span>';
+  const size = $('eraserSize'), label = $('eraserSizeControl');
+  const sizes = document.createElement('div');
+  sizes.className = 'eraser-sizes';
+  sizes.setAttribute('role', 'group');
+  sizes.setAttribute('aria-label', 'Eraser size');
+  for (const option of size.options) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.dataset.radius = option.value;
+    button.innerHTML = icon('<path d="M5 12h14" stroke-width="' + Number(option.value) / 4 + '"/>');
+    const caption = document.createElement('span');
+    caption.textContent = option.textContent;
+    button.append(caption);
+    button.onclick = () => {
+      size.value = option.value;
+      size.onchange();
+    };
+    sizes.append(button);
+  }
+  label.before(sizes);
+  label.hidden = true;
+  size.onchange = () => {
+    eraserRadius = Number(size.value);
+    for (const button of sizes.children)
+      button.setAttribute('aria-pressed', String(button.dataset.radius === size.value));
+  };
+  size.onchange()
 }
 for (const [kind, id, caption] of [
   ['partial', 'eraserPartial', 'Partial'],

@@ -7,6 +7,31 @@ undoPageJump.textContent = 'Undo page jump';
 undoPageJump.hidden = true;
 undoPageJump.style.cssText = 'position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:1000;min-height:44px;padding:8px 20px';
 document.body.append(undoPageJump);
+const linkFeedback = document.createElement('canvas');
+linkFeedback.id = 'linkFeedback';
+linkFeedback.hidden = true;
+linkFeedback.setAttribute('aria-hidden', 'true');
+$('inkLayers').append(linkFeedback);
+
+function showLinkFeedback(link) {
+  const bounds = backgroundContentBounds();
+  if (!bounds || !canvas.width || !canvas.height) return;
+  const [left, top, right, bottom] = link.rect;
+  const x = (bounds.x + left * bounds.width) / state.width;
+  const y = (bounds.y + top * bounds.height) / state.height;
+  const width = (right - left) * bounds.width / state.width;
+  const height = (bottom - top) * bounds.height / state.height;
+  Object.assign(linkFeedback.style, {
+    left: 100 * x + '%', top: 100 * y + '%', width: 100 * width + '%', height: 100 * height + '%'
+  });
+  linkFeedback.width = Math.ceil(width * canvas.width);
+  linkFeedback.height = Math.ceil(height * canvas.height);
+  const preview = linkFeedback.getContext('2d');
+  if (!preview) return;
+  preview.drawImage(canvas, x * canvas.width, y * canvas.height,
+    width * canvas.width, height * canvas.height, 0, 0, linkFeedback.width, linkFeedback.height);
+  linkFeedback.hidden = false
+}
 function clearLinkReturn() {
   clearTimeout(linkTimer); linkReturn = null; undoPageJump.hidden = true
 }
@@ -74,6 +99,7 @@ canvas.onpointerup = e => {
   if (gesture.link.index !== state.index) {
     clearLinkReturn();
     pendingLinkJump = {from: state.index, to: gesture.link.index};
+    showLinkFeedback(gesture.link);
     send({op: 'page', index: gesture.link.index})
   }
 };
@@ -89,6 +115,8 @@ window.notebookUpdate = (next, error) => {
   if (next.index !== state.index) clearLinkReturn();
   linkUpdate(next, error);
   if (pendingLinkJump && completed?.op === 'page') {
+    linkFeedback.hidden = true;
+    linkFeedback.width = linkFeedback.height = 0;
     if (!error && next.index === pendingLinkJump.to) {
       linkReturn = pendingLinkJump.from; undoPageJump.hidden = false;
       linkTimer = setTimeout(clearLinkReturn, 3000)

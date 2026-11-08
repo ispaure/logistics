@@ -8,10 +8,11 @@ function checkTouchNavigation(sources) {
     addEventListener(type,fn){const group=this.id==='viewport'?'viewport':this.id==='paper'?'canvas':null;if(group)(listeners[group][type]??=[]).push(fn)}
     setAttribute(){}append(...rows){this.children.push(...rows)}contains(node){return node===canvas||node===this}closest(){return null}
     getBoundingClientRect(){return this===canvas?{left:-viewport.scrollLeft,top:-viewport.scrollTop,width,height,right:width-viewport.scrollLeft,bottom:height-viewport.scrollTop}:{left:0,top:0,width:400,height:600,right:400,bottom:600}}
-    setPointerCapture(){}showModal(){}close(){}
+    setPointerCapture(){}showModal(){}close(){}getContext(){return {drawImage(){}}}
   }
   const $=id=>{if(!nodes.has(id))nodes.set(id,new Node(id));return nodes.get(id)};
   const canvas=$('paper'),viewport=$('viewport');
+  canvas.width=2000;canvas.height=3000;
   const eventTarget=group=>({addEventListener(type,fn){(listeners[group][type]??=[]).push(fn)}});
   const context={console,Math,Map,Set,innerWidth:400,innerHeight:600,devicePixelRatio:1,
     document:{...eventTarget('document'),body:{append(){},classList:{contains:x=>x==='notebook-mobile'}},createElement:()=>new Node('new'),elementFromPoint:()=>canvas,hidden:false},

@@ -42,14 +42,14 @@ if(document.querySelector('#brushes')){
   check(!eraserDialog.open&&mode==='erase','Outside pointer must dismiss settings without changing the tool');
   $('erase').click();
 }
-check($('eraserSize').options.length===3,'Expected three eraser sizes');
+check(document.querySelectorAll('.eraser-sizes button svg').length===3,'Expected three eraser size previews');
 $('eraserWhole').click();
-$('eraserSize').value='32';$('eraserSize').dispatchEvent(new Event('change'));
+document.querySelector('.eraser-sizes [data-radius="32"]').click();
 check(eraserKind==='whole'&&eraserRadius===32,'Eraser controls did not change settings');
 $('closeEraser').click();
 $('erase').click();check(eraserDialog.open&&eraserKind==='whole','Pressing active eraser must reopen settings');
 $('eraserPartial').click();
-$('eraserSize').value='16';$('eraserSize').dispatchEvent(new Event('change'));
+document.querySelector('.eraser-sizes [data-radius="16"]').click();
 $('closeEraser').click();
 // Exercise the actual shared pointer path, inspecting the queued command without sending it.
 let originalSend=send,erased=null;send=action=>{erased=action};
@@ -88,8 +88,8 @@ choose(tool);
 check($('width').options.length===(tool===18?1:3),'Wrong per-tool width choices');
 const widthButtons=[...document.querySelectorAll('#widths [data-value],.widths [data-width]')];
 check(widthButtons.filter(b=>!b.hidden&&b.style.display!=='none').length===(tool===18?1:3),'Wrong visible width buttons');
-check(JSON.stringify(Array.from($('color').options,o=>Number(o.value)))===JSON.stringify(brushes[tool].colors),'Wrong brush palette '+tool);
-check(document.querySelectorAll('.swatch').length===brushes[tool].colors.length,'Visual swatches out of sync '+tool);
+check(JSON.stringify(Array.from($('color').options,o=>Number(o.value)))===JSON.stringify(state.brushes[tool].colors),'Wrong brush palette '+tool);
+check(document.querySelectorAll('.swatch').length===state.brushes[tool].colors.length,'Visual swatches out of sync '+tool);
 for(let b of document.querySelectorAll('.swatch')){let choice=Number(b.dataset.value??b.dataset.color),dot=b.querySelector('circle')||b.querySelector('span')||b;let shown=(dot.tagName.toLowerCase()==='circle'?getComputedStyle(dot).fill:getComputedStyle(dot).backgroundColor).match(/\d+/g).slice(0,3).map(Number);check(shown.join(',')===swatchColor(tool,choice).join(','),'Swatch ignores brush RGBA '+tool+'/'+choice)}
 if(tool===18)check(!$('color').querySelector('option[value="0"]'),'Black must not be a highlighter choice');
 for(let width=1;width<=3;width++)check(JSON.stringify(strokePoints(samples,tool,width))===JSON.stringify(expected[tool][width]),'Preview/model widths differ '+tool+'/'+width);
@@ -132,7 +132,7 @@ check(pixel(80,60).slice(0,3).join(',')==='255,237,117','Wrong legacy native hig
 let shader={tool:23,...nativeColor(23,1),points:[[30,60,.5,30],[130,60,.5,30],[240,60,.5,30]]};line(shader,target);
 let middle=pixel(130,60)[0],edge=pixel(80,60)[0];check(Math.abs(middle-edge)<=1,'Shader joins accumulate opacity');
 line(shader,target);check(pixel(80,60)[0]<edge,'Separate shader strokes must build up');
-check(brushes[23].colors.length===8&&!brushes[23].colors.includes(0)&&!brushes[23].colors.includes(2),'Shader must not offer black/white pen colors');
+check(state.brushes[23].colors.length===8&&!state.brushes[23].colors.includes(0)&&!state.brushes[23].colors.includes(2),'Shader must not offer black/white pen colors');
 check(nativeColor(23,-1).color_rgba.join(',')==='254,178,0,115','Shader orange must use native color-specific alpha');
 // Exercise streaming drawing, rather than only the final renderer. In
 // particular, calligraphy widths must keep their incoming travel direction.

@@ -129,6 +129,11 @@ class RemarkableExportTests(unittest.TestCase):
         self.assertEqual(book.page(0).strokes[0].points[0][:2], points[0][:2])
         preview, = editor.page_previews(0)
         self.assertEqual((preview['width'], preview['height']), (state['width'], state['height']))
+        self.assertEqual(preview['pdf_paper'], state['pdf_paper'])
+        from base64 import b64decode
+        from struct import unpack
+        png = b64decode(preview['background'].split(',', 1)[1])
+        self.assertEqual(max(unpack('>II', png[16:24])), 288)
         self.assertAlmostEqual(preview['items'][0]['points'][0][0], points[0][0] - left, places=2)
 
         editor.apply(dict(op='stroke', points=[[100, 4910, .5], [110, 4920, .5]]))

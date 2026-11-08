@@ -211,9 +211,14 @@ def notebook_title(panel):
     return Path(path).name if path else panel.editor.notebook.name
 
 
-def notebook_storage_status(panel):
+def notebook_storage_identity(panel):
+    from mobile.control_icons import ICONS
     from mobile.document_location import storage_identity
-    return storage_identity(panel.document.resource if panel.document is not None else None)[0]
+    label, remote, encrypted = storage_identity(panel.document.resource if panel.document is not None else None)
+    names = ['storage_remote' if remote else 'storage_local']
+    if encrypted:
+        names.append('storage_unlocked')
+    return label, [ICONS[name][2] for name in names]
 
 
 def notebook_location(panel):

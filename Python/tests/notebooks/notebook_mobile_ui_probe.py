@@ -153,6 +153,7 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         bridge = Bridge()
         failures, received = [], []
         header_state = dict(canvas_header=True, display_name='Field notes.rmdoc', storage_status='On-device',
+                            storage_icons=[[[[2, 15], [22, 15]]]],
                             native_close=True, native_actions=False, notes_library=True,
                             brush_presets=[dict(id='blue', brush=[17,6,2]), dict(id='yellow', brush=[18,13,1])]) if header_only else {}
 
@@ -208,6 +209,7 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         assert loaded[-1]
         if header_only:
             try:
+                assert js("document.querySelector('.notebook-storage svg').getBoundingClientRect().width === 13")
                 reports = check_canvas_header(view, js, wait, output)
                 (output / 'canvas-header-result.json').write_text(json.dumps(
                     dict(success=True, layouts=reports), indent=2))
@@ -230,12 +232,20 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         if not (native_only or laptop_only or palm_only):
             toolbar_reports = check_toolbar_layout(view, js, wait, output)
             assert js("!document.querySelector('.mobile-tools #capture') && !!document.querySelector('.mobile-tools #select')")
-            js("window.notebookNativeAction('view')")
-            assert js("$('capture').getClientRects().length>0 && $('mobileSheet').contains($('capture'))")
+            js("$('select').click()")
+            assert js("mode==='select' && $('mobileSheet').hidden")
+            js("$('select').click()")
+            assert js("$('mobileSheet').dataset.panel==='selection' && $('capture').getClientRects().length>0")
             js("$('capture').click()")
-            assert js("mode==='capture' && $('mobileSheet').hidden")
-            js("window.notebookNativeAction('view');$('capture').click()")
-            assert js("mode==='ink' && $('mobileSheet').hidden")
+            assert js("mode==='capture' && $('mobileSheet').hidden && $('select').ariaPressed==='true'")
+            js("$('select').click();$('capture').parentElement.firstElementChild.click()")
+            assert js("mode==='select' && $('mobileSheet').hidden")
+            js("$('brushToggle').click();$('erase').click();$('erase').click()")
+            assert js("eraserDialog.open && document.querySelectorAll('.eraser-sizes button svg').length===3")
+            js("document.querySelector('.eraser-sizes [data-radius=\"32\"]').click()")
+            assert js("eraserRadius===32 && document.querySelector('.eraser-sizes [aria-pressed=true]').dataset.radius==='32'")
+            js("document.querySelector('.eraser-sizes [data-radius=\"16\"]').click();eraserDialog.close();$('brushToggle').click()")
+            assert js("eraserRadius===16 && mode==='ink'")
         if native_only:
             assert js("document.querySelector('[aria-label=\"Notebook actions\"]').hidden")
             # The native strip must invoke the real mobile handlers, including
@@ -576,7 +586,7 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         wait(lambda: js('busy') is False)
         js("document.querySelector('header button[aria-label=\"Notebook actions\"]').click();document.getElementById('pagesToggle').click()")
         wait(lambda: js("document.querySelectorAll('.page-previews button').length") == 2)
-        wait(lambda: js("[...document.querySelectorAll('.page-previews img')].every(img => img.naturalWidth === 288)"))
+        wait(lambda: js("[...document.querySelectorAll('.page-previews img')].every(img => Math.max(img.naturalWidth,img.naturalHeight) === 288)"))
         wait(lambda: js('busy') is False)
         js("document.getElementById('prev').click()")
         wait(lambda: editor.index == 0 and js('busy') is False)
@@ -657,6 +667,12 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         wait(lambda: js("!document.querySelector('[data-brush=\"16,10,2\"]')&&!busy"))
         assert js("!$('addBrushPreset').hidden && !$('brushPresetMenu').open")
         assert [entry['brush'] for entry in read_presets(Preferences(root / 'preferences').values[PREFERENCE])] == [[17, 7, 1]]
+        js("$('addBrushPreset').click();$('addBrushPreset').click()")
+        wait(lambda: js("!busy && document.querySelectorAll('[data-brush=\"17,7,1\"]').length===2"))
+        presets = read_presets(Preferences(root / 'preferences').values[PREFERENCE])
+        assert len(presets) == 2 and presets[0]['id'] != presets[1]['id']
+        assert presets[0]['brush'] == presets[1]['brush'] == [17, 7, 1]
+        assert js("document.querySelectorAll('.preset-buttons [data-preset]')[1].getAttribute('aria-pressed')==='true'")
         js("$('zoom').value='page';$('zoom').onchange();$('viewport').scrollTop=0")
         assert js("Math.abs($('paperWrap').getBoundingClientRect().top-$('viewport').getBoundingClientRect().top)<1")
         js("window.notebookViewportInsets([0,0,0]);showSwipePage()")
