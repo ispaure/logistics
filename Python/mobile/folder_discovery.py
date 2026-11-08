@@ -4,7 +4,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Callable
 
-from .folder_hub import discover_folder_choices
+from .folder_hub import discover_folder_choices, ordinary_browser_choices
 
 
 @dataclass(frozen=True)
@@ -12,6 +12,7 @@ class FolderDiscoveryHost:
     """UI-thread capabilities; only the detached snapshot reaches a worker."""
     loop: object
     active: Callable
+    private_root: Callable
     stamp: Callable
     snapshot: Callable
     publish: Callable
@@ -37,8 +38,7 @@ class FolderDiscovery:
         self.cache = {}
         self.cache_stamp = None
         # Never show a previous connection's names while its replacement loads.
-        return {'All files': dict(source='Local', kind='shared-local', value='',
-                                  name='Shared Files', copies=[], browser_root=True)}
+        return ordinary_browser_choices(self.host.private_root())
 
     def request(self):
         """Share one task; requests arriving during a scan coalesce into a rescan."""

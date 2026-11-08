@@ -97,19 +97,32 @@ def notebook_source_binding(recovery, key):
         raise ValueError('Invalid notebook source binding.')
     value = json.loads(path.read_text())
     from pathlib import Path
-    source_root = Path(value['root'])
+    source_root = value['root']
     relative = Path(value['path'])
     if relative.is_absolute() or '..' in relative.parts:
         raise ValueError('Invalid notebook source path.')
-    from types import SimpleNamespace
-    from mobile.document_sources import local_document_path
-    original = source_root / relative
-    relocated = local_document_path(SimpleNamespace(private_root=Path(recovery.root).parent), original)
-    if relocated != original:
-        source_root = relocated
-        for _ in relative.parts:
-            source_root = source_root.parent
-    return source_root, value
+    from .mobile_locations import split_alias
+    from .progress_identity import local_document_path
+    private_root = Path(recovery.root).parent
+    if split_alias(source_root) is not None:
+        return local_document_path(private_root, source_root), value
+    original = Path(source_root) / relative
+    relocated = local_document_path(private_root, original)
+    if relocated == original:
+        return Path(source_root), value
+    from .mobile_locations import enabled, storage_reference
+    from .migrations.mobile_layout import legacy_reference
+    if enabled(private_root) and split_alias(storage_reference(private_root, relocated)) is not None:
+        from commonUtils.filesystem.snapshots import file_revision
+        _, binding = legacy_reference(private_root, relocated.resolve())
+        if binding is not None and value.get('revision') == binding[0]:
+            current = list(file_revision(relocated))
+            if current[:4] == binding[1][:4]:
+                value = dict(value, revision=current)
+    relocated_root = local_document_path(private_root, source_root)
+    if relocated.is_relative_to(relocated_root):
+        return relocated_root, dict(value, path=relocated.relative_to(relocated_root).as_posix())
+    return relocated.parent, dict(value, path=relocated.name)
 
 
 def restore_notebook_resource(recovery, key):
@@ -126,6 +139,7 @@ def restore_notebook_resource(recovery, key):
 def remember_notebook_resource(document):
     """Publish ordinary references and return a rollback for this exact write."""
     import json
+    from pathlib import Path
     from commonUtils.persistence import atomic_write_json
     from commonUtils.persistence.atomic import atomic_write_bytes
     from commonUtils.persistence.publication import mutation_lock
@@ -134,7 +148,9 @@ def remember_notebook_resource(document):
     if resource is None or not resource.policy.persistent or document.recovery is None:
         return
     path = notebook_binding(document.recovery, document.key)
-    state = dict(root=str(resource.provider.root), path=resource.path,
+    from .mobile_locations import storage_reference
+    root = storage_reference(Path(document.recovery.root).parent, resource.provider.root)
+    state = dict(root=root, path=resource.path,
                  revision=resource.revision, dirty=document.dirty)
     expected = json.dumps(state, ensure_ascii=False, allow_nan=False).encode('utf-8')
     def observed():

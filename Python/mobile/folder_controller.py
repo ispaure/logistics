@@ -84,6 +84,7 @@ class FolderController(FolderHubUI):
             FolderDiscoveryHost(
                 loop=app.loop,
                 active=lambda: self.active_host,
+                private_root=lambda: self.private_root,
                 stamp=self.discovery_stamp,
                 snapshot=self.discovery_snapshot,
                 publish=self.publish_discovery,

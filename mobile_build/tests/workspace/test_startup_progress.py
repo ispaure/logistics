@@ -14,6 +14,35 @@ from mobile.app import LogisticsMobile
 
 
 class StartupProgressTests(unittest.IsolatedAsyncioTestCase):
+    async def test_migration_keeps_progress_and_warning_visible_until_worker_finishes(self):
+        from threading import Event
+        from mobile.startup import StartupScreen, prepare_storage_on_worker
+
+        screen = StartupScreen()
+        release = Event()
+        def migrate(report):
+            report('Renaming encrypted copies…', 0, 1)
+            if not release.wait(5):
+                raise TimeoutError('Test did not release the migration worker.')
+            report('Renaming encrypted copies…', 1, 1)
+            return 'private root'
+
+        task = asyncio.create_task(prepare_storage_on_worker(SimpleNamespace(startup_screen=screen), migrate))
+        try:
+            for _ in range(40):
+                if screen.progress.max == 1:
+                    break
+                await asyncio.sleep(.01)
+            self.assertFalse(task.done())
+            self.assertEqual(screen.status.text, 'Renaming encrypted copies…')
+            self.assertIn('Don’t turn off your device\nor switch apps during the migration.', screen.detail.text)
+        finally:
+            release.set()
+            self.assertEqual(await task, 'private root')
+        self.assertEqual(screen.progress.value, 1)
+        screen.show_step(1, STEPS[1])
+        self.assertEqual(screen.progress.max, len(STEPS))
+
     async def test_exit_during_loading_cancels_initialization_without_partial_checkpoint(self):
         app = SimpleNamespace(_startup_in_progress=True, startup_task=Mock(), active_host=True)
         self.assertTrue(LogisticsMobile.exit_app(app, app))

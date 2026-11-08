@@ -365,7 +365,8 @@ class FilesUI:
         else:
             provider, storage, selected = context
         commands = [('New folder…', lambda: self.show_file_actions(operation='new'))]
-        if storage == 'Local files':
+        from services.documents.mobile_locations import enabled
+        if storage == 'Local files' or (storage == 'Shared files' and enabled(self.private_root)):
             commands.append(('Pin this folder', self.locations_controller().pin_local_folder))
         if selected:
             commands += [('Open', self.enter_file_folder if selected['directory'] else self.read_managed_file),
@@ -440,7 +441,9 @@ class FilesUI:
             self.app.routes.folders.capture()
         label, path = location
         local_name = collection_path(self.private_root).name
-        if label == 'Shared files' and (path == local_name or path.startswith(local_name + '/')):
+        from services.documents.mobile_locations import enabled
+        if (not enabled(self.private_root) and label == 'Shared files'
+                and (path == local_name or path.startswith(local_name + '/'))):
             location = ('Local files', path.removeprefix(local_name).lstrip('/'))
         if self.cloud_busy and not self.can_browse_local(location[0]):
             return False
@@ -474,8 +477,10 @@ class FilesUI:
         from .local_sources import device_files
         from .incoming_files import inbox_path
         from services.documents.locations import MobileLocalFiles
-        roots = {'Local files': None, 'Shared files': device_files(self.private_root, include_collections=include_collections),
-                 'Received Files': MobileLocalFiles(inbox_path(self.private_root))}
+        from services.documents.mobile_locations import enabled
+        roots = {'Local files': None, 'Shared files': device_files(self.private_root, include_collections=include_collections)}
+        if not enabled(self.private_root):
+            roots['Received Files'] = MobileLocalFiles(inbox_path(self.private_root))
         return roots
 
     def file_provider_for(self, label):
@@ -558,6 +563,10 @@ class FilesUI:
         name = (Path(self.file_path).name if self.file_path else
                 'Local' if managed_root else
                 'On this device' if self.file_storage.value in ('Local files', 'Shared files') else self.file_storage.value)
+        from services.documents.mobile_locations import COPIES, enabled
+        from .local_sources import device_files_label
+        if not self.file_path and enabled(self.private_root):
+            name = {'Local files': COPIES, 'Shared files': device_files_label(self.app)}.get(self.file_storage.value, name)
         self.file_browser.location_bar.update_provider(self.file_path,
             self.file_provider, name=name)
         from .folder_navigation import record

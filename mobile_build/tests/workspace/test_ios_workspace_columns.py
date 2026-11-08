@@ -10,9 +10,27 @@ from unittest.mock import Mock, patch
 import toga
 
 from mobile.ios_workspace_columns import WorkspaceColumns, sync
+from mobile.workspace_navigation import WorkspaceFrame
 
 
 class WorkspaceColumnsTests(TestCase):
+    def test_native_prompt_discards_portable_pane_dimensions(self):
+        frame = object.__new__(WorkspaceFrame)
+        frame.row = toga.Box()
+        prompt = frame._folder_prompt()
+        prompt.style.width = 350
+        prompt.style.height = 300
+        prompt.style.margin_left = 36
+        prompt.style.margin_top = 24
+        prompt.style.flex = 0
+        for _ in range(2):
+            frame.mount_native_folder_prompt()
+        self.assertEqual(list(frame.row.children), [prompt])
+        self.assertEqual(prompt.style.width, toga.Box().style.width)
+        self.assertEqual(prompt.style.height, toga.Box().style.height)
+        self.assertEqual((prompt.style.margin_left, prompt.style.margin_top, prompt.style.flex), (0, 0, 1))
+        self.assertEqual((prompt.style.align_items, prompt.style.justify_content), ('center', 'center'))
+
     def test_route_policy_mock_does_not_create_native_controllers(self):
         workspace = NS(app=NS(_impl=NS(), routes=NS(apple=True)))
         with patch('mobile.ios_workspace_columns.WorkspaceColumns') as create:
@@ -111,17 +129,27 @@ class WorkspaceColumnsTests(TestCase):
         columns.closed = False
         screens = [('folder:books', None, '')]
         columns.app = NS(routes=NS(screens={'files': screens}))
-        native = NS(superview=None, bounds=rect((0, 0), (900, 600)),
+        native = NS(superview=None, bounds=rect((0, 0), (0, 0)),
                     safeAreaInsets=NS(left=20, right=10), window=None)
         columns.controller = NS(view=native)
         columns.sidebar = NS(controller=NS(view=NS(hidden=False, layoutIfNeeded=Mock())))
         columns.navigation = NS(view=NS(layoutIfNeeded=Mock()))
+        columns.master = NS(mount_native_folder_prompt=Mock())
+        def mount_prompt():
+            frame = columns.navigation.view.frame
+            self.assertGreater(frame.origin.x, 20)
+            self.assertEqual(frame.origin.x + frame.size.width, 900)
+        columns.master.mount_native_folder_prompt.side_effect = mount_prompt
         columns.layout_sidebar = Mock()
         with patch.dict('sys.modules', {'rubicon.objc': NS(CGRect=rect)}), \
                 patch('mobile.fold_layout.division', return_value=None), \
                 patch('mobile.fold_layout.has_fold', return_value=False), \
                 patch('ctypes.CDLL'):
             columns.layout()
+            columns.master.mount_native_folder_prompt.assert_not_called()
+            native.bounds = rect((0, 0), (900, 600))
+            columns.layout()
+            columns.master.mount_native_folder_prompt.assert_called_once()
             browser_frame = columns.navigation.view.frame
             self.assertGreater(browser_frame.origin.x, 20)
             self.assertEqual(browser_frame.origin.x + browser_frame.size.width, 900)
@@ -143,6 +171,7 @@ class WorkspaceColumnsTests(TestCase):
         self.assertEqual((restored.origin.x, restored.size.width),
                          (browser_frame.origin.x, browser_frame.size.width))
         self.assertEqual(columns.layout_sidebar.call_count, 2)
+        columns.master.mount_native_folder_prompt.assert_called_once()
 
     def test_active_fold_retains_native_columns_below_flat_breakpoint(self):
         view = toga.Box()

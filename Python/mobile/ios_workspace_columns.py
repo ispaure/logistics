@@ -33,7 +33,6 @@ class WorkspaceColumns:
         self.navigation = self.adapter.navigation[self.index]
         self.navigation_autoresizing = self.navigation.view.autoresizingMask
         self.controller = columns_controller().alloc().init()
-        self.controller.owner = self
         self.controller.view.autoresizingMask = 18  # flexible width and height
         from rubicon.objc import ObjCClass
         item = self.navigation.tabBarItem
@@ -44,6 +43,8 @@ class WorkspaceColumns:
                                           on_native_layout=self.layout_sidebar)
         from .file_drawer import detach
         detach(master.main)
+        if (prompt := getattr(master, 'folder_placeholder', None)) is not None:
+            detach(prompt)
         master.main.style.flex = 1
         del master.main.style.width
         del master.main.style.height
@@ -75,8 +76,11 @@ class WorkspaceColumns:
             child.view.autoresizingMask = 0
             self.controller.view.addSubview(child.view)
             child.didMoveToParentViewController(self.controller)
-        self.app.native_host.activate(self.app.native_host.state.destination)
+        # UIKit may lay out the replacement tab while it is being installed.
+        # Let the detail prompt mount only after both child frames have owners.
+        self.controller.owner = self
         self.layout()
+        self.app.native_host.activate(self.app.native_host.state.destination)
 
     def layout_sidebar(self, container):
         if self.closed:
@@ -179,6 +183,8 @@ class WorkspaceColumns:
         def apply():
             for child, frame in zip(children, frames):
                 child.view.frame = frame
+            if previous is None:
+                self.master.mount_native_folder_prompt()
             if not document:
                 self.layout_sidebar(self.sidebar)
             # Toga commits constraints, so lay out descendants in this same
@@ -208,6 +214,8 @@ class WorkspaceColumns:
         self.navigation.view.autoresizingMask = self.navigation_autoresizing
         from .file_drawer import detach
         detach(self.master.main)
+        if (prompt := getattr(self.master, 'folder_placeholder', None)) is not None:
+            detach(prompt)
         self.sidebar.content = None
         self.master.row.add(self.master.main)
         self.sidebar_box.window, self.sidebar_box.app = None, None

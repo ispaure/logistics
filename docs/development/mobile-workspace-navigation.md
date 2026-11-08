@@ -254,7 +254,7 @@ reserved regions. Geometry and retained-owner contracts are covered by
 successfully listed Workspaces folder. A local workspace shortcut starts its
 stack at the selected folder: Back from that folder returns to the retained
 Workspaces overview, and subfolders return to their parent within that workspace.
-Shared Files starts at the storage root, including Local and Received Files. Browser entry points capture provider and path before
+On This Phone opens the ordinary files root. Browser entry points capture provider and path before
 their first listing, including LocalCrypt and mapped offline copies. Android Back
 and the toolbar return to Workspaces at that entry point, before considering older
 browser history. Search dismissal and child-folder history remain separate steps.
@@ -262,7 +262,7 @@ Folder identity includes both provider and
 path, since both provider roots have an empty path. Other direct reveals retain their
 folder ancestry.
 
-On iOS, moves between Received Files and ordinary Shared Files folders opt into
+On iOS, moves between ordinary files and Rclone Copies opt into
 commonUtils' guarded cross-root filesystem rename. Large videos keep their inode
 without copying or hashing their contents when both folders are on one volume.
 Different-volume moves retain verified streaming transfer. The picker shows a
@@ -451,10 +451,10 @@ creation retains the form for retry or Cancel. `test_document_navigation.py`
 covers creation from Home, Documents and a retained folder browser, including
 unsaved-change decisions and returning to the original panel.
 
-Creation starts at the ordinary All files provider used by Workspaces. Entering
-Local or Received Files switches to its collection provider; Up and system Back
-return to All files from a collection root. Android's collection-only browse root
-requires entering a collection before creating anything. Filename preview,
+Creation starts at the On This Phone provider used by Workspaces. The location
+selector switches to Rclone Copies or a separately scoped encrypted provider.
+On This Phone allows creation at its root and guards managed folder names.
+Filename preview,
 listing and publication share the picker extension policy, including `.rmdoc`
 for notebooks. Operation errors use a fitted, noneditable message instead of a
 text input or single-line browser header label. Its form height uses Travertino's logical
@@ -1374,17 +1374,14 @@ Home Server offers **Add share…**, and Cloud offers **Add Remote…**. A cache
 connection metadata before folder visibility or credential filtering. Transfer
 feedback takes precedence over Cloud's setup action.
 
-On iOS, `storage_location.shared_documents_path` exposes the registered public
-Documents root separately from the managed Local directory. The app-owned
-`local_sources.SharedFiles` provider protects managed collection roots from
-mutations. Its `include_collections` listing option defaults to true for pickers and
-the Shared Files browser, including recursive root search. Android's `DeviceFiles` uses the same option without
-exposing private app storage. This changes listings only, not filesystem exposure.
-Local → Rclone Copies lists downloaded/synced copies individually. Local → On This Phone
-shows only Received Files and Shared Files; ordinary folders stay inside the browser. The root choice is marked `browser_root` and rendered as a
-**Shared Files** folder button below the folder tree, using the same row
-surface, title metrics and folder icon as Received Files, without a workspace
-menu. Local and Cloud omit the lock-state legend; folder icons and accessible
+On iOS, `locations.shared_documents_path` exposes the registered public
+Documents root. `local_sources.PhoneFiles` hides managed entries and rejects
+direct access or creation under those names. On Android the same provider
+opens the dedicated Files root, separate from app state and managed copies.
+Local → On This Phone or On This Tablet shows the selectable ordinary root with
+the same label, plus one indented level of immediate folders. The root opens for
+browsing and editing. Local → Rclone Copies
+and the destination picker expose individual copies. Local and Cloud omit the lock-state legend; folder icons and accessible
 labels carry the lock state.
 The local and LocalCrypt browser omit the source strip and places its actions
 button at the trailing edge of `FolderLocationHeader`, alongside Search. The
@@ -1793,6 +1790,10 @@ The Android E Ink threshold remains 516 points. Native iOS folder Search joins
 the leading group on vertical bars, immediately following system Back; UIKit
 owns safe positioning around the Dynamic Island. Other panel actions continue
 through the shared native navigation-bar projection.
+
+The native iOS workspace overview mounts its selection prompt after assigning
+the browser and detail controller frames. The prompt centers within the detail
+pane and drops any fixed width or fold margin left by the portable layout.
 
 ### Storage selector keyboard lifetime
 

@@ -13,19 +13,8 @@ from .folder_hub_style import (
     SOURCE_LABELS, folder_scroll, source_actions, source_tab, surface, toolbar_button,
 )
 from .folder_tree_view import FolderTreeView
+from .local_sources import device_files_label, device_label as device_label
 from .ui_metrics import CAPTION_TEXT, CONTROL_TEXT, TOUCH_TARGET
-
-
-def device_label(app):
-    """Use device identity, rather than the current pane/window width."""
-    backend = type(app._impl).__module__
-    if backend.startswith('toga_iOS.'):
-        from rubicon.objc import ObjCClass
-        return 'Tablet' if int(ObjCClass('UIDevice').currentDevice.userInterfaceIdiom) == 1 else 'Phone'
-    if backend.startswith('toga_android.'):
-        config = app._impl.native.getResources().getConfiguration()
-        return 'Tablet' if int(config.smallestScreenWidthDp) >= 600 else 'Phone'
-    return 'Phone'
 
 
 def subtab_button(label, *, on_press=None):
@@ -91,7 +80,8 @@ class WorkspacesScreen:
                     self.preferences.save(workspace_local_group=selected)
                 except (OSError, ValueError) as error:
                     self.set_folder_loading('Could not remember workspace tab: ' + str(error))
-            button = subtab_button(local_source_label(group, device=device_label(self.app)), on_press=select_local)
+            caption = device_files_label(self.app) if group == 'Others' else local_source_label(group)
+            button = subtab_button(caption, on_press=select_local)
             self.folder_local_buttons[group] = button
             self.folder_local_tabs.add(button)
         self.folder_cloud_label = surface(toga.Label(RCLONE_REMOTES, style=Pack(
@@ -212,6 +202,12 @@ class WorkspacesScreen:
             self.folder_local_header.add(self.folder_local_tabs)
         elif local_group is None and self.folder_local_header.children:
             self.folder_local_header.remove(self.folder_local_tabs)
+        if any(entry.get('device_root') for entry in visible.values()):
+            button = self.folder_local_buttons['Others']
+            caption = device_files_label(self.app)
+            if button.text != caption:
+                button.text = caption
+                self.folder_local_styled = None
         if self.folder_source == 'Local' and self.folder_local_styled != local_group:
             for group, button in self.folder_local_buttons.items():
                 source_tab(button, group == local_group, quiet=True)
@@ -236,7 +232,8 @@ class WorkspacesScreen:
             reflow_folder_notice(self.app)
         source_actions(self.app)
         visible = {name: entry for name, entry in visible.items()
-                   if self.folder_path_visible(name) and self.folder_path_visible(entry.get('remote') or '')}
+                   if entry.get('device_root') or (self.folder_path_visible(name)
+                                                  and self.folder_path_visible(entry.get('remote') or ''))}
         self.folder_picker_choices = {**choices, **visible}
         # Native selectors and retained metadata are relatively expensive. Read
         # them once, rather than once for every encrypted folder in the tree.
@@ -290,8 +287,10 @@ class WorkspacesScreen:
                 native_context=lambda: self.app._impl.native,
             )
             self.folder_tab_views[key] = tab
+        on_device = key == ('Local', 'Others')
         tab.render(visible, self.folder_source, loaded_remotes, crypt_remotes,
-                   grouped=not (self.folder_source == 'Local' and self.folder_local_group == 'Others'))
+                   grouped=not on_device,
+                   device_label=self.folder_local_buttons['Others'].text if on_device else None)
         self.folder_buttons, self.folder_tree_buttons = tab.buttons, tab.tree_buttons
         self.mount_folder_tab(tab.content)
 

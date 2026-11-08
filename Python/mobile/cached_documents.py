@@ -61,6 +61,12 @@ def original_text_paths(app):
     found = {}
     roots = [imports.collection_root, imports.shared_root, imports.received_root,
              Path(app.private_root) / 'Downloads', Path(app.private_root) / 'LocalFiles']
+    from services.documents.mobile_locations import enabled, phone_path
+    if enabled(app.private_root):
+        try:
+            roots.append(phone_path(app.private_root))
+        except OSError:
+            pass
     candidates = [path for path in Path(app.private_root).iterdir() if path.is_file()]
     seen = set()
 
@@ -68,9 +74,11 @@ def original_text_paths(app):
         try:
             if path.is_symlink():
                 return
-            key = imports.identity(path)
-            if key in wanted:
-                found.setdefault(wanted[key], []).append(path)
+            for key in imports.identities(path):
+                if key in wanted:
+                    paths = found.setdefault(wanted[key], [])
+                    if path not in paths:
+                        paths.append(path)
         except (OSError, ValueError):
             pass
 

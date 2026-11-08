@@ -446,11 +446,11 @@ class FolderHubUI(WorkspacesScreen):
                 return await self.open_mirror_copy(value)
             value = job['target']
             kind = 'local'
-        if kind == 'shared-local':
+        if kind in ('shared-local', 'device-folder'):
             return await self.show_files(location=('Shared files', value))
         if kind == 'inbox':
             return await self.show_files(location=('Received Files', value))
-        if kind == 'local':
+        if kind in ('local', 'copy-folder'):
             return await self.show_files(location=('Local files', value))
         if kind == 'crypt':
             return await self.show_files(location=(value, ''))

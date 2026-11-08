@@ -10,11 +10,19 @@ from commonUtils.runtime.resources.paths import resource_path
 
 from .credential_state import credential_authority, sources
 from .locations import collection_path, selection, shared_documents_path
+from .mobile_locations import alias_path, split_alias, storage_reference
+from .migrations.mobile_layout import remapped_path
 
 
 def local_document_path(private_root, path):
     """Recover an old iOS Documents reference only if its replacement exists."""
+    alias = split_alias(path)
+    if alias is not None:
+        return alias_path(private_root, alias)
     original = Path(path)
+    replacement = remapped_path(private_root, original) if original.is_absolute() else None
+    if replacement is not None:
+        return replacement
     if original.is_absolute() and original.exists():
         return original
     documents = shared_documents_path(private_root)
@@ -29,10 +37,31 @@ def local_document_path(private_root, path):
     relative = Path(*parts[8:])
     if relative.anchor or '..' in relative.parts:
         return original
-    candidate = documents / relative
-    if candidate.is_file() and candidate.resolve().is_relative_to(documents.resolve()):
+    candidate = remapped_path(private_root, original, ios_relative=relative)
+    if candidate is None and relative.parts[:1] == ('LocalFiles',):
+        candidate = remapped_path(private_root, original, ios_relative=Path('Local', *relative.parts[1:]))
+    candidate = candidate or documents / relative
+    if candidate.exists() and candidate.resolve().is_relative_to(documents.resolve()):
         return candidate
     return original
+
+
+def normalize_local_reference(private_root, source, opener=None):
+    if source.get('type') != 'local':
+        return source, opener
+    from .mobile_locations import enabled
+    def normalize(value):
+        if split_alias(value) is not None:
+            return value
+        try:
+            path = local_document_path(private_root, value)
+            return storage_reference(private_root, path) if enabled(private_root) else str(path)
+        except (OSError, ValueError):
+            return value  # Keep the old reference if its drive is unavailable.
+    source = dict(source, path=normalize(source['path']))
+    if opener is not None and opener.get('kind') == 'notes':
+        opener = dict(opener, root=normalize(opener['root']))
+    return source, opener
 
 
 def _local_full_path(provider, path, private_root):
@@ -53,6 +82,10 @@ def _local_identity(provider, path, private_root, managed_roots):
     full = _local_full_path(provider, path, private_root)
     roots = []
     if private_root is not None:
+        alias = split_alias(storage_reference(private_root, full))
+        if alias is not None:
+            prefix, relative = alias
+            return ('local', prefix, os.path.normcase(relative.as_posix()))
         documents = shared_documents_path(private_root)
         if documents is not None:
             roots.append(('app:ios-documents', documents))
@@ -134,6 +167,9 @@ def _protected_provider(chain, path):
     namespace = next((str(source.storage_namespace) for source in chain
                       if getattr(source, 'storage_namespace', None)), '')
     domain = 'remote' if any(getattr(source, 'remote_storage', False) for source in chain) else 'private'
+    prefix = next((source.reader_storage_alias for source in chain if getattr(source, 'reader_storage_alias', None)), '')
+    if domain == 'private' and namespace:
+        namespace = prefix + namespace
     return chain[0], logical, (domain, namespace)
 
 

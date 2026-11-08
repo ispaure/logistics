@@ -43,12 +43,8 @@ class RecentDocuments:
             self.error = str(error)
 
     def normalize_source(self, source):
-        if source.get('type') != 'local':
-            return source
-        from types import SimpleNamespace
-        from .document_sources import local_document_path
-        path = local_document_path(SimpleNamespace(private_root=self.private_root), source['path'])
-        return dict(source, path=str(path))
+        from services.documents.progress_identity import normalize_local_reference
+        return normalize_local_reference(self.private_root, source)[0]
 
     def notebook_file_reference(self, item):
         """Upgrade clean, file-backed notebook history from a recovery UUID."""
@@ -74,14 +70,14 @@ class RecentDocuments:
         for item in sorted(items, key=lambda item: item.get('opened', 0), reverse=True):
             item = self.notebook_file_reference(item)
             if item['provider'] == 'file-reference':
+                from services.documents.catalog import relocated_title
+                from services.documents.progress_identity import normalize_local_reference
                 before = item['source']
-                source = self.normalize_source(before)
-                if source != before and item.get('opener', {}).get('kind') == 'notes':
-                    from pathlib import Path
-                    suffix = Path(before['path']).relative_to(item['opener']['root'])
-                    root = Path(source['path']).parents[len(suffix.parts) - 1]
-                    item = dict(item, opener=dict(item['opener'], root=str(root)))
-                item = dict(item, source=source, resource=self.reference_id(source))
+                source, opener = normalize_local_reference(self.private_root, before, item.get('opener'))
+                if opener is not None:
+                    item = dict(item, opener=opener)
+                title = relocated_title(item['title'], before, source) if source != before else item['title']
+                item = dict(item, source=source, resource=self.reference_id(source), title=title)
             identity = item['provider'], item['resource']
             if identity not in seen:
                 result.append(item)
@@ -140,8 +136,9 @@ class RecentDocuments:
             raise ValueError('Invalid recent file source.')
         from pathlib import Path
         if source['type'] == 'local':
-            if not Path(source['path']).is_absolute():
-                raise ValueError('Recent local files require an absolute path.')
+            from services.documents.mobile_locations import split_alias
+            if not Path(source['path']).is_absolute() and split_alias(source['path']) is None:
+                raise ValueError('Recent local files require a storage reference.')
         else:
             for key in ('identity', 'namespace'):
                 if key in source and (len(source[key]) != 64 or any(c not in '0123456789abcdef' for c in source[key])):
@@ -156,7 +153,8 @@ class RecentDocuments:
                     or source.get('type') not in {'local', 'crypt'}):
                 raise ValueError('Invalid Notes Library opening reference.')
             if source['type'] == 'local':
-                if not Path(opener['root']).is_absolute() or not Path(source['path']).resolve().is_relative_to(Path(opener['root']).resolve()):
+                from services.documents.catalog import _path_suffix
+                if _path_suffix(source['path'], dict(type='local', path=opener['root'])) is None:
                     raise ValueError('Recent note is outside its library.')
             elif (PurePosixPath(source['key']).is_absolute() or '..' in PurePosixPath(source['key']).parts
                   or PurePosixPath(opener['root']).is_absolute() or '..' in PurePosixPath(opener['root']).parts
@@ -170,7 +168,8 @@ class RecentDocuments:
     def remember_file(self, session, source, *, opener=None):
         if self.error or source is None:
             return
-        source = self.normalize_source(source)
+        from services.documents.progress_identity import normalize_local_reference
+        source, opener = normalize_local_reference(self.private_root, source, opener)
         item = dict(provider='file-reference', resource=self.reference_id(source),
                     kind=session.kind, title=session.title, source=source, opened=time_ns())
         if opener is not None:

@@ -741,16 +741,14 @@ actual independent-window evidence.
 
 ## Android collection drive selection
 
-`features/rclone/mobile/storage_location.py` owns the Local/LocalCrypt/Received Files
-location. Private `collection-storage.json` records the selected volume and a
-random identity matching `<volume>/Logistics/.logistics-storage`. Unconfigured
-Android installs retain the existing private `LocalFiles`/`LocalCryptFolders` layout.
-Configured drives use `Logistics/Local`, `Logistics/LocalCrypt` and
-`Logistics/Received Files`; neither
-credentials nor `mirror-jobs.json` move. All provider, Workspaces, library and
-transfer destination resolution uses this boundary. Retained collection providers
-revalidate the selected marker before filesystem operations. No missing-card
-fallback or replacement directory is created.
+`services/documents/locations.py` owns the collection drive. Private
+`collection-storage.json` records the selected volume and a random identity
+matching `<volume>/Logistics/.logistics-storage`. Configured drives use
+`Logistics/Rclone Copies`, `Logistics/Rclone Copies Encrypted` and `Logistics/Files`.
+Internal storage uses `Rclone Copies`, `Rclone Copies Encrypted` and `Files`.
+Credentials and `mirror-jobs.json` stay private. Providers revalidate the
+selected marker before filesystem operations. A missing drive leaves the
+selected location unavailable until it returns.
 
 `mobile/storage_ui.py` enumerates mounted Android storage volumes and
 opens the app-specific All files access Settings screen. The manifest helper
@@ -805,26 +803,19 @@ reads. The update used the existing app identity and preserved its data.
 
 ### Incoming files and Inbox
 
-`mobile/incoming_files.py` consumes complete native handoffs into ordinary
-**Received Files** storage. iOS uses `Documents/Received Files`, beside the
-file-sharing `Local` directory; Android uses `<collection-base>/Received Files`
-(`Logistics/Received Files` on a selected drive). App internal storage keeps the
-folder private. Workspaces, Browse All Files and the browser location picker use
-the same name and destination. Android's `DeviceFiles` provider admits only Local
-and Received Files; private state and raw LocalCrypt paths are rejected, including
-direct requests. It is excluded from physical filesystem search indexing.
+`mobile/incoming_files.py` publishes complete handoffs to the ordinary files
+root exposed as **On This Phone**. iOS uses the public Documents root. Android
+uses `<collection-base>/Files`. The ordinary provider excludes the managed
+copy folder, legacy reserved names and temporary intake files.
 
-Legacy private and system `Inbox` trees are copied with SHA-256 inventory
-verification and durable private `inbox-upgrade-*.json` receipts. Sources remain
-as backups. An occupied destination gets a uniquely named `Previous Inbox`
-subfolder; retries reuse the journaled destination instead of duplicating files.
-Changed destinations stop migration and preserve both copies. iOS receipts avoid
-absolute container paths so restores can resume. Startup creates Received Files
-even before the first share. It never creates or writes Apple's system
-`Documents/Inbox`; UIKit URLs in that directory now enter the normal native queue.
+Legacy private and system `Inbox` trees are copied and verified before the
+public-layout upgrade, with the originals retained. The public-layout journal
+then moves existing **Received Files** items to the ordinary root. Name
+collisions get a numbered suffix. The OS-owned iOS `Documents/Inbox` remains
+outside this provider and UIKit file URLs continue to enter the intake queue.
 
 Android collection copying, recovery, empty-location checks and explicit inactive
-location erasure include Received Files. The storage UI serializes these actions
+location erasure include the Files directory. The storage UI serializes these actions
 with intake and migrates legacy Inbox before copying. Intake pauses during a
 storage change. If a selected drive is unavailable, ready handoffs stay queued;
 there is no silent internal fallback. Received documents reuse normal resource
@@ -894,8 +885,7 @@ Fixture `storage_root` overrides are unchanged; secondary scenes reuse the prepa
 private root. `UIFileSharingEnabled` and `LSSupportsOpeningDocumentsInPlace` expose
 Documents through computer file sharing and the Files app. The iOS plist sets
 `CFBundleDisplayName` and `CFBundleName` to `Logisticks`, so the intended Files
-path is `On My iPhone/iPad → Logisticks → Local`. `Local` is created directly
-under Documents; no additional app-name directory is created.
+path for managed ordinary copies is `On My iPhone/iPad → Logisticks → Rclone Copies`. Ordinary files are at the Logisticks root.
 
 A durable private `ios-file-sharing-migration.json` journals the original root
 entry names, moves them into Application Support (except the system import Inbox),
@@ -913,14 +903,11 @@ before migration or provider registration; failure stops startup. This excludes
 the shared Local root from both iCloud and computer device backups. It does not
 enable iCloud Drive synchronization. The feature's process-local shared-root
 registration is rebuilt each launch, avoiding persisted absolute iOS container
-paths. `collection_path(private_root)` resolves to `Documents/Local`, while crypt
-paths remain in their existing private location. Startup creates `Local` and `Received Files` on every
-launch, including fresh installs, completed journals and after deletion in Files,
-so both ordinary folders are visible before any remote is pulled or file is shared.
-No migration is added for files previously pulled directly into Documents; files
-beside `Local` remain untouched and outside Workspaces's Local collection. Mapping records retain their relative targets and stay private;
-arbitrary computer imports do not create mapping records. Android's drive switch
-is refused for a registered iOS root.
+paths. `collection_path(private_root)` resolves to `Documents/Rclone Copies`.
+Crypt paths stay private. The public-layout journal relocates the previous Local
+collection and keeps relative rclone targets. Ordinary files already at the
+Documents root stay in place. Android's drive switch is refused for a
+registered iOS root.
 
 Installation enables the static plist capability before first launch. Old root
 contents can therefore be visible to a trusted computer between installation and

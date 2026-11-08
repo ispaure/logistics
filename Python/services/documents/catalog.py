@@ -5,6 +5,7 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 from threading import RLock
 from time import time_ns
 from commonUtils.persistence import atomic_write_bytes
+from .mobile_locations import split_alias
 
 LIMIT = 128 * 1024
 _lock = RLock()
@@ -19,11 +20,24 @@ def _path_suffix(path, source):
     if not isinstance(path, str):
         return None
     key = 'key' if 'key' in source else 'path'
+    if source.get('type') == 'local':
+        alias, origin = split_alias(path), split_alias(source[key])
+        if alias is not None or origin is not None:
+            if alias is None or origin is None or alias[0] != origin[0]:
+                return None
+            return alias[1].relative_to(origin[1]) if alias[1].is_relative_to(origin[1]) else None
     kind = _path_type(source)
     try:
         return kind(path).relative_to(kind(source[key]))
     except ValueError:
         return None
+
+
+def _append_suffix(destination, key, suffix):
+    alias = split_alias(destination[key]) if destination.get('type') == 'local' else None
+    if alias is not None:
+        return alias[0] + '/'.join((alias[1] / suffix).parts)
+    return str(_path_type(destination)(destination[key]) / suffix)
 
 
 def relocated_source(item, source, destination):
@@ -35,7 +49,7 @@ def relocated_source(item, source, destination):
     suffix = _path_suffix(item.get(key), source)
     if suffix is None:
         return item
-    return None if destination is None else dict(destination, **{key: str(_path_type(destination)(destination[key]) / suffix)})
+    return None if destination is None else dict(destination, **{key: _append_suffix(destination, key, suffix)})
 
 
 def relocated_opener(opener, source, destination):
@@ -44,7 +58,7 @@ def relocated_opener(opener, source, destination):
     suffix = _path_suffix(result.get('root'), source)
     if suffix is not None and destination is not None:
         key = 'key' if 'key' in destination else 'path'
-        result['root'] = str(_path_type(destination)(destination[key]) / suffix)
+        result['root'] = _append_suffix(destination, key, suffix)
     return result
 
 
@@ -55,9 +69,10 @@ def relocated_title(title, before, after, *, names=None):
 
 
 class DocumentCatalog:
-    def __init__(self, root, *, recent=False):
+    def __init__(self, root, *, recent=False, normalize=None):
         self.root = Path(root) / ('DocumentRecent' if recent else 'DocumentCatalog')
         self.errors = []
+        self.normalize = normalize
 
     def path(self, cipher=None):
         identity = cipher.identity if cipher is not None else 'local'
@@ -68,7 +83,7 @@ class DocumentCatalog:
             raise ValueError('Document lists cannot be linked.')
         return path
 
-    def read(self, cipher=None):
+    def read(self, cipher=None, *, normalize=True):
         path = self.path(cipher)
         if not path.exists():
             return dict(favourites=[], recent=[])
@@ -96,7 +111,23 @@ class DocumentCatalog:
                         or not isinstance(row['source'], dict) or not isinstance(row['opener'], dict)
                         or type(row['updated']) is not int or row['id'] != self.identity(row['source'])):
                     raise ValueError('Invalid document reference.')
+            if normalize and self.normalize is not None and cipher is None:
+                normalized = {}
+                for row in sorted(rows, key=lambda item: item['updated'], reverse=True):
+                    source, opener = self.normalize(row['source'], row['opener'])
+                    key = self.identity(source)
+                    title = (relocated_title(row['title'], row['source'], source)
+                             if source != row['source'] and source.get('type') == 'local' else row['title'])
+                    normalized.setdefault(key, dict(row, id=key, source=source, opener=opener, title=title))
+                value[field] = list(normalized.values())
         return value
+
+    def upgrade_local_references(self):
+        with _lock:
+            original = self.read(normalize=False)
+            updated = self.read()
+            if original != updated:
+                self.save(updated)
 
     @staticmethod
     def identity(source):
@@ -119,6 +150,8 @@ class DocumentCatalog:
     def remember(self, source, title, opener, *, favourite=False, cipher=None):
         with _lock:
             value = self.read(cipher)
+            if self.normalize is not None and cipher is None:
+                source, opener = self.normalize(source, opener)
             row = dict(id=self.identity(source), title=title, source=source, opener=opener, updated=time_ns())
             field, maximum = ('favourites', 100) if favourite else ('recent', 10)
             value[field] = [row, *(old for old in value[field] if old['id'] != row['id'])][:maximum]

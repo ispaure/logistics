@@ -61,6 +61,12 @@ class FileDrawer:
         self.storage.on_change = self.change_storage
 
     async def show_main_browser(self, storage, *, folder='', extensions=None, title='Browse files', provider=None):
+        from services.documents.mobile_locations import COPIES_ALIAS, enabled, storage_reference
+        from .local_sources import device_files_label
+        if storage == 'Local files' and enabled(self.app.private_root):
+            storage = device_files_label(self.app)
+            if provider is not None and storage_reference(self.app.private_root, provider.root / folder).startswith(COPIES_ALIAS):
+                storage = Path(folder).name or provider.root.name
         if not self.app.checkpoint():
             return False
         if self.destination == 'home' and hasattr(self, 'page'):
@@ -182,11 +188,19 @@ class FileDrawer:
         self.schedule_refresh()
 
     def available_roots(self):
-        roots = {'Local files': None}
+        roots = self.ordinary_roots()
         if local_read_available(self.app):
             roots.update(self.app.existing_crypt_locations())
             roots.update(self.app.linked_crypt_locations())
         return roots
+
+    def ordinary_roots(self):
+        from services.documents.mobile_locations import enabled
+        from .local_sources import device_files_label
+        if enabled(self.app.private_root):
+            roots = self.app.ordinary_file_roots(include_collections=False)
+            return {device_files_label(self.app): roots['Shared files']}
+        return {'Local files': None}
 
     async def refresh(self):
         with self.browser.population_paused():
@@ -207,7 +221,7 @@ class FileDrawer:
             scope = getattr(self, 'scoped_provider', None)
             if scope is not None:
                 roots.setdefault(scope[0], None)
-            selected = self.storage.value if self.storage.value in roots else 'Local files'
+            selected = self.storage.value if self.storage.value in roots else next(iter(roots))
             self.changing_storage = True
             try:
                 self.roots = roots
@@ -222,8 +236,6 @@ class FileDrawer:
                     self.browser_widget.insert(0, self.storage)
             request = None
             try:
-                if selected != 'Local files' and not local_read_available(self.app):
-                    raise ValueError('This connection is busy. Local files remain available.')
                 if scope is not None and scope[0] == selected:
                     provider = scope[1]
                     if provider.private and (self.app.cloud_client is not scope[2]
@@ -231,6 +243,8 @@ class FileDrawer:
                         raise ValueError('Unlock the library connection again.')
                 else:
                     provider = self.app.storage_provider(selected, roots)
+                if provider.private and not local_read_available(self.app):
+                    raise ValueError('This connection is busy. Local files remain available.')
                 model = ResourceSelection(provider, extensions=self.extensions or ())
                 folder = self.folder
                 request = self.listing.capture(work, provider, folder, (selected, folder), source=model)
@@ -241,7 +255,8 @@ class FileDrawer:
                 self.provider_client = getattr(self.app, 'cloud_client', None)
                 self.provider_generation = getattr(self.provider_client, 'generation', None)
                 self.browser.set_entries(model, folder, rows, location=(selected, folder))
-                self.browser.location_bar.update_provider(folder, provider)
+                self.browser.location_bar.update_provider(folder, provider,
+                    name=selected if not folder else None)
                 main_browser = self.main_browser_visible()
                 self.parent_button.enabled = bool(folder) or main_browser
                 if main_browser and not folder:

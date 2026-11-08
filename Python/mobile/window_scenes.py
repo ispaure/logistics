@@ -177,6 +177,11 @@ class SceneManager:
             window = objc_property()
 
             @objc_method
+            def windowScene_didUpdateEffectiveGeometry_(self, scene, previous_geometry) -> None:
+                if reader_cover is not None and reader_cover.ownsSceneRole(scene.session.role):
+                    reader_cover.sharedDisplay().refreshSceneGeometry(scene)
+
+            @objc_method
             def scene_willConnectToSession_options_(self, scene, session, options) -> None:
                 if reader_cover is not None and reader_cover.ownsSceneRole(session.role):
                     self.window = reader_cover.sharedDisplay().connectScene(

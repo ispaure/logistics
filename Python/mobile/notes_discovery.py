@@ -7,7 +7,7 @@ from features.notes_library.notes import vault_root, operation
 from commonUtils.runtime.operations import check_cancelled, OperationCancelled
 from commonUtils.ui.native.forms import FittedLabel, fit_text
 from commonUtils.ui.native.adaptive import allocated_width
-from .appearance import accessible_name, list_button, surface
+from .appearance import accessible_name, action_button, list_button, surface
 from .control_icons import button_icons
 from .browser_ui import middle_filename
 
@@ -132,6 +132,10 @@ def populate(app, container, *, title='Notes Library', refresh=True, title_style
                             provider.close()
                 encrypted = label.endswith(' - Encrypted Copy')
                 location = label.removesuffix(' - Encrypted Copy')
+                from services.documents.mobile_locations import COPIES, enabled
+                from .local_sources import device_files_label
+                if enabled(app.private_root):
+                    location = {'Local files': COPIES, 'Shared files': device_files_label(app)}.get(location, location)
                 caption = PurePosixPath(root).name or location
                 button = toga.Button(caption, on_press=open_library, style=Pack(height=48))
                 if row_font is not None:
@@ -145,7 +149,8 @@ def populate(app, container, *, title='Notes Library', refresh=True, title_style
                 middle_filename(button)
                 # Keep the full source and logical path for same-named libraries.
                 parent = PurePosixPath(root).parent
-                source = f'{label} / {parent}' if parent.parts else label
+                source_label = label if encrypted else location
+                source = f'{source_label} / {parent}' if parent.parts else source_label
                 accessible_name(button, f'{caption} · {source}' if root else source)
                 rows.add(button)
             if rows.children:
@@ -161,7 +166,7 @@ def populate(app, container, *, title='Notes Library', refresh=True, title_style
         if valid():
             await app.editor_picker().show_editor_browser('folder')
 
-    container.add(toga.Button('New Notes Library…', on_press=create, style=Pack(height=48)))
+    container.add(action_button(toga.Button('New Notes Library…', on_press=create, style=Pack(height=48))))
     if refresh:
         container.add(toga.Button('Refresh libraries',
             on_press=lambda widget: populate(app, container, title=title,

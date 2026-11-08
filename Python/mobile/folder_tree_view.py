@@ -103,21 +103,30 @@ class FolderTreeView:
         elif backend.startswith('toga_android.'):
             button._impl.native.setSelected(selected)
 
-    def render(self, visible, source, loaded_remotes, crypt_remotes, *, grouped=True):
+    def render(self, visible, source, loaded_remotes, crypt_remotes, *, grouped=True, device_label=None):
         """Reconcile this source snapshot; unchanged rows keep native identity."""
-        nodes, panels, buttons, tree_buttons = {}, {}, {}, {}
+        nodes, panels, buttons, tree_buttons, browse = {}, {}, {}, {}, {}
 
         def add_branch(branch, parent, ancestors=()):
             children = []
             for index, (title, node) in enumerate(sorted(branch.items(), key=lambda item: item[0].casefold())):
                 path = (*ancestors, title)
                 name = node['names'][0] if node['names'] else None
-                projected = (folder_row_presentation(title, visible[name], source,
+                entry = visible[name] if name is not None else {}
+                browser_root = entry.get('browser_root')
+                device_folder = entry.get('kind') == 'device-folder'
+                caption = (device_label if entry.get('device_root') else None) or (
+                    entry['name'] if browser_root else title)
+                projected = (folder_row_presentation(caption, entry, source,
                     loaded_remotes, crypt_remotes) if name is not None else None)
-                record = self._row_for(path, title, name, projected)
+                record = self._row_for(path, projected.title if projected else title, name, projected,
+                                       menu=name is not None and not browser_root and not device_folder,
+                                       accessible_title=entry['name'] if device_folder else caption if browser_root else None)
                 nodes[path] = record
                 if name is not None:
                     buttons[name] = record.button
+                    if browser_root:
+                        browse[name] = record.button
                 else:
                     tree_buttons[path] = record.group
                 children.append(record.row)
@@ -144,7 +153,11 @@ class FolderTreeView:
 
         content = []
         folders = {name: entry for name, entry in visible.items() if not entry.get('browser_root')}
-        for title, node in sorted(folder_tree(folders, grouped=grouped).items(), key=lambda item: item[0].casefold()):
+        device_root = next((name for name, entry in visible.items() if entry.get('device_root')), None)
+        tree = folder_tree(folders, grouped=grouped and device_root is None)
+        if device_root is not None:
+            tree = {device_root: dict(names=[device_root], children=tree)}
+        for title, node in sorted(tree.items(), key=lambda item: item[0].casefold()):
             panel = self.panels.get(title)
             if panel is None:
                 branch_content = toga.Box(style=Pack(direction=COLUMN))
@@ -154,15 +167,14 @@ class FolderTreeView:
             add_branch({title: node}, panel.children[0])
             panels[title] = panel
             content.append(panel)
-        if not folders:
+        if not visible:
             if 'empty' not in self.extras:
                 self.extras['empty'] = toga.Label('No folders available for this source.')
             content.append(self.extras['empty'])
-        browse = {}
         for name, entry in visible.items():
-            if entry.get('browser_root'):
+            if entry.get('browser_root') and name != device_root:
                 path = (name,)
-                projected = folder_row_presentation('Shared Files', entry, source,
+                projected = folder_row_presentation(entry['name'], entry, source,
                     loaded_remotes, crypt_remotes)
                 record = self._row_for(path, projected.title, name, projected, menu=False)
                 nodes[path] = record
@@ -176,10 +188,11 @@ class FolderTreeView:
         self.buttons, self.tree_buttons = buttons, tree_buttons
         self.select(self.selected_name)
 
-    def _row_for(self, path, title, name, projected, *, menu=True):
+    def _row_for(self, path, title, name, projected, *, menu=True, accessible_title=None):
         """Reuse a path only while it still represents the same selectable folder."""
         if projected is not None:
             icon, description, state = projected.icon, projected.description, projected.state
+            accessible_title = accessible_title or name
             presentation = (projected.title, icon, description)
         record = self.nodes.get(path)
         if record is None or record.name != name:
@@ -189,7 +202,7 @@ class FolderTreeView:
             if name is not None:
                 async def select(widget=None, selected=name, **kwargs):
                     return await self.browse_folder(selected)
-                record.indicator = icon_button(icon, name + ', ' + description, on_press=select)
+                record.indicator = icon_button(icon, accessible_title + ', ' + description, on_press=select)
                 record.button = folder_name(list_button(toga.Button(title, on_press=select,
                     style=Pack(height=ROW_HEIGHT, flex=1))))
                 row.add(record.indicator, record.button)
@@ -219,11 +232,11 @@ class FolderTreeView:
             if record.presentation != presentation:
                 if record.indicator.control_icon != icon:
                     from .control_icons import apply_icon
-                    apply_icon(record.indicator, icon, name + ', ' + description, preserve_layout=True)
+                    apply_icon(record.indicator, icon, accessible_title + ', ' + description, preserve_layout=True)
                 if record.button.text != title:
                     record.button.text = title
-                accessible_name(record.indicator, name + ', ' + description)
-                accessible_name(record.button, name + ', ' + description)
+                accessible_name(record.indicator, accessible_title + ', ' + description)
+                accessible_name(record.button, accessible_title + ', ' + description)
                 color = 'folder_' + state if state else 'folder'
                 record.indicator._folder_foreground = color
                 if record.presentation is None:

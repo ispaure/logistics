@@ -132,7 +132,7 @@ class StorageUI:
         needed = (volume is not None or source_external) and android_sdk() >= 30
         if needed and not all_files_allowed():
             box.add(self._storage_heading('Allow storage access'),
-                self._storage_note('Android needs All files access for this location. Other apps with storage access can read Local files; LocalCrypt stays encrypted.'),
+                self._storage_note('Android needs All files access for this location. Other apps with storage access can read ordinary files and Rclone Copies; LocalCrypt stays encrypted.'),
                 self._storage_button('Open Android settings', self.allow_collection_storage),
                 self._storage_button('Check access', lambda widget: self._show_storage_target(action)
                     if action == 'wipe' else self._show_storage_review(action)))
@@ -180,7 +180,7 @@ class StorageUI:
         self.collection_drive.on_change = self.collection_target_changed
         box = toga.Box(style=Pack(direction=COLUMN, margin=20))
         location = toga.Box(children=[self._storage_heading(current),
-            self._storage_note('Local · LocalCrypt · Received Files')], style=Pack(direction=COLUMN, margin=16))
+            self._storage_note('Rclone Copies · LocalCrypt · On This Phone')], style=Pack(direction=COLUMN, margin=16))
         surface(location, radius=16, background='settings_group')
         box.add(self._storage_note('Current location'), location,
                 self._storage_note('Choose where these files are stored. LocalCrypt stays encrypted.'),
@@ -191,7 +191,7 @@ class StorageUI:
                                          ('Delete files from an old location', 'wipe'))]
         box.add(self._storage_disclosure('Other storage options', [group_rows(options)]),
                 self._storage_disclosure('What stays on this device?', [self._storage_note(
-                    'Settings, credentials and app-managed documents stay in the app. Only Local, LocalCrypt and Received Files change location.')]),
+                    'Settings, credentials and app-managed documents stay in the app. Only Rclone Copies, LocalCrypt and On This Phone change location.')]),
                 self.collection_storage_status)
         self.collection_target_changed()
         self._show_storage_page(box, 'File storage', 'collection-storage')
@@ -239,7 +239,7 @@ class StorageUI:
         self._collection_target_details = details
         box.add(details)
         if action == 'wipe':
-            details.add(self._storage_note('Permanently delete Local, LocalCrypt and Received Files at this location, including interrupted copies. Your active storage and other files are kept.'),
+            details.add(self._storage_note('Permanently delete Rclone Copies, LocalCrypt and On This Phone at this location, including interrupted copies. Your active storage and other files are kept.'),
                         self._storage_paths(self.collection_drives[self.collection_drive.value]))
             allowed = self._storage_permission(details, action)
             detach(self.collection_erase)
@@ -260,9 +260,9 @@ class StorageUI:
         target = self.collection_drive.value
         box.add(self._storage_note('New location'), self._storage_heading(target))
         explanations = {
-            'copy': ('Copy your files and switch', 'Copy and verify Local, LocalCrypt and Received Files. Original files stay where they are.'),
+            'copy': ('Copy your files and switch', 'Copy and verify Rclone Copies, LocalCrypt and On This Phone. Original files stay where they are.'),
             'recover': ('Use the files already here', 'No files are copied or merged. These files may be older than your current collection. LocalCrypt needs its original credentials.'),
-            'empty': ('Start with empty folders', 'Create empty Local, LocalCrypt and Received Files folders. Your current files stay at their old location. The destination must be empty.'),
+            'empty': ('Start with empty folders', 'Create empty Rclone Copies, LocalCrypt and On This Phone folders. Your current files stay at their old location. The destination must be empty.'),
         }
         title, note = explanations[action]
         box.add(self._storage_heading(title), self._storage_note(note))
@@ -451,12 +451,14 @@ class StorageUI:
     def _collection_prompt(self, action, volume):
         destination = str(volume / 'Logistics') if volume else 'app internal storage'
         prompts = {
-            'copy': ('Change collection drive?', 'Copy Local, LocalCrypt and Received Files to ' + destination +
+            'copy': ('Change collection drive?', 'Copy Rclone Copies, LocalCrypt and On This Phone to ' + destination +
                      '? Different destination files stop the copy. Original copies remain as a backup.'),
-            'empty': ('Start empty at this location?', 'Create and use empty Local, LocalCrypt and Received Files folders in ' + destination + '? No files are copied or erased. Current files stay at their old location. The destination must be empty.'),
-            'recover': ('Use existing files here without copying?', 'Use the existing Local, LocalCrypt and Received Files collections in ' + destination +
+            'empty': ('Start empty at this location?', 'Create and use empty Rclone Copies, LocalCrypt and On This Phone folders in ' + destination + '? No files are copied or erased. Current files stay at their old location. The destination must be empty.'),
+            'recover': ('Use existing files here without copying?', 'Use the existing Rclone Copies, LocalCrypt and On This Phone collections in ' + destination +
                         '? This does not copy or merge your current collection. A retained backup may be older and omit recent changes. LocalCrypt still needs its original credentials.'),
-            'wipe': ('Permanently erase these collection folders?', 'Delete ' + str(volume / 'Logistics/Local' if volume else self.private_root / 'LocalFiles') + ' and ' + str(volume / 'Logistics/LocalCrypt' if volume else self.private_root / 'LocalCryptFolders') + ', ' + str(volume / 'Logistics/Received Files' if volume else self.private_root / 'Received Files') + ', plus interrupted .storage-copy-* folders at ' + destination + '? The files cannot be recovered by Logistics. Other folders, private credentials, settings and metadata are kept. The location currently in use cannot be erased.'),
+            'wipe': ('Permanently erase these collection folders?',
+                     'Delete the displayed collection folders and any interrupted .storage-copy-* folders at '
+                     + destination + '? Other files and the active location are kept.'),
         }
         title, message = prompts[action]
         if action != 'wipe':

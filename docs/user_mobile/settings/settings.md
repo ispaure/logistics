@@ -255,23 +255,16 @@ appearance, separately from the app's system-following surfaces and reader theme
 
 ### File storage
 
-Files shared from other apps appear in **Received Files** in Workspaces.
-In the Workspaces browser, **Shared Files**, **Local** and **Received Files**
-are separate locations. File destination pickers use those same names.
-On iOS, Files shows **Logisticks/Received Files** beside **Local**. Android
-keeps Received Files alongside the selected Local and LocalCrypt
-collections. Legacy Inbox contents are copied without overwriting existing files;
-see [receiving files](../documents/workflows.md#receive-files-from-another-app).
+**Workspaces → Local → On This Phone** opens ordinary files, including incoming
+shares. **Rclone Copies** holds the managed ordinary copies. Destination pickers
+list the two locations separately.
 
-On iPhone and iPad, **Local lives in `Logisticks/Local`** in Apple's
-Files app under **On My iPhone/iPad**. Launch the app once to create the `Local`
-folder, even before pulling any remotes. The app recreates it on later launches
-if it was removed. In Finder, choose your device → **Files → Logisticks**;
-on Windows use Apple Devices or iTunes File Sharing, then open `Local`.
-Pulled ordinary remotes and files added inside `Local` appear in Workspaces.
-Adding a folder does not create a remote mapping. Computer file sharing can also
-copy out or delete these files. Files already beside `Local` are left in place;
-this layout change does not move existing shared files.
+On iPhone and iPad, open **On My iPhone/iPad → Logisticks** in Apple's Files app.
+Ordinary files and shares appear directly inside **Logisticks**. Rclone's
+ordinary copies live in **Logisticks/Rclone Copies**. Finder and Apple Devices
+file sharing expose the same folders. The upgrade renames the old **Local**
+folder and moves items from **Received Files** into the ordinary root. It keeps
+both items when names collide.
 
 The existing upgrade preparation keeps private application data separate.
 Credentials, settings, saved editor/library documents and both kinds of encrypted
@@ -283,13 +276,13 @@ Conflicting destination names stop migration without overwriting either copy;
 resolve the conflict and reopen the app to retry.
 
 Logistics excludes the shared root from iCloud and computer device backups and
-reapplies that exclusion on launch. Keep another copy of important Local files;
+reapplies that exclusion on launch. Keep another copy of important files;
 these files do not sync through iCloud Drive. File sharing becomes enabled when
 the update is installed, so the previous storage layout can be visible to a
 trusted computer until the updated app has been opened and migration completes.
 
 On Android, open **Settings → Workspaces → File storage…**.
-The current location covers Local, LocalCrypt and Received Files. Choose
+The current location covers Rclone Copies, LocalCrypt and On This Phone. Choose
 **Change location**, select a drive, then **Continue** to review the copy before
 confirming **Copy and switch**. Selecting or reviewing a drive changes no files.
 **Folder paths** shows exact paths and whether the folders contain files.
@@ -301,17 +294,17 @@ The delete page has a red **Delete files…** button at the bottom and a final
 confirmation. The active location cannot be deleted. In E Ink mode the button
 uses high-contrast black and white.
 
-On Android 11 and newer, the shared-drive folders are `<drive>/Logistics/Local`,
-`<drive>/Logistics/LocalCrypt` and `<drive>/Logistics/Received Files`. Internal copies use the app's private
-`LocalFiles`, `LocalCryptFolders` and `Received Files`. Enable **All files access** using
+On Android 11 and newer, the shared-drive folders are `<drive>/Logistics/Rclone Copies`,
+`<drive>/Logistics/Rclone Copies Encrypted` and `<drive>/Logistics/Files`. Internal storage uses the app's
+`Rclone Copies`, `Rclone Copies Encrypted` and `Files` directories. Enable **All files access** using
 **Open Android settings** when prompted, then return and choose **Check access**.
 The permission controls appear only when needed for the selected operation.
 
 On Android 7–10 (including Android 9 on a Galaxy S8+), drive choices use
 Logistics' app-owned device-storage or SD-card directory. No storage permission
 is required. On an SD card the collections are normally under
-`<card>/Android/data/io.github.ispaure.logisticsmobile/files/Logistics/Local`
-with `LocalCrypt` and `Received Files` beside it; the page shows the exact paths. These versions cannot
+`<card>/Android/data/io.github.ispaure.logisticsmobile/files/Logistics/Rclone Copies`
+with `Rclone Copies Encrypted` and `Files` beside it; the page shows the exact paths. These versions cannot
 use arbitrary SD-card folders through this setting. Android deletes the app-owned
 folders when you uninstall Logistics or clear its app data, including through
 the app's Reset action. Keep a separate backup before doing so.
@@ -321,7 +314,7 @@ the app's Reset action. Keep a separate backup before doing so.
 | **Copy and switch** | Copies and verifies all three folders, then selects the destination. Different destination files stop the operation; nothing is merged or overwritten. | Original files remain at the previous location. Matching copied files can be reused after an interrupted copy. |
 | **Use these files** | Selects the collection folders already at this location without copying or merging the current collection. | Current files stay at their old location. The selected files may be an older backup. Original credentials are still needed for LocalCrypt. |
 | **Start empty and switch** | Creates/selects empty collection folders without copying. Refuses a location containing files. Works even if the previously selected card is unavailable. | Current files stay at their old location. Private documents, credentials and metadata remain. |
-| **Delete files…** | Permanently deletes only the displayed Local, LocalCrypt and Received Files folders, their contents, interrupted `.storage-copy-*` folders and the location marker. Does not select another location. | Unrelated folders, private documents, credentials, settings and metadata remain. Disabled/refused for the collection currently in use. |
+| **Delete files…** | Permanently deletes only the displayed collection folders, their contents, interrupted `.storage-copy-*` folders and the location marker. Does not select another location. | Unrelated folders, private documents, credentials, settings and metadata remain. Disabled/refused for the collection currently in use. |
 
 For retained shared-drive folders on Android 11 and newer, after reinstalling or
 resetting the app, choose **Use files from another location**, select the SD card,

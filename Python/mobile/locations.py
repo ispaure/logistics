@@ -33,6 +33,21 @@ class Locations:
                     keys.add(item['id'])
                     identities.add(identity)
                 self.items = value['items']
+                from services.documents.mobile_locations import enabled, split_alias, storage_reference
+                from services.documents.migrations.mobile_layout import legacy_copy_path
+                if enabled(root):
+                    normalized = {}
+                    for item in self.items:
+                        if item['kind'] == 'local' and split_alias(item['path']) is None:
+                            try:
+                                path = storage_reference(root, legacy_copy_path(root, item['path']))
+                            except (OSError, ValueError):
+                                path = item['path']
+                            item = dict(item, path=path)
+                        normalized.setdefault((item['kind'], item['connection'], item['path']), item)
+                    items = list(normalized.values())
+                    if items != self.items:
+                        self.publish(items)
         except (OSError, ValueError, TypeError):
             self.error = 'Pinned locations could not be read; the original file was preserved.'
 
@@ -49,10 +64,14 @@ class Locations:
 
     @staticmethod
     def validate(item):
+        from services.documents.mobile_locations import split_alias
         if (not isinstance(item, dict) or set(item) != {'id', 'kind', 'connection', 'path'}
                 or not isinstance(item['id'], str) or re.fullmatch('[0-9a-f]{32}', item['id']) is None
                 or item['kind'] not in ('local', 'remote') or not isinstance(item['path'], str)
-                or len(item['path']) > 2048 or resource_path(item['path']) != item['path']):
+                or len(item['path']) > 2048):
+            raise ValueError('Invalid pinned location.')
+        path = item['path']
+        if not (item['kind'] == 'local' and split_alias(path) is not None) and resource_path(path) != path:
             raise ValueError('Invalid pinned location.')
         if item['kind'] == 'local':
             if item['connection'] != '':
