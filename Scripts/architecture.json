@@ -472,6 +472,13 @@
       "reason": "Ordinary reader resume/bookmark state; shared persistence policy excludes private and remote documents."
     },
     {
+      "module": "features.notebooks.remarkable_ssh",
+      "scope": "export_document",
+      "operation": "archive-write:zipfile.ZipFile",
+      "reason": "The desktop SSH retrieval tool writes native ZIP entries to a host-owned streaming export stage.",
+      "via": "services.documents.storage.stage_local_document_export"
+    },
+    {
       "module": "features.notebooks.recovery",
       "scope": "Repository.create",
       "operation": "raw-call:commonUtils.persistence.atomic.atomic_write_bytes",

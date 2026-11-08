@@ -15,6 +15,28 @@ existing notebooks; private notebooks keep edits in memory until explicitly save
 Use **Export** to write an updated `.rmdoc` file copy. The standalone editor's
 saved-copy list remains available when running without the application host.
 
+### Retrieve a notebook from a reMarkable tablet
+
+On desktop, open **Debug → Notebooks → Retrieve RMDOC from reMarkable Tablet…**.
+Connect the tablet by USB and leave it awake. The dialog shows the default
+**Address** `10.11.99.1`, **Port** `22` and the tablet username `root`.
+Enter the SSH host or IP address without a URL scheme and change the port if
+needed. Click **Connect**, filter the list by notebook or folder, select a
+document, then click **Retrieve…** and choose where to save the copy.
+
+This tool needs working SSH access and OpenSSH on the computer. On macOS,
+OpenSSH can prompt for host verification and the tablet password. Other
+desktops can use SSH keys or a configured OpenSSH password prompt. On Paper Pro,
+SSH requires Developer Mode to be enabled already. Enabling it factory-resets
+the tablet. [reMarkable Developer Mode](https://developer.remarkable.com/documentation/developer-mode)
+
+Close the notebook on the tablet and let any active edits or sync finish before
+retrieving it. Logistics reads the source files over SSH and packages the
+archive on the computer, preserving native ink, images and the embedded PDF.
+The tool leaves the tablet files and any existing destination file intact.
+The resulting archive can be larger than the notebook editor's import limits.
+
+### Editing and storage
 
 **Open**, **Save** and **Save As** use the shared storage chooser, including
 unlocked LocalCrypt copies. Saving a private notebook publishes verified

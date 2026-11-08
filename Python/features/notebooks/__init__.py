@@ -17,11 +17,22 @@ def activate(context):
     return open_workspace(path=context.path)
 
 
+def retrieve_remarkable(data=None, parent=None):
+    from .ui.remarkable_retrieval import RetrievalDialog
+    return RetrievalDialog(parent).exec()
+
+
 def register():
     from commonUtils.ui.features import FileType, BrowserExtension, FileActivation
-    from features.contributions import Feature, DocumentLauncherContribution, SettingsContribution
+    from features.contributions import (DebugActionContribution, DocumentLauncherContribution,
+                                        Feature, SettingsContribution, WorkflowContribution)
     from pathlib import Path
     return Feature(id='notebooks', label='Notebooks',
+        debug_actions=[DebugActionContribution(
+            name='Retrieve RMDOC from reMarkable Tablet…',
+            description='Browse the tablet over SSH and save a native notebook archive.',
+            workflow_id='retrieve_remarkable_rmdoc')],
+        workflows=[WorkflowContribution(workflow_id='retrieve_remarkable_rmdoc', handler=retrieve_remarkable)],
         settings=[SettingsContribution('Notebook preview', 'notebooks.preview',
             config_files=(Path(__file__).with_name('config.ini'),))],
         file_types=[FileType('features.notebooks.file_type:RMDOCFile', extensions=('rmdoc',))],
