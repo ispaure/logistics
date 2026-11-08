@@ -48,7 +48,7 @@ class NotebookMutations:
             for panel, document, path, token, digest in self.prepared:
                 resource = DocumentResource(destination, path, max_bytes=MAX_ARCHIVE)
                 try:
-                    data = resource.read()
+                    data = resource.read(track_local_content=True)
                     Notebook.read(data)
                     if sha256(data).digest() != digest:
                         raise ValueError('The moved notebook changed before reopening.')

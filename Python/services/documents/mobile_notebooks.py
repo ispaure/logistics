@@ -95,7 +95,7 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
             active_resource = resource
             if resource is not None:
                 try:
-                    source_bytes = resource.read()
+                    source_bytes = resource.read(track_local_content=True)
                     book = Notebook.read(source_bytes)
                 except (OSError, ValueError):
                     if recovery is None or key is None or (binding and not binding.get('dirty')):
@@ -292,7 +292,7 @@ async def retarget_notebook(app, panel, resource):
     from features.notebooks.storage import NotebookDocument
     from services.documents.mobile_storage import remember_notebook_resource
     try:
-        await asyncio.to_thread(lambda: Notebook.read(resource.read()))
+        await asyncio.to_thread(lambda: Notebook.read(resource.read(track_local_content=True)))
         recovery = repository(app) if resource.policy.persistent else None
         document = NotebookDocument(panel.editor.notebook, resource=resource, recovery=recovery,
                                     changed=remember_notebook_resource)
@@ -641,7 +641,7 @@ async def notes_editor(app, library, path):
     epoch = library.epoch
     try:
         book = await asyncio.to_thread(lambda: Notebook.read(resource.read(
-            cancelled=lambda: not library.valid() or library.epoch != epoch)))
+            cancelled=lambda: not library.valid() or library.epoch != epoch, track_local_content=True)))
         if not library.valid() or library.epoch != epoch:
             raise ValueError('Notes Library closed.')
         document = NotebookDocument(book, resource=resource, changed=lambda doc: setattr(library.session, 'dirty', doc.dirty)

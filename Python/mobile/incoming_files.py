@@ -238,8 +238,9 @@ def start_receiving(app):
                 if not live_host():
                     break
                 if (saved or failed) and can_receive():
-                    from services.documents.mobile_locations import PHONE, enabled
-                    location = PHONE if enabled(app.private_root) else RECEIVED_FILES
+                    from services.documents.mobile_locations import enabled
+                    from .local_sources import device_files_label
+                    location = device_files_label(app) if enabled(app.private_root) else RECEIVED_FILES
                     app.incoming_status = (f'{saved} file(s) saved to {location}.' if saved else '')
                     if failed:
                         app.incoming_status += ' Some incoming files could not be saved; reopen the app to retry.'

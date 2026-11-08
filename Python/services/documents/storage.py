@@ -184,6 +184,7 @@ class DocumentResource:
         self.path = self.provider.relative(path)
         self.max_bytes = max_bytes
         self.revision = None
+        self._content_baseline = None
         self.closed = False
         self._release = self.provider.acquire() if independent and hasattr(self.provider, 'acquire') else lambda: None
 
@@ -207,7 +208,7 @@ class DocumentResource:
         # entry also validates the retained provider's credential generation.
         return self.provider.entry(self.path)
 
-    def read(self, *, cancelled=lambda: False):
+    def read(self, *, cancelled=lambda: False, track_local_content=False):
         before = self.check()['revision']
         operation = getattr(self.provider, 'operation', None)
         with operation(cancelled) if operation else nullcontext():
@@ -219,15 +220,33 @@ class DocumentResource:
         if self.check()['revision'] != before:
             raise _ReadRevisionChanged('The document changed while opening; reopen it.')
         self.revision = before
+        if track_local_content or self._content_baseline is not None:
+            from commonUtils.runtime.resources.local import LocalFiles
+            if isinstance(self.provider, LocalFiles) and self.policy.persistent:
+                self._content_baseline = before, sha256(data).hexdigest()
         return data
 
     def save(self, data, *, validate=lambda data: None, cancelled=lambda: False):
         if self.revision is None:
             raise ValueError('Read the document before replacing it.')
+        expected = self.revision
+        baseline = self._content_baseline
+        if baseline is not None and baseline[0] == expected:
+            current = self.check()['revision']
+            # The same local file can acquire new metadata while the editor is
+            # open. Rebind only after a stable read proves its bytes match.
+            if current != expected and current[:3] == expected[:3]:
+                from commonUtils.runtime.streams import stream_signature
+                with self.provider.open(self.path) as stream:
+                    _, digest = stream_signature(stream, cancelled=cancelled, max_bytes=self.max_bytes)
+                if digest == baseline[1] and self.check()['revision'] == current:
+                    expected = current
         revision = self.publish(self.provider, self.path, data, max_bytes=self.max_bytes,
-                                expected_revision=self.revision, validate=validate, cancelled=cancelled,
+                                expected_revision=expected, validate=validate, cancelled=cancelled,
                                 alive=lambda: not self.closed)
         self.revision = revision
+        if baseline is not None:
+            self._content_baseline = revision, sha256(data).hexdigest()
         return revision
 
     @staticmethod

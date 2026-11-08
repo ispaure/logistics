@@ -51,7 +51,7 @@ does not run Obsidian plugins.
 **Local File Browser** opens directly on the current folder, without a source
 button above it. The folder header has Back (‹), Search and an upper-right
 actions menu (circled ellipsis on iOS, vertical dots on Android). Choose
-**Local → On This Phone** or **On This Tablet** to see the device root and its
+**Local → On My Phone** or **On My Tablet** to see the device root and its
 immediate folders. The sidebar indents those folders beneath the root. Choose
 the root row to open the top level and see files shared from other apps, or
 choose a folder to browse it. This is the **Logisticks** folder in
@@ -178,7 +178,7 @@ visible folders; refreshing the hub also refreshes the package choices.
 Credential labels omit `.zip` (including uppercase `.ZIP`). Duplicate labels use
 a number, such as **Personal (2)**. Loaded-package changes refresh a visible hub
 automatically, including changes made in another iPad window.
-**Local** separates **On This Phone**, where ordinary files and new shares
+**Local** separates **On My Phone**, where ordinary files and new shares
 appear, from **Rclone Copies**, where downloaded and synced copies appear.
 Save pickers use those same names. **Home Server** contains
 SMB/Mac connections added through **Add share…**, including their managed offline

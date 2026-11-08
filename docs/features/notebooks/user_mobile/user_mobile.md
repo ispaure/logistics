@@ -22,8 +22,8 @@ a separate copy. **Quit without saving** discards edits since the last Save, inc
 the recovery draft, so reopening shows the saved file. Cancel keeps editing. If
 discard cannot update recovery, the notebook stays open with an error.
 If an ordinary recovered draft's original file is missing or has changed, Save
-asks for a new location and preserves the draft. Save As offers **Local files**,
-**Shared files**, **Received Files** and available unlocked locations. Two files
+asks for a new location and preserves the draft. Save As offers **On My Phone**
+or **On My Tablet**, individual rclone copies and available unlocked locations. Two files
 with the same name in different folders remain separate documents. Explicitly
 choosing **Quit without saving** discards only that draft.
 For ordinary notebooks, Logistics keeps a local recovery copy of completed edits,

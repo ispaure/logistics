@@ -67,8 +67,9 @@ Starting a selected cloud download retires the completed destination-picker
 route before presenting transfer progress. Android Back and the iOS Back control
 therefore return to the retained source folder, preserving its viewport.
 `test_remote_downloads.py` covers the route handoff and retained source panel.
-The download picker's Shared files provider excludes managed collection rows;
-Local files and Received Files remain separate storage choices in its dropdown.
+The download picker lists ordinary files under On My Phone or On My Tablet and
+offers managed copies separately. In the legacy layout, the Shared Files provider
+excludes managed collection rows, and Local and Received Files are separate choices.
 Leaving a cleared picker on the stack exposes an empty Workspaces form even
 after the busy flag resets, and tab changes retain that unusable form.
 `test_transfer_feedback.py` covers Back, tab changes and local browsing during
@@ -254,7 +255,7 @@ reserved regions. Geometry and retained-owner contracts are covered by
 successfully listed Workspaces folder. A local workspace shortcut starts its
 stack at the selected folder: Back from that folder returns to the retained
 Workspaces overview, and subfolders return to their parent within that workspace.
-On This Phone opens the ordinary files root. Browser entry points capture provider and path before
+On My Phone opens the ordinary files root. Browser entry points capture provider and path before
 their first listing, including LocalCrypt and mapped offline copies. Android Back
 and the toolbar return to Workspaces at that entry point, before considering older
 browser history. Search dismissal and child-folder history remain separate steps.
@@ -451,9 +452,9 @@ creation retains the form for retry or Cancel. `test_document_navigation.py`
 covers creation from Home, Documents and a retained folder browser, including
 unsaved-change decisions and returning to the original panel.
 
-Creation starts at the On This Phone provider used by Workspaces. The location
+Creation starts at the On My Phone provider used by Workspaces. The location
 selector switches to Rclone Copies or a separately scoped encrypted provider.
-On This Phone allows creation at its root and guards managed folder names.
+On My Phone allows creation at its root and guards managed folder names.
 Filename preview,
 listing and publication share the picker extension policy, including `.rmdoc`
 for notebooks. Operation errors use a fitted, noneditable message instead of a
@@ -822,15 +823,16 @@ not establish native Duo fold-gesture support.
 
 ## Workspaces and file browser naming
 
-The Local source retains separate Rclone Copies and On This Phone tree views. Classification
+The Local source retains separate Rclone Copies and On My Phone tree views. Classification
 uses each local copy's remote association, including mapped LocalCrypt copies;
-On This Phone owns only Received Files and Shared Files. Mixed catalog entries keep
+On My Phone (On My Tablet on tablets) shows ordinary files, including incoming
+shares. Mixed catalog entries keep
 only the selected group's copies, while managed entries retain their remote
 actions. Others renders literal folder names; remote naming groups remain
 available in Rclone Copies. Local → Rclone Copies also shows the Credential filter, defaulting
 to All when entering from another source or local subtab. It filters managed
 plaintext and LocalCrypt copies by their credential association, including
-offline copies; Local → On This Phone remains unfiltered. Picker destinations include existing encrypted copies and
+offline copies; Local → On My Phone remains unfiltered. Picker destinations include existing encrypted copies and
 linked pull targets, without synthesizing empty roots for every loaded remote.
 Android's virtual location root disables publication and explains the required
 folder choice. Picker status uses a fitted label mounted only when nonempty.
@@ -1378,7 +1380,7 @@ On iOS, `locations.shared_documents_path` exposes the registered public
 Documents root. `local_sources.PhoneFiles` hides managed entries and rejects
 direct access or creation under those names. On Android the same provider
 opens the dedicated Files root, separate from app state and managed copies.
-Local → On This Phone or On This Tablet shows the selectable ordinary root with
+Local → On My Phone or On My Tablet shows the selectable ordinary root with
 the same label, plus one indented level of immediate folders. The root opens for
 browsing and editing. Local → Rclone Copies
 and the destination picker expose individual copies. Local and Cloud omit the lock-state legend; folder icons and accessible
@@ -1932,7 +1934,7 @@ and direct-source metadata saves. Host checks do not certify native appearance.
 ## Workspace display labels and credential refresh
 
 Source/filter keys (`Rclone`, `Others`, `LocalCrypt`) remain technical identifiers.
-The selectors display Rclone Copies, On This Phone (On This Tablet on tablets),
+The selectors display Rclone Copies, On My Phone (On My Tablet on tablets),
 and Cloud's single Rclone Remotes tab. Desktop uses On This Computer and retains
 Dropbox. Picker captions use `<foldername> - Encrypted Copy`; disk paths are unchanged.
 Credential publication refreshes retained workspace trees even beside an open

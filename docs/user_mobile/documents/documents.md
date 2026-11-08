@@ -25,7 +25,7 @@ discovered Notes libraries followed by configured Comics libraries, under
 **Notes** and **Comics** headings. Tap a library directly to open it.
 
 The upper-right **Search documents** magnifier beside Open and New opens a dedicated
-filename search. It searches filenames recursively through On This Phone,
+filename search. It searches filenames recursively through On My Phone,
 Rclone Copies and unlocked LocalCrypt storage, including files and folders
 you have never opened. Results use compact filename rows with **…** actions;
 **Show in folder** reveals the item in the file browser. It does not search file contents or online remotes.
@@ -47,7 +47,7 @@ contains Open, New and Search while Unlock remains directly available.
 
 In **New document**, enter a name and choose Plain text, Markdown or Notebook.
 Tap **Choose location** to leave the keyboard and open the folder browser. Select
-a folder in **On This Phone** or **On This Tablet**, an individual rclone copy,
+a folder in **On My Phone** or **On My Tablet**, an individual rclone copy,
 or an unlocked **Encrypted Copy**. Changing the file type updates a matching document extension; a name
 without an extension receives the selected one. Tap **Create document** to create
 and open the file. On a narrow screen, **Back to name** keeps your chosen folder
@@ -64,12 +64,12 @@ cloud locations are read-only and receive changes through reviewed **Push**.
 New documents do not use the private saved-document store. Existing saved
 documents remain available in Documents.
 
-New Document and New Notes Library start at **On This Phone** or **On This Tablet**.
+New Document and New Notes Library start at **On My Phone** or **On My Tablet**.
 Choose an individual rclone folder from the location selector to create a file
 or library in that copy. The Move picker uses the same location names.
 To make a subfolder, tap **New folder**, enter its name, then tap **Create folder**. The browser selects the new folder.
 Cancelling the folder entry keeps the current location and your filename.
-You can create files and ordinary folders at the top level of **On This Phone**.
+You can create files and ordinary folders at the top level of **On My Phone**.
 The app reserves the managed **Rclone Copies** folder name there. Errors
 appear beneath the destination.
 Correct the name or location and try again. Only existing LocalCrypt copies and

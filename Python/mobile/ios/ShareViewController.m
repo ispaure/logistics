@@ -8,13 +8,17 @@
 @end
 
 @implementation LogisticsShareViewController
+- (NSString *)deviceFilesLabel {
+    return UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad
+        ? @"On My Tablet" : @"On My Phone";
+}
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = UIColor.systemBackgroundColor;
     self.status = [[UILabel alloc] init];
     self.status.numberOfLines = 0;
     self.status.textAlignment = NSTextAlignmentCenter;
-    self.status.text = @"Receiving files into On This Phone…";
+    self.status.text = [NSString stringWithFormat:@"Receiving files into %@…", self.deviceFilesLabel];
     self.doneButton = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.doneButton setTitle:@"Cancel remaining files" forState:UIControlStateNormal];
     [self.doneButton addTarget:self action:@selector(done) forControlEvents:UIControlEventTouchUpInside];
@@ -62,7 +66,8 @@
         if (success) saved++; else failed++;
     }
     dispatch_async(dispatch_get_main_queue(), ^{
-        self.status.text = [NSString stringWithFormat:@"%lu file(s) received. Open Logisticks to find them in On This Phone.%@", (unsigned long)saved,
+        self.status.text = [NSString stringWithFormat:@"%lu file(s) received. Open Logisticks to find them in %@.%@",
+            (unsigned long)saved, self.deviceFilesLabel,
             failed ? @" Some files could not be received; share them again." : @""];
         [self.doneButton setTitle:@"Done" forState:UIControlStateNormal];
     });

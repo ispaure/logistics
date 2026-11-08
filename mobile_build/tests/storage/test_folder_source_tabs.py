@@ -44,7 +44,7 @@ class FolderSourceTabTests(unittest.TestCase):
         app = self.app
         app.show_locations()
         self.assertEqual(app.folder_local_buttons['Rclone'].text, 'Rclone Copies')
-        self.assertEqual(app.folder_local_buttons['Others'].text, 'On This Phone')
+        self.assertEqual(app.folder_local_buttons['Others'].text, 'On My Phone')
         app.change_folder_source('rclone')
         self.assertEqual(app.folder_cloud_label.text, 'Rclone Remotes')
         self.assertFalse(app.folder_local_header.children)
