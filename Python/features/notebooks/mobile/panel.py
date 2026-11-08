@@ -226,6 +226,10 @@ class NotebookPanel:
         self.document = document
         self.open(document.book, document.key, mount=mount, progress=progress)
 
+    @property
+    def paper_preview(self):
+        return self.app.preferences.values.get('notebook_paper_preview', 'true') == 'true'
+
     def state(self):
         state = document_state(self.editor, self.document)
         state['eraser_kind'] = self.editor.eraser_kind
@@ -387,9 +391,10 @@ class NotebookPanel:
                 self.pencil_input_trace = attach_diagnostics(self.web, self.app.loop,
                     Path(self.app.private_root) / 'notebook-input-diagnostics.json')
         self._brush_presets_sent = self.app.preferences.values.get(BRUSH_PRESETS, '[]')
+        self._paper_preview_sent = self.paper_preview
         set_inline_html(self.web, 'https://logistics.invalid/notebooks/', mobile_editor_html(
             self.state(), self.bridge.url, stylesheet=self.app.presentation.css_variables(),
-            paper_preview=self.app.preferences.values.get('notebook_paper_preview', 'true') == 'true'))
+            paper_preview=self._paper_preview_sent))
 
     async def canvas_loaded(self, widget=None, **kwargs):
         if widget is not self.web:
@@ -399,6 +404,42 @@ class NotebookPanel:
         if getattr(self, 'native_drawing_tools', None) is not None:
             self.app.adaptive.render()
         self.refresh_fold()
+        self.prefetch_pdf_neighbors(self.bridge)
+
+    def prefetch_pdf_neighbors(self, canvas):
+        editor = self.editor
+        if (not canvas.active or not self.app.active_host or editor is None or
+                editor.notebook.content.get('fileType') != 'pdf'):
+            return
+        previous = getattr(self, '_pdf_prefetch', None)
+        if previous is not None and not previous.done():
+            return
+        start = editor.index
+
+        async def prefetch():
+            try:
+                for index in (start + 1, start - 1):
+                    if not canvas.active or not self.app.active_host or self.editor is not editor or editor.index != start:
+                        break
+                    key = editor.background_key(index)
+                    if key is None or editor.cached_background(key) is not None:
+                        continue
+                    try:
+                        image = await asyncio.to_thread(editor.render_background, key)
+                    except Exception:
+                        # An optional warmup failure must not interrupt editing.
+                        continue
+                    if (not canvas.active or not self.app.active_host or self.editor is not editor or
+                            editor.index != start or key != editor.background_key(index)):
+                        break
+                    editor.cache_background(key, image, keep=editor.background_key(start))
+            finally:
+                self._pdf_prefetch = None
+                if self.web is not None and self.editor is not None and (
+                        self.editor is not editor or editor.index != start or self.bridge is not canvas):
+                    self.prefetch_pdf_neighbors(self.bridge)
+
+        self._pdf_prefetch = self.app.loop.create_task(prefetch())
 
     def refresh_native_canvas_layout(self):
         # Canvas mounting can follow the native container's last layout pass.
@@ -460,6 +501,12 @@ class NotebookPanel:
                         'window.notebookViewportInsets?.(' + json.dumps(insets) + ')')
                     if self.web is web and self.bridge is bridge and _input_true(accepted):
                         self._viewport_insets_sent = insets
+                if self.web is web and self.bridge is bridge and hasattr(self, '_paper_preview_sent'):
+                    preview = self.paper_preview
+                    if preview != self._paper_preview_sent:
+                        accepted = await web.evaluate_javascript('window.notebookRefreshPaperPreview?.(' + json.dumps(preview) + ')')
+                        if self.web is web and self.bridge is bridge and _input_true(accepted):
+                            self._paper_preview_sent = preview
                 if self.web is web and hasattr(self, '_brush_presets_sent'):
                     raw = self.app.preferences.values.get(BRUSH_PRESETS, '[]')
                     if raw != self._brush_presets_sent:
@@ -539,6 +586,17 @@ class NotebookPanel:
                 self._brush_presets_sent = raw
                 return
             op = validate_action(action)
+            if op == 'paper-preview':
+                try:
+                    if self.paper_preview != action['muted']:
+                        self.app.preferences.save(notebook_paper_preview='true' if action['muted'] else 'false')
+                except (OSError, ValueError) as failure:
+                    error = str(failure)
+                preview = self.paper_preview
+                await respond('window.notebookPaperPreviewUpdate(' + json.dumps(preview) + ', '
+                              + json.dumps(error) + ')', acknowledges=True)
+                self._paper_preview_sent = preview
+                return
             if op in ('brush-color', 'eraser-kind'):
                 if op == 'brush-color':
                     editor.brush_colors[action['tool']] = action['color']
@@ -697,10 +755,13 @@ class NotebookPanel:
                 else:
                     script = update_script(self.state(), error)
                 location = page_location(editor)
-                changed = progress is not None and not error and location != previous_page
+                page_changed = not error and location != previous_page
+                changed = progress is not None and page_changed
                 if changed:
                     script += ';state.page_id === ' + json.dumps(location['page_id']) + ' && state.index === ' + str(location['index'])
                 displayed = await respond(script, acknowledges=True)
+                if page_changed or (not error and action['op'] == 'unlock-pdf'):
+                    self.prefetch_pdf_neighbors(canvas)
                 if (changed and progress is self.progress and _input_true(displayed)
                         and position_sequence >= self._position_sequence):
                     self._position_sequence = position_sequence

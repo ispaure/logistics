@@ -1,4 +1,4 @@
-// Single-finger navigation owns no ink. Existing two-contact zoom also pans.
+// Single-finger navigation owns no ink.
 let pageTouch = null, offeredPage = null, addingSwipePage = false;
 const swipeAddPage = document.createElement('button');
 swipeAddPage.id = 'swipeAddPage';
@@ -39,7 +39,7 @@ function finishPageSwipe(gesture, event) {
   const index = state.index+(dx < 0 ? 1 : -1);
   if (index >= 0 && index < state.count) {
     hideSwipePage();
-    send({op: 'page', index})
+    navigateWithPageFeedback(index)
   } else if (dx < 0 && index === state.count) showSwipePage();
   return true
 }

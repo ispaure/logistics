@@ -25,7 +25,12 @@ from mobile.palette import css_variables
 CHECKS = r'''(()=>{try{
 const check=(value,message)=>{if(!value)throw Error(message)};
 const scale=()=>canvas.getBoundingClientRect().width/state.width;
-const shown=()=>parseInt($('zoomLevel').textContent)/100;
+const zoomReadoutMatches=()=>{
+  const height = compactTemplate() && documentPaperView !== 'pro' ? compactPaper().height : paperBounds().height;
+  const expected = mobileViewport() ? (scale()*height/pageViewportSpace().height).toFixed(1)+'×' :
+    Math.round(scale()*100)+'%';
+  return $('zoomLevel').textContent === expected
+};
 const originalSend=send,originalCapture=canvas.setPointerCapture,originalFinger=$('finger').checked;
 const viewportCapture=$('viewport').setPointerCapture;
 const commands=[];send=action=>commands.push(action);canvas.setPointerCapture=()=>{};
@@ -33,12 +38,12 @@ $('viewport').setPointerCapture=()=>{};
 try{
   setZoom(1);$('zoomIn').click();check(Math.abs(scale()-1.2)<.001,'Zoom in button');
   $('zoomOut').click();check(Math.abs(scale()-1)<.001,'Zoom out button');
-  check(Math.abs(shown()-scale())<.006,'Visible zoom percentage');
+  check(zoomReadoutMatches(),'Visible zoom readout');
   setZoom(100);check(scale()===4&&$('zoomIn').disabled,'Upper zoom bound');
   setZoom(.001);check(Math.abs(scale()-.1)<.001&&$('zoomOut').disabled,'Lower zoom bound');
   $('zoomFit').click();check($('zoom').value===defaultViewportChoice().zoom,'Reset zoom defaults');
   check($('zoomFit').getAttribute('aria-label')==='Reset zoom','Reset zoom accessible label');
-  check(Math.abs(shown()-scale())<.006,'Fit page shows actual percentage');
+  check(zoomReadoutMatches(),'Fit page shows actual zoom');
   setZoom(1);
   const viewport=$('viewport'),box=viewport.getBoundingClientRect();
   const x=box.left+box.width/2,y=box.top+box.height/2;
@@ -65,8 +70,8 @@ try{
     contact('pointermove',501,x-60,y+15);contact('pointermove',502,x+100,y+15);
     // Pointer-up flushes a pending animation frame before releasing the pair.
     contact('pointerup',502,x+100,y+15);
-    check(Math.abs(scale()-2)<.001,'Two-finger pinch scale');
-    check(Math.abs(shown()-scale())<.006,'Pinch percentage');
+    check(Math.abs(scale()-160/96)<.001,'Two-finger pinch scale');
+    check(zoomReadoutMatches(),'Pinch zoom readout');
     const after=canvas.getBoundingClientRect();
     check(Math.abs(after.left+paperPoint[0]*after.width-x-20)<2&&
       Math.abs(after.top+paperPoint[1]*after.height-y-15)<2,'Moving pinch anchor drift');
@@ -96,7 +101,7 @@ try{
   margin('pointerdown',801,x-40,y);margin('pointerdown',802,x+40,y);
   margin('pointermove',801,x-80,y);margin('pointermove',802,x+80,y);
   margin('pointerup',802,x+80,y);margin('pointerup',801,x-80,y);
-  check(Math.abs(scale()-2)<.001&&commands.length===0,'Margin pinch drew ink or failed to zoom');
+  check(Math.abs(scale()-160/96)<.001&&commands.length===0,'Margin pinch drew ink or failed to zoom');
   margin('pointerdown',801,x,y);
   window.dispatchEvent(new Event('blur'));
   check(!pan&&!touchContacts.size&&!touchPinch,'Focus loss left a finger pan active');

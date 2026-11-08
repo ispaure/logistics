@@ -8,7 +8,7 @@ function fixture(mobile = true) {
   const classes = new Set(mobile ? ['notebook-mobile'] : []);
   function node(id) {
     return {id, value:'1', hidden:false, options:[{value:'1'},{value:'page'},{value:'fit'}],
-      clientWidth:400,clientHeight:600,scrollLeft:0,scrollTop:0,style:{},
+      clientWidth:400,clientHeight:600,scrollLeft:0,scrollTop:0,style:{},classList:{remove(){},toggle(){}},
       setAttribute(){},append(){},setPointerCapture(){},
       addEventListener(type,fn){const key=id+':'+type;(listeners.get(key)||listeners.set(key,[]).get(key)).push(fn)},
       closest(selector){return selector==='#viewport'?$('viewport'):null},
@@ -18,6 +18,7 @@ function fixture(mobile = true) {
   const c={console,Map,Set,Math,$,innerWidth:400,innerHeight:600,
     document:{body:{classList:{contains:name=>classes.has(name)}},createElement:()=>node('new'),head:{append(){}},elementFromPoint:()=>$('paper')},
     getComputedStyle:()=>({paddingLeft:'0px',paddingRight:'0px'}),
+    pageViewportSpace:()=>({width:400,height:600}),paperBounds:()=>({width:1000,height:1500}),
     window:{addEventListener(){}},canvas:$('paper'),state:{width:1000,height:1500},active:null,pan:null,paperView:'pro',
     resize(){const value=$('zoom').value;scale=['page','fit'].includes(value)?1:Number(value);vm.runInContext('updateZoomChrome()',c)},
     setTimeout(fn,delay){const id=++serial;timers.set(id,{fn,deadline:now+delay});return id},clearTimeout:id=>timers.delete(id),

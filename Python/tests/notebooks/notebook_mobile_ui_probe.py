@@ -166,6 +166,10 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
                         presets = change_preset(preferences, action)
                         self.runJavaScript(f'window.notebookBrushPresetUpdate({json.dumps(presets)}, "")')
                         return
+                    if action['op'] == 'paper-preview':
+                        preferences.save(notebook_paper_preview='true' if action['muted'] else 'false')
+                        self.runJavaScript(f"window.notebookPaperPreviewUpdate({json.dumps(action['muted'])}, '')")
+                        return
                     if action['op'] == 'page-previews':
                         self.runJavaScript('window.notebookPagePreviews(' + json.dumps(page_previews(book, action['start'])) + ')')
                     elif action['op'] != 'document-location':
@@ -231,17 +235,47 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
             return
         if not (native_only or laptop_only or palm_only):
             toolbar_reports = check_toolbar_layout(view, js, wait, output)
+            js("document.querySelector('.view-options').click()")
+            assert js("$('mobileSheet').dataset.panel==='view' && $('paperPreview').value==='muted'")
+            assert js("""(() => {
+                const preview = document.createElement('div');
+                preview.className = 'page-previews';
+                preview.id = 'colorPreviewProbe';
+                preview.append(document.createElement('img'));
+                document.body.append(preview);
+                window.colorPreviewFilter = () => [
+                    getComputedStyle($('paperWrap')).filter, getComputedStyle(preview.firstChild).filter
+                ];
+                return $('paperWrap').contains($('pdfBackground')) &&
+                    window.colorPreviewFilter().every(filter => filter.includes('brightness(1.03)'))
+            })()""")
+            js("$('paperPreview').value='vivid';$('paperPreview').onchange()")
+            wait(lambda: js("!busy && $('paperPreview').value==='vivid' && colorPreviewFilter().every(filter=>filter==='none')"))
+            assert Preferences(root / 'preferences').values['notebook_paper_preview'] == 'false'
+            js("$('paperPreview').value='muted';$('paperPreview').onchange()")
+            wait(lambda: js("!busy && colorPreviewFilter().every(filter=>filter!=='none')"))
+            assert Preferences(root / 'preferences').values['notebook_paper_preview'] == 'true'
+            js("document.querySelector('.sheet-heading button').click();$('colorPreviewProbe').remove();delete window.colorPreviewFilter")
             assert js("!document.querySelector('.mobile-tools #capture') && !!document.querySelector('.mobile-tools #select')")
             js("$('select').click()")
             assert js("mode==='select' && $('mobileSheet').hidden")
             js("$('select').click()")
             assert js("$('mobileSheet').dataset.panel==='selection' && $('capture').getClientRects().length>0")
+            assert js("""(() => {
+                const panel = $('mobileSheet'), opener = $('select');
+                return panel.getBoundingClientRect().top >= opener.getBoundingClientRect().bottom &&
+                    getComputedStyle(panel, '::before').content !== 'none' &&
+                    !panel.querySelector('.sheet-heading').getClientRects().length && $('mobileBackdrop').hidden;
+            })()""")
             js("$('capture').click()")
             assert js("mode==='capture' && $('mobileSheet').hidden && $('select').ariaPressed==='true'")
             js("$('select').click();$('capture').parentElement.firstElementChild.click()")
             assert js("mode==='select' && $('mobileSheet').hidden")
             js("$('brushToggle').click();$('erase').click();$('erase').click()")
             assert js("eraserDialog.open && document.querySelectorAll('.eraser-sizes button svg').length===3")
+            assert js("""eraserDialog.style.getPropertyValue('--drawer-notch') &&
+                getComputedStyle(eraserDialog, '::before').content !== 'none' &&
+                getComputedStyle(eraserDialog).overflow === 'visible'""")
             js("document.querySelector('.eraser-sizes [data-radius=\"32\"]').click()")
             assert js("eraserRadius===32 && document.querySelector('.eraser-sizes [aria-pressed=true]').dataset.radius==='32'")
             js("document.querySelector('.eraser-sizes [data-radius=\"16\"]').click();eraserDialog.close();$('brushToggle').click()")

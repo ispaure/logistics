@@ -297,7 +297,7 @@ storage still asks before leaving a dirty drawing. For writable notebooks, use
 
 ## Paper Pro preview
 
-A muted color preview is enabled by default to approximate Paper Pro / Paper Pro Move color E Ink. Turn it off for vivid display colors in **Settings → Features → Notebook preview**, then reopen the notebook. It applies to the page and overview thumbnails, including backgrounds. This is a display approximation, not a calibrated tablet profile; saved and exported colors remain unchanged.
+Open **Aa → View and input → Notebook colors** to switch between **Muted (default)** and **Vivid**. Muted softens colors and gives white areas a slight gray tint. The app remembers this choice for all notebooks and applies it to the page, PDF and template backgrounds, and page thumbnails. The same preference is available under **Settings → Features → Notebook preview**. Saved and exported colors keep their original values.
 
 Logistics draws its own template previews and custom layouts. Native lined options
 are labeled reMarkable compatible; Logistics is not affiliated with or endorsed

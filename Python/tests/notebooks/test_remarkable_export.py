@@ -43,6 +43,33 @@ class RemarkableExportTests(unittest.TestCase):
             editor.apply(dict(op='stroke', points=[[700, 180, .5], [850, 180, .5]], tool=17, width=2, color=0))
         return book, editor
 
+    def test_pdf_background_cache_reuses_neighbor_rasters_with_a_byte_limit(self):
+        from pypdf import PdfWriter
+        from features.pdf.annotation import notebook_from_pdf
+
+        writer = PdfWriter()
+        for _ in range(4):
+            writer.add_blank_page(width=300, height=400)
+        output = BytesIO()
+        writer.write(output)
+        editor = Editor(notebook_from_pdf(output.getvalue(), 'Four pages'))
+        with patch.object(editor, 'render_background', side_effect=lambda key: str(key[1]) * 3) as render, \
+                patch('features.notebooks.editor.PDF_BACKGROUND_BYTES', 9):
+            editor.index = 1
+            self.assertEqual(editor.background(), '111')
+            current = editor.background_key(1)
+            editor.cache_background(editor.background_key(0), '000', keep=current)
+            editor.cache_background(editor.background_key(2), '222', keep=current)
+            editor.cache_background(editor.background_key(3), '3333333', keep=current)
+            editor.index = 2
+            self.assertEqual(editor.background(), '222')
+            editor.index = 1
+            self.assertEqual(editor.background(), '111')
+            editor.index = 0
+            self.assertEqual(editor.background(), '000')
+            self.assertEqual(render.call_count, 1)
+            self.assertIsNone(editor.cached_background(editor.background_key(3)))
+
     def test_custom_backgrounds_export_with_native_ink_and_source_preserved(self):
         book, editor = self.fixture()
         ink = [book.page(i).to_bytes() for i in range(2)]

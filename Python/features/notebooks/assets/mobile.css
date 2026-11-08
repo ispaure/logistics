@@ -34,15 +34,14 @@ button{-webkit-appearance:none;appearance:none}
 #mobileSheet[data-panel=document] .menu-add-page{font-weight:600}
 
 /* Tool options float below their toolbar buttons without blocking canvas input. */
-#mobileSheet[data-panel=brush],#eraserDialog{position:fixed;right:auto;bottom:auto;margin:0;width:min(360px,calc(100vw - 16px));max-width:none;max-height:calc(100dvh - 84px - env(safe-area-inset-top));box-sizing:border-box;border:1px solid var(--edge);border-radius:18px;background:var(--paper);color:var(--ink);box-shadow:0 4px 24px #15201030;z-index:6}
-#eraserDialog{padding:18px;overflow:auto}
+#mobileSheet:is([data-panel=brush],[data-panel=selection]),#eraserDialog{position:fixed;right:auto;bottom:auto;margin:0;width:min(360px,calc(100vw - 16px));max-width:none;max-height:calc(100dvh - var(--drawer-top,60px) - max(8px,env(safe-area-inset-bottom),calc(var(--notebook-home-bottom) + 4px)));box-sizing:border-box;overflow:visible;border:1px solid var(--edge);border-radius:18px;background:var(--paper);color:var(--ink);box-shadow:0 4px 24px #15201030;z-index:6}
+#eraserDialog{padding:0}
+#eraserDialog .eraser-settings{padding:18px;max-height:inherit;overflow:auto;box-sizing:border-box;border-radius:inherit}
 
 #mobileSheet[data-panel=brush] {
   width:min(650px,calc(100vw - 16px));
-  max-height:calc(100dvh - var(--drawer-top,60px) - max(8px,env(safe-area-inset-bottom),calc(var(--notebook-home-bottom) + 4px)));
-  overflow:visible;
 }
-#mobileSheet[data-panel=brush]::before {
+#mobileSheet:is([data-panel=brush],[data-panel=selection])::before,#eraserDialog::before {
   content:'';
   position:absolute;
   top:-5px;
@@ -54,9 +53,10 @@ button{-webkit-appearance:none;appearance:none}
   border-left:1px solid var(--edge);
   transform:rotate(45deg);
   pointer-events:none;
+  z-index:1;
 }
-#mobileSheet[data-panel=brush] .sheet-heading{display:none}
-#mobileSheet[data-panel=brush] .sheet-scroll{min-height:0;padding:10px;border-radius:inherit}
+#mobileSheet:is([data-panel=brush],[data-panel=selection]) .sheet-heading{display:none}
+#mobileSheet:is([data-panel=brush],[data-panel=selection]) .sheet-scroll{min-height:0;padding:10px;border-radius:inherit}
 #mobileSheet[data-panel=brush] h3{margin:8px 2px 4px;text-transform:none;letter-spacing:0}
 #mobileSheet[data-panel=brush] h3:first-child{margin-top:0}
 #mobileSheet[data-panel=brush] .brush-grid {
@@ -141,13 +141,19 @@ button{-webkit-appearance:none;appearance:none}
 }
 .notebook-mobile .capture-tools{max-width:min(600px,calc(var(--notebook-safe-width) - 16px))}
 .notebook-mobile #pdfUnlock{max-width:calc(var(--notebook-safe-width) - 24px)}
-.notebook-mobile #zoomControls,.notebook-mobile #undoPageJump,.notebook-mobile #pdfUnlock {
+.notebook-mobile #zoomControls,.notebook-mobile #pageNavigationFeedback,.notebook-mobile #pdfUnlock {
   left:calc(50% + var(--notebook-tools-shift));
 }
-#eraserDialog{width:min(360px,calc(var(--notebook-safe-width) - 16px))}
+#eraserDialog,#mobileSheet[data-panel=selection]{width:min(360px,calc(var(--notebook-safe-width) - 16px))}
 #mobileSheet[data-panel=brush] .swatch svg.color-disc{width:min(26px,100%)}
 .notebook-mobile #restoreTools,.notebook-mobile .capture-tools{right:calc(var(--notebook-rail-right) + 8px)}
-.notebook-mobile #zoomControls{bottom:max(10px,env(safe-area-inset-bottom),calc(var(--notebook-home-bottom) + 4px))}
+.notebook-mobile #zoomControls,.notebook-mobile #pageNavigationFeedback{
+  --notebook-feedback-bottom:max(10px,env(safe-area-inset-bottom),calc(var(--notebook-home-bottom) + 4px));
+  bottom:var(--notebook-feedback-bottom)
+}
+.notebook-mobile:not(.tools-hidden):has(#zoomControls:not([hidden])) #pageNavigationFeedback{
+  bottom:calc(var(--notebook-feedback-bottom) + 58px)
+}
 
 /* The real horizontal hinge reserves upper settings and lower drawing space. */
 body.notebook-laptop header.mobile-head{max-width:calc(100% - 8px)}

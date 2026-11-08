@@ -1,9 +1,14 @@
 """Reversible notebook commands independent of hosts and storage backends."""
+from collections import OrderedDict
 from copy import copy, deepcopy
 
 from .protocol import validate_action, RecoveryIncomplete
 from .ink import WIDTH, HEIGHT, TOOLS, COLORS
 from .brushes import BRUSHES, EXPANDED_BRUSHES, EXPANDED_INK_SCALE, PALETTE, HIGHLIGHTS, HIGHLIGHT_IDS, NATIVE_HIGHLIGHTS, SHADERS, WIDTHS
+
+
+PDF_BACKGROUND_BYTES = 12 * 1024 * 1024
+PDF_BACKGROUND_PAGES = 3
 
 
 class Editor:
@@ -18,33 +23,58 @@ class Editor:
         self.redo = []
         self._stroke_clipboard = []
         self._selection_ids = []
-        self._background = (None, None)
+        self._backgrounds = OrderedDict()
         self._unlocked_pdf = None
         self._locked_pdf = None  # Encrypted source bytes only; never a password.
         self._pdf_geometry = (None, None)
         self._pdf_links = (None, None, [])
 
-    def background(self):
+    def background_key(self, page_index):
         book = self.notebook
-        if book.content.get('fileType') != 'pdf':
+        if book.content.get('fileType') != 'pdf' or not 0 <= page_index < len(book.pages):
             return None
-        index = book.pages[self.index].record.get('redir', {}).get('value', -1)
-        if index < 0:
+        index = book.pages[page_index].record.get('redir', {}).get('value', -1)
+        data = self.pdf_data() if index >= 0 else None
+        return (data, index) if data is not None else None
+
+    @staticmethod
+    def render_background(key):
+        from base64 import b64encode
+        from features.pdf.document import PDFDocument
+
+        data, index = key
+        pdf = PDFDocument(data)
+        try:
+            return 'data:image/png;base64,' + b64encode(pdf.page(index)).decode('ascii')
+        finally:
+            pdf.close()
+
+    def cached_background(self, key):
+        return self._backgrounds.get(key)
+
+    def cache_background(self, key, image, *, keep=None):
+        if keep is not None and key != keep:
+            # Lookahead cannot evict the page already being displayed.
+            if len(image) + len(self._backgrounds.get(keep, '')) > PDF_BACKGROUND_BYTES:
+                return
+        self._backgrounds[key] = image
+        self._backgrounds.move_to_end(key)
+        while len(self._backgrounds) > 1 and (len(self._backgrounds) > PDF_BACKGROUND_PAGES or
+                sum(map(len, self._backgrounds.values())) > PDF_BACKGROUND_BYTES):
+            oldest = next(candidate for candidate in self._backgrounds if candidate not in (keep, key))
+            del self._backgrounds[oldest]
+
+    def background(self):
+        key = self.background_key(self.index)
+        if key is None:
             return None
-        data = self.pdf_data()
-        if data is None:
-            return None
-        key = (data, index)
-        if self._background[0] != key:
-            import base64
-            from features.pdf.document import PDFDocument
-            pdf = PDFDocument(data)
-            try:
-                image = 'data:image/png;base64,' + base64.b64encode(pdf.page(index)).decode()
-            finally:
-                pdf.close()
-            self._background = (key, image)
-        return self._background[1]
+        image = self.cached_background(key)
+        if image is None:
+            image = self.render_background(key)
+            self.cache_background(key, image)
+        else:
+            self._backgrounds.move_to_end(key)
+        return image
 
     def expanded_pdf_layout(self):
         content = self.notebook.content
