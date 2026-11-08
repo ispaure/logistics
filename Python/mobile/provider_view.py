@@ -91,7 +91,7 @@ class ProviderDocumentView:
             view.crypt_image.bind_links(owner, reader)
         else:
             view.crypt_image = ImageCanvas(on_page=owner.swipe_crypt_page,
-                page_swipes_at_edges=reader.kind in {'.cbz', '.zip'},
+                page_swipes_at_edges=reader.kind in {'.cbz', '.zip'} or getattr(reader, 'image_document', False),
                 on_toggle=owner.toggle_private_reading_mode, style=Pack(flex=1))
         from .magnifier import bind
         bind(owner, view.crypt_image)

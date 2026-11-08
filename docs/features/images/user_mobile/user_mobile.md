@@ -4,9 +4,11 @@
 
 Open a PNG, JPEG or WebP from Files or a folder drawer. Local, LocalCrypt,
 Cloud and connected Home Server locations use the image document viewer.
-Use **Previous image** / **Next image** to move through the same folder in natural
-filename order. The buttons stop at the first/last image and skip subfolders and
-other formats. Failed opens keep the current image. **Fit image** is available
+At fit zoom, swipe left for the next image or right for the previous one.
+Swipes work in fullscreen and with the controls visible, using the same slide
+as comic pages. **Previous image** and **Next image** follow the same natural
+filename order. Navigation stops at the first or last image and skips
+subfolders and other formats. Failed opens keep the current image. **Fit image** is available
 in the reader controls.
 
 The row below the title uses the browser's storage icons and caption style,

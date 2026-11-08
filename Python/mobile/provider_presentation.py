@@ -87,7 +87,9 @@ def compact_private_view(self, view):
     bind_provider_title(view)
     image = bool(getattr(view.crypt_reader, 'image_document', False))
     comic = view.crypt_reader.kind in {'.cbz', '.zip'}
-    view.crypt_immersive = comic or image or view.crypt_reader.kind == '.pdf'
+    image_immersive = getattr(self, 'initial_image_immersive', None)
+    view.crypt_immersive = ((True if image_immersive is None else image_immersive) if image
+                            else comic or view.crypt_reader.kind == '.pdf')
     if view.crypt_immersive:
         view.reading_frame.set_immersive(True, comic=comic, image=image or view.crypt_reader.kind == '.pdf')
     self.register_transfer_status(view.crypt_view)
