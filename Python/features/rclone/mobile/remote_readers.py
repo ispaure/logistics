@@ -1,6 +1,8 @@
 """Format readers over an independently owned remote resource session."""
 from pathlib import Path
 
+from commonUtils.archives.zip_access import ArchivePasswordError
+
 from services.documents.readers import PrivateReader
 from services.documents.mobile_reading import DocumentReadCapabilities
 from features.rclone.remote_policy import direct_kind, TEXT_LIMIT
@@ -46,9 +48,22 @@ class RemoteReaders:
                     data = stream.read()
                 reader = RemoteImageReader(key, data, source)
             else:
-                if Path(key).suffix.lower() in {'.epub', '.cbz', '.zip'}:
+                suffix = Path(key).suffix.lower()
+                if suffix in {'.epub', '.cbz', '.zip'}:
                     source.cache_archive()
-                reader = PrivateReader(key, source=source)
+                try:
+                    reader = PrivateReader(key, source=source)
+                except ArchivePasswordError:
+                    if password or suffix not in {'.cbz', '.zip'}:
+                        raise
+                    from services.documents.zip_passwords import inherited_remote_password
+                    with resource.operation(cancelled):
+                        password = inherited_remote_password(resource.relative(key), resource.read_bytes)
+                    if not password:
+                        raise
+                    # The source is still private to this worker and has no decoded members.
+                    source.password = password
+                    reader = PrivateReader(key, source=source)
             reader.key, reader.password, reader.read_only = key, password, True
             source.check()
             return reader

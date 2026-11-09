@@ -10,7 +10,10 @@ import (
 	"path"
 
 	"github.com/rclone/rclone/backend/crypt"
+	"github.com/rclone/rclone/fs"
 )
+
+var remoteFileNotFound = errors.New("the remote file was not found")
 
 // Resolve one logical remote file without materializing a plaintext local copy.
 func remoteDocument(ctx context.Context, name, p, identity string) (remoteReaderAt, int64, string, error) {
@@ -37,6 +40,9 @@ func remoteDocument(ctx context.Context, name, p, identity string) (remoteReader
 		return empty, 0, "", err
 	}
 	object, err := backend.NewObject(ctx, objectPath)
+	if errors.Is(err, fs.ErrorObjectNotFound) || errors.Is(err, fs.ErrorDirNotFound) {
+		return empty, 0, "", remoteFileNotFound
+	}
 	if err != nil {
 		return empty, 0, "", errors.New("remote file could not be opened")
 	}

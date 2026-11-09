@@ -129,6 +129,8 @@ func encodeReply(action string, result any, err error) string {
 		reply["error"] = "Rclone operation failed."
 		if errors.Is(err, archivePasswordError) {
 			reply["error_code"] = "archive_password"
+		} else if errors.Is(err, remoteFileNotFound) {
+			reply["error_code"] = "remote_file_not_found"
 		}
 		if action != "probe" {
 			reply["error"] = err.Error()

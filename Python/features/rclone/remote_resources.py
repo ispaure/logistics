@@ -157,6 +157,8 @@ class RemoteResources:
                 or self._cancellation.current())
         except BinaryCommandError as error:
             self._check_active()
+            if operation == 'lsjson' and '--stat' in flags and error.returncode in {3, 4}:
+                raise FileNotFoundError('The remote file was not found.') from None
             raise OSError(remote_failure(error)) from None
         self._check_active()
         return result
@@ -182,7 +184,10 @@ class RemoteResources:
         return row.get('ID'), row['Size'], row.get('ModTime'), tuple(sorted((row.get('Hashes') or {}).items()))
 
     def stat(self, path):
-        return json.loads(self.command('lsjson', path, '--stat', '--no-mimetype'))
+        row = json.loads(self.command('lsjson', path, '--stat', '--no-mimetype'))
+        if row is None:
+            raise FileNotFoundError('The remote file was not found.')
+        return row
 
     def entry(self, path):
         key = self.relative(path)
@@ -220,7 +225,12 @@ class RemoteResources:
             return stream.read()
 
     def archive_password(self, path):
-        return None
+        from commonUtils.archives.zip_access import is_encrypted
+        from services.documents.zip_passwords import inherited_remote_password
+        with self.open(path) as stream:
+            if not is_encrypted(stream):
+                return None
+        return inherited_remote_password(self.relative(path), self.read_bytes)
 
     def check(self):
         self._check_active()

@@ -98,6 +98,8 @@ class CloudClient:
         if not reply.get('ok'):
             if reply.get('error_code') == 'credentials_busy':
                 raise CredentialBusyError(reply.get('error'))
+            if reply.get('error_code') == 'remote_file_not_found':
+                raise FileNotFoundError('The remote file was not found.')
             if reply.get('error_code') == 'archive_password':
                 from commonUtils.archives.zip_access import ArchivePasswordError
                 raise ArchivePasswordError(reply.get('error', 'Inner ZIP password required.'))

@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,6 +53,10 @@ func TestRemoteDocumentsRangesArchivesIdentityAndRevision(t *testing.T) {
 		result, err := remoteDocumentRequest(ctx, "remote_stat", name, p, identity, "", "", "", 0, 0)
 		if err != nil {
 			t.Fatal(err)
+		}
+		_, missing := remoteDocumentRequest(ctx, "remote_stat", name, "missing/remoteConfig.ini", identity, "", "", "", 0, 0)
+		if !errors.Is(missing, remoteFileNotFound) || !strings.Contains(encodeReply("remote_stat", nil, missing), `"error_code":"remote_file_not_found"`) {
+			t.Fatal("missing remote configuration was not reported as missing", missing)
 		}
 		stat := result.(map[string]any)
 		revision := stat["revision"].(string)

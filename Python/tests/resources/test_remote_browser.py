@@ -117,6 +117,35 @@ class RemoteBrowserTests(QtTestCase):
                 with self.assertRaisesRegex(ValueError, 'Credentials'):
                     stream.read(1)
 
+    def test_remote_comic_inherits_archive_password(self):
+        from commonUtils.archives.zip_access import ArchivePasswordError, open_archive
+        from features.comics.library import ComicDocument
+        from features.comics.pages import ComicPages
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            series = root / 'Books' / 'Series'
+            series.mkdir(parents=True)
+            with open_archive(series / 'comic.cbz', 'w', password='fixture-only') as archive:
+                archive.writestr('page.png', b'comic page')
+            (root / 'remoteConfig.ini').write_text('[LogisticsZIP]\narchive_password=fixture-only\n')
+            nearer = root / 'Books' / 'remoteConfig.ini'
+            nearer.write_text('[Other]\narchive_password=unrelated\n')
+            config = root / 'account.session'
+            session.remember(config, {'Files': {'type': 'alias', 'remote': str(root)}})
+            self.addCleanup(session.forget, config)
+            provider = RemoteResources(config, 'Files', binary=self.binary)
+            self.addCleanup(provider.close)
+            key = provider.root / 'Books' / 'Series' / 'comic.cbz'
+
+            comic = ComicPages(key, ComicDocument(key, source=provider))
+            self.assertEqual(comic.read_page(0), (b'comic page', 'image/png'))
+
+            nearer.write_text('[LogisticsZIP]\narchive_password=\n')
+            with self.assertRaises(ArchivePasswordError):
+                ComicDocument(key, source=provider)
+            comic = ComicPages(key, ComicDocument(key, source=provider, password='fixture-only'))
+            self.assertEqual(comic.read_page(0), (b'comic page', 'image/png'))
+
     def test_crypt_direct_reads(self):
         with TemporaryDirectory() as folder, crypt_fixture(folder, self.binary) as fixture:
             provider = RemoteResources(fixture.context, 'Secret', binary=self.binary)

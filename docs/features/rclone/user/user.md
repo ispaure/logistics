@@ -260,8 +260,11 @@ are 128 MiB per comic and 256 MiB across windows. Download progress shows bytes
 and percentage. Closing the comic or retiring its credentials releases the cache;
 it is never written to disk. Larger comics need a managed local copy. Reopen to
 load a newer online version. Mobile remote listings do not fetch thumbnails.
-On mobile, a comic's inner password opens an item-specific password form. The
-file/folder **•••** page also offers **Open preview**/**Open folder** for that item,
+For a protected comic, Logistics looks for `remoteConfig.ini` beside the archive
+and then in parent folders up to the remote root. The nearest `[LogisticsZIP]`
+section supplies `archive_password`. An empty or omitted key in that section
+stops inheritance. If no password is found or it is rejected, Logistics asks
+for the comic's ZIP password. On mobile, the file/folder **•••** page also offers **Open preview**/**Open folder** for that item,
 with an optional inner ZIP password for archives. File-opening progress and
 failures appear above the browser listing.
 Other formats and content exceeding the direct-reader limits show a dialog asking
