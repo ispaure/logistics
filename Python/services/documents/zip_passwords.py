@@ -3,10 +3,12 @@
 from collections import OrderedDict
 from configparser import ConfigParser, Error as ConfigError
 from hashlib import sha256
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from threading import RLock
 
 from commonUtils.archives.zip_access import ArchivePasswordError, authenticate, is_encrypted, password_bytes
+
+MAX_CONFIG_BYTES = 64 * 1024
 
 _cache = OrderedDict()
 _lock = RLock()
@@ -117,7 +119,7 @@ def is_password_error(message):
 
 def password_from_ini(data):
     """Parse a bounded virtual INI using the same LogisticsZIP inheritance rule."""
-    if len(data) > 65536:
+    if len(data) > MAX_CONFIG_BYTES:
         raise ValueError('ZIP password configuration exceeds its size limit.')
     parser = ConfigParser(interpolation=None)
     try:
@@ -127,3 +129,17 @@ def password_from_ini(data):
     parser.defaults().clear()
     found = parser.has_section('LogisticsZIP')
     return ((parser.get('LogisticsZIP', 'archive_password', fallback='') or None) if found else None, found)
+
+
+def inherited_remote_password(path, read_bytes):
+    """Read the nearest LogisticsZIP section within the remote's own root."""
+    parent = PurePosixPath(path).parent
+    for folder in (parent, *parent.parents):
+        try:
+            data = read_bytes((folder / 'remoteConfig.ini').as_posix(), limit=MAX_CONFIG_BYTES)
+        except FileNotFoundError:
+            continue
+        password, found = password_from_ini(data)
+        if found:
+            return password
+    return None

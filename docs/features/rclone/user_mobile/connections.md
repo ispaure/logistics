@@ -99,8 +99,11 @@ encrypted-folder discovery in the background. Opening a mapped remote shows
 and navigation remain usable during that check.
 
 Tap a file to open its preview or a folder to browse it directly. File browser
-rows have no **•••** button. Opening a password-protected comic brings up its
-inner ZIP password form automatically.
+rows have no **•••** button. When you open a protected comic, Logistics checks
+`remoteConfig.ini` beside it and up to the remote root. The nearest
+`[LogisticsZIP]` section supplies `archive_password`. An empty or omitted key
+in that section stops inheritance. If no password is found or it is rejected,
+Logistics opens the inner ZIP password form.
 The browser status shows when a remote file is opening and reports opening failures.
 
 The magnifying glass on the right reveals **Search**, which filters names in the

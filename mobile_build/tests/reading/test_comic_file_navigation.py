@@ -25,6 +25,55 @@ class ComicFileNavigationTests(unittest.TestCase):
     def test_cloud_read_only_comics_can_navigate_neighbors(self):
         self.exercise('cloud')
 
+    def test_cloud_comic_inherits_password_without_redownloading(self):
+        import base64
+        from io import BytesIO
+        from zipfile import ZipFile
+        from commonUtils.archives.zip_access import ArchivePasswordError
+
+        class ProtectedRemote(RemoteClient):
+            def request(self, action, **values):
+                if action == 'remote_stat' and values['path'] not in self.files:
+                    raise FileNotFoundError(values['path'])
+                if action == 'remote_cache_archive':
+                    data = self.cached[values['run']]
+                    with ZipFile(BytesIO(data)) as archive:
+                        if member := values.get('member'):
+                            if values.get('password') != 'fixture-only':
+                                raise ArchivePasswordError('Inner ZIP password required or incorrect.')
+                            return dict(data=base64.b64encode(archive.read(member)).decode())
+                        return [dict(name=row.filename, size=row.file_size, crc=row.CRC, flags=1,
+                                     directory=row.is_dir()) for row in archive.infolist()]
+                return super().request(action, **values)
+
+        client = ProtectedRemote()
+        key = 'Books/Series/comic.cbz'
+        data = BytesIO()
+        with ZipFile(data, 'w') as archive:
+            archive.writestr('page.png', b'comic page')
+        client.files[key] = data.getvalue()
+        client.files['remoteConfig.ini'] = b'[LogisticsZIP]\narchive_password=fixture-only\n'
+        client.files['Books/remoteConfig.ini'] = b'[Other]\narchive_password=unrelated\n'
+        provider = NativeRemoteResources(client, NativeRemoteLocation('Files'))
+        self.addCleanup(provider.close)
+
+        reader = provider.readers().open(key)
+        try:
+            self.assertEqual(reader.password, 'fixture-only')
+            self.assertEqual(reader.pages, ['page.png'])
+            self.assertEqual(client.calls.count(('remote_cache_open', key)), 1)
+        finally:
+            reader.source.close()
+
+        client.files['Books/remoteConfig.ini'] = b'[LogisticsZIP]\narchive_password=wrong\n'
+        with self.assertRaises(ArchivePasswordError):
+            provider.readers().open(key)
+        self.assertFalse(client.cached)
+        client.calls.clear()
+        reader = provider.readers().open(key, password='fixture-only')
+        reader.source.close()
+        self.assertFalse(any(path and path.endswith('remoteConfig.ini') for _, path in client.calls))
+
     def test_local_files_use_original_folder_without_creating_imports(self):
         from mobile.document_imports import open_local_document
         from mobile_build.tests.support.app import create_app
