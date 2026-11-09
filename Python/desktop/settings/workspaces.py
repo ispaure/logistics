@@ -36,7 +36,7 @@ class WorkspaceSettingsPanel(qt.QWidget):
         self.visibility.changed.connect(self._sync)
         layout.addWidget(self.show_legacy_choice)
         description = qt.QLabel(
-            'Show workspace names starting with Legacy- in Local, Cloud and Home Server. '
+            'Show workspace names starting with Legacy- and credential names starting with Legacy. '
             'Hidden by default. This choice lasts only until the app closes.')
         description.setWordWrap(True)
         layout.addWidget(description)
