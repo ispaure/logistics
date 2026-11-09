@@ -410,6 +410,30 @@ class FolderSourceTests(QtTestCase):
         self.assertIs(page.browser_stack.currentWidget(), page.browser_notice)
         self.assertFalse(page.detail_scroll.widget().findChildren(qt.QPushButton))
 
+    def test_legacy_credential_choices_follow_workspace_visibility(self):
+        self.local_folders = [self.folder('Books'), self.folder('Legacy-Books')]
+        self.remote(['Books'], 'Current', feature='rclone')
+        self.remote(['Legacy-Books'], 'lEgAcY', feature='rclone')
+        page = self.page()
+        combo = page.credential_combo
+        for source in ('Local', 'Cloud'):
+            with self.subTest(source=source):
+                page.source_tabs.setCurrentIndex(self.tab(page, source))
+                self.wait(page)
+                self.assertEqual([combo.itemText(i) for i in range(combo.count())], ['All', 'Current'])
+
+                combo.setCurrentIndex(combo.findText('Current'))
+                page.visibility.set_show_legacy(True)
+                self.assertEqual(combo.currentText(), 'Current')
+                self.assertNotEqual(combo.findText('lEgAcY'), -1)
+                combo.setCurrentIndex(combo.findText('lEgAcY'))
+                self.assertEqual([entry.name for entry in self.entries(page)], ['Legacy-Books'])
+
+                page.visibility.set_show_legacy(False)
+                self.assertEqual(combo.currentText(), 'All')
+                self.assertEqual([combo.itemText(i) for i in range(combo.count())], ['All', 'Current'])
+                self.assertEqual([entry.name for entry in self.entries(page)], ['Books'])
+
     def test_all_local_copies_and_loaded_cloud_remotes_use_separate_browser_targets(self):
         from types import SimpleNamespace
         from features.rclone.localcrypt.backend import LocalCryptFolder

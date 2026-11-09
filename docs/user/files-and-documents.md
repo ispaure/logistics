@@ -97,8 +97,10 @@ When Cloud has no visible folders, **+ rclone** opens credential setup. Unlock
 a credential package in Settings to load its remotes. Remembered names and local
 copy associations do not create Cloud destinations after credentials lock or are
 forgotten; local folders remain available under Local.
-Names starting with **Legacy-** (ignoring case) are hidden by default across all
-three sources. Use **Settings → Workspaces → Show Legacy (session only)** to reveal them.
+Workspace names starting with **Legacy-** are hidden by default across all three
+sources. The Rclone Copies and Cloud credential dropdowns also hide credential
+names starting with **Legacy**. Both checks ignore case. Use
+**Settings → Workspaces → Show Legacy (session only)** to reveal these names.
 The choice survives refreshes and source changes, and resets to off on the next launch.
 Its files open in the **Files** pane on the right. Below the folder list,
 **Info** shows general workspace details and **Actions** contains feature tools.

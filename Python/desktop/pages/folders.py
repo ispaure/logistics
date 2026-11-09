@@ -208,7 +208,7 @@ class FoldersPage(pyside.QWidget):
         self.folder_tree.currentItemChanged.connect(self._selection_changed)
         self.folder_tree.setContextMenuPolicy(pyside.Qt.ContextMenuPolicy.CustomContextMenu)
         self.folder_tree.customContextMenuRequested.connect(self._folder_context_menu)
-        self.visibility.changed.connect(self.tree_presentation.refresh)
+        self.visibility.changed.connect(self._visibility_changed)
 
     def _folder_context_menu(self, position):
         item = self.folder_tree.itemAt(position)
@@ -323,6 +323,12 @@ class FoldersPage(pyside.QWidget):
         self._selected_entry_key = None
         self.tree_presentation.refresh()
 
+    def _visibility_changed(self):
+        if self._closing or self._sources is None:
+            return
+        self._refresh_credentials(self.credential_combo.currentData())
+        self.tree_presentation.refresh()
+
     def _get_selected_source(self):
         return self.source_tabs.tabData(self.source_tabs.currentIndex())
 
@@ -340,7 +346,9 @@ class FoldersPage(pyside.QWidget):
             self.credential_combo.addItem('All', None)
             if cloud or local_rclone:
                 for source in sources:
-                    self.credential_combo.addItem(source.source.name, source.source.context)
+                    name = source.source.name
+                    if self.visibility.show_legacy or not name.casefold().startswith('legacy'):
+                        self.credential_combo.addItem(name, source.source.context)
             if selected_credential is not None:
                 for index in range(self.credential_combo.count()):
                     current = self.credential_combo.itemData(index)

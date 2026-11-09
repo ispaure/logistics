@@ -37,7 +37,9 @@ Browser replacement, unlock callbacks and retirement remain with the page; the
 Qt-independent `FolderController` still captures discovery/detail worker inputs.
 
 Desktop `FoldersPage` filters `Legacy-` workspace names case-insensitively after
-source/credential selection, before building the tree. **Settings → Workspaces →
+source/credential selection, before building the tree. The Rclone Copies and
+Cloud dropdowns filter credential names beginning with `Legacy`, ignoring case.
+Hiding the selected credential resets the filter to **All**. **Settings → Workspaces →
 Show Legacy (session only)** starts unchecked and uses an application-owned
 `WorkspaceVisibility` object shared by all desktop workspace and Settings pages.
 Discovery refreshes and window changes preserve it; no configuration value is
