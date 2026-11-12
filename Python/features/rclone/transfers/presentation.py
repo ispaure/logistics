@@ -59,18 +59,27 @@ class ReviewProjection:
         self.query = ''
 
 
+def removal_counts(values):
+    counts = (f'{values[key]:,} {label}' for key, label in (
+        ('file_delete_attempts', 'files'), ('folder_removal_attempts', 'folders'))
+        if values.get(key) is not None)
+    return ', '.join(counts) or 'Not reported'
+
+
 def progress_model(state):
     if state.display_revoked:
         return dict(mode='progress', operation='Pull', source='—', destination='—', workspace='Transfer',
             phase='failed', busy=False, message='Connection locked or changed. Review again after unlocking.',
             status='', percentage=None, done=0, total=0, files=0, total_files=0, checks=0, listed=0,
+            file_delete_attempts=None, folder_removal_attempts=None,
             active=0, active_files=(), attempt=0, max_attempts=0, retrying=False, elapsed=0)
     values = state.metrics
     phase = values.get('phase', '')
+    removing = phase == 'Removing destination entries'
     result = state.result
     if state.busy:
         phase = ('verify' if phase in ('Sync complete; verifying local copy', 'Checking / finishing sync')
-                 else 'transfer' if phase == 'Transferring' or values.get('done', 0) > 0 else 'scan')
+                 else 'transfer' if removing or phase == 'Transferring' or values.get('done', 0) > 0 else 'scan')
         if state.cancel is not None and state.cancel.is_set():
             phase = 'stopping'
     else:
@@ -81,9 +90,12 @@ def progress_model(state):
     percentage = state.percentage if phase == 'transfer' else 100 if phase == 'complete' else None
     return dict(mode='progress', operation=operation, source=source, destination=destination,
         workspace=workspace_name(source, destination, operation), phase=phase, busy=state.busy,
-        message=state.message, status='Stopping transfer…' if phase == 'stopping' else 'Copying files…',
+        message=state.message, status={'stopping': 'Stopping transfer…'}.get(phase,
+            'Removing destination entries…' if removing else 'Copying files…'),
         percentage=percentage, done=values.get('done', 0), total=values.get('total', 0),
         files=values.get('files', 0), total_files=values.get('total_files', 0),
+        file_delete_attempts=values.get('file_delete_attempts'),
+        folder_removal_attempts=values.get('folder_removal_attempts'),
         checks=values.get('checks', 0), listed=values.get('listed', 0), active=values.get('active', 0),
         active_files=tuple(dict(row) for row in values.get('active_files', ())[:3]) if phase == 'transfer' else (),
         attempt=values.get('attempt', 0), max_attempts=values.get('max_attempts', 0),

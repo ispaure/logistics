@@ -281,7 +281,11 @@ async def exercise_ui_review(app):
                                ('Network shares', app.folder_add_share_button), ('Local', None)):
             app.folder_source_buttons[source].on_press()
             assert list(app.folder_source_actions.children) == ([action] if action is not None else [])
-            assert bool(app.folder_picker_header.children) == (source == 'rclone')
+            assert list(app.folder_picker_header.children) == {
+                'rclone': [app.folder_credential_row, app.folder_view_toggle],
+                'Network shares': [app.folder_view_toggle],
+                'Local': [],
+            }[source]
             assert all(button.enabled for button in app.folder_source_buttons.values())
             assert not app.folder_loading_box.children
         folder = app.folder_buttons['All files']

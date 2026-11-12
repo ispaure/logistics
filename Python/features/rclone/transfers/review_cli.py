@@ -49,7 +49,7 @@ def _lines(arguments, environment, cancelled, consume):
 
 def scanner(binary, source, destination, config_path, options=TransferOptions(), *,
             display_path=lambda path, cancelled: path, display_directory=None, cleanup_plan=lambda cancelled: {},
-            display_paths=None, display_directories=None):
+            display_paths=None, display_directories=None, delete_excluded=False):
     def scan(emit, cancelled):
         revoked = session.revocation_check(config_path)
         launched = session.launch(config_path, source, destination)
@@ -112,7 +112,7 @@ def scanner(binary, source, destination, config_path, options=TransferOptions(),
                                 pending[path] = sigils[code]
                                 if len(pending) >= 128:
                                     flush()
-        flags = options.cli_arguments()
+        flags = options.cli_arguments(delete_excluded=delete_excluded)
         arguments = [str(binary), 'sync', '--config', config, '--dry-run', '--combined', '-',
                      '--use-json-log', '--log-level', 'DEBUG', '--create-empty-src-dirs', *flags, '--', src, dst]
         _lines(arguments, environment, cancelled, comparison)
@@ -123,7 +123,9 @@ def scanner(binary, source, destination, config_path, options=TransferOptions(),
         # Record both trees for stale-review detection, including matching files.
         # Metadata is streamed to RAM, never written to plaintext report files.
         trees = []
-        for target in (src, dst):
+        for is_destination, target in enumerate((src, dst)):
+            # Excluded destination entries are in scope for deletion on Push.
+            excludes = () if is_destination and delete_excluded else options.excludes
             chunks = []
             def inventory(line):
                 chunks.append(line)
@@ -133,7 +135,7 @@ def scanner(binary, source, destination, config_path, options=TransferOptions(),
             else:
                 _lines([str(binary), 'lsjson', target, '--config', config, '-R', '--no-mimetype',
                         *(['--copy-links'] if options.copy_links else []),
-                        *[argument for pattern in options.excludes for argument in ('--exclude', pattern)]],
+                        *[argument for pattern in excludes for argument in ('--exclude', pattern)]],
                        environment, cancelled, inventory)
                 if cancelled():
                     return ''

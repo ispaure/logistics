@@ -164,7 +164,7 @@ rclone folders. Remote-only folders appear under Cloud once credentials load.
 Tap a folder under **Local** to browse its device copy; tap it under **Cloud**
 to browse its online copy, including the mapped subfolder for a partial pull.
 The **•••** menu keeps the same available browse, Push/Pull and folder-management
-actions on both tabs. In **Cloud**, the credential picker beside **Rclone Remotes**
+actions on both tabs. In **Cloud**, the credential picker below the **Rclone Remotes** tab
 starts at **All**. Choose a credential ZIP to filter its folders. Returning from
 another source resets it to **All**.
 The remote names and credential filters come from loaded configurations and retained
@@ -183,7 +183,8 @@ appear, from **Rclone Copies**, where downloaded and synced copies appear.
 Save pickers use those same names. **Home Server** contains
 SMB/Mac connections added through **Add share…**, including their managed offline
 copies. SMB remotes imported inside credential ZIPs stay with their package under
-**Cloud**. Local and Home Server hide the credential selector. **Transfers** appears on **Cloud** only while a transfer is active or a stopped
+**Cloud**. The credential selector appears in **Cloud** and **Rclone Copies**.
+**Transfers** appears on **Cloud** only while a transfer is active or a stopped
 transfer needs attention. **Add share…** appears on **Home Server** only when no
 share is configured; **Add Remote…** appears on **Cloud** only when no remote is
 configured and opens connection settings. Saved or locked connections count as
@@ -196,7 +197,8 @@ progress appear only while a folder is opening or an error needs attention.
 Android folder and overflow icons sit centered within their touch targets,
 leaving room for the row outline. High contrast uses the same icon sizes,
 title sizes and content positions as regular appearance across all source tabs.
-File-browser lists sit in one rounded group on iOS and Android, with inset dividers between files. The group ends at the final row
+File-browser lists sit in one rounded group on iOS and Android, with dividers that
+have equal insets on both sides and extend beneath the row menus. The group ends at the final row
 for short lists, leaving the surrounding page visible below it. Long lists
 scroll inside the available pane. Android High contrast / E Ink adds a black
 outline while keeping the same rounded corners and row spacing.
@@ -211,8 +213,13 @@ relying on red/green differences. Android monochrome mode retains the distinct
 shapes in black. Ordinary folders use a plain folder icon in the same blue as unlocked folders. Screen readers announce
 the copy type and individual lock state. Group headings describe structure,
 not a shared credential state.
-Dash-separated names form expanded levels (for example Server → Lib → ComicRack);
-group labels are informational and remain expanded. Groups and browsable folders
+By default, dash-separated names form expanded levels (for example Server → Lib → ComicRack).
+Use the folder-view button beside **Credential** in Cloud or Local's **Rclone Copies**
+to switch between the hierarchy and a flat list with full names. In Home Server,
+the button sits at the right of the header. The setting applies to all three
+sources and is remembered when you reopen Logistics.
+
+In hierarchy view, group labels are informational and remain expanded. Groups and browsable folders
 use the same text size and row height. Groups have plain bold labels
 with no icon, including the top level; browsable folders have regular names,
 folder icons and **•••**. Each level has a consistent

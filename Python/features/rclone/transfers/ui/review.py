@@ -1,15 +1,27 @@
 """Qt presentation of the shared transfer review lifecycle."""
+from shiboken6 import isValid
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.document_host import CloseOutcome, current_document_host
 from features.rclone.transfers.review import ReviewSession
 from features.rclone.transfers.presentation import ReviewProjection, PAGE_SIZE, workspace_name
 
 
+def finish_setup_for_review(dialog):
+    host = current_document_host(destination=ReviewDialog.document_destination)
+    if host is not None and not host.closing and host.window().isVisible() and dialog.isModal():
+        dialog.accept()
+
+
 class ReviewDialog(qt.QDialog):
+    document_destination = 'workspace-actions'
+
     def __init__(self, request, scanner, valid, parent=None, *, session=None):
         super().__init__(parent)
         self.request, self.scanner, self.valid = request, scanner, valid
         self.session = session or ReviewSession(request, scanner, valid)
-        self.setWindowTitle('Review ' + request.operation)
+        self.context = dict(operation='Review ' + request.operation, source=request.source,
+                            destination=request.destination)
+        self.setWindowTitle(self.context['operation'])
         self.resize(980, 640)
         self.projection = ReviewProjection(request)
         layout = qt.QVBoxLayout(self)
@@ -107,7 +119,7 @@ class ReviewDialog(qt.QDialog):
         qt.connect_search(self.search, self.reset_filter)
         row = qt.QHBoxLayout()
         self.cancel_button = qt.QPushButton('Cancel')
-        self.early_button = qt.QPushButton('Proceed without full review…')
+        self.early_button = qt.QPushButton('Skip preview and start ' + request.operation)
         self.proceed_button = qt.QPushButton('Confirm ' + request.operation + '…')
         self.proceed_button.setEnabled(False)
         self.proceed_button.setDefault(True)
@@ -157,10 +169,8 @@ class ReviewDialog(qt.QDialog):
             return
         if not self.session.can_approve(incomplete=incomplete):
             return
-        if qt.QMessageBox.question(self, 'Confirm ' + self.request.operation,
-                self.request.confirmation(incomplete=incomplete) +
-                ('\n\nLocalCrypt Push will also skip the full integrity scan and generated-file cleanup.'
-                 if incomplete and self.request.operation == 'Push' else ''),
+        if incomplete or qt.QMessageBox.question(self, 'Confirm ' + self.request.operation,
+                self.request.confirmation(),
                 qt.QMessageBox.StandardButton.Yes | qt.QMessageBox.StandardButton.Cancel,
                 qt.QMessageBox.StandardButton.Cancel) == qt.QMessageBox.StandardButton.Yes:
             self.session.approve(incomplete=incomplete)
@@ -218,8 +228,13 @@ class ReviewDialog(qt.QDialog):
                 self.next.setEnabled((model['page'] + 1) * PAGE_SIZE < model['total'])
                 self.position.setText(f"{model['page'] * PAGE_SIZE + 1:,}–{min((model['page'] + 1) * PAGE_SIZE, model['total']):,} / {model['total']:,}")
                 self.proceed_button.setText(self.request.operation + f" {sum(counts.values()):,} changes…")
-                self.warning.setText(f"{counts['delete']:,} destination deletions · No backup or undo" +
-                    (f" · {counts['cleanup']:,} local generated entries removed before Push" if counts['cleanup'] else ''))
+                risk = (f"{counts['delete']:,} destination deletions · No backup or undo" if snapshot.complete
+                        else 'Skipping may replace or delete destination files before you can review them.')
+                if not snapshot.complete and self.request.operation == 'Push':
+                    risk += ' LocalCrypt Push also skips the full integrity scan and generated-file cleanup.'
+                elif counts['cleanup']:
+                    risk += f" · {counts['cleanup']:,} local generated entries removed before Push"
+                self.warning.setText(risk)
                 self.empty.setText('' if rows else ('No matching changes.' if self.search.text() or self.filter.currentData() != 'all'
                     else 'No changes needed.' if snapshot.complete else 'Looking for changes…'))
             if snapshot.error:
@@ -233,7 +248,7 @@ class ReviewDialog(qt.QDialog):
             ready='Review complete. Confirm to check for changes and start the transfer.')
         if state in notices:
             self.notice.setText(notices[state])
-        if state in ('approved', 'cancelled') and self.isVisible():
+        if state in ('approved', 'cancelled') and not self.isHidden():
             self.timer.stop()
             if state == 'approved':
                 super().accept()
@@ -243,6 +258,10 @@ class ReviewDialog(qt.QDialog):
     def reject(self):
         self.session.cancel()
         self.refresh()
+
+    def request_close(self):
+        self.reject()
+        return CloseOutcome.ACCEPTED if self.session.scan.retired.is_set() else CloseOutcome.PENDING
 
     def closeEvent(self, event):
         event.ignore()
@@ -256,6 +275,22 @@ def confirm_review(prepared, parent=None):
         return None
     dialog = ReviewDialog(prepared.request, review.scanner, review.valid, parent, session=review)
     try:
-        return prepared if dialog.exec() == qt.QDialog.DialogCode.Accepted else None
+        host = current_document_host(dialog)
+        if host is not None and host.closing:
+            review.cancel()
+            return None
+        if host is None or not host.window().isVisible() or qt.QApplication.activeModalWidget():
+            return prepared if dialog.exec() == qt.QDialog.DialogCode.Accepted else None
+
+        # Keep the existing synchronous handoff for callers which launch a
+        # series of transfers. The hosted review itself is a non-modal tab.
+        loop = qt.QEventLoop()
+        dialog.finished.connect(loop.exit)
+        dialog.destroyed.connect(loop.quit)
+        host.present(dialog)
+        dialog.refresh()
+        result = loop.exec() if dialog.timer.isActive() else dialog.result()
+        return prepared if result == qt.QDialog.DialogCode.Accepted and isValid(host) and not host.closing else None
     finally:
-        dialog.deleteLater()
+        if isValid(dialog):
+            dialog.deleteLater()

@@ -95,9 +95,10 @@ motion on mobile. System reduced-motion preferences are respected.
 
 PDFs use the same picture-only TV output as comics. Connect an external display
 or use the system's screen sharing controls; the current PDF page or spread is
-shown without the app's controls. Output clears when you leave the reader or the
-app becomes inactive. Protected-session gates also blank the output, including
-while another protected document is retained in the app.
+shown without the app's controls. On iOS, ordinary app navigation mirrors
+before you open the reader and after you leave it. The dedicated picture clears
+when the app becomes inactive. Protected-session gates blank the output,
+including while another protected document is retained in the app.
 
 
 ## Internal page links

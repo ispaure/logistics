@@ -247,15 +247,17 @@ system-bar behavior. Ordinary and private comics share this presentation.
 
 ## Reading on a TV
 
-Connect AirPlay Screen Mirroring on iPhone or iPad, then open a comic. The TV
-shows the current page or spread fitted against black, without reader controls.
+Connect AirPlay Screen Mirroring on iPhone or iPad. You can browse Logistics
+on the mirrored display before opening a comic. In the reader, the TV shows
+the current page or spread fitted against black, without reader controls.
 Turn pages on the phone or tablet; TV output follows the same two-page spread
 or complete wide page, with no added gap between paired pages. A small **Casting to TV** badge stays visible on the
 internal screen even in fullscreen reading, above the home indicator. It clears
 when you leave the comic, disconnect the display, or privacy protection blocks
 output. The phone may remain in
-portrait while the TV uses its own landscape display dimensions. Leaving the comic or
-backgrounding the app clears the dedicated external picture. After updating from
+portrait while the TV uses its own landscape display dimensions. Leaving the
+reader returns the display to system mirroring when privacy allows it.
+Backgrounding the app clears the dedicated external picture. After updating from
 a version that only mirrored the app, stop Screen Mirroring and reconnect once
 so iOS can create the dedicated display session.
 

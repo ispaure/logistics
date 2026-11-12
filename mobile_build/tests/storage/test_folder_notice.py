@@ -40,40 +40,29 @@ class FolderNoticeTests(unittest.TestCase):
             reflow_folder_notice(NS(incoming_notice=notice), 240)
         fit.assert_called_once_with(notice, 240)
 
-    def test_narrow_cloud_header_keeps_credential_picker_inline(self):
+    def test_narrow_header_keeps_credential_picker_within_its_row(self):
         import toga
         from toga.style.pack import ROW
         from travertino.size import at_least
 
-        cloud = toga.Label('Rclone Remotes', style=Pack(margin_right=12, flex=1))
-        cloud.intrinsic.width = at_least(94)
         caption = toga.Label('Credential', style=Pack(margin_right=6))
         caption.intrinsic.width = at_least(61)
         picker = toga.Selection(items=['All', 'Long credential name'], value='Long credential name')
         picker.intrinsic.width = at_least(300)
-        row = toga.Box(children=[caption, picker], style=Pack(direction=ROW))
-        header = toga.Box(children=[cloud, row], style=Pack(direction=ROW))
+        row = toga.Box(children=[caption, picker], style=Pack(direction=ROW, flex=1))
+        toggle = toga.Button('View', style=Pack(width=48, margin_left=6))
+        header = toga.Box(children=[row, toggle], style=Pack(direction=ROW))
         app = NS(folder_credential=picker, folder_credential_label=caption,
-                 folder_credential_row=row, folder_cloud_label=cloud)
+                 folder_credential_row=row, folder_view_toggle=toggle)
 
-        fit_folder_credential(app, 228)
+        fit_folder_credential(app, 122)
         self.assertIsNone(caption.parent)
-        self.assertEqual(picker.style.width, 122)
-        self.assertEqual(list(header.children), [cloud, row])
+        self.assertEqual(picker.style.width, 68)
         self.assertEqual(picker.value, 'Long credential name')
-        header.style.layout(NS(width=228, height=48))
-        self.assertEqual(row.layout.content_left + picker.layout.content_width, 228)
+        header.style.layout(NS(width=122, height=48))
+        self.assertEqual(row.layout.content_left + picker.layout.content_width, 68)
+        self.assertEqual(toggle.layout.content_left + toggle.layout.content_width, 122)
 
         fit_folder_credential(app, 320)
         self.assertEqual(list(row.children), [caption, picker])
-        self.assertEqual(picker.style.width, 147)
-        self.assertIs(picker.parent, row)
-
-        fit_folder_credential(app, 680)
-        self.assertEqual(picker.style.width, 180)
-        self.assertEqual(row.style.flex, 0)
-
-        header.remove(cloud)
-        fit_folder_credential(app, 320)
-        self.assertEqual(picker.style.width, 253)
-        self.assertEqual(row.style.flex, 1)
+        self.assertEqual(picker.style.width, 199)

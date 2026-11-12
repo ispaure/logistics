@@ -404,6 +404,11 @@ The native viewer fits the existing decoded image against black without taking a
 workspace screenshot or writing an export. Android creates a separate Drawable
 around the shared bitmap so TV layout cannot change the phone canvas's bounds.
 
+On iOS, the display owner keeps the connected scene available for the reader
+and attaches its window for page output or privacy blanking. Outside the reader,
+it detaches the window when privacy allows, restoring the system's default
+display behavior.
+
 Privacy refreshes clear output synchronously when any existing screen-privacy
 gate is present, including gates in other windows and retained protected views.
 An unlocked gate still blocks transmission. Inactivity, route changes, suspension

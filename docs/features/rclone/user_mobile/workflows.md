@@ -38,7 +38,10 @@ switching to another app; credential locking and platform background limits stil
 apply.
 Transfer details include **Back** and stay in the tab from which they were opened;
 leaving the screen keeps the transfer running. Switching tabs dismisses transfer
-details, so returning to a tab never reopens them automatically. The progress screen shows the current phase, percentage, copied files and MB.
+details, so returning to a tab never reopens them automatically. The progress screen
+shows the current phase, percentage, copied files, MB and **Removal attempts**.
+The removal row shows separate file and folder counts, including reported zeros.
+rclone counts an attempt before the storage provider finishes the removal.
 Tap the source-to-destination strip for exact endpoints. **Transfer details**
 expands discovery, comparison, elapsed-time and retry counters. The **Scan →
 Transfer → Verify** indicator distinguishes discovery, copying and final checks.
@@ -71,8 +74,8 @@ not invented when a comparison supplies only actions and paths.
 
 **Push N changes** or **Pull N changes** asks for confirmation, then checks a
 completed comparison again before starting. Changed results need another
-confirmation. **Proceed without full review…** remains available during an
-incomplete comparison and requires its own explicit confirmation. Replacements
+confirmation. During an incomplete comparison, **Skip preview and start**
+stops the comparison and starts the sync once the comparison has stopped. Replacements
 and deletions have no backup or undo. Back cancels a review without starting a
 transfer. Leaving progress keeps the running transfer active.
 
@@ -168,7 +171,7 @@ password leaves the file encryption keys unchanged.
 ### Mobile Workspaces source tabs
 
 On Android and iOS, Workspaces opens on **Local**. In **Cloud**, the credential
-picker beside **Rclone Remotes** starts at **All**. Choose a package to filter its
+picker below the **Rclone Remotes** tab starts at **All**. Choose a package to filter its
 folders and their downloaded Local/LocalCrypt copies. **Local → Rclone Copies**
 has its own picker. Returning to Cloud selects All again. Directly added SMB/Mac
 connections and their copies appear under Home Server; SMB remotes imported

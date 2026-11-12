@@ -6,6 +6,7 @@ from types import MappingProxyType
 from typing import Callable, Mapping
 from uuid import uuid4
 
+from commonUtils.integrations.wrappers.cmdShellWrapper.binary import BinaryCommandError
 from commonUtils.runtime.operations import check_cancelled
 from features.rclone import session
 from . import sync
@@ -99,13 +100,27 @@ def _compare(transfer, config_path, emit, cancelled):
             return {}
         from features.rclone.transfers.local_policy import cleanup_candidates
         return cleanup_candidates(item.data, display, cancelled, decode_many=display_many)
+    delete_excluded = transfer.operation == 'Push' and bool(transfer.options.excludes)
+    def review_labels(paths, stopping, *, directory=False):
+        try:
+            return display_many(paths, stopping, directory=directory)
+        except BinaryCommandError:
+            if not delete_excluded:
+                raise
+            check_cancelled(stopping)
+            # A raw destination entry such as .DS_Store has no decoded crypt name.
+            # Isolate it so neighboring entries still get their decoded names.
+            if len(paths) == 1:
+                decoded[paths[0], directory] = paths[0]
+                return paths
+            mid = len(paths) // 2
+            return (review_labels(paths[:mid], stopping, directory=directory)
+                    + review_labels(paths[mid:], stopping, directory=directory))
     try:
         return scanner(binary, transfer.source, transfer.destination, config_path, transfer.options,
-            display_path=display,
-            display_directory=lambda path, cancelled: display(path, cancelled, directory=True),
-            display_paths=display_many,
-            display_directories=lambda paths, cancelled: display_many(paths, cancelled, directory=True),
-            cleanup_plan=cleanup_plan)(emit, cancelled)
+            display_paths=review_labels,
+            display_directories=lambda paths, cancelled: review_labels(paths, cancelled, directory=True),
+            cleanup_plan=cleanup_plan, delete_excluded=delete_excluded)(emit, cancelled)
     finally:
         if provider is not None:
             provider.close()

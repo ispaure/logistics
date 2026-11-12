@@ -2,15 +2,16 @@
 
 import toga
 from toga.style import Pack
-from toga.style.pack import CENTER, COLUMN, ROW
+from toga.style.pack import CENTER, COLUMN, END, ROW
 
 from commonUtils.ui.native.forms import FittedLabel
 from services.folders.labels import local_source_label, RCLONE_REMOTES
 
 from .appearance import accessible_name, batch_surfaces
+from .control_icons import apply_icon
 from .folder_hub import credential_choices, source_choices
 from .folder_hub_style import (
-    SOURCE_LABELS, folder_scroll, source_actions, source_tab, surface, toolbar_button,
+    SOURCE_LABELS, compact_icon, folder_scroll, source_actions, source_tab, surface, toolbar_button,
 )
 from .folder_tree_view import FolderTreeView
 from .local_sources import device_files_label, device_label as device_label
@@ -58,6 +59,23 @@ class WorkspacesScreen:
             selected = getattr(self, 'folder_credential_name', 'All')
         return selected if selected in self.folder_credentials else 'All'
 
+    def _style_folder_view_toggle(self):
+        grouped = self.preferences.values['workspace_folder_view'] == 'hierarchy'
+        button = self.folder_view_toggle
+        apply_icon(button, 'group' if grouped else 'contents',
+                   'Show flat folder list' if grouped else 'Show folder hierarchy')
+        compact_icon(button, width=TOUCH_TARGET, size=20, background='surface', foreground='text')
+
+    def _toggle_folder_view(self, widget=None, **kwargs):
+        view = 'list' if self.preferences.values['workspace_folder_view'] == 'hierarchy' else 'hierarchy'
+        try:
+            self.preferences.save(workspace_folder_view=view)
+        except (OSError, ValueError) as error:
+            self.set_folder_loading('Could not remember folder view: ' + str(error))
+            return
+        self._style_folder_view_toggle()
+        self.update_folder_list(self.folder_all_choices)
+
     def build_folder_picker(self, *, choices=None):
         # Finish discovery before replacing references to the visible controls.
         choices = self.folder_choices() if choices is None else choices
@@ -84,10 +102,11 @@ class WorkspacesScreen:
             button = subtab_button(caption, on_press=select_local)
             self.folder_local_buttons[group] = button
             self.folder_local_tabs.add(button)
-        self.folder_cloud_label = surface(toga.Label(RCLONE_REMOTES, style=Pack(
-            font_size=CAPTION_TEXT, margin_right=12)),
-            background='transparent', foreground='muted', outlined=False)
-        self.folder_local_header = toga.Box(style=Pack(direction=COLUMN))
+        remotes_tab = subtab_button(RCLONE_REMOTES)
+        source_tab(remotes_tab, True, quiet=True)
+        accessible_name(remotes_tab, f'{RCLONE_REMOTES} selected')
+        self.folder_cloud_tabs = toga.Box(children=[remotes_tab], style=Pack(direction=ROW, margin_bottom=4))
+        self.folder_subtab_header = toga.Box(style=Pack(direction=COLUMN))
         self.folder_list = toga.Box(style=Pack(direction=COLUMN))
         self.folder_tab_views = {}
         self.folder_tab_snapshot = None
@@ -111,7 +130,6 @@ class WorkspacesScreen:
             accessory.isAccessibilityElement = False
             native.rightView = accessory
             native.rightViewMode = 3  # UITextFieldViewModeAlways
-            self.folder_cloud_label.style.flex = 1
             native.accessibilityHint = 'Opens the list of credentials'
         self.folder_transfers_button = toga.Button('Transfers', on_press=self.show_transfers, style=Pack(height=TOUCH_TARGET, font_size=CONTROL_TEXT, flex=1))
         toolbar_button(self.folder_transfers_button, 'arrow.up.arrow.down')
@@ -133,7 +151,9 @@ class WorkspacesScreen:
             background='transparent', foreground='muted', outlined=False)
         self.folder_credential_row = toga.Box(children=[self.folder_credential_label, self.folder_credential],
                                              style=Pack(direction=ROW, align_items=CENTER, flex=1))
-        self.folder_picker_header = toga.Box(style=Pack(direction=ROW, align_items=CENTER))
+        self.folder_view_toggle = toga.Button(on_press=self._toggle_folder_view, style=Pack(margin_left=6))
+        self._style_folder_view_toggle()
+        self.folder_picker_header = toga.Box(style=Pack(direction=ROW, align_items=CENTER, justify_content=END))
         self.folder_source_actions = toga.Box(style=Pack(direction=ROW))
         self.folder_loading_box = toga.Box(style=Pack(direction=COLUMN))
         incoming = getattr(self.app, 'incoming_status', '')
@@ -142,7 +162,7 @@ class WorkspacesScreen:
         self.app._files_status_row = toga.Box(children=[self.folder_source_tabs],
             style=Pack(direction=ROW, align_items=CENTER, margin_bottom=4))
         scroll = folder_scroll(self.folder_list)
-        box = toga.Box(children=[self.app._files_status_row, self.folder_local_header, self.folder_picker_header, self.folder_source_actions,
+        box = toga.Box(children=[self.app._files_status_row, self.folder_subtab_header, self.folder_picker_header, self.folder_source_actions,
             self.folder_loading_box, self.app.incoming_notice, scroll],
             style=Pack(direction=COLUMN, margin=(8, 16, 12, 16), flex=1))
         from .scroll_edges import fill_bottom
@@ -198,10 +218,13 @@ class WorkspacesScreen:
         selected = self.folder_credentials.get(credential)
         local_group = self.folder_local_group if self.folder_source == 'Local' else None
         visible = source_choices(choices, self.folder_source, network_remotes, local_group=local_group)
-        if local_group is not None and not self.folder_local_header.children:
-            self.folder_local_header.add(self.folder_local_tabs)
-        elif local_group is None and self.folder_local_header.children:
-            self.folder_local_header.remove(self.folder_local_tabs)
+        subtabs = {'Local': self.folder_local_tabs, 'rclone': self.folder_cloud_tabs}.get(self.folder_source)
+        subtab_header = self.folder_subtab_header
+        if list(subtab_header.children) != ([subtabs] if subtabs is not None else []):
+            for child in list(subtab_header.children):
+                subtab_header.remove(child)
+            if subtabs is not None:
+                subtab_header.add(subtabs)
         if any(entry.get('device_root') for entry in visible.values()):
             button = self.folder_local_buttons['Others']
             caption = device_files_label(self.app)
@@ -221,9 +244,9 @@ class WorkspacesScreen:
                 source_tab(button, source == self.folder_source, quiet=True)
                 accessible_name(button, SOURCE_LABELS[source] + (' selected' if source == self.folder_source else ''))
             self.folder_source_styled = self.folder_source
-        scope = [self.folder_cloud_label] if self.folder_source == 'rclone' else []
-        if credential_filter:
-            scope.append(self.folder_credential_row)
+        scope = [self.folder_credential_row] if credential_filter else []
+        if credential_filter or self.folder_source == 'Network shares':
+            scope.append(self.folder_view_toggle)
         if list(self.folder_picker_header.children) != scope:
             for child in list(self.folder_picker_header.children):
                 self.folder_picker_header.remove(child)
@@ -289,7 +312,7 @@ class WorkspacesScreen:
             self.folder_tab_views[key] = tab
         on_device = key == ('Local', 'Others')
         tab.render(visible, self.folder_source, loaded_remotes, crypt_remotes,
-                   grouped=not on_device,
+                   grouped=not on_device and self.preferences.values['workspace_folder_view'] == 'hierarchy',
                    device_label=self.folder_local_buttons['Others'].text if on_device else None)
         self.folder_buttons, self.folder_tree_buttons = tab.buttons, tab.tree_buttons
         self.mount_folder_tab(tab.content)

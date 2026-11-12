@@ -185,6 +185,9 @@ func mirrorSyncStats(run string, stats *accounting.StatsInfo) {
 	mirrorProgressState.Total = values["totalBytes"].(int64)
 	mirrorProgressState.Files = values["transfers"].(int64)
 	mirrorProgressState.TotalFiles = values["totalTransfers"].(int64)
+	// rclone increments these counters before calling the backend's remove.
+	mirrorProgressState.FileDeleteAttempts = values["deletes"].(int64)
+	mirrorProgressState.FolderRemovalAttempts = values["deletedDirs"].(int64)
 	mirrorProgressState.Checks = values["checks"].(int64)
 	mirrorProgressState.Listed = values["listed"].(int64)
 	mirrorProgressState.Active = int64(len(transfers))
@@ -192,6 +195,8 @@ func mirrorSyncStats(run string, stats *accounting.StatsInfo) {
 	mirrorProgressState.Phase = "Discovering / checking files"
 	if len(transfers) > 0 {
 		mirrorProgressState.Phase = "Transferring"
+	} else if mirrorProgressState.FileDeleteAttempts > 0 || mirrorProgressState.FolderRemovalAttempts > 0 {
+		mirrorProgressState.Phase = "Removing destination entries"
 	} else if mirrorProgressState.Files > 0 {
 		mirrorProgressState.Phase = "Checking / finishing sync"
 	}

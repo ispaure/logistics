@@ -1,14 +1,15 @@
-"""Picture-only external document output; no workspace, credentials or disk copies."""
+"""Dedicated document output with system mirroring between readers on iOS."""
 import weakref
 import json
 import os
 
 
-def comic_canvas(view):
-    if (getattr(view, '_external_comic_page', False) or getattr(view, '_external_document_page', False)) and getattr(view, 'image', None) is not None:
+def comic_canvas(view, *, include_empty=False):
+    if (getattr(view, '_external_comic_page', False) or getattr(view, '_external_document_page', False)) and (
+            include_empty or getattr(view, 'image', None) is not None):
         return view
     for child in view.children:
-        found = comic_canvas(child)
+        found = comic_canvas(child, include_empty=include_empty)
         if found is not None:
             return found
     return None
@@ -122,12 +123,25 @@ class ExternalComicDisplay:
             self.update_ios_status(False)
             self.diagnose_ios()
             return
-        canvas = self.allowed_canvas()
-        for window, picture in self.ios.values():
-            picture.image = canvas._impl.picture.image if canvas is not None else None
+        allowed = self.allowed_host(app)
+        canvas = comic_canvas(app.body) if allowed else None
+        image = canvas._impl.picture.image if self.ios and canvas is not None else None
+        mirror = self.ios and allowed and canvas is None and comic_canvas(app.body, include_empty=True) is None
+        for scene, window, picture in self.ios.values():
+            picture.image = image
+            if mirror:
+                # Hiding the window alone does not restore system mirroring.
+                if window.windowScene is not None:
+                    window.setHidden(True)
+                    window.windowScene = None
+            elif window.windowScene != scene:
+                window.windowScene = scene
+                window.frame = scene.coordinateSpace.bounds
+                # Use the native selector for UIKit's isHidden property.
+                window.setHidden(False)
         if self.android is not None:
             self.android.setImage(canvas._impl.native.getDrawable() if canvas is not None else None)
-        self.update_ios_status(canvas is not None and bool(self.ios))
+        self.update_ios_status(image is not None)
         self.diagnose_ios()
 
     def clear_ios_status(self):
@@ -195,15 +209,16 @@ class ExternalComicDisplay:
                 split_wide=app.preferences.values['comic_split_wide'],
                 outputs=[dict(
                     window_bounds=[float(window.bounds.size.width), float(window.bounds.size.height)],
-                    screen_bounds=[float(window.screen.bounds.size.width), float(window.screen.bounds.size.height)],
-                    scene_bounds=[float(window.windowScene.coordinateSpace.bounds.size.width), float(window.windowScene.coordinateSpace.bounds.size.height)],
-                    scene_state=int(window.windowScene.activationState),
+                    screen_bounds=[float(scene.screen.bounds.size.width), float(scene.screen.bounds.size.height)],
+                    scene_bounds=[float(scene.coordinateSpace.bounds.size.width), float(scene.coordinateSpace.bounds.size.height)],
+                    scene_state=int(scene.activationState),
+                    attached=window.windowScene is not None,
                     hidden=bool(window.isHidden()), alpha=float(window.alpha),
                     picture_bounds=[float(picture.bounds.size.width), float(picture.bounds.size.height)],
                     image=picture.image is not None,
                     image_size=([float(picture.image.size.width), float(picture.image.size.height)]
                                 if picture.image is not None else None),
-                ) for window, picture in self.ios.values()],
+                ) for scene, window, picture in self.ios.values()],
                 source_active=bool(getattr(app, 'active_host', False)),
                 source_comic=comic_canvas(app.body) is not None,
                 allowed=self.allowed_canvas() is not None,
@@ -228,7 +243,7 @@ class ExternalComicDisplay:
     def connect_ios(self, scene):
         from rubicon.objc import ObjCClass
         from .screen_privacy import native_value
-        window = ObjCClass('UIWindow').alloc().initWithWindowScene(scene)
+        window = ObjCClass('UIWindow').alloc().initWithFrame(scene.coordinateSpace.bounds)
         controller = ObjCClass('UIViewController').alloc().init()
         picture = ObjCClass('UIImageView').alloc().init()
         picture.backgroundColor = native_value(ObjCClass('UIColor'), 'blackColor')
@@ -238,22 +253,19 @@ class ExternalComicDisplay:
         picture.accessibilityLabel = 'Document on external display'
         controller.view = picture
         window.rootViewController = controller
-        window.frame = scene.coordinateSpace.bounds
         picture.frame = window.bounds
         picture.autoresizingMask = 18  # flexible width and height
-        self.ios[str(scene.session.persistentIdentifier)] = window, picture
-        # Rubicon's attribute assignment does not reliably dispatch this UIKit
-        # property with its custom isHidden getter. Use the native selector.
-        window.setHidden(False)
+        self.ios[str(scene.session.persistentIdentifier)] = scene, window, picture
         self.refresh()
         return window
 
     def disconnect_ios(self, scene):
         target = self.ios.pop(str(scene.session.persistentIdentifier), None)
         if target is not None:
-            window, picture = target
+            _, window, picture = target
             picture.image = None
             window.setHidden(True)
+            window.windowScene = None
         self.refresh()
 
     def install_android(self, app):
@@ -271,9 +283,10 @@ class ExternalComicDisplay:
         self.reader_cover.clear()
         self.clear_ios_status()
         self.unregister_ios()
-        for window, picture in self.ios.values():
+        for _, window, picture in self.ios.values():
             picture.image = None
             window.setHidden(True)
+            window.windowScene = None
         self.ios.clear()
         if self.android is not None:
             self.android.dispose()

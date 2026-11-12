@@ -319,8 +319,12 @@ func TestNativeRcloneSyncDeletesDestinationOnlyFilesWithoutBackups(t *testing.T)
 		if err != nil || len(rows) != 0 {
 			t.Fatalf("push must remove destination-only files: %v %v", rows, err)
 		}
-		// Pull from that empty remote deletes a local-only file and creates no snapshots.
-		if err = os.WriteFile(filepath.Join(canonical, "local-only"), []byte("delete"), 0600); err != nil {
+		// Pull from that empty remote deletes a local-only tree and creates no snapshots.
+		obsolete := filepath.Join(canonical, "obsolete", "nested")
+		if err = os.MkdirAll(obsolete, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(filepath.Join(obsolete, "local-only"), []byte("delete"), 0600); err != nil {
 			t.Fatal(err)
 		}
 		if _, err = mirrorSync(ctx, mode.name, prefix, identity, canonical, strings.Repeat("d", 32), false); err != nil {
@@ -328,7 +332,13 @@ func TestNativeRcloneSyncDeletesDestinationOnlyFilesWithoutBackups(t *testing.T)
 		}
 		children, _ := os.ReadDir(canonical)
 		if len(children) != 0 {
-			t.Fatal("pull did not remove destination-only local files")
+			t.Fatal("pull did not remove destination-only local tree")
+		}
+		mirrorProgressState.Lock()
+		fileDeletes, folderRemovals := mirrorProgressState.FileDeleteAttempts, mirrorProgressState.FolderRemovalAttempts
+		mirrorProgressState.Unlock()
+		if fileDeletes != 1 || folderRemovals != 2 {
+			t.Fatalf("final removal attempts: files=%d folders=%d", fileDeletes, folderRemovals)
 		}
 	}
 }

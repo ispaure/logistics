@@ -1,5 +1,6 @@
 """Private offline transfer UI, with bounded messages and retired callbacks."""
 from commonUtils.search.policy import SEARCH_DEBOUNCE_MS
+from services.appearance_palette import css_variables
 import asyncio
 from functools import lru_cache
 import json
@@ -38,7 +39,7 @@ async def evaluate_bounded(web, script):
 @lru_cache(maxsize=1)
 def surface_html():
     return ((ASSETS / 'surface.html').read_text()
-            .replace('/*STYLE*/', (ASSETS / 'surface.css').read_text())
+            .replace('/*STYLE*/', css_variables() + '\n' + (ASSETS / 'surface.css').read_text())
             .replace('/*SCRIPT*/', (ASSETS / 'surface.js').read_text().replace('SEARCH_DEBOUNCE_MS', str(SEARCH_DEBOUNCE_MS))))
 
 

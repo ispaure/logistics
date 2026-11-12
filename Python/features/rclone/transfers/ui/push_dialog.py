@@ -238,7 +238,10 @@ class RclonePushDialog(pyside.QDialog):
             self._update_result_preview()
 
     def _push_validated(self):
+        from .review import finish_setup_for_review
+
         if self.regular_radio.isChecked():
+            finish_setup_for_review(self)
             started = actions.push_to_cloud(
                 self.entry.local,
                 self.config_path,
@@ -262,6 +265,7 @@ class RclonePushDialog(pyside.QDialog):
             ui.display_msg_box_ok('Push Specific Folder', 'Enter a bandwidth limit from 1 to 1000000 MB/s, or leave it blank.')
             return
 
+        finish_setup_for_review(self)
         if actions.push_specific_directory(
             self.entry.local,
             self.config_path,

@@ -160,7 +160,7 @@ class ReviewSession:
                 and (incomplete or self.scan.retired.is_set() and self.scan.snapshot().complete))
 
     def approve(self, *, incomplete=False):
-        # Called only after the platform's explicit destructive-action dialog.
+        # The platform calls this after a user confirms or explicitly skips review.
         if not self.valid():
             self.cancel()
             return False

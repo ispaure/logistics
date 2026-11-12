@@ -10,6 +10,7 @@ from commonUtils.tests.qt_test_case import QtTestCase
 from unittest.mock import patch
 from shiboken6 import isValid
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.document_host import register_document_host
 from commonUtils.ui.tasks.process_host import register_process_host
 from commonUtils.ui.tasks.process_progress import ProcessProgressWindow, open_process
 from commonUtils.ui.tasks.process_runner import ProcessResult
@@ -27,6 +28,7 @@ class FolderActionTests(QtTestCase):
         self.host.setCentralWidget(self.tabs)
         self.host.resize(1000, 700); self.host.show(); self.host.activateWindow()
         register_process_host(self.page)
+        register_document_host(self.page, destination='workspace-actions')
         self.notice = patch.object(self.page, 'notify').start()
         self.addCleanup(patch.stopall)
         self.addCleanup(self.cleanup)
@@ -86,6 +88,51 @@ class FolderActionTests(QtTestCase):
             self.assertEqual(self.page.unread_count, 0)
         self.assertEqual(self.page.attached_count, 2)
         self.assertEqual(self.notice.call_count, 2)
+
+    def test_review_opens_in_transfer_view_and_skip_starts_progress_without_a_dialog(self):
+        from threading import Event
+        from features.rclone.transfers.review import ReviewRequest
+        from features.rclone.transfers.service import TransferPlan, TransferService
+        from features.rclone.transfers.ui.review import confirm_review, finish_setup_for_review
+
+        scanned = Event()
+        def scanner(emit, cancelled):
+            while not cancelled():
+                scanned.wait(.01)
+            scanned.set()
+            return ''
+        request = ReviewRequest('Pull', 'Fixture:', '/tmp/destination', 'account')
+        transfers = TransferService()
+        prepared = transfers.prepare(TransferPlan(request, scanner, lambda: True,
+            lambda *_: self.start("print('transferred')")))
+        observations = []
+        def skip():
+            pane = self.page.workspace.active_view
+            if pane is not None:
+                observations.append((pane.document.isWindow(), self.tabs.currentWidget() is self.page))
+                pane.document.early_button.click()
+            else:
+                modal = self.app.activeModalWidget()
+                if modal is not None:
+                    modal.reject()
+        setup = qt.QDialog(self.host)
+        approved = []
+        def from_setup():
+            finish_setup_for_review(setup)
+            qt.QTimer.singleShot(0, skip)
+            approved.append(confirm_review(prepared))
+        qt.QTimer.singleShot(0, from_setup)
+        with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Cancel) as question:
+            self.assertEqual(setup.exec(), qt.QDialog.DialogCode.Accepted)
+        self.assertEqual(approved, [prepared])
+        self.assertEqual(observations, [(False, True)])
+        question.assert_not_called()
+        self.assertTrue(scanned.is_set())
+        self.assertTrue(prepared.review.scan.retired.is_set())
+        process = transfers.execute(prepared)
+        self.wait(lambda: process.result is not None)
+        self.assertTrue(process.result.succeeded)
+        self.assertEqual(self.page.count, 1)
 
     def test_closing_a_running_tab_cancels_its_process_before_retirement(self):
         window = self.start('import time; time.sleep(10)')

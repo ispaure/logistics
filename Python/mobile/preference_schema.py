@@ -27,6 +27,7 @@ DEFAULTS = {
     'accent_hue': str(DEFAULT_ACCENT[0]),
     'accent_saturation': str(DEFAULT_ACCENT[1]),
     'workspace_local_group': 'Others',
+    'workspace_folder_view': 'hierarchy',
     'document_card_overview': 'false',
     'show_legacy': 'false',
     'disabled_features': '[]',
@@ -86,6 +87,8 @@ def validate(values):
         raise ValueError('Invalid document restore preference.')
     if values['workspace_local_group'] not in {'Rclone', 'Others'}:
         raise ValueError('Invalid local workspace tab.')
+    if values['workspace_folder_view'] not in {'hierarchy', 'list'}:
+        raise ValueError('Invalid workspace folder view.')
     if values['show_legacy'] not in {'true', 'false'}:
         raise ValueError('Invalid legacy folder preference.')
     if values['document_card_overview'] != 'false':

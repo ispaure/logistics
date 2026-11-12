@@ -114,6 +114,8 @@ def validate_result(action, value):
             "total",
             "files",
             "total_files",
+            "file_delete_attempts",
+            "folder_removal_attempts",
             "checks",
             "listed",
             "active",
@@ -156,6 +158,8 @@ class MirrorProgress(TypedDict, total=False):
     total: Required[int]
     files: int
     total_files: int
+    file_delete_attempts: int
+    folder_removal_attempts: int
     checks: int
     listed: int
     active: int

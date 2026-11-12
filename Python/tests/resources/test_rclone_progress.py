@@ -30,22 +30,29 @@ class RcloneProgressTests(QtTestCase):
     def test_streamed_retry_success_is_confirmed_by_the_actual_exit(self):
         import sys
         import time
-        from commonUtils.ui.tasks.process_progress import ProcessProgressWindow
-        from commonUtils.ui.tasks.process_runner import ProcessRunner
+        from commonUtils.ui.tasks.process_progress import _windows
         app = qt.QApplication.instance() or qt.QApplication([])
         for code, expected in ((0, 'succeeded'), (9, 'failed')):
-            window = ProcessProgressWindow('Simulated rclone', runner=ProcessRunner(parser=RcloneProgressParser()))
-            window.show()
             script = ("import json; print(json.dumps({'msg':'Attempt 1/3 failed with 1 errors'})); "
                       "print(json.dumps({'msg':'Attempt 2/3 succeeded'})); "
+                      "print(json.dumps({'stats': {'transfers': 0, 'totalTransfers': 0, "
+                      "'deletes': 1234, 'deletedDirs': 0}})); "
                       f"raise SystemExit({code})")
-            window.start(sys.executable, ['-u', '-c', script])
+            with TemporaryDirectory() as destination, \
+                    patch('features.rclone.transfers.sync.executable.ensure_rclone', return_value=Path(sys.executable)), \
+                    patch('features.rclone.transfers.sync.build_sync_arguments',
+                          return_value=[sys.executable, '-u', '-c', script]):
+                self.assertTrue(rclone_sync('Remote:', destination, config_path='/selected.conf'))
+            window = _windows[-1]
             deadline = time.monotonic() + 5
             while window.busy:
                 self.assertLess(time.monotonic(), deadline)
                 app.processEvents(); time.sleep(.01)
             self.assertEqual(window.result.state, expected)
             self.assertEqual(window.result.attempt, 2)
+            self.assertEqual(window.fields['files'].text(), '0 / 0')
+            self.assertEqual(window.fields['deleted'].text(), '1,234')
+            self.assertEqual(window.fields['deleted_dirs'].text(), '0')
             window.close(); app.processEvents()
 
     def test_arguments_keep_transfer_options_and_literal_paths(self):
@@ -87,18 +94,31 @@ class RcloneProgressTests(QtTestCase):
             source = root / 'source'; source.mkdir()
             (source / 'file.txt').write_text('fixture')
             config = root / 'empty.conf'; config.touch()
-            def run(src, dst):
+            def run(src, dst, *, dry_run=False):
                 with patch('features.rclone.transfers.sync.executable.ensure_rclone', return_value=executable):
-                    self.assertTrue(rclone_sync(src, dst, config_path=config))
+                    self.assertTrue(rclone_sync(src, dst, config_path=config, dry_run=dry_run))
                 window = _windows[-1]
                 deadline = time.monotonic() + 10
                 while window.busy:
                     self.assertLess(time.monotonic(), deadline)
                     app.processEvents(); time.sleep(.01)
                 return window
-            window = run(source, root / 'destination')
+            destination = root / 'destination'
+            destination.mkdir()
+            extra = destination / 'extra'
+            extra.mkdir()
+            (extra / 'stale.txt').touch()
+            preview = run(source, destination, dry_run=True)
+            self.assertTrue(preview.result.succeeded)
+            self.assertEqual(preview.fields['deleted'].text(), '1')
+            self.assertTrue((extra / 'stale.txt').exists())
+            preview.close(); app.processEvents()
+            window = run(source, destination)
             self.assertTrue(window.result.succeeded)
-            self.assertEqual((root / 'destination' / 'file.txt').read_text(), 'fixture')
+            self.assertEqual((destination / 'file.txt').read_text(), 'fixture')
+            self.assertFalse(extra.exists())
+            self.assertEqual(window.fields['deleted'].text(), '1')
+            self.assertEqual(window.fields['deleted_dirs'].text(), '1')
             self.assertTrue(window.isVisible())
             window.close(); app.processEvents()
             failed = run(root / 'missing-source', root / 'other-destination')

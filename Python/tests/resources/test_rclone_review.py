@@ -227,6 +227,45 @@ class ReviewTests(unittest.TestCase):
             (src / 'ignored.skip').write_text('a later excluded source version')
             self.assertTrue(unchanged(first, self.finish(ReviewScan(compare))))
 
+    def test_desktop_push_reviews_and_deletes_excluded_destination_files(self):
+        from features.rclone.executable import get_rclone_path
+        from features.rclone.transfers.desktop import DesktopTransferRequest, _compare
+        from features.rclone.transfers.sync import rclone_sync
+        from features.rclone.transfers.transfer_options import DEFAULT_EXCLUDES, TransferOptions
+
+        binary = get_rclone_path()
+        if not binary.is_file():
+            self.skipTest('Pinned rclone is not installed')
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            src, dst = root / 'source', root / 'destination'
+            src.mkdir()
+            (dst / 'obsolete').mkdir(parents=True)
+            (src / '.DS_Store').write_text('excluded source')
+            (src / 'note.txt').write_text('upload')
+            (dst / 'obsolete' / '.DS_Store').write_text('excluded destination')
+            (dst / 'Thumbs.db').write_text('excluded destination')
+            outside = root / '.DS_Store'
+            outside.write_text('outside the destination')
+            config = root / 'rclone.conf'
+            config.write_text('[Fixture]\ntype = local\n')
+            remote = f'Fixture:{dst.as_posix()}'
+            options = TransferOptions(excludes=DEFAULT_EXCLUDES)
+            request = DesktopTransferRequest(src, remote, 'Push', config, binary, options)
+            compare = lambda emit, cancelled: _compare(request, config, emit, cancelled)
+            first = self.finish(ReviewScan(compare))
+            self.assertEqual(set(first.rows()), {
+                ('add', 'note.txt'), ('delete', 'Thumbs.db'),
+                ('delete', 'obsolete/'), ('delete', 'obsolete/.DS_Store'),
+            })
+            (dst / 'Thumbs.db').write_text('changed destination file')
+            self.assertFalse(unchanged(first, self.finish(ReviewScan(compare))))
+            self.assertTrue(rclone_sync(src, remote, config_path=config, executable_path=binary,
+                                        excludes=options.excludes, wait_for_output=True))
+            self.assertEqual(list(dst.iterdir()), [dst / 'note.txt'])
+            self.assertEqual((src / '.DS_Store').read_text(), 'excluded source')
+            self.assertEqual(outside.read_text(), 'outside the destination')
+
 
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
@@ -277,7 +316,7 @@ class ReviewDialogTests(QtTestCase):
                         operation='Push', config_path=f.context, copy_links=False))
                 self.assertEqual(list(f.item.data.rglob('.logistics-review-directory*')), [])
 
-    def test_early_proceed_retires_scan_and_requires_confirmation(self):
+    def test_skip_preview_retires_scan_without_confirmation(self):
         from unittest.mock import patch
         from features.rclone.transfers.ui.review import ReviewDialog
         retired = Event()
@@ -292,7 +331,7 @@ class ReviewDialogTests(QtTestCase):
         with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Yes) as confirm:
             self.assertEqual(dialog.exec(), qt.QDialog.DialogCode.Accepted)
         self.assertTrue(retired.is_set())
-        self.assertIn('incomplete', confirm.call_args.args[2])
+        confirm.assert_not_called()
         dialog.deleteLater()
 
     def test_early_review_approval_skips_crypt_integrity_and_launches_push(self):
@@ -358,16 +397,20 @@ class ReviewDialogTests(QtTestCase):
             f.provider.create_file('.DS_Store', BytesIO(b'synthetic generated junk'))
             raw = f.provider._physical('.DS_Store', False)
             (f.cloud / raw.name).write_bytes(raw.read_bytes())
+            (f.cloud / 'Thumbs.db').write_bytes(b'raw destination junk')
             def confirm(prepared):
                 request, compare, valid = prepared.request, prepared.review.scanner, prepared.review.valid
                 snapshot = self.finish_scan(compare)
                 self.assertIn(('cleanup', '.DS_Store'), snapshot.changes)
                 self.assertIn(('delete', '.DS_Store'), snapshot.changes)
+                self.assertIn(('delete', 'Thumbs.db'), snapshot.changes)
+                self.assertIn(('match', 'note.md'), snapshot.changes)
                 self.assertNotIn(('match', '.DS_Store'), snapshot.changes)
                 self.assertTrue(raw.exists(), 'review must not clean local files')
                 self.assertTrue((f.cloud / raw.name).exists())
                 return False
             with patch.object(executable, 'ensure_rclone', return_value=binary), patch(
+                    'features.rclone.transfers.push_policy.load_excludes', return_value=('Thumbs.db',)), patch(
                     'features.rclone.transfers.ui.review.confirm_review', side_effect=confirm):
                 self.assertFalse(workflow.reviewed_sync(f.item.data,
                     copy_mapping.backing_target(session.credentials(f.context), 'Secret'),
