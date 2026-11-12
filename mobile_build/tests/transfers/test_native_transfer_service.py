@@ -328,7 +328,8 @@ class TransferSurfaceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_failed_render_rebuilds_once_then_keeps_native_transfer_controls(self):
         surface, handler = self.surface()
-        surface.update(dict(mode='progress', phase='transfer', busy=True, files=2, source='Local/private', destination='Cloud:'))
+        surface.update(dict(mode='progress', phase='transfer', busy=True, files=2, source='Local/private',
+            destination='Cloud:', file_delete_attempts=0, folder_removal_attempts=0))
         original, token = surface.web, surface.token
         surface.recover_rendering()
         self.assertIsNot(surface.web, original)
@@ -339,14 +340,17 @@ class TransferSurfaceTests(unittest.IsolatedAsyncioTestCase):
         fallback = surface.native_fallback
         self.assertIsNone(surface.web)
         self.assertIn('Files: 2', fallback.metrics.text)
+        self.assertIn('Removal attempts: 0 files, 0 folders', fallback.metrics.text)
         self.assertEqual(surface.delivered_revision, surface.revision)
         self.assertIsNone(surface.pending)
         await fallback.buttons.children[0].on_press()
         handler.assert_awaited_with('stop', dict(revision=str(surface.revision)))
         surface.recover_rendering()
         self.assertEqual(surface.recovery_count, 2)
-        surface.update(dict(mode='progress', phase='complete', files=3))
+        surface.update(dict(mode='progress', phase='complete', files=3,
+            file_delete_attempts=1234, folder_removal_attempts=2))
         self.assertIn('Files: 3', fallback.metrics.text)
+        self.assertIn('Removal attempts: 1,234 files, 2 folders', fallback.metrics.text)
         self.assertEqual([button.text for button in fallback.buttons.children], ['Continue browsing'])
 
     async def test_native_review_keeps_confirmation_and_stale_revision_guards(self):

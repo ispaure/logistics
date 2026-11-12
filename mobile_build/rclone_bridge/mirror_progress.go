@@ -19,6 +19,7 @@ var mirrorProgressState struct {
 	Run, Phase                                string
 	Done, Total                               int64
 	Files, TotalFiles, Checks, Listed, Active int64
+	FileDeleteAttempts, FolderRemovalAttempts int64
 }
 
 func mirrorPhase(run, phase string, total int64) {
@@ -29,6 +30,7 @@ func mirrorPhase(run, phase string, total int64) {
 	mirrorProgressState.Done, mirrorProgressState.Total = 0, total
 	mirrorProgressState.ActiveFiles = []activeTransfer{}
 	mirrorProgressState.Files, mirrorProgressState.TotalFiles = 0, 0
+	mirrorProgressState.FileDeleteAttempts, mirrorProgressState.FolderRemovalAttempts = 0, 0
 	mirrorProgressState.Checks, mirrorProgressState.Listed, mirrorProgressState.Active = 0, 0, 0
 }
 
@@ -45,6 +47,7 @@ func mirrorProgress(input string) string {
 	if request.Run != "" && request.Run == mirrorProgressState.Run {
 		result = map[string]any{"phase": mirrorProgressState.Phase, "done": mirrorProgressState.Done, "total": mirrorProgressState.Total,
 			"files": mirrorProgressState.Files, "total_files": mirrorProgressState.TotalFiles,
+			"file_delete_attempts": mirrorProgressState.FileDeleteAttempts, "folder_removal_attempts": mirrorProgressState.FolderRemovalAttempts,
 			"checks": mirrorProgressState.Checks, "listed": mirrorProgressState.Listed, "active": mirrorProgressState.Active,
 			"attempt": mirrorProgressState.Attempt, "max_attempts": mirrorProgressState.MaxAttempts, "retrying": mirrorProgressState.Retrying, "active_files": mirrorProgressState.ActiveFiles}
 	}

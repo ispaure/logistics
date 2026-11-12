@@ -44,26 +44,19 @@ def fit_folder_credential(app, width):
     row = app.folder_credential_row
     if row.parent is None:
         return
+    toggle = app.folder_view_toggle
+    width -= toggle.style.width + toggle.style.margin_left
     caption = app.folder_credential_label
-    cloud = app.folder_cloud_label
-    in_cloud = cloud.parent is not None
-
-    def occupied(label):
-        hint = label.intrinsic.width
-        return getattr(hint, 'value', hint or 0) + label.style.margin_right
-
-    available = width - (occupied(cloud) if in_cloud else 0)
     # Keep a bounded field even when a long credential name increases the
     # native intrinsic width. The picker and its accessibility label stay intact.
-    caption_width = occupied(caption)
-    show_caption = available >= caption_width + picker._MIN_WIDTH
+    hint = caption.intrinsic.width
+    caption_width = getattr(hint, 'value', hint or 0) + caption.style.margin_right
+    show_caption = width >= caption_width + picker._MIN_WIDTH
     if show_caption and caption.parent is None:
         row.insert(0, caption)
     elif not show_caption and caption.parent is row:
         row.remove(caption)
-    field_width = max(TOUCH_TARGET, int(available - (caption_width if show_caption else 0)))
-    row.style.flex = 0 if in_cloud else 1
-    picker.style.width = min(180, field_width) if in_cloud else field_width
+    picker.style.width = max(TOUCH_TARGET, int(width - (caption_width if show_caption else 0)))
 
 
 class FolderHubUI(WorkspacesScreen):

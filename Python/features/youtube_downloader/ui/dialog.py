@@ -227,6 +227,8 @@ class YouTubeDownloaderDialog(pyside.QDialog):
         )
 
         if confirmed:
+            from features.rclone.transfers.ui.review import finish_setup_for_review
+            finish_setup_for_review(self)
             downloader.push_seasons(self.folder, self.rclone_config_path, review=True)
 
     def _push_config(self):
@@ -237,6 +239,8 @@ class YouTubeDownloaderDialog(pyside.QDialog):
         )
 
         if confirmed:
+            from features.rclone.transfers.ui.review import finish_setup_for_review
+            finish_setup_for_review(self)
             downloader.push_config(self.folder, self.rclone_config_path, review=True)
 
     def _pull_config(self):
@@ -247,4 +251,6 @@ class YouTubeDownloaderDialog(pyside.QDialog):
         )
 
         if confirmed:
+            from features.rclone.transfers.ui.review import finish_setup_for_review
+            finish_setup_for_review(self)
             downloader.pull_config(self.folder, self.rclone_config_path, review=True)

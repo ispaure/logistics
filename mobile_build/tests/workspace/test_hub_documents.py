@@ -484,9 +484,9 @@ class HubDocumentTests(unittest.TestCase):
         self.assertIs(app._sync_status_controls['files'][2].parent, app._files_status_row)
         credential_row = app.folder_credential.parent
         self.assertIs(app._files_status_row.children[0], app.folder_source_tabs)
-        self.assertFalse(app.folder_local_header.children)
+        self.assertEqual(list(app.folder_subtab_header.children), [app.folder_cloud_tabs])
         self.assertIn(app.folder_picker_header, frame.main.children)
-        self.assertEqual(list(app.folder_picker_header.children), [app.folder_cloud_label, credential_row])
+        self.assertEqual(list(app.folder_picker_header.children), [credential_row, app.folder_view_toggle])
         self.assertIsNone(app.folder_transfers_button.parent)
         app.transfer_busy = False
         app.transfer_notification = True

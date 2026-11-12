@@ -7,7 +7,8 @@ class PushSettings(qt.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = qt.QVBoxLayout(self)
-        note = qt.QLabel('Push exclusions: one rclone pattern per line. These skip transfers, never delete matching local files. '
+        note = qt.QLabel('Push exclusions: one rclone pattern per line. Desktop Push skips matching local files '
+                        'and deletes matching files in the selected destination. '
                         'LocalCrypt checks every file before applying filters. Raw or encrypted .DS_Store, Thumbs.db, '
                         'ehthumbs.db and ehthumbs_vista.db files are automatically removed before a real push. '
                         'Patterns match stored names; LocalCrypt transfers use encrypted names.')

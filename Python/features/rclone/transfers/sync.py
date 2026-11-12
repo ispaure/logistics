@@ -62,6 +62,7 @@ def rclone_sync(source_path, destination_path, *, config_path, query=False, wait
         from features.rclone.transfers.push_policy import load_excludes, validate_localcrypt_push
         from features.rclone.localcrypt.mapping import for_path, storage_root
         options['excludes'] = load_excludes() if excludes is None else excludes
+        options['delete_excluded'] = True
         item = for_path(source_path)
         boundary = storage_root().absolute()
         source = Path(source_path).absolute()
@@ -133,6 +134,7 @@ def _execute_sync(
     cancelled=lambda: False,
     executable_path=None,
     excludes=(),
+    delete_excluded=False,
     on_launch=None
 ):
     """Return a named outcome; STARTED never claims transfer completion."""
@@ -158,7 +160,8 @@ def _execute_sync(
         raise ValueError('This credential session has ended. Unlock the package again.')
     arguments = build_sync_arguments(rclone_path, source_path, destination_path,
         config_path=config_path, track_renames=track_renames, bw_limit=bw_limit,
-        dry_run=dry_run or query, integrated=mode is LaunchMode.INTEGRATED, copy_links=copy_links, excludes=excludes)
+        dry_run=dry_run or query, integrated=mode is LaunchMode.INTEGRATED, copy_links=copy_links,
+        excludes=excludes, delete_excluded=delete_excluded)
     import shlex
     import subprocess
     baseline = subprocess.list2cmdline(arguments) if get_os() == OS.WIN else shlex.join(arguments)
@@ -193,7 +196,7 @@ def _execute_sync(
         application = qt.QApplication.instance()
         if application is not None and qt.QThread.currentThread() == application.thread():
             from commonUtils.ui.tasks.process_progress import open_process
-            from features.rclone.transfers.progress import RcloneProgressParser
+            from features.rclone.transfers.progress import RcloneProgressParser, add_removal_statistics
             if cancelled():
                 return SyncOutcome(SyncState.CANCELLED)
             window = open_process('rclone sync (dry run)' if dry_run else 'rclone sync',
@@ -201,6 +204,7 @@ def _execute_sync(
                          context={'operation': 'Sync (dry run)' if dry_run else 'Sync', 'source': source_path_str,
                                   'destination': destination_path_str, 'dry_run': dry_run},
                          **({'environment': environment} if environment is not None else {}))
+            add_removal_statistics(window, dry_run=dry_run)
             _watch_transfer(window, credential_path, revoked if environment is not None else lambda: False,
                             cancelled, session_bound=environment is not None)
             if on_launch is not None:
@@ -219,7 +223,8 @@ def _execute_sync(
 
 
 def build_sync_arguments(rclone_path, source_path, destination_path, *, config_path,
-                         track_renames=False, bw_limit=None, dry_run=False, integrated=True, copy_links=True, excludes=()):
+                         track_renames=False, bw_limit=None, dry_run=False, integrated=True, copy_links=True,
+                         excludes=(), delete_excluded=False):
     """Argument vector shared by UI and legacy callers; no shell interpretation."""
     options = TransferOptions(track_renames=track_renames, bw_limit=bw_limit, copy_links=copy_links, excludes=excludes)
     arguments = [str(rclone_path), '--config', str(config_path), 'sync', '--create-empty-src-dirs']
@@ -231,7 +236,7 @@ def build_sync_arguments(rclone_path, source_path, destination_path, *, config_p
     arguments += [f'--transfers={transfer_concurrency(source_path)}']
     if dry_run:
         arguments += ['--dry-run']
-    arguments += options.cli_arguments()
+    arguments += options.cli_arguments(delete_excluded=delete_excluded)
     arguments += ['--', str(source_path), str(destination_path)]
     return arguments
 

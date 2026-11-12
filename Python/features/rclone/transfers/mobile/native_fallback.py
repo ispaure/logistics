@@ -2,6 +2,7 @@
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN
+from features.rclone.transfers.presentation import removal_counts
 
 
 class NativeTransferFallback(toga.Box):
@@ -42,6 +43,8 @@ class NativeTransferFallback(toga.Box):
                 + f"Files: {model.get('files', 0):,} / {model.get('total_files', 0):,}\n"
                 + f"Data: {model.get('done', 0) / 1_000_000:,.2f} / {model.get('total', 0) / 1_000_000:,.2f} MB\n"
                 + f"Checked: {model.get('checks', 0):,} · Listed: {model.get('listed', 0):,}")
+            if phase != 'idle':
+                self.metrics.text += '\nRemoval attempts: ' + removal_counts(model)
             rows = tuple(str(row.get('name', '')) for row in model.get('active_files', ()))
             if model.get('busy'):
                 buttons.append(('Stop transfer', 'stop', phase != 'stopping', {}))
@@ -61,7 +64,8 @@ class NativeTransferFallback(toga.Box):
                 buttons.append(('Show all changes', 'filter', True, dict(kind='all', query='')))
             buttons.append(('Approve ' + model.get('operation', 'transfer'), 'approve', bool(model.get('can_confirm')), {}))
             if model.get('can_early') and not model.get('complete'):
-                buttons.append(('Proceed without full review…', 'early', True, {}))
+                self.metrics.text += '\nSkipping may replace or delete more files.'
+                buttons.append(('Skip preview and start', 'early', True, {}))
             buttons.append(('Cancel review', 'background', True, {}))
         else:
             self.status.text = 'Review additions, replacements and deletions before anything changes.'

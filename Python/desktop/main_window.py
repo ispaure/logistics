@@ -113,6 +113,7 @@ class MainWindow(pyside.Window):
                 self._bind_docking_preview(page)
             register_document_host(self.documents)
             register_process_host(self.actions)
+            register_document_host(self.actions, destination='workspace-actions')
             from desktop.bulk_rename import register_bulk_rename_host
             register_bulk_rename_host(self._show_bulk_rename)
             from .notifications import notification_service, Toast

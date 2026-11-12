@@ -396,13 +396,19 @@ class MirrorJobTests(unittest.TestCase):
                 if action == 'mirror_sync':
                     if not received.wait(3):
                         raise AssertionError('No live progress received')
-                return original(action, **values)
+                result = original(action, **values)
+                if action == 'mirror_progress':
+                    result.update(file_delete_attempts=2, folder_removal_attempts=1)
+                return result
             client.request = slow
             store.pull(job['id'], client, progress=report)
             live = next(value for value in updates if value.get('active'))
             self.assertEqual((live['files'], live['total_files'], live['done'], live['total']), (1, 2, 5, 10))
             self.assertEqual((live['listed'], live['checks']), (3, 1))
             self.assertEqual(updates[-1]['files'], 1)
+            for value in (live, updates[-1]):
+                self.assertEqual(value['file_delete_attempts'], 2)
+                self.assertEqual(value['folder_removal_attempts'], 1)
 
     def test_external_record_edits_refuse_push_without_replacing_metadata(self):
         with TemporaryDirectory() as directory:

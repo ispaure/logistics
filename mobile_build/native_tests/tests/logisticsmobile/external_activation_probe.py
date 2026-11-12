@@ -56,8 +56,6 @@ class TVProbe(LogisticsMobile):
                 source.write_bytes(comic.read_bytes())
                 records.append(store.import_book(LocalDocuments(), source))
             record = records[1]
-            await self.open_book(record['id'])
-            owner = self.reader_manager().active
             output = self.scene_manager.external_comics
             from rubicon.objc import ObjCClass
             for _ in range(150):
@@ -72,9 +70,15 @@ class TVProbe(LogisticsMobile):
             result['registration_controller'] = str(output.ios_registration[0]) if output.ios_registration else None
             assert output.ios, 'UIKit never connected a noninteractive external scene'
             key = next(iter(output.ios))
-            window, picture = output.ios[key]
+            scene, window, picture = output.ios[key]
+            assert window.windowScene is None and picture.image is None
+            assert output.ios_status is None
+            result['cases'].append('external_window_detached_before_reader')
+            await self.open_book(record['id'])
+            owner = self.reader_manager().active
             assert not window.isHidden(), 'UIKit TV window is hidden despite having a connected scene'
-            assert str(window.windowScene.session.role) != 'UIWindowSceneSessionRoleApplication'
+            assert window.windowScene == scene
+            assert str(scene.session.role) != 'UIWindowSceneSessionRoleApplication'
             result['external_bounds'] = [float(window.bounds.size.width), float(window.bounds.size.height)]
             result['phone_bounds'] = [float(self.native_scene.coordinateSpace.bounds.size.width), float(self.native_scene.coordinateSpace.bounds.size.height)]
             assert result['external_bounds'][0] > result['external_bounds'][1]
@@ -152,8 +156,8 @@ class TVProbe(LogisticsMobile):
             assert picture.image is not None
             result['cases'].append('conceal_and_reveal')
             self.show_settings()
-            assert picture.image is None
-            result['cases'].append('route_exit_blank')
+            assert picture.image is None and window.windowScene is None
+            result['cases'].append('route_exit_restores_system_output')
             owner.show_library()
             sync(self, select=True)
             assert picture.image is not None

@@ -36,8 +36,10 @@ Use each checkout's own `.venv`, `mobile_build/.venv` and manager-owned build
 workspaces. Install the external manager in that checkout's tooling environments;
 do not share mutable environments or build outputs between checkouts. See
 [adapter ownership](build-deployment-audit.md) and [storage policy](build-manager.md).
-When `git config --get logistics.releaseWorktree` reserves a checkout, other
-work uses `logistics.developmentWorktree` or an explicitly isolated checkout.
+Use the main checkout on `alpha` for routine development. Reserve a release
+checkout when `logistics.releaseWorktree` and `logistics.developmentWorktree`
+point to separate checkouts. When both point to the main checkout, develop on
+`alpha` there.
 Physical installation belongs to the release coordinator while that reservation
 is active. Diagnostic commands below do not override this ownership.
 

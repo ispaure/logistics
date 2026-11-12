@@ -5,6 +5,7 @@ from time import monotonic
 from threading import Event, Lock
 from typing import Protocol
 from services.worker_retirement import drain_worker
+from features.rclone.transfers.presentation import removal_counts
 from .models import TransferOutcome
 
 
@@ -107,9 +108,9 @@ def completion_message(operation, result):
     if outcome.operation == 'download':
         return 'Download complete. The selected item is saved locally.'
     if outcome.operation == 'push':
-        return f'Push sync verified: {outcome.files} file(s) sent. Destination-only entries were removed.'
+        return f'Push sync verified: {outcome.files} file(s) sent.'
     return ('Files changed during the operation; inspect the local destination.'
-            if outcome.status == 'conflict' else 'Pull sync complete. The local folder now matches the remote.')
+            if outcome.status == 'conflict' else 'Pull sync complete.')
 
 
 class TransferExecution:
@@ -200,6 +201,7 @@ def transfer_progress(values):
     phase = {'Discovering / checking files': 'Finding and comparing files…',
              'Checking / finishing sync': 'Finishing and checking the destination…',
              'Sync complete; verifying local copy': 'Verifying the local copy…',
+             'Removing destination entries': 'Removing destination entries…',
              'Transferring': 'Copying files…'}.get(phase, phase)
     message = f'{phase} · Files copied: {files:,}'
     if total_files > 0:
@@ -213,6 +215,8 @@ def transfer_progress(values):
         message += f' · Copying now: {values["active"]:,} files'
     if values.get('listed', 0) or values.get('checks', 0):
         message += f' · Files found: {values.get("listed", 0):,} · Files compared: {values.get("checks", 0):,}'
+    if values.get('file_delete_attempts') or values.get('folder_removal_attempts'):
+        message += ' · Removal attempts: ' + removal_counts(values)
     if total > 0:
         message += f' · {done / 1_000_000:,.2f} / {total / 1_000_000:,.2f} MB (known so far)'
     elif done > 0:

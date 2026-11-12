@@ -211,6 +211,8 @@ class PlexManagePMSDialog(pyside.QDialog):
         )
 
         if confirmed:
+            from features.rclone.transfers.ui.review import finish_setup_for_review
+            finish_setup_for_review(self)
             self._run_package_folder_action(actions.pull_pms, self.config_path)
 
     def _unpackage_pms(self):
@@ -243,4 +245,6 @@ class PlexManagePMSDialog(pyside.QDialog):
         )
 
         if confirmed:
+            from features.rclone.transfers.ui.review import finish_setup_for_review
+            finish_setup_for_review(self)
             self._run_package_folder_action(actions.push_pms, self.config_path)

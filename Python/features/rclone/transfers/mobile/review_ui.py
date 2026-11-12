@@ -44,7 +44,7 @@ def _display_review(session):
 
 class ReviewPresentation(Protocol):
     app: object
-    async def confirm(self, request, *, incomplete: bool) -> bool: ...
+    async def confirm(self, request) -> bool: ...
     def scanning(self, session) -> None: ...
     def show(self, box, cancel, request) -> None: ...
     def close(self) -> None: ...
@@ -96,7 +96,7 @@ class TransferReviewDialog:
             confirming = True
             publish()
             try:
-                accepted = await self.view.confirm(session.request, incomplete=incomplete)
+                accepted = incomplete or await self.view.confirm(session.request)
                 if not closed and accepted and session.approve(incomplete=incomplete):
                     self.view.scanning(session)
             finally:
@@ -152,12 +152,11 @@ class MobileReviewPresentation:
         self.app = owner.app
         self.review_snapshot = None
 
-    async def confirm(self, request, *, incomplete):
+    async def confirm(self, request):
         counts = self.review_snapshot.counts
         message = (f'{counts["add"]:,} added · {counts["replace"]:,} replaced · {counts["delete"]:,} deleted.\n'
                    + (f'{counts["cleanup"]:,} local generated entries removed before Push.\n' if counts['cleanup'] else '')
                    + f'Source: {request.source}\nDestination: {request.destination}\n\n'
-                   + ('Comparison incomplete. Additional replacements and deletions may occur.\n' if incomplete else '')
                    + 'Destination replacements and deletions have no backup or undo.')
         return await self.owner.main_window.dialog(toga.ConfirmDialog(
             request.operation + ' these changes?', message))

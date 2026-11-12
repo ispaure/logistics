@@ -169,7 +169,12 @@ class MirrorUITests(unittest.TestCase):
                          cipher_identity='c' * 64, target=name)
                     for letter, name in [('a', 'Notes'), ('b', 'Comics')]]
             providers = [Mock(), Mock()]
-            store = NS(jobs={str(i): job for i, job in enumerate(jobs)}, target=lambda job: Path(directory))
+            def target(job):
+                return Path(directory) / job['target']
+
+            for job in jobs:
+                target(job).mkdir()
+            store = NS(jobs={str(i): job for i, job in enumerate(jobs)}, target=target, guard=Path)
             owner = NS(app=NS(feature_enabled=lambda feature: True), private_root=Path(directory),
                        cloud_client=Mock(), cloud_crypt_remotes=['Secret'], mirror_store=lambda: store)
             service = NS(localcrypt=NS(open=Mock(side_effect=providers)))
@@ -405,7 +410,7 @@ class MirrorUITests(unittest.TestCase):
                         while not started.is_set():
                             await asyncio.sleep(.01)
                     self.assertTrue(await drive_review(app, early=True))
-                    self.assertEqual(dialog.await_count, 1)
+                    dialog.assert_not_awaited()
                 self.assertTrue(retired.is_set())
             try:
                 app.loop.run_until_complete(exercise())

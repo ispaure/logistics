@@ -46,16 +46,19 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(app.folder_local_buttons['Rclone'].text, 'Rclone Copies')
         self.assertEqual(app.folder_local_buttons['Others'].text, 'On My Phone')
         app.change_folder_source('rclone')
-        self.assertEqual(app.folder_cloud_label.text, 'Rclone Remotes')
-        self.assertFalse(app.folder_local_header.children)
+        self.assertEqual(list(app.folder_subtab_header.children), [app.folder_cloud_tabs])
+        remotes_tab, = app.folder_cloud_tabs.children
+        self.assertEqual(remotes_tab.text, 'Rclone Remotes')
+        self.assertEqual(remotes_tab.style.font_weight, 'bold')
+        self.assertEqual(remotes_tab.style.height, app.folder_local_buttons['Rclone'].style.height)
         self.assertEqual(list(app.folder_picker_header.children),
-                         [app.folder_cloud_label, app.folder_credential_row])
+                         [app.folder_credential_row, app.folder_view_toggle])
         self.assertEqual(app.folder_picker_header.style.direction, 'row')
         self.assertIs(app.folder_credential.parent, app.folder_credential_row)
         app.change_folder_source('Network shares')
-        self.assertFalse(app.folder_local_header.children)
+        self.assertFalse(app.folder_subtab_header.children)
         app.change_folder_source('Local')
-        self.assertEqual(list(app.folder_local_header.children), [app.folder_local_tabs])
+        self.assertEqual(list(app.folder_subtab_header.children), [app.folder_local_tabs])
 
     def test_native_review_uses_dedicated_managed_folder_route(self):
         from mobile_build.tests.support.app import mobile_app
@@ -159,13 +162,13 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertFalse(app.folder_picker_header.children)
         app.folder_source_buttons['Network shares'].on_press()
         self.assertEqual(set(app.folder_buttons), {'Home Mac'})
-        self.assertFalse(app.folder_picker_header.children)
+        self.assertEqual(list(app.folder_picker_header.children), [app.folder_view_toggle])
         app.show_locations()
         self.assertEqual(app.folder_source, 'Network shares')
         app.folder_source_buttons['rclone'].on_press()
         self.assertEqual(app.folder_credential.value, 'All')
         self.assertEqual(set(app.folder_buttons), {'Personal drive', 'Work drive'})
-        self.assertIs(app.folder_picker_header.children[-1], app.folder_credential_row)
+        self.assertIs(app.folder_picker_header.children[0], app.folder_credential_row)
 
     def test_source_actions_follow_tab_without_leaving_empty_toolbar_or_duplicate_share(self):
         app = self.app
@@ -187,7 +190,7 @@ class FolderSourceTabTests(unittest.TestCase):
         app.change_folder_source('Network shares')
         self.assertEqual(list(app.folder_source_actions.children), [app.folder_add_share_button])
         self.assertIsNone(app.folder_transfers_button.parent)
-        self.assertFalse(app.folder_picker_header.children)
+        self.assertEqual(list(app.folder_picker_header.children), [app.folder_view_toggle])
         self.assertFalse(any(getattr(child, 'text', '') == 'Add share…'
                              for child in app.folder_list.children))
         app.show_locations()
@@ -196,6 +199,43 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(list(app.folder_source_actions.children), [app.folder_add_remote_button])
         self.assertIsNone(app.folder_add_share_button.parent)
         self.assertIn(app.folder_credential_row, app.folder_picker_header.children)
+
+    def test_folder_view_preserves_full_names_and_is_shared_and_saved(self):
+        from unittest.mock import patch
+        from mobile.preferences import Preferences
+
+        app = self.app
+        choices = {
+            'Compulsion-Server-Lib': dict(source='Remote', kind='remote', remote='Compulsion-Server-Lib',
+                                         value='Compulsion-Server-Lib'),
+            'Home-Server-Books': dict(source='Remote', kind='remote', remote='Home-Server-Books',
+                                      value='Home-Server-Books', catalog_category='Home Server'),
+            'Local-Server-Music': dict(source='Local', kind='job', remote='Local-Server-Music', value='music'),
+        }
+        with patch.object(app.folder_controller(), 'folder_choices', return_value=choices):
+            app.show_locations()
+            app.change_folder_source('rclone')
+            self.assertEqual(app.folder_buttons['Compulsion-Server-Lib'].text, 'Lib')
+            app.folder_view_toggle.on_press()
+            self.assertEqual(app.folder_buttons['Compulsion-Server-Lib'].text, 'Compulsion-Server-Lib')
+            self.assertFalse(app.folder_tree_buttons)
+
+            app.change_folder_source('Network shares')
+            self.assertEqual(app.folder_buttons['Home-Server-Books'].text, 'Home-Server-Books')
+            self.assertEqual(list(app.folder_picker_header.children), [app.folder_view_toggle])
+            app.change_folder_source('Local')
+            app.folder_local_buttons['Rclone'].on_press()
+            self.assertEqual(app.folder_buttons['Local-Server-Music'].text, 'Local-Server-Music')
+            self.assertEqual(Preferences(app.preferences.path.parent).values['workspace_folder_view'], 'list')
+
+            # Build fresh controls from the persisted preference.
+            app.preferences.reload()
+            app.build_folder_picker(choices=choices)
+            self.assertEqual(app.folder_view_toggle.control_icon, 'contents')
+            self.assertEqual(app.folder_buttons['Local-Server-Music'].text, 'Local-Server-Music')
+            app.folder_view_toggle.on_press()
+            self.assertEqual(app.folder_buttons['Local-Server-Music'].text, 'Music')
+            self.assertEqual(Preferences(app.preferences.path.parent).values['workspace_folder_view'], 'hierarchy')
 
     def test_local_subtabs_isolate_managed_copies_and_preserve_ordinary_names(self):
         app = self.app
@@ -225,9 +265,9 @@ class FolderSourceTabTests(unittest.TestCase):
         app.folder_local_buttons['Others'].on_press()
         self.assertNotIn(shared_name, app.folder_buttons)
         app.change_folder_source('rclone')
-        self.assertFalse(app.folder_local_header.children)
+        self.assertEqual(list(app.folder_subtab_header.children), [app.folder_cloud_tabs])
         app.change_folder_source('Local')
-        self.assertTrue(app.folder_local_header.children)
+        self.assertTrue(app.folder_subtab_header.children)
 
     def test_local_rclone_credential_filters_offline_copies_and_defaults_to_all(self):
         from types import SimpleNamespace

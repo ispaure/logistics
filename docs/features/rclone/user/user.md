@@ -160,8 +160,11 @@ replace a running tool. See [download settings](download-versions.md#rclone-down
 for the field details.
 
 Sync progress opens in **Workspace actions** on the left rail. Each job has its own
-tab with transfer statistics and logs; completed and failed jobs remain available
-until you close them. A red badge marks results you haven't viewed. Completion
+tab with transfer statistics and logs. **Transfer statistics** shows file deletion
+attempts and folder removal attempts separately from file transfers. rclone counts
+an attempt before the storage provider finishes the removal. Dry runs label these
+counters as planned changes. Completed and failed jobs remain available until you
+close them. A red badge marks results you haven't viewed. Completion
 and errors also use system notifications when the platform supports them, unless
 you are already viewing that job in the focused window. Notifications still
 appear when another job or feature is selected, another app has focus, or the
@@ -190,10 +193,11 @@ copy. Confirming a complete review checks for changes again before starting; if
 the comparison changed, inspect the new results and confirm again. Comparison
 scans use rclone’s normal retries on both desktop and mobile. Each attempt
 replaces the previous attempt’s results; an exhausted or cancelled comparison
-remains incomplete. Cancel and **Proceed without full review…** remain available
-while waiting for a retry (mobile labels this **Skip full comparison…**).
+remains incomplete. Cancel and **Skip preview and start** remain available
+while waiting for a retry.
 
-The desktop review displays a change table with **Change**, **File** and **Folder**
+The desktop review opens in **Workspace actions**, where sync progress also
+appears. It displays a change table with **Change**, **File** and **Folder**
 columns, plus total counts for additions, replacements, deletions and local
 cleanup. A side inspector explains the selected action and exact affected paths.
 Large reviews page through 30 changes at a time without limiting the comparison. Filter by action or search a path to find affected files; hover a row
@@ -206,10 +210,9 @@ including nested empty folders and decrypted crypt folder labels. The final
 change check tracks directory membership and type without treating directory
 timestamp changes as new transfer work.
 
-While scanning or checking a completed review, **Proceed without full review…**
-lets you stop waiting and explicitly confirm the source and destination. The
-confirmation warns that additional replacements and deletions may occur. It waits
-for the comparison to stop before launching the transfer. Credential and destination
+During an incomplete comparison, **Skip preview and start** requests the sync
+directly. It waits for the comparison to stop before launching the transfer.
+Additional replacements and deletions may occur. Credential and destination
 checks still apply. On desktop, this choice also skips the full LocalCrypt
 integrity scan and generated-file cleanup; it starts Push after the comparison
 stops and structural checks pass. Mobile retains its LocalCrypt integrity checks.
@@ -452,7 +455,7 @@ remote removal as **Delete**. Unchanged encrypted junk is therefore shown as a
 planned deletion, rather than hidden among matching files. Cancelling review
 preserves both copies. Encrypted junk must still pass authentication before removal.
 
-Unless desktop **Proceed without full review…** was explicitly confirmed, the
+Unless you chose **Skip preview and start** on desktop, the
 cancellable check then validates every stored name and fully decrypts and
 authenticates every file in memory. Plaintext with an encrypted-looking filename,
 unknown names, corrupt ciphertext and files that change during checking refuse
@@ -464,8 +467,8 @@ app does not create decrypted temporary files for this check.
 
 **Settings → rclone → Push exclusions** controls one [rclone exclusion pattern](https://rclone.org/filtering/)
 per line. Defaults skip common Finder/Explorer junk and AppleDouble sidecars.
-These apply to local-to-remote pushes, including dry runs, and preserve excluded
-files already at the destination. Pulls keep their existing behavior. Patterns
+Desktop Push skips matching source files and deletes matching files inside the
+selected destination. Its dry-run review lists those destination deletions. Patterns
 match the names passed to rclone: ordinary pushes use normal names; ciphertext
 mirror pushes use encrypted stored names. They do not match decoded names in a
 LocalCrypt mirror. Exclusions do not authorize local deletion.

@@ -124,7 +124,7 @@ class PushPolicyTests(unittest.TestCase):
                 push_policy.validate_localcrypt_push(f.item, binary, report=change_cleanup)
             self.assertEqual(path.read_bytes(), replacement)
 
-    def test_ordinary_push_filters_preserve_excluded_destination_files(self):
+    def test_ordinary_push_filters_delete_excluded_destination_files(self):
         binary = executable.get_rclone_path()
         if not binary.is_file(): self.skipTest('Pinned rclone unavailable')
         real_sync = sync.rclone_sync
@@ -134,12 +134,12 @@ class PushPolicyTests(unittest.TestCase):
             (source / '.DS_Store').write_bytes(b'junk')
             (source / 'keep.txt').write_text('push me')
             (source / 'skip.pdf').write_text('exclude me')
-            (destination / 'existing.pdf').write_text('preserve me')
+            (destination / 'existing.pdf').write_text('remove me')
             with patch.object(push_policy, 'load_excludes', return_value=('.DS_Store', '*.pdf')):
                 self.assertTrue(real_sync(source, 'Cloud:' + str(destination), config_path=f.context,
                                           wait_for_output=True, executable_path=binary))
             self.assertEqual((destination / 'keep.txt').read_text(), 'push me')
-            self.assertEqual((destination / 'existing.pdf').read_text(), 'preserve me')
+            self.assertFalse((destination / 'existing.pdf').exists())
             self.assertFalse((destination / '.DS_Store').exists())
             self.assertFalse((destination / 'skip.pdf').exists())
             self.assertTrue((source / '.DS_Store').exists())

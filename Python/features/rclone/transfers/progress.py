@@ -66,7 +66,7 @@ class RcloneProgressParser:
             mapping = {'bytes': 'bytes', 'total_bytes': 'totalBytes', 'speed': 'speed', 'eta': 'eta',
                        'files': 'transfers', 'total_files': 'totalTransfers', 'checks': 'checks',
                        'total_checks': 'totalChecks', 'errors': 'errors', 'elapsed': 'elapsedTime',
-                       'deleted': 'deletes', 'renamed': 'renames', 'listed': 'listed'}
+                       'deleted': 'deletes', 'deleted_dirs': 'deletedDirs', 'renamed': 'renames', 'listed': 'listed'}
             self.metrics.update({target: _number(stats.get(source)) for target, source in mapping.items()})
             self.metrics['warnings'] = self.warning_records
             if stats.get('lastError'):
@@ -83,3 +83,25 @@ class RcloneProgressParser:
         if message:
             return self._update(message)
         return None
+
+
+def add_removal_statistics(window, *, dry_run):
+    from commonUtils.ui import pyside as qt
+
+    grid = window.statistics.layout()
+    row = grid.rowCount()
+    titles = ('Planned file deletions', 'Planned folder removals') if dry_run else (
+        'File deletion attempts', 'Folder removal attempts')
+    for column, (key, title) in enumerate(zip(('deleted', 'deleted_dirs'), titles)):
+        label = qt.QLabel('Not reported')
+        label.setTextInteractionFlags(qt.Qt.TextInteractionFlag.TextSelectableByMouse)
+        window.fields[key] = label
+        grid.addWidget(qt.QLabel(title), row, column * 2)
+        grid.addWidget(label, row, column * 2 + 1)
+
+    def update_removals(update):
+        for key in ('deleted', 'deleted_dirs'):
+            count = update.metrics.get(key)
+            window.fields[key].setText(f'{int(count):,}' if count is not None else 'Not reported')
+
+    window.runner.progress.connect(update_removals)

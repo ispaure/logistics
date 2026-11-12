@@ -32,7 +32,9 @@ class FolderActionsPage(DocumentsPage):
         super().present(window)
         if fresh:
             self.records[window].update(name=window.windowTitle(), unseen=False)
-            window.runner.completed.connect(lambda result, job=window: self._completed(job, result))
+            runner = getattr(window, 'runner', None)
+            if runner is not None:
+                runner.completed.connect(lambda result, job=window: self._completed(job, result))
 
     def _viewed(self, window):
         record = self.records.get(window)

@@ -166,6 +166,19 @@ class TransferFeedbackTests(TestCase):
         app.show_transfers()
         self.assertIs(app.transfer_view, first)
         self.assertEqual(controller.transfer_files.text, 'Files\n2 / 4')
+        app.publish_mirror_progress(7, dict(phase='Removing destination entries', files=0,
+            done=0, total=0, file_delete_attempts=3, folder_removal_attempts=2))
+        model = app.transfer_view.model
+        self.assertEqual(model['phase'], 'transfer')
+        self.assertEqual(model['status'], 'Removing destination entries…')
+        self.assertIsNone(model['percentage'])
+        app.publish_mirror_progress(7, dict(phase='Sync complete; verifying local copy', files=0,
+            done=0, total=0, file_delete_attempts=3, folder_removal_attempts=2))
+        controller.state.busy = False
+        controller.state.result = 'complete'
+        controller.render_transfer_summary()
+        self.assertEqual(app.transfer_view.model['file_delete_attempts'], 3)
+        self.assertEqual(app.transfer_view.model['folder_removal_attempts'], 2)
 
     def test_transfer_settings_remain_reachable_from_setup_and_return_to_setup(self):
         app = self.app

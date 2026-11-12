@@ -41,26 +41,55 @@ class ExternalDisplayTests(unittest.TestCase):
         self.output = ExternalComicDisplay(NS())
         self.host.scene_manager = NS(external_comics=self.output)
         self.picture = NS(image=None)
+        self.scene = NS(session=NS(persistentIdentifier='tv'), coordinateSpace=NS(bounds=object()))
         self.window = Mock()
-        self.window.hidden = False
+        self.window.windowScene = None
+        self.window.hidden = True
         self.window.setHidden.side_effect = lambda hidden: setattr(self.window, 'hidden', hidden)
-        self.output.ios['tv'] = self.window, self.picture
+        self.output.ios['tv'] = self.scene, self.window, self.picture
 
     def test_page_publication_navigation_and_suspension_clear_old_pixels(self):
         sync(self.host, select=True)
         self.assertEqual(self.picture.image, 'page one')
+        self.assertIs(self.window.windowScene, self.scene)
         self.canvas._impl.picture.image = 'page two'
         sync(self.host)
         self.assertEqual(self.picture.image, 'page two')
         self.canvas.image = None
         sync(self.host)
         self.assertIsNone(self.picture.image)
+        self.assertIs(self.window.windowScene, self.scene)
         self.canvas.image = object()
         sync(self.host)
         self.assertEqual(self.picture.image, 'page two')
         self.host.body = NS(children=[])
         sync(self.host, select=True)
         self.assertIsNone(self.picture.image)
+        self.assertIsNone(self.window.windowScene)
+        self.assertTrue(self.window.hidden)
+
+    def test_ios_mirrors_outside_reader_only_while_unprotected(self):
+        self.host.body = NS(children=[])
+        sync(self.host, select=True)
+        self.assertIsNone(self.window.windowScene)
+        self.window.setHidden.assert_not_called()
+
+        self.privacy.gates = lambda: (NS(locked=False),)
+        sync(self.host)
+        self.assertIs(self.window.windowScene, self.scene)
+        self.assertIsNone(self.picture.image)
+        self.assertFalse(self.window.hidden)
+
+        self.privacy.gates = lambda: ()
+        sync(self.host)
+        self.assertIsNone(self.window.windowScene)
+        self.assertTrue(self.window.hidden)
+
+        self.host.body = NS(children=[self.canvas])
+        sync(self.host)
+        self.assertIs(self.window.windowScene, self.scene)
+        self.assertEqual(self.picture.image, 'page one')
+        self.assertFalse(self.window.hidden)
 
     def test_session_gate_blanks_even_local_comic_and_unlocked_gate(self):
         sync(self.host, select=True)
@@ -169,7 +198,7 @@ class ExternalDisplayTests(unittest.TestCase):
         output = ExternalComicDisplay(NS())
         window, controller, picture = Mock(), Mock(), Mock()
         classes = {name: Mock() for name in ('UIWindow', 'UIViewController', 'UIImageView', 'UIColor')}
-        classes['UIWindow'].alloc.return_value.initWithWindowScene.return_value = window
+        classes['UIWindow'].alloc.return_value.initWithFrame.return_value = window
         classes['UIViewController'].alloc.return_value.init.return_value = controller
         classes['UIImageView'].alloc.return_value.init.return_value = picture
         scene = NS(session=NS(persistentIdentifier='tv'), coordinateSpace=NS(bounds=object()))

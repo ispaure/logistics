@@ -38,9 +38,8 @@ called **On My Tablet**. The app remembers the last Local tab on this
 device across restarts, starting with **On My Phone** on first use. A notebook's **× (Close document)** closes its
 session with the usual unsaved-edit choices and returns to the Home overview.
 
-**Cloud** lists ordinary
-and encrypted remotes under **Rclone Remotes**, with the credential picker beside
-that label. Local destination pickers use
+**Cloud → Rclone Remotes** lists ordinary and encrypted remotes. The credential
+picker sits below the tab. Local destination pickers use
 `<foldername> - Encrypted Copy` for encrypted copies and just the folder name
 for regular folders. Lock icons describe current access; unlocking does not
 remove encryption from the stored copy.

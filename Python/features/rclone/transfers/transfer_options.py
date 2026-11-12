@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 
-# Cleanup is a separate, narrowly scoped mutation policy. User filters never
-# authorize deleting local files, and excluded destination files stay excluded.
+# Cleanup is a separate, narrowly scoped mutation policy. Push filters never
+# authorize deleting local files.
 CLEANUP_NAMES = frozenset({'.ds_store', 'thumbs.db', 'ehthumbs.db', 'ehthumbs_vista.db'})
 DEFAULT_EXCLUDES = ('.DS_Store', '[Tt]humbs.db', '[Ee]hthumbs.db', '[Ee]hthumbs_vista.db', '[Dd]esktop.ini', '._*')
 
@@ -42,7 +42,7 @@ class TransferOptions:
                 raise ValueError('Bandwidth limit must be a positive number of MB/s')
             object.__setattr__(self, 'bw_limit', value)
 
-    def cli_arguments(self):
+    def cli_arguments(self, *, delete_excluded=False):
         arguments = ['--copy-links'] if self.copy_links else []
         if self.track_renames:
             arguments += ['--track-renames']
@@ -50,6 +50,8 @@ class TransferOptions:
             arguments += ['--bwlimit', f'{self.bw_limit}M']
         for pattern in self.excludes:
             arguments += ['--exclude', pattern]
+        if delete_excluded and self.excludes:
+            arguments.append('--delete-excluded')
         return arguments
 
     def bridge_arguments(self, *, push):

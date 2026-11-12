@@ -1359,8 +1359,8 @@ coverage in `test_workspace_navigation` checks retained controls, compact/wide
 rotation, Back, content-width thresholds and posture-only reflow;
 `test_fold_layout` checks flat ratios and reserved-region allocation.
 
-The mobile Workspaces uses quiet source tabs above the tree. Cloud shows the
-native credential picker inline beside the static **Rclone Remotes** label.
+Mobile Workspaces uses quiet source tabs above the tree. Cloud shows a selected
+**Rclone Remotes** tab with the native credential picker on the row below.
 In a narrow iOS pane, the **Credential** caption can yield space to the field,
 which keeps its accessible name. Local → Rclone Copies shows its own credential
 row. `folder_hub.source_choices` partitions logical folders
