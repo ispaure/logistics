@@ -77,6 +77,18 @@ feature contributions as right-clicking the current selection.
 
 File Browser starts at your home folder. Use it for arbitrary paths;
 **Workspaces** brings configured local folders and remote integrations together.
+
+On desktop, right-click an ordinary local `.db`, `.db3`, `.sqlite` or `.sqlite3`
+file and choose **Inspect SQLite…** to inspect its schema, filter and sort
+100-row pages. It opens read-only. **Enable editing** offers typed row edits,
+inserts and deletions for supported primary-key tables; **Save changes** commits
+the whole staged batch. Failed or cancelled saves preserve the database and keep
+the staged changes available. The [shared SQLite guide](../../Python/commonUtils/docs/user/sqlite_browser/sqlite_browser.md)
+describes controls, constraints and stale-data recovery. Existing double-click
+actions are unchanged. Managed index/job databases stay read-only; network,
+encrypted, remote, archive and native-provider resources have no SQLite editor.
+The native mobile browser does not expose this desktop action.
+
 Choose **Local**, **Cloud** or **Home Server**, then a workspace in the compact left
 tree. Local has **Dropbox**, **Rclone Copies** and **On This Computer** source tabs; Rclone Copies is selected
 initially and includes ordinary Local and encrypted LocalCrypt copies. Local →
