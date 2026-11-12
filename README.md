@@ -101,7 +101,7 @@ The guided flow supports [combined platform validation and reviewed GitHub/Fireb
 | Tool | Use it to… |
 | --- | --- |
 | [Notes Library](docs/features/notes_library/user/user.md) | Read, edit and organize local or unlocked LocalCrypt notes with independent libraries and split document tabs |
-| [File Browser & Markdown](docs/user/files-and-documents.md) | Browse files and storage usage; read/edit Markdown and browse guides in the heading-based Documentation Library |
+| [File Browser & Markdown](docs/user/files-and-documents.md) | Browse files and storage usage; inspect local SQLite databases and explicitly save supported row edits; read/edit Markdown and browse guides |
 | [Git](docs/features/git/user/user.md) | Clone repositories, browse history, stage and commit changes, manage branches and remotes |
 | [Bulk Rename](docs/features/bulk_rename/user/user.md) | Preview and apply changes to many filenames at once |
 | [Text Editor](docs/features/text_editor/user/user.md) | Edit text and code in tabs, search/replace, see Git change markers, and preserve file encodings |

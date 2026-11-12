@@ -79,6 +79,19 @@ class _PrivateBrowserLocation:
     directory: Path
 
 
+def _sqlite_write_allowed(path):
+    """Opt ordinary host files in; encrypted-copy paths remain provider-owned."""
+    if _crypt_location(path)[1]:
+        raise PermissionError('Open encrypted copies through their private provider; SQLite editing is unavailable.')
+    return True
+
+
+def _sqlite_readonly_paths():
+    from commonUtils.filesystem.index import directory_cache
+    database = directory_cache.database
+    return database, database.with_suffix('.jobs.sqlite3')
+
+
 def _browser_view(path=None, *, root_path=None, filesystem_scope=False):
     from features.rclone.storage import install_local_storage_policy
     install_local_storage_policy()
@@ -128,6 +141,8 @@ class _BrowserHost:
                                        directory_handler=self._route_directory,
                                        directory_boundary=self._directory_boundary,
                                        calculate_folder_sizes=calculate_folder_sizes,
+                                       sqlite_write_allowed=_sqlite_write_allowed,
+                                       sqlite_readonly_paths=_sqlite_readonly_paths,
                                        index_settings_path=Path(__file__).resolve().parents[1]/'configFile.ini')
         from services.documents.ui.markdown import activate_markdown
         self.file_browser.install_extension('markdown-reader', activation_handlers=(activate_markdown,))
@@ -250,17 +265,22 @@ class _BrowserHost:
             self.file_browser.refresh()
 
     def _retry_close(self):
-        if self.closing:
+        if self.closing and self.file_browser.sqlite_browser.can_retire:
             self.window().close()
 
     def prepare_close(self):
+        sqlite = self.file_browser.sqlite_browser
+        if not sqlite.prepare_close():
+            self.closing = sqlite.closing
+            self.can_retire = sqlite.can_retire
+            return False
         self.closing = True
         ready = True
         for extension in self.extensions:
             if not extension.prepare_close():
                 ready = False
-        self.can_retire = ready
         browser_busy = self.file_browser.stop()
+        self.can_retire = ready and sqlite.can_retire
         return ready and not browser_busy
 
     def closeEvent(self, event):
@@ -271,7 +291,11 @@ class _BrowserHost:
 
 
 class BrowserView(_BrowserHost, qt.QMainWindow):
-    close_in_background = True
+    @property
+    def close_in_background(self):
+        # WorkspaceDock checks this before prepare_close(). Dirty editors must
+        # remain attached and visible so Cancel is a real close veto.
+        return self.file_browser.sqlite_browser.can_retire
     title_changed = qt.Signal(str)
     idle = qt.Signal()
     def __init__(self, parent=None, *, root_path=None, filesystem_scope=False):
@@ -318,7 +342,7 @@ class BrowserView(_BrowserHost, qt.QMainWindow):
         return (path.name or str(path)) if path else 'Files'
 
     def _retry_close(self):
-        if self.closing:
+        if self.closing and self.file_browser.sqlite_browser.can_retire:
             self.idle.emit()
 
 

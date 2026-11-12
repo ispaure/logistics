@@ -14,6 +14,32 @@ workers. `desktop/file_browser.py:BrowserView` hosts it and installs enabled
 Logistics contributions through `registry.get_browser_extensions()`. Feature-owned
 hosts can add their own controls around the same component.
 
+## SQLite inspection boundary
+
+The shared browser contributes **Inspect SQLite…** without changing activation.
+Logistics opts ordinary local files into explicit editing through
+`_sqlite_write_allowed`; encrypted-copy paths remain provider-owned. The host
+passes the current directory-index and job-database paths as read-only policy.
+Shared access checks additionally reject protected local roots, network mounts,
+links, unsupported providers and recognizable managed-index schemas. No database
+is copied out of remote/private storage for SQLite editing. Native mobile has no
+SQLite editor. The [shared SQLite API](../../Python/commonUtils/docs/development/reference/integrations/sqlite.md)
+owns SQL, identity checks and transactions; its
+[Qt integration guide](../../Python/commonUtils/docs/development/reference/ui/sqlite_browser/sqlite_browser.md)
+owns worker and dialog contracts. Directory-index schemas, queues, snapshots and
+retention remain under their existing owners.
+
+`BrowserView.close_in_background` is conditional on the SQLite controller's
+retirement readiness. A dirty editor veto keeps its browser tab attached; a
+clean worker can retire in the background. SQLite close checks precede feature
+shutdown so cancelling a prompt does not stop unrelated feature controllers.
+`tests/files/test_sqlite_browser_host.py` exercises the real host action, filter,
+save/reopen, protected policy and dirty workspace close. Existing browser and
+launch suites cover the normal host paths; native platform acceptance remains
+separate from offscreen host tests.
+
+## Browser presentation
+
 The Logistics browser host uses zero outer pane margins and `BrowserIndexStatus`
 to compact the shared workspace footer's padding, font, buttons and activity
 track. Embedded, standalone and detached browser workspaces use this same
