@@ -97,6 +97,50 @@ class ManagerSettingsTests(unittest.TestCase):
         self.assertEqual(values['testflight.poll_interval_seconds'], 12)
         self.assertEqual((self.root / 'testflight-distribution.json').read_text(), before)
 
+    def test_reset_preserves_masked_values_until_save_and_removes_only_selected_keys(self):
+        import os
+        group = 'firebase.group'
+        timing = 'testflight.poll_interval_seconds'
+        signing = 'signing.app_profile'
+        defaults = settings.defaults(self.root)
+        with patch.dict(os.environ, {}, clear=True):
+            settings.save(self.root, {group: 'Saved group', signing: '/fixture/reference.mobileprovision'})
+            path = settings.profile_path(self.root)
+            self.assertNotIn(timing, settings.load_profile(path))
+            self.assertNotIn('testflight.processing_timeout_seconds', settings.load_profile(path))
+            settings.save(self.root, {timing: '12'})
+            with patch.dict(os.environ, {'LOGISTICS_FIREBASE_GROUP': 'Environment group'}):
+                values, _, resets = settings.settings_with_resets(self.root)
+                self.assertEqual(values[group], 'Environment group')
+                self.assertEqual(resets[group], dict(overridden=True, value='Environment group', origin='environment'))
+                before = path.read_bytes()
+                for invalid in ([signing], ['testing.android_api'], [group, group], 'firebase.group'):
+                    with self.assertRaises(ValueError):
+                        settings.save(self.root, {}, resets=invalid)
+                    self.assertEqual(path.read_bytes(), before)
+                settings.save(self.root, {'firebase.release_notes': 'New notes'}, resets=[group, timing])
+                self.assertEqual(settings.settings(self.root)[0][group], 'Environment group')
+            self.assertEqual(settings.settings(self.root)[0][group], defaults[group])
+            self.assertEqual(settings.load_profile(path), {
+                signing: '/fixture/reference.mobileprovision', 'firebase.release_notes': 'New notes'})
+
+    def test_reset_from_legacy_keeps_other_values_and_does_not_revive_removed_key(self):
+        import os
+        group = 'testflight.external_group'
+        timing = 'testflight.poll_interval_seconds'
+        legacy = self.root / 'legacy.json'
+        profile = self.root / 'profile.json'
+        settings.save_profile(legacy, {group: 'Old group', timing: 12}, allowed={group, timing})
+        before = legacy.read_bytes()
+        with patch.dict(os.environ, {'LOGISTICS_MANAGER_PROFILE': str(profile),
+                                     'LOGISTICS_MANAGER_LEGACY_PROFILE': str(legacy)}, clear=True):
+            _, _, resets = settings.settings_with_resets(self.root)
+            self.assertTrue(resets[group]['overridden'])
+            settings.save(self.root, {}, resets=[group])
+            self.assertEqual(settings.load_profile(profile), {timing: 12})
+            self.assertEqual(settings.settings(self.root)[0][group], settings.defaults(self.root)[group])
+            self.assertEqual(legacy.read_bytes(), before)
+
     def test_identity_invalid_group_and_invalid_waits_do_not_write_profile(self):
         for change in ({'testflight.app_id': '123'}, {'testflight.external_group': ''},
                        {'testflight.poll_interval_seconds': '0'}, {'firebase.app_id': 'bad'}):

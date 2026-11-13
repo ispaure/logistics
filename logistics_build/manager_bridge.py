@@ -54,7 +54,7 @@ def main():
         elif action == 'set_app_version':
             result = project.set_app_version(values['version'])
         elif action == 'save_settings':
-            result = project.save_settings(values['changes'])
+            result = project.save_settings(values['changes'], resets=values.get('resets', ()))
         elif action == 'verification':
             result = project.verification_plan().data()
         elif action == 'storage_inventory':

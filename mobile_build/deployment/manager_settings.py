@@ -6,6 +6,7 @@ import re
 import subprocess
 import tomllib
 
+from build_manager.locking import workspace_lock
 from build_manager.profiles import effective, load_profile, save_profile
 
 
@@ -66,21 +67,47 @@ VARIABLES = {
 }
 
 
+RESETTABLE = frozenset({
+    'testflight.external_group', 'testflight.what_to_test', 'testflight.enabled',
+    'testflight.locale', 'testflight.poll_interval_seconds', 'testflight.processing_timeout_seconds',
+    'firebase.app_id', 'firebase.group', 'firebase.release_notes',
+    'github.repository', 'github.workflow',
+})
+TIMING_FIELDS = ('testflight.poll_interval_seconds', 'testflight.processing_timeout_seconds')
+
+
 def current_settings(values):
     """Discard retired Ubuntu selectors from saved profiles and captured overrides."""
     return {key: value for key, value in values.items() if key not in {'vm.linux', 'vm.linux_scope'} and not key.startswith('testing.')}
 
 
 def settings(root, *, overrides=None):
-    configured = defaults(root)
+    return resolve_settings(root, defaults(root), loaded_profile(root), overrides=overrides)
+
+
+def resolve_layers(configured, profile, *, overrides=None):
     from build_manager.settings import Field, resolve
     account = json.loads(os.environ.get('LOGISTICS_MANAGER_ACCOUNT_DEFAULTS', '{}'))
     schema = {key: Field(value, account=key.startswith('auth.'),
                         machine=key.startswith(('tools.', 'vm.', 'ios.', 'android.')),
                         guarded=key in {'testflight.app_id', 'testflight.bundle_id', 'firebase.bundle_id'},
                         variable=VARIABLES.get(key)) for key, value in configured.items()}
-    values, sources = resolve(schema, account=account, profile=current_settings(loaded_profile(root)),
-                              environment=os.environ, overrides=current_settings(overrides or {}))
+    return resolve(schema, account=account, profile=current_settings(profile),
+                   environment=os.environ, overrides=current_settings(overrides or {}))
+
+
+def settings_with_resets(root):
+    configured, profile = defaults(root), loaded_profile(root)
+    values, sources = resolve_settings(root, configured, profile)
+    fallback, origins = resolve_layers(configured, {name: value for name, value in profile.items()
+                                                     if name not in RESETTABLE})
+    resets = {name: dict(overridden=name in profile, value=fallback[name], origin=origins[name])
+              for name in RESETTABLE.intersection(configured)}
+    return values, sources, resets
+
+
+def resolve_settings(root, configured, profile, *, overrides=None):
+    values, sources = resolve_layers(configured, profile, overrides=overrides)
     validate(values, configured)
     for key in configured:
         if key.startswith('testing.'):
@@ -104,7 +131,7 @@ def settings(root, *, overrides=None):
                 sources[key] = 'Automatic selection unavailable: ' + Redactor()(str(error))
                 continue
             if selector:
-                values[key], sources[key] = selector, 'Detected dedicated test machine; Save keeps its UUID in your private project settings'
+                values[key], sources[key] = selector, 'Detected dedicated test machine'
     return values, sources
 
 
@@ -113,7 +140,7 @@ def validate(values, configured):
         raise ValueError('Unsupported GitHub account reference kind.')
     if values['auth.github_kind']=='environment-name' and not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',values['auth.github_reference']):
         raise ValueError('GitHub account references contain environment names, never tokens.')
-    for name in ('testflight.poll_interval_seconds', 'testflight.processing_timeout_seconds'):
+    for name in TIMING_FIELDS:
         try:
             values[name] = int(values[name])
         except (TypeError, ValueError):
@@ -156,21 +183,32 @@ def distribution(root, provider, original):
     return {key: values[provider + '.' + key] for key in original}
 
 
-def save(root, changes):
+def save(root, changes, *, resets=()):
     from logistics_build.test_environments import load, save as save_environments, validate as validate_environments
-    environment_changes = {key.removeprefix('testing.'): value for key, value in changes.items() if key.startswith('testing.')}
-    validate_environments(dict(load(Path(root).parent), **environment_changes))
-    changes = {key: value for key, value in changes.items() if not key.startswith('testing.')}
-    base = defaults(root)
-    current = loaded_profile(root)
-    incoming = current_settings(dict(current, **changes))
-    values, _ = effective(base, incoming)
-    validate(values, base)
-    for key in ('testflight.poll_interval_seconds', 'testflight.processing_timeout_seconds'):
-        incoming[key] = int(values[key])
-    if environment_changes:
-        save_environments(Path(root).parent, environment_changes)
-    save_profile(profile_path(root), incoming, allowed=base)
+    if (not isinstance(resets, (list, tuple)) or
+            any(not isinstance(name, str) or name not in RESETTABLE for name in resets) or
+            len(set(resets)) != len(resets) or set(resets).intersection(changes)):
+        raise ValueError('Reset must name supported project overrides that are not also edited.')
+    path = profile_path(root)
+    with workspace_lock(path.with_name(path.name + '.lock'), timeout=5):
+        environment_changes = {key.removeprefix('testing.'): value for key, value in changes.items()
+                               if key.startswith('testing.')}
+        validate_environments(dict(load(Path(root).parent), **environment_changes))
+        profile_changes = {key: value for key, value in changes.items() if not key.startswith('testing.')}
+        base = defaults(root)
+        if set(resets) - base.keys():
+            raise ValueError('Reset names a field absent from the project settings.')
+        current = loaded_profile(root)
+        for name in resets:
+            current.pop(name, None)
+        incoming = current_settings(dict(current, **profile_changes))
+        values, _ = effective(base, incoming)
+        validate(values, base)
+        for name in incoming.keys() & set(TIMING_FIELDS):
+            incoming[name] = values[name]
+        if environment_changes:
+            save_environments(Path(root).parent, environment_changes)
+        save_profile(path, incoming, allowed=base)
 
 
 def app_version(root, *, revision=None, check_project=True):
