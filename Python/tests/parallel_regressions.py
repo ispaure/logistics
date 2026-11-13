@@ -86,7 +86,7 @@ def child(command, environment, timeout, cancelled):
                 outcome = (130, 'cancelled') if cancelled.is_set() else (124, 'timeout')
                 # commonUtils capture checks cancellation every 50 ms and its
                 # existing supervisor allows up to two 2-second cleanup waits.
-                # Work has stopped at the deadline; only cleanup gets this grace.
+                # Fix the deadline outcome before allowing the cleanup grace.
                 Path(environment['LOGISTICS_TEST_CANCEL_FILE']).touch()
                 try:
                     process.wait(timeout=5)
