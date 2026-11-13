@@ -91,7 +91,7 @@ class ViewerLayoutProbe(LogisticsMobile):
             row['vertical'] = footer.vertical
             if sys.platform == 'ios':
                 from .rotation_checks import assert_control_bounds
-                from mobile.reader_edges import footer_touch_extension
+                from mobile.reading.reader_edges import footer_touch_extension
                 window = self.main_window._impl.native
                 touch_extension = footer_touch_extension(view, float(window.safeAreaInsets.bottom))
                 row['allowed_touch_extension'] = touch_extension
@@ -108,7 +108,7 @@ class ViewerLayoutProbe(LogisticsMobile):
             x, y, width, height = row['footer']
             left, top, right, bottom = row['safe']
             row['bottom_gap'] = bottom - y - height
-            from mobile.reader_edges import footer_bottom_extension
+            from mobile.reading.reader_edges import footer_bottom_extension
             extension = (footer_bottom_extension(view, float(self.main_window._impl.native.safeAreaInsets.bottom))
                 if sys.platform == 'ios' else 0)
             row['footer_extension'] = extension

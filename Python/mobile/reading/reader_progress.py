@@ -2,8 +2,8 @@
 import weakref
 import toga
 from commonUtils.ui.native.sliders import style_slider as native_style_slider
-from .appearance import apple_color
-from .palette import android_palette
+from ..appearance import apple_color
+from ..palette import android_palette
 
 _sliders = weakref.WeakSet()
 IOS_TRACK_OFFSET = 14
@@ -13,7 +13,7 @@ class PageSlider(toga.Slider):
     def _create(self):
         if self.factory.Slider.__module__.startswith('toga_iOS.'):
             self._reader_track_offset = IOS_TRACK_OFFSET
-            from .ios_reader_progress import ReaderSlider
+            from ..ios_reader_progress import ReaderSlider
             return ReaderSlider(interface=self)
         return super()._create()
 
@@ -34,7 +34,7 @@ def style_slider(slider):
     palette = android_palette
     if colors is not None:
         from commonUtils.ui.native.appearance import DynamicAppleColors
-        from .palette import LIGHT, DARK, eink_enabled
+        from ..palette import LIGHT, DARK, eink_enabled
         if getattr(slider, '_accent_preview_key', None) != colors:
             slider._accent_preview_key = colors
             slider._accent_apple_colors = DynamicAppleColors(lambda dark:
@@ -111,7 +111,7 @@ class VerticalPageSlider(toga.Canvas):
 
     def paint_track(self):
         self.root_state.drawing_actions.clear()
-        from .palette import android_palette
+        from ..palette import android_palette
         backend = type(self._impl).__module__
         dark = False
         if backend.startswith('toga_iOS.'):

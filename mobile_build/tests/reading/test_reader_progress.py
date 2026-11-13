@@ -73,9 +73,9 @@ class ReaderProgressTests(unittest.TestCase):
         move.assert_awaited_once_with(81)
 
     def test_manga_fill_direction_survives_theme_refresh_and_mode_changes(self):
-        from mobile.reader_progress import style_slider
+        from mobile.reading.reader_progress import style_slider
         footer, _ = self.footer()
-        with patch('mobile.reader_progress.native_style_slider') as paint:
+        with patch('mobile.reading.reader_progress.native_style_slider') as paint:
             for rtl in (True, False, True):
                 footer.sync(comic=True, count=5, index=1, right_to_left=rtl)
                 style_slider(footer.slider)

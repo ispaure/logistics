@@ -7,7 +7,7 @@ from types import SimpleNamespace as NS
 from unittest import TestCase
 from unittest.mock import patch
 import toga
-from mobile.chapter_drawer import ChapterDrawer
+from mobile.reading.chapter_drawer import ChapterDrawer
 from mobile.page_animation import sync_preferences
 
 
@@ -16,7 +16,7 @@ class ChapterDrawerTests(TestCase):
         app = NS(preferences=NS(values={'android_eink': 'false'}))
         sidebar, page = toga.Box(), toga.Box()
         drawer = ChapterDrawer(sidebar, page, app=app)
-        with patch('mobile.chapter_drawer.SpeechOverlay') as overlay, \
+        with patch('mobile.reading.chapter_drawer.SpeechOverlay') as overlay, \
                 patch('commonUtils.ui.native.transitions.begin_page_slide') as begin, \
                 patch('commonUtils.ui.native.transitions.finish_page_slide') as finish:
             for width in (390, 900):

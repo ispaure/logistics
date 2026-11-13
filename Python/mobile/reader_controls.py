@@ -211,10 +211,10 @@ class PageFooter:
         self.epub_book = None
         self.screen_pages_unavailable = False
         if vertical:
-            from .reader_progress import VerticalPageSlider
+            from .reading.reader_progress import VerticalPageSlider
             self.slider = VerticalPageSlider(on_release=self.release, style=Pack(flex=1, width=44))
         else:
-            from .reader_progress import PageSlider
+            from .reading.reader_progress import PageSlider
             self.slider = PageSlider(min=0, max=1, value=0, on_release=self.release,
                                       style=Pack(flex=1, height=READER_LAYOUT.touch_extent))
         accessible_name(self.slider, 'Chapter position' if unit == 'chapter' else 'Page position')
@@ -239,14 +239,14 @@ class PageFooter:
         self.widget._reader_page_footer = self
         if not vertical:
             self.widget.add(self.row, self.badge)
-            from .reader_edges import style_progress_caption
+            from .reading.reader_edges import style_progress_caption
             style_progress_caption(self.spacer)
         if app is not None:
             from .layout_participants import participants
             self._edge_subscription = participants(app).register(('reader-progress', id(self)), self,
                 lambda owner, frame: owner.request_edge_refresh(
                     frame.content_width(destination, margin=0)), order=30)
-        from .reader_progress import style_slider
+        from .reading.reader_progress import style_slider
         style_slider(self.slider)
         self.sync(comic=False, count=0, index=0)
 
@@ -319,10 +319,10 @@ class PageFooter:
         self._layout_app = None
 
     def refresh_edges(self, available=None):
-        from .reader_edges import refresh_progress_edges
+        from .reading.reader_edges import refresh_progress_edges
         refresh_progress_edges(self)
         if not self.vertical:
-            from .reader_edges import progress_width
+            from .reading.reader_edges import progress_width
             width = progress_width(self.widget, available)
             if self.badge.style.width != width:
                 self.badge.style.width = width
@@ -333,7 +333,7 @@ class PageFooter:
         self.count, self.index, self.rtl = count, index, comic and right_to_left
         if getattr(self.slider, '_reading_reverse_fill', False) != self.rtl:
             self.slider._reading_reverse_fill = self.rtl
-            from .reader_progress import style_slider
+            from .reading.reader_progress import style_slider
             style_slider(self.slider)
         from .appearance import surface
         for button, icon, label in ((self.previous, 'forward' if self.rtl else 'back', 'Previous page'),
@@ -342,7 +342,7 @@ class PageFooter:
             surface(button, radius=24, background='transparent', foreground='text')
             if not self.vertical and type(button._impl).__module__.startswith('toga_iOS.'):
                 from rubicon.objc import UIEdgeInsets
-                from .reader_progress import IOS_TRACK_OFFSET
+                from .reading.reader_progress import IOS_TRACK_OFFSET
                 button._impl.native.imageEdgeInsets = UIEdgeInsets(IOS_TRACK_OFFSET, 0, -IOS_TRACK_OFFSET, 0)
         if self.vertical:
             apply_icon(self.previous, 'up', 'Previous page', size=18)

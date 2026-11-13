@@ -48,6 +48,7 @@ different lifetimes.
 | Session Close/Back decisions and source return | `session_workflows/transitions.py`, source-specific `session_workflows/adapters.py`; facade in `reader_lifecycle.py` |
 | Provider opening, session and controls | `provider_opening.py` prepares and publishes; `provider_document.py` owns the reader session; `provider_view.py` builds unpublished controls; `provider_presentation.py` builds chrome; `provider_ui.py` retains session commands |
 | Reader surface publication and footer/chrome synchronization | `reading/publication.py`, validity captures in `reading/sources.py` |
+| Reader chapter drawer, edge geometry, memory and progress | `reading/{chapter_drawer,reader_edges,reader_memory,reader_progress}.py` |
 | Settings composition and named panels | `settings/categories.py` declares factories/icons/gates; `settings/navigation.py` retains pages; [named panel map](ui-architecture.md#find-a-screen-by-its-visible-name) |
 | Preference defaults/validation versus INI persistence | `preference_schema.py`; `preferences.py` retains storage and migrations |
 | Temporary file-opening presentation and measured read progress | `document_sources.py`, `loading_progress.py` |
@@ -85,7 +86,7 @@ muted caption beneath it, matching the native storage subtitle's font size.
 EPUB retains separate page/percentage and chapter lines; comics retain their
 spread/half-page and right-to-left progress rules. PDF keeps its vertical strip.
 Desktop video places its timeline after the transport/actions/status rows.
-`mobile.reader_edges` reads Android's reported corner geometry and reflows
+`mobile.reading.reader_edges` reads Android's reported corner geometry and reflows
 registered progress controls through `LayoutParticipants`. iOS uses UIKit's safe
 areas, with only unconsumed Home-indicator clearance reserved by the host.
 Reader control clearance must not shrink fullscreen artwork unnecessarily.
@@ -661,7 +662,7 @@ chevrons retain 48-point targets, the native track is 4 points with a 16-point
 thumb, and a centered capsule badge sizes to its progress text. Comic/PDF release
 commits a page; EPUB release commits a chapter, while its badge retains the
 current chapter percentage. Status/error labels remain available to native
-header diagnostics. `reader_progress.py` supplies the palette, reading direction and refresh registry;
+header diagnostics. `reading/reader_progress.py` supplies the palette, reading direction and refresh registry;
 commonUtils owns native slider painting.
 PDF's vertical rail and the horizontal controls share `PageFooter` range,
 rounding, release-only navigation, disabled-state and failed-seek restoration

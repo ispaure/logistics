@@ -11,7 +11,7 @@ import (
 
 const remoteComicLimit int64 = 128 * 1024 * 1024
 
-// Coordinate with mobile.reader_memory: reserve room for Python buffers,
+// Coordinate with mobile.reading.reader_memory: reserve room for Python buffers,
 // current/replacement canvases, one sampled decode and transient bridge copies.
 const remoteComicPoolLimit int64 = 128 * 1024 * 1024
 

@@ -6,7 +6,7 @@ from toga_iOS.libs import (
     UIControlEventTouchUpInside, UIControlEventTouchUpOutside,
     UIControlEventValueChanged,
 )
-from .reader_progress import IOS_TRACK_OFFSET
+from .reading.reader_progress import IOS_TRACK_OFFSET
 
 
 class LogisticsReaderSlider(TogaSlider):

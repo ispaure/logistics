@@ -6,7 +6,7 @@ from toga.style.pack import COLUMN
 from .forms import SettingsLabel
 from ..appearance import accessible_name, surface, refresh_appearance
 from ..palette import DEFAULT_ACCENT, accent_colors, set_accent
-from ..reader_progress import style_slider
+from ..reading.reader_progress import style_slider
 
 
 class AccentControls(toga.Box):

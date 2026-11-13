@@ -3,7 +3,7 @@ from types import SimpleNamespace
 import toga
 from toga.style import Pack
 from commonUtils.ui.native.presentation import sidebar_button
-from .speech_overlay import SpeechOverlay
+from ..speech_overlay import SpeechOverlay
 
 
 class ChapterDrawer:

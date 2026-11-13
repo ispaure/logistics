@@ -82,7 +82,7 @@ class RotationLayoutReadinessTests(unittest.IsolatedAsyncioTestCase):
         stack=ExitStack()
         stack.enter_context(patch.object(rotation_checks.sys,'platform','ios'))
         stack.enter_context(patch('mobile.ios_content_background.preview_edge',return_value=0))
-        stack.enter_context(patch('mobile.reader_edges.page_footer',return_value=None))
+        stack.enter_context(patch('mobile.reading.reader_edges.page_footer',return_value=None))
         stack.enter_context(patch('mobile.document_location.side_title_reader',return_value=None))
         return stack
 

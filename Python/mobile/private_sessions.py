@@ -10,7 +10,7 @@ from .reader_host import ReaderHost
 from services.documents.mobile_reading import reading_capabilities
 
 MAX_PRIVATE_SESSIONS = 4
-from .reader_memory import PRIVATE_BUFFERS, private_buffer_bytes
+from .reading.reader_memory import PRIVATE_BUFFERS, private_buffer_bytes
 
 MAX_PRIVATE_BYTES = PRIVATE_BUFFERS
 
@@ -434,7 +434,7 @@ class PrivateSessions:
                 image.image = None
                 owner.page_suspended = True
             source = getattr(owner.crypt_reader, 'source', None)
-            from .reader_memory import trim_content_cache
+            from .reading.reader_memory import trim_content_cache
             trim_content_cache(source)
         from .external_display import sync as sync_external
         sync_external(self.app)

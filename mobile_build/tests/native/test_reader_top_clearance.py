@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 from commonUtils.testing.stages import TestStage
 from mobile.ios_system_occlusions import content_column_top
-from mobile.reader_edges import compact_apple_reader
+from mobile.reading.reader_edges import compact_apple_reader
 
 TEST_STAGE = TestStage.REGRESSION
 

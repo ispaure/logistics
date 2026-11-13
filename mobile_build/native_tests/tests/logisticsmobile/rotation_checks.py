@@ -145,7 +145,7 @@ def safe_geometry(app):
     safe = window.safeAreaInsets
     minimum_top = float(insets.top)
     minimum_window_top = float(safe.top)
-    from mobile.reader_edges import page_footer
+    from mobile.reading.reader_edges import page_footer
     from mobile.ios_toolbar import vertical_edge
     from mobile.document_location import side_title_reader
     footer = page_footer(view)
@@ -356,7 +356,7 @@ def assert_visible_controls(app):
             if rect.size.width > 0 and rect.size.height > 0:
                 count += 1
                 label = getattr(widget, 'accessible_name', None) or getattr(widget, 'text', type(widget).__name__)
-                from mobile.reader_edges import footer_touch_extension
+                from mobile.reading.reader_edges import footer_touch_extension
                 extension = footer_touch_extension(footer_view, float(window.safeAreaInsets.bottom)) if footer_view else 0
                 assert_control_bounds(rect, window, label, bottom_extension=extension)
         # Promoted actions retain callbacks outside the Toga content tree.

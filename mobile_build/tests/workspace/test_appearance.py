@@ -22,12 +22,12 @@ class AppearanceTests(unittest.TestCase):
     def test_slider_preview_supplies_the_same_opaque_accent_on_both_platforms(self):
         import toga
         from unittest.mock import patch
-        from mobile.reader_progress import style_slider, refresh_progress
+        from mobile.reading.reader_progress import style_slider, refresh_progress
         from mobile.palette import accent_colors, set_eink_enabled, EINK
         slider = toga.Slider()
         slider._accent_preview = accent_colors(150, 60)
         self.addCleanup(set_eink_enabled, False)
-        with patch('mobile.reader_progress.native_style_slider') as paint:
+        with patch('mobile.reading.reader_progress.native_style_slider') as paint:
             style_slider(slider)
             options = paint.call_args.kwargs
             for dark, color in enumerate(slider._accent_preview):
