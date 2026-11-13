@@ -415,20 +415,32 @@ identity; storage, credential checks and writer ownership remain in Logistics.
 
 `library/index.py` owns the existing ordinary-import SQLite cache and its unchanged
 schema. `library/metadata.py` supplies bounded per-format metadata loaders.
-`mobile/library/catalog.py` owns configured-folder presentation and incremental import metadata refresh,
-with `LibraryHost` callbacks for discovery snapshots, routing and presentation.
-Discovery itself stays in the host. Protected metadata is excluded from indexing.
-The catalogue and reader controllers retain their own tasks and generation guards.
+`mobile/library/catalog.py` owns folder-discovery coordination, inventory refresh
+and incremental import metadata refresh. `LibraryHost` supplies the discovery
+snapshot and callbacks from `Python/mobile/composition/presentation.py`. The shell
+reads the configuration in `Python/mobile/library_ui.py` and opens selected
+folders through the existing Workspaces browser. Protected metadata is excluded
+from indexing. The catalogue and reader controllers retain their own tasks and
+generation guards.
 
 
-## iOS catalogue toolbar
+## Find the mobile Books & Comics panel
 
-The catalogue declares Refresh and Import as screen-level iOS actions, with
-symbols and accessible titles. The host detaches these retained controls from
-the header and mounts ordinary UIKit bar items, including Duo vertical bars.
-Empty-state entry points and library-row actions remain in content. The reader
-uses the host's separate native reader action contract. Android retains its
-catalogue header.
+Start in `mobile/library/catalog_panel.py:LibraryCatalogPanel` for **Refresh**,
+**Import…**, the configured folder rows and the empty state's **Open Workspaces**
+button. `Python/mobile/reader_sessions.py:ReaderWorkspace.show_library()` uses
+`Readers.show_catalog()` to present the panel on the originating destination's
+`library` route. Reader sessions use their own reader routes.
+
+On iOS, the panel declares Refresh and Import as screen-level actions with
+symbols and accessible titles. The host detaches the retained controls from the
+header and mounts UIKit bar items, including Duo vertical bars. The empty state
+and folder rows stay in the content. Android displays the catalogue header.
+
+Host checks live in `test_library_catalog.py` and `test_library_inventory.py`.
+Native verification covers toolbar placement and activation on iOS, the header
+on Android, and folder selection and Back to the originating destination on
+both platforms.
 
 ## Mobile EPUB settings and return to reading
 
