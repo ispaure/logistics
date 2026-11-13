@@ -25,12 +25,13 @@ RESERVED_OUTPUTS = {'firebase', 'testflight', 'mobile_app', 'logisticsmobile',
                     'physical-device', 'cloud-host', 'go-cache'}
 
 COMPILER_CACHE_MARKER = '.manager-compiler-cache'
+COMPILER_CACHE_DIRECTORY = 'tmp/cache/compiler'
+LEGACY_COMPILER_CACHE_DIRECTORY = 'mobile_build/.tools/build-manager/compiler-caches'
 SCRATCH_DIRECTORY = 'tmp/runs/scratch'
 LEGACY_SCRATCH_DIRECTORY = 'test-results/build-scratch'
 
 
-def compiler_cache_group(root=ROOT):
-    parent = Path(root) / 'mobile_build/.tools/build-manager/compiler-caches'
+def compiler_cache_group(parent):
     return dict(root=parent,
                 eligible=lambda p: bool(re.fullmatch('[a-z][a-z0-9-]*', p.name))
                 and not linked(p / COMPILER_CACHE_MARKER) and (p / COMPILER_CACHE_MARKER).is_file(),
@@ -38,12 +39,20 @@ def compiler_cache_group(root=ROOT):
                 lock_path=lambda p: parent / (p.name + '.lock'))
 
 
+def compiler_cache_groups(root):
+    # Keep the legacy cleanup group ID for selections made before the cutover.
+    return {
+        'Probe compiler caches': compiler_cache_group(root / LEGACY_COMPILER_CACHE_DIRECTORY),
+        'Probe compiler caches / tmp': compiler_cache_group(root / COMPILER_CACHE_DIRECTORY),
+    }
+
+
 @contextmanager
 def compiler_cache(name, root=ROOT):
     """Lease an explicitly owned cache under the shared compiler retention policy."""
     if not re.fullmatch('[a-z][a-z0-9-]*', name):
         raise ValueError('Invalid compiler cache name.')
-    spec = compiler_cache_group(root)
+    spec = compiler_cache_group(Path(root) / COMPILER_CACHE_DIRECTORY)
     path = spec['root'] / name
     if any(linked(p) for p in (path, *path.parents)):
         raise ValueError('Compiler caches refuse linked paths.')
@@ -224,8 +233,8 @@ def clean(root=ROOT, *, apply=False, snapshots=True, warnings=None):
                              grace_days=1/24, last_used=device_access, apply=apply)
         caches = [dict(spec, last_used=cache_access) for _, spec in device_intermediates(root)]
         caches += [spec for _, spec in snapshot_intermediates(root)]
-        caches.append(dict(compiler_cache_group(root),
-                           last_used=lambda p: (p / COMPILER_CACHE_MARKER).stat().st_mtime))
+        caches.extend(dict(spec, last_used=lambda p: (p / COMPILER_CACHE_MARKER).stat().st_mtime)
+                      for spec in compiler_cache_groups(root).values())
         removed += prune_cache_groups(caches, age_days=1, max_bytes=12 * GIB, grace_days=1/24, apply=apply)
         if sys.platform == 'darwin':
             from logistics_build.xcode_storage import storage_group, access_order
@@ -342,7 +351,7 @@ def storage_groups(root=ROOT):
     }
     groups.update(device_intermediates(root))
     groups.update(snapshot_intermediates(root))
-    groups['Probe compiler caches'] = compiler_cache_group(root)
+    groups.update(compiler_cache_groups(root))
     from logistics_build.storage_extras import directory_groups
     groups.update(directory_groups(root))
 

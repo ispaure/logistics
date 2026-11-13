@@ -434,6 +434,12 @@ inside a source snapshot. Read-only TestFlight `plan` does not prune outputs.
 - Recipe-identified device-build workspaces retain the three newest per platform
   plus those used within one day, with a 12 GiB budget per platform and a one-hour
   grace period. Their operation locks and paused-workflow holds protect installs.
+- New probe compiler caches live under `tmp/cache/compiler/`. Marked legacy
+  caches under `mobile_build/.tools/build-manager/compiler-caches/` remain in place
+  and share one 12 GiB soft budget with the new caches and eligible snapshot and
+  device compiler intermediates. The cache policy uses a one-day age limit and
+  one-hour grace period. The storage view can select marked entries at either
+  location for cleanup.
 - On macOS, Xcode DerivedData is identified using `info.plist`'s `WorkspacePath`
   under this checkout's generated build folders. Cache display names alone do
   not establish ownership. The system `/tmp` alias and its resolved path identify

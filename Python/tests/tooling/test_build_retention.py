@@ -14,18 +14,25 @@ from unittest.mock import patch
 from logistics_build.build_retention import (clean, compiler_cache, compiler_cache_group,
                                             COMPILER_CACHE_MARKER, delete_storage, enroll_output,
                                             scratch, storage_inventory)
-from build_manager.retention import lease
+from build_manager.retention import durable_hold, lease
 
 
 class BuildRetentionTests(unittest.TestCase):
     def test_compiler_cache_reuses_data_and_rejects_unowned_or_linked_paths(self):
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
+            legacy = root / 'mobile_build/.tools/build-manager/compiler-caches/notebook-codec'
+            legacy.mkdir(parents=True)
+            (legacy / COMPILER_CACHE_MARKER).touch()
+            (legacy / 'compiled').write_bytes(b'legacy')
             with compiler_cache('notebook-codec', root) as path:
+                self.assertEqual(path, root / 'tmp/cache/compiler/notebook-codec')
+                self.assertFalse((path / 'compiled').exists())
                 (path / 'compiled').write_bytes(b'reusable')
             with compiler_cache('notebook-codec', root) as reused:
                 self.assertEqual(reused, path)
                 self.assertEqual((reused / 'compiled').read_bytes(), b'reusable')
+            self.assertEqual((legacy / 'compiled').read_bytes(), b'legacy')
             parent = path.parent
             (parent / 'unowned').mkdir()
             (parent / 'linked').symlink_to(path, target_is_directory=True)
@@ -33,14 +40,24 @@ class BuildRetentionTests(unittest.TestCase):
                 with self.assertRaises(ValueError), compiler_cache(name, root):
                     self.fail('Unowned cache was accepted')
             rows = storage_inventory(root)
-            self.assertTrue(any(row['group'] == 'Probe compiler caches' and row['name'] == path.name
+            self.assertTrue(any(row['group'] == 'Probe compiler caches / tmp' and row['name'] == path.name
                                 for row in rows))
+
+    def test_compiler_cache_rejects_linked_root_before_creating_output(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            outside = root / 'outside'
+            outside.mkdir()
+            (root / 'tmp').symlink_to(outside, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, 'linked paths'), compiler_cache('probe', root):
+                self.fail('Linked compiler cache root was accepted')
+            self.assertEqual(list(outside.iterdir()), [])
 
     def test_compiler_cache_retention_preserves_active_and_pinned_caches(self):
         from build_manager.retention import prune_cache_groups
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
-            spec = compiler_cache_group(root)
+            spec = compiler_cache_group(root / 'tmp/cache/compiler')
             spec['last_used'] = lambda p: (p / COMPILER_CACHE_MARKER).stat().st_mtime
 
             def prune():
@@ -61,6 +78,51 @@ class BuildRetentionTests(unittest.TestCase):
             os.utime(path, (1, 1))
             self.assertEqual(prune(), [str(path)])
             self.assertFalse(path.exists())
+
+    def test_compiler_cache_retention_budgets_both_roots_together(self):
+        import time
+        from build_manager.locking import workspace_lock
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            legacy = root / 'mobile_build/.tools/build-manager/compiler-caches'
+            current = root / 'tmp/cache/compiler'
+            old, new = legacy / 'probe', current / 'probe'
+            locked, pinned, held = (legacy / name for name in ('locked', 'pinned', 'held'))
+            for path in (old, new, locked, pinned, held):
+                path.mkdir(parents=True)
+                (path / COMPILER_CACHE_MARKER).touch()
+            unknown = legacy / 'unknown'
+            unknown.mkdir()
+            linked_marker = legacy / 'linked-marker'
+            linked_marker.mkdir()
+            (linked_marker / COMPILER_CACHE_MARKER).symlink_to(old / COMPILER_CACHE_MARKER)
+            (pinned / '.keep').touch()
+            durable_hold(held, 'fixture')
+
+            now = time.time()
+            for path, seconds in ((old, 7200), (new, 5400), (locked, 10800), (pinned, 10800), (held, 10800)):
+                stamp = now - seconds
+                os.utime(path / COMPILER_CACHE_MARKER, (stamp, stamp))
+            with workspace_lock(legacy / 'locked.lock'), \
+                    patch('build_manager.retention.allocated_bytes', return_value=3 * 1024 ** 3):
+                rows = {row['path']: row for row in storage_inventory(root)}
+                self.assertEqual(rows[str(old)]['group'], 'Probe compiler caches')
+                self.assertEqual(rows[str(new)]['group'], 'Probe compiler caches / tmp')
+                for protected in (locked, pinned, held):
+                    self.assertTrue(rows[str(protected)]['protected'])
+                self.assertNotIn(str(unknown), rows)
+                self.assertNotIn(str(linked_marker), rows)
+                # Each root fits alone. Pressure in the shared budget evicts only the oldest eligible entry.
+                self.assertEqual(clean(root), [str(old)])
+                self.assertTrue(old.exists())
+                self.assertEqual(clean(root, apply=True), [str(old)])
+            self.assertFalse(old.exists())
+            self.assertTrue(all(path.exists() for path in (new, locked, pinned, held, unknown, linked_marker)))
+            # A saved legacy selection must never resolve to the same name in the new root.
+            self.assertFalse(delete_storage(root, {'Probe compiler caches': ['probe']})['removed'])
+            self.assertTrue(new.exists())
+            outcome = delete_storage(root, {'Probe compiler caches / tmp': ['probe']})
+            self.assertEqual(outcome['removed'], [str(new)])
 
     def test_five_day_window_expires_six_day_outputs_and_preserves_four_day_outputs(self):
         import time
