@@ -18,6 +18,8 @@ import uuid
 ROOT = Path(__file__).resolve().parents[1]
 if __package__ in (None, ""):
     sys.path.insert(0, str(ROOT))
+from logistics_build.device_workspace_paths import DEVICE_WORKSPACES
+
 _MUTATION = ContextVar('tooling_mutation', default=None)
 
 
@@ -450,7 +452,8 @@ def file_lock(path, *, create=False):
 def operation_locks(root):
     # Existing lock files alone are harmless. Probe actual advisory ownership.
     for base in (private(root) / 'workspaces', private(root) / 'snapshots',
-                 Path(root) / 'test-results', Path(root) / 'tmp/runs/scratch'):
+                 Path(root) / 'test-results', Path(root) / 'tmp/runs/scratch',
+                 Path(root) / DEVICE_WORKSPACES):
         if owned_path(root, base) and base.is_dir():
             for path in base.rglob('*.lock'):
                 if path.name in ('operation.lock', 'supervisor.lock') or path.name.endswith(('.operation.lock', '.retention.lock')):

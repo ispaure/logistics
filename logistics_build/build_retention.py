@@ -14,6 +14,7 @@ import tempfile
 
 from build_manager.locking import workspace_lock
 from build_manager.retention import lease, linked, prune, prune_cache_groups, remove_tree, explicitly_pinned, has_retention_protection, nested_workflow_hold_reason
+from logistics_build.device_workspace_paths import DEVICE_WORKSPACES, LEGACY_DEVICE_WORKSPACES
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_MARKER = '.manager-build-output'
@@ -119,8 +120,8 @@ def scratch_groups(root):
     }
 
 
-def device_group(root, platform):
-    parent = Path(root) / 'mobile_build/.tools/build-manager/workspaces/devices' / platform
+def device_group(root, platform, directory=LEGACY_DEVICE_WORKSPACES):
+    parent = Path(root) / directory / platform
 
     def eligible(path):
         if not re.fullmatch('[0-9a-f]{32}', path.name):
@@ -138,10 +139,57 @@ def device_group(root, platform):
     return dict(root=parent, eligible=eligible, lock_path=lambda p: p / 'operation.lock', ownership_files=('recipe.json',))
 
 
+def device_groups(root, platform):
+    # Saved storage selections address a group and basename. Keep each bound
+    # to its original root even if both roots contain the same basename.
+    name = 'Device workspaces / ' + platform
+    return {
+        name: device_group(root, platform),
+        name + ' / tmp': device_group(root, platform, DEVICE_WORKSPACES),
+    }
+
+
+def device_workspaces(spec):
+    parent = spec['root']
+    if parent.is_dir() and not any(linked(p) for p in (parent, *parent.parents)):
+        for path in sorted(parent.iterdir()):
+            if not linked(path) and path.is_dir() and spec['eligible'](path):
+                yield path
+
+
 def device_access(path):
     # Opening operation.lock must not make an abandoned workspace look newly used.
     files = [p for p in path.glob('*.json') if not linked(p) and p.is_file()]
     return max((p.stat().st_mtime for p in files), default=path.stat().st_mtime)
+
+
+def prune_device_workspaces(root, platform, *, apply=False):
+    specs = device_groups(root, platform).values()
+    accessed = {}
+    for spec in specs:
+        for path in device_workspaces(spec):
+            try:
+                accessed[path] = device_access(path)
+            except FileNotFoundError:
+                continue  # A concurrent cleanup removed the workspace.
+    newest = set(sorted(accessed, key=lambda p: (accessed[p], p.name, p), reverse=True)[:3])
+
+    # The pinned Manager can share a budget across roots and recheck caller
+    # protection under the operation lock, but has no cross-root keep count.
+    def protection(path):
+        if path in newest:
+            return 'Among the three newest device workspaces'
+        try:
+            if path not in accessed or device_access(path) > accessed[path]:
+                return 'Workspace used during retention'
+        except FileNotFoundError:
+            return 'Workspace changed during retention'
+        return ''
+
+    return prune_cache_groups(
+        [dict(spec, last_used=device_access, protection=protection) for spec in specs],
+        age_days=1, max_bytes=DEVICE_BUDGET, grace_days=1/24, apply=apply,
+    )
 
 
 def cache_idle(path):
@@ -161,29 +209,29 @@ def cache_idle(path):
 def device_intermediates(root):
     """Keep reviewed packages/receipts while retiring their reproducible build tree."""
     for platform in ('ios', 'android'):
-        spec = device_group(root, platform)
-        parent = spec['root']
-        if not parent.is_dir() or any(linked(p) for p in (parent, *parent.parents)):
-            continue
-        for workspace in sorted(parent.iterdir()):
-            if linked(workspace) or not workspace.is_dir() or not spec['eligible'](workspace):
-                continue
-            def eligible(path, workspace=workspace, platform=platform, owner=spec['eligible']):
-                if path.name != 'build' or not owner(workspace) or explicitly_pinned(workspace) or not cache_idle(workspace):
+        for group, spec in device_groups(root, platform).items():
+            cache_group = group.replace('Device workspaces', 'Device build caches', 1)
+            yield from device_group_intermediates(cache_group, spec, platform)
+
+
+def device_group_intermediates(group, spec, platform):
+    for workspace in device_workspaces(spec):
+        def eligible(path, workspace=workspace, platform=platform, owner=spec['eligible']):
+            if path.name != 'build' or not owner(workspace) or explicitly_pinned(workspace) or not cache_idle(workspace):
+                return False
+            prepared = workspace / 'prepared.json'
+            try:
+                if linked(prepared) or prepared.stat().st_size > 262144:
                     return False
-                prepared = workspace / 'prepared.json'
-                try:
-                    if linked(prepared) or prepared.stat().st_size > 262144:
-                        return False
-                    data = json.loads(prepared.read_text())
-                    package = workspace / ('app.zip' if platform == 'ios' else 'app.apk')
-                    return (data.get('workspace') == str(workspace) and data.get('platform') == platform
-                            and data.get('package') == str(package) and package.is_file() and not linked(package)
-                            and re.fullmatch('[0-9a-f]{64}', data.get('package_sha256', '')) is not None)
-                except (OSError, ValueError, TypeError, AttributeError):
-                    return False
-            yield ('Device build caches / ' + platform + ' / ' + workspace.name,
-                   dict(root=workspace, eligible=eligible, lock_path=lambda p: p.parent / 'operation.lock'))
+                data = json.loads(prepared.read_text())
+                package = workspace / ('app.zip' if platform == 'ios' else 'app.apk')
+                return (data.get('workspace') == str(workspace) and data.get('platform') == platform
+                        and data.get('package') == str(package) and package.is_file() and not linked(package)
+                        and re.fullmatch('[0-9a-f]{64}', data.get('package_sha256', '')) is not None)
+            except (OSError, ValueError, TypeError, AttributeError):
+                return False
+        yield (group + ' / ' + workspace.name,
+               dict(root=workspace, eligible=eligible, lock_path=lambda p: p.parent / 'operation.lock'))
 
 
 def cache_access(path):
@@ -229,8 +277,7 @@ def clean(root=ROOT, *, apply=False, snapshots=True, warnings=None):
                          age_days=5, max_bytes=SNAPSHOT_BUDGET, grace_days=1/24,
                          apply=apply, lock_path=lambda p: p.with_suffix('.lock'))
         for platform in ('ios', 'android'):
-            removed += prune(**device_group(root, platform), age_days=1, max_bytes=DEVICE_BUDGET,
-                             grace_days=1/24, last_used=device_access, apply=apply)
+            removed += prune_device_workspaces(root, platform, apply=apply)
         caches = [dict(spec, last_used=cache_access) for _, spec in device_intermediates(root)]
         caches += [spec for _, spec in snapshot_intermediates(root)]
         caches.extend(dict(spec, last_used=lambda p: (p / COMPILER_CACHE_MARKER).stat().st_mtime)
@@ -346,7 +393,8 @@ def storage_groups(root=ROOT):
         'Source snapshots': dict(root=mobile / '.tools/build-manager/snapshots',
             eligible=owned_snapshot, ownership_files=('.manager-source.json',),
             lock_path=lambda p: p.with_suffix('.lock')),
-        **{'Device workspaces / ' + platform: device_group(root, platform) for platform in ('ios', 'android')},
+        **device_groups(root, 'ios'),
+        **device_groups(root, 'android'),
         **scratch_groups(root),
     }
     groups.update(device_intermediates(root))

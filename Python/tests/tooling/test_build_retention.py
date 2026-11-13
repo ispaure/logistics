@@ -7,17 +7,100 @@ import os
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import time
 import unittest
 import sys
 from unittest.mock import patch
 
 from logistics_build.build_retention import (clean, compiler_cache, compiler_cache_group,
                                             COMPILER_CACHE_MARKER, delete_storage, enroll_output,
-                                            scratch, storage_inventory)
+                                            prune_device_workspaces, scratch, storage_inventory)
+from logistics_build.device_workspace_paths import DEVICE_WORKSPACES, LEGACY_DEVICE_WORKSPACES
+from build_manager.locking import workspace_lock
 from build_manager.retention import durable_hold, lease
 
 
+def device_workspace(root, base, number, stamp, platform='android'):
+    path = root / base / platform / f'{number:032x}'
+    path.mkdir(parents=True)
+    recipe = path / 'recipe.json'
+    recipe.write_text(json.dumps(dict(schema=1, platform=platform, workspace=str(path))))
+    os.utime(recipe, (stamp, stamp))
+    return path
+
+
 class BuildRetentionTests(unittest.TestCase):
+    def test_device_workspace_age_and_protection_across_roots(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            now = time.time()
+            old = now - 3 * 86400
+            legacy, new = LEGACY_DEVICE_WORKSPACES, DEVICE_WORKSPACES
+            expired = device_workspace(root, legacy, 1, old)
+            locked = device_workspace(root, new, 2, old)
+            held = device_workspace(root, legacy, 3, old)
+            pinned = device_workspace(root, new, 4, old)
+            newest = [device_workspace(root, base, i, old + i)
+                      for i, base in enumerate((new, legacy, new), 5)]
+            invalid = device_workspace(root, new, 8, now)
+            (invalid / 'recipe.json').write_bytes((expired / 'recipe.json').read_bytes())
+            other_platform = device_workspace(root, new, 9, old, platform='ios')
+            durable_hold(held, 'fixture')
+            (pinned / '.keep').touch()
+
+            with workspace_lock(locked / 'operation.lock'):
+                rows = {row['path']: row for row in storage_inventory(root)}
+                self.assertNotIn(str(invalid), rows)
+                for protected in (locked, held, pinned):
+                    self.assertTrue(rows[str(protected)]['protected'])
+                    group = rows[str(protected)]['group']
+                    self.assertFalse(delete_storage(root, {group: [protected.name]})['removed'])
+                self.assertEqual(clean(root), [str(expired)])
+                self.assertTrue(expired.exists())
+                self.assertEqual(clean(root, apply=True), [str(expired)])
+            self.assertFalse(expired.exists())
+            self.assertTrue(all(path.is_dir() for path in (*newest, locked, held, pinned, invalid, other_platform)))
+
+    def test_device_workspace_budget_shares_roots_and_respects_grace(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            now = time.time()
+            bases = (LEGACY_DEVICE_WORKSPACES, DEVICE_WORKSPACES)
+            paths = [device_workspace(root, bases[i % 2], i, now - age)
+                     for i, age in enumerate((7200, 5400, 1800, 1200, 600, 300))]
+            with patch('build_manager.retention.allocated_bytes', return_value=3 * 1024 ** 3):
+                # Each root fits alone. Pressure removes both older entries,
+                # and the fourth-newest survives within the grace period.
+                expected = list(map(str, paths[:2]))
+                self.assertEqual(prune_device_workspaces(root, 'android'), expected)
+                self.assertEqual(prune_device_workspaces(root, 'android', apply=True), expected)
+            self.assertTrue(all(path.is_dir() for path in paths[2:]))
+
+    def test_device_workspace_cleanup_keeps_exact_group_paths(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            old, new = (device_workspace(root, base, 1, time.time())
+                        for base in (LEGACY_DEVICE_WORKSPACES, DEVICE_WORKSPACES))
+            for path in (old, new):
+                (path / 'build').mkdir()
+                (path / 'app.apk').touch()
+                (path / 'prepared.json').write_text(json.dumps(dict(workspace=str(path), platform='android',
+                    package=str(path / 'app.apk'), package_sha256='a' * 64)))
+            with patch('logistics_build.build_retention.cache_idle', return_value=True):
+                rows = {row['path']: row for row in storage_inventory(root)}
+                for path, suffix in ((old, ''), (new, ' / tmp')):
+                    self.assertEqual(rows[str(path)]['group'], 'Device workspaces / android' + suffix)
+                    self.assertEqual(rows[str(path / 'build')]['group'],
+                                     'Device build caches / android' + suffix + ' / ' + path.name)
+                result = delete_storage(root, {rows[str(new / 'build')]['group']: ['build']})
+                self.assertEqual(result['removed'], [str(new / 'build')])
+                self.assertTrue((new / 'app.apk').is_file())
+                self.assertTrue((old / 'build').is_dir())
+                result = delete_storage(root, {rows[str(old)]['group']: [old.name]})
+                self.assertEqual(result['removed'], [str(old)])
+                self.assertFalse(delete_storage(root, {rows[str(old)]['group']: [old.name]})['removed'])
+                self.assertTrue(new.is_dir())
+
     def test_compiler_cache_reuses_data_and_rejects_unowned_or_linked_paths(self):
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
