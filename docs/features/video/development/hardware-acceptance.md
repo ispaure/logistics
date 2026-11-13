@@ -113,6 +113,28 @@ actual output loss and calls must still pause without automatic resume. Use a fr
 `tests.logisticsmobile.audio_hardware_probe:main` runs the all-audio Settings phase
 without the iOS-only physical video/call launcher.
 
+### Reconnect during protected playback
+
+Repeat on an iPhone with paired AirPods and on Android with a paired Bluetooth
+headset. Use synthetic video and speech with audible content. Record the OS
+version, headset model, committed app source and timestamps for route selection,
+player pause and any audible output from the headset or speaker.
+
+1. Remove the saved approval. Disconnect the headset, start protected video on
+   the built-in speaker, then reconnect the headset. Verify the OS selects it.
+   Check for a pause, and listen for any audio on either output during and after
+   the switch.
+2. Decline the approval, press Play again and verify that the dialog returns
+   above the video controls. Close the video, open a second video and try
+   read-aloud. Verify both controls remain usable and both withhold audio
+   while approval is outstanding. Approve via **Settings → Privacy & Security →
+   Protected audio outputs → Approve current output…** and verify that a
+   separate Play action is required.
+3. Remove the approval and relaunch with the headset selected. Retry from Play
+   and Settings. If the route appears as unavailable or its identity is
+   unreadable, verify silence, select an identifiable output, and press Play
+   again. Repeat the reconnect with active read-aloud and with ordinary playback.
+
 For iPhone Mirroring, test ordinary documents before loading credentials, then
 load a session while mirroring is active. Stop mirroring from the Mac if the app
 is shielded. Also start mirroring with a session already loaded, repeat with an

@@ -1059,6 +1059,12 @@ public final class VideoPlayer {
     public boolean completed() { return ended; }
     public void pause() {
         if (done) return;
+        if (!audioSuppressed) {
+            int current = player.getVolume();
+            resumeVolume = current >= 0 ? current : 100;
+            audioSuppressed = true;
+        }
+        player.setVolume(0); // Silence the decoder before updating the paused UI.
         if (resume < 0) {
             long target = position();
             if (observedFrames > 0 && android.os.SystemClock.elapsedRealtime() - lastFrameProgress >= 2000 && lastRenderedClock >= 0)
@@ -1076,12 +1082,6 @@ public final class VideoPlayer {
         networkResumePending = false;
         buffering = false;
         bufferingOverlay.setVisibility(View.GONE);
-        if (!audioSuppressed) {
-            int current = player.getVolume();
-            resumeVolume = current >= 0 ? current : 100;
-            audioSuppressed = true;
-        }
-        player.setVolume(0); // Keep unexpected OS/decoder restarts silent until explicit Play.
         if (player.isPlaying() && !pausePending) {
             pausePending = true;
             player.pause(); // Guard and coalesce the native pause; never toggle OS state.

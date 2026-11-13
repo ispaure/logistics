@@ -863,14 +863,16 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
         adapter.show()
         adapter.native.revealSurface.assert_not_called()
 
-    def test_conceal_cancels_delayed_native_presentation(self):
+    def test_conceal_cancels_delayed_presentation_and_dismisses_the_video_stack(self):
         from features.video.mobile.ios import IOSVideo
         adapter = object.__new__(IOSVideo)
         adapter.native = Mock()
-        adapter.container = Mock()
+        presenter = SimpleNamespace(dismissViewControllerAnimated=Mock())
+        adapter.container = presenter.presentedViewController = SimpleNamespace(
+            presentingViewController=presenter, presentedViewController=object())
         pending = adapter.presentation = Mock()
         adapter.hide()
         pending.cancel.assert_called_once()
         adapter.native.suspendForLock.assert_called_once()
-        adapter.container.dismissViewControllerAnimated.assert_called_once()
+        presenter.dismissViewControllerAnimated.assert_called_once_with(False, completion=None)
         self.assertIsNone(adapter.presentation)

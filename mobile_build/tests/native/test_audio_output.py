@@ -191,6 +191,75 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.owner.permitted())
         self.assertEqual(self.owner.approved(), {})
 
+    async def test_reconnect_blocks_decoder_before_notification_and_allows_retry(self):
+        from features.books.mobile.media_controls import SpeechPlayback
+        from features.books.mobile.speech import SpeechSession
+        from features.video.mobile.player import MobileVideo
+        engine = NS(ready=True, speak=Mock(), stop=Mock())
+        session = SpeechSession(engine, on_range=Mock(), on_state=Mock())
+        video = NS(allowed=lambda *args: True, audio_output=self.owner,
+                   transport=NS(resume=Mock()), failure_message=None)
+        speech = SpeechPlayback(NS(session=session), self.app, audio_output=self.owner)
+        self.addCleanup(speech.dispose)
+        session.can_speak = speech.can_start
+        self.assertTrue(MobileVideo.request_play(video))
+        self.assertTrue(MobileVideo.playback_allowed(video))
+        self.assertTrue(speech.request_start())
+        session.play('Synthetic text.')
+        engine.speak.assert_called_once()
+        engine.stop.reset_mock()
+        self.pause_video.reset_mock()
+
+        # The route query can change before the native callback is delivered.
+        self.route = (CAR,)
+        self.assertFalse(MobileVideo.playback_allowed(video))
+        self.assertFalse(speech.can_start())
+        self.assertEqual(self.owner.policy.route, (SPEAKER,))
+        self.pause_video.assert_not_called()
+        for _ in range(2):
+            self.owner.refresh()
+        self.pause_video.assert_called_once()
+        self.assertEqual(session.state, 'paused')
+        engine.stop.assert_called_once()
+        await self.prompt_done()
+        self.dialog.assert_awaited_once()
+        self.assertEqual(self.owner.approved(), {})
+
+        self.dialog.return_value = True
+        self.assertFalse(speech.request_start())
+        await self.prompt_done()
+        self.assertEqual(self.dialog.await_count, 2)
+        self.assertFalse(MobileVideo.playback_allowed(video))
+        self.assertFalse(speech.can_start())
+        self.assertTrue(speech.request_start())
+        session.resume()
+        self.assertEqual(session.state, 'speaking')
+        self.assertEqual(engine.speak.call_count, 2)
+        session.stop()
+        self.assertTrue(MobileVideo.request_play(video))
+        self.owner.refresh()
+        self.assertTrue(MobileVideo.playback_allowed(video))
+
+    async def test_connected_at_start_can_be_approved_from_settings(self):
+        import toga
+        from mobile.settings.audio import controls
+        self.route = (HEADSET,)
+        self.owner.dispose()
+        owner = self.app.audio_output = AudioOutput(self.app, self.native)
+        self.addCleanup(owner.dispose)
+        self.assertFalse(owner.permitted())
+        self.assertIsNone(owner.prompt)
+
+        box = toga.Box()
+        controls(self.app, box)
+        action = next(child for child in box.children if isinstance(child, toga.Button)
+                      and child.text == 'Approve current output…')
+        self.dialog.return_value = True
+        await action.on_press._raw(action)
+        self.assertIn(HEADSET.identity, owner.approved())
+        self.assertFalse(owner.permitted())
+        self.assertTrue(owner.request_play())
+
     async def test_backgrounding_rejects_queued_prompt_without_presenting_it(self):
         self.route = (CAR,)
         self.owner.refresh()
@@ -330,7 +399,7 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.owner.permitted())
         self.assertTrue(self.owner.request_play())
 
-    async def test_permission_query_has_no_native_refresh_or_pause_effects(self):
+    async def test_ordinary_permission_query_skips_native_routes_and_pause_effects(self):
         self.protected = False
         self.assertTrue(self.owner.request_play())
         self.owner.native.outputs = Mock(side_effect=AssertionError('Permission query refreshed routes'))
@@ -455,7 +524,8 @@ class AppleRouteEventTests(unittest.TestCase):
         classes = {'AVAudioSession': NS(sharedInstance=object()),
                    'NSNotificationCenter': NS(defaultCenter=center),
                    'NSOperationQueue': NS(mainQueue=object())}
-        objc = NS(ObjCClass=classes.__getitem__,
+        objc = NS(ObjCClass=classes.__getitem__, ObjCInstance=lambda pointer: pointer.note,
+                  objc_const=lambda library, name: name.encode(),
                   Block=lambda callback, *signature: callback, objc_id=object())
         with patch.dict(sys.modules, {'rubicon.objc': objc}), patch('ctypes.CDLL'):
             return AppleOutputs(changed, interrupted)
@@ -505,7 +575,38 @@ class AppleRouteEventTests(unittest.TestCase):
             callback = callbacks['AVAudioSessionRouteChangeNotification']
             for reason, lost in [(1, False), (2, True), (7, True), (8, False)]:
                 for number in [reason, NS(unsignedIntegerValue=lambda: reason)]:
-                    callback(NS(userInfo=NS(objectForKey=lambda key: number)))
+                    callback(NS(note=NS(userInfo={b'AVAudioSessionRouteChangeReasonKey': number})))
                     changed.assert_called_with(lost=lost)
+            callback(NS(note=NS(userInfo=None)))
+            changed.assert_called_with(lost=False)
         finally:
             monitor.dispose()
+
+
+class AppleApprovalPresentationTests(unittest.IsolatedAsyncioTestCase):
+    async def test_full_screen_presenter_and_dismissal_leave_dialog_retryable(self):
+        from mobile.audio_output_native import show_approval
+        root = NS(presentViewController=Mock())
+        video = root.presentedViewController = NS(presentedViewController=None,
+            isBeingPresented=False, isBeingDismissed=False, view=NS(window=object()),
+            isKindOfClass=lambda cls: False)
+        backend = type('WindowHost', (), {'__module__': 'toga_iOS.app'})
+        loop = asyncio.get_running_loop()
+        app = NS(_impl=backend(), loop=loop,
+                 main_window=NS(_impl=NS(native=NS(rootViewController=root))))
+        outcomes = [None, False, True]
+        for outcome in outcomes:
+            alert = NS(presentingViewController=None)
+            dialog = NS(_impl=NS(native=alert))
+            def present(controller, **kwargs):
+                self.assertIs(controller, alert)
+                alert.presentingViewController = video
+                if outcome is not None:
+                    loop.call_soon(dialog._impl.future.set_result, outcome)
+                else:
+                    loop.call_soon(setattr, alert, 'presentingViewController', None)
+            video.presentViewController = Mock(side_effect=present)
+            with patch.dict(sys.modules, {'rubicon.objc': NS(ObjCClass=lambda name: name)}):
+                self.assertIs(await asyncio.wait_for(show_approval(app, dialog, valid=lambda: True), 1), outcome)
+            video.presentViewController.assert_called_once()
+            root.presentViewController.assert_not_called()
