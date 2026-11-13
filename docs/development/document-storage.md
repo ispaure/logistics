@@ -11,8 +11,9 @@ cannot gain write access through a local cache or wrapper.
 
 `stage_local_document_export` keeps the existing destination untouched while a
 caller streams and verifies its output. Its default remains exclusive creation.
-To replace an approved existing file, pass the `LocalFiles.entry()` revision
-captured with that approval as `expected_revision`, including through the SSH
+To replace an approved existing file, use `local_document_export_revision` to
+capture its `LocalFiles.entry()` revision with that approval and pass it as
+`expected_revision`, including through the SSH
 retrieval API. The stage rejects a changed revision before transfer and uses the
 local provider's checked replacement after verification and cancellation checks.
 Declines must not start an export; do not infer approval in the worker from the

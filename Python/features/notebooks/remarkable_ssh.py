@@ -129,7 +129,8 @@ def _json_member(stream, size):
     return value
 
 
-def list_documents(host, cancelled=lambda: False, *, port=DEFAULT_PORT):
+def list_metadata(host, cancelled=lambda: False, *, port=DEFAULT_PORT):
+    """Read native IDs and metadata without changing the tablet store."""
     command = '''set -- ./*.metadata
 if [ -f "$1" ]; then exec tar -cf - "$@"; fi'''
     entries = {}
@@ -146,6 +147,17 @@ if [ -f "$1" ]; then exec tar -cf - "$@"; fi'''
                             entries[name.stem] = _json_member(metadata, member.size)
                         except ValueError:
                             continue
+    return entries
+
+
+def list_snapshot(host, cancelled=lambda: False, *, port=DEFAULT_PORT):
+    from .remarkable_store import TabletSnapshot
+    return TabletSnapshot.from_metadata(list_metadata(host, cancelled, port=port), cancelled=cancelled)
+
+
+def list_documents(host, cancelled=lambda: False, *, port=DEFAULT_PORT):
+    """Compatibility enumeration: keep the established flattened retrieval API."""
+    entries = list_metadata(host, cancelled, port=port)
 
     def folder_name(entry):
         labels = []

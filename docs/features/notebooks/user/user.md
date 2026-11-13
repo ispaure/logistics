@@ -21,8 +21,19 @@ On desktop, open **Debug → Notebooks → Retrieve RMDOC from reMarkable Tablet
 Connect the tablet by USB and leave it awake. The dialog shows the default
 **Address** `10.11.99.1`, **Port** `22` and the tablet username `root`.
 Enter the SSH host or IP address without a URL scheme and change the port if
-needed. Click **Connect**, filter the list by notebook or folder, select a
-document, then click **Retrieve…** and choose where to save the copy.
+needed. Click **Connect** and open folders in the shared list or tile browser.
+Use the breadcrumbs, Back, Forward and Up controls to navigate. Empty folders
+are included. Notebooks and folders with the same name remain separate items;
+their tooltips show the native IDs. Filtering keeps matching items with their
+folder context. Refresh reads a new tablet snapshot and retains the current
+folder and selection when they still exist.
+
+Select a document, then click **Retrieve…** and choose where to save the copy.
+The native save dialog supplies the `.rmdoc` extension and asks before replacing
+an existing file. Use a filename ending in `.rmdoc`; Logistics does not change
+an already-approved path to a different extension. A destination changed after
+selection is rejected. Cancellation, interrupted transfer and failed archive
+verification preserve the old file.
 
 This tool needs working SSH access and OpenSSH on the computer. On macOS,
 OpenSSH can prompt for host verification and the tablet password. Other
@@ -33,7 +44,10 @@ the tablet. [reMarkable Developer Mode](https://developer.remarkable.com/documen
 Close the notebook on the tablet and let any active edits or sync finish before
 retrieving it. Logistics reads the source files over SSH and packages the
 archive on the computer, preserving native ink, images and the embedded PDF.
-The tool leaves the tablet files and any existing destination file intact.
+Browsing and retrieval leave the tablet files intact; upload and tablet file
+actions are unavailable. Entries whose folder links are missing or cyclic appear
+under **Unfiled (invalid folder links)**. This group changes only the display.
+Deleted entries and their descendants stay hidden.
 The resulting archive can be larger than the notebook editor's import limits.
 
 ### Editing and storage
