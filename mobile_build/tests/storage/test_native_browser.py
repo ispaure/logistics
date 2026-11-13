@@ -1,3 +1,4 @@
+"""Check browser pagination, search and preview lifecycle with host fixtures."""
 
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage

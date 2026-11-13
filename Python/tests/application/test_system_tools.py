@@ -1,3 +1,4 @@
+"""Check Windows repair commands, platform guards and restoration of saved power settings."""
 
 from commonUtils.testing.stages import TestStage
 

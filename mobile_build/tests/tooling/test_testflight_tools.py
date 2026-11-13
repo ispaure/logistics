@@ -1,3 +1,4 @@
+"""Check TestFlight archive configuration, signing and existing-build distribution."""
 
 from commonUtils.testing.stages import TestStage
 

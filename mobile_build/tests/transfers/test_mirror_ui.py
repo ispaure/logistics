@@ -1,3 +1,4 @@
+"""Check mirror review controls and progress delivery across worker and UI callbacks."""
 
 from contextlib import ExitStack
 from commonUtils.testing.event_loop import close_loop

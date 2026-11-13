@@ -1,3 +1,4 @@
+"""Check packaged iOS and Android icon variants and repeatable project updates."""
 
 from commonUtils.testing.stages import TestStage
 

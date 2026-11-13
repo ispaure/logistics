@@ -1,3 +1,4 @@
+"""Check App Store Connect authentication, beta build selection and distribution state."""
 
 from commonUtils.testing.stages import TestStage
 

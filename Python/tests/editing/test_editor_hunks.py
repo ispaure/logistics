@@ -1,3 +1,4 @@
+"""Check hunk staging, review and undoable restoration against current text."""
 
 from commonUtils.testing.stages import TestStage
 

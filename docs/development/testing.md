@@ -497,13 +497,17 @@ selection when a guide does not need to name an individual test class.
 | `ide/` | IDE layout, browser, navigation and search |
 | `blender/` | Blender integration, library, metadata and operation UI |
 | `calibre/` | Calibre library launch and transactional device exports |
+| `notebooks/` | Notebook storage, drawing, import, export and recovery |
 | `tooling/` | Build, documentation, architecture and runner contracts |
 
-The root `test_mobile*.py` profiles remain at their established paths because
-the independent portable testbed consumes them. Root fixture and driver files
-also retain their paths: they are shared inputs, not extra subject groups.
-Desktop cross-group imports name `tests.<owner>` explicitly; shared contracts use
-`commonUtils.tests.<owner>`. The shared test owner map lives in
+Some tests with `test_mobile_*.py` filenames run in the desktop host environment.
+Look in the subject folder for cases such as mobile chat presentation, comic
+batching and speech timing. The portable runtime testbed uses seven flat test
+modules and two fixtures from the root of `Python/tests/`. See the explicit
+list in [mobile staging](../../mobile_build/tools.py) and its consumer in
+[runtime smoke](../../Python/mobile/smoke.py) before relocating those files.
+Desktop cross-group imports name `tests.<owner>` explicitly. Shared contracts use
+`commonUtils.tests.<owner>`, with the owner map in
 [commonUtils](../../Python/commonUtils/docs/development/reference/tests/tests.md).
 The small package initializers enable recursive standard `unittest discover`
 and contain no setup or runtime registration.
@@ -529,9 +533,22 @@ the map does not invent individual maintainer assignments.
 | LM conversation lifecycle and presentation | `Python/tests/chat/test_lm_session.py`, `test_lm_ui.py`, `test_lm_appearance.py` |
 | Git history, search, preview and job ownership | `Python/tests/version_control/test_git_ui*.py`, `test_git_watchers.py`, `test_git_preferences.py`, `test_git_repository_tabs.py`, `test_git_hunk_layout.py` |
 | Blender presentation and operation lifecycle | `Python/tests/blender/test_blender_page.py`, `test_blender_settings.py`, `test_blender_library.py` |
-| Mobile Open/Save As and file management | `mobile_build/tests/documents/test_editor_picker.py`, `test_files_ui.py`, `test_private_sessions.py` |
-| Mobile saved imports and window ownership | `mobile_build/tests/documents/test_saved_files.py`, `test_window_owners.py`, `test_workspace_ui.py` |
+| Bulk Rename widget and host | `Python/tests/files/test_bulk_rename_ui.py`, `Python/tests/files/test_bulk_rename_host.py` |
+| Notebook storage and drawing | `Python/tests/notebooks/test_notebooks.py`, `mobile_build/tests/documents/test_notebook_storage.py`, `mobile_build/tests/documents/test_notebook_input_lifecycle.py` |
+| Mobile Open/Save As and file management | `mobile_build/tests/documents/test_editor_picker.py`, `mobile_build/tests/storage/test_files_ui.py`, `mobile_build/tests/documents/test_private_sessions.py` |
+| Mobile saved imports and window ownership | `mobile_build/tests/documents/test_saved_files.py`, `mobile_build/tests/workspace/test_window_owners.py`, `mobile_build/tests/workspace/test_workspace_ui.py` |
 | Mobile source selection and import isolation | `Python/tests/test_mobile_packaging.py`, `test_mobile_portability.py`, `mobile_build/tests/tooling/test_packaged_startup.py` |
+
+For a change to folder image compression, start with the
+[Images developer guide](../features/images/development/development.md#compression-regression-coverage)
+and follow `compress_folders` in `Python/features/images/actions.py`. Inspect
+the owner selection, then run the file that exercises cancellation and recovery
+from encoder failure with synthetic images:
+
+```sh
+python3 dev.py test-owner images --dry-run
+python3 dev.py test desktop --exact-file Python/tests/images/test_image_folder_tool.py
+```
 
 The [mobile owner map](mobile-runtime.md) explains controller
 and packaging boundaries. For focused runs, use `dev.py test desktop <filename>` or

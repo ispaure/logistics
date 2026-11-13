@@ -1,3 +1,4 @@
+"""Check background connection restore and its effects on Home readiness and credential state."""
 
 from contextlib import ExitStack
 from commonUtils.testing.event_loop import close_loop

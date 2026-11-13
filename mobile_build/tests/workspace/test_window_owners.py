@@ -1,3 +1,4 @@
+"""Check mobile scene retirement, registration cleanup and reconnect behavior."""
 
 from commonUtils.testing.stages import TestStage
 

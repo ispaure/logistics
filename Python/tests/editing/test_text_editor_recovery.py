@@ -1,3 +1,4 @@
+"""Check desktop editor session recovery, conflict handling and private data cleanup."""
 
 from commonUtils.testing.stages import TestStage
 

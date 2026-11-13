@@ -1,3 +1,4 @@
+"""Check encrypted desktop file operations, batched name lookup and plaintext cleanup."""
 
 from commonUtils.testing.stages import TestStage
 

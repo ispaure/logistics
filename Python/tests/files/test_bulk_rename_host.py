@@ -1,3 +1,4 @@
+"""Check selection replacement and scan ordering in the embedded Bulk Rename page."""
 
 from commonUtils.testing.stages import TestStage
 

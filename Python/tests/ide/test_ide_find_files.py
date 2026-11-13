@@ -1,3 +1,4 @@
+"""Check Find Files results, exact navigation and stale search or preview rejection."""
 
 from commonUtils.testing.stages import TestStage
 

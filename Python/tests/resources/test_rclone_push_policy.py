@@ -1,3 +1,4 @@
+"""Check push filters, encrypted destination policy and junk-file cleanup."""
 
 from commonUtils.testing.stages import TestStage
 
