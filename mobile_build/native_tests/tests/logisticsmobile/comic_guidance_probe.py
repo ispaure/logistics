@@ -2,6 +2,7 @@
 import asyncio
 from hashlib import sha256
 import json
+import os
 from pathlib import Path
 from threading import Event
 from types import SimpleNamespace
@@ -490,6 +491,10 @@ class ComicGuidanceProbe(LogisticsMobile):
             self.record_progress(report, 'startup')
             await self.until(lambda: not getattr(self, '_startup_in_progress', False), 'Startup did not settle', 30)
             self.preferences.values.update(comic_layout='single', comic_split_wide='false', android_eink='false')
+            if os.environ.get('LOGISTICS_COMIC_GUIDANCE_BASIC') == '1':
+                await local_overlay_check(self, report)
+                report['success'] = True
+                return
             for rtl in (False, True):
                 folder = self.private_root / ('RTL' if rtl else 'LTR')
                 folder.mkdir(parents=True, exist_ok=True)
@@ -522,7 +527,10 @@ class ComicGuidanceProbe(LogisticsMobile):
         finally:
             comic_feedback.clear(self)
             try:
-                for manager in (self.private_sessions, self.reader_manager()):
+                for name in ('private_sessions', 'readers'):
+                    manager = getattr(self, name, None)
+                    if manager is None:
+                        continue
                     for owner in list(manager.controllers.values()):
                         if owner.session is not None:
                             await self.close_owner(owner)
@@ -533,6 +541,58 @@ class ComicGuidanceProbe(LogisticsMobile):
                 report['success'] = False
             report['phase'] = 'complete' if report['success'] else 'failed'
             (root / RESULT).write_text(json.dumps(report, indent=2))
+
+
+async def local_overlay_check(app, report):
+    """Minimum renderer proof using the established local native comic fixture."""
+    from mobile.comic_layout_check import fixture_reader
+    report['scope'] = 'local-overlay-only'
+    report['missing_acceptance'] = ['provider and imported volume opening matrix',
+        'pending/failed/disappeared provider availability', 'theme/orientation/fullscreen matrix',
+        'reduced-motion OS setting', 'background/resume', 'window switches', 'fold layouts',
+        'external-display output', 'physical e-ink quality']
+    cache = Path(app.paths.cache)
+    for rtl in (False, True):
+        folder = app.private_root / ('basic-rtl' if rtl else 'basic-ltr')
+        folder.mkdir(parents=True, exist_ok=True)
+        owner = await fixture_reader(app, folder, pages=4, right_to_left=rtl)
+        source = folder / 'layout-fixture.cbz'
+        for name in ('00.cbz', 'zz.cbz'):
+            (folder / name).write_bytes(source.read_bytes())
+        await owner.comic_controller().refresh_comic_neighbors()
+        await app.settled(owner)
+        await app.swipe(owner, -1, rtl=rtl)
+        feedback = app.guidance(owner, rtl=rtl, direction=-1, available=True)
+        presenter = feedback.native
+        app.assert_pass_through(owner, presenter)
+        assert presenter.motion_enabled
+        await asyncio.sleep(.10)
+        start = presenter.hand_position()
+        prefix = 'comic-guidance-' + ('rtl' if rtl else 'ltr')
+        await capture_window(app, cache / (prefix + '-frame-start.png'))
+        await asyncio.sleep(.25)
+        end = presenter.hand_position()
+        await capture_window(app, cache / (prefix + '-frame-end.png'))
+        assert (end - start) * (1 if rtl else -1) > 5, (start, end, rtl)
+        report['motion'].append(dict(rtl=rtl, first_x=start, last_x=end))
+        await app.swipe(owner, 1, rtl=rtl)
+        assert owner.book_record['position'] == 1
+        assert feedback.native is None and feedback.timer is None
+        await owner.move_book_page(3)
+        await app.swipe(owner, 1, rtl=rtl)
+        app.guidance(owner, rtl=rtl, direction=1, available=True)
+        for name in ('00.cbz', 'zz.cbz'):
+            (folder / name).unlink()
+        await owner.comic_controller().refresh_comic_neighbors()
+        await app.swipe(owner, 1, rtl=rtl)
+        feedback = app.guidance(owner, rtl=rtl, direction=1, available=False)
+        await asyncio.sleep(comic_feedback.HINT_SECONDS + .1)
+        assert feedback.native is None and feedback.timer is None
+        report['availability'].append(dict(rtl=rtl, previous_and_next_offered=True,
+                                           missing_neighbor_omitted=True, page_opened=1))
+        report['lifecycle'].append(dict(rtl=rtl, page_change=True, expiry=True))
+        await app.close_owner(owner)
+        app.record_progress(report, 'local-overlay')
 
 
 def main():

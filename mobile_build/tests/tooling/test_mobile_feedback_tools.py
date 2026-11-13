@@ -3,9 +3,10 @@ from commonUtils.testing.stages import TestStage
 from io import StringIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import json
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from mobile_build.validation import document_storage_tools as tools
 
@@ -16,7 +17,8 @@ class MobileFeedbackToolsTests(unittest.TestCase):
     def test_comic_packaged_launch_completes_real_host_startup(self):
         import toga
         from commonUtils.testing.event_loop import close_loop
-        from mobile_build.native_tests.tests.logisticsmobile.comic_guidance_probe import ComicGuidanceProbe
+        from mobile_build.native_tests.tests.logisticsmobile import comic_guidance_probe
+        ComicGuidanceProbe = comic_guidance_probe.ComicGuidanceProbe
         with TemporaryDirectory() as directory, \
                 patch.dict(os.environ, {'TOGA_DUMMY_HOME': directory}), \
                 patch.object(toga.App, 'app', toga.App.app):
@@ -31,6 +33,16 @@ class MobileFeedbackToolsTests(unittest.TestCase):
                 self.assertTrue(app.active_host)
                 self.assertIsNotNone(app.main_window.content)
                 app.checkpoint()
+                # A local-only probe never creates the lazy provider manager.
+                # Exercise real finalization without invoking native rendering.
+                self.assertFalse(hasattr(app, 'private_sessions'))
+                with patch.dict(os.environ, {'LOGISTICS_COMIC_GUIDANCE_BASIC': '1'}), \
+                        patch.object(comic_guidance_probe, 'local_overlay_check', new_callable=AsyncMock):
+                    app.loop.run_until_complete(app.probe())
+                report = json.loads((Path(app.paths.cache) / comic_guidance_probe.RESULT).read_text())
+                self.assertTrue(report['success'], report)
+                self.assertTrue(report['reader_cleanup'])
+                self.assertFalse(hasattr(app, 'private_sessions'))
             finally:
                 app = toga.App.app
                 if isinstance(app, ComicGuidanceProbe):
