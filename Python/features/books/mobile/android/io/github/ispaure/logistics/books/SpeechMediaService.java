@@ -140,7 +140,8 @@ public final class SpeechMediaService extends Service {
             .setState(playing ? PlaybackState.STATE_PLAYING : PlaybackState.STATE_PAUSED,
                 PlaybackState.PLAYBACK_POSITION_UNKNOWN, playing ? 1f : 0f)
             .setActions(PlaybackState.ACTION_PLAY | PlaybackState.ACTION_PAUSE | PlaybackState.ACTION_PLAY_PAUSE
-                | PlaybackState.ACTION_STOP)
+                | PlaybackState.ACTION_STOP | PlaybackState.ACTION_SKIP_TO_PREVIOUS
+                | PlaybackState.ACTION_SKIP_TO_NEXT)
             .addCustomAction("back15", "Back 15 seconds", skipIcon("back15"))
             .addCustomAction("forward15", "Forward 15 seconds", skipIcon("forward15"));
         session.setPlaybackState(state.build());

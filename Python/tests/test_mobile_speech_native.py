@@ -4,6 +4,8 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
+from pathlib import Path
+import re
 import sys
 from types import SimpleNamespace
 import unittest
@@ -21,6 +23,18 @@ def voice(name, *, network=False, installed=True, null_features=False):
 
 
 class NativeSpeechTests(unittest.TestCase):
+    def test_android_advertises_both_system_skip_callbacks(self):
+        source = (Path(__file__).resolve().parents[1] / 'features/books/mobile/android'
+                  / 'io/github/ispaure/logistics/books/SpeechMediaService.java').read_text(encoding='utf-8')
+        actions = re.search(r'\.setActions\(([^)]*)\)', source)
+        self.assertIsNotNone(actions)
+        for flag, callback, command in (
+                ('ACTION_SKIP_TO_PREVIOUS', 'onSkipToPrevious', 'back'),
+                ('ACTION_SKIP_TO_NEXT', 'onSkipToNext', 'forward')):
+            with self.subTest(callback=callback):
+                self.assertIn('PlaybackState.' + flag, actions[1])
+                self.assertRegex(source, rf'void {callback}\(\)\s*\{{\s*send\("{command}"\);\s*\}}')
+
     def engine(self):
         engine = NativeSpeech.__new__(NativeSpeech)
         engine.closed, engine.ready, engine.error = False, False, ''
