@@ -566,7 +566,7 @@ class NotesLibraryTests(unittest.TestCase):
                     'window.logisticsPlayVideo?.("' + inline.split('=')[-1] + '","' + transport.url + '")')
                 self.assertEqual(consent.call_count, 2)
             with patch.object(owner.web, 'evaluate_javascript') as javascript:
-                owner.document._inline_audio.players[owner.document]()
+                owner.document._inline_audio.pause()
                 self.assertIn('video.pause()', javascript.call_args.args[0])
             self.assertEqual(native.await_count, 4)
             self.assertEqual(owner.path, 'Vault/Home.md')
