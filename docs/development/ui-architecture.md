@@ -27,6 +27,8 @@ Application-wide guidance has moved to [developer documentation](development.md)
 | Desktop Settings → Feature settings | `Python/desktop/settings/feature_settings.py:FeatureSettingsPanel` | Feature contributions supply lazy widgets and config files |
 | Mobile workspace browser | `Python/mobile/files_ui.py`, `file_drawer.py`, `workspace_navigation.py` | [Workspace navigation](mobile-workspace-navigation.md) separates retained browsers from pane placement |
 | Desktop Workspaces | `Python/desktop/pages/folders.py`, `folder_tree.py`, `workspace_panes.py` | Source requests and selection stay with the page/controller |
+| Desktop rclone sync / Workspace actions | `Python/features/rclone/transfers/ui/progress.py:open_transfer_progress`; Push/Pull setup and review in sibling modules | `transfers/sync.py` selects execution mode; shared `process_host` presents in `desktop/folder_actions.py:FolderActionsPage` or a standalone window |
+| Mobile Transfer / Transfer review | `Python/features/rclone/transfers/mobile/{ui,review_ui,surface,native_fallback}.py`; offline controls in `transfers/assets/surface.*` | `TransferController` retains feature state; `Python/mobile/transfer_status.py` mounts shell shortcuts |
 
 Mobile `settings/categories.py` keeps small feature links and the ordered `Category`
 declarations: title, factory, arguments, icon, camera requirement and required

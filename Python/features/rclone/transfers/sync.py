@@ -14,37 +14,19 @@ from .launch import LaunchMode, SyncOutcome, SyncState, transfer_concurrency
 
 
 def _watch_transfer(window, config_path, revoked, cancelled, *, session_bound):
-    """Keep the captured access/cancellation binding alive with the GUI process."""
-    from commonUtils.ui import pyside as qt
+    """Compatibility for the former desktop guard owner.
 
-    class Guard(qt.QObject):
-        stop = qt.Signal()
-
-        def invalidate(self):
-            self.stop.emit()
-
-        def release(self, *_):
-            self.timer.stop()
-            self.unsubscribe()
-
-        def poll(self):
-            if revoked() or cancelled():
-                self.timer.stop()
-                self.invalidate()
-
-    guard = Guard(window)
-    guard.stop.connect(window.runner.cancel, qt.Qt.ConnectionType.QueuedConnection)
-    guard.unsubscribe = session.on_forget(config_path, guard.invalidate) if session_bound else lambda: None
-    guard.timer = qt.QTimer(guard)
-    guard.timer.timeout.connect(guard.poll)
-    guard.timer.start(100)
-    window.runner.completed.connect(guard.release)
-    window.destroyed.connect(guard.release)
-    window._session_guard = guard
-    # A reload between launch and subscription must not attach old work to new keys.
-    guard.poll()
-    if not window.busy:
-        guard.release()
+    Before: features.rclone.transfers.sync._watch_transfer(window, ...)
+    After: features.rclone.transfers.ui.progress.watch_transfer(window, ...)
+    Arguments and cancellation connections are unchanged.
+    """
+    import warnings
+    from .ui.progress import watch_transfer
+    warnings.warn(
+        'features.rclone.transfers.sync._watch_transfer is deprecated; use '
+        'features.rclone.transfers.ui.progress.watch_transfer with the same arguments.',
+        FutureWarning, stacklevel=2)
+    return watch_transfer(window, config_path, revoked, cancelled, session_bound=session_bound)
 
 
 def rclone_sync(source_path, destination_path, *, config_path, query=False, wait_for_output=False,
@@ -195,18 +177,15 @@ def _execute_sync(
         from commonUtils.ui import pyside as qt
         application = qt.QApplication.instance()
         if application is not None and qt.QThread.currentThread() == application.thread():
-            from commonUtils.ui.tasks.process_progress import open_process
-            from features.rclone.transfers.progress import RcloneProgressParser, add_removal_statistics
+            from .ui.progress import open_transfer_progress
             if cancelled():
                 return SyncOutcome(SyncState.CANCELLED)
-            window = open_process('rclone sync (dry run)' if dry_run else 'rclone sync',
-                         arguments[0], arguments[1:], parser=RcloneProgressParser(),
-                         context={'operation': 'Sync (dry run)' if dry_run else 'Sync', 'source': source_path_str,
-                                  'destination': destination_path_str, 'dry_run': dry_run},
-                         **({'environment': environment} if environment is not None else {}))
-            add_removal_statistics(window, dry_run=dry_run)
-            _watch_transfer(window, credential_path, revoked if environment is not None else lambda: False,
-                            cancelled, session_bound=environment is not None)
+            window = open_transfer_progress(arguments,
+                source=source_path_str, destination=destination_path_str, dry_run=dry_run,
+                credential_path=credential_path,
+                revoked=revoked if environment is not None else lambda: False,
+                cancelled=cancelled, session_bound=environment is not None,
+                environment=environment)
             if on_launch is not None:
                 on_launch(window)
             return SyncOutcome(SyncState.STARTED)

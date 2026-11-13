@@ -127,6 +127,31 @@ formatter cannot leave a failed result marked complete.
 A legacy or named conflict result remains incomplete: it cannot show 100%, mark
 verified success or trigger the successful-transfer notification timeout.
 
+## Find desktop transfer controls
+
+`transfers/ui/progress.py:open_transfer_progress` owns the rclone window title,
+source/destination context, deletion/removal rows and captured access guard.
+`transfers/progress.py:RcloneProgressParser` maps rclone statistics to the existing
+shared `ProcessUpdate`; this remains a desktop adapter, not a portable model.
+commonUtils' `ui/tasks/process_progress.py` owns the reusable progress bar,
+statistics, active-file table, log disclosure and Cancel/Close control. Its runner
+owns process execution and completion; only a successful exit means complete.
+
+The desktop shell registers `desktop/folder_actions.py:FolderActionsPage` through
+commonUtils' process host in `desktop/main_window.py`. It owns Workspace actions
+tabs, docking, completion notices and shutdown coordination. Standalone launches
+use the same shared window. Push setup, storage choice, settings and review remain
+in `transfers/ui/{push_dialog,pull_dialog,push_settings,review}.py`; the mobile
+surface and `transfers/assets/` keep their existing feature-owned paths.
+
+The old `transfers.sync._watch_transfer` and
+`transfers.progress.add_removal_statistics` entry points delegate to
+`transfers.ui.progress.watch_transfer` and `add_removal_statistics`, respectively.
+Their arguments and connections are unchanged. Each compatibility hook has a
+migration example and emits a visible `FutureWarning` at the caller; Python's
+default warning filter suppresses repeats from the same call site. New code uses
+the `transfers.ui.progress` entry points directly.
+
 ## Desktop launch contract
 
 `transfers/sync.py:rclone_sync` preserves the existing preview/bool interface.

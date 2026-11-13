@@ -160,12 +160,13 @@ class CredentialRevocationTests(QtTestCase):
 
     def test_gui_transfer_retains_the_callers_access_guard_until_completion(self):
         from commonUtils.ui.tasks.process_progress import open_process
+        from features.rclone.transfers.ui.progress import watch_transfer
         active = [True]
         with TemporaryDirectory() as directory:
             ready = Path(directory) / 'ready'
             script = 'from pathlib import Path; import sys,time; Path(sys.argv[1]).touch(); time.sleep(30)'
             window = open_process('guard fixture', sys.executable, ['-u', '-c', script, str(ready)])
-            sync._watch_transfer(window, Path(directory) / 'saved.conf', lambda: False,
+            watch_transfer(window, Path(directory) / 'saved.conf', lambda: False,
                                  lambda: not active[0], session_bound=False)
             try:
                 self.wait_until(ready.exists)

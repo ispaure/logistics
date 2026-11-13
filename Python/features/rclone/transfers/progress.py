@@ -86,22 +86,16 @@ class RcloneProgressParser:
 
 
 def add_removal_statistics(window, *, dry_run):
-    from commonUtils.ui import pyside as qt
+    """Compatibility for the former Qt statistics owner.
 
-    grid = window.statistics.layout()
-    row = grid.rowCount()
-    titles = ('Planned file deletions', 'Planned folder removals') if dry_run else (
-        'File deletion attempts', 'Folder removal attempts')
-    for column, (key, title) in enumerate(zip(('deleted', 'deleted_dirs'), titles)):
-        label = qt.QLabel('Not reported')
-        label.setTextInteractionFlags(qt.Qt.TextInteractionFlag.TextSelectableByMouse)
-        window.fields[key] = label
-        grid.addWidget(qt.QLabel(title), row, column * 2)
-        grid.addWidget(label, row, column * 2 + 1)
-
-    def update_removals(update):
-        for key in ('deleted', 'deleted_dirs'):
-            count = update.metrics.get(key)
-            window.fields[key].setText(f'{int(count):,}' if count is not None else 'Not reported')
-
-    window.runner.progress.connect(update_removals)
+    Before: features.rclone.transfers.progress.add_removal_statistics(window, dry_run=False)
+    After: features.rclone.transfers.ui.progress.add_removal_statistics(window, dry_run=False)
+    Arguments and progress connections are unchanged.
+    """
+    import warnings
+    from .ui.progress import add_removal_statistics as add_statistics
+    warnings.warn(
+        'features.rclone.transfers.progress.add_removal_statistics is deprecated; use '
+        'features.rclone.transfers.ui.progress.add_removal_statistics with the same arguments.',
+        FutureWarning, stacklevel=2)
+    return add_statistics(window, dry_run=dry_run)
