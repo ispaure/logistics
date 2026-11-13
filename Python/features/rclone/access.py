@@ -6,12 +6,12 @@ from commonUtils.runtime.operations import check_cancelled
 
 
 class ResourceAccess:
-    def __init__(self, grant):
+    def __init__(self, grant, *, on_last_release=None):
         self.grant = grant
         self.closed = False
         self._lock = RLock()
         self._cancellation = WorkerCancellation()
-        self._leases = ResourceLeases(validate=self.check, close=self.close)
+        self._leases = ResourceLeases(validate=self.check, close=on_last_release or self.close)
 
     def check(self):
         check_cancelled(self._cancellation.current)

@@ -69,9 +69,50 @@ def highlight_entry(widget, selected):
 
 
 def sync_browser_population(app, body=None):
-    """Compatibility hook for retained route/privacy lifecycle callers."""
-    # Native lists own their viewport; there is no Python population timer.
-    return
+    """Resume retained search only when its owning view is visible again."""
+    privacy = getattr(app, 'screen_privacy', None)
+    if (privacy is None or privacy.disposed or getattr(privacy, '_folder_work_paused', False)
+            or getattr(app, 'scene_active', True) is False or not app.active_host):
+        return
+    body = body if body is not None else getattr(app, 'body', None)
+    if body is None:
+        return
+    from .routes import contains
+    paused = getattr(privacy, '_paused_file_browsers', ())
+    for browser in tuple(paused):
+        if browser.closed or contains(body, browser.widget):
+            paused.discard(browser)
+            browser.resume_search_work()
+    notes = getattr(app, 'vault_browser', None)
+    if notes is not None and notes._index_work_suspended and contains(body, notes.view):
+        notes.resume_index_work()
+
+
+def mounted_file_browsers(widget):
+    browser = getattr(widget, '_file_browser_owner', None)
+    if browser is not None:
+        yield browser
+        return
+    if isinstance(widget, toga.ScrollContainer) and widget.content is not None:
+        yield from mounted_file_browsers(widget.content)
+    else:
+        for child in widget.children:
+            yield from mounted_file_browsers(child)
+
+
+def pause_file_browser_searches(app):
+    """Fence workers of mounted browsers and retained source/picker views."""
+    body = getattr(app, 'body', None)
+    browsers = set(mounted_file_browsers(body)) if body is not None else set()
+    browsers.update(getattr(app, name, None) for name in ('file_browser', 'remote_browser'))
+    picker = getattr(app, '_editor_picker', None)
+    browsers.add(getattr(picker, 'editor_browser', None))
+    adaptive = getattr(app, 'adaptive', None)
+    browsers.update(drawer.browser for drawer in getattr(adaptive, 'browsers', {}).values())
+    paused = {browser for browser in browsers if isinstance(browser, FileBrowser) and not browser.closed}
+    for browser in paused:
+        browser.pause_search_work()
+    return paused
 
 
 def schedule_visible_file_browser_refresh(app):
@@ -128,11 +169,14 @@ class FileBrowser(RecycledBrowser):
         self._index_cancel = Event()
         self._index_error = None
         self._index_started = False
+        self._search_suspended = False
+        self._index_hint = object()
         if local_search is not None:
             kwargs['resource_search'] = local_search.search
         super().__init__(presentation=LogisticsBrowserPresentation(),
                          list_factory=partial(RecycledFileList, title_lines=2), inline_details=False, **kwargs)
         self.widget._clear_return_selection = self.clear_selection
+        self.widget._file_browser_owner = self
 
     def clear_selection(self):
         """Retire contextual selection without rebuilding the retained listing."""
@@ -172,22 +216,31 @@ class FileBrowser(RecycledBrowser):
             previous = self._release_resource
             self._resource_provider, self._release_resource = provider, release
             previous()
-        if self.search_open:
-            self._start_local_index()
+        self._foreground_folder(not self._search_suspended)
+        if self.search_open and not self._search_suspended:
+            preparing = self._start_local_index()
+            if self.search.value and not preparing:
+                self.query_changed()
 
     async def _search_subfolders(self, epoch, cancelled):
         # Online search filters the loaded listing; recursive I/O is explicit.
-        if getattr(self.search_provider, 'remote_storage', False):
+        if self._search_suspended or getattr(self.search_provider, 'remote_storage', False):
             return
         await super()._search_subfolders(epoch, cancelled)
 
     def _start_local_index(self):
         provider = self.search_provider
-        if (not self._index_started and provider is not None and self.local_search is not None
+        if (not self._search_suspended and not self._index_started and provider is not None and self.local_search is not None
                 and self.local_search.supports(provider)):
             self._index_started = True
             self._index_cancel = Event()
             self._spawn(self._prepare_local_search(provider, self.search_directory, self._index_cancel))
+            return True
+        return False
+
+    def query_changed(self, widget=None, **kwargs):
+        if not self._search_suspended or widget is self.sort:
+            super().query_changed(widget, **kwargs)
 
     async def _prepare_local_search(self, provider, directory, cancelled):
         from commonUtils.runtime.operations import OperationCancelled
@@ -215,6 +268,7 @@ class FileBrowser(RecycledBrowser):
             header.clear_location()
         self.stop_local_search()
         super().stop()
+        self._search_suspended = False
         self._release_resource()
         self._resource_provider = None
         self._release_resource = lambda: None
@@ -222,6 +276,36 @@ class FileBrowser(RecycledBrowser):
     def stop_local_search(self):
         self._index_cancel.set()
         self.search_cancelled.set()
+        self._foreground_folder(False)
+
+    def _foreground_folder(self, active):
+        cache = getattr(self.local_search, 'cache', None)
+        if cache is None:
+            return
+        from services.directory_index import focus
+        provider = self.search_provider
+        paths = ((provider.root / provider.relative(self.search_directory),)
+                 if active and provider is not None and self.local_search.supports(provider) else ())
+        focus(cache.database, self._index_hint, paths)
+
+    def pause_search_work(self):
+        if self._search_suspended or self.closed:
+            return
+        self._search_suspended = True
+        self.stop_local_search()
+        self.search_epoch += 1
+        self.searching = False
+        self._index_started = False
+
+    def resume_search_work(self):
+        if not self._search_suspended or self.closed:
+            return
+        self._search_suspended = False
+        self._foreground_folder(True)
+        if self.search_open:
+            self._start_local_index()
+            if self.search.value:
+                self.query_changed()
 
     location_header = FolderLocationHeader
 

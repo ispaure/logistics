@@ -166,7 +166,16 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
 
     def showEvent(self, event):
         super().showEvent(event)
+        if self.library is not None and not self.locked:
+            from ..library_files import focus
+            focus(self.library)
         self.refresh_connections()
+
+    def hideEvent(self, event):
+        if self.library is not None:
+            from ..library_files import clear_focus
+            clear_focus(self.library)
+        super().hideEvent(event)
 
     def show_sidebar(self, visible):
         self.panel_tabs.setVisible(True)
@@ -175,6 +184,8 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
     def list_folder(self, path):
         if self.progress.busy or self.library is None or self.locked:
             return
+        from ..library_files import focus
+        focus(self.library, path)
         self.pending = ('folder', path)
         self.tree.setEnabled(False)
         def read(report, cancelled):

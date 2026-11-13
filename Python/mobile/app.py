@@ -237,6 +237,13 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         root = self.private_root if getattr(self, '_async_startup', False) else self._prepare_startup_storage()
         yield STEPS[StartupPhase.PREFERENCES]
         models, workspace_root = self._prepare_startup_preferences(root)
+        if not self.active_host:
+            raise asyncio.CancelledError
+        if not hasattr(self, '_directory_index_host'):
+            from services.directory_index import acquire
+            self._directory_index_host = acquire(root / 'Cache' / 'directory-index.sqlite3')
+            if getattr(self, 'scene_active', True) is False:
+                self._directory_index_host.set_active(False)
         yield STEPS[StartupPhase.DOCUMENTS]
         restored_document = self._prepare_startup_documents(root, models, workspace_root)
         yield STEPS[StartupPhase.EDITOR]

@@ -350,6 +350,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
     def refresh_chrome(self):
         if not hasattr(self, 'secondary'):
             return
+        if hasattr(self, 'panel_tab'):
+            self.resume_visible_index_work()
         if hasattr(self, 'open_card'):
             self.open_card.style.display = NONE if self.sidebar.sidebar_open or self.sidebar.expanded else PACK
         available = getattr(self, '_notes_available', 320)
@@ -576,6 +578,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.notice.text = "Loading notes…"
         try:
             path = self.contained(path)
+            if not self._index_work_suspended:
+                library_files.focus(self.library, path)
             def listing():
                 entries = self.library.folders(path, cancelled=lambda: not self.valid()) if rows is None else rows
                 pages = self.library.folder_pages(
@@ -648,6 +652,9 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if not self.valid():
             return
         terms = search_terms(self.search.value or '')
+        if self._index_work_suspended:
+            self.search_paused = bool(terms)
+            return
         self.search_paused = False
         if terms:
             if getattr(self, 'panel_tab', 'Files') != 'Search':
@@ -689,6 +696,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         await asyncio.sleep(SEARCH_DEBOUNCE_SECONDS)
         if cancelled():
             return
+        library_files.focus(self.library)
         self.shown = 50
         self.search_status = 'Searching…'
         # A scan with no early matches still needs visible feedback. Updating

@@ -40,6 +40,46 @@ separate from offscreen host tests.
 
 ## Browser presentation
 
+### Directory-index admission and foreground demand
+
+The desktop launch-owned `IndexService` registers its commonUtils coordinator
+with `services.directory_index`. Mobile hosts acquire a process-shared lease for
+their app-private index; a second iPad scene shares the same runner. The mobile
+thread starts only when a scan is submitted. Closing one scene removes only its
+lease; the last close requests cooperative retirement. Idle or locked hosts pause
+admission, and an active sibling scene may continue work.
+
+Eligible ordinary Notes filename queries and mobile Files preparation use this
+same coordinator. Names-only validation is distinct from the browser's ordinary
+metadata check. Compatible same-root and covered descendant requests share work;
+pending requests can expand to an ancestor without dropping followers. Explicit
+refresh and mutation notifications preserve their existing semantics. Saved reads
+use separate SQLite snapshots and do not wait for a busy writer.
+
+The host selects jobs using visible-folder/search hints after a 150 ms quiet
+period. An unrelated traversal can yield cooperatively after an initial 500 ms
+turn; a deferred job becomes eligible for a fair turn after five seconds. Resumed
+turns double their guaranteed duration so atomic reconciliation, whose unfinished
+transaction rolls back on cancellation, can eventually commit. Backgrounding all
+scenes still interrupts promptly at the next cooperative boundary. These
+are scheduling intervals, not UI latency guarantees or interruption of blocking
+provider I/O. commonUtils retains checkpoints and elects a single runner; host
+policy chooses which compatible work runs next. Navigation, close and privacy
+transitions retire the corresponding hints.
+
+Mobile cached filename matches stream in batches of 50, with each path admitted
+through the provider before publication. Later cumulative updates are throttled;
+the query/route/privacy generation rejects obsolete callbacks. The status stays
+in progress until the final result, including a partial marker when necessary.
+Cold search follows preparation and may reuse available partial snapshots;
+corrupt-cache reads fall back to live provider search. LocalCrypt and other
+private or virtual namespaces remain outside the ordinary index and job queue.
+
+Focused coverage includes shared receipt overlap/recovery, host fairness and
+scene leases, warm publication while a writer is held, changed/deleted/link hits,
+and lock/unlock/navigation fences. Platform timings and raw probe evidence remain
+local validation artifacts, not part of this guide.
+
 The Logistics browser host uses zero outer pane margins and `BrowserIndexStatus`
 to compact the shared workspace footer's padding, font, buttons and activity
 track. Embedded, standalone and detached browser workspaces use this same

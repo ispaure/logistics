@@ -4,6 +4,7 @@ iOS public APIs cannot prevent still screenshots. Never claim otherwise or
 reparent UIKit views into undocumented secure-text-field internals.
 """
 import logging
+from weakref import WeakSet
 
 from commonUtils.ui.native.password_input import PasswordInput
 
@@ -23,6 +24,8 @@ class ScreenPrivacy:
         self.inactive = False
         self.interrupted = False
         self.browser_refresh_pending = False
+        self._folder_work_paused = False
+        self._paused_file_browsers = WeakSet()
         self.captured = False
         self.observers = []
         self.shield = None
@@ -178,11 +181,30 @@ class ScreenPrivacy:
         from .protection import for_app
         return for_app(self.app).process.protected()
 
+    def _set_directory_index_active(self, active):
+        lease = getattr(self.app, '_directory_index_host', None)
+        if lease is not None:
+            lease.set_active(active and self.app.active_host)
+
+    def _pause_folder_work(self):
+        if getattr(self, '_folder_work_paused', False):
+            return
+        self._folder_work_paused = True
+        from .browser_ui import pause_file_browser_searches
+        if not hasattr(self, '_paused_file_browsers'):
+            self._paused_file_browsers = WeakSet()
+        self._paused_file_browsers.update(pause_file_browser_searches(self.app))
+        notes = getattr(self.app, 'vault_browser', None)
+        if notes is not None:
+            notes.pause_index_work()
+
     def interrupt(self):
         """Lock protected sessions on app switcher and Control Center interruptions."""
         if self.disposed:
             return
         self.interrupted = True
+        self._pause_folder_work()
+        self._set_directory_index_active(False)
         self.wifi_revision = getattr(self, 'wifi_revision', 0) + 1
         if self.sensitive():
             self.conceal()
@@ -195,6 +217,8 @@ class ScreenPrivacy:
         if self.disposed:
             return
         self.inactive = True  # Deny reentrant playback before native/UI effects.
+        self._pause_folder_work()
+        self._set_directory_index_active(False)
         self.browser_refresh_pending = True
         # Native shielding and player callbacks can fail or reenter the loop.
         # Invalidate outstanding authentication before invoking any of them.
@@ -229,8 +253,6 @@ class ScreenPrivacy:
         cancel_visible_slides(self.app)
         from .ios_content_background import clear
         clear(self.app)
-        from .browser_ui import sync_browser_population
-        sync_browser_population(self.app)
         from features.books.mobile.media_controls import enforce_privacy
         enforce_privacy(self.app)
         if self.lock_view is not None:
@@ -301,8 +323,6 @@ class ScreenPrivacy:
         self.resume_reader()
         from .ios_content_background import sync
         sync(self.app)
-        from .browser_ui import sync_browser_population
-        sync_browser_population(self.app)
 
     def resume_reader(self):
         """Memory pressure can retire the visible page while the lock is up."""
@@ -380,7 +400,12 @@ class ScreenPrivacy:
         scope = for_app(self.app)
         gates = self.gates()
         self.lock_new_gates(gates)
+        if (self.inactive or getattr(self, 'interrupted', False) or any(gate.locked for gate in gates)
+                or getattr(self.app, 'scene_active', True) is False):
+            self._pause_folder_work()
         hidden = self.prepare_native_protection(transitioning=True)
+        if hidden:
+            self._pause_folder_work()
         scope.changed()
         video = getattr(self.app, 'video_player', None)
         if video is not None:
@@ -410,16 +435,20 @@ class ScreenPrivacy:
         if hidden:
             from .ios_content_background import clear
             clear(self.app)
-        from .browser_ui import sync_browser_population
-        sync_browser_population(self.app)
         from .external_display import sync as sync_external
         sync_external(self.app)
         # Reveal only after all required protection effects completed.
         if self.backend.startswith('toga_iOS.'):
             self.set_ios_shield(hidden)
-        if (getattr(self, 'browser_refresh_pending', False) and not self.inactive
-                and not getattr(self, 'interrupted', False) and not hidden and not any(gate.locked for gate in gates)
-                and getattr(self.app, 'scene_active', True) is not False):
+        ready = (not self.inactive and not getattr(self, 'interrupted', False) and not hidden
+                 and not any(gate.locked for gate in gates)
+                 and getattr(self.app, 'scene_active', True) is not False)
+        self._set_directory_index_active(ready)
+        if ready and getattr(self, '_folder_work_paused', False):
+            self._folder_work_paused = False
+            from .browser_ui import sync_browser_population
+            sync_browser_population(self.app)
+        if ready and getattr(self, 'browser_refresh_pending', False):
             self.browser_refresh_pending = False
             from .browser_ui import schedule_visible_file_browser_refresh
             schedule_visible_file_browser_refresh(self.app)

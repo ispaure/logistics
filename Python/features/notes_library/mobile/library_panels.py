@@ -30,6 +30,8 @@ class LibraryPanels:
         self.calendar_entries = None
         self.calendar_generation = 0
         self.calendar_task = None
+        self._index_work_suspended = False
+        self._resume_calendar = False
         self.file_command_busy = False
         self.daily_opening = False
         children = list(self.tree.children)
@@ -148,8 +150,44 @@ class LibraryPanels:
         self.sidebar.refresh_gestures()
 
     def resume_search_interface(self):
-        if self.search_paused or self.search_query != (self.search.value or ''):
+        if not self._index_work_suspended and (self.search_paused or self.search_query != (self.search.value or '')):
             self.search_changed()
+
+    def pause_index_work(self):
+        if self._index_work_suspended or self.cancelled.is_set():
+            return
+        self._index_work_suspended = True
+        library_files.clear_focus(self.library)
+        self.search_generation += 1
+        if self.search_task is not None and not self.search_task.done():
+            self.search_paused = True
+            self.search_task.cancel()
+        self.search_task = None
+        tree_task = getattr(self, 'tree_task', None)
+        if self.panel_tab == 'Search' and tree_task is not None and not tree_task.done():
+            self.search_paused = True
+            tree_task.cancel()
+        self.calendar_generation += 1
+        if self.calendar_task is not None and not self.calendar_task.done():
+            self._resume_calendar = self.panel_tab == 'Calendar'
+            self.calendar_task.cancel()
+        self.calendar_task = None
+
+    def resume_index_work(self):
+        if not self._index_work_suspended or not self.valid():
+            return
+        self._index_work_suspended = False
+        library_files.focus(self.library)
+        self.resume_visible_index_work()
+
+    def resume_visible_index_work(self):
+        if (self._index_work_suspended or not self.valid()
+                or not (self.sidebar.expanded or self.sidebar.side == 'files')):
+            return
+        if self.panel_tab == 'Search' and self.search_paused:
+            self.resume_search_interface()
+        elif self.panel_tab == 'Calendar' and self._resume_calendar:
+            self.refresh_calendar()
 
     def release_search_focus(self):
         # Release the keyboard before UIKit detaches its first responder.
@@ -265,6 +303,7 @@ class LibraryPanels:
             self.refresh_calendar()
         else:
             self.calendar_generation += 1
+            self._resume_calendar = False
             if self.calendar_task is not None:
                 self.calendar_task.cancel()
             self.render_tree()
@@ -281,6 +320,10 @@ class LibraryPanels:
     def refresh_calendar(self, widget=None, **kwargs):
         if not self.valid() or self.panel_tab != 'Calendar':
             return
+        if self._index_work_suspended:
+            self._resume_calendar = True
+            return
+        self._resume_calendar = False
         self.calendar_generation += 1
         generation = self.calendar_generation
         if self.calendar_task is not None:

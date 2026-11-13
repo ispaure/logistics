@@ -639,7 +639,7 @@ class NotesLibraryPanelTests(unittest.TestCase):
                 if not release.wait(3):
                     raise RuntimeError('Test did not release search')
                 return SearchResult([], 1000, True, [])
-            with patch('features.notes_library.library_files.search_resources', side_effect=scan):
+            with patch.object(library_files, 'search', side_effect=scan):
                 owner.search.value = 'missing'
                 try:
                     self.assertTrue(await asyncio.to_thread(entered.wait, 2))
@@ -730,16 +730,13 @@ class NotesLibraryPanelTests(unittest.TestCase):
                 original_render()
             owner.render_tree = render
             def scan(*args, progress, **kwargs):
-                if progress is None:
-                    # The saved filename index can have no matches for the new query.
-                    return SearchResult([], 0, True, [])
                 result = SearchResult([dict(path='Vault/Projects/Plan.MD', name='Plan.MD', directory=False)], 1, False, [])
                 progress(result)
                 entered.set()
                 if not release.wait(3):
                     raise RuntimeError('Test did not release search')
                 return SearchResult(result.rows, 1, True, [])
-            with patch('features.notes_library.library_files.search_resources', side_effect=scan):
+            with patch.object(library_files, 'search', side_effect=scan):
                 owner.search.value = 'Plan'
                 try:
                     self.assertTrue(await asyncio.to_thread(entered.wait, 2))
@@ -747,6 +744,60 @@ class NotesLibraryPanelTests(unittest.TestCase):
                 finally:
                     release.set()
                     await owner.search_task
+        self.run_async(exercise())
+
+    def test_background_fences_notes_search_and_calendar_until_visible(self):
+        from commonUtils.search.providers import SearchResult
+
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            privacy = self.app.screen_privacy
+            owner.sidebar.show_sidebar()
+            for panel in ('Search', 'Calendar'):
+                with self.subTest(panel=panel):
+                    entered, release, retired = Event(), Event(), Event()
+                    cancellations = []
+
+                    def scan(*args, cancelled, **kwargs):
+                        cancellations.append(cancelled)
+                        stale = len(cancellations) == 1
+                        if stale:
+                            entered.set()
+                            if not release.wait(5):
+                                raise AssertionError('Test did not release the retired scan')
+                            retired.set()
+                        path = 'Vault/Home.md' if stale else 'Vault/Projects/Plan.MD'
+                        if panel == 'Calendar':
+                            return {'2026-11-13': [path]}
+                        row = dict(path=path, name=path.rpartition('/')[2], directory=False)
+                        if stale:
+                            kwargs['progress'](SearchResult([row], 1, False, []))
+                        return SearchResult([row], 1, True, [])
+
+                    with patch.object(library_files, 'search' if panel == 'Search' else 'daily_notes', scan):
+                        if panel == 'Search':
+                            owner.search.value = 'Plan'
+                        else:
+                            owner.select_panel_tab('Calendar')
+                        try:
+                            self.assertTrue(await asyncio.to_thread(entered.wait, 5))
+                            privacy.conceal()
+                            owner.sidebar.show_detail()
+                            privacy.reveal()
+                            self.assertIsNone(owner.search_task if panel == 'Search' else owner.calendar_task)
+                            self.assertTrue(cancellations[0]())
+                            owner.sidebar.show_sidebar()
+                            resumed = owner.search_task if panel == 'Search' else owner.calendar_task
+                            await asyncio.wait_for(resumed, 5)
+                        finally:
+                            release.set()
+                        self.assertTrue(await asyncio.to_thread(retired.wait, 5))
+                        await asyncio.sleep(0)
+                        if panel == 'Search':
+                            self.assertEqual([row['path'] for row in owner.search_rows], ['Vault/Projects/Plan.MD'])
+                        else:
+                            self.assertEqual(owner.calendar_entries, {'2026-11-13': ['Vault/Projects/Plan.MD']})
+
         self.run_async(exercise())
 
     setUp = fixtures.ObsidianTests.setUp

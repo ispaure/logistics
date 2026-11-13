@@ -106,7 +106,7 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
     def __init__(self, root, client, remote, *, namespace=None, storage_root=None, create=True, cipher_identity=None):
         self.collection_storage_root = storage_root
         self.client, self.remote = client, remote
-        self._access = ResourceAccess(native_service(client).credentials.capture(remote))
+        self._access = ResourceAccess(native_service(client).credentials.capture(remote), on_last_release=self.close)
         self.identity = client.request('crypt_path', remote=remote, path='', directory=True)['identity']
         self._access.check()
         if cipher_identity is not None and self.identity != cipher_identity:
@@ -185,7 +185,7 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
         return dict(remote=self.remote, identity=self.identity, encrypted_path=self.mapping(path))
 
     def _note_check(self):
-        self._access.check()
+        self._guard(self.root)
 
     def _note_encode(self, name):
         return self.mapping(name)

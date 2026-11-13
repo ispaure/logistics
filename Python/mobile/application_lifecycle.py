@@ -181,6 +181,7 @@ class HostLifecycle:
         for name in ('startup_task', 'startup_document_task', 'cloud_startup_task', 'incoming_task'):
             self._cancel_task(name)
         self._retire(self, 'stop_local_searches')
+        self._retire(getattr(host, '_directory_index_host', None), 'close')
         self._retire(getattr(host, '_layout_participants', None), 'dispose')
         from .markdown_speech import stop_markdown_speech
         self._retire(getattr(host, 'video_player', None), 'retire')
