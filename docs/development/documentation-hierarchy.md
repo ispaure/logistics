@@ -35,7 +35,9 @@ maintained in commonUtils rather than duplicated here.
 
 `mobile_build/tools.py` copies the single root wiki into
 `mobile/help/`, preserving repository-relative paths. It excludes linked
-features and never traverses the external emulation repository. The Settings
+features and never traverses the external emulation repository. The mirror
+excludes every `mobile-evidence/` directory under `docs/`, including
+feature wikis, while preserving the local files. The Settings
 entry opens `docs/user_mobile/user_mobile.md` with the Logistics tree. Feature links stay inside the same mirrored wiki, so users can read every
 feature guide offline without changing the sidebar scope. Links within the
 Logistics wiki use that packaged tree. Checkout-relative links to source files

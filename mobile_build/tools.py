@@ -284,8 +284,8 @@ def stage(repo, destination, *, testbed=False, allow_dirty=False):
         copy(repo / 'Python' / owner / 'mobile_sources.json', Path(owner) / 'mobile_sources.json')
     # Preserve repository-relative documentation links inside the app package.
     for page in sorted((repo / 'docs').rglob('*.md')):
-        # Old local checkouts may still keep their ignored QA archive here.
-        if page.is_relative_to(repo / 'docs/development/mobile-evidence'):
+        # Match the Git/release exclusion at every depth, including feature wikis.
+        if 'mobile-evidence' in page.relative_to(repo / 'docs').parts:
             continue
         copy(page, Path('mobile/help') / page.relative_to(repo))
     copy(repo / 'README.md', Path('mobile/help/README.md'))

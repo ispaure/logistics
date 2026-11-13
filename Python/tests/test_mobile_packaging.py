@@ -149,13 +149,18 @@ assert not any(name.startswith(('PySide', 'toga', 'mobile', 'config')) for name 
             git(repo, '-c', 'user.name=Test', '-c', 'user.email=test@example.test', 'commit', '-m', 'fixture')
             # Local QA material must not enter offline help, even from an old
             # checkout with evidence still underneath the docs directory.
-            for name in ('docs/development/mobile-evidence/nested/report.md',
-                         'test-results/mobile-evidence/report.md'):
+            evidence = ('docs/development/mobile-evidence/nested/report.md',
+                        'docs/features/books/mobile-evidence/nested/report.md',
+                        'docs/mobile-evidence/report.md',
+                        'test-results/mobile-evidence/report.md')
+            for name in evidence:
                 artifact = repo / name
                 artifact.parent.mkdir(parents=True, exist_ok=True)
                 artifact.write_text('# Local QA fixture\n')
             guide = repo / 'docs/development/development.md'
             guide.write_text('# Public development guide\n')
+            named_guide = repo / 'docs/development/mobile-evidence-policy.md'
+            named_guide.write_text('# Public evidence policy\n')
             payload = base / 'payload'
             manifest = mobile_tools.stage(repo, payload)
             self.assertFalse(manifest['dirty'])
@@ -196,8 +201,10 @@ assert not any(name.startswith(('PySide', 'toga', 'mobile', 'config')) for name 
             self.assertEqual((payload / 'mobile/help/docs/development/development.md').read_text(),
                              '# Public development guide\n')
             self.assertFalse(any('mobile-evidence' in path.parts for path in payload.rglob('*')))
-            self.assertTrue((repo / 'docs/development/mobile-evidence/nested/report.md').is_file())
-            self.assertTrue((repo / 'test-results/mobile-evidence/report.md').is_file())
+            self.assertEqual((payload / 'mobile/help/docs/development/mobile-evidence-policy.md').read_text(),
+                             '# Public evidence policy\n')
+            for name in evidence:
+                self.assertEqual((repo / name).read_text(), '# Local QA fixture\n')
             self.assertTrue((payload / 'features/books/epub.py').exists())
             self.assertTrue((payload / 'services/documents/authoring/provider_markdown.py').is_file())
             self.assertTrue((payload / 'commonUtils/ui/native/android/io/github/ispaure/commonutils/NavigationBack.java').exists())
