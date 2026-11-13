@@ -215,6 +215,7 @@ class PackageTests(unittest.TestCase):
             'build-project.json',
             'logistics_build/manager_bridge.py',
             'logistics_build/tooling_bootstrap.py',
+            'logistics_build/device_workspace_paths.py',
             'logistics_build/native_tooling.py',
             'logistics_build/native_tooling.json',
         }

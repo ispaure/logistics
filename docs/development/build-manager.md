@@ -439,6 +439,8 @@ inside a source snapshot. Read-only TestFlight `plan` does not prune outputs.
   locks, paused-workflow holds and pins protect workspaces at either root.
   The storage view lists both locations for cleanup. Saved selections and
   recipes still identify the workspace at its original path.
+  New single-signing Android Debug plans that capture their own source and
+  prepare their own package use `tmp/build/mobile/android/`.
 - New probe compiler caches live under `tmp/cache/compiler/`. Marked legacy
   caches under `mobile_build/.tools/build-manager/compiler-caches/` remain in place
   and share one 12 GiB soft budget with the new caches and eligible snapshot and

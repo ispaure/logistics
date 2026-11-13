@@ -144,9 +144,11 @@ def availability_policy(choice='bounded'):
     raise ValueError('Choose Try once or Wait until reachable for device availability.')
 
 
-def make_plan(project, platform, targets, context, revision, *, shared=None, retained_snapshot=None):
+def make_plan(project, platform, targets, context, revision, *, shared=None, retained_snapshot=None,
+              _mixed_signing=False):
     from logistics_build.build_snapshots import materialize, PRIVATE_RUNTIME_NAMES
     source = context.source(project, revision)
+    independent = shared is None and retained_snapshot is None and not _mixed_signing
     signing_mode = None
     if platform == 'android':
         if not targets:
@@ -162,7 +164,8 @@ def make_plan(project, platform, targets, context, revision, *, shared=None, ret
         if len(groups) > 1:
             plans = []
             for mode, recipients in groups.items():
-                plan = make_plan(project, platform, recipients, context, revision, shared=shared, retained_snapshot=retained_snapshot)
+                plan = make_plan(project, platform, recipients, context, revision, shared=shared,
+                                 retained_snapshot=retained_snapshot, _mixed_signing=True)
                 names = {phase.id: 'signing-' + mode + '.' + phase.id for phase in plan.phases}
                 plans.append(replace(plan, phases=tuple(replace(phase, id=names[phase.id],
                     dependencies=tuple(names[dep] for dep in phase.dependencies)) for phase in plan.phases)))
@@ -173,6 +176,13 @@ def make_plan(project, platform, targets, context, revision, *, shared=None, ret
         # Prepare its own development package; never silently replace a key.
         if signing_mode == 'debug':
             shared = None
+    parent = project.private / 'workspaces' / 'devices' / platform
+    if independent and signing_mode == 'debug':
+        from build_manager.retention import linked
+        from logistics_build.device_workspace_paths import DEVICE_WORKSPACES
+        parent = project.root / DEVICE_WORKSPACES / platform
+        if any(linked(part) for part in (parent, *parent.parents)):
+            raise ValueError('Device workspaces require an unlinked build directory.')
     snapshot = project.private / 'snapshots' / source['fingerprint']
     if retained_snapshot is None:
         materialize(project.root, snapshot, revision, expected=source)
@@ -188,7 +198,7 @@ def make_plan(project, platform, targets, context, revision, *, shared=None, ret
         from logistics_build.retained_devices import verify_snapshot
         verify_snapshot(snapshot, source)
     options = source['effective_settings']['values']
-    workspace = project.private / 'workspaces' / 'devices' / platform / uuid4().hex
+    workspace = parent / uuid4().hex
     workspace.mkdir(parents=True, exist_ok=True)
     recipe = dict(schema=1, platform=platform, source=source, root=str(snapshot), workspace=str(workspace), targets=targets)
     if signing_mode is not None:

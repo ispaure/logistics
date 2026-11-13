@@ -41,7 +41,8 @@ class WindowsLogisticsLauncherTests(TestCase):
                         launchers / 'LaunchPythonProject_WIN.bat')
         scripts = root / 'logistics_build'
         scripts.mkdir()
-        shutil.copyfile(ROOT / 'logistics_build/tooling_bootstrap.py', scripts / 'tooling_bootstrap.py')
+        for name in ('tooling_bootstrap.py', 'device_workspace_paths.py'):
+            shutil.copyfile(ROOT / 'logistics_build' / name, scripts / name)
         # Use the real consumer config and parser. The dependency-free manifest
         # plus offline policy permits no installation or download from a service.
         shutil.copyfile(ROOT / 'launch_config.ini', root / 'launch_config.ini')

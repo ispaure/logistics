@@ -96,6 +96,9 @@ class ManagerDeviceTests(unittest.TestCase):
                     self.assertEqual(recipes['debug']['targets'], [targets[1]])
                     self.assertEqual(recipes['beta']['targets'], [targets[0]])
                     self.assertNotEqual(recipes['debug']['workspace'], recipes['beta']['workspace'])
+                    for recipe in recipes.values():
+                        self.assertEqual(Path(recipe['workspace']).parent,
+                                         project.private / 'workspaces/devices/android')
                     self.assertNotIn('shared_report', recipes['debug'])
                     self.assertEqual('shared_report' in recipes['beta'], release is not None)
                     names = {phase.id for phase in plan.phases}
@@ -179,12 +182,34 @@ class ManagerDeviceTests(unittest.TestCase):
             self.assertFalse(check.resources)
             self.assertFalse(install.approval_required)
         self.assertIn('--sha256', plan.phases[0].argv)
+        workspace = Path(plan.workspace)
+        self.assertEqual(workspace.parent, project.root / 'tmp/build/mobile/android')
+        self.assertEqual(plan.resource_locks, (str(project.mobile / '.deploy-workspaces/deploy.lock'),))
+        self.assertEqual(Path(plan.phases[0].cwd), project.private / 'snapshots/source')
+        recipe = workspace / 'recipe.json'
+        self.assertEqual(json.loads(recipe.read_text())['workspace'], str(workspace))
+        self.assertEqual(plan.phases[0].argv[-4:], ('--recipe', str(recipe), '--sha256', file_sha256(recipe)))
+        for phase in plan.phases:
+            self.assertEqual(phase.environment['LOGISTICS_DEPLOY_WORKSPACE'], str(workspace))
         self.assertIn('one', plan.phases[1].argv); self.assertNotIn('two', plan.phases[1].argv)
         self.assertEqual(len(plan.phases[0].artifacts), 2)
         self.assertEqual(plan.phases[0].environment['PATH'].split(os.pathsep)[0],
                          str(project.mobile / '.tools/go/bin'))
         self.assertEqual(plan.phases[0].environment['PIP_FIND_LINKS'],
                          str(project.mobile / '.tools/release-wheels'))
+
+    def test_new_android_workspace_refuses_linked_parent(self):
+        project = LogisticsProject(self.root)
+        elsewhere = self.root / 'elsewhere'
+        elsewhere.mkdir()
+        (self.root / 'tmp').symlink_to(elsewhere, target_is_directory=True)
+        source = dict(fingerprint='source', effective_settings=dict(values={'tools.mobile_python': sys.executable}))
+        context = PlanningContext(str(project.root), 'HEAD', json.dumps(source))
+        with patch('logistics_build.build_snapshots.materialize') as capture:
+            with self.assertRaisesRegex(ValueError, 'unlinked build directory'):
+                devices.make_plan(project, 'android', [dict(id='one', name='Phone')], context, 'HEAD')
+        capture.assert_not_called()
+        self.assertEqual(list(elsewhere.iterdir()), [])
 
     def test_offline_readiness_reconnects_only_selected_transport_without_installing(self):
         from logistics_build.manager_devices import DeviceUnavailable
@@ -323,6 +348,7 @@ class ManagerDeviceTests(unittest.TestCase):
             plan = devices.make_plan(project, 'android', self.data['targets'], context, 'HEAD', shared=shared)
         recipe = json.loads(Path(plan.phases[0].argv[plan.phases[0].argv.index('--recipe')+1]).read_text())
         self.assertEqual(recipe['shared_report'], str(self.report))
+        self.assertEqual(Path(recipe['workspace']).parent, project.private / 'workspaces/devices/android')
         self.assertIn('shared Android Release', plan.phases[0].label)
         self.assertEqual(plan.phases[1].effect, 'inspect')
         self.assertEqual(plan.phases[2].effect, 'deploy')
