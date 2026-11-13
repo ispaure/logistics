@@ -13,6 +13,20 @@ class ContinuousPDFView(QPdfView):
         self.setZoomMode(QPdfView.ZoomMode.FitInView)
         QScroller.grabGesture(self.viewport(), QScroller.ScrollerGestureType.TouchGesture)
 
+    def wheelEvent(self, event):
+        # Trackpads provide pixel deltas. Qt's standard scroll bar handles
+        # angle deltas from a mouse wheel, including partial wheel steps.
+        delta = event.pixelDelta()
+        if delta.isNull():
+            super().wheelEvent(event)
+            return
+        QScroller.scroller(self.viewport()).stop()
+        vertical = self.verticalScrollBar()
+        horizontal = self.horizontalScrollBar()
+        vertical.setValue(vertical.value() - delta.y())
+        horizontal.setValue(horizontal.value() - delta.x())
+        event.accept()
+
     def jump(self, index):
         QScroller.scroller(self.viewport()).stop()
         navigator = self.pageNavigator()

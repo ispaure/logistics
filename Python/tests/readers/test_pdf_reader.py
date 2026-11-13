@@ -138,6 +138,9 @@ class PDFReaderTests(QtTestCase):
 
     def test_desktop_navigation_and_close_clear_buffer(self):
         from features.pdf.ui.reader import PDFWindow
+        from PySide6.QtCore import QPoint, QPointF, Qt
+        from PySide6.QtGui import QWheelEvent
+        from PySide6.QtWidgets import QApplication
         window = PDFWindow('fixture.pdf', pdf_bytes())
         window.show()
         self.assertEqual(window.index, 0)
@@ -149,9 +152,14 @@ class PDFReaderTests(QtTestCase):
         bar = window.view.verticalScrollBar()
         last = bar.value()
         bar.setValue(last - 125)
-        self.assertEqual(bar.value(), last - 125)
-        bar.setValue(last - 75)
-        self.assertEqual(bar.value(), last - 75)
+        view = window.view.viewport()
+        point = QPointF(view.rect().center())
+        for delta, expected in ((-10, last - 115), (20, last - 135)):
+            event = QWheelEvent(point, QPointF(view.mapToGlobal(point.toPoint())), QPoint(0, delta),
+                                QPoint(), Qt.MouseButton.NoButton, Qt.KeyboardModifier.NoModifier,
+                                Qt.ScrollPhase.ScrollUpdate, False)
+            QApplication.sendEvent(view, event)
+            self.assertEqual(bar.value(), expected)
         window.go(1)
         self.assertEqual(window.index, 1)
         window.close()

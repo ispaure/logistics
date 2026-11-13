@@ -104,7 +104,6 @@ class PDFWindow(qt.QMainWindow):
         self.find_shortcut.activated.connect(self.show_find)
         layout.addWidget(self.view)
         self.setCentralWidget(root)
-        self.document.pageCountChanged.connect(lambda count: self.number.setMaximum(max(1, count)))
         self.view.pageNavigator().currentPageChanged.connect(self.sync_page)
         saved = self.position_state.load() if self.position_state is not None else {}
         if (self.position_state is not None and self.position_state.can_import_legacy
