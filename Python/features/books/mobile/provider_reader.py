@@ -139,13 +139,16 @@ class RichBookView(toga.Box):
         self.on_chapter = self.on_position = lambda *args: None
 
 
-    def show_read_aloud(self, loop, *, app=None, presentation=None, highlight_allowed=None, privacy_gate=lambda: None, valid=lambda: True, next_chapter=None):
+    def show_read_aloud(self, loop, *, app=None, presentation=None, highlight_allowed=None,
+                        privacy_gate=lambda: None, valid=lambda: True, can_read=lambda: True,
+                        read_chapter=None, show_chapter=None):
         panel = getattr(self, 'speech_panel', None)
         if panel is not None and not panel.closed:
             panel.toggle_over(self)
             return
         self.close_read_aloud()
         from .speech_view import ReadAloudPanel
+        from .epub_speech import EpubReadAloudPanel
         from .presentation import speech_source
         async def source():
             view = panel.book_view
@@ -153,11 +156,23 @@ class RichBookView(toga.Box):
         def follow(start, end):
             view = panel.book_view
             if not view.disposed:
-                if (highlight_allowed() if highlight_allowed is not None else (app is None or not app.screen_privacy.inactive)):
+                display = (highlight_allowed() if highlight_allowed is not None
+                           else (app is None or not app.screen_privacy.inactive))
+                if display:
                     view.webview._chapter_bridge.highlight(start, end)
+                    if start >= 0:
+                        view.event('position', start)
+                elif start >= 0:
+                    view.offset = min(start, view.chapter.length)
 
-        panel = self.speech_panel = ReadAloudPanel(loop=loop, source=source, on_range=follow, close=self.close_read_aloud,
-            app=app, presentation=presentation, privacy_gate=privacy_gate, valid=valid, next_chapter=next_chapter)
+        options = dict(loop=loop, source=source, on_range=follow, close=self.close_read_aloud,
+                       app=app, presentation=presentation, privacy_gate=privacy_gate, valid=valid)
+        if read_chapter is None:
+            panel = ReadAloudPanel(**options)
+        else:
+            panel = EpubReadAloudPanel(**options, location=lambda: (panel.book_view.index, len(panel.book_view.book.spine)),
+                                       read_chapter=read_chapter, show_chapter=show_chapter, can_read=can_read)
+        self.speech_panel = panel
         panel.book_view = self
         self.speech_panel.show_over(self)
 

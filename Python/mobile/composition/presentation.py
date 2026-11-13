@@ -274,7 +274,17 @@ def notes_host(app):
             return result
         return NativeTreeRows(owner, row_list)
 
+    def playlists(library):
+        from features.notes_library.playlists import PlaylistStore
+        return PlaylistStore(app.private_root, app=app).for_library(library)
+
+    def playlist_speech(owner, catalog, changed):
+        from features.notes_library.mobile.playlist_speech import PlaylistSpeech
+        return PlaylistSpeech(owner, catalog, changed, app=app)
+
     return NotesHost(
+        playlists=playlists,
+        playlist_speech=playlist_speech,
         audio_output=lambda: for_app(app),
         folder_browser=folder_browser,
         show_error=show_error,

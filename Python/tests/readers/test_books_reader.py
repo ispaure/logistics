@@ -79,6 +79,44 @@ class ReaderTests(QtTestCase):
             self.app.processEvents()
             self.assertEqual(self.page._current, 0)
 
+    def test_time_skip_crosses_an_empty_chapter_in_both_directions(self):
+        from commonUtils.tests.appearance.test_read_aloud import SilentEngine
+        book = self.page.book
+        first, last = book.spine
+        book.spine = [first, 'empty.xhtml', last]
+        self.page.book_progress.set_book(book)
+        original = book.read
+        first_words = [f'first{i}' for i in range(20)]
+        last_words = [f'last{i}' for i in range(60)]
+        sources = {first: ' '.join(first_words), 'empty.xhtml': '…', last: ' '.join(last_words)}
+
+        def read(path):
+            if path in sources:
+                return f'<html><body><p>{sources[path]}</p></body></html>'.encode()
+            return original(path)
+
+        speech = self.page.speech
+        speech.engine_factory = SilentEngine
+        speech.show()
+        with (patch.object(book, 'read', side_effect=read),
+              patch('commonUtils.ui.readers.read_aloud.passage_language', return_value='')):
+            self.page.go_chapter(0)
+            self.app.processEvents()
+            speech.start()
+            speech.session.pause()
+            speech.forward.click()
+            self.app.processEvents()
+            expected = len(' '.join(last_words[:25])) + 1
+            self.assertEqual(self.page._current, 2)
+            self.assertEqual(speech.session.state, 'paused')
+            self.assertEqual(self.page.text.read_pointer, expected)
+            self.assertEqual(speech.session.position, expected)
+            speech.back.click()
+            self.app.processEvents()
+            self.assertEqual(self.page._current, 0)
+            self.assertEqual(speech.session.position, 0)
+            self.assertEqual(speech.session.state, 'paused')
+
     def setUp(self):
         self.app = qt.QApplication.instance() or qt.QApplication([])
         standalone_host = patch.object(self.app, "_commonutils_document_host", None, create=True)

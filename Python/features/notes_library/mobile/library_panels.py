@@ -1,4 +1,4 @@
-"""Files, Search and Calendar panels with compact commands below the tabs."""
+"""Notes Library sidebar panels with compact commands below the tabs."""
 import asyncio
 import calendar
 import posixpath
@@ -10,6 +10,8 @@ from toga.style.pack import COLUMN, ROW
 from commonUtils.runtime.operations import OperationCancelled
 from features.notes_library import library_files
 from ..navigation import PathChange
+from ..notes import document_kind
+from .playlist_panel import PlaylistPanel
 from services.documents.authoring.document_dialogs import DocumentDialog, DocumentTypeDialog
 
 
@@ -77,7 +79,7 @@ class LibraryPanels:
         self.panel_tab_indicators = {}
         tabs = self.host.presentation.surface(toga.Box(style=Pack(direction=ROW)),
             radius=0, background='transparent', outlined=False)
-        for name in ('Files', 'Search', 'Calendar'):
+        for name in ('Files', 'Search', 'Calendar', 'Playlist'):
             def select(widget=None, name=name, **kw):
                 if self.panel_tab != name:
                     self.select_panel_tab(name)
@@ -90,7 +92,8 @@ class LibraryPanels:
             self.style_panel_tab(name, name == self.panel_tab)
         self.calendar_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
         self.calendar_scroll = toga.ScrollContainer(content=self.calendar_content, horizontal=False, style=Pack(flex=1))
-        self.sidebar.set_files_scrolls(self.calendar_scroll, *(
+        self.playlist_panel = PlaylistPanel(self)
+        self.sidebar.set_files_scrolls(self.calendar_scroll, self.playlist_panel.scroll, *(
             getattr(state['rows'], 'native_list', state['scroll']) for state in self._row_panels.values()
         ))
         # Keep the tab strip mounted while changing panels. The commands move
@@ -243,7 +246,8 @@ class LibraryPanels:
             self.select_panel_rows(self._search_scope if name == 'Search' else name)
         self.panel_tab = name
         selected = {'Files': self.files_content, 'Search': self.search_content,
-                    'Calendar': self.calendar_scroll}[name]
+                    'Calendar': self.calendar_scroll, 'Playlist': self.playlist_panel.widget}[name]
+        self.playlist_panel.sync_pick_prompt(name)
         if self.panel_body.children != [selected]:
             self.panel_body.clear()
             self.panel_body.add(selected)
@@ -266,7 +270,13 @@ class LibraryPanels:
             self.render_tree()
             if name == 'Search':
                 self.resume_search_interface()
+        if name == 'Playlist':
+            self.playlist_panel.activate()
         self.sidebar.refresh_gestures()
+
+    async def open_selected_note(self, path):
+        if not await self.playlist_panel.choose_note(path):
+            await self.open_note(path)
 
     def refresh_calendar(self, widget=None, **kwargs):
         if not self.valid() or self.panel_tab != 'Calendar':
@@ -467,6 +477,8 @@ class LibraryPanels:
             return
         self.selected_path = path
         choices = []
+        if document_kind(path) == 'markdown':
+            choices.append(('Add to playlist…', 'playlist'))
         if self.library.supports('rename'):
             choices.extend([('Rename…', 'rename'), ('Move…', 'move')])
         if all(self.library.supports(action) for action in ('create', 'rename', 'delete')):
@@ -492,6 +504,8 @@ class LibraryPanels:
             self.copy_entry_form(path, return_side=side)
         elif action == 'delete':
             await self.delete_entry(path)
+        elif action == 'playlist':
+            await self.playlist_panel.add_note(path)
 
     def show_file_action(self, view, *, route, title, return_side=None):
         if not self.valid() or self.file_command_busy:
@@ -693,6 +707,7 @@ class LibraryPanels:
             self.file_command_busy = False
 
     def dispose_panels(self):
+        self.playlist_panel.close()
         self.search_mode.on_change = None
         for state in self._search_interfaces.values():
             state['control'].on_change = None

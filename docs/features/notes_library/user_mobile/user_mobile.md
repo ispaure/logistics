@@ -10,7 +10,7 @@ Close an open library before turning its feature off. Markdown and embedded text
 editing remain usable with Text Editor disabled. Notebooks controls drawing opens
 and creation separately.
 
-Use Files, Search, Calendar and Links to navigate, and the library's close
+Use Files, Search, Calendar, Playlist and Links to navigate, and the library's close
 control to leave. Close returns to Documents or Workspaces, depending on where
 you opened the library. The New Document, New Folder and Collapse All controls appear
 in Files. Unsaved changes retain their save/discard/cancel choices. Folder-backed
@@ -179,7 +179,7 @@ Tap a folder icon or its enlarged disclosure triangle in Files to expand or coll
 the folder. Tapping a folder name opens its landing note when one exists. Hold the
 icon to drag the folder.
 
-The left panel has **Files**, **Search** and **Calendar** tabs. Files uses the
+The left panel has **Files**, **Search**, **Calendar** and **Playlist** tabs. Files uses the
 available height for its folder tree. Search keeps its query and results in a
 separate tab, with **File names** selected by default and **In documents** available
 for content searches. Files and Search retain separate rows and scroll positions;
@@ -206,6 +206,23 @@ its Markdown file in the library root. Read-only libraries can open existing
 daily notes. Refresh daily notes after files are changed outside the library.
 Calendar reads filenames only and keeps its index in memory, with a 10,000-entry
 and 100-folder-level limit; a failed scan does not offer creation.
+
+### Playlists
+
+Choose **Playlist → New playlist** and save a name. In the playlist detail,
+tap **Add Markdown** and select a note in Files or Search. You can also use
+**Add to playlist** from a Markdown note's actions. Press and hold a playlist
+entry to drag it to another entry's position, or select it and use **Move up**
+or **Move down**. If a note is missing, moved or inaccessible, select the entry
+and choose **Repair reference** to pick a replacement. **Remove entry** keeps
+the source note.
+
+Choose **Read aloud** in the playlist detail for playback controls, or **Play
+selected** to start at another note. The active entry is marked in the queue.
+Forward and backward time skips can cross notes.
+Each playlist saves its own place when storage permits it. Moving the active
+entry keeps its place in that note. A playlist labelled **This session** lives
+in memory. See Settings for lock-screen playback and deletion. [Mobile Settings](../../../user_mobile/settings/settings.md)
 
 In Files, hold a file or folder name for the same **Rename…**, **Move…**, **Copy…**,
 or **Delete…** options as its **…** button,

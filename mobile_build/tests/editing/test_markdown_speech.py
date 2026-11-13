@@ -1,15 +1,15 @@
 """Rendered selection and speech lifetime across mobile Markdown routes."""
 
-from commonUtils.testing.stages import TestStage
-
-TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import json
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import patch
 
+from commonUtils.testing.stages import TestStage
 import mobile_build.tests.documents.test_obsidian as test_obsidian
 from mobile.obsidian import open_vault
+
+TEST_STAGE = TestStage.REGRESSION
 
 
 class Engine:
@@ -39,7 +39,7 @@ class MarkdownSpeechTests(unittest.TestCase):
 
     def test_source_failure_is_visible_and_word_highlights_are_cleared(self):
         import toga
-        from mobile.markdown_speech import MarkdownSpeech, SOURCE_SCRIPT
+        from mobile.markdown_speech import MarkdownSpeech
 
         async def exercise():
             web = toga.WebView()
@@ -69,7 +69,7 @@ class MarkdownSpeechTests(unittest.TestCase):
 
                 def evaluate(script):
                     result = self.app.loop.create_future()
-                    result.set_result(json.dumps('😀 One two.') if script == SOURCE_SCRIPT else None)
+                    result.set_result(json.dumps([['😀 One two.', 0]]) if 'createTreeWalker' in script else None)
                     return result
 
                 with patch.object(web, 'evaluate_javascript', side_effect=evaluate) as run:
@@ -84,14 +84,14 @@ class MarkdownSpeechTests(unittest.TestCase):
                     panel.session.stop()
                     self.assertIn('})(-1,-1)', run.call_args.args[0])
                     speech.close()
-                    self.assertEqual(run.call_args.args[0], 'delete window.logisticsSpeech')
+                    self.assertTrue(run.call_args.args[0].startswith('delete window["logisticsSpeech-'))
         self.run_async(exercise())
 
     def javascript_result(self, text):
         # Toga evaluates immediately and returns an awaitable result, rather
         # than a coroutine that must be awaited to start execution.
         result = self.app.loop.create_future()
-        result.set_result(json.dumps(text))
+        result.set_result(json.dumps([[text, 0]]))
         return result
 
     def test_document_preview_and_provider_cleanup(self):
@@ -168,10 +168,11 @@ class MarkdownSpeechTests(unittest.TestCase):
                 panel = speech.panel
                 await panel.ready_task
                 pending = self.app.loop.create_future()
-                with patch.object(owner.web, 'evaluate_javascript', AsyncMock(side_effect=lambda *a: None)) as evaluate:
-                    async def delayed(*args):
-                        return await pending
-                    evaluate.side_effect = delayed
+                def evaluate(script):
+                    if 'createTreeWalker' in script:
+                        return pending
+                    return self.javascript_result('')
+                with patch.object(owner.web, 'evaluate_javascript', side_effect=evaluate):
                     task = self.app.loop.create_task(panel.play())
                     await asyncio.sleep(0)
                     self.app.show_home()

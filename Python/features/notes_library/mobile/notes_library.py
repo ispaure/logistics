@@ -69,6 +69,8 @@ class NotesHost:
     tree_rows: Callable = lambda owner: None
     audio_output: Callable = lambda: None
     style_font: Callable = lambda size: size
+    playlists: Callable = None
+    playlist_speech: Callable = None
 
 
 from .library_panels import ENTRY_ICON_SIZE, FILENAME_SIZE, PATH_SIZE, TAB_SIZE, LibraryPanels
@@ -557,6 +559,9 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if self.path is not None and not self.editing and PurePosixPath(self.path).suffix.lower() in MARKDOWN:
             actions.append(("Find in this page…", self.show_page_search))
             actions.append(("Read aloud…", self.speech.show))
+            async def add_to_playlist(widget=None, path=self.path, **kwargs):
+                await self.playlist_panel.add_note(path)
+            actions.append(('Add to playlist…', add_to_playlist))
         if self.up_button.enabled:
             actions.append(("Browse parent folder", self.browse_parent))
         actions.append(("All documents", self.host.show_documents))
@@ -770,7 +775,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         task = getattr(self, 'tree_task', None)
         if task is not None and not task.done():
             task.cancel()
-        if getattr(self, 'panel_tab', 'Files') == 'Calendar':
+        if getattr(self, 'panel_tab', 'Files') not in ('Files', 'Search'):
             return
         from commonUtils.ui.native.text_size import native_backend
         row_updates = self.tree_updates(reveal=reveal)
@@ -875,13 +880,13 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
 
             async def choose(widget=None, path=path, directory=directory, page=page, **kwargs):
                 if page is not None:
-                    await self.open_note(page)
+                    await self.open_selected_note(page)
                 elif searching and directory:
                     await self.reveal_folder(path)
                 elif directory:
                     await self.toggle_folder(path)
                 else:
-                    await self.open_note(path)
+                    await self.open_selected_note(path)
 
             label = row_label(entry)
             key = (searching, path, directory, page, depth, label, path in self.expanded)
@@ -939,7 +944,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                     row.insert(2, disclosure)
                 async def file_actions(widget=None, path=path, **kwargs):
                     await self.file_actions(path)
-                if any(self.library.supports(action) for action in ('rename', 'delete')):
+                if (not directory and document_kind(path) == 'markdown'
+                        or any(self.library.supports(action) for action in ('rename', 'delete'))):
                     actions = self.host.presentation.icon_button('more', 'Actions for ' + PurePosixPath(path).name, on_press=file_actions)
                     actions.style.width = 48
                     compact_file_row_padding(actions)

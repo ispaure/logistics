@@ -5,8 +5,10 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 from commonUtils.search.names import search_terms
 from features.notes_library import library_files
+from features.notes_library.notes import document_kind
 from .library_icons import entry_icon
 from .library_connections import LibraryConnections
+from .playlist_panel import PlaylistPanel
 
 
 class SearchNotice(qt.QLabel):
@@ -133,6 +135,8 @@ class LibraryPanels(LibraryConnections):
         layout.addStretch()
         self.calendar_entries = None
         self.panel_tabs.addTab(self.calendar_panel, 'Calendar')
+        self.playlist_panel = PlaylistPanel(self)
+        self.panel_tabs.addTab(self.playlist_panel, 'Playlist')
         self.panel_tabs.currentChanged.connect(self.panel_changed)
         self.init_connections()
         self.document_saved.connect(self.invalidate_search_interfaces)
@@ -359,6 +363,11 @@ class LibraryPanels(LibraryConnections):
             self.refresh_calendar()
         elif self.panel_tabs.currentWidget() is self.search_panel:
             self.resume_search_interface()
+        elif self.panel_tabs.currentWidget() is self.playlist_panel:
+            if self.playlist_panel.catalog is None and self.library is not None and not self.locked:
+                self.playlist_panel.connect_library()
+            else:
+                self.playlist_panel.refresh()
 
     def refresh_calendar(self, *args):
         if (self.library is None or self.locked or self.closing
@@ -416,6 +425,12 @@ class LibraryPanels(LibraryConnections):
             self.viewer.status.setText('The library root is a drop destination. Select one of its files or folders for actions.')
             return
         menu = qt.QMenu(self)
+        if not directory and document_kind(path) == 'markdown':
+            def add():
+                if self.playlist_panel.catalog is None:
+                    self.playlist_panel.connect_library()
+                self.playlist_panel.add_note(path)
+            menu.addAction('Add to playlist…', add)
         if not directory and getattr(self, 'document_tabs', None) is not None:
             menu.addAction('Open in new tab', lambda: self.open_note(path, new_tab=True))
         if self.library.supports('rename'):

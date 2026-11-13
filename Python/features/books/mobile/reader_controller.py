@@ -183,12 +183,8 @@ class EpubController:
             )
         )
 
-    async def prepare_page(self, reader, record, index, epoch):
-        async def seek(chapter, fraction):
-            self._epub_target = ('fraction', fraction)
-            await self.move_book_page(chapter)
-        self.page_footer.set_book(reader, seek)
-        content, chapter_text = await asyncio.to_thread(
+    async def read_chapter(self, reader, index):
+        return await asyncio.to_thread(
             indexed_chapter,
             reader,
             index,
@@ -199,6 +195,12 @@ class EpubController:
             **typography_options(self.preferences.values),
         )
 
+    async def prepare_page(self, reader, record, index, epoch, *, prepared=None, location=None):
+        async def seek(chapter, fraction):
+            self._epub_target = ('fraction', fraction)
+            await self.move_book_page(chapter)
+        self.page_footer.set_book(reader, seek)
+        content, chapter_text = prepared if prepared is not None else await self.read_chapter(reader, index)
         content = self.format_services.themed_chapter(
             content, self.preferences.values["reading_theme"]
         )
@@ -208,8 +210,10 @@ class EpubController:
             or not self.active_host
         ):
             return
-        target = getattr(self, "_epub_target", None)
-        self._epub_target = None
+        target = location
+        if prepared is None:
+            target = getattr(self, "_epub_target", None)
+            self._epub_target = None
         saved = record.get("location", {})
         offset = (
             saved.get("offset", 0) if saved.get("path") == reader.spine[index] else 0

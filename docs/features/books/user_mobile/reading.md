@@ -120,14 +120,15 @@ word; playing again continues from that word. Speed changes apply immediately
 from the current word during playback, or on resume when paused. **Stop** ends
 reading; pressing Play again starts at the top of the visible page unless text
 is selected. Playback uses icon buttons with accessible names. The
-back/forward **15** controls use the same circular-arrow design as desktop and
-jump approximately 15 seconds within the current
-passage, accounting for the selected speed. System speech has no recorded
-timeline, so skips estimate distance at 180 words per minute at normal speed.
+back/forward **15** controls jump approximately 15 seconds at the selected speed.
+For whole-book playback, any time left in the jump carries into the preceding
+or following chapters. The jump passes over empty chapters and clamps to the
+first or last spoken word. For selected text, the controls stay inside the
+selection. Skips estimate distance at 180 words per minute at normal speed.
 Skipping clears the previous spoken-word highlight before showing the new word,
 including when paused. Skipping while paused keeps playback paused. Tapping outside the popup hides the controls
 and keeps playback running, including automatic page turns within the chapter.
-Tap the speaker again to reopen the same controls. Changing chapters,
+Tap the speaker again to reopen the same controls. Manually changing chapters,
 leaving a private reader or closing its session stops
 the engine and clears queued text. Settings → Read aloud loads installed voices
 automatically when opened; Refresh voices retries discovery after changing system
@@ -238,6 +239,11 @@ Ordinary imported EPUBs, Markdown previews, public notes and documentation may
 show their filename as the heading. Document passages never appear in the lock
 screen, Control Center or Android media notifications. Private readers keep the
 generic **Read aloud** heading and never show filenames or credential names.
+The system skip controls follow the same chapter boundaries as the panel.
+While a private book is locked with background speech enabled, playback and
+skips can use the chapter already loaded. At the end of that chapter, speech
+waits for you to unlock, return to the book and tap **Play**. Unlock and
+return to the book before requesting a skip into another private chapter.
 Turning the timer Off leaves only the app name in the subtitle.
 The operating system controls the exact lock-screen layout and refresh timing.
 Playback and controls end when

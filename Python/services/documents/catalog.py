@@ -68,11 +68,10 @@ def relocated_title(title, before, after, *, names=None):
     return new if title == old else title
 
 
-class DocumentCatalog:
-    def __init__(self, root, *, recent=False, normalize=None):
-        self.root = Path(root) / ('DocumentRecent' if recent else 'DocumentCatalog')
-        self.errors = []
-        self.normalize = normalize
+class CredentialBuckets:
+    """App-owned settings buckets using the reader-state credential ZIP cipher."""
+    def __init__(self, root, field):
+        self.root, self.field = Path(root), field
 
     def path(self, cipher=None):
         identity = cipher.identity if cipher is not None else 'local'
@@ -83,22 +82,50 @@ class DocumentCatalog:
             raise ValueError('Document lists cannot be linked.')
         return path
 
-    def read(self, cipher=None, *, normalize=True):
+    def read(self, cipher=None):
+        identity = cipher.identity if cipher is not None else None
         path = self.path(cipher)
-        if not path.exists():
-            return dict(favourites=[], recent=[])
-        if path.stat().st_size > LIMIT + 1024:
-            raise ValueError('Document list exceeds limits; original preserved.')
-        data = path.read_bytes()
+        with path.open('rb') as stream:
+            data = stream.read(LIMIT + 1025)
+        if len(data) > LIMIT + 1024:
+            raise ValueError('Settings record exceeds limits; original preserved.')
         if cipher is not None:
-            identity = cipher.identity
             data = cipher.transform(data, decode=True)
         value = json.loads(data)
         if cipher is not None:
-            if (not isinstance(value, dict) or set(value) != {'version', 'credential', 'lists'}
+            if (not isinstance(value, dict) or set(value) != {'version', 'credential', self.field}
                     or value['version'] != 1 or value['credential'] != identity or cipher.identity != identity):
-                raise ValueError('Document list belongs to another credential.')
-            value = value['lists']
+                raise ValueError('Settings record belongs to another credential.')
+            value = value[self.field]
+        return value
+
+    def save(self, value, cipher=None, *, validate=lambda: None):
+        identity = cipher.identity if cipher is not None else None
+        envelope = dict(version=1, credential=identity, **{self.field: value}) if cipher is not None else value
+        data = json.dumps(envelope, ensure_ascii=False).encode()
+        if len(data) > LIMIT:
+            raise ValueError('Settings record exceeds limits.')
+        path = self.path(cipher)
+        if cipher is not None:
+            data = cipher.transform(data)
+            if cipher.identity != identity:
+                raise ValueError('Credential changed while saving settings.')
+        self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
+        validate()
+        atomic_write_bytes(path, data)
+
+
+class DocumentCatalog(CredentialBuckets):
+    def __init__(self, root, *, recent=False, normalize=None):
+        super().__init__(Path(root) / ('DocumentRecent' if recent else 'DocumentCatalog'), 'lists')
+        self.errors = []
+        self.normalize = normalize
+
+    def read(self, cipher=None, *, normalize=True):
+        try:
+            value = super().read(cipher)
+        except FileNotFoundError:
+            return dict(favourites=[], recent=[])
         if not isinstance(value, dict) or set(value) != {'favourites', 'recent'}:
             raise ValueError('Invalid document list; original preserved.')
         for field, maximum in (('favourites', 100), ('recent', 10)):
@@ -132,20 +159,6 @@ class DocumentCatalog:
     @staticmethod
     def identity(source):
         return sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
-
-    def save(self, value, cipher=None):
-        identity = cipher.identity if cipher is not None else None
-        envelope = dict(version=1, credential=identity, lists=value) if cipher is not None else value
-        data = json.dumps(envelope, ensure_ascii=False).encode()
-        if len(data) > LIMIT:
-            raise ValueError('Document list exceeds limits.')
-        path = self.path(cipher)
-        if cipher is not None:
-            data = cipher.transform(data)
-            if cipher.identity != identity:
-                raise ValueError('Credential changed while saving document lists.')
-        self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
-        atomic_write_bytes(path, data)
 
     def remember(self, source, title, opener, *, favourite=False, cipher=None):
         with _lock:

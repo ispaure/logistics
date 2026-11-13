@@ -5,7 +5,8 @@ from commonUtils.ui.readers.reader_menus import ReaderMenus
 from commonUtils.ui.readers.reader_chrome import ReaderLabel, ReaderFullscreen, reader_button, READER_MARGINS, READER_SPACING, reading_spin
 from features.books.preferences import THEMES
 from features.books.ui.text_view import BookText
-from commonUtils.ui.readers.read_aloud import ReadAloud, reader_text
+from commonUtils.ui.readers.read_aloud import reader_text
+from .speech import BookReadAloud
 
 
 def tool(page, action, name, icon=None):
@@ -154,10 +155,10 @@ def _build_reading_area(page, header):
     reading_layout = qt.QHBoxLayout(page.reading_area)
     reading_layout.setContentsMargins(0, 0, 0, 0)
     page.text = BookText()
-    page.speech = ReadAloud(page, lambda: reader_text(speech_widget(page), start=page.text.location()),
+    page.speech = BookReadAloud(page, lambda: reader_text(speech_widget(page), start=page.text.location()),
                             scope='the book from this page', text_widget=lambda: speech_widget(page),
                             start_provider=page.text.location,
-                            on_finished=page.continue_speech,
+                            on_finished=lambda: page.speech.advance(),
                             language_provider=lambda: next(iter(page.book.values('language')), '') if page.book else '')
     page.speech.positionChanged.connect(page.follow_speech)
     page.menus.view.addAction(page.speech.action)

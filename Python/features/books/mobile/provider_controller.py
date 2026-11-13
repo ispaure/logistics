@@ -101,31 +101,40 @@ class ProviderBookController:
             and hasattr(panel, "show_read_aloud")
             and not self.cloud_busy
         ):
-            async def next_chapter(speech):
-                reader = self.crypt_reader
-                index = speech.book_view.index + 1
-                if reader is None or index >= len(reader.book.spine):
-                    return False
+            reader = self.crypt_reader
+            owner = self.app
+
+            def valid():
+                return (self.crypt_reader is reader and self.format_services.speech_valid()
+                        and owner.session.id in owner.workspace.sessions)
+
+            def can_read():
+                return valid() and owner.provider_speech_read_allowed()
+
+            async def read_chapter(index, current):
+                return await owner.read_provider_speech_chapter(reader, index, current)
+
+            async def show_chapter(speech, index, offset, prepared, current):
                 shown = speech.overlay is not None
                 speech.hide()
-                self._provider_epub_target = 0
-                await self.move_private_page(index, preserve_speech=True)
-                current = self.provider_epub_view
-                if speech.closed:
+                self._provider_epub_target = offset
+                try:
+                    await self.move_private_page(index, preserve_speech=True, speech_chapter=prepared,
+                                                 valid=lambda: can_read() and current())
+                finally:
+                    self._provider_epub_target = None
+                    if shown and not speech.closed and can_read():
+                        speech.show_over(speech.book_view)
+                if not can_read() or not current() or speech.book_view.index != index:
                     return False
-                if self.crypt_reader is not reader or current.index != index:
-                    raise RuntimeError('Chapter publication was cancelled')
-                if shown:
-                    speech.show_over(current)
                 from .presentation import wait_chapter_ready
-                if not await wait_chapter_ready(current.webview):
-                    raise RuntimeError('Chapter did not load')
-                return True
+                return await wait_chapter_ready(speech.book_view.webview)
+
             panel.show_read_aloud(
                 self.loop,
                 presentation=self.format_services.speech_presentation,
                 highlight_allowed=self.format_services.highlight_allowed,
                 privacy_gate=lambda: self.privacy_gate,
-                valid=lambda: self.format_services.speech_valid(),
-                next_chapter=next_chapter,
+                valid=valid, can_read=can_read, read_chapter=read_chapter,
+                show_chapter=show_chapter,
             )

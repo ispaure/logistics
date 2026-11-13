@@ -122,4 +122,9 @@ class DocumentTypeDialog(DocumentDialog):
             [label for label, _, _ in options], self.listener).setNegativeButton('Cancel', self.listener).create()
         self.native.setOnCancelListener(self.cancel_listener)
         self.native.show()
+        def finished(result):
+            native, self.native = self.native, None
+            if result.cancelled() and native is not None:
+                native.dismiss()
+        future.add_done_callback(finished)
         return future

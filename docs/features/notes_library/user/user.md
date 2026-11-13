@@ -62,7 +62,7 @@ The path is centered between the toolbar buttons and wraps to two lines as
 needed. If it still overflows, it initially shows its end. Swipe or use the
 mouse or trackpad wheel over the breadcrumb to reach earlier folders.
 
-On desktop, the sidebar has **Files**, **Search** and **Calendar** tabs.
+On desktop, the sidebar has **Files**, **Search**, **Calendar** and **Playlist** tabs.
 Files contains the folder tree and file actions. Search contains both search
 modes and their results.
 Previous/next note and parent-folder controls sit in the document toolbar.
@@ -93,6 +93,22 @@ a day to open it, choosing a path when several notes share that date. A missing
 day asks before creating a note in the library root. **Refresh daily notes**
 rescans names after outside changes. **Links** opens backlinks, outgoing links,
 unresolved links and word/character counts for the saved Markdown note.
+
+### Playlists
+
+Open **Playlist → New playlist**, give it a name, then choose **Add Markdown**
+to browse for notes within this library. You can also right-click a Markdown
+note in Files or Search and choose **Add to playlist**. Open a saved playlist to
+see its queue. Drag entries into order or select an entry and use **Move up**
+or **Move down**. **Repair reference** lets you choose a replacement for a
+missing, moved or inaccessible note. **Remove entry** keeps the source note.
+
+Use **Read aloud** to open the speech controls, or **Play selected** to start at
+another note. The queue marks the active entry, and the time skips carry across entries. Each playlist remembers
+its own place. Moving the active entry keeps its position in that note. Use
+**Delete playlist** in the playlist detail to remove the queue and its saved
+position while keeping its notes. A playlist labelled **This session** is
+kept in memory because its source has no approved persistent credential key.
 
 An unopened library offers a New Document card; select existing documents in the
 sidebar. Choose Markdown or Remarkable Document before naming a new file and selecting a library folder.

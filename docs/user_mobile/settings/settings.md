@@ -451,13 +451,28 @@ Ordinary documents may show their filename; private readers use **Read aloud**.
 Document passages never appear in lock-screen or notification metadata. The subtitle
 shows the timer when enabled, otherwise the app name.
 
+**Settings → Privacy & Security → Playlist speech while locked** allows an
+already-playing ordinary Notes Library playlist to continue on the lock screen.
+It defaults to off.
+
 **Settings → Privacy & Security → Session-only speech while locked** defaults to off. With it off, speech from
 session-only credentials stops and its queued text clears when the app locks or
 goes into the background. Turn the setting on to permit already-started speech
 and system controls while locked; the choice is remembered on this device.
 Credentials still lock normally, and this setting does not permit new file reads
 or restore speech after an app restart. Clearing/replacing credentials or closing
-the document stops playback even with the setting enabled.
+the document stops playback even with the setting enabled. A protected playlist
+can continue or skip through notes prepared in memory while unlocked. Unlock to
+continue when playback reaches a note that needs a fresh read. Private playlist
+names and filenames stay out of Now Playing.
+
+### Delete playlists
+
+Open **Settings → Reset → Delete a playlist**, choose a playlist, then confirm.
+Deleting a playlist also removes its saved listening position and stops its
+playback. **Clear locked playlists** removes encrypted playlist records that
+cannot be unlocked or read. The confirmation keeps their names private. Both
+actions keep the source notes.
 
 ## Audio playback
 

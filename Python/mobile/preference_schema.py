@@ -34,6 +34,7 @@ DEFAULTS = {
     'markdown_justify': 'false',
     'clear_unmodified_documents_on_restart': 'true',
     'session_speech_when_locked': 'false',
+    'playlist_speech_when_locked': 'false',
     'session_trusted_wifi': 'false',
     'trusted_wifi_networks': '[]',
     'approved_bluetooth_devices': '[]',
@@ -70,8 +71,9 @@ def validate(values):
     network_names(values['trusted_wifi_networks'])
     if values['session_trusted_wifi'] not in {'true', 'false'}:
         raise ValueError('Invalid trusted Wi-Fi session preference.')
-    if values['session_speech_when_locked'] not in {'true', 'false'}:
-        raise ValueError('Invalid session speech lock-screen preference.')
+    if any(values[key] not in {'true', 'false'}
+           for key in ('session_speech_when_locked', 'playlist_speech_when_locked')):
+        raise ValueError('Invalid speech lock-screen preference.')
     if values['notebook_paper_preview'] not in {'true', 'false'}:
         raise ValueError('Invalid notebook preview preference.')
     read_presets(values[NOTEBOOK_BRUSH_PRESETS])

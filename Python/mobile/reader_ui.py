@@ -318,7 +318,8 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             if not initial:
                 progress.observe(value)
 
-    async def display_book_page(self, index, *, preserve_speech=False, initial=False):
+    async def display_book_page(self, index, *, preserve_speech=False, initial=False,
+                                speech_chapter=None):
         if not preserve_speech:
             self.close_read_aloud()
         sidebar = getattr(self, 'chapter_sidebar', None)
@@ -334,7 +335,9 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
         if not 0 <= index < count:
             return
         if record['kind'] == 'epub':
-            prepared_epub = await self.epub_controller().prepare_page(reader, record, index, epoch)
+            prepared, location = speech_chapter if speech_chapter is not None else (None, None)
+            prepared_epub = await self.epub_controller().prepare_page(
+                reader, record, index, epoch, prepared=prepared, location=location)
             if prepared_epub is None:
                 return
         else:
@@ -451,16 +454,19 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
                   or (self.epub_offset == 0 and index in updated['bookmarks'])) if record['kind'] == 'epub' else index in updated['bookmarks']
         self.bookmark_button.text = 'Unbookmark' if marked else 'Bookmark'
 
-    async def move_book_page(self, index, *, preserve_speech=False):
+    async def move_book_page(self, index, *, preserve_speech=False, speech_chapter=None, valid=lambda: True):
         pending = getattr(self, '_epub_location_task', None)
         if pending is not None and not pending.done():
             self.request_position_flush()
             await pending
-        if self.book_busy or self.book_reader is None:
+        if self.book_busy or self.book_reader is None or not valid():
             return
         self.set_book_busy(True)
         try:
-            await self.display_book_page(index, **({'preserve_speech': True} if preserve_speech else {}))
+            kwargs = {'preserve_speech': True} if preserve_speech else {}
+            if speech_chapter is not None:
+                kwargs['speech_chapter'] = speech_chapter
+            await self.display_book_page(index, **kwargs)
         except Exception as error:
             self.book_status.text = 'Cannot read page: ' + str(error)[:500]
         finally:

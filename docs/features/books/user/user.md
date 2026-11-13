@@ -65,8 +65,13 @@ Alt+Left/Right moves between chapters.
 
 Choose the **speaker** icon in the toolbar or **View → Read aloud…**. Select a passage
 first to read only that passage; otherwise reading starts at the visible page
-and continues through subsequent chapters to the end of the book. The same speed
-and remaining sleep-timer budget carry across chapter changes. Language defaults to **Automatic (detect text)**,
+and continues through subsequent chapters to the end of the book. The **Back 15
+seconds** and **Forward 15 seconds** controls estimate a jump at the current
+speed. They carry the remaining jump across chapters, pass over empty chapters
+and stop at the book’s first or last spoken word. For selected text, the
+controls stay inside the selection. Skipping while paused moves the highlight
+and keeps playback paused. The same speed and remaining sleep-timer budget carry
+across chapter changes. Language defaults to **Automatic (detect text)**,
 which detects the passage locally and chooses an installed voice in that language.
 For uncertain passages, the book’s language metadata provides a fallback. You can
 choose a language and voice manually. Set the speed, then press **Play**. The same button changes to **Pause** while speaking

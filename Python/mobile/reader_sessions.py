@@ -76,8 +76,9 @@ class ReaderController(ReaderHost, ReaderUI):
             await self.comic_controller().refresh_comic_neighbors()
         return self.book_reader is not None
 
-    async def display_book_page(self, index, *, preserve_speech=False, initial=False):
-        await super().display_book_page(index, preserve_speech=preserve_speech, initial=initial)
+    async def display_book_page(self, index, *, preserve_speech=False, initial=False, speech_chapter=None):
+        await super().display_book_page(index, preserve_speech=preserve_speech,
+                                        initial=initial, speech_chapter=speech_chapter)
         self.manager.update_session(self)
 
     def cancel_book_unlock(self, widget=None, **kwargs):

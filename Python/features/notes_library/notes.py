@@ -255,16 +255,17 @@ class NotesLibrary:
                 raise
             return None
 
-    def read(self, path, *, cancelled=lambda: False):
+    def read(self, path, *, cancelled=lambda: False, limit=None):
         path = self.contained(path)
         if PurePosixPath(path).suffix.lower() not in MARKDOWN:
             raise ValueError('Choose a Markdown note.')
         before = self.entry(path)
-        limit_error = f'Markdown source is too large. Notes Library has a {MAX_NOTE / (1024 * 1024):g} MiB source limit.'
-        if before['directory'] or not 0 <= before['size'] <= MAX_NOTE + 4096:
+        limit = MAX_NOTE if limit is None else min(limit, MAX_NOTE)
+        limit_error = f'Markdown source is too large. This read has a {limit / (1024 * 1024):g} MiB source limit.'
+        if before['directory'] or not 0 <= before['size'] <= limit + 4096:
             raise DocumentSizeExceeded(limit_error)
         try:
-            with DocumentResource(self.provider, path, max_bytes=MAX_NOTE, independent=False) as resource:
+            with DocumentResource(self.provider, path, max_bytes=limit, independent=False) as resource:
                 data = resource.read(cancelled=cancelled)
         except DocumentSizeExceeded as error:
             raise DocumentSizeExceeded(limit_error) from error

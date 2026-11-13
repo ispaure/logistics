@@ -13,6 +13,7 @@
     "mobile/android/io/github/ispaure/logistics/books/SpeechMediaService.java",
     "mobile/appearance.py",
     "mobile/content.py",
+    "mobile/epub_speech.py",
     "mobile/library/__init__.py",
     "mobile/library/catalog.py",
     "mobile/media_android.py",
@@ -31,6 +32,7 @@
     "mobile/text_reader.py",
     "mobile/typography.py",
     "mutations.py",
+    "speech_sequence.py",
     "themes.py",
     "xhtml.py"
   ]

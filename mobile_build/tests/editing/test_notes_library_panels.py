@@ -762,7 +762,7 @@ class NotesLibraryPanelTests(unittest.TestCase):
             self.assertFalse(hasattr(owner, 'panel_metadata'))
             self.assertFalse(hasattr(owner, 'panel_identity'))
             self.assertEqual(owner.links.children[0].text, 'Links')
-            self.assertEqual(list(owner.panel_tabs), ['Files', 'Search', 'Calendar'])
+            self.assertEqual(list(owner.panel_tabs), ['Files', 'Search', 'Calendar', 'Playlist'])
             self.assertTrue(owner.sidebar.overlay.edge_panel)
             owner.sidebar.reflow(296)  # A 320-unit view minus the host inset.
             self.assertEqual(owner.sidebar.policy.sidebar_width, 264)
@@ -770,6 +770,77 @@ class NotesLibraryPanelTests(unittest.TestCase):
             self.assertTrue(owner.sidebar.overlay.dim)
             owner.sidebar.show_detail()
             self.assertIsNone(owner.sidebar.overlay)
+        self.run_async(exercise())
+
+    def test_playlist_names_add_repair_drag_and_remove_through_library_pane(self):
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            panel = owner.playlist_panel
+            owner.select_panel_tab('Playlist')
+            await panel.loading
+            self.assertIn('Create a playlist', panel.notice.text)
+            panel.name()
+            field, commands = panel.commands.children
+            field.value = 'Morning'
+            await commands.children[0].on_press()
+            self.assertEqual(panel.header.text, 'Morning')
+            self.assertIn('Add Markdown', panel.notice.text)
+
+            panel.begin_pick()
+            self.assertEqual(owner.panel_tab, 'Files')
+            self.assertIs(panel.pick_prompt.parent, owner.files_content)
+            owner.select_panel_tab('Search')
+            self.assertIs(panel.pick_prompt.parent, owner.search_content)
+            await owner.open_selected_note('Vault/Home.md')
+            self.assertIsNone(owner.path)
+            self.assertEqual(owner.panel_tab, 'Playlist')
+            await panel.reload()
+            panel.begin_pick()
+            await owner.open_selected_note('Vault/Projects/Plan.MD')
+            await panel.reload()
+            first, second = panel.playlist.entries
+
+            self.assertTrue(panel.drag.start(second.id))
+            self.assertTrue(panel.drag.drop(first.id))
+            await asyncio.sleep(0)
+            for _ in range(100):
+                if panel.playlist.entries[0] == second:
+                    break
+                await asyncio.sleep(.01)
+            self.assertEqual(panel.playlist.entries[0], second)
+            panel.buttons[second.id].on_press()
+            self.assertEqual(panel.selected, second.id)
+            with patch.object(panel.speech, 'play') as play:
+                panel.play_button.on_press()
+                play.assert_called_once_with(panel.playlist.id, anchor=panel.play_button)
+                play.reset_mock()
+                panel.selected_play_button.on_press()
+                play.assert_called_once_with(panel.playlist.id, second.id, anchor=panel.play_button)
+            await panel.move_down()
+            await panel.reload()
+            self.assertEqual(panel.playlist.entries[1], second)
+
+            panel.repair()
+            await owner.open_selected_note('Vault/Home.md')
+            await panel.reload()
+            self.assertEqual(panel.playlist.entries[1].id, second.id)
+            self.assertEqual(panel.playlist.entries[1].path, 'Vault/Home.md')
+            await panel.remove()
+            await panel.reload()
+            self.assertEqual(panel.playlist.entries, (first,))
+            self.assertTrue((self.vault / 'Projects/Plan.MD').exists())
+            speech = panel.speech
+            panel.suspend_display()
+            self.assertEqual(panel.header.text, '')
+            self.assertFalse(panel.rows.children)
+            self.assertIs(panel.speech, speech)
+            self.assertIsNone(panel.reload())
+            panel.resume_display()
+            await panel.loading
+            self.assertEqual([row.text for row in panel.rows.children], ['Morning'])
+            owner.dispose()
+            self.assertFalse(panel.rows.children)
+            self.assertEqual(panel.header.text, '')
         self.run_async(exercise())
 
     def test_calendar_indexes_nested_names_without_reading_documents(self):
@@ -1078,7 +1149,7 @@ class NotesLibraryPanelTests(unittest.TestCase):
             self.assertEqual(owner.path, 'Vault/2026-10-17.md')
         self.run_async(exercise())
 
-    def test_read_only_calendar_can_open_but_cannot_offer_creation_or_actions(self):
+    def test_read_only_calendar_can_open_and_file_actions_only_offer_playlists(self):
         (self.vault / '2026-10-15.md').write_text('Existing')
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
@@ -1087,8 +1158,11 @@ class NotesLibraryPanelTests(unittest.TestCase):
             with patch.object(owner.library, 'supports', return_value=False), \
                     patch.object(self.app.main_window, 'dialog', new=AsyncMock()) as dialog:
                 self.assertFalse(await owner.open_daily_note('2026-10-16'))
-                await owner.file_actions('Vault/Home.md')
                 dialog.assert_not_awaited()
+                await owner.file_actions('Vault/Home.md')
+                dialog.assert_awaited_once()
+                self.assertEqual([choice[1] for choice in dialog.call_args.args[0].choices],
+                                 ['playlist', 'cancel'])
                 with self.assertRaises(PermissionError):
                     library_files.copy(owner.library, 'Vault/Home.md', 'Vault/Copy.md')
                 with self.assertRaises(PermissionError):

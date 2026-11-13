@@ -939,6 +939,15 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         settings_changed(self)
         self.settings_status.text = ''
 
+    def change_playlist_speech(self, widget, **kwargs):
+        from .settings.forms import save_boolean_switch
+        if not save_boolean_switch(self.preferences, widget, 'playlist_speech_when_locked',
+                                   self.change_playlist_speech, self.settings_status):
+            return
+        from features.books.mobile.media_controls import settings_changed
+        settings_changed(self)
+        self.settings_status.text = ''
+
     def save_preferences(self, widget=None, **kwargs):
         try:
             from .font_scaling import FONT_KEYS, refresh

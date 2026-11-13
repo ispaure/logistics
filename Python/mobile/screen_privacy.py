@@ -150,11 +150,17 @@ class ScreenPrivacy:
     def retire_stale(self):
         if self.disposed or not self.app.active_host:
             return
+        self.dismiss_playlist_settings()
         # Cover capture/native snapshots before feature retirement can reenter UI.
         self.refresh()
         from .privacy_effects import retire_stale_content
         retire_stale_content(self.app)
         self.refresh()
+
+    def dismiss_playlist_settings(self):
+        if getattr(self.app, '_playlist_settings_dialog', None) is not None:
+            from .settings.playlists import dismiss_playlist_dialog
+            dismiss_playlist_dialog(self.app)
 
     def gates(self):
         from .protection import for_app
@@ -182,6 +188,8 @@ class ScreenPrivacy:
             self.conceal()
         else:
             self.prepare_native_protection()
+            from features.books.mobile.media_controls import enforce_privacy
+            enforce_privacy(self.app, playlists_only=True)
 
     def conceal(self):
         if self.disposed:
@@ -205,6 +213,10 @@ class ScreenPrivacy:
         if output is not None:
             output.invalidate(pause=False)  # Reject dialogs without stopping permitted background speech.
         notes = getattr(self.app, 'vault_browser', None)
+        playlist = getattr(notes, 'playlist_panel', None)
+        if playlist is not None:
+            playlist.suspend_display()
+        self.dismiss_playlist_settings()
         pause_inline = getattr(notes, 'pause_inline_videos', None)
         if pause_inline is not None:
             pause_inline()
@@ -374,6 +386,17 @@ class ScreenPrivacy:
         if video is not None:
             video.retire_changed_policy()
         self.sync_lock_view(gates)
+        notes = getattr(self.app, 'vault_browser', None)
+        playlist = getattr(notes, 'playlist_panel', None)
+        if playlist is not None:
+            if hidden or self.inactive or self.resume_locked:
+                playlist.suspend_display()
+            else:
+                playlist.resume_display()
+        if hidden or self.inactive or self.resume_locked:
+            self.dismiss_playlist_settings()
+        from features.books.mobile.media_controls import enforce_privacy
+        enforce_privacy(self.app, playlists_only=True)
         output = getattr(self.app, 'audio_output', None)
         if output is not None:
             output.capture_changed(self.sensitive() and self.captured)
