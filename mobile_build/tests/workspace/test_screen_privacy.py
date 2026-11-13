@@ -7,7 +7,7 @@ TEST_STAGE = TestStage.REGRESSION
 import sys
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 from mobile.screen_privacy import ScreenPrivacy
 from services.session_auth import ResumePassword
@@ -476,6 +476,80 @@ class ResumeLockTests(unittest.TestCase):
             self.assertIs(browser.native_list.selection, selected)
             self.assertEqual(browser.epoch, epoch)
             self.assertEqual([row.title for row in browser.native_list.data], ['Photos', 'Documents', 'Books'])
+
+    def test_directory_index_resumes_only_after_authentication_and_scene_activation(self):
+        lease = self.app._directory_index_host
+        self.addCleanup(lease.close)
+        with patch.object(lease, 'set_active', wraps=lease.set_active) as set_active:
+            self.app.scene_active = False
+            self.privacy.interrupt()
+            self.privacy.reveal()
+            self.unlock('wrong')
+            self.unlock('session-password')
+            self.assertFalse(self.gate.locked)
+            set_active.assert_called_with(False)
+            self.assertNotIn(call(True), set_active.call_args_list)
+
+            self.app.scene_active = True
+            self.privacy.reveal()
+            set_active.assert_called_with(True)
+            set_active.reset_mock()
+
+            self.privacy.conceal()
+            self.privacy.reveal()
+            self.assertTrue(self.gate.locked)
+            self.assertNotIn(call(True), set_active.call_args_list)
+            self.unlock('session-password')
+            set_active.assert_called_with(True)
+
+    def test_queued_browser_search_result_is_fenced_across_lock_and_unlock(self):
+        import asyncio
+        from pathlib import Path
+        from commonUtils.search.providers import SearchResult
+        from mobile.browser_ui import FileBrowser
+
+        browser = FileBrowser()
+        self.addCleanup(lambda: self.app.loop.run_until_complete(browser.close()))
+        self.app.body = browser.widget
+        self.app.main_window.content = browser.widget
+        provider = SimpleNamespace(root=Path('/virtual'), relative=lambda value: value, list=lambda *_: [])
+        browser.set_entries(provider, '', [])
+        browser.open_search()
+        scans = []
+        pending_progress = self.app.loop.create_future()
+
+        def capture(progress, result):
+            self.privacy.conceal()
+            pending_progress.set_result((progress, result))
+
+        def search(provider, folder, query, *, cancelled, progress):
+            scans.append(cancelled)
+            name = 'match-stale.md' if len(scans) == 1 else 'match-current.md'
+            result = SearchResult([dict(path=name, name=name, directory=False)], 1, True, [])
+            if len(scans) == 1:
+                self.app.loop.call_soon_threadsafe(capture, progress, result)
+            return result
+
+        async def check():
+            browser.search.value = 'match'
+            progress, stale = await asyncio.wait_for(pending_progress, 5)
+            self.assertEqual(browser.search.value, 'match')
+            self.assertFalse(browser.native_list.data)
+            self.privacy.reveal()
+            self.assertTrue(self.gate.locked)
+            revision = self.gate.revision
+            self.assertTrue(self.gate.authorize(revision))
+            self.privacy.refresh()
+            progress(stale)
+            await asyncio.sleep(0)
+            self.assertTrue(scans[0]())
+            self.assertFalse(browser.native_list.data)
+            while tasks := tuple(task for task in browser.tasks if not task.done()):
+                await asyncio.wait_for(asyncio.gather(*tasks), 5)
+            self.assertEqual([row.entry.payload['path'] for row in browser.native_list.data], ['match-current.md'])
+
+        with patch.object(browser, 'resource_search', side_effect=search):
+            self.app.loop.run_until_complete(check())
 
     def test_notes_drawers_are_detached_before_password_resume(self):
         import toga

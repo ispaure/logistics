@@ -121,6 +121,7 @@ class NotesLibrary:
             raise ValueError('Notes Library requires a local copy. Download or sync this folder first.')
         self.provider, self.root = provider, provider.relative(root)
         self.index_database = index_database
+        self._index_hint = object()
         self._link_folders = {}
         self._resolved_links = {}
         self._link_lock = RLock()
@@ -132,6 +133,8 @@ class NotesLibrary:
 
     def close(self):
         """Retire in-memory names, including work completing after revocation."""
+        from .library_files import clear_focus
+        clear_focus(self)
         with self._link_lock:
             self._links_closed = True
             self._link_folders.clear()
@@ -203,7 +206,8 @@ class NotesLibrary:
         with operation(self.provider, cancelled):
             # Browsing, calendar and link inventories use names/types/sizes;
             # document admission obtains its own fresh revision through entry().
-            listing = getattr(self.provider, 'list_names', None) or self.provider.list
+            listing = (getattr(self.provider, 'indexed_list', None)
+                       or getattr(self.provider, 'list_names', None) or self.provider.list)
             rows = listing(path, cancelled=cancelled)
         if len(rows) > 10000:
             raise ValueError('Folder exceeds the 10,000-entry limit.')

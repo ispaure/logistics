@@ -27,6 +27,7 @@ class HostLifecycleTests(unittest.TestCase):
         host.navigation = NS(window=host.main_window, app=host)
         host.scene_manager = NS(external_comics=Mock())
         host.audio_output, host._layout_participants = Mock(), Mock()
+        host._directory_index_host = Mock()
         host.startup_document_task = Mock()
         host.clear_private_reader, host.release_disposable_resources = Mock(), Mock()
         order = []
@@ -40,6 +41,7 @@ class HostLifecycleTests(unittest.TestCase):
         picker.assert_called_once_with(host.main_window)
         host.checkpoint.assert_called_once_with()
         host.audio_output.dispose.assert_called_once_with()
+        host._directory_index_host.close.assert_called_once_with()
         host._layout_participants.dispose.assert_called_once_with()
         host.startup_document_task.cancel.assert_called_once_with()
         host._editor_picker.clear.assert_called_once_with()
@@ -104,11 +106,13 @@ class HostLifecycleTests(unittest.TestCase):
 
     def test_prepare_is_only_preflight_and_retirement_rechecks_then_disposes_once(self):
         host = self.host()
+        host._directory_index_host = Mock()
         owner = lifecycle(host)
         with patch('mobile.markdown_speech.stop_markdown_speech'), \
                 patch('features.books.mobile.media_controls.stop_media'):
             owner.prepare_replacement()
             host.screen_privacy.dispose.assert_not_called()
+            host._directory_index_host.close.assert_not_called()
             owner.retire_for_replacement()
             owner.retire_for_replacement()
         self.assertIs(lifecycle(host), owner)
@@ -117,6 +121,7 @@ class HostLifecycleTests(unittest.TestCase):
         self.assertEqual(host.checkpoint_chat.call_count, 2)
         host.startup_task.cancel.assert_called_once_with()
         host.screen_privacy.dispose.assert_called_once_with()
+        host._directory_index_host.close.assert_called_once_with()
         host.cloud_startup_task.cancel.assert_called_once_with()
         host.workspace.invalidate.assert_called_once_with('doc')
         host._crypt_cancel.set.assert_called_once_with()
@@ -231,7 +236,7 @@ class HostLifecycleTests(unittest.TestCase):
 
     def test_partial_startup_failure_retires_only_created_resources_without_saving(self):
         host = NS(active_host=True, _startup_in_progress=True, checkpoint=Mock(),
-                  memory_pressure=Mock(), routes=Mock(), startup_task=Mock(),
+                  memory_pressure=Mock(), routes=Mock(), startup_task=Mock(), _directory_index_host=Mock(),
                   startup_document_task=Mock(), startup_screen=NS(cover=Mock()),
                   main_window=NS(on_lose_focus=Mock(), on_gain_focus=Mock(), on_resize=Mock()))
         owner = lifecycle(host)
@@ -241,6 +246,7 @@ class HostLifecycleTests(unittest.TestCase):
         self.assertFalse(host.active_host)
         host.checkpoint.assert_not_called()
         host.memory_pressure.dispose.assert_called_once_with()
+        host._directory_index_host.close.assert_called_once_with()
         host.routes.uninstall.assert_called_once_with()
         host.startup_task.cancel.assert_called_once_with()
         host.startup_document_task.cancel.assert_called_once_with()

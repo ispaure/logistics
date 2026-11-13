@@ -153,7 +153,31 @@ class _BrowserHost:
         self._unsubscribe = registry.subscribe(self._features_changed)
         self.destroyed.connect(self._unsubscribe)
         self.file_browser.idle.connect(self._retry_close)
+        from commonUtils.filesystem.index import directory_cache
+        from services.directory_index import focus
+        self._index_hint = object()
+        self._index_database = directory_cache.database
+        self.file_browser.views.directory_changed.connect(self._index_foreground)
+        qt.QApplication.instance().focusChanged.connect(self._index_focus_changed)
+        database, hint = self._index_database, self._index_hint
+        self.destroyed.connect(lambda: focus(database, hint))
         self._open_location(root_path)
+
+    def _index_foreground(self, path=None):
+        from services.directory_index import focus
+        browser = self.file_browser
+        if not self.closing and self.isVisible() and not browser.network_location:
+            focus(self._index_database, self._index_hint, (browser.navigation.directory,))
+
+    def _index_focus_changed(self, previous, current):
+        if current is not None and (current is self or self.isAncestorOf(current)):
+            self._index_foreground()
+
+    def hideEvent(self, event):
+        from services.directory_index import focus
+        if hasattr(self, '_index_hint'):
+            focus(self._index_database, self._index_hint)
+        super().hideEvent(event)
 
     def _relocate_renamed(self, parent, before, after):
         from commonUtils.runtime.resources.local import LocalFiles
@@ -275,6 +299,8 @@ class _BrowserHost:
             self.can_retire = sqlite.can_retire
             return False
         self.closing = True
+        from services.directory_index import focus
+        focus(self._index_database, self._index_hint)
         ready = True
         for extension in self.extensions:
             if not extension.prepare_close():

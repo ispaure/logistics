@@ -6,6 +6,7 @@
     "appearance_palette.py",
     "audio_output.py",
     "build_version.py",
+    "directory_index.py",
     "documents/__init__.py",
     "documents/access.py",
     "documents/archive_access.py",

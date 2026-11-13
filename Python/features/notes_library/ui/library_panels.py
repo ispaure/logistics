@@ -282,6 +282,7 @@ class LibraryPanels(LibraryConnections):
             self.sync_search_footer()
             return
         library = self.library
+        library_files.focus(library)
         include_text = self.search_mode.currentIndex() == 0
         generation = self.aux_generation + 1
         self._search_running_query = query

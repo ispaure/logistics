@@ -161,7 +161,8 @@ class CollectionFiles(MobileLocalFiles):
 def ordinary_index_provider(provider):
     """Recognize filesystem adapters whose namespace the shared index can read."""
     return (type(provider) in (LocalFiles, MobileLocalFiles, CollectionFiles)
-            and not provider.private and not getattr(provider, 'session_only', False))
+            and not provider.private and not getattr(provider, 'session_only', False)
+            and not getattr(provider, 'remote_storage', False))
 
 
 def local_folder_snapshot(provider, path='', *, cancelled=lambda: False, names_only=False, root_name_visible=None):

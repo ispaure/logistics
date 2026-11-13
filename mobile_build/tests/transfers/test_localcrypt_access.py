@@ -207,6 +207,190 @@ class Client:
 
 
 class LocalCryptAccessTests(unittest.TestCase):
+    def test_notes_surfaces_reuse_credential_scoped_directory_metadata(self):
+        with TemporaryDirectory() as root:
+            self.notes_index_journey(Path(root))
+
+    def notes_index_journey(self, root):
+        from features.notes_library import library_files, notes_links
+        from features.notes_library.notes import NotesLibrary
+
+        today = '2026-11-13'
+        note = 'Topics/Target.md'
+        bodies = {
+            'Start.md': b'Follow [the link](Target.md).',
+            note: b'Unique content needle.',
+            f'Topics/{today}.md': b'Daily note.',
+        }
+        database = root / 'ordinary.sqlite3'
+        metrics = {}
+        with patch('services.directory_index.cache_for', side_effect=AssertionError('Ordinary index used')):
+            provider = self.provider(root, Client())
+            try:
+                (provider.root / 'Topics').mkdir()
+                for name in bodies:
+                    (provider.root / name).write_bytes(b'opaque fixture')
+            finally:
+                provider.close()
+
+            def search(library, query, *, include_text):
+                result = library_files.search(library, query, include_text=include_text)
+                self.assertTrue(result.complete, result.errors)
+                return [row['path'] for row in result.rows]
+
+            def run(label, operation, expected, folders, reads):
+                client = Client()
+                request = client.request
+
+                def read_body(action, **values):
+                    if action == 'crypt_raw_read':
+                        return dict(data=base64.b64encode(bodies[values['path']]).decode())
+                    return request(action, **values)
+
+                provider = self.provider(root, client)
+                library = NotesLibrary(provider, index_database=database)
+                release = provider.acquire()
+                index = provider._directory_index
+                metrics[label] = {}
+                try:
+                    for phase, body_reads in zip(('cold', 'warm'), reads):
+                        with patch.object(client, 'request', side_effect=read_body) as calls, patch.object(
+                                provider, 'list', wraps=provider.list) as listings, patch.object(
+                                index, '_fingerprint', wraps=index._fingerprint) as fingerprints, patch(
+                                'os.scandir', wraps=os.scandir) as scans:
+                            self.assertEqual(operation(library), expected)
+                        actions = [call.args[0] for call in calls.call_args_list]
+                        counts = metrics[label][phase] = dict(
+                            fingerprints=fingerprints.call_count, scandir=scans.call_count,
+                            live_listings=listings.call_count, crypt_paths=actions.count('crypt_paths'),
+                            body_reads=actions.count('crypt_raw_read'))
+                        self.assertEqual(counts['body_reads'], body_reads, counts)
+                        if folders:
+                            live = folders if phase == 'cold' else 0
+                            self.assertEqual(counts, dict(fingerprints=folders + live,
+                                scandir=folders + 2 * live, live_listings=live, crypt_paths=live,
+                                body_reads=body_reads))
+                        else:
+                            self.assertEqual(counts['live_listings'], 0, counts)
+                            self.assertEqual(counts['fingerprints'], 0, counts)
+                            self.assertGreater(counts['crypt_paths'], 0, counts)
+                        counts['crypt_path'] = actions.count('crypt_path')
+                finally:
+                    try:
+                        library.close()
+                    finally:
+                        release()
+                self.assertTrue(provider.closed)
+                self.assertTrue(index.closed)
+                self.assertFalse(index.rows)
+
+            run('files', lambda library: [row['name'] for row in library.folders('')],
+                ['Topics', 'Start.md'], 1, (0, 0))
+            run('filename_search', lambda library: search(library, 'target', include_text=False),
+                [note], 2, (0, 0))
+            run('body_search', lambda library: search(library, 'needle', include_text=True),
+                [note], 2, (3, 3))
+            run('calendar', library_files.daily_notes, {today: [f'Topics/{today}.md']}, 2, (0, 0))
+            run('link', lambda library: library.link('Start.md', 'Target.md'), (note, ''), 0, (0, 0))
+            run('backlinks', lambda library: notes_links.connections(library, note)['incoming'],
+                ['Start.md'], 2, (3, 0))
+            self.assertFalse(list(root.rglob('*.sqlite*')))
+        return metrics
+    def test_last_lease_retires_indexed_names(self):
+        with TemporaryDirectory() as root:
+            provider = self.provider(root, Client())
+            self.addCleanup(provider.close)
+            (provider.root / 'private-note.md').write_bytes(b'ciphertext fixture')
+            release_first = provider.acquire()
+            release_last = provider.acquire()
+            self.addCleanup(release_last)
+            self.addCleanup(release_first)
+            self.assertEqual(provider.indexed_list()[0]['name'], 'private-note.md')
+            index = provider._directory_index
+            self.assertTrue(index.rows)
+
+            release_first()
+            release_first()
+            self.assertFalse(provider.closed)
+            self.assertEqual(provider.indexed_list()[0]['name'], 'private-note.md')
+            self.assertTrue(index.rows)
+
+            release_last()
+            self.assertTrue(provider.closed)
+            self.assertTrue(index.closed)
+            self.assertFalse(index.rows)
+            with self.assertRaisesRegex(ValueError, 'closed'):
+                provider.indexed_list()
+
+    def test_memory_index_rechecks_collection_selection_before_return(self):
+        with TemporaryDirectory() as root:
+            root = Path(root)
+            client = Client()
+            selected = [root]
+            provider = native_service(client).localcrypt.open(
+                LocalCryptLocation(root, 'Secret', storage_root=root))
+            self.addCleanup(provider.close)
+            (provider.root / 'private-note.md').write_bytes(b'ciphertext fixture')
+            index = provider._directory_index
+            fingerprint = index._fingerprint
+
+            def switch_after_fingerprint(*args):
+                signature = fingerprint(*args)
+                selected[0] = root / 'changed'
+                return signature
+
+            with patch('features.rclone.localcrypt.mobile.resources.collection_path',
+                       side_effect=lambda *args: selected[0]):
+                self.assertEqual(provider.indexed_list()[0]['name'], 'private-note.md')
+                self.assertTrue(index.rows)
+                with patch.object(index, '_fingerprint', side_effect=switch_after_fingerprint):
+                    with self.assertRaisesRegex(ValueError, 'Collection location changed'):
+                        provider.indexed_list()
+
+    def test_sealed_index_rechecks_collection_selection_after_open(self):
+        from mobile_build.tests.transfers.test_credential_document_lists import ListBridge
+
+        with TemporaryDirectory() as root:
+            root = Path(root)
+            client = Client()
+            client.directory_index_root = root / 'cache'
+            client.connection_identity = lambda remote: 'b' * 64
+            bridge = ListBridge()
+            bridge.unlock(remote='Secret')
+            bridge.package_records[0]['crypt_identities']['Secret'] = 'a' * 64
+            client.package_records = bridge.package_records
+            selected = [root]
+            location = LocalCryptLocation(root, 'Secret', storage_root=root)
+            localcrypt = native_service(client).localcrypt
+            request = client.request
+
+            def cache_request(action, **values):
+                if action in {'document_lists_open', 'document_lists_seal'}:
+                    result = bridge.request(action, **values)
+                    if action == 'document_lists_open':
+                        selected[0] = root / 'changed'
+                    return result
+                return request(action, **values)
+
+            with patch('features.rclone.localcrypt.mobile.resources.collection_path',
+                       side_effect=lambda *args: selected[0]), patch.object(
+                           client, 'request', side_effect=cache_request):
+                writer = localcrypt.open(location)
+                try:
+                    (writer.root / 'private-note.md').write_bytes(b'ciphertext fixture')
+                    self.assertEqual(writer.indexed_list()[0]['name'], 'private-note.md')
+                finally:
+                    writer.close()
+                self.assertEqual(len(list(client.directory_index_root.glob('*.zip'))), 1)
+                reader = localcrypt.open(location)
+                try:
+                    with self.assertRaisesRegex(ValueError, 'Collection location changed'):
+                        reader.indexed_list()
+                    self.assertEqual(selected[0], root / 'changed')
+                    self.assertFalse(reader._directory_index.rows)
+                finally:
+                    reader.close()
+
     def test_localcrypt_index_receives_credential_changes_without_refreshing_as_a_window(self):
         from features.rclone.mobile.cloud import CloudClient
         from features.rclone.mobile.credential_state import NativeCredentialState
@@ -218,11 +402,17 @@ class LocalCryptAccessTests(unittest.TestCase):
             provider = self.provider(root, client)
             self.addCleanup(provider.close)
             index = provider._directory_index
+            (provider.root / 'private-note.md').write_bytes(b'ciphertext fixture')
+            self.assertEqual(provider.indexed_list()[0]['name'], 'private-note.md')
             with patch.object(CloudClient, 'credential_state', state):
                 ScreenPrivacy.refresh_other_windows(object())
             self.assertFalse(index.closed)
+            self.assertTrue(index.rows)
             state.publish('clear', {}, {})
             self.assertTrue(index.closed)
+            self.assertFalse(index.rows)
+            with self.assertRaisesRegex(ValueError, 'index closed'):
+                provider.indexed_list()
 
     def test_native_write_progress_reports_bytes_and_cancels_without_reading_plaintext(self):
         from threading import Event

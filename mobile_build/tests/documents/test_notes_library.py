@@ -77,15 +77,19 @@ class NotesLibraryTests(unittest.TestCase):
         library = NotesLibrary(LocalFiles(self.root), 'Vault',
                                index_database=self.root / 'notes-test.sqlite3')
         try:
+            (self.vault / 'Projects/Stable Plan.MD').write_text('# Still authorized')
             self.assertEqual([row['path'] for row in search(library, 'Plan', include_text=False).rows],
-                             ['Vault/Projects/Plan.MD'])
+                             ['Vault/Projects/Plan.MD', 'Vault/Projects/Stable Plan.MD'])
             (self.vault / 'Projects/Plan.MD').rename(self.vault / 'Projects/New Plan.MD')
             updates = []
             with patch.object(library, 'folders', side_effect=AssertionError('Expected the shared index')):
                 result = search(library, 'Plan', include_text=False, progress=updates.append)
-            self.assertEqual([row['path'] for row in updates[0].rows], ['Vault/Projects/Plan.MD'])
+            self.assertEqual([row['path'] for row in updates[0].rows], ['Vault/Projects/Stable Plan.MD'])
             self.assertFalse(updates[0].complete)
-            self.assertEqual([row['path'] for row in result.rows], ['Vault/Projects/New Plan.MD'])
+            self.assertTrue(all('Vault/Projects/Plan.MD' not in {row['path'] for row in update.rows}
+                                for update in updates))
+            self.assertEqual([row['path'] for row in result.rows],
+                             ['Vault/Projects/New Plan.MD', 'Vault/Projects/Stable Plan.MD'])
         finally:
             library.close()
 

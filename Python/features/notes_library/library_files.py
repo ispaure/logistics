@@ -7,6 +7,23 @@ from commonUtils.search.providers import SearchResult, search_resources
 from services.documents.mutations import delete_document_tree, copy_document_tree, copy_document_sibling
 
 
+def focus(library, path=None):
+    """Register only ordinary local scheduling hints; never persist private paths."""
+    from commonUtils.filesystem.index.store import directory_index_path
+    from services.directory_index import focus as hint
+    from services.documents.locations import ordinary_index_provider
+    if ordinary_index_provider(library.provider):
+        database = library.index_database or directory_index_path()
+        path = library.root if path is None else library.contained(path)
+        hint(database, library._index_hint, (library.provider.root / path,))
+
+
+def clear_focus(library):
+    from commonUtils.filesystem.index.store import directory_index_path
+    from services.directory_index import focus as hint
+    hint(library.index_database or directory_index_path(), library._index_hint)
+
+
 def directory_index(library):
     """Admit only known ordinary filesystem providers to the shared cache."""
     from services.documents.locations import ordinary_index_provider
@@ -14,22 +31,60 @@ def directory_index(library):
     provider = library.provider
     if not ordinary_index_provider(provider):
         return None
-    from commonUtils.filesystem.index import DirectoryCache
+    from services.directory_index import cache_for
     from commonUtils.filesystem.local_access import check_local_path
     folder = provider._locate(library.root)
     check_local_path(folder, recursive=True)
-    return DirectoryCache(database=library.index_database), folder
+    return cache_for(library.index_database), folder
 
 
-def indexed_children(library, snapshot, folder):
-    parent = library.provider._locate(folder)
-    entries = snapshot.children(parent, limit=10001)
-    return library.visible_rows([
-        dict(name=item.path.name, path=library.contained(
-             item.path.relative_to(library.provider.root).as_posix()),
-             directory=item.directory, size=item.size)
-        for item in entries if not item.symlink and not item.path.name.startswith('.')
-    ])
+def _indexed_filename_search(library, cache, root, query, *, visible, cancelled, progress, folder_pages):
+    from commonUtils.search.indexed import IndexedLocalSearch
+    from services.directory_index import foreground
+    searcher = IndexedLocalSearch(cache.database, eligible=lambda provider: True, cache=cache)
+    allowed = {}
+    def project(result):
+        rows = []
+        for row in result.rows:
+            check_cancelled(cancelled)
+            try:
+                path = library.contained(row['path'])
+            except ValueError:
+                continue
+            if visible is not None:
+                if not visible(path, directory=row['directory']):
+                    continue
+                parent = str(PurePosixPath(path).parent)
+                permitted = True
+                while parent not in ('.', '', library.root):
+                    if parent not in allowed:
+                        allowed[parent] = visible(parent, directory=True)
+                    if not allowed[parent]:
+                        permitted = False
+                        break
+                    parent = str(PurePosixPath(parent).parent)
+                if not permitted:
+                    continue
+            if folder_pages is not None and row['directory'] and path not in folder_pages:
+                folder_pages[path] = library.folder_page(path, cancelled=cancelled)
+            rows.append(row)
+        return SearchResult(rows, result.scanned, result.complete, result.errors)
+    with cache, foreground(cache.database, root):
+        saved = cache.peek(root, cancelled=cancelled)
+        warm = saved is not None
+        if saved is not None:
+            saved.close()
+        # The shared path validates each saved hit before a bounded publication.
+        result = project(searcher.search(library.provider, library.root, query, cancelled=cancelled,
+            progress=(lambda result: progress(project(result))) if progress is not None else None))
+        if warm:
+            # Retain saved rows while refreshing; do not replace them with the
+            # smaller prefix of a second traversal. Final reconciliation wins.
+            searcher.prepare(library.provider, library.root, cancelled=cancelled)
+            if folder_pages is not None:
+                folder_pages.clear()
+            result = project(searcher.search(library.provider, library.root, query, cancelled=cancelled))
+        return result
 
 
 def search(library, query, *, include_text, visible=None, cancelled=lambda: False, progress=None,
@@ -59,7 +114,7 @@ def search(library, query, *, include_text, visible=None, cancelled=lambda: Fals
 
     def project(result):
         pages = {row['path']: folder_pages[row['path']] for row in result.rows
-                 if row['directory'] and row['path'] in folder_pages}
+                 if row['directory'] and folder_pages.get(row['path'])}
         represented = set(pages.values())
         rows = [dict(row, page=pages[row['path']]) if row['path'] in pages else row
                 for row in result.rows if row['path'] not in represented]
@@ -80,17 +135,9 @@ def search(library, query, *, include_text, visible=None, cancelled=lambda: Fals
     if index is not None:
         cache, root = index
         try:
-            saved = cache.peek(root, partial=False, cancelled=cancelled) if notify is not None else None
-            if saved is not None:
-                with saved:
-                    children = lambda folder, **kwargs: indexed_children(library, saved, folder)
-                    previous = run(None)
-                    if previous.rows:
-                        notify(SearchResult(previous.rows, previous.scanned, False, previous.errors))
-            with cache.get(root, cancelled=cancelled, validate_files=False) as current:
-                if current.complete and not current.errors:
-                    children = lambda folder, **kwargs: indexed_children(library, current, folder)
-                    result = run(notify)
+            result = _indexed_filename_search(library, cache, root, query, visible=visible,
+                cancelled=cancelled, progress=notify,
+                folder_pages=folder_pages if collapse_folder_notes else None)
         except (OSError, DatabaseError):
             pass  # Search remains available if the disposable index cannot be read or updated.
     if result is None:

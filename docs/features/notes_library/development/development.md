@@ -52,7 +52,8 @@ result widgets and pagination. Desktop `ui/library_panels.py` and mobile
 `mobile/notes_library.py` share rooted listing, cancellation and listing-error
 handling through `library_files.search`, which delegates scanning to commonUtils.
 `ranked_search_rows` places filename matches before body matches, using natural
-filename and path order. Mobile supplies its visibility filter before traversal.
+filename and path order. Live provider traversal prunes mobile-hidden folders;
+saved filename results filter both each path and its ancestors before publication.
 Scope switches cancel pending work and advance
 its publication generation before restoring the target interface. Completed
 queries are retained, while library mutations and saves invalidate cached queries.
@@ -64,6 +65,32 @@ and desktop `test_notes_library_desktop.py` cover independent inputs and results
 pagination, late callbacks, provider scope and retirement.
 `test_notes_library_folders.py` covers name-only search without body reads,
 ranking, visibility before traversal, partial listing failures and cancellation.
+
+Ordinary filename search uses the host's shared directory coordinator, with
+names-only recursive validation separate from File Browser's full metadata
+checks. Saved matches stream through SQL and are revalidated by the current
+provider before the first batch of 50 is delivered. A deleted or newly linked
+path cannot appear merely because it was indexed earlier. Saved rows remain
+visible during the refresh; its final result reconciles additions/removals and
+does not replace them with a smaller refresh prefix. Hidden paths and host folder
+visibility remain excluded, and filename search never reads note bodies.
+
+Visible navigation and search update ordinary foreground hints. Mobile privacy
+transitions invalidate search and Calendar generations before hiding content,
+retain the query, and resume unfinished work only in the visible panel after
+unlock. The shared [File Browser guide](../../../development/file-browser.md#directory-index-admission-and-foreground-demand)
+describes runner/scene ownership and bounded scheduling policy.
+
+LocalCrypt Files, Calendar, filename/body search and backlink inventory reuse the
+provider's `indexed_list` hook. Each warm folder still validates its ciphertext
+fingerprint; reusable names stay in that provider's bounded memory or optional
+credential-sealed records. Document-body parsing and direct/suffix link lookup
+retain their existing freshness checks. Final mobile lease release clears cached
+plaintext names, and memory/sealed cache publication rechecks current collection
+and credential access. Neither these names nor query hints enter the ordinary
+SQLite database. Credential rotation, revocation and late-worker checks are
+covered by focused LocalCrypt tests; real native encryption is a separate check.
+
 The managed
 `document_storage_tools ios|android --probe notes-search` check exercises retained
 native inputs/results across scope changes and rotation using synthetic notes.
