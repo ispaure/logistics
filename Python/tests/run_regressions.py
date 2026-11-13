@@ -179,11 +179,11 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
                  stages=STAGE_ORDER, mode='diagnostic', fail_fast=False, timings=None,
                  order='default', seed=None, exact_files=(), workers=1, cancelled=None):
     """Validate first, then run isolated files by stage and known duration."""
-    if workers not in (1, 2):
-        raise ValueError('Choose one or two isolated test workers.')
+    if workers not in (1, 2, 4, 8):
+        raise ValueError('Choose one, two, four or eight isolated test workers.')
     if workers > 1:
         from parallel_regressions import require_parallel_environment
-        require_parallel_environment()
+        require_parallel_environment(workers)
     selected = select_sources(matching_sources(directory, pattern, include_patterns, exact_files), stages)
     durations = {}
     if timings is not None:
@@ -348,8 +348,8 @@ def main():
                         help='Reorder files, classes and methods within each stage; class fixtures stay contiguous')
     parser.add_argument('--seed', type=int, help='Required reproducible seed for --order random')
     parser.add_argument('--single-file', action='store_true', help=argparse.SUPPRESS)
-    parser.add_argument('--workers', type=int, choices=(1, 2), default=1,
-                        help='Opt in to two workers for reviewed macOS offscreen files; other files stay exclusive')
+    parser.add_argument('--workers', type=int, choices=(1, 2, 4, 8), default=None,
+                        help='Opt in to up to eight workers for reviewed macOS offscreen files; other files stay exclusive')
     parser.add_argument('--isolate-modules', action='store_true',
                         help='Run each matching test file in a fresh process, including nested directories')
     parser.add_argument('--traceback-after', type=float, default=PROGRESS_INTERVAL,
@@ -359,6 +359,14 @@ def main():
     parser.add_argument('--timing-child', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--junit', type=Path, help='Write measured testcase evidence for the build manager')
     args = parser.parse_args()
+    if args.workers is None:
+        args.workers = 1
+        if args.isolate_modules and not args.timing_child and os.environ.get('BUILD_MANAGER_TEST_PROGRESS') == '1':
+            reserved = os.environ.get('BUILD_MANAGER_RESERVED_TEST_WORKERS', '1')
+            if not reserved.isdecimal() or not 1 <= int(reserved) <= 8:
+                parser.error('Invalid Manager worker reservation')
+            # Settings may be any ceiling; use the largest measured pool that fits.
+            args.workers = max(count for count in (1, 2, 4, 8) if count <= int(reserved))
     if args.workers > 1 and not args.isolate_modules:
         parser.error('--workers requires --isolate-modules')
     if args.traceback_after <= 0:

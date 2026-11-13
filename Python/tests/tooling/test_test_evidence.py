@@ -49,6 +49,11 @@ class InputIdentityTests(unittest.TestCase):
                 '--junit', '/run-one/result.xml'), str(root), effect='test')
             runtime = dict(python='same', os='same')
             original = key_for(phase, runtime=runtime)
+            mac = replace(phase, environment={'BUILD_MANAGER_TEST_PLATFORM': 'macos', 'BUILD_MANAGER_TEST_WORKERS': '4'})
+            ios = replace(mac, environment=dict(mac.environment, BUILD_MANAGER_TEST_PLATFORM='ios', BUILD_MANAGER_RESERVED_TEST_WORKERS='4'))
+            self.assertEqual(key_for(mac, runtime=runtime), key_for(ios, runtime=runtime))
+            self.assertNotEqual(key_for(mac, runtime=runtime), key_for(replace(mac,
+                environment=dict(mac.environment, BUILD_MANAGER_TEST_WORKERS='8')), runtime=runtime))
             partitioned = replace(phase, argv=(*phase.argv, '--stage', 'regression', '--stage', 'extended'))
             remaining_key = key_for(partitioned, runtime=runtime)
             self.assertTrue(remaining_key)

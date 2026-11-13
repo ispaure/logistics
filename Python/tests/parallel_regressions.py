@@ -12,6 +12,8 @@ from unittest.mock import patch
 
 
 ROOT = Path(__file__).resolve().parents[2]
+SUPPORTED_WORKERS = (1, 2, 4, 8)
+RESERVATION_ENV = 'BUILD_MANAGER_RESERVED_TEST_WORKERS'
 # Explicit files, rather than a directory glob: a newly added test starts
 # exclusive until its resources and concurrent behavior have been reviewed.
 QT_FILES = frozenset('Python/tests/version_control/' + name for name in (
@@ -25,16 +27,18 @@ QT_FILES = frozenset('Python/tests/version_control/' + name for name in (
 ))
 
 
-def require_parallel_environment():
+def require_parallel_environment(workers=2):
     if (sys.platform != 'darwin' or os.environ.get('QT_QPA_PLATFORM') != 'offscreen'
             or os.environ.get('TOGA_BACKEND')):
-        raise ValueError('Two test workers currently require macOS and QT_QPA_PLATFORM=offscreen.')
+        raise ValueError('Parallel test workers currently require macOS and QT_QPA_PLATFORM=offscreen.')
     if os.environ.get('BUILD_MANAGER_TEST_PROGRESS') == '1':
-        raise ValueError('Managed phases retain their existing worker admission; use one test worker.')
+        reserved = os.environ.get(RESERVATION_ENV, '')
+        if not reserved.isdecimal() or not workers <= int(reserved) <= 8:
+            raise ValueError('Managed test workers require a sufficient Manager host/platform reservation.')
     try:
         from build_manager.executor import stop_process
     except ImportError as error:
-        raise ValueError('Two test workers require the project-pinned build manager process owner.') from error
+        raise ValueError('Parallel test workers require the project-pinned build manager process owner.') from error
     if not callable(stop_process):
         raise ValueError('The build manager must provide owned process cleanup.')
 

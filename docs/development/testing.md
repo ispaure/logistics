@@ -136,17 +136,17 @@ running it. Mobile tests use `TOGA_BACKEND=toga_dummy`; desktop tests use offscr
 Qt. These checks do not certify native appearance or interactions. See the
 [mobile handbook](mobile-handbook.md) when you need an actual device build.
 
-### Optional parallel Git regressions on macOS
+### Parallel Git regressions and shared host budgets
 
-The default remains one isolated file-stage process at a time. For the reviewed
-desktop Git group on macOS, opt in to two workers:
+Direct commands default to one isolated file-stage process at a time. For the
+reviewed desktop Git group on macOS, choose 1, 2, 4 or 8 workers:
 
 ```sh
-python3 dev.py test desktop 'test_git*.py' --workers 2
+python3 dev.py test desktop 'test_git*.py' --workers 4
 ```
 
 The direct `Python/tests/run_regressions.py` entry point also accepts
-`--isolate-modules --workers 2`. The runner requires Qt's offscreen backend.
+`--isolate-modules --workers 4`. The runner requires Qt's offscreen backend.
 Only the 19 explicitly listed files in `Python/tests/parallel_regressions.py`
 can overlap. Their real Git repositories, preferences, Qt applications and
 storage are private to each process. New and unreviewed files remain exclusive:
@@ -166,10 +166,21 @@ running exclusive file keeps its original deadline and termination behavior.
 
 This option is limited to macOS desktop Git tests. Toga dummy/mobile host,
 shared-library suites, native windows, media playback, simulators, devices and
-Go bridge tests are not validated for concurrent file execution. Managed phases
-reject the nested worker opt-in; Manager's existing phase/platform admission and
-resource owners remain in charge. Do not infer full-platform or release coverage
-from this selected group.
+Go bridge tests are not validated for concurrent file execution. With a Manager
+that supplies test worker reservations, local host test phases share its
+per-platform and computer-wide ceilings. App settings defaults to four per platform
+and half the logical CPUs, capped at eight, across this computer. The audited
+Logistics runner uses the largest tested pool (1/2/4/8) within its reservation.
+Other host runners reserve one; native/device/build owners retain their existing
+policies. Manager checks captured source capability before enabling pools, so older
+snapshots and older pinned managers retain serial behavior. Audited phases allow
+six seconds for supervised cancellation before outer process-group escalation.
+
+Use Manager when several platform workflows run together: its resource slots
+coordinate separate Manager processes too. Explicit direct `--workers` commands
+are manual pools and do not acquire those reservations. The host budget limits
+participating test processes, not all compiler/helper threads on the machine.
+Do not infer full-platform or release coverage from this selected group.
 
 The implementation at `50c488f0`, based on Logistics `805ccc7c` and unchanged
 commonUtils `cee7537`, matched all 152 Git cases plus 96 smoke cases, all 33
@@ -187,7 +198,34 @@ parallel repeat of 84.28 seconds. Three four-file repetitions had medians of
 48.68 / 28.69 seconds. A serial repetition that overlapped compiler work is
 excluded. These selected-slice measurements are separate from Brief 09's
 12.31-second matched full-macOS improvement; they are not a measured full-suite
-speedup. Two workers are the supported limit.
+speedup.
+
+The expanded experiment on a 16-core M3 Max with 64 GiB memory used the same
+frozen Logistics/commonUtils source and Manager base `922d58d4`. All nine selected
+runs matched 248 case outcomes, 33 file-stage outcomes and 152 JUnit identities.
+Structure and both smoke gates are included; source/environment setup is excluded.
+
+| Workers | Quiet single-phase wall time | Sampled aggregate RSS |
+| --- | --- | --- |
+| 2 | 95.03 s | 396.9 MiB |
+| 4 | 50.45 s | 641.2 MiB |
+| 8 | 35.33 s | 1110.9 MiB |
+
+Two competing platform-host proxies, each running these macOS Qt tests, used the
+same eight-slot host budget. Four plus four completed together in 52.72 seconds;
+two eight-worker phases queued and took 73.86 seconds overall. The earlier 4+4
+run passed in 53.21 seconds while Xcode/compiler activity was observed. These
+proxies establish shared-host scheduling and case parity, not native Android/iOS
+acceptance. Eight-worker individual repeats took 39.15 and 33.87 seconds.
+
+Keep four as the default for mixed platform work and allow eight for an audited
+single-platform workload. Stop at eight: the measured gains do not justify a
+larger pool or dynamic nested scheduling yet. Whole-phase reservations deliberately
+retain spare slots during exclusive files. Real cancellation fixtures cover eight
+active file workers and their detached command helpers; admission fixtures cover
+multiple Manager processes, stale settings, cancelled waits and idle capacity
+changes. Unreviewed suites must pass their own resource and cleanup audit before
+joining the allowlist.
 
 ### Execution stages and failure policy
 
