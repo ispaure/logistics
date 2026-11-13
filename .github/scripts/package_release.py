@@ -47,7 +47,7 @@ def included(name):
                      and path.parts[1] in {'payload', 'logs', '.tools', '.briefcase',
                                            '.deploy-workspaces', '.android-beta', '.testflight-keys',
                                            '.device.json', '.testflight-auth.json'})
-            and path.parts[0] not in {'Temp', 'temp', 'Software', 'Credentials', 'RemoteCredentials', 'Addons', 'pyCharmProjects'}
+            and path.parts[0] not in {'Temp', 'temp', 'tmp', 'Software', 'Credentials', 'RemoteCredentials', 'Addons', 'pyCharmProjects'}
             and not any(part == '.env' or part.startswith('.env.') for part in path.parts))
 
 

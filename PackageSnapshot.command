@@ -41,8 +41,8 @@ def files(repo, prefix=Path()):
     excluded = ignored(repo, names)
     for name in names:
         relative = prefix / name
-        # Never follow links into private folders or include Git metadata.
-        if name in excluded or ".git" in relative.parts:
+        # Exclude Git metadata and checkout outputs before following any paths.
+        if name in excluded or ".git" in relative.parts or relative.parts[0] == "tmp":
             continue
         path = repo / name
         if any(parent.is_symlink() for parent in [path, *path.parents]):

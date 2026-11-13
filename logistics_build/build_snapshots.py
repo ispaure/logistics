@@ -15,6 +15,7 @@ from build_manager.locking import workspace_lock
 
 # These are private runtime references bound by mobile_plan, never source inputs.
 PRIVATE_RUNTIME_NAMES = ('.venv', '.tools', '.device.json', '.testflight-auth.json', '.android-beta')
+EXCLUDE_ROOT_TMP = ':(top,exclude,literal)tmp'
 
 
 def exclude_private_runtime_references(snapshot):
@@ -39,8 +40,21 @@ def git(root, *args):
     return subprocess.check_output(['git', '-C', str(root), *args], text=True, timeout=60).strip()
 
 
-def working_paths(root):
-    paths = subprocess.check_output(['git', '-C', str(root), 'ls-files', '-c', '-o', '--exclude-standard', '-z'])
+def reject_indexed_tmp(root):
+    if git(root, 'ls-files', '--cached', '--', 'tmp'):
+        raise ValueError('Root tmp/ is tracked in the Git index. Remove it from the index before capturing source.')
+
+
+def reject_tmp_history(root, *revisions):
+    # Guest transfer includes .git. Filtering the worktree cannot remove blobs
+    # reachable through the history carried by that directory.
+    if git(root, 'rev-list', '--full-history', '-1', *revisions, '--', 'tmp'):
+        raise ValueError('Root tmp/ is tracked in Git history. Use source with no root tmp/ in the captured history.')
+
+
+def working_paths(root, *pathspecs):
+    paths = subprocess.check_output(['git', '-C', str(root), 'ls-files', '-c', '-o',
+                                     '--exclude-standard', '-z', '--', *pathspecs])
     return sorted({os.fsdecode(value) for value in paths.split(b'\0') if value})
 
 
@@ -52,9 +66,9 @@ def check_source_path(root, path):
         raise ValueError('Source symlink escapes the checkout: ' + path.relative_to(root).as_posix())
 
 
-def working_fingerprint(root, commit):
+def working_fingerprint(root, commit, *pathspecs):
     digest = hashlib.sha256(commit.encode())
-    for name in working_paths(root):
+    for name in working_paths(root, *pathspecs):
         path = root / name
         check_source_path(root, path)
         digest.update(os.fsencode(name) + b'\0')
@@ -70,8 +84,8 @@ def working_fingerprint(root, commit):
     return digest.hexdigest()
 
 
-def overlay_working_tree(root, destination, *, skip=()):
-    names = [name for name in working_paths(root) if name not in skip]
+def overlay_working_tree(root, destination, *pathspecs, skip=()):
+    names = [name for name in working_paths(root, *pathspecs) if name not in skip]
     for name in names:
         source, target = root / name, destination / name
         check_source_path(root, source)
@@ -105,11 +119,14 @@ def identity(root, revision='working-tree'):
     root = Path(root)
     committed = 'HEAD' if revision == 'working-tree' else revision
     commit = git(root, 'rev-parse', committed + '^{commit}')
+    reject_tmp_history(root, commit)
     dependency = git(root, 'ls-tree', commit, 'Python/commonUtils').split()[2]
-    dirty = bool(git(root, 'status', '--porcelain')) if revision == 'working-tree' else False
+    dirty = False
     digest = hashlib.sha256(commit.encode())
     if revision == 'working-tree':
-        digest.update(bytes.fromhex(working_fingerprint(root, commit)))
+        reject_indexed_tmp(root)
+        dirty = bool(git(root, 'status', '--porcelain', '--', EXCLUDE_ROOT_TMP))
+        digest.update(bytes.fromhex(working_fingerprint(root, commit, EXCLUDE_ROOT_TMP)))
         pinned = dependency
         dependency = git(root / 'Python/commonUtils', 'rev-parse', 'HEAD')
         shared_dirty = bool(git(root / 'Python/commonUtils', 'status', '--porcelain'))
@@ -136,6 +153,7 @@ def _materialize(root, destination, revision, *, expected=None):
         raise ValueError('Source changed after the shared planning capture; prepare a fresh plan.')
     if destination.exists():
         exclude_private_runtime_references(destination)
+        reject_tmp_history(destination, '--all', '--reflog', 'HEAD')
         metadata = destination / '.manager-source.json'
         if metadata.is_file():
             saved = json.loads(metadata.read_text())
@@ -151,6 +169,7 @@ def _materialize(root, destination, revision, *, expected=None):
     with TemporaryDirectory(prefix='source-', dir=destination.parent) as temporary:
         snapshot = Path(temporary) / 'source'
         subprocess.run(['git', 'clone', '--quiet', '--no-local', '--no-checkout', str(root), str(snapshot)], check=True, timeout=120)
+        reject_tmp_history(snapshot, '--all', '--reflog', before['logistics_commit'])
         subprocess.run(['git', '-C', str(snapshot), 'checkout', '--quiet', '--detach', before['logistics_commit']], check=True, timeout=60)
         shared = snapshot / 'Python/commonUtils'
         if shared.exists():
@@ -158,7 +177,7 @@ def _materialize(root, destination, revision, *, expected=None):
         subprocess.run(['git', 'clone', '--quiet', '--no-local', '--no-checkout', str(root / 'Python/commonUtils'), str(shared)], check=True, timeout=120)
         subprocess.run(['git', '-C', str(shared), 'checkout', '--quiet', '--detach', before['commonUtils_commit']], check=True, timeout=60)
         if revision == 'working-tree':
-            overlay_working_tree(root, snapshot, skip=('Python/commonUtils',))
+            overlay_working_tree(root, snapshot, EXCLUDE_ROOT_TMP, skip=('Python/commonUtils',))
             overlay_working_tree(root / 'Python/commonUtils', shared)
         if identity(root, revision) != before:
             raise RuntimeError('Source changed during snapshot preparation; inspect a fresh plan.')
@@ -175,11 +194,14 @@ def _materialize(root, destination, revision, *, expected=None):
 
 
 def source_members(snapshot):
+    reject_indexed_tmp(snapshot)
+    reject_tmp_history(snapshot, '--all', '--reflog', 'HEAD')
     members = ['.git', '.manager-source.json']
     for relative in ('', 'Python/commonUtils'):
         folder = snapshot / relative
-        names = subprocess.check_output(['git', '-C', str(folder), 'ls-files', '-c', '-o', '--exclude-standard', '-z']).split(b'\0')
-        members.extend(str(Path(relative) / os.fsdecode(name)) for name in names if name and ((folder / os.fsdecode(name)).is_file() or (folder / os.fsdecode(name)).is_symlink()))
+        names = working_paths(folder) if relative else working_paths(folder, EXCLUDE_ROOT_TMP)
+        members.extend(str(Path(relative) / name) for name in names
+                       if (folder / name).is_file() or (folder / name).is_symlink())
         if relative:
             members.append(relative + '/.git')
     return sorted(set(members))

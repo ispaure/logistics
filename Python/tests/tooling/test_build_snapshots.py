@@ -10,7 +10,7 @@ import subprocess
 from tempfile import TemporaryDirectory
 import unittest
 
-from logistics_build.build_snapshots import identity, materialize
+from logistics_build.build_snapshots import identity, materialize, source_members
 
 
 class SnapshotTests(unittest.TestCase):
@@ -80,12 +80,91 @@ class SnapshotTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'different source'):
             materialize(self.root, destination, before['logistics_commit'])
 
+    def test_untracked_root_tmp_is_excluded_even_in_a_revision_without_the_ignore(self):
+        nested = self.root / 'fixtures/tmp/input.json'
+        nested.parent.mkdir(parents=True)
+        nested.write_text('{}')
+        shared = self.shared / 'tmp/library.json'
+        shared.parent.mkdir()
+        shared.write_text('{}')
+        self.commit(self.shared)
+        self.commit(self.root)
+        before = identity(self.root)
+        output = self.root / 'tmp/cache/tool.json'
+        output.parent.mkdir(parents=True)
+        output.write_text('{}')
+        self.assertEqual(identity(self.root), before)
+        for selection in ('working-tree', 'HEAD'):
+            with self.subTest(selection=selection):
+                destination = self.directory / selection
+                materialize(self.root, destination, selection)
+                self.assertFalse((destination / 'tmp').exists())
+                # Even a local output created directly in a captured tree stays
+                # out of the transfer list for a revision without /tmp/ ignore.
+                (destination / 'tmp').mkdir()
+                (destination / 'tmp/output.json').write_text('{}')
+                members = source_members(destination)
+                self.assertIn('fixtures/tmp/input.json', members)
+                self.assertIn('Python/commonUtils/tmp/library.json', members)
+                self.assertFalse(any(Path(name).parts[0] == 'tmp' for name in members))
+                self.assertEqual(materialize(self.root, destination, selection)['selection'], selection)
+        self.assertTrue(output.is_file())
+
+    def test_indexed_root_tmp_blocks_working_capture_and_transfer(self):
+        (self.root / '.gitignore').write_text('.private/\n/tmp/\n')
+        self.commit(self.root)
+        name = 'tmp/runs/receipt.json'
+        for directory in (self.root, self.directory / 'prepared'):
+            if directory != self.root:
+                # Committed selection ignores the force-added output in the live index.
+                materialize(self.root, directory, 'HEAD')
+                self.assertFalse((directory / 'tmp').exists())
+            output = directory / name
+            output.parent.mkdir(parents=True)
+            output.write_text('{}')
+            self.git(directory, 'add', '-f', '--', name)
+        with self.assertRaisesRegex(ValueError, 'tracked in the Git index'):
+            materialize(self.root, self.directory / 'rejected')
+        with self.assertRaisesRegex(ValueError, 'tracked in the Git index'):
+            source_members(self.directory / 'prepared')
+        self.assertFalse((self.directory / 'rejected').exists())
+
+    def test_committed_root_tmp_blocks_capture_and_transfer_even_after_removal(self):
+        output = self.root / 'tmp/cache/tool.json'
+        output.parent.mkdir(parents=True)
+        output.write_text('{}')
+        self.commit(self.root)
+        for revision in ('HEAD', 'working-tree'):
+            with self.subTest(revision=revision):
+                with self.assertRaisesRegex(ValueError, 'tracked in Git history'):
+                    materialize(self.root, self.directory / 'rejected', revision)
+        self.git(self.root, 'rm', '-r', '--', 'tmp')
+        self.commit(self.root)
+        with self.assertRaisesRegex(ValueError, 'tracked in Git history'):
+            source_members(self.root)
+        with self.assertRaisesRegex(ValueError, 'tracked in Git history'):
+            materialize(self.root, self.directory / 'rejected', 'HEAD')
+        self.assertFalse((self.directory / 'rejected').exists())
+
+    def test_other_local_branch_with_root_tmp_cannot_enter_captured_git_metadata(self):
+        clean = self.git(self.root, 'rev-parse', 'HEAD')
+        branch = self.git(self.root, 'branch', '--show-current')
+        self.git(self.root, 'checkout', '-qb', 'output-fixture')
+        (self.root / 'tmp').mkdir()
+        (self.root / 'tmp/output.json').write_text('{}')
+        self.commit(self.root)
+        self.git(self.root, 'checkout', '-q', branch)
+        self.assertEqual(identity(self.root, 'HEAD')['logistics_commit'], clean)
+        destination = self.directory / 'rejected'
+        with self.assertRaisesRegex(ValueError, 'tracked in Git history'):
+            materialize(self.root, destination, 'HEAD')
+        self.assertFalse(destination.exists())
+
     def test_retention_pin_preserves_snapshot_identity_without_hiding_source_changes(self):
         destination = self.directory / 'pinned'
         before = materialize(self.root, destination)
         (destination / '.keep').write_text('Active native validation\n')
         self.assertEqual(materialize(self.root, destination), before)
-        from logistics_build.build_snapshots import source_members
         self.assertNotIn('.keep', source_members(destination))
         (destination / 'source.py').write_text('unexpected source change')
         with self.assertRaisesRegex(ValueError, 'different source'):
@@ -181,7 +260,6 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual((destination/'source.py/child.py').read_text(), 'new directory content')
 
     def test_private_mobile_references_do_not_break_snapshot_reuse_or_enter_transfer(self):
-        from logistics_build.build_snapshots import source_members
         destination=self.directory/'mobile-snapshot'
         original=materialize(self.root,destination,'HEAD')
         (destination/'mobile_build').mkdir()
