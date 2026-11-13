@@ -146,6 +146,14 @@ class BlenderLibraryTests(unittest.TestCase):
             self.assertEqual(source.read_text(), original + '# unstaged edit')
             self.assertEqual(profile.read_text(), '{"edited": true}')
             self.assertEqual(self.library.selection(self.preset)['installed_bluehole']['commit'], 'a' * 40)
+            entry = destination / '__init__.py'
+            downloaded = entry.read_text()
+            entry.write_text(downloaded + '# edited installed copy')
+            update.return_value = (remote_package, 'b' * 40)
+            self.library.apply(self.release, 'Art', [], bluehole=github)
+            self.assertEqual(entry.read_text(), downloaded)
+            self.assertEqual(profile.read_text(), '{"edited": true}')
+
 
     def test_import_refuses_destination_created_during_copy(self):
         from features.blender.addons import library

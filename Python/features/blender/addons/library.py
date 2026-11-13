@@ -440,7 +440,8 @@ class AddonLibrary:
         old = state['installed']
         old_link = self.checkout_link(root, state)
         new, payloads, retained = self._plan_managed_payloads(root, resolved, old, old_link=old_link)
-        if checkout is not None or old_link is not None:
+        installed_commit = (state.get('installed_bluehole') or state.get('bluehole') or {}).get('commit')
+        if checkout is not None or old_link is not None or (commit and commit != installed_commit):
             retained.discard(bluehole_source.IDENTITY)
         manager.environment(release, name)  # Validate all resource folders before copying.
         environments = manager._contained(root, 'addon-data', 'bluehole')
