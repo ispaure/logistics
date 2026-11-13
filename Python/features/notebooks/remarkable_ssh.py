@@ -129,30 +129,46 @@ def _json_member(stream, size):
     return value
 
 
-def list_metadata(host, cancelled=lambda: False, *, port=DEFAULT_PORT):
-    """Read native IDs and metadata without changing the tablet store."""
+def _read_metadata(host, cancelled, *, port):
     command = '''set -- ./*.metadata
 if [ -f "$1" ]; then exec tar -cf - "$@"; fi'''
     entries = {}
+    observations = []
     with ssh_stream(host, command, cancelled, port=port) as stream:
         if stream.peek(1):
             with tarfile.open(fileobj=stream, mode='r|') as archive:
                 for member in archive:
                     check_cancelled(cancelled)
                     name = PurePosixPath(member.name)
-                    if not member.isfile() or len(name.parts) != 1 or name.suffix != '.metadata' or not UUID.fullmatch(name.stem):
+                    if len(name.parts) != 1 or name.suffix != '.metadata' or not UUID.fullmatch(name.stem):
+                        observations.append(('', 'unidentified_entry'))
+                        continue
+                    identity = name.stem
+                    if not member.isfile():
+                        observations.append((identity, 'unsupported_entry'))
+                        continue
+                    if member.size > MAX_SIDECAR:
+                        observations.append((identity, 'metadata_too_large'))
                         continue
                     with archive.extractfile(member) as metadata:
                         try:
-                            entries[name.stem] = _json_member(metadata, member.size)
-                        except ValueError:
+                            entries[identity] = _json_member(metadata, member.size)
+                        except (ValueError, RecursionError):
+                            observations.append((identity, 'unreadable_metadata'))
                             continue
-    return entries
+                    observations.append((identity, 'read'))
+    return entries, observations
+
+
+def list_metadata(host, cancelled=lambda: False, *, port=DEFAULT_PORT):
+    """Read native IDs and metadata; use list_snapshot for an omission receipt."""
+    return _read_metadata(host, cancelled, port=port)[0]
 
 
 def list_snapshot(host, cancelled=lambda: False, *, port=DEFAULT_PORT):
     from .remarkable_store import TabletSnapshot
-    return TabletSnapshot.from_metadata(list_metadata(host, cancelled, port=port), cancelled=cancelled)
+    metadata, observations = _read_metadata(host, cancelled, port=port)
+    return TabletSnapshot.from_metadata(metadata, observations=observations, cancelled=cancelled)
 
 
 def list_documents(host, cancelled=lambda: False, *, port=DEFAULT_PORT):

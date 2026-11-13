@@ -19,6 +19,19 @@ the streaming, opaque-member-preserving `.rmdoc` export route. It checks SSH
 completion, sidecar JSON, required background members and ZIP CRCs; this is not
 firmware validation or an editor import-limit check.
 
+`list_snapshot` also supplies an immutable, title-free `inventory` mapping keyed
+by native UUID. Each `InventoryRecord` contains `id`, `occurrences`, `visible`,
+`reason` and `read_issues`. Reasons are `visible`, `deleted_or_trashed`,
+`unsupported_type` or `unreadable_metadata`; read issues are
+`unreadable_metadata`, `metadata_too_large` or `unsupported_entry`. Duplicate
+records retain their occurrence count and any failed reads; existing last-valid
+metadata visibility is unchanged. `unidentified_records` counts entries without
+a usable top-level metadata UUID, without recording their filenames. The sum of
+occurrences plus that count equals received archive entries, not a guarantee of
+a coherent tablet snapshot. SSH failure or cancellation raises without returning
+a partial receipt. Synthetic Root and Unfiled rows are excluded. Corpus helpers
+can reconcile omissions using this receipt without logging document titles.
+
 The snapshot keeps document and collection IDs separate from display names,
 including empty folders and duplicate sibling labels. Deleted/trash ancestry is
 omitted. Missing or invalid parents enter a display-only Unfiled group. Cycles

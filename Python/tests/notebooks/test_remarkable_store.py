@@ -74,5 +74,7 @@ class TabletSnapshotTests(unittest.TestCase):
         metadata[identity(1)]['visibleName'] = 'Changed'
         self.assertEqual(set(snapshot.entries), {ROOT, identity(1)})
         self.assertEqual(snapshot.entries[identity(1)].title, 'Original')
+        self.assertEqual(snapshot.inventory[identity(2)].reason, 'unsupported_type')
+        self.assertEqual(snapshot.unidentified_records, 1)
         with self.assertRaises(TypeError):
             snapshot.entries[identity(1)] = None

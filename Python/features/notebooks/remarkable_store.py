@@ -1,5 +1,5 @@
 """Read-only native-ID hierarchy; malformed ancestry never changes tablet data."""
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from collections.abc import Mapping
 from types import MappingProxyType
 
@@ -20,12 +20,24 @@ class TabletEntry:
 
 
 @dataclass(frozen=True)
+class InventoryRecord:
+    """One native ID, with title-free accounting for every received occurrence."""
+    id: str
+    occurrences: int
+    visible: bool
+    reason: str
+    read_issues: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class TabletSnapshot:
     entries: Mapping[str, TabletEntry]
     children: Mapping[str, tuple[str, ...]]
+    inventory: Mapping[str, InventoryRecord] = field(default_factory=lambda: MappingProxyType({}))
+    unidentified_records: int = 0
 
     @classmethod
-    def from_metadata(cls, metadata, *, cancelled=lambda: False):
+    def from_metadata(cls, metadata, *, observations=None, cancelled=lambda: False):
         raw = {key: value for key, value in metadata.items()
                if isinstance(key, str) and UUID.fullmatch(key) and isinstance(value, dict)}
         hidden = {}
@@ -94,7 +106,33 @@ class TabletSnapshot:
                 children[entry.parent].append(identity)
         for items in children.values():
             items.sort(key=lambda key: (not entries[key].directory, entries[key].title.casefold(), key))
-        return cls(MappingProxyType(entries), MappingProxyType({key: tuple(value) for key, value in children.items()}))
+        # Transport observations retain malformed records that cannot enter the
+        # hierarchy. Never put metadata values or arbitrary filenames in receipts.
+        if observations is None:
+            observations = ((key, 'read' if key in raw else 'unreadable_metadata') for key in metadata)
+        counts, issues, unidentified = {}, {}, 0
+        for identity, reason in observations:
+            check_cancelled(cancelled)
+            if not isinstance(identity, str) or not UUID.fullmatch(identity):
+                unidentified += 1
+                continue
+            counts[identity] = counts.get(identity, 0) + 1
+            if reason != 'read':
+                issues.setdefault(identity, set()).add(reason)
+        inventory = {}
+        for identity, count in sorted(counts.items()):
+            if identity in entries:
+                reason = 'visible'
+            elif identity not in raw:
+                reason = 'unreadable_metadata'
+            elif hidden[identity]:
+                reason = 'deleted_or_trashed'
+            else:
+                reason = 'unsupported_type'
+            inventory[identity] = InventoryRecord(identity, count, identity in entries, reason,
+                                                   tuple(sorted(issues.get(identity, ()))))
+        return cls(MappingProxyType(entries), MappingProxyType({key: tuple(value) for key, value in children.items()}),
+                   MappingProxyType(inventory), unidentified)
 
     def ancestry(self, identity):
         result = [identity]
