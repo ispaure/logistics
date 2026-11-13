@@ -169,6 +169,7 @@
     "settings/appearance.py",
     "settings/help.py",
     "settings/privacy_security.py",
+    "settings/playlists.py",
     "settings/text.py",
     "settings/workspaces.py",
     "settings/accent.py",

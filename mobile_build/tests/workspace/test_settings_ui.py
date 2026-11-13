@@ -10,13 +10,64 @@ from tempfile import TemporaryDirectory
 import unittest
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from mobile.app import LogisticsMobile
 from mobile.settings.information import build_information
 
 
 class SettingsUITests(unittest.TestCase):
+    def test_settings_playlist_deletion_and_generic_locked_clear(self):
+        import toga
+        from features.notes_library.notes import NotesLibrary
+        from features.notes_library.playlists import PlaylistStore
+        from commonUtils.runtime.resources.local import LocalFiles
+        from mobile.settings.playlists import controls, dismiss_playlist_dialog
+
+        app = self.make_app()
+        app.show_settings()
+        store = PlaylistStore(app.private_root, app=app)
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / 'Keep.md'
+            source.write_text('Keep this source note.')
+            catalog = store.for_library(NotesLibrary(LocalFiles(root)))
+            record = catalog.create('Morning')
+            catalog.add(record.id, source.name)
+            box = toga.Box()
+            controls(app, box)
+            _, delete, clear = box.children
+
+            with patch.object(app.main_window, 'dialog', new=AsyncMock(side_effect=(record.id, False))):
+                app.loop.run_until_complete(delete.on_press())
+            self.assertEqual(catalog.get(record.id).name, 'Morning')
+
+            async def lock_during_dialog():
+                async def hold(dialog):
+                    dismiss_playlist_dialog(app)
+                    await asyncio.sleep(0)
+                    return record.id
+                with patch.object(app.main_window, 'dialog', new=AsyncMock(side_effect=hold)):
+                    await delete.on_press()
+            app.loop.run_until_complete(lock_during_dialog())
+            self.assertEqual(catalog.get(record.id).name, 'Morning')
+            self.assertIsNone(app._playlist_settings_dialog)
+            self.assertTrue(delete.enabled)
+
+            with patch.object(app.main_window, 'dialog', new=AsyncMock(side_effect=(record.id, 'delete'))):
+                app.loop.run_until_complete(delete.on_press())
+            self.assertEqual(catalog.list(), ())
+            self.assertTrue(source.is_file())
+
+            with patch.object(PlaylistStore, 'locked_count', return_value=1), \
+                    patch.object(PlaylistStore, 'clear_locked') as cleared, \
+                    patch.object(toga, 'ConfirmDialog') as confirmation, \
+                    patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
+                app.loop.run_until_complete(clear.on_press())
+            self.assertIn('locked or unreadable', confirmation.call_args.args[1])
+            self.assertNotIn('Morning', confirmation.call_args.args[1])
+            cleared.assert_called_once()
+
     def test_category_visibility_keeps_shared_text_settings_and_checks_camera_support(self):
         from mobile.settings.categories import settings_sections
 

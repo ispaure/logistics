@@ -1,9 +1,5 @@
 """Whole-book speech uses real chapter publication with a silent speech engine."""
 
-from commonUtils.testing.event_loop import close_loop
-from commonUtils.testing.stages import TestStage
-
-TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from contextlib import contextmanager
 from pathlib import Path
@@ -14,11 +10,18 @@ from unittest.mock import AsyncMock, Mock, patch
 
 from mobile_build.tests.support.readers import MemoryWebView
 from commonUtils.runtime.resources.documents import LocalDocuments
+from commonUtils.testing.event_loop import close_loop
+from commonUtils.testing.stages import TestStage
+from features.books.locations import ChapterText
+from features.books.mobile.epub_speech import EpubReadAloudPanel
 from features.books.mobile.speech_view import ReadAloudPanel
 from mobile.app import LogisticsMobile
 from services.documents.readers import PrivateReader
+from services.session_auth import ResumePassword
 from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
 from mobile_build.tests.editing.test_markdown_speech import Engine
+
+TEST_STAGE = TestStage.REGRESSION
 
 
 @contextmanager
@@ -48,6 +51,77 @@ async def finish_book(panel):
 
 
 class ContinuationTests(unittest.TestCase):
+    def test_rapid_skips_keep_the_residual_and_paused_state_across_empty_chapters(self):
+        async def exercise():
+            loop = asyncio.get_running_loop()
+            first = ChapterText('<body>' + ' '.join(['start'] * 15) + '</body>')
+            empty = ChapterText('<body>…</body>')
+            last = ChapterText('<body><p>edge</p><p>' + ' '.join([f'word{i}' for i in range(70)]) + '</p></body>')
+            chapters = [first, empty, last]
+            current, landings = [0], []
+
+            async def source():
+                return first, 0, None
+
+            async def read(index, valid):
+                await asyncio.sleep(0)
+                return '', chapters[index]
+
+            async def show(panel, index, offset, prepared, valid):
+                current[0] = index
+                landings.append((index, offset))
+                return True
+
+            panel = EpubReadAloudPanel(loop=loop, source=source, on_range=Mock(), close=Mock(),
+                engine=Engine(loop), location=lambda: (current[0], len(chapters)),
+                read_chapter=read, show_chapter=show)
+            try:
+                await panel.ready_task
+                await panel.play()
+                panel.session.pause()
+                panel.skip_forward.on_press()
+                panel.skip_back.on_press()
+                while panel.movement is not None:
+                    await panel.movement
+                expected = len('edge' + ' '.join([f'word{i}' for i in range(29)]) + ' ')
+                self.assertEqual(landings, [(2, expected), (0, 0)])
+                self.assertEqual(panel.session.state, 'paused')
+                self.assertEqual(panel.session.position, 0)
+                self.assertEqual(len(panel.engine.calls), 1)
+            finally:
+                panel.dispose()
+        asyncio.run(exercise())
+
+    def test_stop_invalidates_pending_seek_before_chapter_publication(self):
+        async def exercise():
+            loop = asyncio.get_running_loop()
+            first = ChapterText('<body>First chapter</body>')
+            blocked = asyncio.Event()
+
+            async def source():
+                return first, 0, None
+
+            async def read(index, valid):
+                blocked.set()
+                await asyncio.Future()
+
+            show = AsyncMock(return_value=True)
+            panel = EpubReadAloudPanel(loop=loop, source=source, on_range=Mock(), close=Mock(),
+                engine=Engine(loop), location=lambda: (0, 2), read_chapter=read, show_chapter=show)
+            try:
+                await panel.ready_task
+                await panel.play()
+                task = panel.skip(15)
+                await blocked.wait()
+                panel.stop_playback()
+                with self.assertRaises(asyncio.CancelledError):
+                    await task
+                show.assert_not_called()
+                self.assertEqual(panel.session.state, 'stopped')
+            finally:
+                panel.dispose()
+        asyncio.run(exercise())
+
     def test_empty_chapter_is_skipped_and_continuation_requires_current_audio_grant(self):
         async def exercise():
             loop = asyncio.get_running_loop()
@@ -137,11 +211,31 @@ class ContinuationTests(unittest.TestCase):
                       patch('features.books.mobile.presentation.wait_chapter_ready', AsyncMock(return_value=True))):
                     self.assertTrue(await app.open_crypt(copies=app.crypt_copies, key='a' * 32))
                     owner = app.private_sessions.active
+                    owner.privacy_gate = ResumePassword('test-only')
                     old = owner.provider_epub_view
                     owner.show_provider_read_aloud()
                     panel = old.speech_panel
                     await panel.ready_task
                     await panel.play()
+                    gate = owner.privacy_gate
+                    self.assertIsNotNone(gate)
+                    with patch.object(owner, 'read_provider_speech_chapter', wraps=owner.read_provider_speech_chapter) as read:
+                        # The existing playback grant permits already-admitted audio.
+                        app.preferences.values['session_speech_when_locked'] = 'true'
+                        gate.lock()
+                        self.assertTrue(panel.playback.can_start())
+                        self.assertTrue(panel.playback.command('forward'))
+                        read.assert_not_called()
+                        self.assertEqual(panel.book_view.index, 0)
+                        self.assertEqual(panel.session.state, 'speaking')
+                        await finish_book(panel)
+                        self.assertEqual(panel.session.state, 'stopped')
+                        self.assertTrue(panel.blocked)
+                        read.assert_not_called()
+                        self.assertTrue(gate.authorize(gate.revision))
+                        await panel.play()
+                        await panel.continuation_task
+                        read.assert_awaited_once()
                     await finish_book(panel)
                     current = owner.provider_epub_view
                     self.assertIsNot(current, old)

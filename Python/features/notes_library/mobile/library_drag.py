@@ -6,55 +6,8 @@ from uuid import uuid4
 _ios_classes = None
 
 
-class LibraryDrag:
-    def __init__(self, owner):
-        self.owner = owner
-        self.token = uuid4().hex
-        self.source = None
-        self.bindings = {}
-        self.highlighted = None
-        self.task = None
-
-    def start(self, path):
-        if (not self.owner.valid() or self.owner.file_command_busy
-                or (self.task is not None and not self.task.done()) or not self.owner.library.supports('rename')):
-            return False
-        path = self.owner.library.contained(path)
-        if path == self.owner.root:
-            return False
-        self.source = path
-        return True
-
-    def destination(self, target):
-        if self.source is None or not self.owner.valid() or self.owner.file_command_busy:
-            return None
-        target = self.owner.library.contained(target)
-        destination = posixpath.join(target, PurePosixPath(self.source).name)
-        if destination == self.source or target == self.source or target.startswith(self.source + '/'):
-            return None
-        return destination
-
-    def drop(self, target):
-        destination = self.destination(target)
-        source, self.source = self.source, None
-        self.highlight(None)
-        if destination is None:
-            return False
-        self.task = self.owner.host.loop.create_task(self.owner.move_entry_to(source, destination))
-        return True
-
-    def highlight(self, widget):
-        if self.highlighted is widget:
-            return
-        if self.highlighted is not None:
-            self.owner.host.highlight_entry(self.highlighted, False)
-        self.highlighted = widget
-        if widget is not None:
-            self.owner.host.highlight_entry(widget, True)
-
-    def end(self):
-        self.source = None
-        self.highlight(None)
+class NativeRowDrag:
+    """Attach the platform's local-only drag interactions to one row owner."""
 
     def bind(self, widget, path, *, source=True, target=False):
         self.unbind(widget)
@@ -189,6 +142,57 @@ class LibraryDrag:
             for interaction, delegate in bindings:
                 native.removeInteraction(interaction)
                 delegate.drag = delegate.widget = None
+
+
+class LibraryDrag(NativeRowDrag):
+    def __init__(self, owner):
+        self.owner = owner
+        self.token = uuid4().hex
+        self.source = None
+        self.bindings = {}
+        self.highlighted = None
+        self.task = None
+
+    def start(self, path):
+        if (not self.owner.valid() or self.owner.file_command_busy
+                or (self.task is not None and not self.task.done()) or not self.owner.library.supports('rename')):
+            return False
+        path = self.owner.library.contained(path)
+        if path == self.owner.root:
+            return False
+        self.source = path
+        return True
+
+    def destination(self, target):
+        if self.source is None or not self.owner.valid() or self.owner.file_command_busy:
+            return None
+        target = self.owner.library.contained(target)
+        destination = posixpath.join(target, PurePosixPath(self.source).name)
+        if destination == self.source or target == self.source or target.startswith(self.source + '/'):
+            return None
+        return destination
+
+    def drop(self, target):
+        destination = self.destination(target)
+        source, self.source = self.source, None
+        self.highlight(None)
+        if destination is None:
+            return False
+        self.task = self.owner.host.loop.create_task(self.owner.move_entry_to(source, destination))
+        return True
+
+    def highlight(self, widget):
+        if self.highlighted is widget:
+            return
+        if self.highlighted is not None:
+            self.owner.host.highlight_entry(self.highlighted, False)
+        self.highlighted = widget
+        if widget is not None:
+            self.owner.host.highlight_entry(widget, True)
+
+    def end(self):
+        self.source = None
+        self.highlight(None)
 
     def dispose(self):
         self.end()

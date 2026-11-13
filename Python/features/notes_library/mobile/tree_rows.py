@@ -98,13 +98,13 @@ class NativeTreeRows:
         if not self.current(row):
             return
         if row.page is not None:
-            await self.owner.open_note(row.page)
+            await self.owner.open_selected_note(row.page)
         elif row.folder and row.searching:
             await self.owner.reveal_folder(row.path)
         elif row.folder:
             await self.owner.toggle_folder(row.path)
         else:
-            await self.owner.open_note(row.path)
+            await self.owner.open_selected_note(row.path)
 
     def toggle(self, row):
         if self.current(row) and row.folder and row.tree_expanded is not None:

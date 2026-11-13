@@ -13,12 +13,13 @@ from commonUtils.runtime.speech_language import passage_language
 
 class ReadAloudPanel(toga.Box):
     def __init__(self, *, loop, source, on_range, close, engine=None, app=None, privacy_gate=lambda: None, valid=lambda: True,
-                 document_title=lambda: '', presentation=None, next_chapter=None):
+                 document_title=lambda: '', presentation=None, next_chapter=None, seek=None):
         self.presentation = presentation or (app.speech_presentation if app is not None else SpeechPresentation())
         icon_button = self.presentation.icon_button
         self.playback = None
         self.source, self.closed = source, False
         self.next_chapter = next_chapter
+        self.seek = seek
         self.speech_loop = loop
         self.continue_book = False
         self.continuation_task = None
@@ -46,8 +47,8 @@ class ReadAloudPanel(toga.Box):
         self.speed_track = toga.Box(children=[self.speed_choice, ticks], style=Pack(direction=COLUMN, flex=1))
         self.play_button = icon_button('play', 'Play read-aloud', on_press=self.toggle_playback)
         self.play_button.enabled = False
-        self.skip_back = icon_button('skip_back', 'Skip back about 15 seconds', on_press=lambda w: self.session.skip(-15))
-        self.skip_forward = icon_button('skip_forward', 'Skip forward about 15 seconds', on_press=lambda w: self.session.skip(15))
+        self.skip_back = icon_button('skip_back', 'Skip back about 15 seconds', on_press=lambda w: self.skip(-15))
+        self.skip_forward = icon_button('skip_forward', 'Skip forward about 15 seconds', on_press=lambda w: self.skip(15))
         self.skip_back.enabled = self.skip_forward.enabled = False
         self.session = SpeechSession(self.engine, on_range=on_range, on_state=self.state)
         self.session.on_finished = self.finished
@@ -59,7 +60,7 @@ class ReadAloudPanel(toga.Box):
         self.reset_timer_button.style.update(width=44, height=44, margin_left=8)
         self.timer = PlaybackTimer(loop, changed=self.show_remaining, expired=self.timer_expired)
         self.playback_controls = toga.Box(children=[self.skip_back, self.play_button, self.skip_forward,
-            icon_button('stop', 'Stop read-aloud', on_press=lambda w: self.session.stop())],
+            icon_button('stop', 'Stop read-aloud', on_press=self.stop_playback)],
             style=Pack(direction=ROW, margin_top=12))
         for control in self.playback_controls.children:
             control.style.flex = 1
@@ -117,7 +118,7 @@ class ReadAloudPanel(toga.Box):
             self.playback.timer_changed(self.timer_remaining.text if self.timer.duration else '')
 
     def timer_expired(self):
-        self.session.pause()
+        self.pause_playback()
         self.set_status('Timer finished · Play to start a new timer.')
 
     @property
@@ -147,11 +148,12 @@ class ReadAloudPanel(toga.Box):
             await asyncio.sleep(.25)
             if self.closed:
                 return
-            on_range, can_speak = self.session.on_range, self.session.can_speak
+            on_range, can_speak, on_exhausted = self.session.on_range, self.session.can_speak, self.session.on_exhausted
             self.session.dispose()
             self.engine = NativeSpeech(self.speech_loop)
             self.session = SpeechSession(self.engine, on_range=on_range, on_state=self.state)
             self.session.on_finished = self.finished
+            self.session.on_exhausted = on_exhausted
             self.session.can_speak = can_speak
         if self.closed:
             return
@@ -181,12 +183,28 @@ class ReadAloudPanel(toga.Box):
         if self.closed:
             return
         if self.session.state == 'speaking':
-            self.session.pause()
+            self.pause_playback()
         elif self.session.state == 'paused':
-            if self.playback is None or self.playback.request_start():
-                self.session.resume()
+            self.resume_playback()
         else:
             await self.play()
+
+    def skip(self, seconds):
+        if not self.closed:
+            return self.session.skip(seconds) if self.seek is None else self.seek(seconds)
+
+    def stop_playback(self, widget=None, **kwargs):
+        self.session.stop()
+
+    def pause_playback(self):
+        self.session.pause()
+
+    def resume_playback(self, *, explicit=True):
+        allowed = self.playback is None or (
+            self.playback.request_start() if explicit else self.playback.can_start()
+        )
+        if allowed:
+            self.session.resume()
 
     async def play(self, widget=None, *, continuation=False, **kwargs):
         if self.closed:
@@ -205,27 +223,33 @@ class ReadAloudPanel(toga.Box):
                 self.set_status('Could not read this passage. Try reopening the document.')
             return
         if not self.closed and self.session is session and generation == session.generation:
-            if self.playback is not None and not self.playback.can_start():
-                self.session.stop()
-                self.set_status('Unlock the credential session before reading aloud.')
-                return
-            # Detection runs off the UI thread and never stores the passage.
-            sample = chapter.text.encode('utf-16-le')[start * 2:None if end is None else end * 2].decode('utf-16-le')
-            language = await asyncio.to_thread(passage_language, sample, getattr(chapter, 'language', ''))
-            if self.closed or self.session is not session or generation != session.generation:
-                return
-            if self.playback is not None and not self.playback.can_start():
-                self.session.stop()
-                self.set_status('Unlock the credential session before reading aloud.')
-                return
-            voice = (self.engine.default_voice if self.missing_saved_voice
-                     else self.engine.voice_for_language(language, self.voice))
-            if not voice:
-                self.set_status(f'No installed voice for {language}. Install an offline system voice for this language.')
-                return
             self.continue_book = end is None
-            self.session.play(chapter.text, start, end, voice=voice,
-                speed=float(self.speed_choice.value), breaks=getattr(chapter, 'breaks', ()))
+            await self.play_passage(chapter, start, end)
+
+    async def play_passage(self, chapter, start=0, end=None, *, paused=False, valid=lambda: True):
+        """Load already-admitted speech without requesting a fresh audio grant."""
+        session = self.session
+        generation = session.generation
+        if self.closed or not valid():
+            return False
+        if self.playback is not None and not self.playback.can_start():
+            self.set_status('Unlock the credential session before reading aloud.')
+            return False
+        sample = chapter.text.encode('utf-16-le')[start * 2:None if end is None else end * 2].decode('utf-16-le', 'ignore')
+        language = await asyncio.to_thread(passage_language, sample, getattr(chapter, 'language', ''))
+        if self.closed or self.session is not session or generation != session.generation or not valid():
+            return False
+        if self.playback is not None and not self.playback.can_start():
+            self.set_status('Unlock the credential session before reading aloud.')
+            return False
+        voice = (self.engine.default_voice if self.missing_saved_voice
+                 else self.engine.voice_for_language(language, self.voice))
+        if not voice:
+            self.set_status(f'No installed voice for {language}. Install an offline system voice for this language.')
+            return False
+        self.session.reposition(chapter.text, start, end, voice=voice, paused=paused,
+            speed=float(self.speed_choice.value), breaks=getattr(chapter, 'breaks', ()))
+        return True
 
     def finished(self):
         if not self.closed and self.continue_book and self.next_chapter is not None:
@@ -253,10 +277,9 @@ class ReadAloudPanel(toga.Box):
 
     def pause(self, widget=None, **kwargs):
         if self.session.state == 'paused':
-            if self.playback is None or self.playback.request_start():
-                self.session.resume()
+            self.resume_playback()
         else:
-            self.session.pause()
+            self.pause_playback()
 
     def dispose(self):
         if not self.closed:
@@ -275,4 +298,5 @@ class ReadAloudPanel(toga.Box):
             self.status.text = ''
             self.source = None
             self.next_chapter = None
+            self.seek = None
             self.document_title = lambda: ''

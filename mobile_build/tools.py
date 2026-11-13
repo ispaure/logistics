@@ -82,6 +82,8 @@ SHARED_REQUIRED_MODULES = (
     'formats/markdown/editing.py',
     'formats/markdown/images.py',
     'formats/markdown/properties.py',
+    'formats/markdown/speech.py',
+    'formats/markdown/tokens.py',
     'formats/markdown/wiki.py',
     # Portable resource, stream and lifecycle mechanisms.
     'runtime/browsing.py',

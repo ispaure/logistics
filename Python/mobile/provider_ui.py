@@ -505,7 +505,52 @@ class ProviderUI(FilesUI):
         publication.chrome()
         return True
 
-    async def read_crypt_page(self, widget=None, *, preserve_speech=False, **kwargs):
+    def provider_speech_read_allowed(self):
+        from services.access_policy import display_allowed
+        privacy = self.app.screen_privacy
+        gate = self.privacy_gate
+        return display_allowed(inactive=privacy.inactive, captured=privacy.captured,
+                               locked=(gate is not None and gate.locked) or privacy.resume_locked)
+
+    async def read_provider_speech_chapter(self, reader, index, valid):
+        document = self.provider_document()
+        current = document.capture()
+        gate = self.privacy_gate
+        revision = getattr(gate, 'revision', None)
+
+        def allowed():
+            return (current() and valid() and self.provider_speech_read_allowed()
+                    and self.privacy_gate is gate and getattr(gate, 'revision', None) == revision)
+
+        def load():
+            if (not self.provider_speech_read_allowed() or self.privacy_gate is not gate
+                    or getattr(gate, 'revision', None) != revision):
+                raise PermissionError('The current provider session cannot read this chapter.')
+            return self.provider_page_content(reader, index)[1]
+
+        progress = getattr(self, '_provider_progress', None)
+        if progress is not None and progress.worker is not None:
+            await asyncio.wait({progress.task})
+        if not allowed() or self.cloud_busy or not document.can_start():
+            raise PermissionError('The current provider session cannot read this chapter.')
+        self.set_cloud_busy(True)
+        worker = document.worker = self.loop.create_task(asyncio.to_thread(load))
+        try:
+            try:
+                result = await asyncio.shield(worker)
+            except asyncio.CancelledError:
+                from services.worker_retirement import drain_worker
+                await drain_worker(worker)
+                raise
+            if not allowed():
+                raise PermissionError('The current provider session cannot read this chapter.')
+            return result
+        finally:
+            document.worker = None
+            document.finish_operation(current)
+
+    async def read_crypt_page(self, widget=None, *, preserve_speech=False, speech_chapter=None,
+                              valid=lambda: True, **kwargs):
         document = self.provider_document()
         current = document.capture()
         reader = self.crypt_reader
@@ -520,7 +565,8 @@ class ProviderUI(FilesUI):
             if (not current() or self.manager.active is not self
                     or self.crypt_page.value != selection):
                 return
-        if not document.can_start() or self.cloud_busy:
+        if (not document.can_start() or self.cloud_busy or not valid()
+                or (speech_chapter is not None and not self.provider_speech_read_allowed())):
             return
         panel = getattr(self, 'provider_epub_view', None)
         if not preserve_speech and panel is not None and hasattr(panel, 'close_read_aloud'):
@@ -541,17 +587,20 @@ class ProviderUI(FilesUI):
                 progress.sample_surface()
             from .reading.publication import ReadingPublication
             publication = ReadingPublication.provider(self, self)
-            worker = document.worker = asyncio.create_task(asyncio.to_thread(self.provider_page_content, reader, index))
-            try:
+            if speech_chapter is not None:
+                kind, content = 'epub', speech_chapter
+            else:
+                worker = document.worker = asyncio.create_task(asyncio.to_thread(self.provider_page_content, reader, index))
                 try:
-                    kind, content = await asyncio.shield(worker)
-                except asyncio.CancelledError:
-                    cancelled.set()
-                    from services.worker_retirement import drain_worker
-                    await drain_worker(worker)
-                    raise
-            finally:
-                document.worker = None
+                    try:
+                        kind, content = await asyncio.shield(worker)
+                    except asyncio.CancelledError:
+                        cancelled.set()
+                        from services.worker_retirement import drain_worker
+                        await drain_worker(worker)
+                        raise
+                finally:
+                    document.worker = None
             if not current() or not publication.current() or self.manager.active is not self:
                 return
             if not self._show_crypt_content(kind, content):
@@ -664,11 +713,22 @@ class ProviderUI(FilesUI):
                        count=len(self.crypt_reader.labels), right_to_left=getattr(self.crypt_reader, 'right_to_left', False),
                        busy=self.cloud_busy, move=self.move_private_page)
 
-    async def move_private_page(self, index, *, preserve_speech=False):
-        if self.cloud_busy or self.crypt_reader is None or not 0 <= index < len(self.crypt_reader.labels):
+    async def move_private_page(self, index, *, preserve_speech=False, speech_chapter=None, valid=lambda: True):
+        if (self.cloud_busy or self.crypt_reader is None or not valid()
+                or not 0 <= index < len(self.crypt_reader.labels)):
             return
-        self.crypt_page.value = self.crypt_reader.labels[index]
-        await self.read_crypt_page(**({'preserve_speech': True} if preserve_speech else {}))
+        reader, previous = self.crypt_reader, self.crypt_page.value
+        self.crypt_page.value = reader.labels[index]
+        kwargs = {'preserve_speech': True} if preserve_speech else {}
+        if speech_chapter is not None:
+            kwargs.update(speech_chapter=speech_chapter, valid=valid)
+        try:
+            await self.read_crypt_page(**kwargs)
+        finally:
+            if (speech_chapter is not None and self.crypt_reader is reader
+                    and self.crypt_page.value == reader.labels[index]
+                    and getattr(self, '_provider_displayed_index', None) != index):
+                self.crypt_page.value = previous
 
     async def previous_private_page(self, widget=None, **kwargs):
         if self.crypt_reader is not None and self.crypt_reader.book is not None:

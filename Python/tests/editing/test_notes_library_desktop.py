@@ -294,7 +294,7 @@ class NotesLibraryDesktopTests(QtTestCase):
             (root / 'Home.md').write_text('# Home')
             window = self.open_library(root)
             self.assertEqual([window.panel_tabs.tabText(i) for i in range(window.panel_tabs.count())],
-                             ['Files', 'Search', 'Calendar'])
+                             ['Files', 'Search', 'Calendar', 'Playlist'])
             self.assertIs(window.panel_tabs.currentWidget(), window.files_panel)
             self.assertTrue(window.tree.isVisible())
             self.assertTrue(window.note_controls.isVisible())
@@ -323,6 +323,104 @@ class NotesLibraryDesktopTests(QtTestCase):
             self.assertTrue(window.calendar.isVisible())
             self.assertFalse(window.search.isVisible())
             self.wait_until(lambda: not window.aux.busy)
+
+    def test_playlist_crud_picker_and_keyboard_reorder_keep_source_notes(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from commonUtils.runtime.resources.selection import ResourceChoice
+        from commonUtils.ui.resources import picker
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            library = root / 'library'
+            library.mkdir()
+            for name in ('Home.md', 'Plan.MD', 'Moved.md'):
+                (library / name).write_text('# Note')
+            with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'app'):
+                window = self.open_library(library)
+                panel = window.playlist_panel
+                window.panel_tabs.setCurrentWidget(panel)
+            self.assertIn('Create a playlist', panel.notice.text())
+            with patch.object(qt.QInputDialog, 'getText', return_value=('Morning', True)):
+                panel.new_button.click()
+            self.assertEqual(panel.header.text(), 'Morning')
+            self.assertIn('Add Markdown', panel.notice.text())
+            for path in ('Home.md', 'Plan.MD'):
+                with patch.object(picker, 'choose_resource', return_value=ResourceChoice(
+                    window.provider, path, lambda: None
+                )):
+                    panel.pick()
+            self.wait_until(lambda: panel.rows.count() == 2)
+            panel.rows.setCurrentRow(1)
+            with patch.object(panel.speech, 'play') as play:
+                panel.play_button.click()
+                play.assert_called_once_with(panel.playlist.id, anchor=panel.play_button)
+                play.reset_mock()
+                panel.selected_play_button.click()
+                play.assert_called_once_with(panel.playlist.id, panel.selected, anchor=panel.play_button)
+            panel.up_button.setFocus()
+            panel.up_button.click()
+            self.wait_until(lambda: panel.rows.item(0).text() == 'Plan.MD')
+            self.assertEqual(panel.rows.currentRow(), 0)
+            target = panel.rows.visualItemRect(panel.rows.item(1)).bottomLeft()
+            event = SimpleNamespace(source=lambda: panel.rows, position=lambda: qt.QPointF(target),
+                                    ignore=Mock(), acceptProposedAction=Mock())
+            panel.rows.dropEvent(event)
+            event.acceptProposedAction.assert_called_once()
+            self.wait_until(lambda: panel.rows.item(1).text() == 'Plan.MD')
+            self.assertEqual(panel.rows.currentRow(), 1)
+            with patch.object(picker, 'choose_resource', return_value=ResourceChoice(
+                window.provider, 'Moved.md', lambda: None
+            )):
+                panel.repair_button.click()
+            self.wait_until(lambda: panel.rows.item(1).text() == 'Moved.md')
+            panel.remove_button.click()
+            self.wait_until(lambda: panel.rows.count() == 1)
+            with patch.object(qt.QInputDialog, 'getText', return_value=('Evening', True)):
+                panel.rename()
+            self.wait_until(lambda: panel.header.text() == 'Evening')
+            with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Yes):
+                panel.delete()
+            self.wait_until(lambda: panel.rows.count() == 0)
+            self.assertEqual({path.name for path in library.iterdir() if path.is_file()},
+                             {'Home.md', 'Plan.MD', 'Moved.md'})
+
+    def test_playlist_speech_follows_file_boundaries_and_yields_to_standalone(self):
+        from commonUtils.tests.appearance.test_read_aloud import SilentEngine
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            for name, source in (
+                    ('Start.md', ' '.join('first' + str(i) for i in range(30))),
+                    ('Empty.md', '![Private alt](missing.png)'),
+                    ('End.md', ' '.join('last' + str(i) for i in range(70)))):
+                (root / name).write_text(source)
+            with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'app'):
+                window = self.open_library(root)
+                panel = window.playlist_panel
+                window.panel_tabs.setCurrentWidget(panel)
+            record = panel.catalog.create('Spoken notes')
+            for path in ('Start.md', 'Empty.md', 'End.md'):
+                record = panel.catalog.add(record.id, path)
+            playback = panel.speech
+            playback.controls.engine_factory = SilentEngine
+            window.viewer.speech.engine_factory = SilentEngine
+            with patch('commonUtils.ui.readers.read_aloud.passage_language', return_value=''):
+                playback.play(record.id, anchor=panel.play_button)
+                self.wait_until(lambda: playback.state == 'speaking', message=lambda: playback.controls.message.text())
+                self.assertEqual(playback.active_id, record.entries[0].id)
+                playback.controls.toggle_pause()
+                playback.controls.skip(15)
+                self.wait_until(lambda: playback.active_id == record.entries[2].id)
+                self.assertEqual(playback.state, 'paused')
+                self.assertEqual(playback.queue.position, playback.queue.current.words[15])
+                playback.controls.skip(-15)
+                self.wait_until(lambda: playback.active_id == record.entries[0].id)
+                self.assertEqual(playback.queue.position, 0)
+                window.open_note('Start.md')
+                self.wait_until(lambda: not window.progress.busy)
+                window.viewer.speech.show()
+                window.viewer.speech.start()
+                self.assertEqual(playback.state, 'stopped')
+                self.assertEqual(window.viewer.speech.session.state, 'speaking')
 
     def test_breadcrumb_centers_between_buttons_and_wraps_at_larger_fonts(self):
         with self.temporary_directory() as directory:

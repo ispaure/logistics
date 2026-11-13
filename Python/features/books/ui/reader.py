@@ -361,12 +361,13 @@ class BooksPage(Bookmarks, qt.QWidget):
         chapter = item.data(0, qt.Qt.ItemDataRole.UserRole)
         self.go_chapter(self.book.spine.index(chapter.path), fragment=chapter.fragment)
 
-    def _show_chapter(self, index, *, position=0, fragment='', location=None, turn=0):
+    def _show_chapter(self, index, *, position=0, fragment='', location=None, turn=0, prepared_html=None):
         """Keep the selected chapter aligned with the visible text if loading fails."""
         previous = self._current
         self._current = index
         try:
-            self._render(position=position, fragment=fragment, location=location, turn=turn)
+            self._render(position=position, fragment=fragment, location=location, turn=turn,
+                         prepared_html=prepared_html)
         except (OSError, BookError) as error:
             self._current = previous
             self.status.setText(str(error))
@@ -377,23 +378,6 @@ class BooksPage(Bookmarks, qt.QWidget):
         self.speech.stop()
         self._show_chapter(index, fragment=fragment, turn=index - self._current)
         self._set_busy(False)
-
-    def continue_speech(self):
-        if self.speech.playback.duration and self.speech.playback.remaining <= 0:
-            self.speech.message.setText('Timer finished · Play to start a new timer.')
-            return
-        if not self.book or self.worker or self._closing or self._current + 1 >= len(self.book.spine):
-            if self.book and self._current + 1 == len(self.book.spine):
-                self.speech.message.setText('Finished book.')
-            return
-        book, target = self.book, self._current + 1
-        self.go_chapter(target)
-        generation = self.speech.session.generation
-        def resume():
-            if (self.book is book and self._current == target and not self._loading
-                    and not self._closing and self.speech.session.generation == generation):
-                self.speech.start()
-        qt.QTimer.singleShot(0, self, resume)
 
     def _position(self):
         bar = self.text.verticalScrollBar()
@@ -447,7 +431,11 @@ class BooksPage(Bookmarks, qt.QWidget):
                     selections += [entry for entry in source.extraSelections() if entry.format.property(tag)]
                 widget.setExtraSelections(selections)
 
-    def _render(self, *, position=0, fragment='', location=None, turn=0, initial=False):
+    def _chapter_html(self, index):
+        return chapter_html(self.book, self.book.spine[index], foreground=self._rendered_colors[1],
+                            spacing=self.spacing.value())
+
+    def _render(self, *, position=0, fragment='', location=None, turn=0, initial=False, prepared_html=None):
         if not self.book:
             return
         path = self.book.spine[self._current]
@@ -459,7 +447,7 @@ class BooksPage(Bookmarks, qt.QWidget):
         self._rendered_colors = background, foreground
         self.reading_area.setStyleSheet(f'background-color: {background};')
         self.text.setMaximumWidth(self.reading_width.value())
-        html = chapter_html(self.book, path, foreground=foreground, spacing=self.spacing.value())
+        html = self._chapter_html(self._current) if prepared_html is None else prepared_html
         from services.documents.ui.page_transition import page_slide
         slide = page_slide(self.reading_area)
         slide.begin(turn)
@@ -495,6 +483,8 @@ class BooksPage(Bookmarks, qt.QWidget):
             if fragment:
                 self.text.scrollToAnchor(fragment)
                 self.text.show_page(self.text.verticalScrollBar().value() // self.text.page_height)
+            elif self.text.read_pointer is not None:
+                self.text.show_location(self.text.read_pointer, center=True)
             elif isinstance(location, int) and not isinstance(location, bool):
                 self.text.show_location(location)
             elif isinstance(position, (int, float)) and isfinite(position):

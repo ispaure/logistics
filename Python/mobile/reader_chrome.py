@@ -322,10 +322,15 @@ class ReaderChrome:
             panel.toggle_over(self.book_content, anchor=getattr(self, 'reader_speech_button', None))
             return
         self.close_read_aloud()
-        from features.books.mobile.speech_view import ReadAloudPanel
-        from features.books.mobile.presentation import speech_source
+        from features.books.mobile.epub_speech import EpubReadAloudPanel
+        from features.books.mobile.presentation import speech_source, wait_chapter_ready
+        from .reading.sources import capture_library
+        reader = self.book_reader
+        valid = capture_library(self)
+
         async def source():
             return await speech_source(self.epub_view, self.epub_text, self.epub_offset)
+
         def follow(start, end):
             if not self.app.screen_privacy.inactive:
                 self.epub_view._chapter_bridge.highlight(start, end)
@@ -333,28 +338,29 @@ class ReaderChrome:
                 return
             self.epub_offset = start
             self.epub_event(self.book_reader, self.book_epoch, self.book_record['position'], 'position', start)
-        async def next_chapter(panel):
-            reader, epoch = self.book_reader, self.book_epoch
-            index = self.book_record['position'] + 1
-            if reader is None or index >= len(reader.spine):
-                return False
+
+        def location():
+            return self.book_record['position'], len(reader.spine)
+
+        async def read_chapter(index, current):
+            return await self.epub_controller().read_chapter(reader, index)
+
+        async def show_chapter(panel, index, offset, prepared, current):
             shown = panel.overlay is not None
             panel.hide()
-            self._epub_target = 0
-            await self.move_book_page(index, preserve_speech=True)
-            if panel.closed:
+            try:
+                await self.move_book_page(index, preserve_speech=True,
+                    speech_chapter=(prepared, offset), valid=lambda: valid() and current())
+            finally:
+                if shown and not panel.closed and not self.app.screen_privacy.inactive:
+                    panel.show_over(self.book_content, anchor=getattr(self, 'reader_speech_button', None))
+            if not valid() or not current() or self.book_record['position'] != index:
                 return False
-            if (self.book_reader is not reader or self.book_epoch != epoch
-                    or self.book_record['position'] != index):
-                raise RuntimeError('Chapter publication was cancelled')
-            if shown:
-                panel.show_over(self.book_content, anchor=getattr(self, 'reader_speech_button', None))
-            from features.books.mobile.presentation import wait_chapter_ready
-            if not await wait_chapter_ready(self.epub_view):
-                raise RuntimeError('Chapter did not load')
-            return True
-        self.speech_panel = ReadAloudPanel(loop=self.loop, source=source, on_range=follow, close=self.close_read_aloud,
-            app=self.app, document_title=lambda: self.book_record['name'], next_chapter=next_chapter)
+            return await wait_chapter_ready(self.epub_view)
+
+        self.speech_panel = EpubReadAloudPanel(loop=self.loop, source=source, on_range=follow, close=self.close_read_aloud,
+            app=self.app, document_title=lambda: self.book_record['name'], location=location, valid=valid,
+            read_chapter=read_chapter, show_chapter=show_chapter)
         self.speech_panel.show_over(self.book_content, anchor=getattr(self, 'reader_speech_button', None))
 
     def close_read_aloud(self, widget=None, **kwargs):

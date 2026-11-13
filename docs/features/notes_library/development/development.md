@@ -1,5 +1,37 @@
 # Notes Library development
 
+## Playlist playback and storage
+
+`features.notes_library.playlists` scopes a playlist to the reader-state identity
+of its provider and library root. Each reference stores a stable entry ID and
+provider-relative Markdown path. Playlist operations use a settings transaction.
+Protected buckets use the document catalogue's credential-bound ZIP cipher.
+Providers without a persistent reader-state key use session memory. Unreadable
+encrypted buckets remain available for recovery or explicit clearing.
+
+Each checkpoint updates an existing playlist and matching entry only. A newer
+observation supersedes a pending one. Reordering retains the active ID and
+position. Removing or repairing the active entry ends playback and resets its
+position. On a content change the next Play starts the affected entry from the
+beginning. A missing or unreadable reference can be replaced or removed from the
+playlist detail.
+
+`playlist_queue` carries the signed skip through the same word timing used by
+the underlying engine. The Qt and mobile adapters hand over the resulting
+position and retain the current playback settings. They use a snapshot of the
+already rendered current note when available, including visible generated
+results. Other entries are prepared from admitted Markdown without running
+Dataview or reading embed targets for speech. Provider reads are scoped and
+cancelled when access changes.
+
+Mobile retains at most one bounded adjacent passage on each side in memory
+when the lock-screen preference allows continuation. Locked speech cannot
+admit more text. At that boundary, unlock and press Play to continue. System
+metadata for protected playback uses a generic title. Host regression tests
+exercise the native command routing through the media owner and verify that
+locked seeking never issues a provider read. System media presentation, audio
+routing and real call interruptions require native acceptance.
+
 [Notes Library guides](../notes_library.md)
 
 | Change | Owner and focused tests |

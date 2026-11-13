@@ -102,7 +102,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
         self.file_actions_button = qt.QToolButton()
         self.file_actions_button.setText('…')
         self.file_actions_button.setAccessibleName('Selection actions')
-        self.file_actions_button.setToolTip('Move, copy or delete the selected file or folder')
+        self.file_actions_button.setToolTip('Actions for the selected file or folder')
         self.file_actions_button.clicked.connect(self.selected_file_actions)
         self.new_note_button.clicked.connect(self.new_note)
         self.new_folder_button.clicked.connect(lambda: self.new_entry(folder=True))
@@ -293,11 +293,12 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
             if not self.check_provider():
                 return
             self.populate(self.library.root, rows, pages)
+            if self.panel_tabs.currentWidget() is self.playlist_panel:
+                self.playlist_panel.connect_library()
             self.new_note_button.setEnabled(self.library.supports('create'))
             self.new_card.setEnabled(self.library.supports('create'))
             self.new_folder_button.setEnabled(self.library.supports('create'))
             self.rename_button.setEnabled(self.library.supports('rename'))
-            self.file_actions_button.setEnabled(any(self.library.supports(action) for action in ('rename', 'delete')))
             self.tree.setDragEnabled(self.library.supports('rename'))
             self.tree.setAcceptDrops(self.library.supports('rename'))
         elif kind == 'folder':
@@ -466,6 +467,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
 
     def clear_content(self):
         self._after_document_save = None
+        self.playlist_panel.close_library()
         if self.library is not None:
             self.library.close()
         self.cancel_aux()

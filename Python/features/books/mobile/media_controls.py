@@ -20,8 +20,8 @@ class SpeechPlayback:
             audio_output.register(self, self.pause_audio)
 
     def pause_audio(self):
-        if self.panel.session.state == 'speaking':
-            self.panel.session.pause()
+        if self.panel.session.state in {'speaking', 'paused'}:
+            getattr(self.panel, 'pause_playback', self.panel.session.pause)()
 
     def request_start(self):
         return self.credential_start() and (self.audio_output is None or self.audio_output.request_play())
@@ -30,6 +30,10 @@ class SpeechPlayback:
         return self.credential_start() and (self.audio_output is None or self.audio_output.permitted())
 
     def allowed(self):
+        allows_background = getattr(self.panel, 'allows_background', None)
+        if allows_background is not None:
+            return (not self.closed and getattr(self.app, 'active_host', True) and self.valid()
+                    and allows_background())
         return (not self.closed and getattr(self.app, 'active_host', True) and self.valid() and (self.gate() is None
             or self.app.preferences.values.get('session_speech_when_locked', 'false') == 'true'))
 
@@ -37,6 +41,9 @@ class SpeechPlayback:
         return self.allowed() and self.panel.session.state in {'speaking', 'paused'}
 
     def credential_start(self):
+        playback_allowed = getattr(self.panel, 'playback_allowed', None)
+        if playback_allowed is not None:
+            return not self.closed and getattr(self.app, 'active_host', True) and self.valid() and playback_allowed()
         privacy = getattr(self.app, 'screen_privacy', None)
         if privacy is not None and getattr(privacy, 'sensitive', lambda: False)() and not speech_allowed(
                 protected=getattr(privacy, 'sensitive', lambda: False)(),
@@ -55,7 +62,8 @@ class SpeechPlayback:
             return
         if state in {'speaking', 'paused'}:
             if _active is not None and _active is not self:
-                _active.panel.session.stop()
+                previous = _active.panel
+                getattr(previous, 'stop_playback', previous.session.stop)()
             _active = self
             if self.allowed():
                 try:
@@ -77,7 +85,8 @@ class SpeechPlayback:
         # Hosts opt ordinary readers in with a title provider. Private hosts leave
         # it empty; credential-session readers remain generic even with opt-in audio.
         privacy = getattr(self.app, 'screen_privacy', None)
-        private = self.gate() is not None or bool(privacy is not None and getattr(privacy, 'sensitive', lambda: False)())
+        private = (getattr(self.panel, 'private_metadata', False) or self.gate() is not None
+                   or bool(privacy is not None and getattr(privacy, 'sensitive', lambda: False)()))
         title = getattr(self.panel, 'document_title', lambda: '')() if not private else ''
         if not title:
             return 'Read aloud'
@@ -104,28 +113,43 @@ class SpeechPlayback:
         if action == 'interrupt':
             if self.audio_output is not None:
                 self.audio_output.invalidate()
-            session.pause()
+            self.pause_audio()
         elif action == 'play':
             if not self.can_start():
                 return False
-            session.resume()
+            self.resume()
         elif action == 'pause':
-            session.pause()
+            self.pause_audio()
         elif action == 'toggle':
             if session.state == 'paused' and not self.can_start():
                 return False
-            session.resume() if session.state == 'paused' else session.pause()
+            self.resume() if session.state == 'paused' else self.pause_audio()
         elif action == 'back':
-            session.skip(-15)
+            getattr(self.panel, 'skip', session.skip)(-15)
         elif action == 'forward':
-            session.skip(15)
+            getattr(self.panel, 'skip', session.skip)(15)
         elif action == 'stop':
-            session.stop()
+            getattr(self.panel, 'stop_playback', session.stop)()
         else:
             return False
         return True
 
+    def resume(self):
+        resume = getattr(self.panel, 'resume_playback', None)
+        if resume is not None:
+            resume(explicit=False)
+        else:
+            self.panel.session.resume()
+
     def enforce(self):
+        enforce = getattr(self.panel, 'enforce_playlist_access', None)
+        if enforce is not None:
+            enforce()
+            if not self.allowed():
+                self.clear()
+            elif self.media is not None:
+                self.media.update_content(self.content())
+            return
         if not self.credential_start():
             self.pause_audio()
         if self.media is not None:
@@ -154,9 +178,9 @@ class SpeechPlayback:
         self.gate = self.valid = lambda: None
 
 
-def enforce_privacy(app):
+def enforce_privacy(app, *, playlists_only=False):
     for owner in tuple(_owners):
-        if owner.app is app:
+        if owner.app is app and (not playlists_only or hasattr(owner.panel, 'enforce_playlist_access')):
             owner.enforce()
 
 
@@ -178,7 +202,7 @@ def settings_changed(app):
 def stop_media(app):
     for owner in tuple(_owners):
         if owner.app is app:
-            owner.panel.session.stop()
+            getattr(owner.panel, 'stop_playback', owner.panel.session.stop)()
             owner.clear()
 
 

@@ -28,7 +28,8 @@ See the [user guide](../user/user.md) for reading controls, settings and backups
   elided titles/status and native fullscreen state synchronization. Navigation
   and format-specific controls remain in their own reader modules.
   Shared read-aloud controls start at the top of the visible EPUB page, highlight
-  the current word and provide approximate 15-second backward/forward jumps.
+  the current word and provide approximate 15-second backward/forward jumps
+  across chapters. Selected passages keep their own bounds.
 - `ui/text_view.py`: screen-height QTextDocument pagination with discrete arrow-key
   turns. The hidden scrollbar represents page offsets, including a short final
   page. Saved locations use a UTF-16 document offset within the spine chapter;
@@ -203,9 +204,9 @@ characters), without reading or forwarding utterance text to the native adapters
 The subtitle contains only the listening timer or app name. Private hosts leave
 the title provider empty; credential-session sources remain generic regardless of
 the background-audio opt-in. The OS controls subtitle presentation and refresh timing.
-Hosts provide current
-text/selection and range-follow callbacks, then dispose speech before chapter
-replacement or reader retirement. Resume continues from the current word.
+Hosts provide the current text/selection and range-follow callbacks. Manual
+chapter replacement or reader retirement disposes speech. When speech navigates,
+the same panel, native engine and timer follow the landing chapter.
 
 Android initializes audio attributes after `onInit` succeeds and prefers the
 system's current installed offline voice. Null voice-feature sets are accepted;
@@ -241,6 +242,18 @@ focus or resize the WebView. Programmatic scroll restoration is distinguished
 from user movement so reflow does not replace a precise anchor with the beginning
 of its newly wrapped line. No speech text, voice buffer or private selection is
 written to the catalogue or recovery records.
+
+`speech_sequence.py` resolves overshoot in words against the chapter order and
+keeps at most the most recent playable destination and the chapter being scanned.
+Both hosts use commonUtils speech positions and the UTF-16 word index of their own
+rendered text. Mobile serializes rapid skips and checks the reader, session and
+audio permission before loading or publishing a destination. Provider-backed
+chapters also require a fresh read grant, checked before the worker opens the
+source and again before using its result. A lock-screen grant permits the already
+loaded chapter to finish and leaves the next chapter for Play after unlock.
+`test_books_reader.py` and `test_epub_continuation.py` exercise whole-book
+continuation, residual seeking, cancellation, selection boundaries and the
+provider lock boundary with silent engines.
 
 ## Desktop presentation
 
