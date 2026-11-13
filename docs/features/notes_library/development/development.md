@@ -24,6 +24,10 @@ results. Other entries are prepared from admitted Markdown without running
 Dataview or reading embed targets for speech. Provider reads are scoped and
 cancelled when access changes.
 
+On mobile, `composition/presentation.py:notes_host` constructs
+`PlaylistSpeech` and supplies the reader preparation, highlighting, clearing
+and speech-stop callbacks. The feature owns the queue and playback transitions.
+
 Mobile retains at most one bounded adjacent passage on each side in memory
 when the lock-screen preference allows continuation. Locked speech cannot
 admit more text. At that boundary, unlock and press Play to continue. System
@@ -40,7 +44,7 @@ routing and real call interruptions require native acceptance.
 | Desktop session destination | `ui/page.py`, `desktop/documents.py`, `desktop/sidebar.py`; `test_notes_library_hosting.py` |
 | Desktop documents and groups | `ui/notes_library.py`, `ui/document.py`, `ui/library_workspace.py`; `test_notes_library_desktop.py`, `test_notes_library_tabs.py` |
 | In-library file previews | `services/documents/file_preview.py`, `ui/file_preview.py`, `mobile/file_preview.py`; desktop tabs and mobile Notes Library suites, native Notes Library probe |
-| Mobile library | `mobile/notes_library.py`, library panels/tools/editors; mobile Notes Library and Markdown library workflow suites |
+| Mobile browsing and document lifecycle | [Mobile browsing and document lifecycle](#mobile-browsing-and-document-lifecycle) maps the feature owners and focused tests. |
 | Shared mobile authoring | `services/documents/authoring/`; mobile Markdown editor, provider and workflow suites |
 | Feature state and payload | Desktop runtime preferences, mobile preferences/features, owning source manifests; feature-preference/mobile-feature and packaging tests |
 
@@ -92,9 +96,8 @@ and credential access. Neither these names nor query hints enter the ordinary
 SQLite database. Credential rotation, revocation and late-worker checks are
 covered by focused LocalCrypt tests; real native encryption is a separate check.
 
-The managed
-`document_storage_tools ios|android --probe notes-search` check exercises retained
-native inputs/results across scope changes and rotation using synthetic notes.
+The [Search round-trip checks](#search-round-trip-checks) cover retained native
+inputs and results across scope changes and rotation using synthetic notes.
 
 Sidebar navigation reuses the current inner document owner, preserving its
 history and existing save/discard/cancel transition. Explicit `new_tab=True`
@@ -528,8 +531,9 @@ row beside the breadcrumb. The **×** calls `NotesHost.close_session` through th
 workflow, retiring the library even when page history or compact browsing is
 active. The visible **‹ / ›** controls only navigate note history; they stay
 disabled at its ends. The documentation reader uses the same controls, with
-Close returning through its host route. Android system Back retains its
-browse-panel, page-history, then exit ordering.
+Close returning through its host route. The
+[mobile lifecycle](#mobile-browsing-and-document-lifecycle) describes how host
+Back handles a retained Search origin, browse panels and note history.
 
 Remote providers never get a search widget or recursive index. Private note data
 stays in memory and credential revocation retires the document. See the
@@ -956,12 +960,74 @@ the shared Qt fixture also fails unhandled callback exceptions.
 `preparation.py` returns named `PreparedDocument` results before desktop UI
 publication. An abandoned result has one idempotent close path for source leases,
 notebooks, media resources and file previews. Publication retains each format's
-existing editor behavior. Mobile `mobile/library_opening.py` owns document
-admission, preparation, publication tokens, history and native page callbacks;
-the browser retains library navigation. `mobile/preparation.py` shields prepared
+existing editor behavior. The [mobile lifecycle](#mobile-browsing-and-document-lifecycle)
+describes mobile admission and publication. `mobile/preparation.py` shields prepared
 reads and disposes late results when their awaiting task is cancelled. A source
 resource is never closed while its preparation worker still uses it. Desktop
 late-open regressions and mobile cancellation/resource checks cover this boundary.
+
+## Mobile browsing and document lifecycle
+
+`mobile/notes_library.py:VaultBrowser` owns library navigation, note history and
+the transition between browsing and detail. `mobile/library_panels.py:LibraryPanels`
+owns panel state and the retained Search inputs, result rows and scroll controls
+for each scope. `mobile/library_opening.py:LibraryDocuments` owns the active
+document, including preparation and WebView publication, editor leave decisions,
+page search, speech, media and retirement. The host routes Back and Close through
+`Python/mobile/session_workflows/transitions.py`.
+
+Selecting a result from compact Search captures its scope, query, selected row
+and scroll position. The return context is installed after a successful open.
+Back first dismisses floating actions or browse panels and cancels any active
+document load. When returning from a note to Search, it resolves editor changes
+before clearing the document. The document owner flushes pending input, then
+uses the editor's save policy or asks for Save, Discard or Cancel. Cancel or a
+failed flush or save leaves the editor and draft active.
+
+On a successful return, the browser reuses the Search controls and results.
+It restores the selected row and viewport when the scope and query still match.
+A save can refresh the results while preserving that viewport. The document
+owner retires the editor, callbacks and page media while the library stays open.
+Explicit Close follows the host's library-session close path.
+
+Open, leave and load callbacks are fenced by document epoch and library validity.
+An asynchronous leave also checks editor identity. For a WebView load event with
+no URL, the document owner verifies a marker in the current DOM before enabling
+page actions. Search uses its own generation to reject late results when its
+scope or lifecycle changes.
+
+### Search round-trip checks
+
+From the repository root, use the mobile host runner for the focused contracts:
+
+```sh
+python3 dev.py test mobile test_notes_library_panels.py
+python3 dev.py test mobile test_notes_library.py
+python3 dev.py test mobile test_playlist_speech.py
+```
+
+The panel tests cover Search return, save, cancel, failed save, read-only notes
+and late loads. The document tests cover Back to browsing across document kinds.
+The playlist tests exercise host callbacks for playback and reader highlighting.
+
+For native checks, run the managed probe on a disposable simulator or emulator:
+
+```sh
+mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools ios \
+  --probe notes-search --output test-results/notes-search-ios
+mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools android \
+  --probe notes-search --output test-results/notes-search-android
+```
+
+The probe passed at Logistics `84b59b744` with commonUtils `dbb002baa2b1` on an
+iPhone 18 Pro simulator (iOS 27.0) and Pixel 9 emulator (Android API 36).
+It checked both Search scopes in portrait and landscape, then exercised writable
+and read-only Search → note → Back in portrait through the host Back route.
+The writable case cancelled once, saved on retry, refreshed the result set and
+restored selection and scroll. Both cases reopened a second note and verified
+its WebView was ready. The managed runs removed their disposable devices.
+Physical-device gestures and the later playlist composition change are outside
+this native result.
 
 ## Shared link policy
 

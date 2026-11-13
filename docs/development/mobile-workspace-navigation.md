@@ -605,7 +605,7 @@ animations are not implemented by this policy.
 | Workspaces and workspace actions | Pop detail to the retained Workspaces page, then Home |
 | Local, LocalCrypt and Remote browser | Clear query, close search controls, follow bounded browser history; direct entry falls back to parent |
 | Documents and ordinary text/Markdown | Close compact drawer/Find, then pop detail; keep session and draft |
-| Notes Library and documentation | Close compact browse surface, retrace note/page history, then pop the owning route |
+| Notes Library and documentation | Close compact browse surface, return to a retained Notes browse origin when present, retrace note/page history, then pop the owning route |
 | Imported EPUB/comic | Close compact chapter list or fullscreen, then pop tools/reader to its origin |
 | Provider EPUB/comic/PDF | Close visible find, chapter or PDF tools, leave fullscreen, then return to origin |
 | Chat | Close compact conversation drawer; pop configuration/actions; root returns Home |
@@ -679,8 +679,10 @@ adds the command to the location's Push/Pull actions page only when `.obsidian`
 is a directory. Probes perform no filesystem mutations, and generation/navigation
 checks discard stale results.
 
-`mobile.obsidian` retains the native adaptive folder/page reader and
-owns a transient `notes-library` Documents session. Its hamburger, history,
+`mobile.obsidian` opens a transient `notes-library` Documents session and wires
+the feature-owned adaptive browser to the host. The
+[Notes Library lifecycle guide](../features/notes_library/development/development.md#mobile-browsing-and-document-lifecycle)
+covers the browser and active-document owners, including Search return. Its hamburger, history,
 parent navigation and read-aloud controls stay with the reader. Closing the
 library removes its session and returns to Documents when opened there. A library
 opened through Workspaces returns to the Workspaces overview, including
