@@ -45,8 +45,10 @@ html, body { margin: 0; width: 100%; height: 100%; overflow: hidden; }
     }
 
     function anchor(y) {
-        const page = pageAt(y), row = rows[page];
-        return [page, row ? (y - row.top) / row.step : 0];
+        // Chromium quantizes scroll offsets to device pixels. A page-top
+        // seek can land a fraction of a CSS pixel before the page boundary.
+        const page = pageAt(y + 1), row = rows[page];
+        return [page, row ? Math.max(0, y - row.top) / row.step : 0];
     }
 
     function geometry() {
