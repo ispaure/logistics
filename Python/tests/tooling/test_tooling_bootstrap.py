@@ -221,7 +221,8 @@ class ToolingBootstrapTests(TestCase):
         repo = Path(tooling.__file__).resolve().parents[1]
         package = self.root / 'logistics_build'
         package.mkdir()
-        for name in ('manager_bridge.py', 'tooling_bootstrap.py', 'native_tooling.py', 'native_tooling.json'):
+        for name in ('manager_bridge.py', 'tooling_bootstrap.py', 'device_workspace_paths.py',
+                     'native_tooling.py', 'native_tooling.json'):
             shutil.copy2(repo / 'logistics_build' / name, package / name)
         for action, values in [('tooling_status', {}), ('tooling_update', {'confirmed': False})]:
             with self.subTest(action=action):
@@ -346,6 +347,21 @@ class ToolingBootstrapTests(TestCase):
         with tooling.mutation_guard(self.root):
             pass
 
+    @skipUnless(os.name == 'posix', 'POSIX tooling mutation guard')
+    def test_device_workspace_locks_block_tooling_mutation_at_both_roots(self):
+        from build_manager.locking import operation_lock_path, workspace_lock
+        from logistics_build.device_workspace_paths import DEVICE_WORKSPACES, LEGACY_DEVICE_WORKSPACES
+
+        for base in (LEGACY_DEVICE_WORKSPACES, DEVICE_WORKSPACES):
+            workspace = self.root / base / 'android' / ('1' * 32)
+            workspace.mkdir(parents=True)
+            with self.subTest(root=base), workspace_lock(workspace / 'operation.lock'):
+                self.assertIn(operation_lock_path(workspace), set(tooling.operation_locks(self.root)))
+                with self.assertRaises(tooling.ActiveWorkflowError), tooling.mutation_guard(self.root):
+                    self.fail('Tooling mutation entered while a device workspace was leased')
+            with tooling.mutation_guard(self.root):
+                pass
+
     def test_post_sync_is_opt_in_and_uses_declared_repair(self):
         with patch.object(tooling, 'update') as update:
             self.assertIsNone(tooling.after_sync(self.root))
@@ -413,7 +429,8 @@ class ToolingBootstrapTests(TestCase):
         repo = Path(tooling.__file__).resolve().parents[1]
         package = self.root / 'logistics_build'
         package.mkdir()
-        for name in ('manager_bridge.py', 'tooling_bootstrap.py', 'native_tooling.py', 'native_tooling.json'):
+        for name in ('manager_bridge.py', 'tooling_bootstrap.py', 'device_workspace_paths.py',
+                     'native_tooling.py', 'native_tooling.json'):
             shutil.copy2(repo / 'logistics_build' / name, package / name)
         (package / 'build_project.py').write_text(
             'class LogisticsProject:\n'

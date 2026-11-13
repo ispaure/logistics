@@ -431,9 +431,14 @@ inside a source snapshot. Read-only TestFlight `plan` does not prune outputs.
   directories plus everything used within five days. Enrollment refreshes age.
 - A `.keep` file anywhere inside a tree pins that enclosing build or snapshot.
   Pin a prepared artifact before keeping its path for long-term upload/retry use.
-- Recipe-identified device-build workspaces retain the three newest per platform
-  plus those used within one day, with a 12 GiB budget per platform and a one-hour
-  grace period. Their operation locks and paused-workflow holds protect installs.
+- Recipe-identified device-build workspaces share a newest-three count and a
+  12 GiB budget per platform across the legacy
+  `mobile_build/.tools/build-manager/workspaces/devices/` root and
+  `tmp/build/mobile/`. Workspaces used within one day are kept unless the
+  budget requires earlier cleanup after a one-hour grace period. Operation
+  locks, paused-workflow holds and pins protect workspaces at either root.
+  The storage view lists both locations for cleanup. Saved selections and
+  recipes still identify the workspace at its original path.
 - New probe compiler caches live under `tmp/cache/compiler/`. Marked legacy
   caches under `mobile_build/.tools/build-manager/compiler-caches/` remain in place
   and share one 12 GiB soft budget with the new caches and eligible snapshot and
