@@ -269,7 +269,8 @@ PYTHONPATH=Python:. .venv/bin/python -m mobile_build.validation.video_native ios
 ```
 
 The native API compiler checks download pinned upstream interfaces into
-`logistics_build.build_retention.scratch()`, compile and remove the scratch tree. They
+`logistics_build.build_retention.scratch()`, compile and remove the scratch tree.
+Successful checks write `tmp/test-results/media/<platform>-api-compile.json`. They
 do not install apps or prove native playback. Desktop fixtures generate all
 eight required codec/container combinations and observe decoded frames and audio
 samples. Provider regressions exercise actual rclone ciphertext with an 11 MiB

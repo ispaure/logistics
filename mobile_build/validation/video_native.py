@@ -72,7 +72,7 @@ def main():
     owner = ROOT / 'Python/features/video/mobile'
     source = (owner / 'ios/VideoPlayer.m' if args.platform == 'ios'
               else owner / 'android/io/github/ispaure/logistics/video/VideoPlayer.java')
-    report = ROOT / f'test-results/media/{args.platform}-api-compile.json'
+    report = ROOT / 'tmp/test-results/media' / f'{args.platform}-api-compile.json'
     report.parent.mkdir(parents=True, exist_ok=True)
     report.write_text(json.dumps(dict(status='passed', scope='native SDK API compile only',
         platform=args.platform, checked_at=datetime.now(timezone.utc).isoformat(),
@@ -81,6 +81,7 @@ def main():
                  for path in sorted(source.parent.glob('*.m' if args.platform == 'ios' else '*.java'))},
         sdk=VLC_REVISION if args.platform == 'ios' else 'libvlc-all:3.7.5', scratch_removed=True), indent=2) + '\n')
     print(args.platform + ' video adapter API compile passed; scratch removed.')
+    print(f'Report: {report}')
 
 
 if __name__ == '__main__':
