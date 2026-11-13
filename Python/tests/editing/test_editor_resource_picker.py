@@ -1,3 +1,4 @@
+"""Check file selection, private reader handoff and cleanup for editor-launched pickers."""
 
 from commonUtils.testing.stages import TestStage
 

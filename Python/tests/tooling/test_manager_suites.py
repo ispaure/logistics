@@ -1,3 +1,4 @@
+"""Check Logistics manager suite routing, selected test files and acceptance evidence."""
 
 from commonUtils.testing.stages import TestStage
 

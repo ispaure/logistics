@@ -1,3 +1,4 @@
+"""Check pinned location persistence and navigation across local and provider roots."""
 
 from commonUtils.testing.stages import TestStage
 

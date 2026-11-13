@@ -1,3 +1,4 @@
+"""Check editor baselines, Git fallback and project change-review state."""
 
 from commonUtils.testing.stages import TestStage
 

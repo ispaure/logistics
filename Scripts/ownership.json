@@ -60,6 +60,18 @@
       },
       "mobile_manifest": "Python/features/books/mobile_sources.json"
     },
+    "bulk_rename": {
+      "sources": [
+        "Python/desktop/bulk_rename"
+      ],
+      "guide": "docs/features/bulk_rename/development/development.md",
+      "tests": {
+        "desktop": [
+          "files/test_bulk_rename_host.py",
+          "files/test_bulk_rename_ui.py"
+        ]
+      }
+    },
     "calibre": {
       "sources": [
         "Python/features/calibre"
@@ -575,6 +587,25 @@
         ]
       },
       "mobile_manifest": "Python/features/video/mobile_sources.json"
+    },
+    "notebooks": {
+      "sources": [
+        "Python/features/notebooks"
+      ],
+      "guide": "docs/features/notebooks/development/development.md",
+      "tests": {
+        "desktop": [
+          "notebooks/test_*.py",
+          "resources/test_notebook_resources.py"
+        ],
+        "mobile": [
+          "documents/test_notebook_*.py",
+          "native/test_notebook_*.py",
+          "native/test_native_notebook_image_entry.py",
+          "tooling/test_notebook_sampling_package.py"
+        ]
+      },
+      "mobile_manifest": "Python/features/notebooks/mobile_sources.json"
     },
     "notes_library": {
       "sources": [

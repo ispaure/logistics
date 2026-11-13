@@ -1,3 +1,4 @@
+"""Check Firebase beta build preflight, build numbering and distribution decisions."""
 
 from commonUtils.testing.stages import TestStage
 

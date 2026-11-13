@@ -1,3 +1,4 @@
+"""Check mobile file browsing, thumbnail privacy and provider admission."""
 
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage

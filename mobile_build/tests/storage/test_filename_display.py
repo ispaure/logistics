@@ -1,3 +1,4 @@
+"""Check mobile filename truncation, accessible names and extension-safe editing."""
 
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage

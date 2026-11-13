@@ -1,3 +1,4 @@
+"""Check IDE document buffers, project persistence and conflict handling."""
 
 from commonUtils.testing.stages import TestStage, stage
 

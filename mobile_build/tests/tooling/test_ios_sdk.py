@@ -1,3 +1,4 @@
+"""Check Apple SDK selection and managed Duo simulator setup with synthetic tooling results."""
 
 from commonUtils.testing.stages import TestStage
 

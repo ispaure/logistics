@@ -20,7 +20,7 @@ PUSH_DEFAULTS = {
     'mobile-build.yml': dict(family='mobile-build', targets=('ios', 'android'),
         sha256='0ff8dddc90a0d9929720bd54fe5c80557876e1a710cb20f33f3058f2f1f88f19'),
     'mobile-runtime.yml': dict(family='mobile-runtime', targets=('ios', 'android'),
-        sha256='4862d34ae88c07a0be36c28794034889df9639a097a72c02f6bd0552180bcf50'),
+        sha256='2ee75804da9812bdd5fc81d779e4e011ce0748563bce024e20cc59e79279814d'),
 }
 
 

@@ -1,3 +1,4 @@
+"""Check editor and picker layout reactions to platform keyboard notifications."""
 
 from commonUtils.testing.stages import TestStage
 

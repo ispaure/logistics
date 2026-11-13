@@ -1,3 +1,4 @@
+"""Check LocalCrypt configuration, bounded file creation and safe encrypted listings."""
 
 from commonUtils.testing.stages import TestStage
 

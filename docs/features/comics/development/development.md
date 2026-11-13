@@ -282,7 +282,7 @@ use one native ImageCanvas in `mobile/presentation.py`. Geometry preserves page
 proportions at a common height and manga visual order, with no artificial gutter
 between the pages. Desktop and mobile use the same zero-gap policy.
 Geometry regressions in
-`Python/tests/test_mobile_composite.py` verify touching page edges across viewport
+`Python/tests/comics/test_mobile_composite.py` verify touching page edges across viewport
 sizes and bitmap allocation limits; `mobile_build/tests/native/test_fold_layout.py` separately
 checks reserved physical hinge clearance. Combined output is capped at 16 million pixels and 8192 pixels per side before native
 allocation. UIKit rendering explicitly uses scale 1 so Retina density does not

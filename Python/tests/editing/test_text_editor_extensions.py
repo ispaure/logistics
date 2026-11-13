@@ -1,3 +1,4 @@
+"""Check formatter, diff review and merge actions in the desktop editor."""
 
 from commonUtils.testing.stages import TestStage
 

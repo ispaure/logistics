@@ -1,3 +1,4 @@
+"""Check the TestFlight launcher build counter and upload decisions."""
 
 from commonUtils.testing.stages import TestStage
 

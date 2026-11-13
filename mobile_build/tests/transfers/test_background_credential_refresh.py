@@ -1,3 +1,4 @@
+"""Check credential refresh, Home control updates and metadata reuse."""
 
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage

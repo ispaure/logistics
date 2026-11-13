@@ -1,3 +1,4 @@
+"""Check Android deployment device selection, in-place upgrades and signer continuity."""
 
 from commonUtils.testing.stages import TestStage
 

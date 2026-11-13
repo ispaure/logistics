@@ -1,3 +1,4 @@
+"""Check privacy manifest staging, signing integration and release inspection."""
 
 from commonUtils.testing.stages import TestStage
 
