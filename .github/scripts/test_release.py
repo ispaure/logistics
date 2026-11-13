@@ -26,7 +26,8 @@ class PackageTests(unittest.TestCase):
                    'docs/development/mobile-evidence/screenshot.png',
                    'docs/development/mobile-evidence/old-report.json',
                    'Python/features/books/docs/mobile-evidence/report.json',
-                   'docs/features/books/mobile-evidence/report.json']
+                   'docs/features/books/mobile-evidence/report.json',
+                   'tmp/runs/receipt.json', 'tmp/cache/tool.json', 'tmp/build/generated.py']
         for folder in ('Mobile', 'mobile_build'):
             private.extend(folder + '/' + name for name in (
                 'payload/mobile/app.py', 'build/generated.py', 'logs/deploy.log',
@@ -34,7 +35,8 @@ class PackageTests(unittest.TestCase):
                 '.testflight-keys/upload.p8', '.tools/test-devices.json',
                 '.android-beta/signing.json', '.deploy-workspaces/ios/pyproject.toml'))
         public = ['mobile_build/pyproject.toml', 'mobile_build/resources/logistics.png',
-                  'Python/mobile/mobile_sources.json', 'Python/desktop/main_window.py']
+                  'Python/mobile/mobile_sources.json', 'Python/desktop/main_window.py',
+                  'Python/tests/fixtures/tmp/example.json', 'tmp_helpers/source.py']
         # Test tracked ignore policy independently of private runtime symlinks
         # in captured manager checkouts. Git refuses pathspecs below symlinks.
         with tempfile.TemporaryDirectory() as directory:
@@ -75,7 +77,9 @@ class PackageTests(unittest.TestCase):
             names = ['docs/development/validation-artifacts.md',
                      'docs/development/mobile-evidence/nested/screenshot.png',
                      'Python/commonUtils/docs/development/mobile-evidence/report.json',
-                     'test-results/mobile-evidence/report.json']
+                     'test-results/mobile-evidence/report.json',
+                     'tmp/runs/receipt.json', 'tmp/cache/tool.json',
+                     'Python/tests/fixtures/tmp/example.json']
             for name in names:
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -83,6 +87,8 @@ class PackageTests(unittest.TestCase):
             packaging.package(root, root / 'release.zip', names, required=set())
             with zipfile.ZipFile(root / 'release.zip') as archive:
                 self.assertIn('Logistics/' + names[0], archive.namelist())
+                self.assertIn('Logistics/' + names[-1], archive.namelist())
+                self.assertFalse(any(name.startswith('Logistics/tmp/') for name in archive.namelist()))
                 self.assertFalse(any('mobile-evidence/' in name for name in archive.namelist()))
             for name in names:
                 self.assertEqual((root / name).read_bytes(), b'local artifact fixture')

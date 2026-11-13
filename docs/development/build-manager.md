@@ -127,7 +127,11 @@ executable modes and internal relative links from both Logistics and commonUtils
 The source identity records commonUtils' base commit, dirty state and content
 fingerprint as well as the combined fingerprint. Neither checkout needs a commit
 or push for local validation and Debug development builds. Ignored credentials,
-device configuration and external feature links are excluded. Source changes
+device configuration, external feature links and checkout-root `tmp/` outputs are
+excluded. Working capture and guest transfer reject root `tmp/` entries in the
+Git index. Capture and transfer also reject root `tmp/` in retained Logistics
+Git history because guest archives include Git metadata. Nested source paths
+named `tmp` remain eligible. Source changes
 during capture or mismatched copied bytes reject preparation; later source edits
 cannot mutate an existing snapshot. Cached snapshots must still match their recorded
 content fingerprint, including the shared tree. Signed tester and Release-device
