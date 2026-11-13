@@ -4,6 +4,10 @@ import json
 from pathlib import Path
 
 
+DESKTOP_SMOKE_ARGS = ['--profile', 'smoke', '--mode', 'fast']
+DESKTOP_REMAINING_STAGES = ['--stage', 'regression', '--stage', 'extended']
+
+
 def desktop_checks(system, results, root=None):
     """The existing platform gate, with no platform's required checks omitted."""
     checks = [('test-structure', ['-m', 'logistics_build.test_structure', '--check'], 120)]
@@ -14,9 +18,12 @@ def desktop_checks(system, results, root=None):
     rows = discover(root, 'desktop')
     checks.extend((row['id'] + '.smoke', ['Python/tests/run_regressions.py', row['directory'],
                    '--isolate-modules', *row['smoke_args']], row['timeout']) for row in rows if row.get('smoke_args'))
-    checks.extend((row['id'], ['Python/tests/run_regressions.py', row['directory'], '--isolate-modules'],
-                   row['timeout'])
-                  for row in rows)
+    for row in rows:
+        command = ['Python/tests/run_regressions.py', row['directory'], '--isolate-modules']
+        # Only the canonical gate proves the entire smoke stage ran up front.
+        if row.get('smoke_args') == DESKTOP_SMOKE_ARGS:
+            command.extend(DESKTOP_REMAINING_STAGES)
+        checks.append((row['id'], command, row['timeout']))
     checks.extend([
         ('compression-parity', ['Python/tests/compare_comic_zip_versions.py', '--output-dir', str(Path(results) / 'parity')], 600),
     ])

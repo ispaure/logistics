@@ -3,6 +3,8 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -32,3 +34,63 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn('shared-import: PASS', result.stdout)
             self.assertTrue((Path(directory) / 'summary.json').is_file())
+
+    def test_desktop_entrypoint_keeps_smoke_gating_and_regression_diagnostics(self):
+        root = Path(__file__).resolve().parents[3]
+        code = '''
+import runpy, sys
+from pathlib import Path
+root = Path(sys.argv[1])
+sys.path[:0] = [str(root), str(root / 'Python')]
+from build_manager import test_manifest
+from logistics_build import validation_plans
+fixture = Path(sys.argv[2])
+test_manifest.discover = lambda *_: [dict(
+    id='fixture', directory=str(fixture), timeout=30,
+    smoke_args=['--profile', 'smoke', '--mode', 'fast'])]
+actual_checks = validation_plans.desktop_checks
+validation_plans.desktop_checks = lambda system, results: [
+    check for check in actual_checks(system, results) if check[0] in ('fixture.smoke', 'fixture')]
+sys.argv = [str(root / 'Python/tests/run_platform_checks.py'), '--results-dir', str(fixture / 'results')]
+runpy.run_path(sys.argv[0], run_name='__main__')
+'''
+        cases = '''
+from pathlib import Path
+from commonUtils.testing.stages import TestStage, stage
+from unittest import TestCase
+TEST_STAGE = TestStage.REGRESSION
+class Fixture(TestCase):
+    def record(self, stage):
+        with Path(__file__).with_name('observed').open('a') as output:
+            output.write(stage + '\\n')
+        self.assertNotEqual(stage, FAILURE)
+
+    @stage(TestStage.SMOKE)
+    def test_smoke(self):
+        self.record('smoke')
+
+    def test_regression(self):
+        self.record('regression')
+
+    @stage(TestStage.EXTENDED)
+    def test_extended(self):
+        self.record('extended')
+'''
+        for failure in ('', 'smoke', 'regression'):
+            with self.subTest(failure=failure), TemporaryDirectory() as directory:
+                fixture = Path(directory)
+                (fixture / 'test_stage_fixture.py').write_text(f'FAILURE = {failure!r}\n' + cases)
+                result = subprocess.run([sys.executable, '-I', '-X', 'utf8', '-c', code, str(root), directory],
+                                        cwd=directory, capture_output=True, text=True, encoding='utf-8', timeout=60,
+                                        env=dict(os.environ, LOGISTICS_REUSE_TEST_RESULTS='off'))
+                self.assertEqual(result.returncode, int(bool(failure)), result.stdout + result.stderr)
+                observed = (fixture / 'observed').read_text().splitlines()
+                report = json.loads((fixture / 'results/summary.json').read_text())
+                if failure == 'smoke':
+                    self.assertEqual(observed, ['smoke'])
+                    self.assertEqual(report['not_run'], [{'name': 'fixture', 'reason': 'Preflight/smoke gate failed'}])
+                    self.assertEqual([row['status'] for row in report['checks']], ['failed'])
+                else:
+                    self.assertEqual(observed, ['smoke', 'regression', 'extended'])
+                    self.assertEqual([row['status'] for row in report['checks']],
+                                     ['passed', 'failed' if failure else 'passed'])

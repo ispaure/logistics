@@ -50,7 +50,21 @@ class ValidationPlanTests(unittest.TestCase):
             if name.endswith('.smoke'):
                 self.assertEqual(command[-4:], ['--profile', 'smoke', '--mode', 'fast'])
             else:
-                self.assertNotIn('--profile', command)  # Full coverage stays the default.
+                self.assertEqual(command[-4:], ['--stage', 'regression', '--stage', 'extended'])
+
+    def test_desktop_suite_without_the_canonical_smoke_gate_keeps_all_stages(self):
+        for smoke_args in ([], ['--stage', 'smoke', '--exact-file', 'test_example.py']):
+            with self.subTest(smoke_args=smoke_args):
+                row = dict(id='example', directory='Python/tests', timeout=1800, smoke_args=smoke_args)
+                with patch('build_manager.test_manifest.discover', return_value=[row]):
+                    checks = desktop_checks('Linux', 'reports')
+                commands = {name: argv for name, argv, _ in checks}
+                self.assertEqual(commands['example'],
+                                 ['Python/tests/run_regressions.py', 'Python/tests', '--isolate-modules'])
+                if smoke_args:
+                    self.assertEqual(commands['example.smoke'][-len(smoke_args):], smoke_args)
+                else:
+                    self.assertNotIn('example.smoke', commands)
 
     def test_windows_full_suite_floor_never_shortens_larger_declared_budget(self):
         suites = [dict(id='logistics', directory='Python/tests', timeout=3000,
@@ -74,11 +88,13 @@ class ValidationPlanTests(unittest.TestCase):
                     checks = desktop_checks(system, Path('reports'))
                     commands = {name: command for name, command, _ in checks}
                     self.assertEqual(commands['commonutils'],
-                        ['Python/tests/run_regressions.py', 'Python/commonUtils/tests', '--isolate-modules'])
-                    # Full Python/tests includes the project-owned tooling subtree:
+                        ['Python/tests/run_regressions.py', 'Python/commonUtils/tests', '--isolate-modules',
+                         '--stage', 'regression', '--stage', 'extended'])
+                    # The platform inventory includes the project-owned tooling subtree:
                     # adapter/journey/Executor, retained artifacts and bootstrap tests.
                     self.assertEqual(commands['logistics'],
-                        ['Python/tests/run_regressions.py', 'Python/tests', '--isolate-modules'])
+                        ['Python/tests/run_regressions.py', 'Python/tests', '--isolate-modules',
+                         '--stage', 'regression', '--stage', 'extended'])
                     self.assertIn('test-structure', commands)
                     self.assertIn('compression-parity', commands)
                     self.assertFalse(any('build_manager.contracts' in argv for argv in commands.values()))
