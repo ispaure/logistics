@@ -148,5 +148,6 @@ arrangements then preserved every original stroke, image, stacking position,
 PNG resource and PDF byte after native pen edits, saving and USB re-export on
 user-reported firmware 3.29.1.0. Host regression coverage checks anchor age,
 dependencies, arrangement and preservation. This bounded result does not qualify
-every scene type or tablet mutation. Folder creation was user-confirmed; rename,
-move, trash/restore and cleanup remain outstanding.
+every scene type or tablet mutation. Folder creation and cleanup of the disposable
+test items into Trash were user-confirmed; rename, moves between folders and
+restoration checks remain outstanding.
