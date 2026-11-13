@@ -7,6 +7,7 @@ TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
+from unittest.mock import Mock, call, patch, sentinel
 from commonUtils.runtime.resources.local import LocalFiles
 from mobile.app import LogisticsMobile
 from services.documents.mobile_storage import open_provider_document
@@ -40,19 +41,32 @@ class ImageDocumentTests(unittest.TestCase):
                         path = provider._physical(name)
                         path.parent.mkdir(parents=True, exist_ok=True)
                         path.write_bytes(content[::-1] if storage == 'localcrypt' else content)
-                    self.assertTrue(app.loop.run_until_complete(open_provider_document(app, provider, 'pic2.png')))
-                    owner = app.private_sessions.active
-                    self.assertTrue(owner.crypt_reader.image_document)
-                    self.assertFalse(owner.image_file_buttons[0].enabled)
-                    self.assertTrue(owner.image_file_buttons[1].enabled)
-                    self.assertIn('(Read-Only)', owner.crypt_view._document_storage_status)
-                    app.loop.run_until_complete(owner.image_file_buttons[1].on_press())
+                    animation = Mock()
+                    animation.capture.return_value = sentinel.slide
+                    with (
+                        patch('mobile.page_animation.capture_replacement_slide', animation.capture),
+                        patch('mobile.page_animation.finish_replacement_slide', animation.finish),
+                    ):
+                        self.assertTrue(app.loop.run_until_complete(open_provider_document(app, provider, 'pic2.png')))
+                        outgoing = app.private_sessions.active
+                        self.assertTrue(outgoing.crypt_reader.image_document)
+                        self.assertFalse(outgoing.image_file_buttons[0].enabled)
+                        self.assertTrue(outgoing.image_file_buttons[1].enabled)
+                        self.assertIn('(Read-Only)', outgoing.crypt_view._document_storage_status)
+                        content, preferences = outgoing.crypt_content, outgoing.preferences.values
+                        app.loop.run_until_complete(outgoing.image_file_buttons[1].on_press())
                     owner = app.private_sessions.active
                     self.assertEqual(owner.crypt_reader.key, 'pic10.png')
                     self.assertEqual(len(app.private_sessions.controllers), 1)
+                    self.assertEqual(animation.mock_calls, [
+                        call.capture(content, 1, preferences),
+                        call.finish(owner.crypt_content, sentinel.slide, 1, preferences),
+                    ])
+                    animation.reset_mock()
                     app.loop.run_until_complete(owner.image_file_buttons[1].on_press())
                     self.assertIs(app.private_sessions.active, owner)
                     self.assertEqual(owner.crypt_reader.key, 'pic10.png')
+                    self.assertEqual(animation.mock_calls, [call.capture(owner.crypt_content, 1, preferences)])
                 finally:
                     app.main_window.close()
                     close_loop(app.loop)
