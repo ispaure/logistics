@@ -78,11 +78,15 @@ class SchedulingTests(unittest.TestCase):
         self.assertEqual(len(data['not_run']), 2)
 
     def test_new_files_are_exclusive_and_managed_or_native_hosts_cannot_overcommit(self):
-        with patch.dict(os.environ, QT_QPA_PLATFORM='offscreen', TOGA_BACKEND='', BUILD_MANAGER_TEST_PROGRESS='0'):
+        with patch.dict(os.environ, QT_QPA_PLATFORM='offscreen', TOGA_BACKEND='', BUILD_MANAGER_TEST_PROGRESS='0', BUILD_MANAGER_RESERVED_TEST_WORKERS=''):
             self.assertTrue(parallel.eligible(parallel.ROOT / next(iter(parallel.QT_FILES))))
             self.assertFalse(parallel.eligible(parallel.ROOT / 'Python/tests/version_control/test_new.py'))
             with patch.object(sys, 'platform', 'darwin'):
                 parallel.require_parallel_environment()
+                with patch.dict(os.environ, BUILD_MANAGER_TEST_PROGRESS="1", BUILD_MANAGER_RESERVED_TEST_WORKERS="4"):
+                    parallel.require_parallel_environment(4)
+                    with self.assertRaises(ValueError):
+                        parallel.require_parallel_environment(8)
                 for environment in ({'QT_QPA_PLATFORM': 'cocoa'}, {'TOGA_BACKEND': 'toga_dummy'},
                                     {'BUILD_MANAGER_TEST_PROGRESS': '1'}):
                     with patch.dict(os.environ, environment), self.assertRaises(ValueError):
@@ -179,19 +183,19 @@ raise SystemExit(runner.main())
         self.assertTrue(marker.exists(), result.stderr)
         self.assert_retired([marker])
 
-    def test_sigterm_cancels_both_workers_accounts_for_unstarted_and_cleans_nested_helpers(self):
-        markers = [self.root / f'nested-{i}.json' for i in range(2)]
-        for name, marker in zip(('test_a.py', 'test_b.py'), markers):
+    def assert_cancelled_pool(self, workers):
+        markers = [self.root / f'nested-{i}.json' for i in range(workers)]
+        for name, marker in zip((f'test_{i}.py' for i in range(workers)), markers):
             self.slow_fixture(name, marker)
-        self.fixture('test_c.py', 'import unittest\nclass C(unittest.TestCase):\n def test_unstarted(self): pass\n')
+        self.fixture('test_z.py', 'import unittest\nclass C(unittest.TestCase):\n def test_unstarted(self): pass\n')
         with (self.root / 'output.log').open('w') as output:
-            process = subprocess.Popen(self.command(), env=self.environment, stdout=output, stderr=subprocess.STDOUT,
+            process = subprocess.Popen(self.command(workers), env=self.environment, stdout=output, stderr=subprocess.STDOUT,
                                        start_new_session=True)
             try:
                 deadline = monotonic() + 6
                 while not all(p.exists() for p in markers) and monotonic() < deadline:
                     sleep(.02)
-                self.assertTrue(all(p.exists() for p in markers), 'Both workers must start before cancellation')
+                self.assertTrue(all(p.exists() for p in markers), 'All workers must start before cancellation')
                 process.send_signal(signal.SIGTERM)
                 self.assertEqual(process.wait(timeout=8), 130)
             finally:
@@ -202,13 +206,19 @@ raise SystemExit(runner.main())
         self.assertTrue(data['complete'])
         self.assertTrue(data['cancelled'])
         self.assertFalse(data['coverage_complete'])
-        self.assertTrue(any(r.get('file') == 'test_c.py' for r in data['not_run']))
-        self.assertEqual(sum(r['id'].endswith('test_a_completed') for r in data['tests']), 2)
+        self.assertTrue(any(r.get('file') == 'test_z.py' for r in data['not_run']))
+        self.assertEqual(sum(r['id'].endswith('test_a_completed') for r in data['tests']), workers)
         omitted = [node for node in ET.parse(self.junit).getroot().findall('testcase')
-                   if node.get('classname') == 'Logistics.not_run' and node.get('file') == 'test_c.py']
+                   if node.get('classname') == 'Logistics.not_run' and node.get('file') == 'test_z.py']
         self.assertEqual([node.get('name') for node in omitted], ['C.test_unstarted'])
         self.assertIsNotNone(omitted[0].find('skipped'))
         self.assert_retired(markers)
+
+    def test_sigterm_cancels_both_workers_accounts_for_unstarted_and_cleans_nested_helpers(self):
+        self.assert_cancelled_pool(2)
+
+    def test_sigterm_retires_eight_workers_and_all_nested_command_helpers(self):
+        self.assert_cancelled_pool(8)
 
 
 if __name__ == '__main__':

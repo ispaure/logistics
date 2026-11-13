@@ -20,13 +20,14 @@ spec.loader.exec_module(dev)
 
 
 class DeveloperCommandTests(unittest.TestCase):
-    def test_two_workers_are_explicit_and_desktop_only(self):
+    def test_worker_pools_are_explicit_and_desktop_only(self):
         with patch('logistics_build.test_structure.inventory', return_value=[]), \
                 patch.object(development.subprocess, 'run') as run, patch.object(Path, 'is_file', return_value=True):
             run.return_value.returncode = 0
-            self.assertEqual(dev.main(['test', 'desktop', 'test_git*.py', '--workers', '2']), 0)
-            command = run.call_args.args[0]
-            self.assertEqual(command[command.index('--workers') + 1], '2')
+            for workers in ('2', '4', '8'):
+                self.assertEqual(dev.main(['test', 'desktop', 'test_git*.py', '--workers', workers]), 0)
+                command = run.call_args.args[0]
+                self.assertEqual(command[command.index('--workers') + 1], workers)
             self.assertEqual(dev.main(['test', 'desktop', 'test_git*.py']), 0)
             self.assertNotIn('--workers', run.call_args.args[0])
             for suite in ('mobile', 'shared', 'bridge'):

@@ -23,6 +23,28 @@ ROOT = Path(__file__).resolve().parents[3]
 
 
 class ManagerSuiteTests(unittest.TestCase):
+    def test_worker_budget_preserves_native_and_historical_runners(self):
+        from build_manager import test_workers
+        with TemporaryDirectory() as temporary, patch.object(sys, 'platform', 'darwin'):
+            directory = Path(temporary) / 'resources'
+            test_workers.configure(dict(per_platform=4, host=8), directory)
+            desktop = Phase('desktop', (sys.executable, 'Python/tests/run_regressions.py', 'Python/tests',
+                '--isolate-modules'), str(ROOT), environment={'QT_QPA_PLATFORM': 'offscreen'})
+            mobile = replace(desktop, id='mobile', argv=(*desktop.argv[:2], 'mobile_build/tests', '--isolate-modules'),
+                             environment={'TOGA_BACKEND': 'toga_dummy'})
+            shared = replace(desktop, id='shared', argv=(*desktop.argv[:2], 'Python/commonUtils/tests', '--isolate-modules'))
+            native = Phase('native', (sys.executable, 'ui_tools.py'), str(ROOT), resources={'device:fixture': 1})
+            plan = Plan('Fixture', 'Test', {}, (desktop, mobile, shared, native), temporary)
+            budgeted = suites.with_worker_budget(plan, 'android', directory=directory)
+            self.assertEqual([p.resources.get(test_workers.HOST) for p in budgeted.phases], [4, 1, 1, None])
+            self.assertEqual(budgeted.phases[0].stop_grace, 6)
+            self.assertEqual(budgeted.phases[-1], native)
+            for backend in ('GitHub', 'Local Parallels VM'):
+                remote = replace(plan, backend=backend)
+                self.assertEqual(suites.with_worker_budget(remote, 'android', directory=directory), remote)
+            historical = replace(plan, phases=(replace(desktop, cwd=temporary),))
+            self.assertEqual(suites.with_worker_budget(historical, 'macos', directory=directory).phases[0].resources[test_workers.HOST], 1)
+
     def setUp(self):
         temporary = TemporaryDirectory(prefix='manager-suite-contracts-')
         self.addCleanup(temporary.cleanup)
@@ -250,7 +272,8 @@ class ManagerSuiteTests(unittest.TestCase):
             device_resource = 'android.device-workspace:' + plan.workspace
             for name in ('android-native', 'android-runtime'):
                 self.assertEqual(rows[name].resources[device_resource], 1)
-            self.assertFalse(rows['portable-contracts'].resources)
+            self.assertEqual(rows['portable-contracts'].resources,
+                {'test-workers:host': 1, 'test-workers:platform:android': 1})
             self.assertEqual(rows['prepare-verified-artifact'].resources['host.mobile-build'], 1)
             self.assertEqual(rows['prepare-verified-artifact'].resources['host.signing-keychain'], 1)
             self.assertEqual(rows['reviewed-distribution'].resources['provider.destination:firebase:Logistics'], 1)

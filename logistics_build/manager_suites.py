@@ -102,6 +102,39 @@ def with_reports(plan, target):
     return replace(plan, phases=tuple(phases))
 
 
+def with_worker_budget(plan, target, *, directory=None):
+    """Budget local host test runners; only the audited desktop runner opts in."""
+    if plan.backend in {'GitHub', 'Local Parallels VM'}:
+        return plan
+    try:
+        from build_manager.test_workers import reserve
+    except ImportError:
+        return plan  # Older pinned managers retain their original serial runners.
+    selected, accelerated = [], []
+    for phase in plan.phases:
+        if (phase.kind != 'test' or phase.always
+                or phase.argv[1:2] != ('Python/tests/run_regressions.py',)
+                or '--isolate-modules' not in phase.argv):
+            continue
+        selected.append(phase.id)
+        if (sys.platform != 'darwin' or phase.argv[2] != 'Python/tests'
+                or phase.environment.get('QT_QPA_PLATFORM') != 'offscreen'
+                or phase.environment.get('TOGA_BACKEND')):
+            continue
+        capability = Path(phase.cwd) / 'Python/tests/parallel_regressions.py'
+        if capability.is_file():
+            declarations = {}
+            for node in ast.parse(capability.read_text()).body:
+                if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
+                    if node.targets[0].id in {'SUPPORTED_WORKERS', 'RESERVATION_ENV'}:
+                        declarations[node.targets[0].id] = ast.literal_eval(node.value)
+            if declarations == dict(SUPPORTED_WORKERS=(1, 2, 4, 8), RESERVATION_ENV='BUILD_MANAGER_RESERVED_TEST_WORKERS'):
+                accelerated.append(phase.id)
+    plan = replace(plan, phases=tuple(replace(phase, stop_grace=max(6, phase.stop_grace))
+        if phase.id in accelerated else phase for phase in plan.phases))
+    return reserve(plan, target, selected, accelerated=accelerated, directory=directory)
+
+
 def with_structure_gate(plan, interpreter):
     """Validate captured test source before tests, builds or native preparation."""
     if plan.backend == 'GitHub' or not any(p.kind == 'test' for p in plan.phases):

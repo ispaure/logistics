@@ -69,6 +69,7 @@ class JourneyAdapterTests(unittest.TestCase):
                       commonUtils=dict(commit='b' * 40, dirty=False, fingerprint='commonutils-fixture'))
         for target, options in (
                 ('build_manager.identity.capture_engine_source_identity', {'return_value': engine}),
+                ('build_manager.test_workers.config_directory', {'return_value': self.root}),
                 ('build_manager.test_manifest.resolve_test_group_suites', {'side_effect': lambda root, group: _resolve_suites(ROOT, group)}),
                 ('logistics_build.build_retention.clean', {'return_value': []}),
                 ('logistics_build.build_project.identity', {'return_value': self.source}),
@@ -241,7 +242,7 @@ class JourneyAdapterTests(unittest.TestCase):
             else:
                 code = 'pass'
             return (sys.executable, '-c', code)
-        phases = tuple(replace(phase, argv=command(phase), artifacts=(), artifact_types={}, environment={}) for phase in plan.phases)
+        phases = tuple(replace(phase, argv=command(phase), artifacts=(), artifact_types={}, environment={k: v for k, v in phase.environment.items() if k.startswith('BUILD_MANAGER_TEST_')}) for phase in plan.phases)
         result = Executor(resource_directory=self.root / 'resources').run(replace(plan, phases=phases), self.root / 'result')
         self.assertEqual(result['status'], 'passed')
         checks = [json.loads((self.root / (target + '.validation.commonutils.json')).read_text()) for target in ('ios', 'android')]
@@ -295,7 +296,7 @@ class JourneyAdapterTests(unittest.TestCase):
                     f'Path({str(target)!r}).write_text(json.dumps([start,time.perf_counter_ns()]))')
                 return (sys.executable, '-c', script)
             return (sys.executable, '-c', 'pass')
-        phases = tuple(replace(p, argv=command(p), artifacts=(), artifact_types={}, environment={}) for p in plan.phases)
+        phases = tuple(replace(p, argv=command(p), artifacts=(), artifact_types={}, environment={k: v for k, v in p.environment.items() if k.startswith('BUILD_MANAGER_TEST_')}) for p in plan.phases)
         plan = replace(plan, phases=phases)
         executor = Executor(resource_directory=self.root / 'resources')
         first = executor.run(plan, self.root / 'result')
@@ -312,7 +313,7 @@ class JourneyAdapterTests(unittest.TestCase):
     def test_failed_android_blocks_firebase_but_ios_can_prepare_and_deliver(self):
         plan = self.make()
         phases = tuple(replace(p, argv=(sys.executable, '-c', 'raise SystemExit(1)' if p.id == 'android.validation.android-native' else 'pass'),
-                               artifacts=(), artifact_types={}, environment={}) for p in plan.phases)
+                               artifacts=(), artifact_types={}, environment={k: v for k, v in p.environment.items() if k.startswith('BUILD_MANAGER_TEST_')}) for p in plan.phases)
         report = Executor(resource_directory=self.root / 'resources').run(replace(plan, phases=phases), self.root / 'result')
         states = {row['id']: row['status'] for row in report['phases']}
         self.assertEqual(states['android.validation.cleanup'], 'passed')

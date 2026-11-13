@@ -142,7 +142,8 @@ def key_for(phase, *, runtime=None):
             value = value.replace(str(root.parent), '$WORKSPACE')
         return value
     environment = {k: normalized(v) for k, v in phase.environment.items()
-                   if k not in {'LOGISTICS_MANAGER_PROFILE', 'LOGISTICS_MANAGER_ACCOUNT_DEFAULTS'}}
+                   if k not in {'LOGISTICS_MANAGER_PROFILE', 'LOGISTICS_MANAGER_ACCOUNT_DEFAULTS',
+                                'BUILD_MANAGER_TEST_PLATFORM', 'BUILD_MANAGER_RESERVED_TEST_WORKERS'}}
     for name in ('LOGISTICS_MANAGER_PROFILE', 'LOGISTICS_MANAGER_ACCOUNT_DEFAULTS'):
         if phase.environment.get(name):
             path = Path(phase.environment[name])
