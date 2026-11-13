@@ -373,6 +373,20 @@ def stage_local_document_export(path, *, expected_revision=None, cancelled=lambd
             stage.unlink(missing_ok=True)
 
 
+def local_document_export_revision(path):
+    """Capture the exact native-picker destination before starting its worker."""
+    from commonUtils.runtime.resources.local import LocalFiles
+    target = Path(path).absolute()
+    provider = LocalFiles(target.parent)
+    try:
+        row = provider.entry(target.name)
+    except FileNotFoundError:
+        return None
+    if row['directory']:
+        raise ValueError('Choose a file destination, not a folder.')
+    return row['revision']
+
+
 def local_document_resource(path, *, max_bytes):
     """Resolve an ordinary path inside the host, including protected-root checks."""
     from commonUtils.runtime.resources.local import LocalFiles

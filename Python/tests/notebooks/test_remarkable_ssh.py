@@ -47,6 +47,10 @@ class RemarkableSSHTests(unittest.TestCase):
         with patch.object(remarkable_ssh, 'ssh_stream', stream):
             self.assertEqual(remarkable_ssh.list_documents('tablet', port=2222),
                              [remarkable_ssh.TabletDocument(DOC, 'Journal', 'Personal')])
+            snapshot = remarkable_ssh.list_snapshot('tablet', port=2222)
+            self.assertEqual(snapshot.children[FOLDER], (DOC,))
+            self.assertEqual(snapshot.entries[FOLDER].title, 'Personal')
+            self.assertNotIn(PAGE, snapshot.entries)
 
     def test_export_preserves_nested_images_and_checks_ssh_before_publishing(self):
         entries = {

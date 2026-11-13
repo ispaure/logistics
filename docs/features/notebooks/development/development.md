@@ -9,6 +9,49 @@ in [saved stroke sampling](stroke-sampling.md).
 Native lasso controls and clipboard contracts are described in
 [stroke selection](stroke-selection.md).
 
+## Read-only SSH browser and local overwrite
+
+`remarkable_ssh.list_metadata` retrieves native UUID metadata through the existing
+OpenSSH transport. `list_snapshot` normalizes it with `remarkable_store.TabletSnapshot`;
+`list_documents` retains its established flattened `TabletDocument(id, title,
+folder)` enumeration for existing retrieval callers. `export_document` remains
+the streaming, opaque-member-preserving `.rmdoc` export route. It checks SSH
+completion, sidecar JSON, required background members and ZIP CRCs; this is not
+firmware validation or an editor import-limit check.
+
+The snapshot keeps document and collection IDs separate from display names,
+including empty folders and duplicate sibling labels. Deleted/trash ancestry is
+omitted. Missing or invalid parents enter a display-only Unfiled group. Cycles
+have one deterministic ID-based break, retaining the remaining subtree. Neither
+normalization nor filtering writes tablet metadata.
+
+`ui/remarkable_browser.py` adapts the shared `EntryModel`, `BrowserViews`, navigation
+controls and breadcrumbs to these opaque IDs. It does not project the store into
+ordinary filesystem paths or expose filesystem rename/delete actions. List and
+tile views share selection and folder context. Reconnect reads a complete
+replacement snapshot off-thread; the dialog retires the old view and rejects
+obsolete endpoint/generation results. Refresh restores surviving IDs and falls
+back to a surviving ancestor when the current folder disappears.
+
+`ui/remarkable_destination.py` configures native Save mode and the default suffix
+before native overwrite confirmation. It captures the exact accepted local path
+and its revision for the export worker. A differently suffixed result is rejected
+instead of silently retargeted. Do not add a second application confirmation:
+macOS native dialogs ignore Qt's
+[`DontConfirmOverwrite` option](https://doc.qt.io/qt-6/qfiledialog.html#Option-enum).
+The streaming
+publication service retains create-only defaults and permits replacement only
+with a captured revision; its shared-provider concurrency limit is documented in
+[document storage](../../../development/document-storage.md#streaming-local-exports).
+
+Focused host regressions cover hierarchy, duplicates, empty folders, malformed
+ancestry, deep parent chains, filtering, refresh/reconnect, native-picker contract
+simulation, replacement, decline and concurrent destination changes. They use
+synthetic metadata, native archives and an in-memory SSH stream. The macOS 26.6.2 /
+Qt 6.12 native-picker attempt could not automate the system panel buttons, so
+native acceptance remains pending. Physical tablet/firmware behavior is also
+unverified. Upload, tablet mutations and firmware index refresh remain unimplemented.
+
 ## Current implementation and acceptance boundary
 
 The November 4, 2026 documentation audit reviewed source and test definitions;
