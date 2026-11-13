@@ -13,7 +13,7 @@ desktop, with a separate mobile workspace for supported features.
 | Configure settings or credentials | [Configuration](user/configuration.md) |
 | Clear reading positions or recent files | [Reader history](user/reader-history.md) |
 | Learn a particular tool | [Feature catalog](features/features.md) |
-| Make your first code change | [Contributor walkthrough](development/getting-started.md) |
+| Set up a checkout, change code or choose a test | [Developing Logistics](development/development.md) |
 | Build, validate or deliver Logistics | [Build manager workflow](user/build-manager-journeys.md) |
 
 ## Browse the wiki
@@ -28,6 +28,5 @@ The shared library maintains its module/API documentation in its own repository.
 
 ## Further reading
 
-- [Developing Logistics](development/development.md)
 - [Using Logistics](user/user.md)
 - [Logistics on mobile](user_mobile/user_mobile.md)
