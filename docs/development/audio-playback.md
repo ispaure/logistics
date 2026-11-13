@@ -29,8 +29,8 @@ interruption end does not automatically resume it.
 A Bluetooth approval grants an output, not access to a credential session. Existing
 trusted-Wi-Fi behavior only waives eligible repeat password prompts. It does not
 waive Bluetooth approval or capture restrictions. Approvals are device-local app
-preferences, not the system pairing list, and can be removed in **Settings → Audio
-playback**. Only selected outputs are candidates for approval; nearby and paired
+preferences, separate from system pairing. Manage them in **Settings → Privacy &
+Security → Protected audio outputs**. Only selected outputs are candidates for approval; nearby and paired
 but unused devices are not treated as active outputs. Device names are labels,
 not authorization identities. Saved identifiers hash the platform port UID/address
 and profile; profile/identity changes may require a new approval. This is not
@@ -43,19 +43,22 @@ cryptographic hardware attestation.
 lifetime, coalesced approval prompts and cross-scene revocation. It consumes the
 explicit process protection scope; it does not discover privacy through UI
 observers or player internals. See [access and privacy](access-privacy.md) for
-registration, challenge provenance and effect ordering. A pending dialog
-cannot approve a route after a route, lifecycle, credential or Settings change.
-Approval never grants the Play latch. Native callbacks and passive permission
-checks never grant playback. Passive checks do not refresh native routes or
-produce pause/dialog effects; native monitors and explicit commands observe them.
+registration, challenge provenance and effect ordering. A route, lifecycle,
+credential or Settings change invalidates a pending approval. Approval leaves
+the Play latch closed. Passive checks compare the current native route with the
+admitted route to catch changes before callback delivery. Native monitors and
+explicit commands update the observed route and own pause and dialog effects.
 
 `mobile/audio_output_native.py` and the Android `AudioOutputs.java` class query
-outputs and report transitions; they do not decide consent. The mobile host injects
-the owner into read-aloud presentation. Video and speech register explicit,
-idempotent pause callbacks. Native video admits deliberate Play separately from
-its periodic permission checks; native speech resume also checks permission before
-resuming an already-synthesized utterance. Host replacement/exit unregisters the
-native monitors and cancels pending prompts.
+outputs and report transitions. On iOS, the approval alert is presented above
+the visible native controller, including full-screen video. If iOS dismisses
+that controller and its alert, Play or Settings can offer approval again.
+The mobile host injects the consent owner into read-aloud presentation. Video
+mutes during its explicit pause callback, and mobile read-aloud stops the
+current native utterance and retains the reading position. Video checks
+permission before starting and during playback. Read-aloud checks before
+submitting each utterance. Host replacement or exit unregisters the native
+monitors and cancels pending prompts.
 
 `mobile/screen_privacy.py` remains the app-wide screen owner. Capture restrictions
 use the process credential store, including sessions loaded in another window,
@@ -80,10 +83,11 @@ speech metadata becomes generic whenever any session protects the app.
   with an external device remain ambiguous. Unreadable or redacted Bluetooth
   identities also fail closed only for protected playback. Ordinary playback bypasses these consent checks. The app does not silently trust a display name.
 - Android device callbacks plus a 100 ms route recheck catch selection changes
-  without connection events. OS routing can precede notification or polling;
-  this is not a guarantee of zero audio at a new physical output. Android output-removal callbacks retain the existing conservative pause, even if the removed output was not selected. Real car,
-  multipoint/BLE/headset, speaker leakage and receiver-buffer behavior need hardware
-  checks. An external receiver may retain audio already sent to it.
+  without connection events. Both operating systems can reroute an active
+  stream before the app observes the change. Receiver buffers can also retain
+  audio already sent to them. Verify brief audible output during a transition
+  on physical hardware. Android output-removal callbacks pause even when the
+  removed output was idle.
 - Saved progress, subtitles, thumbnails, stream tokens, native decoder buffers and
   credential revocation retain the video feature's existing lifetime rules. No
   whole-file plaintext staging or audio transcript/cache is added by consent.
@@ -93,20 +97,22 @@ speech metadata becomes generic whenever any session protects the app.
 
 ## Validation and deferred acceptance
 
-The portable output tests cover ordinary playback bypass, ordinary route-loss/interruption safety, retained protection, protection removal during approval, before-start protected approval, protected output transitions,
-unknown/same-name identities, separate Play, decline/cancel, Settings removal and
-persistence, cross-scene revocation, stale decisions and interruption/capture
-latches. Existing video, speech, Settings and privacy regressions accompany them.
+The portable output tests cover reconnect before callback delivery, duplicate
+route events, read-aloud pause and retry after a declined video approval, and
+Settings approval with a device selected at launch. The iOS bridge fixtures cover
+raw notification arguments and alert presentation over full-screen video. The
+existing tests cover ordinary playback, unknown identities, cross-scene revocation
+and interruption and capture latches.
 `mobile_build.validation.video_native` compiles the changed iOS video gate and all
 three Android audio/video adapters against native SDKs. Compilation and dummy-host
 checks do not establish real iOS/Android route behavior.
 
-The reusable `audio_hardware_probe.py:main` opens the real **Settings → Audio
-playback** category with native read-aloud controls and transition logging. The
+The reusable `audio_hardware_probe.py:main` opens **Settings → Privacy & Security**
+with native read-aloud controls and transition logging. The
 existing `video_hardware_probe.py:main` includes ordinary/session-only audio phases
 and an enabled-but-unavailable Wi-Fi password phase. Rebuild native adapters and
-Python from current source before using either entry point; old binaries cannot
-exercise new native interfaces. Physical tests are deferred at the user's request.
+Python from current source before using either entry point. Physical
+Bluetooth acceptance requires an authorized device session.
 Follow the [video hardware guide](../features/video/development/hardware-acceptance.md)
 for isolated app/device authorization, source freshness, evidence and cleanup.
 

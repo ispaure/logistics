@@ -39,11 +39,17 @@ class OutputPolicy:
         self.revision = 0
         self.manual_play = False
 
-    def observe(self, route, *, require_consent=True):
-        route = tuple(sorted(route, key=lambda item: item.identity)) if route else None
+    @staticmethod
+    def identities(route):
         # Names can change without changing output identity or authorization.
-        changed = (None if self.route is None else tuple((x.identity, x.bluetooth) for x in self.route)) != (
-            None if route is None else tuple((x.identity, x.bluetooth) for x in route))
+        return tuple(sorted((item.identity, item.bluetooth) for item in route or ()))
+
+    def matches(self, route):
+        return self.identities(self.route) == self.identities(route)
+
+    def observe(self, route, *, require_consent=True):
+        changed = not self.matches(route)
+        route = tuple(sorted(route, key=lambda item: item.identity)) if route else None
         self.route = route
         if changed:
             self.revision += 1

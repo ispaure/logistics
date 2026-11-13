@@ -80,18 +80,18 @@ class AudioOutput:
         if self.closed:
             return
         self.scope.changed()
-        try:
-            route = self.native.outputs()
-        except Exception:
-            route = None
         protected = self.protected()
-        if lost:
-            self.pause()  # Ordinary route-loss safety is independent of Bluetooth consent.
-        if self.policy.observe(route, require_consent=protected):
-            if protected:
-                self.pause()
-                if self.players:
-                    self.offer()
+        changed = self.policy.observe(self.outputs(), require_consent=protected)
+        if lost or (protected and changed):
+            self.pause()
+        if protected and changed and self.players:
+            self.offer()
+
+    def outputs(self):
+        try:
+            return self.native.outputs()
+        except Exception:
+            return None
 
     def pause(self):
         if not self.closed:
@@ -143,8 +143,13 @@ class AudioOutput:
             return False
 
     def permitted(self):
-        return self.available() and (self.policy.permitted(self.approved()) if self.protected()
-                                     else self.policy.manual_play)
+        if not self.available() or not self.policy.manual_play:
+            return False
+        if not self.protected():
+            return True
+        # Check audio submission and native restarts even if route delivery is
+        # queued. Only refresh() may update consent state or pause other players.
+        return self.policy.permitted(self.approved()) and self.policy.matches(self.outputs())
 
     def prepare(self):
         try:
@@ -192,31 +197,34 @@ class AudioOutput:
 
     async def ask(self, revision):
         import toga
+        from .audio_output_native import show_approval
+        def valid():
+            return revision == self.policy.revision and self.protected() and self.interactive()
         try:
-            if revision != self.policy.revision or not self.protected() or not self.interactive():
+            if not valid():
                 return
             pending = self.policy.pending(self.approved())
             if not self.policy.identified():
-                await self.app.main_window.dialog(toga.InfoDialog('Audio output unavailable',
+                await show_approval(self.app, toga.InfoDialog('Audio output unavailable',
                     'Playback is paused because the selected audio output cannot be identified. '
                     'Select an identifiable output in system controls and press Play again. '
-                    'Manage saved approvals in Settings → Privacy & Security.'))
+                    'Manage saved approvals in Settings → Privacy & Security.'), valid=valid)
                 return
             if not pending:
                 return
             names = ', '.join(item.label for item in pending)
-            accepted = await self.app.main_window.dialog(toga.ConfirmDialog('Approve Bluetooth audio?',
+            accepted = await show_approval(self.app, toga.ConfirmDialog('Approve Bluetooth audio?',
                 f'Allow session-only audio playback through {names}? This applies to video and read-aloud while session-only protection is active. '
                 'Adding approval leaves playback paused. Press Play separately when ready. '
-                'You can remove approval in Settings → Privacy & Security.'))
+                'You can remove approval in Settings → Privacy & Security.'), valid=valid)
             self.refresh()
             # A route/credential/lifecycle transition invalidates an old decision.
             if (accepted and self.protected() and self.available() and self.policy.revision == revision
                     and self.policy.pending(self.approved()) == pending):
                 self.save({**self.approved(), **{item.identity: item.label for item in pending}})
         except (OSError, ValueError):
-            await self.app.main_window.dialog(toga.InfoDialog('Approval was not saved',
-                'Playback remains paused. Try again in Settings → Privacy & Security.'))
+            await show_approval(self.app, toga.InfoDialog('Approval was not saved',
+                'Playback remains paused. Try again in Settings → Privacy & Security.'), valid=valid)
         finally:
             self.prompt = None
             # A stale decision leaves playback paused; only a new Play asks again.

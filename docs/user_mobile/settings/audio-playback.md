@@ -6,8 +6,9 @@ this device and is separate from Bluetooth pairing in system Settings.
 
 While protection is active, select a Bluetooth output in system controls, then press Play or **Approve current
 output…**. An unapproved output asks for approval. Approving it leaves playback
-paused: press Play separately when you are ready. Declining or cancelling leaves
-it unapproved and paused.
+paused until you press Play again. After declining or cancelling, you
+can retry from Play or **Approve current output…**, including when the headset
+was already connected when Logistics opened.
 
 During session-only protection, changing the selected audio output pauses playback, even when the new device was already approved. Removing approval also pauses protected playback. Ordinary playback is unaffected by approval-list edits or consent-related output-switch rules. Calls, interruptions and actual headphone/Bluetooth output loss still pause ordinary playback, and reconnecting a device does not restart it automatically. Device labels include a short
 identifier so two devices with the same name can be distinguished.

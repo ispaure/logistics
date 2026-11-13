@@ -87,7 +87,13 @@ class IOSVideo:
             self.presentation.cancel()
             self.presentation = None
         self.native.suspendForLock()
-        self.container.dismissViewControllerAnimated(False, completion=None)
+        self.dismiss()
+
+    def dismiss(self):
+        # Dismiss the video and any alert or menu presented above it together.
+        presenter = self.container.presentingViewController
+        if presenter is not None and presenter.presentedViewController == self.container:
+            presenter.dismissViewControllerAnimated(False, completion=None)
 
     def show(self):
         if self.disposed or self.owner.closed or self.owner.hidden or not self.owner.allowed():
@@ -141,5 +147,5 @@ class IOSVideo:
         except BaseException:
             self.disposal = None
             raise
-        self.container.dismissViewControllerAnimated(False, completion=None)
+        self.dismiss()
         return self.disposal

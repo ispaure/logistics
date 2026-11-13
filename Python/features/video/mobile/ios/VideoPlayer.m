@@ -735,6 +735,11 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 }
 - (void)done:(id)sender { if (self.closed) self.closed(); }
 - (void)pause {
+    if (!self.audioSuppressed) {
+        self.resumeMuted = self.player.audio.isMuted;
+        self.audioSuppressed = YES;
+    }
+    self.player.audio.muted = YES; // Silence the decoder before updating the paused UI.
     self.rateChangePending = NO;
     [self logHDRTransition:@"pause-request"];
     [self holdPausePresentation];
@@ -759,11 +764,6 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     self.buffering = NO;
     self.bufferOverlay.hidden = YES;
     [self.bufferSpinner stopAnimating];
-    if (!self.audioSuppressed) {
-        self.resumeMuted = self.player.audio.isMuted;
-        self.audioSuppressed = YES;
-    }
-    self.player.audio.muted = YES; // Retain silence across any unsolicited decoder restart.
     if (self.player.isPlaying && !self.pausePending) {
         self.pausePending = YES;
         [self.player pause];
@@ -914,9 +914,11 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 }
 - (void)audioRouteChanged:(NSNotification *)notification {
     NSUInteger reason = [notification.userInfo[AVAudioSessionRouteChangeReasonKey] unsignedIntegerValue];
-    if (reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable ||
-        reason == AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory ||
-        (self.restricted && [self hasExternalAudio])) [self pause];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (!self.retired && (reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable ||
+            reason == AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory ||
+            (self.restricted && [self hasExternalAudio]))) [self pause];
+    });
 }
 - (void)callObserver:(CXCallObserver *)observer callChanged:(CXCall *)call {
     [self pause]; // Ringing banners and Continuity calls need not background a scene.
