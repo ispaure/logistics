@@ -20,7 +20,7 @@ spec.loader.exec_module(dev)
 
 
 class DeveloperCommandTests(unittest.TestCase):
-    def test_worker_pools_are_explicit_and_desktop_only(self):
+    def test_worker_pools_are_explicit_and_keep_shared_native_replay_serial(self):
         with patch('logistics_build.test_structure.inventory', return_value=[]), \
                 patch.object(development.subprocess, 'run') as run, patch.object(Path, 'is_file', return_value=True):
             run.return_value.returncode = 0
@@ -30,7 +30,13 @@ class DeveloperCommandTests(unittest.TestCase):
                 self.assertEqual(command[command.index('--workers') + 1], workers)
             self.assertEqual(dev.main(['test', 'desktop', 'test_git*.py']), 0)
             self.assertNotIn('--workers', run.call_args.args[0])
-            for suite in ('mobile', 'shared', 'bridge'):
+            run.reset_mock()
+            self.assertEqual(dev.main(['test', 'shared', '--workers', '4']), 0)
+            qt, native = run.call_args_list
+            self.assertEqual(qt.args[0][qt.args[0].index('--workers') + 1], '4')
+            self.assertNotIn('--workers', native.args[0])
+            self.assertEqual(native.kwargs['env']['TOGA_BACKEND'], 'toga_dummy')
+            for suite in ('mobile', 'bridge'):
                 with self.subTest(suite=suite), self.assertRaises(SystemExit) as error:
                     dev.main(['test', suite, '--workers', '2'])
                 self.assertEqual(error.exception.code, 2)

@@ -136,19 +136,22 @@ running it. Mobile tests use `TOGA_BACKEND=toga_dummy`; desktop tests use offscr
 Qt. These checks do not certify native appearance or interactions. See the
 [mobile handbook](mobile-handbook.md) when you need an actual device build.
 
-### Parallel Git regressions and shared host budgets
+### Parallel regressions and shared host budgets
 
 Direct commands default to one isolated file-stage process at a time. For the
-reviewed desktop Git group on macOS, choose 1, 2, 4 or 8 workers:
+reviewed desktop groups on macOS, choose 1, 2, 4 or 8 workers:
 
 ```sh
 python3 dev.py test desktop 'test_git*.py' --workers 4
+python3 dev.py test shared 'test_markdown*.py' --workers 4
 ```
 
 The direct `Python/tests/run_regressions.py` entry point also accepts
 `--isolate-modules --workers 4`. The runner requires Qt's offscreen backend.
-Only the 19 explicitly listed files in `Python/tests/parallel_regressions.py`
-can overlap. Their real Git repositories, preferences, Qt applications and
+The shared developer command keeps its separate Toga replay serial.
+Only the 85 explicitly listed files in `Python/tests/parallel_regressions.py`
+can overlap: 19 Git, 17 notes/editor, and 49 shared browser/index/Markdown files.
+Their fixture files, SQLite databases, preferences, Qt applications and default
 storage are private to each process. New and unreviewed files remain exclusive:
 they wait for active work to finish and retain the original serial child path.
 Changes to an admitted file's resource use require another overlap and cleanup audit.
@@ -157,23 +160,25 @@ new admissions while already running files finish.
 
 JSON and JUnit retain deterministic source-plan ordering, case outcomes and file
 identity. Unstarted files include their statically classified cases; their runtime
-discovery is not claimed. For concurrent Git children, SIGINT/SIGTERM first asks
+discovery is not claimed. For concurrent children, SIGINT/SIGTERM first asks
 the existing command supervisors to cancel and retire their detached helpers.
 Up to five seconds is reserved for that cleanup, followed by the manager's
 process-group cleanup. The 300-second file execution deadline is unchanged.
 Child temporary storage is inside the parent's removable file scope. An already
 running exclusive file keeps its original deadline and termination behavior.
 
-This option is limited to macOS desktop Git tests. Toga dummy/mobile host,
-shared-library suites, native windows, media playback, simulators, devices and
-Go bridge tests are not validated for concurrent file execution. With a Manager
+This option is limited to reviewed macOS offscreen tests. Toga dummy/mobile host,
+WebEngine, real media playback, encrypted-provider integration, native windows,
+simulators, devices and Go bridge tests remain exclusive. With a Manager
 that supplies test worker reservations, local host test phases share its
-per-platform and computer-wide ceilings. App settings defaults to four per platform
+per-platform and computer-wide ceilings. App settings defaults to at most four per platform
 and half the logical CPUs, capped at eight, across this computer. The audited
 Logistics runner uses the largest tested pool (1/2/4/8) within its reservation.
 Other host runners reserve one; native/device/build owners retain their existing
 policies. Manager checks captured source capability before enabling pools, so older
-snapshots and older pinned managers retain serial behavior. Audited phases allow
+snapshots keep their captured allowlist and older pinned managers retain serial
+behavior. File filters and subtree selections only reserve a pool when they
+include an admitted file. Audited phases allow
 six seconds for supervised cancellation before outer process-group escalation.
 
 Use Manager when several platform workflows run together: its resource slots
@@ -181,6 +186,16 @@ coordinate separate Manager processes too. Explicit direct `--workers` commands
 are manual pools and do not acquire those reservations. The host budget limits
 participating test processes, not all compiler/helper threads on the machine.
 Do not infer full-platform or release coverage from this selected group.
+
+`run_platform_checks.py` uses the same Manager reservations for its shared and
+Logistics phases. The GitHub platform workflow explicitly configures at most two
+workers on a GitHub-hosted macOS runner, capped by its reported CPU count. The
+step is guarded by the documented
+[`runner.environment` context](https://docs.github.com/en/actions/reference/workflows-and-actions/contexts#runner-context);
+self-hosted runners retain their existing Manager settings. Windows and Linux
+file execution stays serial. This changes scheduling only: structure, smoke,
+remaining regressions, native startup and compression parity keep their existing
+gates and order. Hosted workflow execution still needs its normal CI run.
 
 The implementation at `50c488f0`, based on Logistics `805ccc7c` and unchanged
 commonUtils `cee7537`, matched all 152 Git cases plus 96 smoke cases, all 33
@@ -226,6 +241,39 @@ active file workers and their detached command helpers; admission fixtures cover
 multiple Manager processes, stale settings, cancelled waits and idle capacity
 changes. Unreviewed suites must pass their own resource and cleanup audit before
 joining the allowlist.
+
+The next expansion, based on Logistics `d53a015` and commonUtils `d905628`,
+adds 66 reviewed files: 17 notes/editor, 16 shared browser, 18 shared index and
+15 shared Markdown files. The measured slice retained all 67 candidate files,
+including `browser/test_entry_browser.py`, which stays exclusive after its
+filter-publication assertion failed during the first overlap attempt. Its cases
+were retained in every comparison. WebEngine, real media and encrypted-provider
+integration files were not admitted.
+
+The serial baseline also exposed an inherited feature-toggle assertion that
+incorrectly expected built-in browser action providers to disappear. The existing
+test-only correction `4a37c98` was applied over `d905628` as `dbb002b` before all
+accepted measurements. No production shared-library behavior changed.
+
+Six accepted local runs preserved ordered JSON and JUnit identities and outcomes:
+742 cases across the selected groups and both full desktop smoke gates, with
+741 passes and the same one Windows-drive-only skip. Structure validation ran
+before the smoke gates. Clone/environment preparation is excluded below.
+
+| Workers | Passing runs | Elapsed time | Sampled aggregate peak RSS |
+| --- | --- | --- | --- |
+| 1 | 2 | 124.67–165.28 s | 455.9–515.0 MiB |
+| 2 | 1 | 72.83 s | 636.1 MiB |
+| 4 | 2 | 50.37–69.79 s | 831.5–835.0 MiB |
+| 8 | 1 | 42.24 s | 1241.9 MiB |
+
+The one/two/four-worker runs used real Manager host/platform admission. The
+eight-worker alternative held all eight real host slots around an isolated
+eight-worker settings profile; it did not change the contributor's shared
+four/eight settings. These are selected-slice observations on shared local
+hardware, not full-platform or hosted CI timings. Keep four for mixed platform
+work, two for the initial hosted macOS rollout, and eight as the tested optional
+ceiling. No extra scheduler or nested worker pool was added.
 
 ### Execution stages and failure policy
 

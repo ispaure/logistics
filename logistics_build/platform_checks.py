@@ -1,6 +1,7 @@
 """Project check inventory delegates child ownership and timeouts to the manager."""
 from pathlib import Path
 import shutil
+import sys
 from uuid import uuid4
 from build_manager import Executor, Phase, Plan
 
@@ -15,6 +16,9 @@ def run_check(name, argv, *, root, results, environment, timeout):
     plan = Plan('Logistics', 'Native platform check: '+name, {'check': name},
                 (phase,),
                 str(execution/'workspace'), effect='test')
+    from logistics_build.manager_suites import with_worker_budget
+    target = {'darwin': 'macos', 'win32': 'windows'}.get(sys.platform, 'linux')
+    plan = with_worker_budget(plan, target)
     plan = with_reuse(plan)
     import os
     if os.environ.get('GITHUB_ACTIONS') == 'true':
@@ -35,7 +39,12 @@ def run_check(name, argv, *, root, results, environment, timeout):
             print(event['text'], end='', flush=True)
     report = Executor(event=progress).run(plan, execution/'result')
     row = report['phases'][0]
-    shutil.copy2(execution/'result'/row['log'], results/(name+'.log'))
+    log = results / (name + '.log')
+    if row.get('log'):
+        shutil.copy2(execution/'result'/row['log'], log)
+    else:
+        # Admission can reject changed limits before a child/log exists.
+        log.write_text(row.get('error') or report.get('error') or 'Check did not start.', encoding='utf-8')
     code = 0 if row['status']=='passed' else 124 if row['status']=='timeout' else row.get('exit_code') or 1
     return dict(name=name, exit_code=code, seconds=round(row['seconds'],2), status=row['status'],
                 execution=str(execution/'result'),

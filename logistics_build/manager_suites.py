@@ -103,7 +103,7 @@ def with_reports(plan, target):
 
 
 def with_worker_budget(plan, target, *, directory=None):
-    """Budget local host test runners; only the audited desktop runner opts in."""
+    """Budget host test runners, including the local executor inside CI jobs."""
     if plan.backend in {'GitHub', 'Local Parallels VM'}:
         return plan
     try:
@@ -117,7 +117,7 @@ def with_worker_budget(plan, target, *, directory=None):
                 or '--isolate-modules' not in phase.argv):
             continue
         selected.append(phase.id)
-        if (sys.platform != 'darwin' or phase.argv[2] != 'Python/tests'
+        if (sys.platform != 'darwin'
                 or phase.environment.get('QT_QPA_PLATFORM') != 'offscreen'
                 or phase.environment.get('TOGA_BACKEND')):
             continue
@@ -126,13 +126,31 @@ def with_worker_budget(plan, target, *, directory=None):
             declarations = {}
             for node in ast.parse(capability.read_text()).body:
                 if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-                    if node.targets[0].id in {'SUPPORTED_WORKERS', 'RESERVATION_ENV'}:
+                    if node.targets[0].id in {'SUPPORTED_WORKERS', 'RESERVATION_ENV', 'QT_GROUPS'}:
                         declarations[node.targets[0].id] = ast.literal_eval(node.value)
-            if declarations == dict(SUPPORTED_WORKERS=(1, 2, 4, 8), RESERVATION_ENV='BUILD_MANAGER_RESERVED_TEST_WORKERS'):
+            groups = declarations.pop('QT_GROUPS', None)
+            if declarations == dict(SUPPORTED_WORKERS=(1, 2, 4, 8), RESERVATION_ENV='BUILD_MANAGER_RESERVED_TEST_WORKERS') and _parallel_selection(phase, groups):
                 accelerated.append(phase.id)
     plan = replace(plan, phases=tuple(replace(phase, stop_grace=max(6, phase.stop_grace))
         if phase.id in accelerated else phase for phase in plan.phases))
     return reserve(plan, target, selected, accelerated=accelerated, directory=directory)
+
+
+def _parallel_selection(phase, groups):
+    """Read the captured allowlist without importing fixtures or Qt."""
+    if groups is None:
+        return phase.argv[2] == 'Python/tests'  # Earlier Git-only runner capability.
+    root = (Path(phase.cwd) / phase.argv[2]).resolve()
+    patterns = [phase.argv[i + 1] for i, arg in enumerate(phase.argv[:-1])
+                if arg in {'--pattern', '--include-pattern'}] or ['test*.py']
+    exact = {phase.argv[i + 1] for i, arg in enumerate(phase.argv[:-1]) if arg == '--exact-file'}
+    for directory, names in groups.items():
+        for name in names:
+            path = (Path(phase.cwd) / directory / name).resolve()
+            if (path.is_relative_to(root) and all(fnmatchcase(name, pattern) for pattern in patterns)
+                    and (not exact or path.relative_to(root).as_posix() in exact)):
+                return True
+    return False
 
 
 def with_structure_gate(plan, interpreter):

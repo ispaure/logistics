@@ -81,6 +81,14 @@ class SchedulingTests(unittest.TestCase):
         with patch.dict(os.environ, QT_QPA_PLATFORM='offscreen', TOGA_BACKEND='', BUILD_MANAGER_TEST_PROGRESS='0', BUILD_MANAGER_RESERVED_TEST_WORKERS=''):
             self.assertTrue(parallel.eligible(parallel.ROOT / next(iter(parallel.QT_FILES))))
             self.assertFalse(parallel.eligible(parallel.ROOT / 'Python/tests/version_control/test_new.py'))
+            for group in parallel.QT_GROUPS:
+                self.assertFalse(parallel.eligible(parallel.ROOT / group / 'test_new.py'))
+                self.assertTrue(all((parallel.ROOT / group / name).is_file() for name in parallel.QT_GROUPS[group]))
+            for excluded in ('Python/tests/editing/test_notes_library_integration.py',
+                             'Python/tests/editing/test_text_editor_dataview.py',
+                             'Python/commonUtils/tests/browser/test_entry_browser.py',
+                             'Python/commonUtils/tests/markdown/test_markdown_presentation.py'):
+                self.assertFalse(parallel.eligible(parallel.ROOT / excluded))
             with patch.object(sys, 'platform', 'darwin'):
                 parallel.require_parallel_environment()
                 with patch.dict(os.environ, BUILD_MANAGER_TEST_PROGRESS="1", BUILD_MANAGER_RESERVED_TEST_WORKERS="4"):

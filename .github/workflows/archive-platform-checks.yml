@@ -132,6 +132,15 @@ jobs:
         run: |
           python dev.py test-structure
           python Python/tests/run_regressions.py .github/scripts --isolate-modules
+      - name: Budget reviewed macOS tests on the hosted computer
+        if: runner.os == 'macOS' && runner.environment == 'github-hosted'
+        run: |
+          python - <<'PY'
+          import os
+          from build_manager.test_workers import configure
+          workers = min(2, os.cpu_count() or 1)
+          configure(dict(per_platform=workers, host=workers))
+          PY
       - name: Run all regressions and full before/after compression parity
         run: python Python/tests/run_platform_checks.py --install
         env:
