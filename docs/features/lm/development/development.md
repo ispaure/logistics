@@ -39,8 +39,12 @@ an injected horizontal reserved region, and a
 synthetic loopback streaming server. Physical hinge geometry and personal model
 servers are outside that test's scope.
 
-Mobile configuration retains its native controls and uses the destination that
-opened it. Cold Settings entry initializes Chat without presenting its tab;
+Edit the native **Chat settings** form, provider sections and route presentation
+in `mobile/chat_settings.py:ChatSettingsPanel`. Chat → Model & server settings
+and Settings → LM Chat → Server & generation settings both call
+`ChatController.show_chat_configuration()` through the existing host adapter.
+The panel uses the destination that opened it and retains its native controls.
+Cold Settings entry initializes Chat without presenting its tab;
 Save pops only the configuration route. Provider selection mounts either the
 server form or the on-device availability controls. Provider, connection,
 model and generation controls use native settings groups. Manual model ID and
@@ -373,7 +377,13 @@ records; arbitrary Markdown resources remain blocked.
 
 ## Mobile ownership
 
-`mobile/storage.py`, `mobile/transport.py`, `mobile/presentation.py` and `mobile/ui.py` own mobile chat. The mobile host composes the view and supplies application presentation utilities. `streaming.py` owns SSE decoding shared by both transports; Qt networking stays in `transport.py`. Mobile retains its one-choice, text-only, 64 KiB event, 256 KiB response and timeout/cancellation limits.
+`mobile/ui.py` owns the mobile conversation workspace and its callbacks,
+`mobile/chat_settings.py` owns the settings panel, and `mobile/presentation.py`
+renders the transcript. `mobile/storage.py` and `mobile/transport.py` handle
+storage and server I/O. The mobile host composes the view and supplies application
+presentation utilities. `streaming.py` owns SSE decoding shared by both
+transports. Qt networking lives in `transport.py`. Mobile retains its one-choice,
+text-only, 64 KiB event, 256 KiB response and timeout/cancellation limits.
 
 `ChatController.state` owns the current conversation reference, request activity,
 selection suppression and inventory refresh task. `ChatController.transcript` owns

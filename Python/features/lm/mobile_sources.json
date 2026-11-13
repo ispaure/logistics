@@ -7,6 +7,7 @@
     "execution/mobile.py",
     "generation.py",
     "mobile/__init__.py",
+    "mobile/chat_settings.py",
     "mobile/controller.py",
     "mobile/ios/FoundationChat.swift",
     "mobile/on_device.py",

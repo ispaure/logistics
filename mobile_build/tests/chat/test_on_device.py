@@ -140,7 +140,7 @@ class OnDeviceUITests(unittest.TestCase):
         self.assertEqual(app.chat_models.value, 'Keep my server model')
 
     def setUp(self):
-        with patch('features.lm.mobile.ui.platform_provider', return_value='apple'):
+        with patch('features.lm.mobile.chat_settings.platform_provider', return_value='apple'):
             self.app = create_chat_app(self)
             self.app.show_chat()
 
