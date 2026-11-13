@@ -536,4 +536,4 @@ class ComicGuidanceProbe(LogisticsMobile):
 
 
 def main():
-    ComicGuidanceProbe('Logistics Mobile', 'io.github.ispaure.logisticsmobile').main_loop()
+    return ComicGuidanceProbe('Comic Guidance QA', 'io.github.ispaure.logisticscomicqa')

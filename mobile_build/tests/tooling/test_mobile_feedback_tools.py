@@ -12,6 +12,34 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class MobileFeedbackToolsTests(unittest.TestCase):
+    def test_comic_probe_returns_app_for_the_packaged_main_loop(self):
+        from mobile_build.native_tests.tests.logisticsmobile import comic_guidance_probe
+        with patch.object(comic_guidance_probe, 'ComicGuidanceProbe') as factory:
+            self.assertIs(comic_guidance_probe.main(), factory.return_value)
+            factory.assert_called_once_with('Comic Guidance QA', 'io.github.ispaure.logisticscomicqa')
+            factory.return_value.main_loop.assert_not_called()
+
+    def test_comic_driver_waits_for_missing_or_partial_requests(self):
+        for raw in (b'', b'cat: cache/comic-guidance-request.json: No such file or directory\n',
+                    b'run-as: package is not running\n', b'{"action":', b'\xff'):
+            for android in (False, True):
+                with self.subTest(raw=raw, android=android):
+                    self.assertIsNone(tools.comic_guidance_action(raw, android=android))
+
+    def test_comic_driver_accepts_only_supported_platform_actions(self):
+        for android in (False, True):
+            self.assertEqual(tools.comic_guidance_action(b'{"action":"background"}', android=android),
+                             'background')
+        for action in ('reduce-motion-on', 'reduce-motion-off'):
+            raw = tools.json.dumps(dict(action=action)).encode()
+            self.assertEqual(tools.comic_guidance_action(raw, android=True), action)
+            with self.assertRaises(ValueError):
+                tools.comic_guidance_action(raw)
+        for raw in (b'[]', b'null', b'{}', b'{"action":12}', b'{"action":"install"}'):
+            for android in (False, True):
+                with self.subTest(raw=raw, android=android), self.assertRaises(ValueError):
+                    tools.comic_guidance_action(raw, android=android)
+
     def test_ios_runtime_on_android_is_rejected_before_qa_staging(self):
         with TemporaryDirectory() as directory:
             output = Path(directory) / 'evidence'
