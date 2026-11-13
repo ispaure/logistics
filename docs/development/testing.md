@@ -120,8 +120,9 @@ explicitly excludes mobile build, payload, log, deployment-workspace and downloa
 toolchain trees, plus the external feature link. New, untracked application and
 test source is still checked; lint selection does not depend on the Git index.
 
-For **mobile host tests**, use a separate environment, without installing a
-native SDK or Briefcase just to run dummy-backend checks:
+For **mobile host tests**, set up the separate environment. Setup installs
+the locked host tools, including Briefcase. Dummy-backend checks require no
+native SDK:
 
 ```sh
 # macOS / Linux; use py -3.12 and mobile_build/.venv/Scripts/python.exe on Windows
@@ -600,17 +601,10 @@ unchanged. Managed Qt temporary directories drain owned work before deleting fil
 
 ## Make your first change
 
-1. Find your workflow in the [code map](code-map.md), then read its owning user
-   guide and developer module/test map.
-2. Follow the registration factory or mobile callback to the implementation.
-   A compatibility forwarding module is a pointer, not the place to add behavior.
-3. Change the smallest owning module. For mobile imports, update the owner's
-   `mobile_sources.json` and run `python3 dev.py test desktop test_mobile_packaging.py`.
-4. Run the focused tests below, then `python3 dev.py lint`. UI changes also need
-   interaction checks on the affected platform.
-5. Update the owning documentation using the [hierarchy rules](documentation-hierarchy.md).
-   Review `git diff` and `git status` so generated output and unrelated work stay
-   out of your change.
+Follow the [contributor walkthrough](getting-started.md) for the full first-change
+sequence. If your change adds or moves a mobile payload module, update its
+`mobile_sources.json` and run `python3 dev.py test desktop test_mobile_packaging.py`.
+Use [mobile validation](mobile-handbook.md) for interaction on the affected platform.
 
 ## Testing
 
@@ -653,9 +647,23 @@ and contain no setup or runtime registration.
 
 ### Find the tests for your change
 
-Use `python3 dev.py owners` to list developer guides, then
-`python3 dev.py test-owner books --dry-run` to inspect an owner's test selection.
-Remove `--dry-run` to run it across the appropriate desktop/mobile environments.
+Choose by the behavior under test and the environment it needs. Run these
+examples from the repository root with the corresponding [host setup](#run-everyday-checks).
+On Windows, use `py` in place of `python3`.
+
+| What you need | Command or guide |
+| --- | --- |
+| Find a feature's tests | `python3 dev.py owners`, then `python3 dev.py test-owner books --dry-run`. Replace `books` with the owner ID and remove `--dry-run` to run the selection. |
+| Check one desktop or portable behavior | `python3 dev.py test desktop test_feature_registry.py` uses the root desktop environment. |
+| Check one mobile host behavior | `python3 dev.py test mobile --exact-file mobile_build/tests/documents/test_editor_picker.py` uses the mobile environment and dummy Toga backend. |
+| Check a commonUtils contract | `python3 dev.py test shared 'test_native*.py' --dry-run` previews the shared matrix. See [shared-library test setup](#shared-library-test-matrix). |
+| Check native interaction, platform gates or a delivery plan | Use the [mobile handbook](mobile-handbook.md), [platform checks](platform-checks.md) or [Build Manager plan walkthrough](build-manager-journeys.md#trace-a-validation-plan). |
+
+For a filename that occurs in multiple desktop or mobile directories, select a
+repository-relative `--exact-file`. For a check that selects no cases, confirm
+the suite and filename first, then check whether the selected
+[execution profile](#execution-stages-and-failure-policy) includes the case's stage.
+
 `Scripts/ownership.json` owns these source, guide, manifest and test associations;
 update it when moving an owner or renaming tests. Archive, reading, chat, provider
 and storage selections include their specialist workflow suites; overlapping

@@ -81,13 +81,9 @@ Add `--dry-run` to inspect the selected file and interpreter before running it.
 
 ## Testing, builds and delivery
 
-To trace a Logistics workflow through Build Manager, start with the
-[combined journey contracts](build-manager-journeys.md). Follow the declaration
-in `build-project.json` to `LogisticsProject.make_journey` in
-`logistics_build/build_project.py` and the planner in
-`logistics_build/manager_journeys.py`. For a validation plan, use
-[`build-tests.json` suite discovery](build-manager-journeys.md#shared-tests-and-suite-discovery)
-to see how the manager resolves the project’s test inventory.
+Follow the [Build Manager plan walkthrough](build-manager-journeys.md#trace-a-validation-plan)
+to connect the review screen to the Logistics adapter and suite inventory. For
+source, settings and execution contracts, see [combined journeys](build-manager-journeys.md).
 
 | Task | Reference |
 | --- | --- |
