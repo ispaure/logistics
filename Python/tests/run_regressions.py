@@ -177,8 +177,13 @@ def read_child_evidence(path, stage, exit_code, expected):
 
 def run_isolated(directory, pattern, interval, include_patterns=(), report=None, *,
                  stages=STAGE_ORDER, mode='diagnostic', fail_fast=False, timings=None,
-                 order='default', seed=None, exact_files=()):
+                 order='default', seed=None, exact_files=(), workers=1, cancelled=None):
     """Validate first, then run isolated files by stage and known duration."""
+    if workers not in (1, 2):
+        raise ValueError('Choose one or two isolated test workers.')
+    if workers > 1:
+        from parallel_regressions import require_parallel_environment
+        require_parallel_environment()
     selected = select_sources(matching_sources(directory, pattern, include_patterns, exact_files), stages)
     durations = {}
     if timings is not None:
@@ -210,6 +215,21 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
                            planned_modules=[dict(path=str(r.path.relative_to(directory)), stage=s.value) for s, r in plan],
                            classified_files=[dict(path=str(r.path.relative_to(directory)), **source_inventory(r, levels))
                                              for r, levels in selected], not_run=[], coverage_complete=True)
+    if workers > 1:
+        from parallel_regressions import cancellation, eligible, schedule
+        with TemporaryDirectory(prefix='logistics-test-workers-') as temporary:
+            def execute(index, cancel_event):
+                level, row = plan[index]
+                local = TimingReport(Path(temporary) / f'{index}.json', directory, pattern, True)
+                code = run_isolated(directory, pattern, interval, report=local, stages=(level,),
+                    mode=mode, fail_fast=fail_fast, order=order, seed=seed,
+                    exact_files=[str(row.path.relative_to(directory))],
+                    cancelled=cancel_event if eligible(row.path) else None)
+                local.save(complete=True, exit_code=code)
+                return code, local.data
+            with cancellation() as cancel_event:
+                return schedule(plan, execute, report, directory, workers=workers,
+                    mode=mode, fail_fast=fail_fast, cancelled=cancel_event)
     failed, stop_reason, active_stage, stage_failed = [], '', None, False
     for index, (level, row) in enumerate(plan):
         if active_stage is not None and level is not active_stage:
@@ -243,11 +263,19 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
             command.extend(['--report', str(child_report), '--timing-child'])
             expected = child_context(path, level.value, order, seed)
             try:
-                code = subprocess.run(command, timeout=ISOLATED_FILE_TIMEOUT,
-                                      env=dict(os.environ, BUILD_MANAGER_TEST_FILE=relative_file)).returncode
-                outcome = 'passed' if code == 0 else 'preflight_error' if code == 2 else 'failed'
-                if code < 0:
-                    outcome = 'crashed'
+                environment = dict(os.environ, BUILD_MANAGER_TEST_FILE=relative_file)
+                stopped_outcome = None
+                if cancelled is None:
+                    code = subprocess.run(command, timeout=ISOLATED_FILE_TIMEOUT, env=environment).returncode
+                else:
+                    from parallel_regressions import child
+                    runtime = Path(temporary) / 'runtime'
+                    runtime.mkdir()
+                    environment.update(TMPDIR=str(runtime), TMP=str(runtime), TEMP=str(runtime))
+                    environment['LOGISTICS_TEST_CANCEL_FILE'] = str(Path(temporary) / 'cancel')
+                    code, stopped_outcome = child(command, environment, ISOLATED_FILE_TIMEOUT, cancelled)
+                outcome = stopped_outcome or ('passed' if code == 0 else 'preflight_error' if code == 2
+                                              else 'crashed' if code < 0 else 'failed')
             except subprocess.TimeoutExpired:
                 code, outcome = 124, 'timeout'
             records, not_run, available, evidence_error = read_child_evidence(child_report, level.value, code, expected)
@@ -320,6 +348,8 @@ def main():
                         help='Reorder files, classes and methods within each stage; class fixtures stay contiguous')
     parser.add_argument('--seed', type=int, help='Required reproducible seed for --order random')
     parser.add_argument('--single-file', action='store_true', help=argparse.SUPPRESS)
+    parser.add_argument('--workers', type=int, choices=(1, 2), default=1,
+                        help='Opt in to two workers for reviewed macOS offscreen files; other files stay exclusive')
     parser.add_argument('--isolate-modules', action='store_true',
                         help='Run each matching test file in a fresh process, including nested directories')
     parser.add_argument('--traceback-after', type=float, default=PROGRESS_INTERVAL,
@@ -329,6 +359,8 @@ def main():
     parser.add_argument('--timing-child', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--junit', type=Path, help='Write measured testcase evidence for the build manager')
     args = parser.parse_args()
+    if args.workers > 1 and not args.isolate_modules:
+        parser.error('--workers requires --isolate-modules')
     if args.traceback_after <= 0:
         parser.error('--traceback-after must be positive')
     if args.exact_file and (not args.isolate_modules or args.include_pattern or args.single_file):
@@ -397,7 +429,7 @@ def run_with_report(args, report):
         return run_isolated(args.directory.resolve(), args.pattern, args.traceback_after,
                             args.include_pattern, report, stages=args.stages, mode=args.mode,
                             fail_fast=args.fail_fast, timings=args.timings, order=args.order, seed=args.seed,
-                            exact_files=args.exact_file)
+                            exact_files=args.exact_file, workers=args.workers)
     exact = [args.pattern] if args.single_file else []
     rows = validate(matching_sources(args.directory, args.pattern, (), exact))
     # Keep default storage and preferences away from the contributor's live data,
@@ -418,6 +450,10 @@ def run_with_report(args, report):
             'LOCALAPPDATA': str(home / 'AppData' / 'Local'),
         }
         with patch.dict(os.environ, environment), patch.object(Path, 'home', return_value=home):
+            if args.timing_child and os.environ.get('LOGISTICS_TEST_CANCEL_FILE'):
+                from parallel_regressions import cooperate
+                with cooperate():
+                    return run_suite(args, report, rows)
             return run_suite(args, report, rows)
 
 

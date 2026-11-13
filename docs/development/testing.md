@@ -136,6 +136,49 @@ running it. Mobile tests use `TOGA_BACKEND=toga_dummy`; desktop tests use offscr
 Qt. These checks do not certify native appearance or interactions. See the
 [mobile handbook](mobile-handbook.md) when you need an actual device build.
 
+### Optional parallel Git regressions on macOS
+
+The default remains one isolated file-stage process at a time. For the reviewed
+desktop Git group on macOS, opt in to two workers:
+
+```sh
+python3 dev.py test desktop 'test_git*.py' --workers 2
+```
+
+The direct `Python/tests/run_regressions.py` entry point also accepts
+`--isolate-modules --workers 2`. The runner requires Qt's offscreen backend.
+Only the 19 explicitly listed files in `Python/tests/parallel_regressions.py`
+can overlap. Their real Git repositories, preferences, Qt applications and
+storage are private to each process. New and unreviewed files remain exclusive:
+they wait for active work to finish and retain the original serial child path.
+No stages overlap. Fast mode still gates later work on smoke; fail-fast stops
+new admissions while already running files finish.
+
+JSON and JUnit retain deterministic source-plan ordering, case outcomes and file
+identity. Unstarted files include their statically classified cases; their runtime
+discovery is not claimed. For concurrent Git children, SIGINT/SIGTERM first asks
+the existing command supervisors to cancel and retire their detached helpers.
+Up to five seconds is reserved for that cleanup, followed by the manager's
+process-group cleanup. The 300-second file execution deadline is unchanged.
+Child temporary storage is inside the parent's removable file scope. An already
+running exclusive file keeps its original deadline and termination behavior.
+
+This option is limited to macOS desktop Git tests. Toga dummy/mobile host,
+shared-library suites, native windows, media playback, simulators, devices and
+Go bridge tests are not validated for concurrent file execution. Managed phases
+reject the nested worker opt-in; Manager's existing phase/platform admission and
+resource owners remain in charge. Do not infer full-platform or release coverage
+from this selected group.
+
+On the frozen Logistics `805ccc7c` / commonUtils `cee7537` baseline, a prototype
+using the existing children matched all 152 Git cases plus 96 smoke cases.
+Including structure preflight and both desktop smoke gates, the quiet 19-file
+pair took 158.78 seconds with one worker and 84.46 seconds with two. A reverse
+parallel run took 84.28 seconds. The serial repeat that overlapped compiler work
+is excluded. These selected-slice measurements are separate from Brief 09's
+12.31-second matched full-macOS improvement; they are not a measured full-suite
+speedup. Two workers are the supported limit.
+
 ### Execution stages and failure policy
 
 Every declared test source has one default from `commonUtils.testing.stages.TestStage`:

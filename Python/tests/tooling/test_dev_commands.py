@@ -20,6 +20,20 @@ spec.loader.exec_module(dev)
 
 
 class DeveloperCommandTests(unittest.TestCase):
+    def test_two_workers_are_explicit_and_desktop_only(self):
+        with patch('logistics_build.test_structure.inventory', return_value=[]), \
+                patch.object(development.subprocess, 'run') as run, patch.object(Path, 'is_file', return_value=True):
+            run.return_value.returncode = 0
+            self.assertEqual(dev.main(['test', 'desktop', 'test_git*.py', '--workers', '2']), 0)
+            command = run.call_args.args[0]
+            self.assertEqual(command[command.index('--workers') + 1], '2')
+            self.assertEqual(dev.main(['test', 'desktop', 'test_git*.py']), 0)
+            self.assertNotIn('--workers', run.call_args.args[0])
+            for suite in ('mobile', 'shared', 'bridge'):
+                with self.subTest(suite=suite), self.assertRaises(SystemExit) as error:
+                    dev.main(['test', suite, '--workers', '2'])
+                self.assertEqual(error.exception.code, 2)
+
     def setUp(self):
         # These cases exercise routing; real inventory validation has its own fixtures.
         self.enterContext(patch('logistics_build.test_structure.inventory', return_value=[]))
