@@ -62,7 +62,9 @@ The packaging tool validates pinned submodule checkouts and archive integrity.
 It also requires the source archive's configured manager entry files:
 `build-project.json`, `logistics_build/manager_bridge.py` and
 `logistics_build/tooling_bootstrap.py`, alongside
-the installer and pinned dependency metadata. The external build manager remains
+the installer and pinned dependency metadata. The bootstrap's
+`logistics_build/native_tooling.py` and `logistics_build/native_tooling.json`
+catalog are required too. The external build manager remains
 a separate dependency. `.github/scripts/test_release.py` verifies that the
 packager rejects any missing entry file before creating the ZIP.
 It excludes Git metadata, workflow files, virtual environments, caches and build
