@@ -314,9 +314,10 @@ class ProviderProgress(ProgressWrites):
         index = getattr(owner, '_provider_displayed_index', None)
         if index is None or getattr(owner, 'page_suspended', False):
             return
-        if reader.editable or reader.kind == '.pdf' or self.image_viewport is not None:
-            if reader.kind == '.pdf' and not initial and (self.last_location or {}).get('page') != index:
-                self._position(dict(page=index))
+        if reader.kind == '.pdf':
+            self.capture_pdf(index, owner.crypt_image.reading_viewport(), initial=initial)
+            return
+        if reader.editable or self.image_viewport is not None:
             self.watch_surface(initial=initial)
             return
         value = dict(page=index)
@@ -329,6 +330,12 @@ class ProviderProgress(ProgressWrites):
             value.update(resource=reader.pages[index], half=owner._provider_displayed_half)
         self._position(value, initial=initial)
 
+    def capture_pdf(self, index, location, *, initial=False):
+        value = dict(page=index)
+        if location is not None:
+            value['viewport'] = location
+        self._position(value, initial=initial)
+
     def bookmarks_changed(self):
         owner = self.owner
         self.observe(dict(bookmarks=sorted(owner.crypt_bookmarks),
@@ -337,8 +344,6 @@ class ProviderProgress(ProgressWrites):
 
     def surface_value(self):
         owner = self.owner
-        if self.reader.kind == '.pdf':
-            return owner.crypt_image, 'viewport'
         if self.image_viewport is not None:
             return owner.crypt_image, 'image'
         for control, mode in ((getattr(owner, 'crypt_preview', None), 'preview'),
@@ -408,12 +413,6 @@ class ProviderProgress(ProgressWrites):
         saved = self.last_location or self.restored
         if mode == 'image':
             self.image_viewport.restore(widget)
-        elif mode == 'viewport':
-            if saved.get('page') == index:
-                viewport = saved.get('viewport')
-                if saved.get('spread') != list(self.reader.pdf_navigation.indices) and isinstance(viewport, dict):
-                    viewport = {'zoom': viewport.get('zoom')}
-                widget.restore_viewport(viewport)
         elif mode == 'formatted':
             if saved.get('mode') == mode:
                 scroll = saved.get('scroll')
@@ -441,6 +440,11 @@ class ProviderProgress(ProgressWrites):
                 self.sample_surface()
 
     def sample_surface(self, *, initial=False):
+        if self.reader.kind == '.pdf':
+            if self.visible() and not getattr(self.owner, 'page_suspended', False):
+                canvas = self.owner.crypt_image
+                self.capture_pdf(self.owner._provider_displayed_index, canvas.reading_viewport(), initial=initial)
+            return
         if self.surface is None or not self.visible():
             return
         from .reader_lifecycle import normalized_scroll, source_scroll_anchor
@@ -458,25 +462,19 @@ class ProviderProgress(ProgressWrites):
             if not initial:
                 self.queue(self.image_viewport.observe(widget))
             return
-        if mode == 'viewport':
-            value = dict(page=index)
-            viewport = widget.reading_viewport()
-            if viewport is not None:
-                value.update(viewport=viewport, spread=list(self.reader.pdf_navigation.indices))
-        else:
-            scroll = normalized_scroll(widget)
-            if scroll is None or (not self.surface_ready and not any(scroll)):
-                return
-            if (self.last_location is not None and self.last_location.get('mode') == mode
-                    and self.last_location.get('scroll') == scroll):
-                return
-            value = dict(page=0, mode=mode, scroll=scroll)
-            if mode == 'source':
-                anchor = source_scroll_anchor(widget)
-                if anchor is not None:
-                    value['anchor'] = anchor
-            if initial and not self.restored and any(scroll):
-                initial = False
+        scroll = normalized_scroll(widget)
+        if scroll is None or (not self.surface_ready and not any(scroll)):
+            return
+        if (self.last_location is not None and self.last_location.get('mode') == mode
+                and self.last_location.get('scroll') == scroll):
+            return
+        value = dict(page=0, mode=mode, scroll=scroll)
+        if mode == 'source':
+            anchor = source_scroll_anchor(widget)
+            if anchor is not None:
+                value['anchor'] = anchor
+        if initial and not self.restored and any(scroll):
+            initial = False
         self._position(value, initial=initial)
 
     async def sample_formatted(self, widget, current, *, initial=False):

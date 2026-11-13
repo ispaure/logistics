@@ -147,8 +147,7 @@ playback time and options across processes. Mobile host coverage lives in
 `unified-progress` and `unified-progress-video` probes exercise relaunch and
 restoration through the native app on disposable devices.
 
-Image restoration covers supported zoom. Android PDF restores supported zoom,
-while iOS PDF also exposes a normalized center. Text and Markdown preserve
-mode and normalized scroll for compatible content revisions. Supported native
+Image restoration covers supported zoom. Mobile PDF restores supported zoom
+and its within-page scroll offset. Text and Markdown preserve mode and normalized scroll for compatible content revisions. Supported native
 source editors additionally store a UTF-16 line anchor. A changed revision
 invalidates a locator tied to the previous text.

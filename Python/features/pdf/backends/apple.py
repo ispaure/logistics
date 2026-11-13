@@ -28,6 +28,11 @@ class ApplePDF:
     def __exit__(self, *args):
         self.document = None
 
+    def page_size(self, index):
+        page = self.document.pageAtIndex(index)
+        size = page.boundsForBox(1).size
+        return (size.height, size.width) if page.rotation % 180 else (size.width, size.height)
+
     def render(self, index, *, edge=PAGE_EDGE):
         import ctypes
         from rubicon.objc import CGSize

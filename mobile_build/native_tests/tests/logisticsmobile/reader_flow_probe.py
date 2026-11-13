@@ -1,4 +1,4 @@
-"""Native document chrome, vertical PDF spreads and whole-book EPUB progress."""
+"""Native document chrome, continuous PDF pages and whole-book EPUB progress."""
 
 from commonUtils.testing.stages import TestStage
 
@@ -79,15 +79,15 @@ class ReaderFlowProbe(CompactReadingProbe):
             await capture_window(self, output / 'pdf-portrait.png')
             await self.rotate(True)
             await self.settled(owner)
-            assert owner.crypt_reader.pdf_navigation.indices == (0, 1), (owner.crypt_reader.pdf_navigation.indices, owner.private_comic_viewport())
+            assert owner.crypt_reader.pdf_navigation.index == 0
             await capture_window(self, output / 'pdf-landscape.png')
             owner.crypt_image.page(1)
             await owner._comic_swipe_task
-            assert owner.crypt_reader.pdf_navigation.indices == (2, 3)
+            assert owner.crypt_reader.pdf_navigation.index == 1
             await owner.next_private_page()
-            assert owner.crypt_reader.pdf_navigation.indices == (4,)
+            assert owner.crypt_reader.pdf_navigation.index == 2
             await owner.previous_private_page()
-            assert owner.crypt_reader.pdf_navigation.indices == (2, 3)
+            assert owner.crypt_reader.pdf_navigation.index == 1
             owner.toggle_private_reading_mode()
             assert owner.page_footer.widget not in owner.pdf_body.children
             owner.toggle_private_reading_mode()
@@ -102,7 +102,7 @@ class ReaderFlowProbe(CompactReadingProbe):
             display.ios['reader-flow-qa'] = window, picture
             try:
                 display.select(self)
-                assert picture.image == owner.crypt_image._impl.picture.image
+                assert picture.image == owner.crypt_image.artwork._impl.picture.image
                 navigation = adapter.navigation[self.native_host.destinations.index('files')]
                 navigation.popViewControllerAnimated(True)
                 for _ in range(100):

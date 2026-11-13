@@ -146,31 +146,6 @@ class PDFMobileTests(unittest.TestCase):
                 close_loop(app.loop)
                 LogisticsMobile.storage_root = previous_root
 
-    def test_spreads_follow_page_dimensions_and_last_page_without_skipping(self):
-        from features.pdf.mobile.canvas import PDFNavigation
-        from io import BytesIO
-        from PIL import Image
-        def page(width, height):
-            output = BytesIO()
-            Image.new('RGB', (width, height), 'white').save(output, format='PNG')
-            return output.getvalue()
-        pages = [page(300, 600)] * 5
-        document = SimpleNamespace(data=b'', count=5, page=lambda index: pages[index])
-        navigation = PDFNavigation(document)
-        self.assertEqual(navigation.load(0, (600, 1000))[0], (0,))
-        indices, data = navigation.load(0, (1200, 800))
-        self.assertEqual(indices, (0, 1))
-        navigation.indices, navigation.viewport = indices, (1200, 800)
-        self.assertEqual(navigation.next(), 2)
-        navigation.indices = (2, 3)
-        self.assertEqual(navigation.previous(), 0)
-        navigation.indices = (4,)
-        self.assertIsNone(navigation.next())
-        self.assertEqual(navigation.previous(), 2)
-        self.assertEqual(navigation.load(4, (1200, 800))[0], (4,))
-        pages[1] = page(1200, 600)
-        self.assertEqual(navigation.load(0, (1200, 800))[0], (0,))
-
     def test_search_worker_start_failure_is_retryable(self):
         with search_panel() as (app, search, pages, active):
             async def check():
@@ -287,8 +262,7 @@ class PDFMobileTests(unittest.TestCase):
                 self.assertTrue(await app.open_download(path=local), app.cloud_status.value)
                 owner = app.private_sessions.active
                 self.assertEqual(owner.crypt_reader.pdf.count, 3)
-                self.assertIsNotNone(owner._provider_layout_task)
-                self.assertFalse(owner._provider_layout_task.done())
+                self.assertIs(owner.crypt_image.scroll.document, owner.crypt_reader.pdf)
                 self.assertIsNotNone(owner.crypt_image.image)
                 with patch('mobile.page_animation.begin_page_slide') as begin:
                     await owner.move_private_page(1)
@@ -338,7 +312,7 @@ class PDFMobileTests(unittest.TestCase):
                     owner.pdf_tools.toggle()
                     self.assertIn(owner.pdf_tools.panel, owner.pdf_tools.widget.children)
                     canvas = owner.crypt_image
-                    self.assertEqual(canvas.page_axis, 'vertical')
+                    self.assertIn(canvas.scroll.view, canvas.children)
                     self.assertFalse(canvas.magnifier_enabled)
                     canvas.toggle_controls()
                     self.assertTrue(owner.reading_frame.immersive)

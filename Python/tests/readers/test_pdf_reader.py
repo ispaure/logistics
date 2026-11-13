@@ -138,20 +138,21 @@ class PDFReaderTests(QtTestCase):
 
     def test_desktop_navigation_and_close_clear_buffer(self):
         from features.pdf.ui.reader import PDFWindow
-        from PySide6.QtCore import QPointF, QEvent, Qt
-        from PySide6.QtGui import QMouseEvent
         window = PDFWindow('fixture.pdf', pdf_bytes())
+        window.show()
         self.assertEqual(window.index, 0)
         window.number.setValue(3)
         self.assertEqual(window.index, 2)
         self.assertFalse(window.following.isEnabled())
         window.go(-1)
         self.assertEqual(window.index, 2)
-        for event_type, position in ((QEvent.Type.MouseButtonPress, QPointF(30, 30)),
-                                     (QEvent.Type.MouseButtonRelease, QPointF(30, 150))):
-            event = QMouseEvent(event_type, position, position, Qt.MouseButton.LeftButton,
-                                Qt.MouseButton.LeftButton, Qt.KeyboardModifier.NoModifier)
-            window.eventFilter(window.view.viewport(), event)
+        bar = window.view.verticalScrollBar()
+        last = bar.value()
+        bar.setValue(last - 125)
+        self.assertEqual(bar.value(), last - 125)
+        bar.setValue(last - 75)
+        self.assertEqual(bar.value(), last - 75)
+        window.go(1)
         self.assertEqual(window.index, 1)
         window.close()
         self.assertEqual(bytes(window.buffer.data()), b'')

@@ -71,25 +71,26 @@ class Probe(NotebookProbe):
         await deliver(3 if cancel else 1, point if moved_back or end is None else end, 60)
 
     async def pdf_point(self, canvas, x=.3, y=.35):
-        impl = canvas._impl
+        surface = canvas.scroll
+        point = await surface.js(
+            "JSON.stringify((()=>{const r=document.querySelector('.sheet[data-page=\""
+            + str(surface.index) + "\"] img')?.getBoundingClientRect();" +
+            f"return r ? [r.left+r.width*{x},r.top+r.height*{y}] : null;}})())")
+        assert point is not None, 'PDF raster is not present'
+        native = surface.view._impl.native
         if self.apple:
             from rubicon.objc import CGPoint
-            size = impl.picture.bounds.size
-            point = impl.picture.convertPoint_toView_(CGPoint(size.width*x, size.height*y), None)
-            return [float(point.x), float(point.y)]
-        from java import jarray, jfloat
-        native = impl.native
-        image = native.getDrawable()
-        point = jarray(jfloat)([image.getIntrinsicWidth()*x, image.getIntrinsicHeight()*y])
-        native.getImageMatrix().mapPoints(point)
-        return [float(point[0])+native.getPaddingLeft(), float(point[1])+native.getPaddingTop()]
+            p = native.convertPoint_toView_(CGPoint(*point), None)
+            return [float(p.x), float(p.y)]
+        density = native.getResources().getDisplayMetrics().density
+        return [value * density for value in point]
 
     async def touch_pdf(self, canvas, **kwargs):
         point = await self.pdf_point(canvas)
         if self.apple:
             await self.ios_touch(point, **kwargs)
         else:
-            await self.android_gesture(canvas._impl.native, point, **kwargs)
+            await self.android_gesture(canvas.scroll.view._impl.native, point, **kwargs)
 
     async def check(self, app):
         output = Path(self.paths.cache) / 'link-evidence'
@@ -112,31 +113,32 @@ class Probe(NotebookProbe):
             owner = self.private_sessions.active
             canvas = owner.crypt_image
             await asyncio.sleep(.5)
-            assert owner.crypt_reader.pdf_navigation.indices == (0,)
+            assert owner.crypt_reader.pdf_navigation.index == 0
             for zoom in (1, 2):
                 canvas.set_zoom(zoom)
                 await asyncio.sleep(.2)
                 await self.touch_pdf(canvas)
                 await self.wait(lambda: canvas.return_page is not None, 'Native finger tap did not follow PDF link')
-                assert owner.crypt_reader.pdf_navigation.indices[0] == 2
+                assert owner.crypt_reader.pdf_navigation.index == 2
                 assert not owner.reading_frame.immersive
                 await capture_window(self, output / f'pdf-undo-{zoom}.png')
                 await canvas.undo_link()
-                assert owner.crypt_reader.pdf_navigation.indices[0] == 0
+                assert owner.crypt_reader.pdf_navigation.index == 0
                 report['cases'].append(f'native_pdf_finger_link_and_undo_zoom_{zoom}')
             if not self.apple:
                 point = await self.pdf_point(canvas)
-                native = canvas._impl.native
+                native = canvas.scroll.view._impl.native
                 for label, kwargs in [('cancel', dict(cancel=True)), ('pen', dict(tool=2)),
                                       ('move_out_back', dict(end=[point[0]+60, point[1]], moved_back=True))]:
                     await self.android_gesture(native, point, **kwargs)
                     await asyncio.sleep(.2)
-                    assert owner.crypt_reader.pdf_navigation.indices[0] == 0, label
+                    assert owner.crypt_reader.pdf_navigation.index == 0, label
                     report['cases'].append('android_pdf_no_link_'+label)
             point = await self.pdf_point(canvas)
-            end = [point[0], point[1] - (120 if self.apple else canvas._impl.native.getHeight()*.25)]
+            end = [point[0], point[1] - (120 if self.apple else canvas.scroll.view._impl.native.getHeight()*.25)]
             await self.touch_pdf(canvas, end=end)
-            await self.wait(lambda: owner.crypt_reader.pdf_navigation.indices[0] == 1, 'Native swipe did not advance one page')
+            await self.wait(lambda: canvas.scroll.location['offset'] > 0 or canvas.scroll.index > 0,
+                            'Native swipe did not scroll the document')
             assert canvas.return_page is None, 'Swipe followed the link instead of paging'
             await owner.move_private_page(0)
             report['cases'].append('native_pdf_swipe_does_not_follow_link')

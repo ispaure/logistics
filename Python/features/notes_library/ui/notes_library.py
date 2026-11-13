@@ -510,8 +510,6 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
             return False
         self._after_document_save = None
         self.closing = True
-        if getattr(self, 'file_preview', None) is not None:
-            self.file_preview.operation.request_cancel()
         self.viewer.clear_data_views()
         if self.text_document is not None:
             self.text_document.operation.request_cancel()
@@ -521,8 +519,7 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
         self.cancel_connections()
         return (not self.progress.busy and not self.aux.busy and not self.connections_progress.busy
                 and not (self.viewer.data_views and self.viewer.data_views.progress.busy)
-                and not (self.text_document and (self.text_document.busy or self.text_document.search.busy))
-                and not (getattr(self, 'file_preview', None) and self.file_preview.busy))
+                and not (self.text_document and (self.text_document.busy or self.text_document.search.busy)))
 
 
     def closeEvent(self, event):

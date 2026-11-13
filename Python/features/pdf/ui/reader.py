@@ -1,9 +1,8 @@
-"""Independent Qt PDF reader with vertical, single-page navigation."""
+"""Independent Qt PDF reader with continuous page scrolling."""
 from pathlib import Path
 from commonUtils.ui import pyside as qt
-from PySide6.QtCore import QBuffer, QByteArray, QIODevice, QEvent, QPoint, QTimer
-from PySide6.QtPdf import QPdfDocument
-from PySide6.QtPdfWidgets import QPdfView
+from PySide6.QtCore import QByteArray, QEvent, QTimer
+from .continuous import ContinuousPDFView, load_pdf
 from features.pdf.document import MAX_PDF
 from services.documents.storage import read_local_bytes
 
@@ -18,16 +17,11 @@ class PDFWindow(qt.QMainWindow):
         self.setWindowTitle(Path(name).name)
         self.setWindowFilePath(str(name))
         self.resize(850, 1000)
-        self.buffer = QBuffer(self)
-        self.buffer.setData(QByteArray(data))
-        self.buffer.open(QIODevice.OpenModeFlag.ReadOnly)
-        self.document = QPdfDocument(self)
-        self.document.load(self.buffer)
-        if self.document.status() != QPdfDocument.Status.Ready or not self.document.pageCount():
-            self.document.close()
-            self.buffer.close()
+        try:
+            self.document, self.buffer = load_pdf(self, data)
+        except ValueError:
             self.deleteLater()
-            raise ValueError('Cannot open PDF. It may be damaged or password protected.')
+            raise
         self.position_state = None
         self._position_ready = False
         if annotation_provider is not None or Path(name).is_absolute():
@@ -43,15 +37,12 @@ class PDFWindow(qt.QMainWindow):
         self.position_timer.setSingleShot(True)
         self.position_timer.setInterval(300)
         self.position_timer.timeout.connect(self.flush_position)
-        self.view = QPdfView(self)
+        self.view = ContinuousPDFView(self)
         self.view.setDocument(self.document)
-        self.view.setPageMode(QPdfView.PageMode.SinglePage)
-        self.view.setZoomMode(QPdfView.ZoomMode.FitInView)
         self.view.viewport().installEventFilter(self)
         self.view.installEventFilter(self)
-        self.view.viewport().setAttribute(qt.Qt.WidgetAttribute.WA_AcceptTouchEvents)
         self.start = None
-        self.wheel_delta = 0
+        self.dragged = False
         root = qt.QWidget(self)
         layout = qt.QVBoxLayout(root)
         from commonUtils.ui.readers.layout import READER_LAYOUT
@@ -129,7 +120,11 @@ class PDFWindow(qt.QMainWindow):
                 saved = legacy
                 self.position_state.save(saved)
         page = saved.get('page', 0)
-        self.go(page if type(page) is int and 0 <= page < self.document.pageCount() else 0)
+        page = page if type(page) is int and 0 <= page < self.document.pageCount() else 0
+        self.go(page)
+        self._saved_scroll = saved.get('scroll_fraction')
+        self._saved_page = page or None
+        self.view.verticalScrollBar().valueChanged.connect(self.observe_position)
         self._position_ready = True
         if self.position_state is not None:
             self.position_notice(self.position_state.load_status)
@@ -159,12 +154,14 @@ class PDFWindow(qt.QMainWindow):
     def go(self, index):
         if not 0 <= index < self.document.pageCount():
             return
+        if self._position_ready and not self.isVisible():
+            self._saved_scroll, self._saved_page = None, index
         self.clear_link_return()
         from services.documents.ui.page_transition import page_slide
         slide = page_slide(self.view.viewport())
         slide.begin(index - getattr(self, 'index', index), vertical=True)
-        self.view.pageNavigator().jump(index, QPoint(0, 0))
-        self.sync_page(index)
+        self.view.jump(index)
+        self.sync_page(self.view.pageNavigator().currentPage())
         slide.finish()
 
     def sync_page(self, index):
@@ -172,14 +169,28 @@ class PDFWindow(qt.QMainWindow):
         if changed:
             self.clear_link_return()
         self.index = index
-        if changed and self._position_ready and self.position_state is not None:
-            if self.position_state.observe(dict(page=index)) is not None:
-                self.position_timer.start()
         self.number.blockSignals(True)
         self.number.setValue(index + 1)
         self.number.blockSignals(False)
         self.previous.setEnabled(index > 0)
         self.following.setEnabled(index + 1 < self.document.pageCount())
+
+    def showEvent(self, event):
+        super().showEvent(event)
+        saved, self._saved_scroll = self._saved_scroll, None
+        page, self._saved_page = self._saved_page, None
+        if type(saved) in (int, float) and 0 <= saved <= 1:
+            bar = self.view.verticalScrollBar()
+            bar.setValue(round(saved * bar.maximum()))
+        elif page is not None:
+            self.view.jump(page)
+
+    def observe_position(self):
+        if self._position_ready and self.position_state is not None:
+            bar = self.view.verticalScrollBar()
+            value = dict(page=self.index, scroll_fraction=bar.value() / max(1, bar.maximum()))
+            if self.position_state.observe(value) is not None:
+                self.position_timer.start()
 
     def flush_position(self):
         if self.position_state is not None:
@@ -194,41 +205,28 @@ class PDFWindow(qt.QMainWindow):
 
     def eventFilter(self, watched, event):
         kind = event.type()
-        if kind == QEvent.Type.Wheel:
-            delta = event.angleDelta().y() or event.pixelDelta().y()
-            self.wheel_delta += delta
-            if abs(self.wheel_delta) >= 120:
-                self.go(self.index + (1 if self.wheel_delta < 0 else -1))
-                self.wheel_delta = 0
-            return True
-        if kind in (QEvent.Type.TouchBegin, QEvent.Type.MouseButtonPress):
-            self.start = event.points()[0].position() if kind == QEvent.Type.TouchBegin else event.position()
-            if kind == QEvent.Type.TouchBegin:
+        if kind == QEvent.Type.MouseButtonPress and event.button() == qt.Qt.MouseButton.LeftButton:
+            self.start = event.position()
+            self.dragged = False
+        elif kind == QEvent.Type.MouseMove and self.start is not None:
+            delta = event.position() - self.start
+            if self.dragged or delta.manhattanLength() >= qt.QApplication.startDragDistance():
+                bar = self.view.verticalScrollBar()
+                bar.setValue(bar.value() - round(delta.y()))
+                self.start = event.position()
+                self.dragged = True
                 return True
-        elif kind == QEvent.Type.TouchUpdate:
-            return True
-        elif kind == QEvent.Type.TouchCancel:
+        elif kind == QEvent.Type.MouseButtonRelease and self.start is not None:
             self.start = None
-            return True
-        elif kind in (QEvent.Type.TouchEnd, QEvent.Type.MouseButtonRelease) and self.start is not None:
-            end = event.points()[0].position() if kind == QEvent.Type.TouchEnd else event.position()
-            delta = end - self.start
-            self.start = None
-            if abs(delta.y()) >= 50 and abs(delta.y()) > abs(delta.x()):
-                self.go(self.index + (1 if delta.y() < 0 else -1))
+            if self.dragged:
                 return True
-            if kind == QEvent.Type.MouseButtonRelease and abs(delta.x()) < 8 and abs(delta.y()) < 8:
-                previous = self.index
-                QTimer.singleShot(0, self, lambda: self.offer_link_return(previous))
-        elif kind == QEvent.Type.KeyPress:
-            key = event.key()
-            if key in (qt.Qt.Key.Key_Down, qt.Qt.Key.Key_PageDown, qt.Qt.Key.Key_Up, qt.Qt.Key.Key_PageUp):
-                self.go(self.index + (1 if key in (qt.Qt.Key.Key_Down, qt.Qt.Key.Key_PageDown) else -1))
-                return True
+            previous = self.index
+            QTimer.singleShot(0, self, lambda: self.offer_link_return(previous))
         return super().eventFilter(watched, event)
 
     def closeEvent(self, event):
         self.position_timer.stop()
+        self._position_ready = False
         self.flush_position()
         if self.position_state is not None:
             self.position_state.retire()

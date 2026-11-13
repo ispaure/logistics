@@ -23,8 +23,7 @@ def cleanup_fixture(fail):
     calls, proof = [], {}
     app = SimpleNamespace(editor_view=SimpleNamespace(session=SimpleNamespace(id='pdf')))
     canvas = SimpleNamespace(return_timer=object() if fail else None,
-        on_tap=object() if fail else None,
-        _impl=SimpleNamespace(listener=object() if fail else None))
+        scroll=SimpleNamespace(on_action=object() if fail else None))
     def clear():
         calls.append('clear')
         if fail:
@@ -84,6 +83,8 @@ class NativePDFQueuedNavigationTests(unittest.IsolatedAsyncioTestCase):
             crypt_reader=SimpleNamespace(pdf_navigation=SimpleNamespace(
                 viewport=(400, 600), indices=(0,))))
         class Canvas:
+            scroll = SimpleNamespace(pending=None)
+
             async def jump_link(self):
                 await asyncio.sleep(.12)
                 owner.cloud_busy = True
@@ -96,7 +97,7 @@ class NativePDFQueuedNavigationTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(.08)
         self.assertEqual(owner.crypt_reader.pdf_navigation.indices, (0,))
         self.assertFalse(task.done())
-        await driver().wait_pdf_idle(owner, canvas, lambda reader: (400, 600))
+        await driver().wait_pdf_idle(owner, canvas)
         self.assertTrue(task.done())
         self.assertEqual(owner.crypt_reader.pdf_navigation.indices, (2,))
         # A delayed wrong navigation must now fail the native rejection check.

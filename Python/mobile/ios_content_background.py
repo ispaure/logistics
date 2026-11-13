@@ -35,7 +35,8 @@ def extension_rect(canvas, bounds, *, edge, safe_left, safe_right):
 def candidates(widget, *, reading=False):
     """Only canvases inside a declared reading frame supply artwork."""
     reading = reading or getattr(widget, '_reading_frame', False)
-    if reading and hasattr(widget._impl, 'picture') and getattr(widget, 'image', None) is not None:
+    artwork = getattr(widget, 'artwork', widget)
+    if reading and hasattr(artwork._impl, 'picture') and getattr(artwork, 'image', None) is not None:
         yield widget
     for child in widget.children:
         yield from candidates(child, reading=reading)
@@ -163,7 +164,7 @@ def sync(app, *, settled=False):
         root.insertSubview(native, atIndex=0)
         state = app._ios_artwork_extension = SimpleNamespace(
             root=root, native=native, picture=picture, owner=weakref.ref(canvas))
-    state.picture.image = canvas._impl.picture.image
+    state.picture.image = getattr(canvas, 'artwork', canvas)._impl.picture.image
     state.native.frame = CGRect((extended.x, extended.y), (extended.width, extended.height))
     state.picture.frame = CGRect((rect.x - extended.x, rect.y - extended.y), (rect.width, rect.height))
     state.native.setNeedsLayout()

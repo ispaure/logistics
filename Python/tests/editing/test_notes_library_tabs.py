@@ -249,15 +249,17 @@ class NotesLibraryTabTests(QtTestCase):
                         self.assertIs(child.document_stack.currentWidget(), child.file_preview)
                         if path == 'Document.pdf':
                             self.assertEqual(child.file_preview.preview.count, 2)
-                            with patch.object(child.file_preview.preview, 'content', side_effect=ValueError('Cannot render page')):
-                                child.file_preview.show_page(1)
-                                self.wait_until(lambda: not child.file_preview.busy)
-                            self.assertEqual(child.file_preview.index, 0)
-                            self.assertIn('Cannot render page', child.file_preview.page_label.text())
+                            pdf = child.file_preview.pdf
+                            bar = pdf.verticalScrollBar()
                             child.file_preview.show_page(1)
-                            self.wait_until(lambda: not child.file_preview.busy)
                             self.assertEqual(child.file_preview.index, 1)
-                            self.assertFalse(child.file_preview.browser.pixmap.isNull())
+                            boundary = bar.value()
+                            self.assertGreater(boundary, 30)
+                            for offset in (25, 50, 20):
+                                bar.setValue(boundary - offset)
+                                self.assertEqual(bar.value(), boundary - offset)
+                            child.file_preview.show_page(0)
+                            self.assertEqual(child.file_preview.index, 0)
                         if path == 'Image.png':
                             self.assertIn('data:image/png', child.file_preview.browser.toHtml())
                             self.assertFalse(child.file_preview.browser.pixmap.isNull())

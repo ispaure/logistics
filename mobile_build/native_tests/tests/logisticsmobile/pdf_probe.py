@@ -63,122 +63,84 @@ class PDFProbe(LogisticsMobile):
             await asyncio.sleep(.3)
             await capture_window(self, output / 'search.png')
             owner.pdf_tools.close()
+            await owner.move_private_page(0)
             canvas = owner.crypt_image
-            impl = canvas._impl
-            apple = hasattr(impl, 'picture')
-            def tap():
-                if apple:
-                    impl.native.toggleControls_(None)
-                else:
-                    impl.native.performClick()
-            async def swipe(direction):
-                if apple:
-                    gesture = next(g for g in impl.swipes if int(g.direction) == (4 if direction > 0 else 8))
-                    impl.native.pageSwipe_(gesture)
-                else:
-                    touch(0)
-                    touch(1, -120 * density if direction > 0 else 120 * density)
-                await owner._comic_swipe_task
-            if not apple:
-                from java import jclass, jfloat
-                MotionEvent = jclass('android.view.MotionEvent')
-                SystemClock = jclass('android.os.SystemClock')
-                density = impl.native.getResources().getDisplayMetrics().density
-                def touch(action, dy=0):
-                    now = SystemClock.uptimeMillis()
-                    event = MotionEvent.obtain(now, now, action,
-                        jfloat(impl.native.getWidth()/2), jfloat(impl.native.getHeight()*.34 + dy), 0)
-                    try:
-                        impl.native.onTouchEvent(event)
-                    finally:
-                        event.recycle()
-            normal_size = (float(impl.native.bounds.size.width), float(impl.native.bounds.size.height)) if apple else (impl.native.getWidth(), impl.native.getHeight())
-            report['normal_viewport'] = normal_size
-            await swipe(1)
-            assert owner.crypt_page.value == 'Page 2'
-            await swipe(-1)
-            assert owner.crypt_page.value == 'Page 1'
-            tap()
-            assert owner.reading_frame.immersive
-            assert owner.crypt_image.magnifier_enabled
-            assert owner.reader_restore not in owner.reading_frame.widget.children
-            await swipe(1)
-            assert owner.crypt_page.value == 'Page 2'
-            assert owner.crypt_image.magnifier_enabled
-            await asyncio.sleep(.3)
-            def check_fit(label):
-                if apple:
-                    viewport = impl.native.bounds.size
-                    rect = impl.picture.convertRect(impl.picture.bounds, toView=impl.native)
-                    width, height = float(viewport.width), float(viewport.height)
-                    x, y = float(rect.origin.x), float(rect.origin.y)
-                    shown_width, shown_height = float(rect.size.width), float(rect.size.height)
-                    offset = impl.native.contentOffset
-                    x, y = x - float(offset.x), y - float(offset.y)
-                else:
-                    from java import jclass
-                    native = impl.native
-                    rect = jclass('android.graphics.RectF')(0., 0.,
-                        float(native.getDrawable().getIntrinsicWidth()), float(native.getDrawable().getIntrinsicHeight()))
-                    native.getImageMatrix().mapRect(rect)
-                    width, height = float(native.getWidth()), float(native.getHeight())
-                    x, y = float(rect.left), float(rect.top)
-                    shown_width, shown_height = float(rect.width()), float(rect.height())
-                source_width, source_height = canvas.image.width, canvas.image.height
-                scale = min(width/source_width, height/source_height)
-                expected_width, expected_height = source_width*scale, source_height*scale
-                measured = dict(viewport=[width, height], displayed=[shown_width, shown_height],
-                    source=[source_width, source_height], origin=[x, y])
-                report[label] = measured
-                assert width > 0 and height > 0, measured
-                assert abs(shown_width-expected_width) < 3 and abs(shown_height-expected_height) < 3, measured
-                assert abs(x-(width-shown_width)/2) < 3 and abs(y-(height-shown_height)/2) < 3, measured
-                assert width >= normal_size[0] and height > normal_size[1], measured
-                assert abs(shown_width/shown_height-source_width/source_height) < .005, measured
-            check_fit('portrait_fullscreen_fit')
-            await capture_window(self, output / 'fullscreen.png')
-            await swipe(1)
-            assert owner.crypt_page.value == 'Page 3'
-            await asyncio.sleep(.3)
-            check_fit('landscape_fullscreen_fit')
-            await capture_window(self, output / 'fullscreen-landscape.png')
-            await swipe(-1)
-            assert owner.crypt_page.value == 'Page 2'
-            await asyncio.sleep(.3)
-            if apple:
-                from types import SimpleNamespace
-                from rubicon.objc import CGPoint
-                def location(target):
-                    return impl.picture.convertPoint(CGPoint(impl.picture.bounds.size.width / 2,
-                        impl.picture.bounds.size.height / 3), toView=target)
-                impl.show_magnifier(SimpleNamespace(locationInView=location))
-                assert impl.lens is not None
-            else:
-                touch(0)
-                await asyncio.sleep(.55)
-            await capture_window(self, output / 'magnifier.png')
-            if apple:
-                impl.hide_magnifier()
-                assert impl.lens is None
-            else:
-                touch(1)
-            assert owner.reading_frame.immersive
-            assert owner.crypt_page.value == 'Page 2'
-            report['fullscreen_magnifier'] = True
-            report['native_swipe_both_modes'] = True
-            tap()
-            assert not owner.crypt_image.magnifier_enabled
-            assert not owner.reading_frame.immersive
-            report['reading_mode'] = True
+            report['regular_boundary'] = await check_boundary(canvas.scroll)
+            await capture_window(self, output / 'boundary.png')
+            await owner.move_private_page(2)
+            await wait_viewport(canvas.scroll, lambda state: state['page'] == 2 and any(p[0] == 2 for p in state['visible']))
+            canvas.set_zoom(2)
+            await wait_viewport(canvas.scroll, lambda state: abs(state['zoom'] - 2) < .01)
+            report['zoom_and_last_page'] = True
             reader = owner.crypt_reader
             owner.clear_private_reader()
             assert not reader.pdf.data
             report['memory_cleared'] = True
+            from mobile.obsidian import open_vault
+            from commonUtils.runtime.resources.local import LocalFiles
+            root = output / 'vault'
+            (root / '.obsidian').mkdir(parents=True, exist_ok=True)
+            (root / 'Mixed.pdf').write_bytes(data.getvalue())
+            (root / 'Readme.md').write_text('# Readme')
+            library = await open_vault(self, LocalFiles(root), '', 'documents')
+            try:
+                assert await library.open_note('Mixed.pdf')
+                preview = library.embedded
+                report['library_boundary'] = await check_boundary(preview.pdf)
+                await capture_window(self, output / 'library-boundary.png')
+                await preview.turn(1)
+                await wait_viewport(preview.pdf, lambda state: state['page'] == 1)
+                assert await library.open_note('Readme.md')
+                assert preview.pdf.closed and not preview.pdf.pages
+                report['library_replacement'] = True
+            finally:
+                library.dispose()
             report['success'] = True
         except BaseException:
             report['error'] = traceback.format_exc()
         (output / 'result.json').write_text(json.dumps(report, indent=2))
         print('PDF_PROBE=' + json.dumps(report), flush=True)
+
+
+async def wait_viewport(surface, predicate):
+    # Read DOM state without consuming the production link/tap bridge.
+    async with asyncio.timeout(15):
+        while True:
+            if surface.pending is None:
+                state = await surface.js("""JSON.stringify((() => {
+                    const scroll = document.getElementById('scroll');
+                    const pages = [...document.querySelectorAll('.sheet img')];
+                    const visible = pages.map(img => [Number(img.parentNode.dataset.page),
+                        img.getBoundingClientRect().top, img.getBoundingClientRect().bottom])
+                        .filter(([,top,bottom]) => bottom > 0 && top < scroll.clientHeight);
+                    return {top:scroll.scrollTop, height:scroll.clientHeight, visible, mounted:pages.length};
+                })())""")
+                if state is not None:
+                    state.update(page=surface.index, zoom=(surface.location or {}).get('zoom', 1))
+                    if predicate(state):
+                        return state
+            await asyncio.sleep(.05)
+
+
+async def check_boundary(surface):
+    await wait_viewport(surface, lambda state: any(p[0] == 0 for p in state['visible']))
+    await wait_viewport(surface, lambda state: state['mounted'] >= 2)
+    tops = []
+    for offset in (25, 45, 30):
+        await surface.js(f"""JSON.stringify((() => {{
+            const next = document.querySelector('.sheet[data-page="1"]');
+            if (!next) return false;
+            const scroll = document.getElementById('scroll');
+            scroll.scrollTop = next.offsetTop - {offset};
+            return true;
+        }})())""")
+        await asyncio.sleep(.3)
+        state = await wait_viewport(surface, lambda state: {0, 1} <= {p[0] for p in state['visible']})
+        assert state['mounted'] <= 7, state
+        tops.append(state['top'])
+    assert tops[1] < tops[2] < tops[0], tops
+    return dict(scroll_offsets=tops, visible=state['visible'], mounted=state['mounted'],
+                input='native WebView scroll offset')
 
 
 def main():

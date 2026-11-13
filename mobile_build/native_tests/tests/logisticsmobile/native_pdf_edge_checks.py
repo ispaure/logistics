@@ -36,8 +36,7 @@ def cleanup_pdf_fixture(app, owner, canvas, path, original_session, proof, prima
         except BaseException as error:
             errors.append(label + ': ' + repr(error))
     def retired():
-        assert canvas.return_timer is None and canvas.on_tap is None
-        assert canvas._impl.listener is None
+        assert canvas.return_timer is None and canvas.scroll.on_action is None
         proof['callbacks_retired'] = True
     def close():
         assert app.close_session(owner.session.id), 'Synthetic PDF session did not close'
@@ -66,7 +65,7 @@ def navigation_pending(owner, canvas):
     swipe = getattr(owner, '_comic_swipe_task', None)
     if swipe is not None and not swipe.done():
         return True
-    # follow_link schedules jump_link without retaining a task field. Inspect
+    # Link dispatch schedules jump_link without retaining a task field. Inspect
     # only this reader's production navigation coroutines, never unrelated work.
     for task in asyncio.all_tasks():
         if task is asyncio.current_task() or task.done():
@@ -82,12 +81,12 @@ def navigation_pending(owner, canvas):
             return True
     return False
 
-async def wait_pdf_idle(owner, canvas, viewport):
+async def wait_pdf_idle(owner, canvas):
     loop = asyncio.get_running_loop()
     deadline, stable = loop.time()+15, None
     while True:
         ready = (not owner.cloud_busy and not navigation_pending(owner, canvas) and
-                 owner.crypt_reader.pdf_navigation.viewport == viewport(owner))
+                 canvas.scroll.pending is None)
         stable = (stable if stable is not None else loop.time()) if ready else None
         if stable is not None and loop.time()-stable >= .25:
             return
@@ -99,7 +98,6 @@ async def exercise_pdf_edge_links(app):
     from commonUtils.runtime.platform import get_os, OS
     if get_os() is not OS.ANDROID:
         return dict(applicable=False, reason='Android Java edge admission; no iOS acceptance claim')
-    from features.pdf.mobile.canvas import pdf_viewport
     from .notebook_link_probe import Probe
     from .fixtures import capture_window
     owner = canvas = None
@@ -116,7 +114,7 @@ async def exercise_pdf_edge_links(app):
             await asyncio.sleep(.05)
 
     async def idle():
-        await wait_pdf_idle(owner, canvas, pdf_viewport)
+        await wait_pdf_idle(owner, canvas)
 
     async def point(x):
         return await Probe.pdf_point(SimpleNamespace(apple=False), canvas, x, .5)
@@ -125,7 +123,7 @@ async def exercise_pdf_edge_links(app):
         await Probe.android_gesture(None, native, location, **kwargs)
 
     async def returned():
-        await wait(lambda: owner.crypt_reader.pdf_navigation.indices[0] == 0, 'Native Undo did not return')
+        await wait(lambda: owner.crypt_reader.pdf_navigation.index == 0, 'Native Undo did not return')
         await idle()
 
     primary = None
@@ -136,60 +134,18 @@ async def exercise_pdf_edge_links(app):
             owner = app.private_sessions.active
             canvas = owner.crypt_image
             await idle()
-            native = canvas._impl.native
-            await wait(lambda: native.getWidth() > 0 and native.getHeight() > 0 and native.getDrawable() is not None,
-                       'PDF native image absent')
-            assert owner.crypt_reader.pdf_navigation.indices == (0,), 'PDF fixture must display one page'
-            density = native.getResources().getDisplayMetrics().density
-            assert canvas._impl.listener.imageTaps(), 'PDF tap admission is not enabled'
-            def edge(location):
-                assert location[0] < 24*density or location[0] > native.getWidth()-24*density, location
+            native = canvas.scroll.view._impl.native
+            await wait(lambda: native.getWidth() > 0 and native.getHeight() > 0,
+                       'PDF native view absent')
+            assert owner.crypt_reader.pdf_navigation.index == 0
             for x in (.5, .02, .98):
                 canvas.fit_page()
+                await idle()
                 assert abs(canvas.zoom_scale-1) < .05
                 location = await point(x)
-                if x != .5:
-                    edge(location)
-                tap_handler = canvas.on_tap
-                jump, clear_return = canvas.jump_link, canvas.clear_return
-                attempt = dict(target=x, point=location, native_size=[native.getWidth(), native.getHeight()],
-                               density=density, taps=[], navigation=[])
-                proof['last_finger_attempt'] = attempt
-
-                def record_tap(image_x, image_y):
-                    sample = dict(image_point=[image_x, image_y], link_alive=canvas.link_alive(),
-                                  provider_busy=owner.cloud_busy)
-                    attempt['taps'].append(sample)
-                    sample['consumed'] = tap_handler(image_x, image_y)
-                    return sample['consumed']
-
-                def record_navigation(event):
-                    navigation = owner.crypt_reader.pdf_navigation
-                    attempt['navigation'].append(dict(event=event, page=navigation.indices,
-                        selection=owner.crypt_page.value, busy=owner.cloud_busy,
-                        can_start=owner.provider_document().can_start(), link_alive=canvas.link_alive(),
-                        undo=canvas.return_page, elapsed=asyncio.get_running_loop().time()-started))
-
-                async def record_jump(index):
-                    record_navigation('jump started')
-                    try:
-                        await jump(index)
-                    finally:
-                        record_navigation('jump finished')
-
-                def record_clear_return():
-                    record_navigation('undo cleared')
-                    clear_return()
-
-                started = asyncio.get_running_loop().time()
-                canvas.on_tap, canvas.jump_link, canvas.clear_return = record_tap, record_jump, record_clear_return
-                try:
-                    await gesture(native, location)
-                    await wait(lambda: canvas.return_page is not None, 'Native finger link did not navigate')
-                finally:
-                    record_navigation('tap check ended')
-                    canvas.on_tap, canvas.jump_link, canvas.clear_return = tap_handler, jump, clear_return
-                assert owner.crypt_reader.pdf_navigation.indices[0] == 2
+                await gesture(native, location)
+                await wait(lambda: canvas.return_page is not None, 'Native finger link did not navigate')
+                assert owner.crypt_reader.pdf_navigation.index == 2
                 await idle()
                 if x != .5:
                     await capture_window(app, Path(app.paths.cache) / ('pdf-edge-left.png' if x < .5 else 'pdf-edge-right.png'))
@@ -211,16 +167,17 @@ async def exercise_pdf_edge_links(app):
                         ('swipe', dict(end=[location[0], location[1]-native.getHeight()*.2])),
                         ('move_back', dict(end=[location[0]+(60 if x<.5 else -60), location[1]], moved_back=True)),
                     ):
-                        edge(location)  # Only the proven outer-24dp edge policy forbids paging.
                         await gesture(native, location, **kwargs)
                         await idle()  # Drain queued provider/layout work before claiming rejection.
-                        assert owner.crypt_reader.pdf_navigation.indices[0] == 0 and canvas.return_page is None, label
+                        assert owner.crypt_reader.pdf_navigation.index == 0 and canvas.return_page is None, label
                         proof['cases'].append('edge_no_link_'+str(x)+'_'+label)
+            await owner.move_private_page(0)
             canvas.set_zoom(2)
+            await idle()
             assert abs(canvas.zoom_scale-2) < .05
             await gesture(native, await point(.5))
             await wait(lambda: canvas.return_page is not None, 'Zoomed center link did not navigate')
-            assert owner.crypt_reader.pdf_navigation.indices[0] == 2
+            assert owner.crypt_reader.pdf_navigation.index == 2
             await asyncio.sleep(3.2)
             assert canvas.return_page is None and not canvas.return_box.children
             proof['cases'].append('zoom_2_center_link_real_3s_expiry')

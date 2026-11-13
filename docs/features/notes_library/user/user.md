@@ -127,8 +127,7 @@ such as `[[Topics/Tech]]`. Lookup stops after 10,000 entries.
 ## Embedded source files in Notes Library
 
 Images and documents selected in Files open inside Notes Library. Images (PNG, JPEG,
-WebP and GIF) display in the detail pane; PDFs have Previous page and Next page
-controls. Image previews use an 8 MiB/16-megapixel limit; PDFs use a 32 MiB limit.
+WebP and GIF) display in the detail pane; PDFs scroll continuously. Use Previous page and Next page to jump between pages. Image previews use an 8 MiB/16-megapixel limit; PDFs use a 32 MiB limit.
 Videos such as MP4 open the full desktop Video Player, preserving the current
 library note and using the same source and credentials. That player offers
 resume, autoplay, tracks, subtitles and the full playback tools. Video embeds

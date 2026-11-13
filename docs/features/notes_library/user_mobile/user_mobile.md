@@ -43,7 +43,8 @@ appear in Files and open in the same library detail pane using the normal native
 code input. Use **••• → Save** or **Find / replace…**. Switching files retains the
 library history and asks before discarding unsaved edits.
 
-Images and documents in Files open inside the library detail pane. PDFs have
+Images and documents in Files open inside the library detail pane. Drag up or
+down to scroll through a PDF. PDFs also have
 Previous page and Next page controls. Videos such as MP4 open the full native
 mobile Video Player with its resume, autoplay, tracks and playback tools. The
 current library page stays available when you return. In a Markdown note's

@@ -1,6 +1,7 @@
-"""Library-owned read-only file preview with asynchronous PDF page navigation."""
+"""Library-owned read-only file preview with continuous PDF scrolling."""
 from commonUtils.ui import pyside as qt
-from commonUtils.ui.tasks.operation_progress import OperationProgress
+from PySide6.QtCore import QByteArray
+from features.pdf.ui.continuous import ContinuousPDFView, load_pdf
 
 
 class PreviewBrowser(qt.QStackedWidget):
@@ -68,12 +69,9 @@ class PreviewBrowser(qt.QStackedWidget):
 
 
 class LibraryFilePreview(qt.QWidget):
-    idle = qt.Signal()
-
     def __init__(self, parent):
         super().__init__(parent)
         self.preview, self.index = None, 0
-        self.retired = []
         layout = qt.QVBoxLayout(self)
         row = qt.QHBoxLayout()
         self.previous = qt.QPushButton('Previous page')
@@ -86,14 +84,10 @@ class LibraryFilePreview(qt.QWidget):
         layout.addLayout(row)
         self.browser = PreviewBrowser()
         layout.addWidget(self.browser, 1)
-        self.operation = OperationProgress(self)
-        self.operation.completed.connect(self.completed)
-        layout.addWidget(self.operation)
-        self.operation.hide()
-
-    @property
-    def busy(self):
-        return self.operation.busy
+        self.pdf = ContinuousPDFView()
+        self.pdf.pageNavigator().currentPageChanged.connect(self.sync_page)
+        self.browser.addWidget(self.pdf)
+        self.pdf_buffer = None
 
     def hideEvent(self, event):
         if self.browser.video is not None:
@@ -103,7 +97,14 @@ class LibraryFilePreview(qt.QWidget):
     def load(self, preview, content):
         self.clear()
         self.preview, self.index = preview, 0
-        self.browser.set_content(content)
+        if preview.document is not None:
+            document, self.pdf_buffer = load_pdf(self.pdf, preview.document.data)
+            self.pdf.setDocument(document)
+            self.pdf.verticalScrollBar().setValue(0)
+            self.pdf.jump(0)
+            self.browser.setCurrentWidget(self.pdf)
+        else:
+            self.browser.set_content(content)
         if preview.video_url:
             from pathlib import PurePosixPath
             from commonUtils.ui.markdown.videos import VideoCard
@@ -118,38 +119,28 @@ class LibraryFilePreview(qt.QWidget):
         self.following.setVisible(count > 1)
         self.page_label.setVisible(count > 1)
         self.page_label.setText(f'Page {self.index + 1} of {count}')
-        self.previous.setEnabled(not self.busy and self.index > 0)
-        self.following.setEnabled(not self.busy and self.index + 1 < count)
+        self.previous.setEnabled(self.index > 0)
+        self.following.setEnabled(self.index + 1 < count)
 
     def show_page(self, index):
-        if self.busy or self.preview is None or not 0 <= index < self.preview.count:
-            return
-        preview = self.preview
-        self.operation.start(lambda report, cancelled: (index, preview.content(index)), message='Reading page…')
+        if self.pdf.document() is not None and 0 <= index < self.pdf.document().pageCount():
+            self.pdf.jump(index)
+
+    def sync_page(self, index):
+        self.index = index
         self.update_controls()
 
-    def completed(self, result, error):
-        self.operation.hide()
-        for preview in self.retired:
-            preview.close()
-        self.retired.clear()
-        if self.preview is not None:
-            if not error and not self.operation.cancelled.is_set():
-                index, content = result
-                self.browser.set_content(content)
-                self.index = index
-            self.update_controls()
-            if error:
-                self.page_label.setText(error)
-        self.idle.emit()
-
     def clear(self):
-        self.operation.request_cancel()
+        document = self.pdf.document()
+        if document is not None:
+            self.pdf.setDocument(None)
+            document.close()
+            document.deleteLater()
+            self.pdf_buffer.close()
+            self.pdf_buffer.setData(QByteArray())
+            self.pdf_buffer.deleteLater()
+            self.pdf_buffer = None
         self.browser.clear()
         if self.preview is not None:
-            preview, self.preview = self.preview, None
-            # Page workers must finish before the library retires their bytes.
-            if self.busy:
-                self.retired.append(preview)
-            else:
-                preview.close()
+            self.preview.close()
+            self.preview = None

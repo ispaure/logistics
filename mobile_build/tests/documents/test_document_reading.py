@@ -85,58 +85,54 @@ class DocumentReadingTests(unittest.TestCase):
 
 
 class ProviderWorkerLifetimeTests(unittest.IsolatedAsyncioTestCase):
-    async def test_page_and_previous_pdf_borrow_survives_repeated_cancellation(self):
+    async def test_explicit_pdf_page_render_borrow_survives_repeated_cancellation(self):
         import asyncio
         from threading import Event
-        from unittest.mock import patch
         from mobile.provider_ui import ProviderUI
         from mobile.provider_document import ProviderDocumentSession
-        for previous in (False, True):
-            with self.subTest(previous=previous):
-                release, started = Event(), asyncio.Event()
-                loop = asyncio.get_running_loop()
-                def blocking(*args):
-                    loop.call_soon_threadsafe(started.set)
-                    if not release.wait(5):
-                        raise RuntimeError('Fixture not released')
-                    return 0 if previous else ('text', 'synthetic')
-                reader = NS(kind='.pdf', editable=False, labels=['one'], book=None,
-                            source=NS(close=Mock()), pdf_navigation=NS(previous=blocking))
-                owner = NS(active_host=True, cloud_busy=False, crypt_reader=reader,
-                           workspace=NS(token=lambda key: ('doc', 0), accepts=lambda token: True),
-                           session=NS(id='doc'), crypt_title=NS(text='Unchanged'),
-                           crypt_read_page=NS(enabled=True), crypt_page=NS(value='one'),
-                           crypt_content=NS(children=[]), private_comic_mode=lambda: 'single',
-                           private_comic_seam=lambda: 0, format_services=NS(comic_sharing=lambda: False),
-                           provider_page_content=blocking, move_private_page=Mock())
-                owner.app = owner
-                owner.manager = NS(active=owner, controllers={'doc': owner})
-                owner.document_access = lambda: None
-                owner.set_document_busy = owner.set_cloud_busy = lambda busy: setattr(owner, 'cloud_busy', busy)
-                owner.workspace.sessions = {'doc': owner.session}
-                document = owner._provider_document = ProviderDocumentSession(owner)
-                document.reader = reader
-                owner.provider_document = lambda: document
-                with patch('features.pdf.mobile.canvas.pdf_viewport', return_value=(100, 100)):
-                    task = asyncio.create_task((ProviderUI.previous_private_page if previous else ProviderUI.read_crypt_page)(owner))
-                    try:
-                        await asyncio.wait_for(started.wait(), 2)
-                        task.cancel()
-                        await asyncio.sleep(0)
-                        task.cancel()
-                        await asyncio.sleep(0)
-                        self.assertFalse(task.done())
-                        self.assertTrue(owner.cloud_busy)
-                        with self.assertRaises(OSError):
-                            document.dispose()
-                        reader.source.close.assert_not_called()
-                    finally:
-                        release.set()
-                        with self.assertRaises(asyncio.CancelledError):
-                            await task
-                self.assertFalse(owner.cloud_busy)
-                self.assertEqual(owner.crypt_title.text, 'Unchanged')
-                owner.move_private_page.assert_not_called()
+        release, started = Event(), asyncio.Event()
+        loop = asyncio.get_running_loop()
+        def blocking(*args):
+            loop.call_soon_threadsafe(started.set)
+            if not release.wait(5):
+                raise RuntimeError('Fixture not released')
+            return 'pdf', (b'', [])
+        reader = NS(kind='.pdf', editable=False, labels=['one'], book=None,
+                    source=NS(close=Mock()))
+        owner = NS(active_host=True, cloud_busy=False, crypt_reader=reader,
+                   workspace=NS(token=lambda key: ('doc', 0), accepts=lambda token: True),
+                   session=NS(id='doc'), crypt_title=NS(text='Unchanged'),
+                   crypt_read_page=NS(enabled=True), crypt_page=NS(value='one'),
+                   crypt_content=NS(children=[]), private_comic_mode=lambda: 'single',
+                   private_comic_seam=lambda: 0, format_services=NS(comic_sharing=lambda: False),
+                   provider_page_content=blocking, move_private_page=Mock())
+        owner.app = owner
+        owner.manager = NS(active=owner, controllers={'doc': owner})
+        owner.document_access = lambda: None
+        owner.set_document_busy = owner.set_cloud_busy = lambda busy: setattr(owner, 'cloud_busy', busy)
+        owner.workspace.sessions = {'doc': owner.session}
+        document = owner._provider_document = ProviderDocumentSession(owner)
+        document.reader = reader
+        owner.provider_document = lambda: document
+        task = asyncio.create_task(ProviderUI.read_crypt_page(owner))
+        try:
+            await asyncio.wait_for(started.wait(), 2)
+            task.cancel()
+            await asyncio.sleep(0)
+            task.cancel()
+            await asyncio.sleep(0)
+            self.assertFalse(task.done())
+            self.assertTrue(owner.cloud_busy)
+            with self.assertRaises(OSError):
+                document.dispose()
+            reader.source.close.assert_not_called()
+        finally:
+            release.set()
+            with self.assertRaises(asyncio.CancelledError):
+                await task
+        self.assertFalse(owner.cloud_busy)
+        self.assertEqual(owner.crypt_title.text, 'Unchanged')
+        owner.move_private_page.assert_not_called()
 
     def save_owner(self, *, metadata=False):
         import asyncio

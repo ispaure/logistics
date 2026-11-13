@@ -31,6 +31,9 @@ def native_pdf(document):
     # this fixture keeps the mobile UI suite independent of desktop Qt imports.
     class Renderer:
         count = 3
+        def page_size(self, index):
+            return 300, 600
+
         def render(self, index):
             return PNG
     yield Renderer()

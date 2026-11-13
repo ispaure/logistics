@@ -173,60 +173,40 @@ backend construction fails, `AndroidPDF` closes the renderer when it has been
 acquired, or closes the untransferred descriptor. `test_pdf_reader.py` covers
 constructor rollback and normal context cleanup with a host fixture.
 
-## Adaptive spreads and external output
+## Continuous pages
 
-PDF uses the existing bounded, RAM-only comic bitmap compositor and resize/zoom
-invalidation loop. Page gestures and buttons advance beyond the displayed spread;
-Back retraces committed spread boundaries within the current viewport. After a
-direct jump it tests whether the previous two pages fit; a lone preceding page
-retains a boundary before the page being left, preventing it from appearing again
-inside the preceding spread. Viewport changes discard those layout boundaries.
-Numeric
-jumps, contents and search still target individual pages. Fullscreen hides the
-vertical rail and tools, retaining the shared image canvas and magnifier.
+The desktop reader and Notes Library preview use Qt's multi-page PDF view with
+memory-backed input. Qt renders visible pages and bounds its image cache. Wheel
+and trackpad input use the scroll area. The navigator reports the visible page,
+and explicit controls issue page jumps. The desktop reader stores its page and
+vertical scroll fraction using the existing document checkpoint.
 
-The PDF canvas opts into `mobile.external_display` through
-`_external_document_page`. It reuses the comics' scene registration, Android
-presentation, image publication and process-wide privacy gates; it does not create
-a second casting service. `reader_flow_probe.py` is the reusable Apple native
-rotation/chrome/progress probe. Host tests cover spread boundaries, dimensions,
-vertical scrubbing, session retirement and external privacy blanking.
+On mobile, both readers use `PDFScroll` in an in-memory WebView. Native PDF
+backends provide dimensions for layout without rasterizing the document. A
+single asynchronous worker at a time renders pages that intersect the viewport
+and a neighboring page on each side. Pages beyond that window lose their DOM
+nodes and cached pixels. A jump or retirement invalidates pending publication.
+The regular reader stores the page, within-page offset and zoom with the
+existing provider checkpoint. Older page-only checkpoints still restore the
+page. Credential-backed checkpoints use the owning ZIP password. See [reader
+state](../../../development/reader-state.md).
 
-`test_pdf_spreads.py` exhaustively traverses all 128 seven-page portrait/landscape
-sequences at three viewport sizes forward, backward and forward again. It checks
-exact page coverage and identical spread boundaries, plus direct-jump Back and
-layout-refresh boundaries. These are host navigation checks without native rendering.
-
-## Reading-position ownership and validation limits
-
-Desktop `PDFWindow` obtains `desktop_state(provider, path, 'pdf')`, restores a
-valid zero-based page and saves on page synchronization. The mobile provider
-reader uses the shared document state contract. Credential-backed positions
-can survive restart encrypted with the owning ZIP password; passwordless private
-state stays in RAM. Closing releases PDF buffers and search state independently
-of the checkpoint. See [private reader state](../../../development/reader-state.md)
-for storage authority, migration, revocation and clear fences.
-
-The 10,000-page bound in `PDFDocument` applies to native/mobile rendering and
-notebook conversion input. Desktop `PDFWindow` loads `QPdfDocument` directly; it
-does not enforce that facade page-count bound. Desktop search independently
-enforces its 10,000-page limit. Desktop presentation is single-page and has no
-contents tree or hold magnifier; these are mobile adapters.
-
-Documentation audit on 2026-11-04 reviewed source and test definitions only.
-No Qt, native renderer, device, build or test suite was launched during the
-release quiet hold. The test coverage described above identifies reusable checks;
-it does not claim a new passing run or current physical-device acceptance.
-
+Scroll observations update the page controls without issuing a seek or recording
+an explicit jump in the navigation history. Explicit jumps still accept numeric,
+search, contents, bookmark and internal link targets. The reader's external
+display and iOS side background use an image of the current page through their
+existing artwork paths.
 
 ## Internal page links
 
-`links.page_links` reads up to 2,000 link annotations on the displayed page using the existing pypdf dependency. It resolves internal explicit and named destinations, excludes hidden links and non-GoTo actions, and converts crop-relative rectangles through page rotation into normalized display coordinates. Invalid optional annotations do not prevent rendering. Mobile extraction runs with the existing page-loading worker.
-`mobile/canvas.py:PDFNavigation` stages sizes and links for a candidate spread
-and publishes them with the displayed indices and viewport on commit. Failed
-loads, Back probes and uncommitted resize leave displayed link geometry intact.
-`ProviderUI._show_crypt_content()` assigns PDF spread pixels only in the accepted
-mount callback, so a mount veto also retains the image paired with those links.
-The mobile `test_pdf_links.py` exercises this boundary. PDFCanvas maps normalized image taps through the compositor’s exact spread rectangles, including the seam; it guards busy, inactive and retired sessions and owns a three-second return action. The shared ImageCanvas transports only recognized finger tap coordinates. Desktop retains QPdfView’s native plain-click navigation and offers a timed return after a completed click changes pages.
+`links.page_links` reads up to 2,000 annotations per rendered page using pypdf.
+It resolves internal explicit and named destinations and converts crop-relative
+rectangles through page rotation into normalized display coordinates. The
+mobile view places those targets over the corresponding page and offers
+**Undo page jump** for three seconds. Desktop uses Qt's native internal links
+and offers the same timed return after a click changes pages.
 
-`test_pdf_links.py` in the reader and mobile reading suites covers real annotations, rotation, named destinations, notebook redirects, real Qt clicks, undo, spreads and stale-session rejection. The notebook V8 driver covers link gesture arbitration. Native Apple/Android adapter execution and a freshly compiled Android shell remain pending for this change; existing native results above do not validate these new callbacks.
+The desktop PDF and library-tab tests cover Qt navigation and retirement.
+Mobile host tests cover scroll observations, bounded page requests, late results,
+protected storage and checkpoint restoration. The native PDF probe checks the
+viewport boundary and mixed-size geometry in both mobile entry points.
