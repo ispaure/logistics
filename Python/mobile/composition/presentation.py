@@ -280,7 +280,10 @@ def notes_host(app):
 
     def playlist_speech(owner, catalog, changed):
         from features.notes_library.mobile.playlist_speech import PlaylistSpeech
-        return PlaylistSpeech(owner, catalog, changed, app=app)
+        from ..markdown_speech import clear_view, highlight_view, prepare_view, stop_markdown_speech
+        return PlaylistSpeech(owner, catalog, changed, app=app,
+                              stop_markdown_speech=lambda: stop_markdown_speech(app),
+                              prepare_view=prepare_view, highlight_view=highlight_view, clear_view=clear_view)
 
     return NotesHost(
         playlists=playlists,
