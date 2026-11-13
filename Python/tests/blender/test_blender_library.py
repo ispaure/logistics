@@ -86,24 +86,26 @@ class BlenderLibraryTests(unittest.TestCase):
         import json
         from features.blender.installation.install import installation_lock
 
+        release = next(item for item in load_releases(platform='windows-x64') if item.version == '4.5.1')
+        preset = self.manager.create_preset(release, 'Legacy')
         installed = {'legacy:tool': {'module': 'tool', 'path': 'scripts/addons/tool', 'digest': 'fixture'}}
-        selection_file = self.preset / '.logistics-addons.json'
+        selection_file = preset / '.logistics-addons.json'
         selection_file.write_text(json.dumps({
             'selected': ['legacy:tool'], 'installed': installed,
             'bluehole': {'enabled': True, 'branch': 'main', 'commit': 'a' * 40, 'deluxe_stamp': 'fixture'},
         }), encoding='utf-8')
         original = selection_file.read_bytes()
         config = {'enabled': True, 'branch': 'beta', 'deluxe': True}
-        with installation_lock(self.preset):
+        with installation_lock(preset):
             with self.assertRaisesRegex(ValueError, 'Another operation'):
-                self.library.save_pending_selection(self.release, 'Art', [], bluehole=config)
+                self.library.save_pending_selection(release, 'Legacy', [], bluehole=config)
         with patch.object(self.manager, 'running', return_value=True):
             with self.assertRaisesRegex(ValueError, 'Close the Blender instance'):
-                self.library.save_pending_selection(self.release, 'Art', [], bluehole=config)
+                self.library.save_pending_selection(release, 'Legacy', [], bluehole=config)
         self.assertEqual(selection_file.read_bytes(), original)
 
-        self.library.save_pending_selection(self.release, 'Art', [], bluehole=config)
-        self.assertEqual(self.library.selection(self.preset), {
+        self.library.save_pending_selection(release, 'Legacy', [], bluehole=config)
+        self.assertEqual(self.library.selection(preset), {
             'selected': [], 'installed': installed,
             'installed_bluehole': {'branch': 'main', 'commit': 'a' * 40},
             'bluehole': {**config, 'deluxe_stamp': 'fixture'},
@@ -357,6 +359,39 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertEqual(installed.read_bytes(), b'engine fixture')
         if os.name != 'nt':
             self.assertEqual(installed.stat().st_mode & 0o777, 0o755)
+
+    def test_runtime_deluxe_ignores_old_stamping_choice_and_preserves_preset(self):
+        from features.blender.addons import bluehole
+
+        release = next(item for item in load_releases(platform='windows-x64') if item.version == '5.2.2')
+        preset = self.manager.create_preset(release, 'Runtime')
+        preferences = preset / 'config/userpref.blend'
+        preferences.write_bytes(b'artist preferences')
+        keymap = preset / 'scripts/presets/keyconfig/BH_Keymaps.py'
+        keymap.parent.mkdir(parents=True)
+        keymap.write_bytes(b'artist keymap')
+        overlay = preset / 'config/blue-hole-deluxe-keymaps.json'
+        overlay.write_bytes(b'artist overlay')
+        config = {'enabled': True, 'branch': 'alpha', 'deluxe': True}
+        self.library._publish_selection(preset, {
+            'selected': [], 'installed': {}, 'bluehole': {**config, 'deluxe_stamp': 'old stamp'},
+        })
+        addon = inspect_package(self.package('runtime.zip', minimum=(5, 2, 2), module='BlueHole'))
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch.object(bluehole, 'update', return_value=(addon, 'a' * 40)), \
+                patch.object(bluehole, 'apply_deluxe') as stamp, \
+                patch('features.blender.addons.scanning.run_blender_script'):
+            self.library.apply(release, 'Runtime', [])
+        stamp.assert_not_called()
+        self.assertTrue((preset / 'scripts/addons/BlueHole/__init__.py').is_file())
+        self.assertEqual(preferences.read_bytes(), b'artist preferences')
+        self.assertEqual(keymap.read_bytes(), b'artist keymap')
+        self.assertEqual(overlay.read_bytes(), b'artist overlay')
+        self.assertFalse((preset / 'config/userpref.before-bluehole-deluxe.blend').exists())
+        self.assertEqual(self.library.selection(preset)['bluehole'],
+                         {'enabled': True, 'branch': 'alpha', 'commit': 'a' * 40})
+        self.library.save_pending_selection(release, 'Runtime', [], bluehole=config)
+        self.assertEqual(self.library.selection(preset)['bluehole'], {'enabled': True, 'branch': 'alpha'})
 
     def test_bluehole_update_preserves_custom_environments_and_failed_apply_rolls_back(self):
         from features.blender.addons import bluehole

@@ -27,6 +27,10 @@ class NoCompatibleBranch(ValueError):
     """Remote metadata was read successfully but no version baseline fits."""
 
 
+def uses_runtime_deluxe(release):
+    return version_tuple(release.version) >= (5, 2, 2)
+
+
 def valid_branch(branch):
     return isinstance(branch, str) and (branch in BRANCHES or VERSION_BRANCH.fullmatch(branch) is not None)
 

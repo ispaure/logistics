@@ -292,6 +292,8 @@ class AddonLibrary:
         from features.blender.installation.install import installation_lock
 
         config = bluehole_source.validate(bluehole)
+        if bluehole_source.uses_runtime_deluxe(release):
+            config.pop('deluxe')
         root = self.manager.preset(release, name)
         with installation_lock(root):
             self.manager._require_idle(release, name)
@@ -299,7 +301,7 @@ class AddonLibrary:
             previous = state.get('bluehole', {})
             if 'installed_bluehole' not in state and previous.get('commit'):
                 state['installed_bluehole'] = {key: previous.get(key) for key in ('branch', 'commit')}
-            if config['deluxe']:
+            if config.get('deluxe'):
                 config['deluxe_stamp'] = previous.get('deluxe_stamp')
             state.update(selected=list(identities), bluehole=config)
             self._publish_selection(root, state)
@@ -326,6 +328,10 @@ class AddonLibrary:
         resolved = self._resolve_addons(release, root, identities)
         from features.blender.addons import bluehole as bluehole_source
         bluehole = bluehole_source.validate(bluehole if bluehole is not None else state.get('bluehole', {'enabled': False, 'branch': 'main'}))
+        runtime_deluxe = bluehole_source.uses_runtime_deluxe(release)
+        if runtime_deluxe:
+            bluehole.pop('deluxe')
+        stamp_deluxe = bluehole['enabled'] and bluehole.get('deluxe', False)
         commit = None
         installed_branch = bluehole['branch']
         fallback = False
@@ -337,7 +343,8 @@ class AddonLibrary:
                 check_cancelled(cancelled)
                 addon, installed_branch, commit = bluehole_source.installed_fallback(manager, release, root, state)
                 fallback = True
-                self.warnings.append(f'{error}. Using installed Blue Hole {installed_branch} · {commit[:12]}; update and Deluxe changes will be retried next launch.')
+                pending = 'update and Deluxe changes' if stamp_deluxe else 'update'
+                self.warnings.append(f'{error}. Using installed Blue Hole {installed_branch} · {commit[:12]}; {pending} will be retried next launch.')
             resolved = [item for item in resolved if item.identity != bluehole_source.IDENTITY]
             resolved.append(addon)
         resolved.sort(key=lambda a: (a.name.casefold(), a.module.casefold(), a.identity))
@@ -350,7 +357,7 @@ class AddonLibrary:
             packages = backup / 'packages'
             packages.mkdir()
             snapshots = self._snapshot_packages(resolved, retained, packages,
-                                                deluxe=bluehole['deluxe'] and not fallback, cancelled=cancelled)
+                                                deluxe=stamp_deluxe and not fallback, cancelled=cancelled)
             resolved = [snapshots[addon.identity] for addon in resolved]
             payloads = [(snapshots[addon.identity], relative) for addon, relative in payloads]
             folders = ('config', 'scripts', 'extensions', 'addon-data')
@@ -374,7 +381,7 @@ class AddonLibrary:
                         target.unlink()
                 self._install_payloads(root, payloads, retained, environments, cancelled=cancelled)
                 deluxe_stamp = state.get('bluehole', {}).get('deluxe_stamp') if fallback else None
-                if bluehole['enabled'] and bluehole['deluxe'] and not fallback:
+                if stamp_deluxe and not fallback:
                     bluehole_addon = next(a for a in resolved if a.identity == bluehole_source.IDENTITY)
                     deluxe_stamp = bluehole_source.apply_deluxe(bluehole_addon, root,
                                     state.get('bluehole', {}).get('deluxe_stamp'), cancelled=cancelled)
@@ -395,8 +402,10 @@ class AddonLibrary:
                     'selected': sorted(set(identities)),
                     'installed': new,
                     'installed_bluehole': installed_bluehole,
-                    'bluehole': {**bluehole, 'commit': commit, 'deluxe_stamp': deluxe_stamp},
+                    'bluehole': {**bluehole, 'commit': commit},
                 }
+                if not runtime_deluxe:
+                    selection['bluehole']['deluxe_stamp'] = deluxe_stamp
                 self._publish_selection(root, selection)
             except BaseException:
                 for folder in folders:
