@@ -21,7 +21,7 @@ PAGE = '10000000-0000-4000-8000-000000000003'
 def tar_stream(entries):
     buffer = BytesIO()
     with tarfile.open(fileobj=buffer, mode='w') as archive:
-        for name, data in entries.items():
+        for name, data in (entries.items() if isinstance(entries, dict) else entries):
             member = tarfile.TarInfo(name)
             member.size = len(data)
             archive.addfile(member, BytesIO(data))
@@ -30,6 +30,58 @@ def tar_stream(entries):
 
 
 class RemarkableSSHTests(unittest.TestCase):
+    def test_inventory_accounts_for_omissions_without_titles_or_filenames(self):
+        from dataclasses import asdict
+        from features.notebooks.remarkable_store import ROOT
+        ids = [f'10000000-0000-4000-8000-{i:012d}' for i in range(1, 9)]
+        entries = [(ids[0] + '.metadata', b'{"type":"DocumentType","visibleName":"Private title"}'),
+                   (ids[1] + '.metadata', b'{"type":"FuturePrivateType","visibleName":"Private title"}'),
+                   (ids[2] + '.metadata', b'{broken private text'),
+                   (ids[3] + '.metadata', b'[]'),
+                   (ids[4] + '.metadata', b'{"type":"DocumentType","parent":"trash"}'),
+                   (ids[5] + '.metadata', b'x' * 101),
+                   ('Private filename.metadata', b'{}'),
+                   (ids[0] + '.metadata', b'{bad duplicate'),
+                   (ids[6] + '.metadata', b'\xff'),
+                   (ids[7] + '.metadata', b'{}')]
+
+        @contextmanager
+        def stream(*_, **__):
+            with tar_stream(entries) as data:
+                yield data
+
+        with patch.object(remarkable_ssh, 'ssh_stream', stream), patch.object(remarkable_ssh, 'MAX_SIDECAR', 100):
+            snapshot = remarkable_ssh.list_snapshot('synthetic.invalid')
+            legacy = remarkable_ssh.list_documents('synthetic.invalid')
+        self.assertEqual(set(snapshot.entries), {ROOT, ids[0]})
+        self.assertEqual([doc.id for doc in legacy], [ids[0]])
+        receipt = {key: asdict(value) for key, value in snapshot.inventory.items()}
+        self.assertNotIn('Private', json.dumps(receipt))
+        self.assertEqual(sum(item.occurrences for item in snapshot.inventory.values()) + snapshot.unidentified_records,
+                         len(entries))
+        self.assertEqual(snapshot.unidentified_records, 1)
+        self.assertEqual(snapshot.inventory[ids[0]].occurrences, 2)
+        self.assertTrue(snapshot.inventory[ids[0]].visible)
+        self.assertEqual(snapshot.inventory[ids[0]].read_issues, ('unreadable_metadata',))
+        self.assertEqual(snapshot.inventory[ids[1]].reason, 'unsupported_type')
+        self.assertEqual(snapshot.inventory[ids[4]].reason, 'deleted_or_trashed')
+        self.assertEqual(snapshot.inventory[ids[5]].read_issues, ('metadata_too_large',))
+        self.assertEqual(snapshot.inventory[ids[7]].reason, 'unsupported_type')
+        for index in (2, 3, 5, 6):
+            self.assertEqual(snapshot.inventory[ids[index]].reason, 'unreadable_metadata')
+        with self.assertRaises(TypeError):
+            snapshot.inventory[ids[0]] = None
+
+    def test_inventory_is_not_returned_after_a_failed_transport(self):
+        @contextmanager
+        def stream(*_, **__):
+            with tar_stream({DOC + '.metadata': b'{}'}) as data:
+                yield data
+            raise OSError('Incomplete synthetic inventory')
+
+        with patch.object(remarkable_ssh, 'ssh_stream', stream), self.assertRaises(OSError):
+            remarkable_ssh.list_snapshot('synthetic.invalid')
+
     def test_browse_uses_folder_metadata_and_omits_trash(self):
         entries = {
             './' + DOC + '.metadata': json.dumps(dict(
