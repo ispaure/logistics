@@ -196,6 +196,22 @@ Go `protocol.go` owns decoding/admission and response envelopes; `requests.go`
 routes requests into domain owners. Cancellation and credential publication retain
 the process-wide operation scopes in `operation_scope.go`.
 
+## Mobile transfer appearance
+
+`transfers/assets/surface.css` owns the WebView's action, status and overlay
+colors. Edit each light/dark pair at the top of the stylesheet to update both
+`light-dark()` and the older-browser fallback. E Ink has its own overrides.
+Base window, surface, text and border roles come from
+`services.appearance_palette.css_variables()` through `mobile/surface.py`.
+The stylesheet also owns typography, font scaling, spacing and responsive rules.
+Desktop process-window colors belong to commonUtils.
+
+For a defaults-only change, compare rendered setup, review, progress and overlays
+in light, dark and E Ink modes at compact and wide sizes, including enlarged text.
+Forcing the `@supports` fallback in a modern browser checks cascade behavior
+with that browser's CSS engine. Older embedded engines require their own
+runtime checks. Keep raw comparison evidence under ignored `test-results/`.
+
 ## Mobile sync shortcut layout
 
 `mobile/transfer_status.py` mounts a 48-point/dp tinted button in existing root
