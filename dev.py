@@ -44,6 +44,8 @@ def main(argv=None):
     tests.add_argument('--profile', choices=('smoke', 'daily', 'full'), default='full')
     tests.add_argument('--mode', choices=('fast', 'diagnostic'), default='diagnostic')
     tests.add_argument('--fail-fast', action='store_true')
+    tests.add_argument('--workers', type=int, choices=(1, 2), default=1,
+                       help='Use two workers for reviewed macOS desktop files (default: one)')
     tests.add_argument('--inventory', action='store_true')
     tests.add_argument('--timings', type=Path,
                        help='Existing JSON timing report used to order tests on the same environment; '
@@ -91,6 +93,8 @@ def main(argv=None):
         return doctor(ROOT, environment_python)
     from Scripts.development import run_checks, shared_test_groups
     if args.command == 'test':
+        if args.workers > 1 and args.suite != 'desktop':
+            parser.error('Two workers are currently supported only for desktop tests.')
         if args.exact_file and (args.pattern is not None or args.suite not in ('desktop', 'mobile')):
             parser.error('--exact-file requires desktop or mobile selection without a filename pattern.')
         args.pattern = 'test*.py' if args.pattern is None else args.pattern
@@ -158,6 +162,8 @@ def main(argv=None):
             command = [str(interpreter), str(ROOT / 'Python/tests/run_regressions.py'),
                        str(suite), *pattern_args, '--isolate-modules', *extra,
                        '--profile', args.profile, '--mode', args.mode]
+            if args.workers > 1:
+                command.extend(['--workers', str(args.workers)])
             if args.fail_fast:
                 command.append('--fail-fast')
             if args.inventory:

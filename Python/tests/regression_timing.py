@@ -62,20 +62,33 @@ class TimingReport:
             for row in self.data['tests']:
                 classname, _, name = row['id'].rpartition('.')
                 cases.append(dict(name=name, classname=classname, status=outcomes[row['outcome']],
-                                  seconds=row['duration_seconds'], message=row.get('message', ''), stage=row.get('stage')))
+                                  seconds=row['duration_seconds'], message=row.get('message', ''), stage=row.get('stage'), file=row.get('file')))
             for row in self.data['modules']:
                 if row['outcome'] != 'passed' or not row['test_report_complete']:
                     cases.append(dict(name=row['path'], classname='Logistics.runner', status='error',
-                                      seconds=row['duration_seconds'], stage=row.get('stage'),
+                                      seconds=row['duration_seconds'], stage=row.get('stage'), file=row['path'],
                                       message='Isolated module: ' + row['outcome'] +
                                       (': ' + row['evidence_error'] if row.get('evidence_error') else '')))
             for row in self.data.get('not_run', []):
-                cases.append(dict(name=row.get('id', row.get('file', 'unstarted')), classname='Logistics.not_run',
-                                  status='skipped', message='Not run: ' + row['reason'], stage=row.get('stage')))
+                names = ([row['id']] if row.get('id') else [case['case'] for case in row.get('cases', [])]
+                         or [row.get('file', 'unstarted')])
+                for name in names:
+                    cases.append(dict(name=name, classname='Logistics.not_run',
+                                      status='skipped', message='Not run: ' + row['reason'],
+                                      stage=row.get('stage'), file=row.get('file')))
             if not self.data['complete'] or not cases or (exit_code and all(row['status'] == 'passed' for row in cases)):
                 cases.append(dict(name='suite_completion', classname='Logistics.runner', status='error',
                                   message='The suite did not complete successfully with case evidence.'))
             write_junit(self.junit, self.data['directory'], cases)
+            if any(case.get('file') for case in cases):
+                import re
+                import xml.etree.ElementTree as ET
+                from commonUtils.persistence import atomic_write_bytes
+                tree = ET.parse(self.junit)
+                for node, case in zip(tree.getroot().findall('testcase'), cases):
+                    if case.get('file'):
+                        node.set('file', re.sub('[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\ud800-\\udfff]', '', case['file']))
+                atomic_write_bytes(Path(self.junit), ET.tostring(tree.getroot(), encoding='utf-8', xml_declaration=True))
 
     def summarize(self):
         for key, title, name in (('tests', 'Slowest tests (setup, body and cleanup)', 'id'),
