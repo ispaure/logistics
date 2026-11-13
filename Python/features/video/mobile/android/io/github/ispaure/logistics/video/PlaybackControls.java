@@ -32,7 +32,6 @@ final class PlaybackControls {
             new android.widget.LinearLayout.LayoutParams(-1, owner.dp(3)));
         unlock = new Button(owner.activity); unlock.setText("Unlock controls");
         FrameLayout.LayoutParams frame = new FrameLayout.LayoutParams(-2, owner.dp(48), Gravity.BOTTOM | Gravity.END);
-        frame.setMargins(16, 16, 16, 32);
         owner.root.addView(unlock, frame); unlock.setVisibility(View.GONE);
         unlock.setOnClickListener(v -> lock(false));
         GestureDetector gestures = new GestureDetector(owner.activity, new GestureDetector.SimpleOnGestureListener() {
@@ -69,6 +68,12 @@ final class PlaybackControls {
             }
             return true;
         });
+    }
+
+    void layoutUnlock(FrameLayout.LayoutParams controls) {
+        FrameLayout.LayoutParams frame = (FrameLayout.LayoutParams) unlock.getLayoutParams();
+        frame.setMargins(controls.leftMargin, controls.topMargin, controls.rightMargin, controls.bottomMargin);
+        unlock.setLayoutParams(frame);
     }
 
     void emit(String name, String value) {
