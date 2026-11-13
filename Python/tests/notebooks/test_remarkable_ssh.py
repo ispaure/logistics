@@ -2,7 +2,9 @@
 from contextlib import contextmanager
 from io import BufferedReader, BytesIO
 import json
+import os
 from pathlib import Path
+import subprocess
 import tarfile
 from tempfile import TemporaryDirectory
 import unittest
@@ -30,6 +32,48 @@ def tar_stream(entries):
 
 
 class RemarkableSSHTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == 'posix', 'The tablet enumeration script uses a POSIX shell.')
+    def test_nonfile_first_glob_does_not_hide_later_files_or_read_nested_data(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            first = root / (DOC + '.metadata')
+            first.mkdir()
+            nested = first / 'private-content'
+            nested.write_bytes(b'DO NOT READ THIS NESTED CONTENT')
+            (root / (FOLDER + '.metadata')).write_bytes(b'{"type":"DocumentType","visibleName":"Visible"}')
+            (root / (PAGE + '.metadata')).symlink_to(root / 'absent')
+            legacy = 'set -- ./*.metadata\nif [ -f "$1" ]; then exec tar -cf - "$@"; fi'
+            self.assertEqual(subprocess.run(['/bin/sh', '-c', legacy], cwd=root,
+                capture_output=True, check=True, timeout=5).stdout, b'')
+
+            @contextmanager
+            def stream(host, command, cancelled, **__):
+                self.assertEqual(host, 'synthetic.invalid')
+                result = subprocess.run(['/bin/sh', '-c', command], cwd=root,
+                                        capture_output=True, check=True, timeout=5,
+                                        env=dict(os.environ, COPYFILE_DISABLE='1'))
+                self.assertNotIn(b'DO NOT READ THIS NESTED CONTENT', result.stdout)
+                with BufferedReader(BytesIO(result.stdout)) as data:
+                    yield data
+
+            with patch.object(remarkable_ssh, 'ssh_stream', stream):
+                for kind in ('directory', 'broken symlink'):
+                    with self.subTest(first=kind):
+                        snapshot = remarkable_ssh.list_snapshot('synthetic.invalid')
+                        self.assertEqual(set(snapshot.inventory), {DOC, FOLDER, PAGE})
+                        self.assertEqual(snapshot.unidentified_records, 0)
+                        self.assertTrue(snapshot.inventory[FOLDER].visible)
+                        for identity in (DOC, PAGE):
+                            self.assertEqual(snapshot.inventory[identity].read_issues, ('unsupported_entry',))
+                        self.assertEqual([item.id for item in remarkable_ssh.list_documents('synthetic.invalid')], [FOLDER])
+                    if kind == 'directory':
+                        nested.unlink()
+                        first.rmdir()
+                        first.symlink_to(root / 'absent-first')
+                for item in root.iterdir():
+                    item.unlink()
+                self.assertEqual(dict(remarkable_ssh.list_snapshot('synthetic.invalid').inventory), {})
+
     def test_inventory_accounts_for_omissions_without_titles_or_filenames(self):
         from dataclasses import asdict
         from features.notebooks.remarkable_store import ROOT
