@@ -25,6 +25,10 @@ four-megapixel capture validator. Deleted modern page records and their opaque
 members remain preserved; their inactive scenes are not interpreted. An absent
 page-scene member follows the existing parser's blank-page convention; referenced
 image resources must exist.
+Modern `cPages` candidates must explicitly declare integer `formatVersion: 2`.
+Preparation rejects mixed legacy-version/modern-table metadata without repairing
+it or changing the permissive, byte-preserving read/retrieval path. This version
+check does not qualify the remaining modern metadata fields for every firmware.
 
 For supported stock/blank notebooks and existing PDF-backed documents, the
 candidate is the exact input byte sequence. For supported custom Logistics
@@ -117,3 +121,14 @@ disposable synthetic documents:
 
 Until those results exist, no firmware profile grants upload or organize
 capabilities. Do not promote a synthetic filesystem test into device acceptance.
+
+On November 13, 2026, a disposable USB import on user-reported firmware 3.29.1.0
+returned HTTP 201, but the user saw only its two PDF backgrounds. The native
+re-export confirmed that the embedded PDF remained byte-identical while both
+native ink files and the PNG resource were absent; the importer also assigned
+new document and page IDs. The original synthetic fixture incorrectly combined
+`formatVersion: 1` with `cPages`. Preparation now rejects that combination. This
+is a confirmed failed preservation check; the inconsistent version is a suspected
+cause, not a proven complete diagnosis. A corrected candidate still needs native
+validation. Folder creation was user-confirmed; rename, move, trash/restore and
+cleanup remain outstanding.
