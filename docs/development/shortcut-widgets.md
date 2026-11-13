@@ -136,7 +136,8 @@ Inbox, device-deployment, TestFlight and shared-staging tests remain relevant.
 storage and Watch-envelope checks and builds a small native host with the real
 phone extensions, Watch app and complication through
 the owned scratch lifecycle. It verifies embedded action metadata and absence of
-Python dependencies, and saves concise evidence before deleting scratch outputs.
+Python dependencies. Reports and logs go to `tmp/test-results/widgets/` by default.
+Pass `--output DIRECTORY` to choose a different report directory.
 This validates compilation, envelope round-trips and packaging, not system widget refresh
 latency, paired-device delivery or Shortcuts invocation on a physical phone. Use the normal manager's
 iOS device workflow for the complete signed app; preserve the installed app/data.

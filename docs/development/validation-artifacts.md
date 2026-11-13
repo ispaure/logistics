@@ -2,8 +2,9 @@
 
 Test screenshots, recordings, machine-readable results and one-off probe copies
 are local working material. Keep them under ignored `test-results/` or the
-owning tool's ignored `mobile_build/logs/` directory. They are excluded from source
-releases and mobile offline help.
+owning tool's ignored `mobile_build/logs/` directory. The standalone widget and
+video API validators write new reports under ignored `tmp/test-results/`.
+These report locations are excluded from source releases and mobile offline help.
 
 Run one-off commands through `python -m logistics_build.build_retention --scratch
 COMMAND ...`. Arguments containing `{workspace}` expand to the disposable

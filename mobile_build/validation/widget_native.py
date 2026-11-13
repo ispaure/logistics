@@ -118,7 +118,8 @@ def validate(output, *, device_build=False):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output', type=Path, default=ROOT / 'test-results/widgets')
+    parser.add_argument('--output', type=Path, default=ROOT / 'tmp/test-results/widgets',
+                        help='Report directory (default: tmp/test-results/widgets)')
     parser.add_argument('--device-build', action='store_true', help='Also compile unsigned Release products for iPhone and Apple Watch hardware')
     args = parser.parse_args()
     validate(args.output, device_build=args.device_build)
