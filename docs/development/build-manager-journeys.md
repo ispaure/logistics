@@ -9,18 +9,27 @@ For the operator workflow, see [validating and delivering Logistics](../user/bui
 
 ## Trace a validation plan
 
-1. In the standalone manager, select a trusted Logistics checkout with
-   [project tooling ready](../user/build-manager.md#project-tooling-readiness-and-repair).
-   Choose **Run checks**, a supported platform and a local execution host.
+1. From the Logistics checkout root, check that both environments have the
+   manager revision declared in `build-manager-dependency.json`:
+
+   ```sh
+   python3 logistics_build/tooling_bootstrap.py status
+   ```
+
+   Use `py` on Windows. If the result reports `needs_update`, follow
+   [project tooling readiness and repair](../user/build-manager.md#project-tooling-readiness-and-repair).
+   Run this check even after `dev.py doctor` passes.
+2. In the standalone manager, select the trusted Logistics checkout. Choose
+   **Run checks**, a supported platform and a local execution host.
    Select **Next: review plan** and inspect the source, host, phases and
    prerequisites. Stop at review for this walkthrough. **Start validation**
    executes the reviewed plan.
-2. In the checkout, follow `build-project.json` to
+3. In the checkout, follow `build-project.json` to
    `logistics_build/build_project.py:LogisticsProject.make_journey` and
    `logistics_build/manager_journeys.py`. Follow the plan's test groups into
    [suite discovery](#shared-tests-and-suite-discovery). Logistics declares
    project inputs and gates. Build Manager reviews and executes the plan.
-3. To exercise the adapter with synthetic source and settings, use the root
+4. To exercise the adapter with synthetic source and settings, use the root
    desktop environment with the pinned manager installed:
 
    ```sh
