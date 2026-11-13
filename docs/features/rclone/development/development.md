@@ -23,7 +23,7 @@ in commonUtils' own documentation; see the repository's
 | Remembered desktop ZIP paths and remote names | `desktop_catalog.py` |
 | Native credential adapter and composition | `mobile/credentials.py`, `mobile/service.py` |
 | Native credential load sequencing and host port | `mobile/credential_workflow.py` |
-| Native credential controls, prompts and navigation | `mobile/credentials_ui.py` |
+| Native credential import and route retirement | [Mobile credential import](credentials.md#mobile-credential-import) maps the workflow, controls and host routes. |
 | Retained ZIPs, encrypted vault and package metadata | `mobile/credential_packages.py`, `mobile/credential_vault.py`, `mobile/credential_retention.py` |
 | Remote sessions and cancellation/access policy | `remote_access.py`, `access.py`, `remote_resources.py`, `mobile/remote_resources.py` |
 | Native browser listing workflow and UI adapter | `mobile/browser_workflow.py`, `mobile/cloud_ui.py` |
