@@ -1850,8 +1850,11 @@ returns occupied rectangles in the receiving view's coordinates. The shared
 `control_top_clearance` policy uses every intersecting region to protect custom
 headers and content. No device model or fixed Dynamic Island height determines
 placement. Root and leaf observations include host position, bounds, all four
-safe-area edges and window frame, so equal-size window moves and activity changes
-refresh retained custom layouts. The compatibility `reserve_bar_clearance` hook
+safe-area edges and window frame. Toolbar layout also tracks the current bar edge.
+Equal-size window moves and activity changes refresh retained custom layouts.
+Use `ios_toolbar` for native bar actions and `reader_top_band` for projected
+reader headers. Keep content-band reclamation in the shared container policy.
+The compatibility `reserve_bar_clearance` hook
 now configures native compression and retires only the old app-owned extra inset,
 preserving other owners' insets.
 
@@ -1899,13 +1902,25 @@ the disposable bundle. Apps, helper binaries, compiler caches and simulators use
 the existing scratch/owned-device cleanup. Live Activity growth/shrink is covered
 by host wakeup tests; this focused native run does not stimulate external activities.
 
-`toolbar_conventions_tools --adaptive-shell` adds a separate, disposable silent
+### Verify native shell clearance
+
+Use a simulator app build from the [mobile tooling](mobile-handbook.md)
+and choose a new report directory for each run. From the repository root:
+
+```sh
+mobile_build/.venv/bin/python -m mobile_build.validation.toolbar_conventions_tools \
+  --app "/absolute/path/to/Logistics Mobile.app" --output test-results/adaptive-shell \
+  --family "iPhone Duo" --adaptive-shell
+```
+
+The adaptive run adds a separate, disposable silent
 media app and asserts actual idle/playing/stopped reservation changes. It captures
 root and Settings pages, repeated Documents/Home rotation, collection selection,
 Unlock presence/absence and repeated notebook entry. Reports contain control,
 container and system-region frames in window coordinates; projected controls also
-check native hit testing. `--static-shell` runs the same inventory without claiming
-activity coverage on other displays. All stimuli, apps and simulators remain in
+check a reachable center and a minimum 44-point target. Add `--static-shell` to
+`--adaptive-shell` to run the layout inventory without external activity on other
+displays. All stimuli, apps and simulators remain in
 the existing scratch/owned-device lifecycle. This does not establish genuine
 two-app Split View or physical touch acceptance; those remain separate gates.
 
