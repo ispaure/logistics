@@ -165,14 +165,16 @@ views, with literal physical movement and a separate bottom volume instruction.
 Its two finite strokes respect iOS reduced motion, Android's animation duration
 scale and E Ink mode. Native accessibility announcements accompany the labels.
 Shallow panes use a horizontal cue layout; active fold reservations and system
-insets bound the cue inside the reader's content area.
+insets bound the cue inside the reader's content area. On UIKit, the cue also
+stays inside the actual canvas gesture viewport, which can be narrower than its
+container above a horizontal fold.
 
 The library/provider comic controllers retain their folder and access contracts.
 Lookup generations discard stale results; a shared operation guard prevents a
 swipe and toolbar action from opening two neighbors concurrently. Each open
 refreshes availability. Failure preserves the current reader and returns recovery
 text without arming another volume gesture. Navigation, publication before page
-snapshots, provider disposal and background/privacy transitions remove the native
+snapshots, provider disposal and scene interruptions/background/privacy transitions remove the native
 view, animations, timeout and layout subscription. The cue never enters the comic
 canvas, source archive or external-display image pipeline. Desktop presentation
 does not call this mobile presenter.
@@ -180,20 +182,39 @@ does not call this mobile presenter.
 Focused host coverage lives in `test_comic_feedback.py`,
 `test_comic_neighbor_guidance.py`, `test_comic_file_navigation.py`,
 `test_reader_formats.py`, `test_reader_gestures.py`, `test_reader_sessions.py`,
-`test_comic_split.py`, `test_reading_publication.py` and `test_reader_lifecycle.py`.
+`test_comic_split.py`, `test_reading_publication.py`, `test_reader_lifecycle.py`
+and `test_screen_privacy.py`.
 Desktop `test_comic_spreads.py` checks unchanged boundary behavior with no mobile
 presentation. The synthetic `comic_guidance_probe.py` runs through the owning
 `document_storage_tools --probe comic-guidance` helper on disposable iOS/Android
-devices. Its reports distinguish native motion/static rendering from injected
-iOS reduced-motion policy, physical e-ink quality and external-display hardware
-acceptance; simulator results do not establish those hardware claims.
+devices. The probe waits for the existing asynchronous cloud credential restore
+before admitting its synthetic provider; the startup screen finishing alone does
+not imply that provider admission is ready.
 
-`LOGISTICS_COMIC_GUIDANCE_BASIC=1` selects a narrower smoke check through the
-existing local comic fixture. For an iOS simulator launch, forward it as
-`SIMCTL_CHILD_LOGISTICS_COMIC_GUIDANCE_BASIC=1`. This checks native LTR/RTL finger
-motion, conditional boundary labels, page navigation, pass-through, expiry and
-cleanup. It does not establish adjacent-volume opening, provider failure handling
-or the full native layout, accessibility and lifecycle acceptance matrix.
+Use `--comic-scope` to select a bounded acceptance run:
+
+| Scope | Checks |
+| --- | --- |
+| `basic` | Existing local comic fixture: LTR/RTL motion, conditional hints, page turns, pass-through, expiry and cleanup. |
+| `matrix` (default) | Provider neighbor combinations, pending/failed/disappeared availability, actual volume opens, theme/orientation/fullscreen matrix, lifecycle, imported neighbors and split/spread order. |
+| `lifecycle` | Expiry, rapid swipes, navigation, native background/resume, taps, static policy and reader close. |
+| `library` | Imported volume opens, native split/spread PNGs and thumbnails, and real external-output forwarding into an injected native image sink. |
+| `readers` | Switch retained LTR/RTL readers with a live cue, then turn a page after returning. |
+| `reduced-motion` | Real OS reduced-motion setting, native query and static LTR/RTL cue. |
+| `windows` | Actual iPad scene switch before cue expiry; use `--family iPad`. |
+| `fold` | Actual UIKit reserved regions on both fold axes, safe cue bounds and native HID taps/swipes; use `--family 'iPhone Duo' --pose partial`. |
+
+The helper saves scope reports, screenshots and cleanup receipts. Bitmap checks
+compare native page/thumbnail bytes while the cue is visible; colored fixture
+exports allow independent reading-order review. The external sink check exercises
+the real access and forwarding policy, but does not claim a physical display
+connection. Simulator/emulator E Ink preference checks likewise do not establish
+Boox animation quality. Reuse compatible managed shells for focused reruns and
+remove retained pins/build workspaces after acceptance.
+
+The earlier `LOGISTICS_COMIC_GUIDANCE_BASIC=1` smoke selector remains supported
+(forward it as `SIMCTL_CHILD_LOGISTICS_COMIC_GUIDANCE_BASIC=1` on iOS). A basic
+pass alone does not establish full native acceptance.
 
 ## Password-protected CBZs
 

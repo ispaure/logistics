@@ -206,6 +206,8 @@ class ScreenPrivacy:
         self._pause_folder_work()
         self._set_directory_index_active(False)
         self.wifi_revision = getattr(self, 'wifi_revision', 0) + 1
+        from .comic_feedback import clear as clear_comic_feedback
+        clear_comic_feedback(self.app)
         if self.sensitive():
             self.conceal()
         else:
