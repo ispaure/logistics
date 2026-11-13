@@ -236,7 +236,8 @@ class SpreadTests(QtTestCase):
         reader.step(-1); self.wait(reader)
         self.assertEqual(reader.displayed_pages, (0,))
 
-    def test_natural_file_order_boundary_double_press_and_dedicated_controls(self):
+    @patch('mobile.comic_guidance.present')
+    def test_natural_file_order_boundary_double_press_and_dedicated_controls(self, mobile_guidance):
         first = self.archive('comic 1.cbz', colors=('red', 'green'))
         second = self.archive('comic 2.cbz', colors=('blue',), rtl=True)
         last = self.archive('comic 10.cbz', colors=('orange',))
@@ -263,6 +264,7 @@ class SpreadTests(QtTestCase):
         reader.previous_file_button.click(); self.wait(reader)
         self.assertEqual(reader.pages.path, first)
         self.assertEqual(reader.page, 1)
+        mobile_guidance.assert_not_called()
 
     def test_previous_after_seek_uses_actual_page_shapes(self):
         from types import SimpleNamespace

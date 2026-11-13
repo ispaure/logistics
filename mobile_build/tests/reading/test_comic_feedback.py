@@ -7,9 +7,9 @@ TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from types import SimpleNamespace as NS
 import unittest
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, Mock, patch
 
-from mobile.comic_feedback import boundary, clear, sync
+from mobile.comic_feedback import boundary, clear, sync, physical_swipe
 from features.comics.mobile.composite import spread_geometry
 from features.comics.mobile.navigation import folder_comics
 
@@ -35,24 +35,25 @@ class ComicFeedbackTests(unittest.TestCase):
             right_to_left=rtl, available=available, adjacent=self.adjacent))
         return self.app._comic_boundary_feedback
 
-    def test_beginning_arrow_respects_manga_and_second_swipe_opens_previous(self):
-        for rtl, forward, back in ((False, '←', '→'), (True, '→', '←')):
+    def test_beginning_finger_respects_manga_and_second_swipe_opens_previous(self):
+        for rtl, forward, back in ((False, 'right to left', 'left to right'), (True, 'left to right', 'right to left')):
             with self.subTest(rtl=rtl):
                 clear(self.app)
                 self.adjacent.reset_mock()
                 feedback = self.swipe(-1, rtl=rtl)
-                self.assertIn(forward + ' Swipe to read', feedback.message)
+                self.assertEqual('Swipe ' + forward + ' to read', feedback.reading_text)
+                self.assertEqual(feedback.movement, 1 if rtl else -1)
                 self.assertIn('Swipe ' + back + ' again for previous volume', feedback.message)
                 self.adjacent.assert_not_awaited()
                 self.swipe(-1, rtl=rtl)
                 self.adjacent.assert_awaited_once_with(-1)
                 self.assertFalse(feedback.message)
 
-    def test_end_has_volume_hint_without_reading_instruction(self):
+    def test_end_demonstrates_reading_movement_and_offers_next_volume(self):
         feedback = self.swipe(1)
         self.assertIn('End of comic', feedback.message)
         self.assertIn('next volume', feedback.message)
-        self.assertNotIn('Swipe to read', feedback.message)
+        self.assertIn('Swipe right to left to read', feedback.reading_text)
         self.swipe(1)
         self.adjacent.assert_awaited_once_with(1)
 
@@ -77,7 +78,9 @@ class ComicFeedbackTests(unittest.TestCase):
         clear(self.app)
         self.swipe(1, available=False)
         self.swipe(1, available=False)
-        self.assertIn('No next volume', feedback.message)
+        self.assertEqual(feedback.volume_text, '')
+        self.assertNotIn('volume', feedback.message)
+        self.assertFalse(feedback.armed)
         self.adjacent.assert_not_awaited()
         clear(self.app)
         self.assertFalse(feedback.message)
@@ -90,6 +93,88 @@ class ComicFeedbackTests(unittest.TestCase):
         # A reserved physical hinge remains protected.
         _, rects = spread_geometry([(300, 600), (400, 600)], viewport=(1200, 800), seam=.5, seam_gap=24)
         self.assertEqual(rects[1][0] - rects[0][0] - rects[0][2], 24)
+
+    def test_both_boundaries_match_the_real_gesture_mapping(self):
+        from mobile.reader_controls import schedule_swipe
+        for rtl in (False, True):
+            for direction in (-1, 1):
+                for available in (None, False, True):
+                    with self.subTest(rtl=rtl, direction=direction, available=available):
+                        clear(self.app)
+                        feedback = self.swipe(direction, rtl=rtl, available=available)
+                        movement, wording = physical_swipe(rtl, direction)
+                        self.owner.active_host = True
+                        self.owner.workspace = NS(sessions={'comic': object()})
+                        self.owner.loop = self.app.loop
+                        move = AsyncMock()
+                        # ImageCanvas emits +1 for a finger moving left, -1 for right.
+                        schedule_swipe(self.owner, -movement, right_to_left=rtl, busy=False, move=move)
+                        self.app.loop.run_until_complete(self.owner._comic_swipe_task)
+                        move.assert_awaited_once_with(direction)
+                        if available:
+                            self.assertIn('Swipe ' + wording + ' again', feedback.volume_text)
+                        else:
+                            self.assertEqual(feedback.volume_text, '')
+                            self.assertNotIn('volume', feedback.message)
+
+    def test_unresolved_first_swipe_cannot_arm_a_newly_available_neighbor(self):
+        self.swipe(1, available=None)
+        self.swipe(1, available=True)
+        self.adjacent.assert_not_awaited()
+        self.swipe(1, available=True)
+        self.adjacent.assert_awaited_once_with(1)
+
+    def test_disappeared_neighbor_error_has_no_volume_offer_or_repeat(self):
+        self.adjacent.return_value = 'Next volume is no longer available.'
+        self.swipe(1)
+        feedback = self.swipe(1)
+        self.assertEqual(feedback.reading_text, self.adjacent.return_value)
+        self.assertEqual(feedback.volume_text, '')
+        self.assertEqual(feedback.movement, 0)
+        self.assertFalse(feedback.armed)
+        self.swipe(1)
+        self.adjacent.assert_awaited_once()
+
+    def test_expiry_and_owner_cleanup_dispose_presentation_and_subscription(self):
+        native = Mock()
+        with patch('mobile.comic_guidance.present', return_value=native):
+            feedback = self.swipe(-1)
+            subscription, timer = feedback.subscription, feedback.timer
+            self.assertIn(subscription.key, subscription.participants.entries)
+            # Deliver the real owned timer callback without a wall-clock sleep.
+            timer._callback(*timer._args)
+            native.close.assert_called_once()
+            self.assertNotIn(subscription.key, subscription.participants.entries)
+            self.assertIsNone(feedback.native)
+            self.assertIsNone(feedback.timer)
+            self.assertFalse(feedback.message)
+
+    def test_cue_frames_keep_bottom_hint_separate_in_portrait_landscape_and_panes(self):
+        from mobile.comic_guidance import cue_layout, cue_contents
+        for width, height in ((390, 800), (800, 240), (260, 300), (260, 120), (320, 180)):
+            for movement in (-1, 1):
+                card, bottom, start, end = cue_layout(width, height, True, movement)
+                for x, y, w, h in (card, bottom):
+                    self.assertGreaterEqual(x, 0)
+                    self.assertGreaterEqual(y, 0)
+                    self.assertLessEqual(x + w, width)
+                    self.assertLessEqual(y + h, height)
+                self.assertLess(card[1] + card[3], bottom[1])
+                self.assertEqual(end > start, movement > 0)
+                reading, hand, track, _, _, _ = cue_contents(*card[2:], movement)
+                for x, y, w, h in (reading, hand, track):
+                    self.assertGreaterEqual(x, 0)
+                    self.assertGreaterEqual(y, 0)
+                    self.assertLessEqual(x + w, card[2])
+                    self.assertLessEqual(y + h, card[3])
+                self.assertLessEqual(hand[1] + hand[3], track[1])
+                self.assertTrue(reading[1] + reading[3] <= hand[1] or reading[0] + reading[2] <= min(start, end))
+
+    def test_desktop_backend_does_not_create_a_native_overlay(self):
+        from mobile.comic_guidance import present
+        backend = type('Desktop', (), {'__module__': 'toga_cocoa.app'})
+        self.app._impl = backend()
+        self.assertIsNone(present(self.app, self.owner, 'Reading', '', movement=1))
 
     def test_volume_candidates_do_not_cross_folders(self):
         rows = [dict(path=path, name=path.rsplit('/', 1)[-1], directory=False)

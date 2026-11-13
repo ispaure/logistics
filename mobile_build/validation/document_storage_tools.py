@@ -26,6 +26,7 @@ UNIFIED_PROGRESS_RESULT = 'unified-progress-result.json'
 UNIFIED_PROGRESS_ANDROID_ENTRY = 'tests.logisticsmobile.unified_progress_android_probe'
 UNIFIED_PROGRESS_VIDEO_ENTRY = 'tests.logisticsmobile.unified_progress_video_probe'
 QA_BUNDLES = {UNIFIED_PROGRESS_BUNDLE, BUNDLE, 'io.github.ispaure.logisticsnotesauditqa', 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
+              'io.github.ispaure.logisticscomicqa',
               'io.github.ispaure.logisticsnotebookqa', 'io.github.ispaure.logisticsfeaturesqa',
               'io.github.ispaure.logisticsreaderspaceqa', 'io.github.ispaure.logisticsviewerlayoutqa'}
 NATIVE_DIAGNOSTICS = ('pdf-edge-left.png', 'pdf-edge-right.png', 'logistics-native-ui-timings.json', 'logistics-native-ui-error.txt', 'logistics-native-ui-webview-counts.json', 'notes-discovery.png', 'notes-file-hold.png', 'notes-compact-files.png',
@@ -38,6 +39,14 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 
 
 def diagnostics(entry_point):
+    if entry_point.endswith('.comic_guidance_probe'):
+        return NATIVE_DIAGNOSTICS + ('comic-guidance-progress.json', 'comic-guidance-failure.png',
+            'comic-guidance-reduced-motion.png', 'comic-guidance-eink.png') + tuple(
+            f'comic-guidance-{direction}-{theme}-{orientation}-{mode}.png'
+            for direction in ('ltr', 'rtl') for theme in ('light', 'dark')
+            for orientation in ('portrait', 'landscape-left') for mode in ('normal', 'full')) + tuple(
+            f'comic-guidance-{direction}-frame-{frame}.png'
+            for direction in ('ltr', 'rtl') for frame in ('start', 'end'))
     if entry_point == UNIFIED_PROGRESS_ANDROID_ENTRY:
         return ('progress-fixture-epub-before.png', 'progress-fixture-epub-after.png')
     if entry_point == UNIFIED_PROGRESS_ENTRY:
@@ -393,6 +402,17 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
         deadline = time.monotonic() + (1800 if result_name == 'logistics-native-ui-result.json' else 600 if entry_point.endswith(('.notes_drawers_probe', '.links_images_voices_probe', '.folder_feedback_probe')) else 600 if entry_point in (UNIFIED_PROGRESS_ENTRY, UNIFIED_PROGRESS_VIDEO_ENTRY) else 240)
         next_progress = 0
         while time.monotonic() < deadline:
+            comic_request = cache / 'comic-guidance-request.json'
+            if entry_point.endswith('.comic_guidance_probe') and comic_request.exists():
+                action = json.loads(comic_request.read_text()).get('action')
+                if action != 'background':
+                    raise ValueError('Unexpected iOS comic guidance driver action')
+                comic_request.unlink()
+                client.invoke('launch', device, 'com.apple.Preferences')
+                time.sleep(1)
+                client.invoke('launch', device, bundle)
+                (cache / 'comic-guidance-done').touch()
+                (output / 'ios-comic-lifecycle.json').write_text(json.dumps(dict(background_resume=True)))
             background_request = cache / 'file-transfer-background'
             if entry_point.endswith(('.file_transfer_probe', '.drawer_privacy_probe')) and background_request.exists():
                 background_request.unlink()
@@ -617,6 +637,8 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 observe=None, probe_timeout=None):
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
+    if entry_point.endswith('.comic_guidance_probe') and device is not None:
+        raise ValueError('Comic guidance acceptance requires an owned disposable emulator.')
     if entry_point in (UNIFIED_PROGRESS_ANDROID_ENTRY, UNIFIED_PROGRESS_VIDEO_ENTRY) and device is not None:
         raise ValueError('Unified progress restart acceptance requires an owned emulator.')
     if probe_timeout is not None and (type(probe_timeout) is not int or not 1 <= probe_timeout <= 3600):
@@ -668,6 +690,8 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
     from mobile_build.deployment.android_deploy import build_tools
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
+    if entry_point.endswith('.comic_guidance_probe') and device is not None:
+        raise ValueError('Comic guidance acceptance requires an owned disposable emulator.')
     if probe_timeout is not None and (type(probe_timeout) is not int or not 1 <= probe_timeout <= 3600):
         raise ValueError('Probe timeout must be 1 to 3600 seconds.')
     output.mkdir(parents=True, exist_ok=True)
@@ -738,6 +762,23 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
         while time.monotonic() < deadline:
             if observe is not None:
                 observe('poll', emulator, record, output)
+            if entry_point.endswith('.comic_guidance_probe'):
+                request = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
+                    'cat', 'cache/comic-guidance-request.json'], env=env, capture_output=True, timeout=15)
+                if request.returncode == 0 and request.stdout.strip():
+                    action = json.loads(request.stdout).get('action')
+                    if action not in ('background', 'reduce-motion-on', 'reduce-motion-off'):
+                        raise ValueError('Unexpected Android comic guidance driver action')
+                    emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'rm', 'cache/comic-guidance-request.json')
+                    if action == 'background':
+                        emulator.invoke('-s', serial, 'shell', 'input', 'keyevent', 'KEYCODE_HOME')
+                        time.sleep(1)
+                        emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity')
+                    else:
+                        emulator.invoke('-s', serial, 'shell', 'settings', 'put', 'global',
+                            'animator_duration_scale', '0' if action == 'reduce-motion-on' else '1')
+                    emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'touch', 'cache/comic-guidance-done')
+                    (output / ('android-comic-' + action + '.json')).write_text(json.dumps(dict(action=action, completed=True)))
             if entry_point.endswith(('.documentation_header_probe', '.android_header_probe')):
                 capture = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                     'cat', 'cache/header-capture.json'], env=env, capture_output=True, timeout=15)
@@ -758,7 +799,7 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
                     (directory / (name + '.png')).write_bytes(screen)
                     emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'rm', 'cache/header-capture.json')
                     emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'touch', 'cache/header-capture-done')
-            if tablet or (device is None and entry_point.endswith(('.workspace_edges_probe', '.document_creation_probe', '.documentation_header_probe', '.android_header_probe', '.lockscreen_probe', '.chat_settings_probe', '.notes_search_probe', '.chat_notes_feedback_probe'))):
+            if tablet or (device is None and entry_point.endswith(('.comic_guidance_probe', '.workspace_edges_probe', '.document_creation_probe', '.documentation_header_probe', '.android_header_probe', '.lockscreen_probe', '.chat_settings_probe', '.notes_search_probe', '.chat_notes_feedback_probe'))):
                 result = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                     'cat', 'cache/creation-orientation'], env=env, capture_output=True, timeout=15)
                 pose = result.stdout.strip()
@@ -968,7 +1009,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('workspace-edges', 'mobile-feedback', 'documents-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'playlist-speech', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('comic-guidance', 'workspace-edges', 'mobile-feedback', 'documents-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'playlist-speech', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--retain-build', action='store_true', help='Pin this managed QA build for reruns; caller must remove the pin and workspace afterward.')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
@@ -993,8 +1034,8 @@ def main():
         parser.error('--android-tablet requires the disposable Android emulator.')
     if args.pose and (args.platform != 'ios' or args.family != 'iPhone Duo'):
         parser.error('--pose requires an iOS iPhone Duo run')
-    if args.probe == 'mobile-feedback' and args.device:
-        parser.error('Mobile feedback acceptance uses disposable devices; omit --device.')
+    if args.probe in ('comic-guidance', 'mobile-feedback') and args.device:
+        parser.error('Feedback acceptance uses disposable devices; omit --device.')
     if args.device and args.platform != 'android':
         parser.error('--device requires Android.')
     if args.probe == 'notebook-input' and args.platform != 'android':
@@ -1026,6 +1067,8 @@ def main():
             (args.output / 'retained-build.json').write_text(json.dumps(dict(workspace=str(workspace))))
         os.environ['LOGISTICS_DEPLOY_WORKSPACE'] = str(workspace)
         env['LOGISTICS_DEPLOY_WORKSPACE'] = str(workspace)
+        if args.probe == 'comic-guidance':
+            os.environ['COMMONUTILS_STORAGE_ROOT'] = env['COMMONUTILS_STORAGE_ROOT'] = str(workspace / 'storage')
         env['XDG_CACHE_HOME'] = str(workspace / 'probe-tools')
         env['GOCACHE'] = str(workspace / 'go-cache')
         os.environ['GOCACHE'] = env['GOCACHE']
@@ -1040,6 +1083,9 @@ def main():
         creation_profile = dict(bundle='io.github.ispaure.logisticscreationqa',
             entry_point='tests.logisticsmobile.document_creation_probe',
             result_name='document-creation-evidence/result.json') if args.probe == 'creation' else {}
+        if args.probe == 'comic-guidance':
+            creation_profile = dict(bundle='io.github.ispaure.logisticscomicqa',
+                entry_point='tests.logisticsmobile.comic_guidance_probe', result_name='comic-guidance-result.json')
         if args.probe == 'workspace-edges':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.workspace_edges_probe', result_name='workspace-edges-result.json')

@@ -51,6 +51,8 @@ class ComicController:
     def __init__(self, owner):
         self.app = owner
         self.file_neighbors = (False, False)
+        self._neighbor_revision = 0
+        self._neighbor_opening = False
 
     file_entries = HostAttribute("comic_file_entries")
     open_comic_neighbor = HostAttribute("open_comic_neighbor")
@@ -64,16 +66,22 @@ class ComicController:
     async def refresh_comic_neighbors(self):
         from .navigation import adjacent_comic
         record = self.book_record
+        reader = self.book_reader
+        self._neighbor_revision += 1
+        revision = self._neighbor_revision
         self.file_neighbors = (False, False)
         self.sync_comic_neighbors()
-        if record is None or record['kind'] != 'comic':
+        self.format_services.clear_comic_boundary()
+        if reader is None or record is None or record['kind'] != 'comic':
             return None, []
         token = self.app.workspace.token(self.app.session.id)
         try:
             path, entries = await asyncio.to_thread(self.file_entries)
         except (OSError, ValueError):
             return None, []
-        if (not self.active_host or self.book_record is None or self.book_record['id'] != record['id']
+        if (revision != self._neighbor_revision or not self.active_host
+                or self.book_reader is not reader or self.book_record is None
+                or self.book_record['id'] != record['id']
                 or not self.app.workspace.accepts(token) or self.manager.active is not self.app):
             return None, []
         if path is not None:
@@ -107,6 +115,7 @@ class ComicController:
 
     async def move_comic(self, direction):
         reader, epoch = self.book_reader, self.book_epoch
+        route = self.app.navigation_generation
         navigation = getattr(self, 'comic_navigation', None)
         while self.book_busy and reader is not None and navigation is not None and navigation.layout_reload:
             # A native keyboard/chrome resize may still be fitting the page
@@ -141,6 +150,10 @@ class ComicController:
                 return
             finally:
                 self.set_book_busy(False)
+        if (self.book_reader is not reader or self.book_epoch != epoch
+                or self.app.navigation_generation != route
+                or not self.active_host or self.manager.active is not self.app):
+            return
         if target is not None:
             self.format_services.clear_comic_boundary()
             self.comic_navigation.requested_half = (1 if direction < 0 else 0) if target != index else (1 - self.comic_navigation.half)
@@ -153,22 +166,60 @@ class ComicController:
                 adjacent=self.adjacent_book_comic)
 
     async def adjacent_book_comic(self, direction):
+        if self._neighbor_opening:
+            return
+        self._neighbor_opening = True
+        try:
+            return await self._open_adjacent_comic(direction)
+        finally:
+            self._neighbor_opening = False
+
+    async def _open_adjacent_comic(self, direction):
         if (
             self.book_busy
+            or self.book_reader is None
             or self.book_record is None
             or self.book_record["kind"] != "comic"
         ):
             return
         from features.comics.mobile.navigation import adjacent_comic
 
+        reader = self.book_reader
+        route = self.app.navigation_generation
+        token = self.app.workspace.token(self.app.session.id)
+        # refresh_comic_neighbors starts exactly one lookup revision. A newer
+        # lookup or another reader must not publish this attempt's result.
+        revision = self._neighbor_revision + 1
         path, entries = await self.refresh_comic_neighbors()
-        if path is None:
+        if (revision != self._neighbor_revision or self.book_reader is not reader
+                or self.app.navigation_generation != route
+                or not self.active_host or not self.app.workspace.accepts(token)
+                or self.manager.active is not self.app):
             return
+        if path is None:
+            message = 'Cannot check neighboring volumes. Try again.'
+            self.book_status.text = message
+            return message
         target = adjacent_comic(entries, path.name, direction)
-        if target is not None:
-            if await self.open_comic_neighbor(path.parent / target):
-
-                self.manager.close(self.app.session.id)
+        if target is None:
+            message = ('Previous' if direction < 0 else 'Next') + ' volume is no longer available.'
+            self.book_status.text = message
+            return message
+        try:
+            opened = await self.open_comic_neighbor(path.parent / target)
+        except Exception:
+            opened = False
+        if opened:
+            self.manager.close(self.app.session.id)
+        elif (self.book_reader is reader and self.active_host
+                and self.app.workspace.accepts(token) and self.manager.active is self.app
+                and self.app.navigation_generation == route):
+            self.file_neighbors = tuple(available and index != (0 if direction < 0 else 1)
+                                        for index, available in enumerate(self.file_neighbors))
+            self.sync_comic_neighbors()
+            message = 'Could not open the neighboring volume. The current comic is still open.'
+            self.book_status.text = message
+            return message
 
     async def previous_comic_file(self, widget=None, **kwargs):
         await self.adjacent_book_comic(-1)

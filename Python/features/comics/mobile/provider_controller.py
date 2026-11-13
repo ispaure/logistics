@@ -51,6 +51,8 @@ class ProviderComicController:
 
     def __init__(self, owner):
         self.app = owner
+        self._neighbor_revision = 0
+        self._neighbor_opening = False
 
     async def show_provider_comic_info(self, widget=None, **kwargs):
         if (
@@ -73,6 +75,7 @@ class ProviderComicController:
         if self.cloud_busy or self.crypt_reader is None:
             return
         reader = self.crypt_reader
+        route = self.app.navigation_generation
         index = reader.labels.index(self.crypt_page.value)
         nav = reader.comic_navigation
         if direction > 0:
@@ -93,6 +96,10 @@ class ProviderComicController:
                 return
             finally:
                 self.set_cloud_busy(False)
+        if (self.crypt_reader is not reader or self.app.navigation_generation != route
+                or not self.active_host
+                or self.manager.active is not self.app):
+            return
         if target is not None:
             self.format_services.clear_comic_boundary()
             nav.requested_half = (1 if direction < 0 else 0) if target != index else (1 - nav.half)
@@ -180,85 +187,117 @@ class ProviderComicController:
     async def refresh_provider_comic_neighbors(self):
         header = getattr(self, "comic_header", None)
         reader = self.crypt_reader
-        provider = (getattr(self._crypt_reader_store, "provider", None)
-                    or getattr(self._crypt_reader_store, "resource", None))
-        if header is None or reader is None or provider is None:
-            return
-        header.sync(False, False)
+        store = self._crypt_reader_store
+        provider = getattr(store, "provider", None) or getattr(store, "resource", None)
+        self._neighbor_revision += 1
+        revision = self._neighbor_revision
+        if header is not None:
+            header.sync(False, False)
+        self.format_services.clear_comic_boundary()
+        if (header is None or reader is None or reader.kind not in {'.cbz', '.zip'}
+                or reader.book is not None or reader.editable or provider is None
+                or not self.manager.available(self.session.id)):
+            return None, []
         token = self.workspace.token(self.session.id)
         key = reader.key
         try:
             rows = await asyncio.to_thread(provider.list, key.rpartition("/")[0])
         except Exception:
-            return
+            return None, []
         if (
-            not self.active_host
+            revision != self._neighbor_revision
+            or not self.active_host
             or self.crypt_reader is not reader
+            or self._crypt_reader_store is not store
             or not self.workspace.accepts(token)
+            or self.manager.active is not self.app
+            or not self.manager.available(self.session.id)
         ):
-            return
+            return None, []
         from features.comics.mobile.navigation import adjacent_comic, folder_comics
 
         comics = folder_comics(rows, key)
-        header.sync(
-            adjacent_comic(comics, key, -1) is not None,
-            adjacent_comic(comics, key, 1) is not None,
-        )
+        available = []
+        capture = getattr(store, 'capture_access', None)
+        for direction in (-1, 1):
+            target = adjacent_comic(comics, key, direction)
+            permitted = target is not None
+            if permitted and capture is not None:
+                try:
+                    capture(target)()
+                except (OSError, ValueError):
+                    permitted = False
+            available.append(permitted)
+        header.sync(*available)
+        return key, comics
 
     async def adjacent_provider_comic(self, direction):
+        if self._neighbor_opening:
+            return
+        self._neighbor_opening = True
+        try:
+            return await self._open_adjacent_comic(direction)
+        finally:
+            self._neighbor_opening = False
+
+    async def _open_adjacent_comic(self, direction):
         if (
             self.cloud_busy
             or self.crypt_reader is None
-            or self.crypt_reader.book is not None
-            or self.crypt_reader.editable
+            or self.crypt_reader.kind not in {'.cbz', '.zip'}
         ):
             return
         store = self._crypt_reader_store
-        provider = getattr(store, "provider", None) or getattr(store, "resource", None)
-        if provider is None:
-            self.crypt_title.text = self.format_services.private_label(
-                "Open a folder-backed comic to navigate neighboring files."
-            )
-            return
-        from features.comics.mobile.navigation import adjacent_comic, folder_comics
+        from features.comics.mobile.navigation import adjacent_comic
 
         reader = self.crypt_reader
-        key = reader.key
+        route = self.app.navigation_generation
         token = self.workspace.token(self.session.id)
-        try:
-            rows = await asyncio.to_thread(provider.list, key.rpartition("/")[0])
-        except Exception as error:
-            self.crypt_title.text = self.format_services.private_label(
-                "Cannot list neighboring comics: " + str(error)[:200]
-            )
-            return
+        revision = self._neighbor_revision + 1
+        key, comics = await self.refresh_provider_comic_neighbors()
         if (
-            not self.active_host
+            revision != self._neighbor_revision
+            or not self.active_host
             or self.crypt_reader is not reader
+            or self.app.navigation_generation != route
+            or self._crypt_reader_store is not store
             or not self.workspace.accepts(token)
             or self.manager.active is not self.app
+            or not self.manager.available(self.session.id)
         ):
             return
-        target = adjacent_comic(
-            folder_comics(rows, key),
-            key,
-            direction,
-        )
-        if target is not None:
-            immersive = self.crypt_immersive
-            if await self.manager.open(
-                store, target, destination=self.presentation_destination
-            ):
-                owner = self.manager.active
-                if (owner is None or owner.crypt_reader is None
-                        or owner.session.resource != self.manager.identity(store, target)):
+        if key is None:
+            message = 'Cannot check neighboring volumes. Try again.'
+        else:
+            target = adjacent_comic(comics, key, direction)
+            if (target is None or not self.comic_header.available[0 if direction < 0 else 1]):
+                message = ('Previous' if direction < 0 else 'Next') + ' volume is no longer available.'
+            else:
+                immersive = self.crypt_immersive
+                try:
+                    opened = await self.manager.open(store, target, destination=self.presentation_destination)
+                except Exception:
+                    opened = False
+                if opened:
+                    owner = self.manager.active
+                    if (owner is None or owner.crypt_reader is None
+                            or owner.session.resource != self.manager.identity(store, target)):
+                        return
+                    if owner.crypt_immersive != immersive:
+                        owner.toggle_private_reading_mode()
+                    # Retire the outgoing reader only after successful publication.
+                    if owner is not self.app:
+                        self.manager.close(self.session.id)
                     return
-                if owner.crypt_immersive != immersive:
-                    owner.toggle_private_reading_mode()
-                # Adjacent-volume reading replaces the outgoing comic. Retire it
-                # only after successful publication so failures keep it readable.
-                if owner is not self.app:
-                    self.manager.close(self.session.id)
+                if (self.crypt_reader is not reader or not self.active_host
+                        or not self.workspace.accepts(token) or self.manager.active is not self.app
+                        or self.app.navigation_generation != route):
+                    return
+                self.comic_header.sync(*(available and index != (0 if direction < 0 else 1)
+                    for index, available in enumerate(self.comic_header.available)))
+                message = 'Could not open the neighboring volume. The current comic is still open.'
+        self.crypt_title.text = self.format_services.private_label(message)
+        return message
 
     async def previous_provider_comic_file(self, widget=None, **kwargs):
         await self.adjacent_provider_comic(-1)

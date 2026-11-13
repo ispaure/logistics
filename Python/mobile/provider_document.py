@@ -141,6 +141,8 @@ class ProviderDocumentSession:
         def resource(name, target, method):
             if target is not None:
                 clean(name, getattr(target, method))
+        from .comic_feedback import clear as clear_comic_feedback
+        clean('comic-guidance', lambda: clear_comic_feedback(getattr(owner, 'app', owner), owner=owner))
         resource('footer', getattr(getattr(owner, 'crypt_view', None), 'page_footer', None), 'dispose')
         resource('progress', progress, 'retire' if self.terminal else 'close')
         for name in ('_provider_layout_task', '_provider_width_task'):
