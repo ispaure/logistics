@@ -655,6 +655,34 @@ class NotesLibraryDesktopTests(QtTestCase):
             self.assertIn('Target note', window.viewer.browser.toPlainText())
             window.close()
 
+    def test_attachment_image_decodes_on_worker_then_publishes_oriented_pixels(self):
+        from threading import get_ident
+        from PIL import Image
+        from features.images.ui import decoding
+
+        with self.temporary_directory() as directory:
+            root = Path(directory)
+            image = Image.new('RGB', (80, 40), 'blue')
+            exif = image.getexif()
+            exif[274] = 6
+            image.save(root / 'Rotated.jpg', exif=exif)
+            window = self.open_library(root)
+            ui = get_ident()
+            threads = []
+            read_oriented = decoding.read_oriented
+
+            def decode(reader, data):
+                threads.append(get_ident())
+                return read_oriented(reader, data)
+
+            with patch.object(decoding, 'read_oriented', side_effect=decode):
+                window.open_note('Rotated.jpg')
+                self.wait_until(lambda: not window.progress.busy)
+            self.assertEqual(len(threads), 1)
+            self.assertNotEqual(threads[0], ui)
+            self.assertEqual(window.file_preview.browser.pixmap.size(), qt.QSize(40, 80))
+            window.close()
+
     def test_tree_drop_moves_nested_file_to_visible_library_root(self):
         from types import SimpleNamespace
         with self.temporary_directory() as directory:

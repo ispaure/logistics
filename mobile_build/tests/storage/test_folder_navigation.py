@@ -499,6 +499,65 @@ class ShowInFolderTests(TestCase):
                 await preview.browser.close()
         app.loop.run_until_complete(exercise())
 
+    def test_retired_ancestor_preview_holds_its_lease_until_listing_exits(self):
+        from threading import Event
+        from commonUtils.runtime.resources.lifetime import ResourceLeases
+        from commonUtils.runtime.resources.local import LocalFiles
+        from mobile.browser_ui import FileBrowser
+        from mobile.folder_navigation import FolderPreview, FolderScreen
+
+        app = self.app
+
+        async def exercise():
+            provider = LocalFiles(self.folder.parent.parent)
+            closed = Mock()
+            provider.acquire = ResourceLeases(validate=lambda: None, close=closed).acquire
+            first, second = FileBrowser(), FileBrowser()
+            for browser in (first, second):
+                browser.set_entries(provider, '', [])
+            view = toga.Box()
+            entry = FolderScreen(view, first, None, 'Local files', '', 'browser')
+            entered, done = asyncio.Event(), asyncio.Event()
+            release = Event()
+            seen = []
+            list_rows = provider.list
+            loop = asyncio.get_running_loop()
+
+            def blocked_list(path, *, cancelled=lambda: False):
+                loop.call_soon_threadsafe(entered.set)
+                try:
+                    if not release.wait(5):
+                        raise TimeoutError('Listing was not released')
+                    seen.append(cancelled())
+                    return list_rows(path)
+                finally:
+                    loop.call_soon_threadsafe(done.set)
+
+            with patch.object(provider, 'list', side_effect=blocked_list):
+                preview = FolderPreview(app, entry)
+                task = preview.task
+                await asyncio.wait_for(entered.wait(), 3)
+                with patch.object(preview.browser, 'set_entries', wraps=preview.browser.set_entries) as publish:
+                    try:
+                        preview.close()
+                        first.stop()
+                        await asyncio.sleep(0)
+                        self.assertFalse(task.done())
+                        closed.assert_not_called()
+                        second.stop()
+                        closed.assert_not_called()
+                    finally:
+                        release.set()
+                        first.stop()
+                        second.stop()
+                        await asyncio.wait_for(done.wait(), 3)
+                        await asyncio.gather(task, return_exceptions=True)
+                    self.assertEqual(seen, [True])
+                    publish.assert_not_called()
+            closed.assert_called_once_with()
+
+        app.loop.run_until_complete(exercise())
+
     def test_shared_root_preview_uses_its_own_location_inside_local_files(self):
         from mobile.folder_navigation import FolderPreview, FolderScreen
         app = self.app

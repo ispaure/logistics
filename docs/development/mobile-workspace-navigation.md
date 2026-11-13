@@ -299,9 +299,12 @@ Ancestor controllers hold read-only browser previews rather than empty panels.
 Direct deep entry prepares parent listings asynchronously without changing the
 active folder. Previously visited folders additionally retain a native snapshot
 of their visible layout for the interactive transition. Back keeps this content
-visible until the fresh parent listing is ready. Trimming routes cancels preview
-work and releases its widgets/snapshots; credential invalidation clears private
-previews and snapshots before they can be revealed.
+visible until the fresh parent listing is ready. Trimming routes releases the
+preview widgets and snapshots and signals cancellation to the listing. The
+listing holds its own provider lease until it exits. A retired preview cannot
+publish rows, and other views with their own leases can continue browsing.
+Credential invalidation clears private previews and snapshots before they can
+be revealed.
 Native folder pages put their folder title, storage subtitle, Search and folder
 actions in UIKit's navigation bar, including ancestor previews. Existing buttons
 are reattached from the live browser after Back restores a parent. Preview

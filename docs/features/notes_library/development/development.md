@@ -336,6 +336,9 @@ workspace session does not enter persistent Recent history, but individual file
 references use the host's existing Recent/privacy policy through
 `mobile.obsidian.remember_note`. Session-Only references remain in memory while
 the library is loaded and retire on close or lock.
+Mobile text and Markdown saves keep their provider resource and busy guard
+until the writer exits. A cancelled save that already published updates the
+live editor's baseline to the verified bytes while retaining any newer input.
 The native `notes_audit_probe` checks direct/cold/warm lookups and actual WebView
 publication with synthetic ordinary and LocalCrypt libraries; its LocalCrypt
 checks also reject plaintext workspace/Recent note names and verify lock cleanup.
@@ -932,8 +935,9 @@ is introduced by the connection optimization.
 ## Structured file preview content
 
 `FilePreview.content()` returns `PreviewContent` with image bytes, MIME type,
-metadata and an admitted video URL. Desktop consumes image bytes directly through
-the existing oriented image decoder; it does not serialize or regex-parse HTML.
+metadata and an admitted video URL. The desktop document worker decodes and
+orients attachment images into a QImage. The GUI creates the QPixmap when the
+open result is accepted.
 Mobile HTML previews use `FilePreview.page()` and `PreviewContent.html()`.
 PDF previews pass the admitted document to the continuous PDF surface. Library/tab and mobile preview regressions cover image/PDF/
 video/unknown files, cancellation and cleanup; a native desktop image contract

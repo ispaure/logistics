@@ -2,11 +2,14 @@
 import asyncio
 from dataclasses import dataclass
 from pathlib import PurePosixPath
+from threading import Event
 
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN
+from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.ui.native.routes import Routes
+from services.worker_retirement import drain_worker
 
 
 @dataclass
@@ -92,6 +95,7 @@ class FolderPreview:
         from .scroll_edges import fill_bottom
         fill_bottom(self.view, self.browser.native_list, self.browser._tile_scroll)
         self.task = None
+        self.cancelled = Event()
         if captured:
             # Keep an actual list in the parent controller before the live
             # browser moves into its child. No disk/network refresh is needed.
@@ -107,35 +111,51 @@ class FolderPreview:
 
     async def prepare(self):
         owned = None
+        release = None
         try:
-            if hasattr(self.provider, 'list'):
-                rows = await asyncio.to_thread(self.provider.list, self.entry.path)
-            elif self.entry.kind == 'remote-browser':
+            if self.cancelled.is_set():
+                return
+            if not hasattr(self.provider, 'list'):
+                if self.entry.kind != 'remote-browser':
+                    return
                 from features.rclone.mobile.service import native_service
                 from features.rclone.remote_access import NativeRemoteLocation
                 self.provider = owned = native_service(self.client).remotes.open(
                     NativeRemoteLocation(self.entry.source, generation=self.generation))
-                rows = await asyncio.to_thread(self.provider.list, self.entry.path)
-            else:
-                return
-            if (not self.app.active_host or (self.private and (
+            if hasattr(self.provider, 'acquire'):
+                release = self.provider.acquire()
+            worker = asyncio.create_task(asyncio.to_thread(
+                self.provider.list, self.entry.path, cancelled=self.cancelled.is_set))
+            try:
+                rows = await asyncio.shield(worker)
+            except asyncio.CancelledError:
+                self.cancelled.set()
+                await drain_worker(worker)
+                raise
+            if (self.cancelled.is_set() or not self.app.active_host or (self.private and (
                     self.client is not getattr(self.app, 'cloud_client', None)
                     or self.generation != getattr(self.client, 'generation', None)))):
                 return
             self.browser.set_entries(self.provider, self.entry.path, rows)
+            owned = None
             from services.documents.storage import display_path
             self.browser.location_bar.folder_location = display_path(self.provider, self.entry.path)
-            owned = None
             self.status.value = ''
+        except OperationCancelled:
+            return
         except (OSError, ValueError, AttributeError):
-            self.status.value = 'Return to this folder to refresh.'
+            if not self.cancelled.is_set():
+                self.status.value = 'Return to this folder to refresh.'
         finally:
-            if owned is not None:
+            if release is not None:
+                release()
+            elif owned is not None:
                 owned.close()
 
     def close(self):
-        if self.task is not None:
-            self.task.cancel()
+        if self.cancelled.is_set():
+            return
+        self.cancelled.set()
         if self.sidebar_snapshot is not None:
             self.sidebar_snapshot.removeFromSuperview()
             self.sidebar_snapshot = None
