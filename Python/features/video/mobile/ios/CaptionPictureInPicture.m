@@ -223,6 +223,7 @@ API_AVAILABLE(ios(17.4))
     self.owner.pipActive = active;
     [self.owner updateScreenAwake];
     [self.owner setControlsShown:YES];
+    if (self.owner.externalOutputChanged) self.owner.externalOutputChanged();
     if (self.stateChangeEventHandler) self.stateChangeEventHandler(active);
 }
 - (void)invalidatePlaybackState {

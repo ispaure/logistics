@@ -39,7 +39,8 @@ class MobileVideo:
             opening.callback(self.transport.close)
             self.progress = VideoProgress(content, Path(app.private_root) / 'Video', remote_cipher=MobileCipher(app), app=app)
             self.controls = PlaybackControls(self)
-            self.audio_output.register(self, self.pause_audio)
+            self.audio_output.register(self, self.pause_audio,
+                continues_after_display_disconnect=self.continues_after_display_disconnect)
             opening.callback(self.audio_output.unregister, self)
             self._release_protection = self.protection.register(self,
                 lambda: (getattr(self.content, 'gate', None),),
@@ -68,6 +69,11 @@ class MobileVideo:
     def pause_audio(self):
         if self.native is not None:
             self.native.pause()
+
+    def continues_after_display_disconnect(self):
+        from .ios import IOSVideo
+        return (not self.closed and isinstance(self.native, IOSVideo)
+                and self.native.continues_after_display_disconnect())
 
     def playback_allowed(self, external=False):
         return self.allowed(external) and self.audio_output.permitted()
@@ -202,6 +208,7 @@ class MobileVideo:
         elif backend.startswith('toga_iOS.'):
             from .ios import IOSVideo
             self.native = IOSVideo(self, position, external)
+            self.native.present()
         else:
             raise ValueError('Native mobile video playback requires Android or iOS.')
         import json
@@ -257,6 +264,9 @@ class MobileVideo:
                 await asyncio.sleep(1)
                 checkpoints += 1
                 if self.native is not None and not self.hidden:
+                    diagnostics = getattr(self.native, 'refresh_display_diagnostics', None)
+                    if diagnostics is not None:
+                        diagnostics()
                     if not self.allowed():
                         self.native.pause()
                         self.transport.suspend()

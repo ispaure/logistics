@@ -48,6 +48,11 @@
 @property(nonatomic, copy) void (^closed)(void);
 @property(nonatomic, strong) VLCMediaPlayer *player;
 @property(nonatomic, strong) UIView *movie;
+@property(nonatomic, strong) UIView *inlineMovie, *externalVideoHost;
+@property(nonatomic, copy) BOOL (^externalDisplayAllowed)(void);
+@property(nonatomic, copy) dispatch_block_t externalOutputChanged;
+@property(nonatomic) BOOL externalVideoRevoked;
+@property(nonatomic) NSTimeInterval externalDisconnectTime;
 @property(nonatomic, strong) UITapGestureRecognizer *menuOutsideTap;
 @property(nonatomic, strong) UIStackView *controls;
 @property(nonatomic, strong) UIScrollView *controlsScroll;
@@ -122,6 +127,8 @@
 @property(nonatomic) BOOL forceMaximumHDR; // Session-only diagnostic; default uses automatic HDR.
 - (void)invalidatePiPPlaybackState;
 - (NSString *)trackKey:(VLCMediaPlayerTrack *)track;
+- (void)revokeExternalVideo;
+- (BOOL)isExternalAudioPort:(NSString *)type;
 @end
 
 static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoController *owner);
@@ -179,19 +186,22 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     self.progressSeek = -1;
     self.observedClock = -1;
     self.lastPlaybackProgress = self.lastFrameProgress = NSProcessInfo.processInfo.systemUptime;
-    self.movie = [[UIView alloc] init];
-    self.movie.backgroundColor = UIColor.blackColor;
+    self.inlineMovie = [[UIView alloc] init];
+    self.inlineMovie.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:self.inlineMovie];
+    self.movie = [[UIView alloc] initWithFrame:self.inlineMovie.bounds];
+    self.movie.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.movie.clipsToBounds = YES;
     // VLC installs rendering subviews after presentation. Keep them out of hit
     // testing so the controller tap recognizer always receives video touches.
     self.movie.userInteractionEnabled = NO;
-    self.movie.isAccessibilityElement = YES;
-    self.movie.accessibilityLabel = @"Video";
-    self.movie.accessibilityCustomActions = @[
+    self.inlineMovie.userInteractionEnabled = NO;
+    self.inlineMovie.isAccessibilityElement = YES;
+    self.inlineMovie.accessibilityLabel = @"Video";
+    self.inlineMovie.accessibilityCustomActions = @[
         [[UIAccessibilityCustomAction alloc] initWithName:@"Show video controls" target:self selector:@selector(showControlsForAccessibility)]
     ];
-    self.movie.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:self.movie];
+    [self.inlineMovie addSubview:self.movie];
     self.controls = [[UIStackView alloc] init];
     self.controls.insetsLayoutMarginsFromSafeArea = NO;
     self.controls.axis = UILayoutConstraintAxisVertical;
@@ -343,11 +353,11 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     self.bufferCenterY = [self.bufferOverlay.centerYAnchor constraintEqualToAnchor:safe.centerYAnchor];
     // Size VLC's drawable to the fitted picture, rather than asking VLC to
     // letterbox internally (where it can draw subtitles outside the image).
-    self.movieWidth = [self.movie.widthAnchor constraintEqualToConstant:0];
-    self.movieHeight = [self.movie.heightAnchor constraintEqualToConstant:0];
-    self.movieCenterY = [self.movie.centerYAnchor constraintEqualToAnchor:self.view.topAnchor];
+    self.movieWidth = [self.inlineMovie.widthAnchor constraintEqualToConstant:0];
+    self.movieHeight = [self.inlineMovie.heightAnchor constraintEqualToConstant:0];
+    self.movieCenterY = [self.inlineMovie.centerYAnchor constraintEqualToAnchor:self.view.topAnchor];
     [NSLayoutConstraint activateConstraints:@[
-        [self.movie.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
+        [self.inlineMovie.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
         self.movieCenterY, self.movieWidth, self.movieHeight,
         self.controlsLeading, self.controlsTrailing, self.controlsBottom, self.controlsTop,
         naturalHeight,
@@ -505,6 +515,95 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     [self becomeFirstResponder];
     [self updateScreenAwake];
     [self setControlsShown:YES];
+    if (self.externalOutputChanged) self.externalOutputChanged();
+}
+
+- (CGSize)externalVideoSize {
+    for (VLCMediaPlayerTrack *track in self.player.videoTracks) {
+        if (!track.isSelected || !track.video.width || !track.video.height) continue;
+        VLCMediaVideoTrack *video = track.video;
+        CGFloat width = video.width;
+        if (video.sourceAspectRatio && video.sourceAspectRatioDenominator)
+            width *= (CGFloat)video.sourceAspectRatio / video.sourceAspectRatioDenominator;
+        return video.orientation >= VLCMediaOrientationLeftTop
+            ? CGSizeMake(video.height, width) : CGSizeMake(width, video.height);
+    }
+    return self.player.videoSize;
+}
+- (void)layoutVideoDrawable {
+    if (self.externalVideoHost) {
+        CGRect viewport = self.externalVideoHost.bounds;
+        CGSize size = [self externalVideoSize];
+        self.movie.frame = size.width > 0 && size.height > 0 && !CGRectIsEmpty(viewport)
+            ? AVMakeRectWithAspectRatioInsideRect(size, viewport) : viewport;
+    }
+    for (UIView *surface in self.movie.subviews) surface.frame = self.movie.bounds;
+    [self configureVideoDynamicRange:self.movie.layer];
+}
+- (BOOL)permitsExternalDisplay {
+    return !self.retired && !self.restricted && !self.lockHidden && !self.externalVideoRevoked &&
+        UIApplication.sharedApplication.protectedDataAvailable &&
+        self.externalDisplayAllowed && self.externalDisplayAllowed();
+}
+- (BOOL)moveVideoToExternalHost:(UIView *)host {
+    NSAssert(NSThread.isMainThread, @"Move the video drawable on the UI thread");
+    if (host) {
+        if (![self permitsExternalDisplay]) { [self revokeExternalVideo]; return NO; }
+        if (!self.surfaceVisible || !host.window || self.casting || self.pipActive) {
+            [self moveVideoToExternalHost:nil];
+            return NO;
+        }
+    }
+    if (host != self.externalVideoHost) {
+        if (host) self.externalDisconnectTime = 0;
+        self.externalVideoHost = host;
+        UIView *parent = host ?: self.inlineMovie;
+        // Keep VLC's renderer, subtitle views and queued/paused frame together.
+        // Changing VLC's drawable would take effect only on a new video output.
+        [parent addSubview:self.movie];
+        self.movie.frame = parent.bounds;
+        self.movie.autoresizingMask = host ? UIViewAutoresizingNone
+            : UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    }
+    [self layoutVideoDrawable];
+    [self applyPictureSize];
+    return YES;
+}
+- (void)externalDisplayDisconnected {
+    if (![self permitsExternalDisplay]) { [self revokeExternalVideo]; return; }
+    // UIKit and AVAudioSession report the same loss independently and can
+    // deliver either callback first. Remember a recent detach for the latter.
+    self.externalDisconnectTime = NSProcessInfo.processInfo.systemUptime;
+    [self moveVideoToExternalHost:nil];
+}
+- (BOOL)continuesAfterDisplayDisconnect {
+    return [self permitsExternalDisplay] && !self.casting && !self.pipActive &&
+        (self.externalVideoHost || (self.externalDisconnectTime > 0 &&
+         NSProcessInfo.processInfo.systemUptime - self.externalDisconnectTime < 2));
+}
+- (void)revokeExternalVideo {
+    if (!self.externalVideoHost) return;
+    self.externalVideoRevoked = YES;
+    self.externalDisconnectTime = 0;
+    self.movie.hidden = YES;
+    [self pause];
+    [self clearPausePresentation];
+    [self moveVideoToExternalHost:nil];
+    if (self.externalOutputChanged) self.externalOutputChanged();
+}
+- (NSString *)externalDisplayDiagnosticJSON {
+    CGRect frame = self.movie.frame;
+    CGSize size = [self externalVideoSize];
+    AVSampleBufferDisplayLayer *layer = [self sampleBufferLayer:self.movie.layer];
+    BOOL ready = self.movie.subviews.count > 0 && !self.movie.hidden;
+    if (@available(iOS 17.4, *)) {
+        if (layer) ready = layer.readyForDisplay && !self.movie.hidden;
+    }
+    NSDictionary *value = @{ @"rect": @[@(frame.origin.x), @(frame.origin.y), @(frame.size.width), @(frame.size.height)],
+        @"source_size": @[@(size.width), @(size.height)], @"frame_ready": @(ready),
+        @"playing": @(self.player.isPlaying), @"position_ms": @([self positionMilliseconds]) };
+    return [[NSString alloc] initWithData:[NSJSONSerialization dataWithJSONObject:value options:0 error:nil]
+                                 encoding:NSUTF8StringEncoding];
 }
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
@@ -579,8 +678,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
         // The next layout pass updates them after Auto Layout sizes movie.
         [self.view setNeedsLayout];
     }
-    for (UIView *surface in self.movie.subviews) surface.frame = self.movie.bounds;
-    [self configureVideoDynamicRange:self.movie.layer];
+    [self layoutVideoDrawable];
     self.tabletopUtilities.hidden = !tabletop || portrait;
     self.timeLabel.textAlignment = tabletop ? NSTextAlignmentNatural : NSTextAlignmentCenter;
     self.controls.spacing = portrait ? (available.size.height >= 380 ? 10 : 4) : tabletop ? 2 : 4;
@@ -772,12 +870,13 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 }
 - (BOOL)hasExternalAudio {
     for (AVAudioSessionPortDescription *output in AVAudioSession.sharedInstance.currentRoute.outputs) {
-        NSString *type = output.portType;
-        if ([type isEqualToString:AVAudioSessionPortAirPlay] ||
-            [type isEqualToString:AVAudioSessionPortHDMI] ||
-            [type isEqualToString:AVAudioSessionPortDisplayPort]) return YES;
+        if ([self isExternalAudioPort:output.portType]) return YES;
     }
     return NO;
+}
+- (BOOL)isExternalAudioPort:(NSString *)type {
+    return [type isEqualToString:AVAudioSessionPortAirPlay] ||
+        [type isEqualToString:AVAudioSessionPortHDMI] || [type isEqualToString:AVAudioSessionPortDisplayPort];
 }
 - (BOOL)hasActiveCall {
     for (CXCall *call in self.callObserver.calls) if (!call.hasEnded) return YES;
@@ -818,12 +917,18 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     [self showStatus:self.transportFailure ?: @"Playback stopped unexpectedly. Press Play to retry from this position."];
 }
 - (void)startByUser {
+    if (self.externalVideoHost && ![self permitsExternalDisplay]) [self revokeExternalVideo];
+    if (!self.restricted && self.externalVideoRevoked &&
+        (!self.externalDisplayAllowed || !self.externalDisplayAllowed())) return;
     if (!self.requestPlay || !self.requestPlay() || ![self canPlay:NO]) return;
     NSError *error = nil;
     AVAudioSession *audio = AVAudioSession.sharedInstance;
     if (![audio setCategory:AVAudioSessionCategoryPlayback error:&error] ||
         ![audio setActive:YES error:&error]) return;
     if (![self canPlay:NO]) return; // Activation can change the selected output.
+    self.externalVideoRevoked = NO;
+    [self revealSurface];
+    if (self.externalOutputChanged) self.externalOutputChanged();
     if (self.player.state == VLCMediaPlayerStateError || self.player.state == VLCMediaPlayerStateStopped) {
         if (self.hasPlayed) self.startMilliseconds = self.ended ? 0 : MAX(0, self.lastPosition);
         self.ended = NO;
@@ -914,8 +1019,12 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 }
 - (void)audioRouteChanged:(NSNotification *)notification {
     NSUInteger reason = [notification.userInfo[AVAudioSessionRouteChangeReasonKey] unsignedIntegerValue];
+    AVAudioSessionRouteDescription *previous = notification.userInfo[AVAudioSessionRouteChangePreviousRouteKey];
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (!self.retired && (reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable ||
+        BOOL lostDisplay = reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable &&
+            previous.outputs.count == 1 && [self isExternalAudioPort:previous.outputs.firstObject.portType] &&
+            AVAudioSession.sharedInstance.currentRoute.outputs.count && [self continuesAfterDisplayDisconnect];
+        if (!self.retired && ((reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable && !lostDisplay) ||
             reason == AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory ||
             (self.restricted && [self hasExternalAudio]))) [self pause];
     });
@@ -926,6 +1035,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 - (void)suspendForLock {
     if (self.lockHidden) return;
     self.lockHidden = YES;
+    [self revokeExternalVideo];
     [self.captionPiP stopPictureInPicture];
     [self clearPausePresentation];
     [self pause];
@@ -937,7 +1047,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 - (void)revealSurface {
     // Only the authenticated Python presentation owner calls this entry point.
     self.lockHidden = NO;
-    self.movie.hidden = self.restricted && self.view.window.screen.isCaptured;
+    self.movie.hidden = self.externalVideoRevoked || (self.restricted && self.view.window.screen.isCaptured);
 }
 - (void)background {
     [self setScreenAwake:NO];
@@ -948,7 +1058,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 - (void)captureChanged:(NSNotification *)notification {
     if (self.restricted && self.view.window.screen.isCaptured) {
         [self pause]; [self clearPausePresentation]; self.movie.hidden = YES;
-    } else if (!self.lockHidden && [self canPlay:NO]) self.movie.hidden = NO;
+    } else if (!self.lockHidden && !self.externalVideoRevoked && [self canPlay:NO]) self.movie.hidden = NO;
 }
 - (int64_t)progressPosition {
     if (self.ended) return 0;
@@ -986,6 +1096,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     [self setControlsShown:YES];
 }
 - (void)tick:(NSTimer *)timer {
+    if (self.externalVideoHost && ![self permitsExternalDisplay]) [self revokeExternalVideo];
     // Keep the resume target visible until the decoder acknowledges that seek.
     // The acknowledgement window measures wall time even at faster playback.
     int64_t seekTolerance = (int64_t)(1500 * MAX(1.f, fabsf(self.player.rate)));
@@ -1019,6 +1130,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
         self.lastVideoSize = videoSize;
         [self.view setNeedsLayout];
     }
+    if (self.externalVideoHost) [self layoutVideoDrawable];
     [self applyPictureSize];
     if (self.controlsLocked) [self.view bringSubviewToFront:self.unlockButton];
     [self updateScreenAwake];
@@ -1036,7 +1148,6 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     self.timeLabel.text = [NSString stringWithFormat:@"%@ / %@%@", time(position), duration > 0 ? time(duration) : @"Loading duration…", self.cacheApproximate ? @" · Cache ≈" : @""];
     self.timeLabel.accessibilityValue = self.timeLabel.text;
     self.seek.accessibilityValue = self.timeLabel.text;
-    self.pauseSnapshot.frame = self.movie.frame;
     self.lastPosition = position;
     [self updatePlayButton];
 }
@@ -1226,14 +1337,24 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 }
 - (void)selectRenderer:(VLCRendererItem *)renderer {
     if (![self canPlay:YES]) return;
+    if (self.pipActive) {
+        [self showStatus:@"Close Picture in Picture before changing Cast output."];
+        return;
+    }
     self.startMilliseconds = [self positionMilliseconds];
     [self.player stop];
     self.casting = [self.player setRendererItem:renderer] && renderer != nil;
+    if (self.casting) [self moveVideoToExternalHost:nil];
     [self updateScreenAwake];
     [self startByUser];
+    if (self.externalOutputChanged) self.externalOutputChanged();
 }
 - (void)pip:(id)sender {
     if (![self canPlay:YES]) return;
+    if (self.externalVideoHost || self.casting) {
+        [self showStatus:@"Disconnect the external display or Cast to use Picture in Picture."];
+        return;
+    }
     if (self.subtitlePiPEnabled) {
         if (!self.captionPiP) self.captionPiP = LGCreateCaptionPiP(self);
         if (self.captionPiP) [self.captionPiP startPictureInPicture];
@@ -1252,10 +1373,12 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
         if (owner.restricted || owner.retired) return;
         owner.pipController = controller;
         controller.stateChangeEventHandler = ^(BOOL active) {
-            if (owner.captionPiP) return;
+            if (owner.captionPiP || owner.retired) return;
+            if (active && (owner.externalVideoHost || owner.casting)) { [owner.pipController stopPictureInPicture]; return; }
             owner.pipActive = active;
             [owner updateScreenAwake];
             [owner setControlsShown:YES];
+            if (owner.externalOutputChanged) owner.externalOutputChanged();
         };
     };
 }
@@ -1274,7 +1397,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
         // Apple's native output has its own framing policy; VLC crop alone
         // does not change its default aspect-fit presentation.
         AVSampleBufferDisplayLayer *videoLayer = (AVSampleBufferDisplayLayer *)layer;
-        AVLayerVideoGravity gravity = [[self playbackOptions][@"aspect"] isEqualToString:@"fill"]
+        AVLayerVideoGravity gravity = !self.externalVideoHost && [[self playbackOptions][@"aspect"] isEqualToString:@"fill"]
             ? AVLayerVideoGravityResizeAspectFill : AVLayerVideoGravityResizeAspect;
         if (![videoLayer.videoGravity isEqualToString:gravity]) videoLayer.videoGravity = gravity;
         if (@available(iOS 26.0, *)) {
@@ -1327,6 +1450,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     [self.bufferSpinner stopAnimating];
     self.movie.hidden = YES;
     self.player.audio.muted = YES;
+    [self moveVideoToExternalHost:nil];
     self.fullscreen = NO;
     [self setControlsShown:YES];
     [self.timer invalidate]; self.timer = nil;
@@ -1343,6 +1467,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     self.player = nil;
     self.discoverers = nil;
     self.allowed = nil; self.requestPlay = nil; self.closed = nil;
+    self.externalDisplayAllowed = nil; self.externalOutputChanged = nil;
     static dispatch_queue_t teardownQueue;
     static dispatch_once_t once;
     dispatch_once(&once, ^{ teardownQueue = dispatch_queue_create("logistics.video.teardown", DISPATCH_QUEUE_SERIAL); });

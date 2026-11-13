@@ -56,6 +56,7 @@ class SceneRetirementTests(unittest.TestCase):
         self.enterContext(patch.dict(sys.modules, {
             'rubicon.objc': SimpleNamespace(ObjCClass=lambda name: NativeObject,
                 ObjCProtocol=lambda name: name, objc_method=lambda method: method, objc_property=lambda: None),
+            'rubicon.objc.types': SimpleNamespace(NSInteger=int),
             'toga_iOS.app': SimpleNamespace(PythonAppDelegate=NativeObject),
             'toga_iOS.window': SimpleNamespace(MainWindow=NativeObject),
         }))

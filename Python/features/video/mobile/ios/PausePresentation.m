@@ -16,9 +16,9 @@
     if (!snapshot) return;
     snapshot.userInteractionEnabled = NO;
     snapshot.isAccessibilityElement = NO;
-    snapshot.frame = self.movie.frame;
+    snapshot.frame = self.movie.bounds;
     snapshot.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    [self.view insertSubview:snapshot aboveSubview:self.movie];
+    [self.movie addSubview:snapshot];
     self.pauseSnapshot = snapshot;
 }
 - (void)clearPausePresentation {

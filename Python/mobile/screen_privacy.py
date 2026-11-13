@@ -322,6 +322,8 @@ class ScreenPrivacy:
                 output = getattr(getattr(self.app, 'scene_manager', None), 'external_comics', None)
                 if output is not None and (protected or (output.source is not None and output.source() is self.app)):
                     output.reader_cover.clear()
+                    if protected:
+                        output.detach_video(revoke=True)
             hidden = protected and (self.inactive or getattr(self, 'interrupted', False) or scene_inactive or captured)
             self.set_ios_shield(hidden or (transitioning and protected and self.resume_locked))
             return hidden

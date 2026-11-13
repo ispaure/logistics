@@ -146,6 +146,7 @@ class SceneManager:
 
     def install_ios(self):
         from rubicon.objc import ObjCClass, ObjCProtocol, objc_method, objc_property
+        from rubicon.objc.types import NSInteger
         from toga_iOS.app import PythonAppDelegate
         from toga_iOS.window import MainWindow
         from .ios_notebook_window import initialize_backend
@@ -180,6 +181,14 @@ class SceneManager:
             def windowScene_didUpdateEffectiveGeometry_(self, scene, previous_geometry) -> None:
                 if reader_cover is not None and reader_cover.ownsSceneRole(scene.session.role):
                     reader_cover.sharedDisplay().refreshSceneGeometry(scene)
+                elif not is_workspace_scene(scene.session.role):
+                    manager.external_comics.resize_ios(scene)
+
+            @objc_method
+            def windowScene_didUpdateCoordinateSpace_interfaceOrientation_traitCollection_(
+                    self, scene, space, orientation: NSInteger, traits) -> None:
+                if not is_workspace_scene(scene.session.role):
+                    manager.external_comics.resize_ios(scene)
 
             @objc_method
             def scene_willConnectToSession_options_(self, scene, session, options) -> None:

@@ -7,6 +7,10 @@ controls available. Playback options use a scrollable alert on iPhone, including
 Duo, and an anchored sheet on iPad. System bars are removed after the fade so safe-area changes
 do not move visible controls. Reduce Motion uses an immediate transition.
 
+On Android, tap the video to enter fullscreen or reveal the controls. The
+timeline, playback buttons and **Unlock controls** stay clear of the system
+navigation and tablet taskbar area, including when a swipe reveals system bars.
+
 Choose **Playback** in the iOS navigation controls or Duo's lower fold deck.
 On Android choose **More playback options → Playback…**. Playback options include
 exact time entry, Start over, speed, subtitles,
@@ -73,3 +77,17 @@ system PiP by default; its video surface does not include VLC subtitle overlays.
 On iOS 17.4 or later, **Playback → Subtitle PiP (reopen video)** enables the
 subtitle compositor for the next time the video opens. Turn it off and reopen
 to return to classic PiP. Changing this preference leaves active playback intact.
+
+## Watching on a TV with iPhone or iPad
+
+Connect through AirPlay Screen Mirroring before or during playback. When iOS
+provides a dedicated display, the TV shows the video and its selected subtitles
+against black, fitted to the TV’s own bounds. Play, pause and seek on the phone
+or tablet. Disconnecting returns the picture to the device at the same position.
+Leaving the video restores mirroring or the active comic or PDF.
+
+An active Cast receiver or Picture in Picture session takes priority. Close
+Picture in Picture to return to the connected TV. Session-only credentials and
+retained protected items block external output. If protection activates during
+playback, Logistics stops the output. After unlocking, reopen the video if the
+player closed, or press Play if the controls are still visible.
