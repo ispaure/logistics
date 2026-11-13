@@ -188,6 +188,13 @@ devices. Its reports distinguish native motion/static rendering from injected
 iOS reduced-motion policy, physical e-ink quality and external-display hardware
 acceptance; simulator results do not establish those hardware claims.
 
+`LOGISTICS_COMIC_GUIDANCE_BASIC=1` selects a narrower smoke check through the
+existing local comic fixture. For an iOS simulator launch, forward it as
+`SIMCTL_CHILD_LOGISTICS_COMIC_GUIDANCE_BASIC=1`. This checks native LTR/RTL finger
+motion, conditional boundary labels, page navigation, pass-through, expiry and
+cleanup. It does not establish adjacent-volume opening, provider failure handling
+or the full native layout, accessibility and lifecycle acceptance matrix.
+
 ## Password-protected CBZs
 
 Use `services.documents.zip_passwords` for ancestor `[LogisticsZIP] archive_password` policy;
