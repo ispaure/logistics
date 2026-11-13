@@ -9,14 +9,12 @@ from pathlib import PurePosixPath
 from threading import Event
 from textwrap import fill
 from time import monotonic
-from uuid import uuid4
 from dataclasses import dataclass
 from typing import Callable
 import toga
-from commonUtils.ui.native.inline_html import set_inline_html
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER, NONE, PACK
-from features.notes_library.notes import NotesLibrary, MAX_NOTE, MAX_PREVIEW_HTML, MARKDOWN, document_kind
+from features.notes_library.notes import NotesLibrary, MARKDOWN, document_kind
 from features.notes_library import library_files
 from ..notes import breadcrumb_folders
 from ..navigation import MutationResult
@@ -104,7 +102,7 @@ def compact_file_row_padding(button):
         native.setPaddingRelative(padding, native.getPaddingTop(), padding, native.getPaddingBottom())
 
 
-class VaultBrowser(LibraryDocuments, LibraryPanels):
+class VaultBrowser(LibraryPanels):
     def __init__(self, host, provider, root, destination, *, index_database=None):
         self.host, self.provider, self.destination = host, provider, destination
         self.release_provider = lambda: None
@@ -113,23 +111,16 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         from features.notes_library.notes import library_name
         self.library_title = library_name(provider, self.root)
         self.history, self.history_index = [], -1
-        self.positions = {}
         self.recent_notes = []
         self.session = None
-        self.embedded = None
-        self.editing = False
         self.access = host.storage(provider)
         self.cancelled = Event()
         self.folders, self.expanded, self.loading = {}, {self.root}, set()
         self.folder_pages = {}
-        self.path = None
         self.selected_path = None
-        self.epoch = 0
-        self._open_timing = None
+        self._document_return_side = None
+        self._search_return = None
         self.shown = 50
-        self.base = "https://markdown.invalid/vault/" + uuid4().hex + "/"
-        self._page_videos = {}
-        self._video_opening = None
         self.rows = self.new_panel_rows()
         self.notice = toga.Label("", style=Pack(font_size=12))
         self.tree = toga.Box(
@@ -145,27 +136,19 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.title = toga.Label(
             "Choose a Markdown note", style=Pack(font_size=18, flex=1)
         )
+        self.document = LibraryDocuments(self)
         self.edit = self.host.presentation.icon_button(
-            "edit", "Edit Markdown", on_press=self.open_editor, enabled=False
+            "edit", "Edit Markdown", on_press=self.document.open_editor, enabled=False
         )
-        self.pending_fragment = ""
-        self.web = self.access.webview(max_bytes=MAX_PREVIEW_HTML,
-            on_navigation_starting=self.follow_link, on_webview_load=self.page_loaded,
-            style=Pack(flex=1))
-        host.presentation.bind_font(self.web, "markdown", web=True)
-        self.article = toga.Box(
-            children=[self.web], style=Pack(direction=COLUMN, flex=1)
-        )
-        from commonUtils.ui.native.markdown_search import MarkdownPageSearch
-        self.page_search = MarkdownPageSearch(self.web, self.article, valid=self.valid)
-        self.speech = host.speech(
-            self.web,
-            self.article,
-            document_title=lambda: self.access.title(self.path),
-            privacy_gate=self.access.speech_gate,
-            valid=self.valid,
-        )
-        self.speech.button.enabled = False
+        # Existing editor, host and probe entry points delegate to the document.
+        self.open_embedded = self.document.open_embedded
+        self.open_text = self.document.open_text
+        self.document_error = self.document.document_error
+        self.scroll_fragment = self.document.scroll_fragment
+        self.follow_link = self.document.follow_link
+        self.page_loaded = self.document.page_loaded
+        self.render_data_views = self.document.render_data_views
+        self.remember_position = self.document.remember_position
         self.link_rows = toga.Box(style=Pack(direction=COLUMN))
         self.backlink_rows = toga.Box(style=Pack(direction=COLUMN))
         self.links_tab = 'outgoing'
@@ -335,7 +318,6 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self.open_card)
         if self.library.supports('create'):
             self.welcome_content.add(self.new_card)
-        self.article.remove(self.web)
         self.article.add(self.welcome)
         self.refresh_reader_actions()
         self.refresh_chrome()
@@ -346,6 +328,96 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if self.library.supports('rename'):
             self.file_drag.bind(self.panel_tabs['Files'], self.root, source=False, target=True)
         self.reflow(host.content_width(destination))
+
+    @property
+    def path(self):
+        return self.document.path
+
+    @property
+    def positions(self):
+        return self.document.positions
+
+    @property
+    def web(self):
+        return self.document.web
+
+    @property
+    def article(self):
+        return self.document.article
+
+    @property
+    def speech(self):
+        return self.document.speech
+
+    @property
+    def page_search(self):
+        return self.document.page_search
+
+    @property
+    def page_loading(self):
+        return self.document.page_loading
+
+    @property
+    def base(self):
+        return self.document.base
+
+    @property
+    def embedded(self):
+        return self.document.embedded
+
+    @property
+    def editing(self):
+        return self.document.editing
+
+    @property
+    def epoch(self):
+        return self.document.epoch
+
+    @epoch.setter
+    def epoch(self, value):
+        self.document.epoch = value
+
+    @property
+    def data_views_loading(self):
+        return self.document.data_views_loading
+
+    async def prepare_leave(self, *, save=False, confirm=None):
+        return await self.document.prepare_leave(save=save, confirm=confirm)
+
+    async def open_editor(self, widget=None, **kwargs):
+        return await self.document.open_editor(widget, **kwargs)
+
+    async def open_note(self, path, *, remember=True, fragment='', resolve_link=False, search_return=None):
+        if not self.valid() or (getattr(self, '_moving_entry', False) and not getattr(self, '_reopening_after_move', False)):
+            return False
+        side = self.sidebar.side
+        epoch = self.document.cancel_open()
+        opened = await self.document.open_note(path, epoch=epoch, remember=remember, fragment=fragment, resolve_link=resolve_link)
+        if not opened or not self.document.accepts(epoch):
+            return False
+        if side is not None and self.path is not None:
+            self._document_return_side = None if side == 'files' and self.sidebar.expanded else side
+            self._search_return = search_return if self._document_return_side == 'files' else None
+        self.host.remember_document(self)
+        return True
+
+    def publish_document(self, path, pages, *, remember):
+        if remember and (self.history_index < 0 or self.history[self.history_index] != path):
+            del self.history[self.history_index + 1:]
+            self.history.append(path)
+            self.history_index = len(self.history) - 1
+        self.selected_path = path
+        self.folder_pages.update(pages)
+        self.update_tree_selection()
+        self.title.text = fill(PurePosixPath(path).name, width=28)
+        self.back_button.enabled = self.history_index > 0
+        self.forward_button.enabled = self.history_index < len(self.history) - 1
+        self.up_button.enabled = True
+        self.notice.text = ''
+        self.refresh_reader_actions()
+        self.sidebar.show_detail()
+        self.refresh_chrome()
+        self.host.render()
 
     def refresh_chrome(self):
         if not hasattr(self, 'secondary'):
@@ -518,8 +590,9 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
     def reflow(self, width):
         available = max(0, allocated_width(self.view, width) - 24)
         self.sidebar.reflow(available)
-        if self.sidebar.expanded and getattr(self, '_document_return_side', None) == 'files':
+        if self.sidebar.expanded and self._document_return_side == 'files':
             self._document_return_side = None
+            self._search_return = None
         self._notes_available = available
         for state in self._row_panels.values():
             if not getattr(state['rows'], 'recycled', False):
@@ -633,7 +706,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self.render_tree()
         self.refresh_reader_actions()
 
-    def search_changed(self, widget=None, **kwargs):
+    def search_changed(self, widget=None, *, preserve_viewport=False, **kwargs):
         if widget is not None and widget is not self.search:
             return
         self.sync_search_scope()
@@ -661,8 +734,9 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 self.search_paused = True
                 return
             # Keep the current native results untouched until typing settles.
-            self.search_task = self.host.loop.create_task(self.run_search(
-                self.search.value, self.search_generation, self.search_mode.value == 'Search within Documents'))
+            args = (self.search.value, self.search_generation, self.search_mode.value == 'Search within Documents')
+            search = self.run_search(*args, preserve_viewport=True) if preserve_viewport else self.run_search(*args)
+            self.search_task = self.host.loop.create_task(search)
         else:
             self.search_rows = []
             self.search_status = ''
@@ -670,7 +744,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self.shown = 50
             self.render_tree()
 
-    async def run_search(self, query, generation, include_text):
+    async def run_search(self, query, generation, include_text, *, preserve_viewport=False):
         def cancelled():
             return generation != self.search_generation or not self.valid()
 
@@ -679,14 +753,17 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             nonlocal last_progress_size
             if cancelled():
                 return
-            if not finished and len(result.rows) == last_progress_size:
+            if not finished and (preserve_viewport or len(result.rows) == last_progress_size):
                 return
             last_progress_size = len(result.rows)
             self.search_rows = result.rows
             if finished:
                 self.search_status = "" if result.complete else "Some items could not be searched."
                 self.search_query = query
-            self.render_tree()
+            if preserve_viewport:
+                self.render_tree(preserve_viewport=True)
+            else:
+                self.render_tree()
 
         def project(result):
             rows = [dict(row, name=posixpath.basename(row['path']))
@@ -697,7 +774,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if cancelled():
             return
         library_files.focus(self.library)
-        self.shown = 50
+        if not preserve_viewport:
+            self.shown = 50
         self.search_status = 'Searching…'
         # A scan with no early matches still needs visible feedback. Updating
         # one status row avoids rebuilding the retained native result list.
@@ -777,7 +855,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             return rows.widget
         return toga.ScrollContainer(content=rows, horizontal=False, style=Pack(flex=1))
 
-    def render_tree(self, *, reveal=None):
+    def render_tree(self, *, reveal=None, preserve_viewport=False):
         if not self.valid():
             return
         task = getattr(self, 'tree_task', None)
@@ -786,7 +864,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         if getattr(self, 'panel_tab', 'Files') not in ('Files', 'Search'):
             return
         from commonUtils.ui.native.text_size import native_backend
-        row_updates = self.tree_updates(reveal=reveal)
+        row_updates = self.tree_updates(reveal=reveal, preserve_viewport=preserve_viewport)
         def batched_updates():
             try:
                 while True:
@@ -821,7 +899,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 updates.close()
         self.tree_task = self.host.loop.create_task(render())
 
-    def tree_updates(self, *, reveal=None):
+    def tree_updates(self, *, reveal=None, preserve_viewport=False):
         if not self.valid():
             return
         old_rows = dict(getattr(self, '_row_cache', {}))
@@ -874,9 +952,12 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 tree_landing=landing_page(entry) is not None)
                 for entry, depth in flattened]
             self.rows.message(message)
+            position = self.search_position() if preserve_viewport else None
             self.rows.add(*records)
             if reveal_index is not None:
                 self.rows.native_list.scroll_to_row(reveal_index)
+            elif position is not None:
+                self.restore_search_position(position)
             self.sidebar.refresh_gestures()
             yield
             return
@@ -888,7 +969,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
 
             async def choose(widget=None, path=path, directory=directory, page=page, **kwargs):
                 if page is not None:
-                    await self.open_selected_note(page)
+                    await self.open_selected_note(page, row_path=path)
                 elif searching and directory:
                     await self.reveal_folder(path)
                 elif directory:
@@ -990,8 +1071,11 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             # Build controls cooperatively offscreen, then replace the visible
             # batch without yielding between removals/insertions. Toga refreshes
             # once for each bulk call rather than laying out every row in turn.
+            position = self.search_position() if preserve_viewport else None
             self.rows.clear()
             self.rows.add(*desired)
+            if position is not None:
+                self.restore_search_position(position)
         if reveal_index is not None:
             self.rows_scroll.vertical_position = min(
                 reveal_index * 48, self.rows_scroll.max_vertical_position)
@@ -1014,12 +1098,13 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             return self.sidebar.cancel_action
         if self.sidebar.sidebar_open:
             return self.sidebar.show_detail
-        opening = getattr(self, 'page_loading', None)
-        if opening is not None and opening.active:
-            return opening.cancel
-        if getattr(self, '_document_return_side', None) is not None:
+        if self.document.page_loading.active:
+            return self.document.cancel_open
+        if self._search_return is not None:
+            return self.return_to_search
+        if self._document_return_side is not None:
             return self.return_to_browsing
-        if self.history_index > 0:
+        if self.path is not None and self.history_index > 0:
             return self.previous_note
         return None
 
@@ -1031,6 +1116,36 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self.backlink_rows.clear()
             self.links_refresh_task = self.host.loop.create_task(self.show_links(refresh=True))
         self.host.render()
+
+    async def return_to_search(self):
+        context = self._search_return
+        if context is None or not self.valid():
+            return False
+        epoch = self.document.cancel_open()
+        if not await self.document.prepare_leave(epoch=epoch) or self._search_return is not context:
+            return False
+        await self.remember_position()
+        if not self.document.accepts(epoch) or self._search_return is not context:
+            return False
+
+        self._search_return = self._document_return_side = None
+        path = self.clear_document()
+        self.back_button.enabled = self.forward_button.enabled = False
+        self.refresh_reader_actions()
+        self.sidebar.show_sidebar()
+        self.host.render()
+        self.restore_search(context)
+        await self.document.release_media(path)
+        return True
+
+    def clear_document(self):
+        path = self.document.clear()
+        self.article.clear()
+        self.article.add(self.welcome)
+        self.title.text = 'Choose a Markdown note'
+        self.notice.text = ''
+        self.up_button.enabled = self.edit.enabled = False
+        return path
 
     async def previous_note(self, widget=None, **kwargs):
         await self.navigate_history(-1)
@@ -1081,12 +1196,15 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             task.cancel()
 
     def refresh_library_indexes(self):
+        context = self._search_return
+        preserve_viewport = (context is not None and context.scope == self._search_scope
+                             and context.query == (self.search.value or ''))
         self.library.connection_index.invalidate()
         self.invalidate_search_interfaces()
         if not self.valid():
             return
         if self.search.value:
-            self.search_changed()
+            self.search_changed(preserve_viewport=preserve_viewport)
         self.cancel_links()
         if self.sidebar.side == 'links':
             self.links_refresh_task = self.host.loop.create_task(self.show_links(refresh=True))
@@ -1291,7 +1409,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                 return False
             self._moving_entry = True
             self.article.enabled = False
-            self.epoch += 1
+            self.document.cancel_open()
             def move():
                 change = self.library.move_with_change(source, destination,
                     cancelled=lambda: mutation_cancelled.is_set() or not self.valid())
@@ -1317,11 +1435,11 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             if not self.valid():
                 return False
             if moving_open:
-                self.retire_editor()
+                self.document.retire_editor()
             change = mutation.change
             self.history, self.history_index = change.history(self.history, self.history_index)
-            self.positions = change.positions(self.positions)
-            self.path, self.selected_path = change.remap(self.path), destination
+            self.document.positions = change.positions(self.positions)
+            self.document.path, self.selected_path = change.remap(self.path), destination
             self.expanded = {change.remap(path) for path in self.expanded} | {posixpath.dirname(destination)}
             paths = {change.remap(path) for path in self.folders} | {
                 self.root, posixpath.dirname(source), posixpath.dirname(destination)}
@@ -1393,7 +1511,7 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
                                         cancelled=lambda: not self.valid())
                 if not self.valid():
                     return
-                self.epoch += 1
+                self.document.cancel_open()
                 paths = set(self.folders) | {parent, self.root}
                 self.folders.clear()
                 for path in sorted(paths):
@@ -1424,40 +1542,34 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
             self.page_search.show()
 
     def dispose(self):
+        if self.cancelled.is_set():
+            return
+        self.cancelled.set()
         self.library_title = 'Notes Library'
-        self.clear_video_actions()
+        self._search_return = self._document_return_side = None
         if hasattr(self, 'file_drag'):
             self.file_drag.dispose()
-        self.cancel_data_views()
         task = getattr(self, 'tree_task', None)
         if task is not None:
             task.cancel()
         self.dispose_panel_rows()
         self.dispose_panels()
-        self.retire_editor()
+        self.document.dispose()
         self.sidebar.dispose()
         self.cancel_links()
         self.link_rows.clear()
-        if hasattr(self, 'page_loading'):
-            self.page_loading.finish()
-        self.page_search.dispose()
         self.reader_actions.dispose()
-        self.speech.close()
-        self.speech.button.enabled = False
-        self.cancelled.set()
-        self._open_timing = None
         self.library.close()
         if self.search_task is not None:
             self.search_task.cancel()
         self.search_rows.clear()
         if self.search is not None:
             self.search.value = ""
-        self.epoch += 1
         self.folders.clear()
         self.folder_pages.clear()
         self.expanded.clear()
         self.rows.clear()
-        self.path = self.selected_path = None
+        self.selected_path = None
         self.refresh_breadcrumbs()
         self.root = ""
         self.title.text = "Notes Library closed"
@@ -1465,15 +1577,8 @@ class VaultBrowser(LibraryDocuments, LibraryPanels):
         self.notice.text = "Reopen Notes Library from the location actions."
         self.history.clear()
         self.recent_notes.clear()
-        self.positions.clear()
         if self.session is not None and self.session.id in self.host.workspace.sessions:
             self.host.workspace.close(self.session.id, guard=lambda session: True)
         self.session = None
-        from services.documents.mobile_views import retire_webview
-
-        if hasattr(self.web, "clear_private_content"):
-            self.web.clear_private_content()
-        else:
-            retire_webview(self.web)
         self.release_provider()
         self.release_provider = lambda: None

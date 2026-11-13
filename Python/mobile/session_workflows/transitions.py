@@ -66,7 +66,7 @@ class SessionTransitions:
         if private is not None:
             private.require_replacement_safe(receipt)
         library = getattr(host, 'vault_browser', None)
-        if library is not None and library.__dict__.get('embedded') is not None:
+        if library is not None and library.embedded is not None:
             # A native DOM/ink event may still be queued even when dirty is false.
             raise OSError('Save or close the Notes Library document before replacing this workspace.')
         store = getattr(host, 'store', None)
@@ -88,7 +88,7 @@ class SessionTransitions:
         if host.__dict__.get('_document_close_tasks'):
             return False
         library = getattr(host, 'vault_browser', None)
-        if library is not None and library.__dict__.get('embedded') is not None:
+        if library is not None and library.embedded is not None:
             # Always flush through the async close path: a clean Python model can
             # still have native keystrokes or ink waiting for bridge delivery.
             if library.session is not None:

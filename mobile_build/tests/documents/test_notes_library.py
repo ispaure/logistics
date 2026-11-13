@@ -449,7 +449,7 @@ class NotesLibraryTests(unittest.TestCase):
             with patch.object(owner.web, 'set_content', wraps=owner.web.set_content) as publish:
                 self.assertTrue(await owner.open_note('LICENSE', resolve_link=True), owner.notice.text)
             self.assertTrue(all(transport.closed.is_set() for transport in transports))
-            self.assertFalse(owner._page_videos)
+            self.assertFalse(owner.document._page_videos)
             self.assertNotIn('<video', publish.call_args.args[1])
             self.assertEqual(owner.path, 'Vault/LICENSE')
             owner.dispose()
@@ -547,26 +547,26 @@ class NotesLibraryTests(unittest.TestCase):
                 self.assertEqual(native.await_count, 2)
                 for link, filename in zip(links, ('potato.mp4', 'second.mp4')):
                     self.assertFalse(owner.follow_link(owner.web, link))
-                    self.assertTrue(await owner._video_opening)
+                    self.assertTrue(await owner.document._video_opening)
                     native.assert_awaited_with(self.app, self.provider, 'Vault/Media/' + filename, fullscreen=True)
                 self.assertFalse(owner.follow_link(owner.web, links[0].replace(owner.base, owner.base + 'old/')))
                 self.assertEqual(pause.await_count, 4)
                 self.assertFalse(media.videos)  # Fullscreen owns its own playback transport.
             inline = links[0].replace('?video=', '?inline-video=')
             with patch.object(owner.web, 'evaluate_javascript', new_callable=AsyncMock) as javascript, patch.object(
-                    owner._inline_audio, 'request_play', side_effect=[False, True]) as consent, patch.object(
-                    owner._inline_audio, 'permitted', return_value=True):
+                    owner.document._inline_audio, 'request_play', side_effect=[False, True]) as consent, patch.object(
+                    owner.document._inline_audio, 'permitted', return_value=True):
                 self.assertFalse(owner.follow_link(owner.web, inline))
                 javascript.assert_not_called()
                 self.assertFalse(media.videos)
                 self.assertFalse(owner.follow_link(owner.web, inline))
-                self.assertTrue(await owner._video_opening)
+                self.assertTrue(await owner.document._video_opening)
                 transport = media.videos['Vault/Media/potato.mp4'][1]
                 javascript.assert_awaited_once_with(
                     'window.logisticsPlayVideo?.("' + inline.split('=')[-1] + '","' + transport.url + '")')
                 self.assertEqual(consent.call_count, 2)
             with patch.object(owner.web, 'evaluate_javascript') as javascript:
-                owner._inline_audio.players[owner]()
+                owner.document._inline_audio.players[owner.document]()
                 self.assertIn('video.pause()', javascript.call_args.args[0])
             self.assertEqual(native.await_count, 4)
             self.assertEqual(owner.path, 'Vault/Home.md')
@@ -596,10 +596,10 @@ class NotesLibraryTests(unittest.TestCase):
             owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
             self.assertTrue(await owner.open_note('Vault/Home.md'))
             with patch.object(owner.library, 'open_embedded_video', side_effect=open_video), \
-                    patch.object(owner._inline_audio, 'request_play', return_value=True):
-                key = next(iter(owner._page_videos))
+                    patch.object(owner.document._inline_audio, 'request_play', return_value=True):
+                key = next(iter(owner.document._page_videos))
                 owner.follow_link(owner.web, owner.base + '?inline-video=' + key)
-                task = owner._video_opening
+                task = owner.document._video_opening
                 try:
                     self.assertTrue(await asyncio.to_thread(started.wait, 2))
                     self.assertTrue(await owner.open_note('Vault/Projects/Plan.MD'))
@@ -609,7 +609,7 @@ class NotesLibraryTests(unittest.TestCase):
                     release.set()
                     self.assertTrue(await asyncio.to_thread(finished.wait, 2))
                 self.assertEqual(cancellations, [True])
-                self.assertFalse(owner._page_videos)
+                self.assertFalse(owner.document._page_videos)
             owner.dispose()
 
         self.run_async(exercise())
@@ -953,16 +953,16 @@ class NotesLibraryTests(unittest.TestCase):
         (self.vault / 'Home.md').write_text('```dataviewjs\ndv.header(2, "Generated target");\n```\n')
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
-            with patch.object(owner, 'scroll_fragment') as scroll, \
+            with patch.object(owner.document, 'scroll_fragment') as scroll, \
                     patch('features.notes_library.mobile.dataview.execute_views', new=AsyncMock(return_value='## Generated target\n')):
                 self.assertTrue(await owner.open_note('Vault/Home.md', fragment='generated-target'))
                 owner.page_loaded()
                 scroll.assert_not_called()
-                self.assertEqual(owner.pending_fragment, 'generated-target')
-                await owner.data_view_task
+                self.assertEqual(owner.document.pending_fragment, 'generated-target')
+                await owner.document.data_view_task
                 owner.page_loaded()
                 scroll.assert_called_once_with('generated-target')
-                self.assertEqual(owner.pending_fragment, '')
+                self.assertEqual(owner.document.pending_fragment, '')
         self.run_async(exercise())
 
     def test_data_view_output_does_not_change_authored_source_and_stale_output_is_discarded(self):
@@ -977,8 +977,8 @@ class NotesLibraryTests(unittest.TestCase):
                 initial = publish.call_args.args[1]
                 self.assertIn('Loading data view', initial)
                 self.assertIn('worker-src blob:', initial)
-                plan = owner.data_view_plan
-                owner.data_view_plan = None
+                plan = owner.document.data_view_plan
+                owner.document.data_view_plan = None
                 with patch('features.notes_library.mobile.dataview.execute_views',
                            new=AsyncMock(return_value='# Dashboard\n\n| Name |\n| --- |\n| Mobile result |\n')):
                     await owner.render_data_views(plan, owner.base, owner.path)
@@ -1242,13 +1242,13 @@ class NotesLibraryTests(unittest.TestCase):
                     lookup.assert_not_called()
                     media = discovered.library.image_source('Home.md')
                     self.assertFalse(media.videos)
-                    key = next(iter(discovered._page_videos))
+                    key = next(iter(discovered.document._page_videos))
                     from unittest.mock import AsyncMock
-                    with patch.object(discovered._inline_audio, 'request_play', return_value=True), \
-                            patch.object(discovered._inline_audio, 'permitted', return_value=True), \
+                    with patch.object(discovered.document._inline_audio, 'request_play', return_value=True), \
+                            patch.object(discovered.document._inline_audio, 'permitted', return_value=True), \
                             patch.object(discovered.web, 'evaluate_javascript', new_callable=AsyncMock):
                         discovered.follow_link(discovered.web, discovered.base + '?inline-video=' + key)
-                        self.assertTrue(await discovered._video_opening, discovered.notice.text)
+                        self.assertTrue(await discovered.document._video_opening, discovered.notice.text)
                     lookup.assert_called_once()
                     self.assertEqual(list(media.videos), ['Nested/clip.mp4'])
                     transport = media.videos['Nested/clip.mp4'][1]

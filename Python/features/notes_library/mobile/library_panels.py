@@ -3,6 +3,7 @@ import asyncio
 import calendar
 import posixpath
 from datetime import date
+from dataclasses import dataclass
 from pathlib import PurePosixPath
 import toga
 from toga.style import Pack
@@ -21,6 +22,14 @@ TAB_SIZE = 13
 PATH_SIZE = 12
 ENTRY_ICON_SIZE = 18
 CAPTION_FONT = 10
+
+
+@dataclass(frozen=True)
+class SearchReturn:
+    scope: str
+    query: str
+    selected: str
+    position: float
 
 
 class LibraryPanels:
@@ -313,9 +322,34 @@ class LibraryPanels:
             self.playlist_panel.activate()
         self.sidebar.refresh_gestures()
 
-    async def open_selected_note(self, path):
-        if not await self.playlist_panel.choose_note(path):
+    async def open_selected_note(self, path, *, row_path=None):
+        context = None
+        if self.panel_tab == 'Search' and self.sidebar.side == 'files' and not self.sidebar.expanded:
+            context = SearchReturn(self._search_scope, self.search.value or '', row_path or path,
+                                   self.search_position())
+        if await self.playlist_panel.choose_note(path):
+            return
+        if context is not None:
+            self.release_search_focus()
+            await self.open_note(path, search_return=context)
+        else:
             await self.open_note(path)
+
+    def search_position(self):
+        return self.rows.vertical_position if getattr(self.rows, 'recycled', False) else self.rows_scroll.vertical_position
+
+    def restore_search_position(self, position):
+        if getattr(self.rows, 'recycled', False):
+            self.rows.vertical_position = position
+        else:
+            self.rows_scroll.vertical_position = min(position, self.rows_scroll.max_vertical_position)
+
+    def restore_search(self, context):
+        if (self.panel_tab == 'Search' and self._search_scope == context.scope
+                and (self.search.value or '') == context.query):
+            self.selected_path = context.selected
+            self.update_tree_selection()
+            self.restore_search_position(context.position)
 
     def refresh_calendar(self, widget=None, **kwargs):
         if not self.valid() or self.panel_tab != 'Calendar':
@@ -721,17 +755,15 @@ class LibraryPanels:
                 self.notice.text = 'Deleted; some saved references could not be updated.'
             self.history, retained_index = change.history(self.history, self.history_index)
             self.search_rows = [row for row in self.search_rows if not removed(row['path'])]
-            self.positions = change.positions(self.positions)
+            self.document.positions = change.positions(self.positions)
             self.expanded = {current for current in self.expanded if not removed(current)}
             self.folders = {current: rows for current, rows in self.folders.items() if not removed(current)}
             if self.path and removed(self.path):
-                self.speech.close()
-                self.retire_editor()
-                self.path = None
-                self.up_button.enabled = False
-                self.article.clear()
-                self.article.add(self.welcome)
-                self.edit.enabled = self.speech.button.enabled = False
+                self._search_return = self._document_return_side = None
+                path_to_release = self.clear_document()
+                await self.document.release_media(path_to_release)
+                if not self.valid():
+                    return
             self.selected_path = None
             await self.load_folder(posixpath.dirname(path))
             self.refresh_library_indexes()
@@ -770,8 +802,9 @@ _hold_class = None
 
 class LibraryOpening:
     """Retain the current page while a cancellable full-pane opening runs."""
-    def __init__(self, owner):
-        self.owner = owner
+    def __init__(self, article, cancel):
+        self.article = article
+        self.cancel = cancel
         self.active = False
         self.panel = None
         self.retained = []
@@ -779,7 +812,7 @@ class LibraryOpening:
     def start(self, path, *, finding=False):
         self.finish()
         self.active = True
-        article = self.owner.article
+        article = self.article
         self.retained = list(article.children)
         article.clear()
         self.spinner = toga.ProgressBar(max=None, style=Pack(height=6, margin_top=24))
@@ -802,19 +835,15 @@ class LibraryOpening:
             self.filename.text = PurePosixPath(path).name
             self.status.text = 'Opening document…'
 
-    def cancel(self, widget=None, **kwargs):
-        self.owner.epoch += 1
-        self.finish()
-
     def finish(self):
         if not self.active:
             return
         self.active = False
         self.spinner.stop()
         self.filename.text = self.status.text = ''
-        if self.panel.parent is self.owner.article:
-            self.owner.article.remove(self.panel)
+        if self.panel.parent is self.article:
+            self.article.remove(self.panel)
             for child in self.retained:
-                self.owner.article.add(child)
+                self.article.add(child)
         self.retained.clear()
         self.panel = None
