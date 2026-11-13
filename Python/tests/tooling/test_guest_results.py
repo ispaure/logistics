@@ -6,13 +6,92 @@ TEST_STAGE = TestStage.REGRESSION
 import json
 from pathlib import Path
 from tempfile import TemporaryDirectory
+import subprocess
+from threading import Event
+from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
-from logistics_build.guest_results import GuestResultLifecycle
+from build_manager import parallels
+from logistics_build.guest_results import GuestResultLifecycle, vm_attempt
 
 
 class GuestResultTests(unittest.TestCase):
+    def test_unacknowledged_start_records_one_bound_observation_and_preserves_error(self):
+        vm = '00000000-0000-4000-8000-000000000001'
+        foreign = '00000000-0000-4000-8000-000000000002'
+
+        class FallbackStartTimeout(subprocess.TimeoutExpired):
+            def __init__(self, original, timeout):
+                super().__init__(timeout.cmd, timeout.timeout, timeout.output, timeout.stderr)
+                self.uuid, self.original_state = original['uuid'], original['status']
+
+        timeout_type = getattr(parallels, 'ParallelsStartTimeout', FallbackStartTimeout)
+        for observation, cancelled in (
+                ({'uuid': vm, 'status': 'running'}, False),
+                ({'uuid': vm, 'status': 'stopped'}, True),
+                ({'uuid': foreign, 'status': 'running'}, False),
+                (subprocess.TimeoutExpired('inventory', 30), False)):
+            with self.subTest(observation=observation, cancelled=cancelled), TemporaryDirectory() as folder:
+                original = subprocess.TimeoutExpired(['fixture-prlctl', 'start', vm], 120)
+                error = timeout_type({'uuid': vm, 'status': 'stopped'}, original)
+                event = Event()
+
+                def start(selector):
+                    self.assertEqual(selector, vm)
+                    if cancelled:
+                        event.set()
+                    raise error
+
+                client = Mock(start=Mock(side_effect=start))
+                if isinstance(observation, Exception):
+                    client.selected.side_effect = observation
+                else:
+                    client.selected.return_value = observation
+                args = SimpleNamespace(results=Path(folder) / 'attempt', source_identity={}, vm=vm, shutdown=True)
+                with patch.object(parallels, 'ParallelsStartTimeout', timeout_type, create=True):
+                    with self.assertRaises(subprocess.TimeoutExpired) as raised:
+                        with vm_attempt(args, client, event, backend='fixture', workspace_key='guest_workspace'):
+                            self.fail('Guest work began after an unacknowledged start')
+                self.assertIs(raised.exception, error)
+                client.start.assert_called_once_with(vm)
+                client.selected.assert_called_once_with(vm)
+                client.shutdown.assert_not_called()
+                result = json.loads((args.results / 'result.json').read_text())
+                self.assertEqual(result['status'], 'cancelled' if cancelled else 'failed')
+                self.assertEqual(result['stage'], 'vm-start')
+                self.assertEqual(result['error'], str(original))
+                self.assertNotIn('vm_shutdown', result)
+                record = result['vm_start']
+                self.assertEqual(record['uuid'], vm)
+                self.assertEqual(record['original_state'], 'stopped')
+                self.assertEqual(record['acknowledgement'], 'timed-out')
+                self.assertFalse(record['ownership_verified'])
+                self.assertEqual(record['shutdown'], 'withheld')
+                if isinstance(observation, dict) and observation['uuid'] == vm:
+                    self.assertEqual(record['observed_state'], observation['status'])
+                else:
+                    self.assertIn('observation_error', record)
+                    self.assertNotIn('observed_state', record)
+
+    def test_untyped_start_timeout_retains_original_failure_without_a_power_observation(self):
+        for argv, timeout in ((['fixture-prlctl', 'list', '--all', '--json'], 30),
+                              (['fixture-prlctl', 'start', 'fixture'], 120)):
+            with self.subTest(argv=argv), TemporaryDirectory() as folder:
+                error = subprocess.TimeoutExpired(argv, timeout)
+                client = Mock(start=Mock(side_effect=error))
+                args = SimpleNamespace(results=Path(folder) / 'attempt', source_identity={}, vm='fixture', shutdown=True)
+                with self.assertRaises(subprocess.TimeoutExpired) as raised:
+                    with vm_attempt(args, client, Event(), backend='fixture', workspace_key='guest_workspace'):
+                        self.fail('Guest work began after a timeout')
+                self.assertIs(raised.exception, error)
+                client.selected.assert_not_called()
+                client.shutdown.assert_not_called()
+                result = json.loads((args.results / 'result.json').read_text())
+                self.assertEqual(result['status'], 'failed')
+                self.assertEqual(result['error'], str(error))
+                self.assertNotIn('vm_start', result)
+
     def test_interrupted_wrapper_retains_ownership_before_guest_work(self):
         with TemporaryDirectory() as folder:
             result = dict(source={'commit': 'fixed'}, status='running', vm='owned-vm',

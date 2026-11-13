@@ -7,6 +7,7 @@ import subprocess
 import sys
 import time
 
+from build_manager import parallels
 from build_manager.guest_workload import GuestResultLifecycle, waiting_progress
 from build_manager.profiles import save_json
 from build_manager.redaction import Redactor
@@ -23,7 +24,12 @@ def vm_attempt(args, client, cancelled, *, backend, workspace_key):
     primary_error = None
     try:
         if not cancelled.is_set():
-            initial = client.start(args.vm)
+            try:
+                initial = client.start(args.vm)
+            except subprocess.TimeoutExpired as error:
+                if isinstance(error, getattr(parallels, 'ParallelsStartTimeout', ())):
+                    _record_uncertain_start(client, error, result)
+                raise
             result.update(vm=initial['uuid'], original_state=initial['status'], stage='guest-setup')
             if args.shutdown and result['original_state'] == 'stopped':
                 started_vm = result['vm']
@@ -45,6 +51,15 @@ def vm_attempt(args, client, cancelled, *, backend, workspace_key):
             if primary_error is None:
                 raise
             print('Unable to write final guest attempt: ' + Redactor()(str(error)), file=sys.stderr)
+
+
+def _record_uncertain_start(client, error, result):
+    observation = result['vm_start'] = dict(uuid=error.uuid, original_state=error.original_state,
+        acknowledgement='timed-out', ownership_verified=False, shutdown='withheld')
+    try:
+        observation['observed_state'] = _guest_power_state(client, error.uuid)
+    except Exception as error:
+        observation['observation_error'] = Redactor()(str(error))
 
 
 def _stop_started_guest(client, vm, result):
