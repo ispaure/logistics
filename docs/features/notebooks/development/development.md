@@ -1763,7 +1763,15 @@ RC4, AES-128, AES-256, empty passwords and wrong-password retry have host covera
 
 `test_notebook_images.py` covers native readback, mixed stacking, image transforms,
 asset preservation, repeated/cross-page paste, recovery, rollback and password
-retention. The resource suite exercises real Local and LocalCrypt publication
+retention. Mixed image/ink ordering reconstructs insertion anchors from native
+ID clocks: each item's left/right anchors refer only to older items. The writer
+removes items newest-first from the desired display order to find those anchors,
+preserving IDs, frame order, geometry, resources and unrelated frame bytes.
+The regression checks anchor age and dependencies as well as display order;
+a visually correct host sequence can still lose objects during native saving.
+The scoped physical result is recorded in
+[reMarkable transfer qualification](ssh-transfers.md).
+The resource suite exercises real Local and LocalCrypt publication
 with a protected embedded PDF and ordered image edits. `image_work_logic.js` is a
 pure-JS gesture harness for finger movement, rotation commands, arrangement,
 repeated paste across pages, lasso clipping, cancellation and password gating.

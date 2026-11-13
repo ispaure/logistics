@@ -271,7 +271,7 @@ class ImageWorkflow:
         return self.cases
 
 
-IMAGE_FIXTURE_SHA256 = '35589f44738aa9281fe494e0cfbcef15ac9f5827610ac85ab904e5863bb9984e'
+IMAGE_FIXTURE_SHA256 = '53ea0caccddb485387031ade567c107bd9159fcbe30b3878433305f5dc69ab79'
 
 
 
