@@ -227,3 +227,54 @@ See [transfer handoff](transfers.md) for captured grants and
 A retained-package unlock reflects committed remote publication even if that
 package cannot resume the requested folder connection. A mismatched package does
 not resume the transfer or record a successful association for that request.
+
+## Mobile credential import
+
+`mobile/cloud_ui.py` builds the import form and presents the
+`import-credentials` and `import-credentials-password` Settings routes.
+`mobile/credentials_ui.py:CredentialWorkflow` owns picker admission, the
+pending ZIP, the storage choice and the import epoch. The visible import
+action opens the system Files picker first. Bounded ZIP metadata selects
+the password route for an encrypted archive. A plain archive goes directly
+to the explicit Session-Only or Persistent save choice. Password retries
+reuse the admitted archive and storage choice.
+
+`Python/mobile/routes.py` tells the workflow to retire import state when an
+import route is removed or its host uninstalls. Retirement advances the epoch,
+drops the pending ZIP and storage choice, and clears the password control.
+In-flight work retains its busy ownership until it settles. The workflow
+checks the import epoch, client, navigation and credential generation before
+accepting a picker or load result. The publication guard reaches the native
+submission boundary. If native publication has already committed, credentials
+remain loaded while the retired view skips late presentation, metadata and
+retention updates.
+
+Existing application and controller entry points forward to the feature
+workflow. No-widget callers can still select and import through the manual API,
+including choosing a ZIP when an import has no pending selection.
+
+### Credential import checks
+
+From the repository root, run the focused mobile host checks:
+
+```sh
+python3 dev.py test mobile test_cloud_import_ui.py
+python3 dev.py test mobile test_background_credential_refresh.py
+python3 dev.py test mobile test_workflow_ownership.py
+```
+
+These cover plain and encrypted selection, retry and storage choice, Back
+and host retirement, pre-commit cancellation, stale post-commit results,
+and compatibility forwarding. For a native check, use a disposable simulator
+or emulator and synthetic ZIPs. Exercise plain and encrypted import, a password
+retry, saved-vault restore, retained-ZIP unlock and forgetting. Open the actual
+system Files picker from rclone connections and use Back or Cancel. Verify the
+picker dismisses and the pending ZIP and password are cleared.
+
+Focused native credential cases and the real Files picker return passed on
+Logistics `ccb525c6f` with commonUtils `dbb002baa2b1` and Build Manager
+`30aebe0e9c4b` on an iPhone 18 Pro simulator (iOS 27.0) and a Pixel 9 emulator
+(Android API 36). The Android focused run also covered retirement before and
+after native commit. The canonical iPhone suite stopped during startup at
+`ios_storage_probe.py`, whose fixture expected `Documents/Local` while the
+app used `Rclone Copies`. The focused iOS pass covers the credential journey.
