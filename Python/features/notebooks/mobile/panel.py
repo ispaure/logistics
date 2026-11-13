@@ -250,10 +250,9 @@ class NotebookPanel:
         if self.pen_input is not None and isinstance(getattr(self.pen_input, 'view_id', None), str):
             state['native_pen_nonce'] = self.pen_input.view_id
         state['frame_batched_ink'] = sys.platform == 'ios'
-        from mobile.fold_layout import is_iphone_duo
         from .viewport import tablet_viewport
         state['tablet'] = tablet_viewport(self.web)
-        state['iphone_duo'] = is_iphone_duo()
+        state['iphone_duo'] = self.app.presentation.is_iphone_duo()
         return state
 
     @property
