@@ -784,7 +784,7 @@ beside the source at 720 logical units of usable width. The session's existing
 preview remains available. Local/private editable Markdown retains its source
 while previewing; remote text stays read-only.
 
-On Android 12 and newer, `mobile.android_markdown_font` obtains the
+On Android 12 and newer, `mobile.native.android_markdown_font` obtains the
 font selected for a native Toga label through `TextRunShaper`, then supplies its
 exact glyph tables to marked Markdown preview and formatted-editor WebViews.
 CSS `sans-serif` alone does not reliably follow OEM font customization. The

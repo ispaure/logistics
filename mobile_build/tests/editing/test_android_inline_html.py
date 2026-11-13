@@ -8,7 +8,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 from urllib.parse import quote
 
-from mobile.android_inline_html import DATA_URL_LIMIT, DATA_URL_PREFIX, load_inline_html
+from mobile.native.android_inline_html import DATA_URL_LIMIT, DATA_URL_PREFIX, load_inline_html
 
 
 class InlineHTMLTests(unittest.TestCase):

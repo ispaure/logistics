@@ -10,7 +10,7 @@ import zlib
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
-from mobile.android_markdown_font import FONT_ROOT, MARKER, font_response, standalone_font, style_markdown, web_font
+from mobile.native.android_markdown_font import FONT_ROOT, MARKER, font_response, standalone_font, style_markdown, web_font
 from mobile.preview import markdown_preview
 from services.documents.authoring.markdown_editor import editor_html
 
@@ -28,7 +28,7 @@ class MarkdownFontTests(unittest.TestCase):
         content = markdown_preview('Private draft')
         impl = SimpleNamespace(interface=SimpleNamespace(private_closed=False))
         font = b'font' * (1024 * 1024)
-        with patch('mobile.android_markdown_font.native_font', return_value=(font, '')):
+        with patch('mobile.native.android_markdown_font.native_font', return_value=(font, '')):
             styled = style_markdown(content, impl=impl)
         url, data = impl._markdown_font_resource
         self.assertIs(data, font)
@@ -75,15 +75,15 @@ class MarkdownFontTests(unittest.TestCase):
                 self.assertLess(styled.index('id="logistics-native-font"'), styled.index('</head>'))
 
     def test_unmarked_books_and_retirement_pages_never_access_native_font(self):
-        with patch('mobile.android_markdown_font.native_font') as native:
+        with patch('mobile.native.android_markdown_font.native_font') as native:
             for content in ('<p>Document closed.</p>', '<html><head></head><body>EPUB</body></html>'):
                 self.assertEqual(style_markdown(content), content)
             native.assert_not_called()
 
     def test_native_failure_keeps_readable_original_and_reports_the_failure(self):
         content = markdown_preview('Readable offline')
-        with patch('mobile.android_markdown_font.native_font', side_effect=RuntimeError('OEM restriction')):
-            with self.assertLogs('mobile.android_markdown_font', level='WARNING'):
+        with patch('mobile.native.android_markdown_font.native_font', side_effect=RuntimeError('OEM restriction')):
+            with self.assertLogs('mobile.native.android_markdown_font', level='WARNING'):
                 self.assertEqual(style_markdown(content), content)
         self.assertEqual(style_markdown(content, font_css=''), content)
 

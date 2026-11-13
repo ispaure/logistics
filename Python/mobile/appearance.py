@@ -562,13 +562,13 @@ def _install_android_appearance(app):
             original_box_background(impl, value)
     Box.set_background_color = box_background
     from toga_android.widgets.webview import WebView
-    from .android_markdown_font import install_font_responses
+    from .native.android_markdown_font import install_font_responses
     install_font_responses()
     original_content = WebView.set_content
-    from .android_inline_html import load_inline_html
+    from .native.android_inline_html import load_inline_html
     def web_content(impl, root_url, content):
         from .palette import eink_html
-        from .android_markdown_font import style_markdown
+        from .native.android_markdown_font import style_markdown
         _android_webviews.add(impl)
         content = eink_html(style_markdown(content, impl=impl))
         max_bytes = getattr(impl.interface, 'max_html_bytes', 2 * 1024 * 1024)
