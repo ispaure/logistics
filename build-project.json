@@ -344,6 +344,22 @@
       "description": "Canonical core inventory in pinned CPython on an owned disposable iOS simulator."
     },
     {
+      "id": "android.incoming",
+      "label": "Android incoming files",
+      "tier": "native",
+      "platforms": ["android"],
+      "operations": ["Test"],
+      "description": "Real Sharesheet delivery from separate sender instances, ordinary phone/tablet views and owned cleanup."
+    },
+    {
+      "id": "ios.incoming",
+      "label": "iOS incoming files",
+      "tier": "native",
+      "platforms": ["ios"],
+      "operations": ["Test"],
+      "description": "Files Open With and Share extension delivery on separate sender/receiver pairs, ordinary phone/tablet views and owned cleanup."
+    },
+    {
       "id": "release.acceptance",
       "label": "Complete tester delivery gates",
       "tier": "acceptance",

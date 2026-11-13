@@ -66,7 +66,7 @@ the linked guides; real-device permissions and assistive input need device valid
 | EPUB and comics | Private library, EPUB chapter navigation and PNG/JPEG/WebP CBZ/ZIP pages, saved progress and bookmarks |
 | Preferences / INI settings | Private INI with font size and last-document restore controls; no desktop preference migration |
 | Export | Export a copy through the platform destination picker |
-| Receive files from other apps | iOS share extension and Android share target copy attachments into Received Files |
+| Receive files from other apps | iOS Open In, the iOS share extension and the Android share target copy attachments into On My Phone or On My Tablet |
 | Save back to another app's original attachment | Not implemented; folder-backed files opened within Logistics save to their selected file |
 | File browser | Shared native list/tile views, thumbnails and file information for app-managed Local/LocalCrypt files and remote browsing |
 | Bulk rename, IDE and Git/Perforce UI | Not ported |

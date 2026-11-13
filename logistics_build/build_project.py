@@ -329,6 +329,9 @@ class LogisticsProject:
             return Plan('Logistics', operation, source, phases, str(workspace), backend=backend)
         if operation == 'Test' and target == 'ios' and suite == 'ios.runtime':
             return self.ios_simulator_plan(source, snapshot, workspace, options, env, pattern, False, runtime_only=True)
+        if operation == 'Test' and suite in {'ios.incoming', 'android.incoming'}:
+            from logistics_build.incoming_acceptance import plan
+            return plan(self, target, source, snapshot, workspace, options, env)
         return self.mobile_plan(operation, target, source, snapshot, workspace, options, env,
                                 pattern, build_override, include_ipad)
 
