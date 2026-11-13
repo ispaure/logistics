@@ -6,7 +6,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 from features.blender.addons.scanning import inspect_addons, scan_preset
-from features.blender.addons.library import AddonLibrary, version_tuple
+from features.blender.addons.library import AddonLibrary, addon_replacements, package_identity, version_tuple
 from features.blender.addons.ui.page import source_label
 from desktop.landing import LaunchCard
 from .layout import build_layout
@@ -466,24 +466,47 @@ class BlenderPage(qt.QWidget):
         entries = catalog.entries(shared_only=root is None)
         self.catalog_warning.setText('Some packages were skipped:\n' + '\n'.join(catalog.errors))
         self.catalog_warning.setVisible(bool(catalog.errors))
-        identities = sorted({addon.identity for addon in entries})
-        selected = state['selected']
-        actual = {('extension:' + row['module'].split('.')[-1] if row['kind'] == 'Extension' else 'legacy:' + row['module']): row for row in found.values()}
-        identities = sorted(set(identities) | set(selected) | set(state['installed']) | set(actual),
-                            key=lambda identity: (next((a.name for a in entries if a.identity == identity), identity).casefold(), identity))
+        replacements = addon_replacements(entries, state)
+        groups = {}
+        for addon in entries:
+            if addon.identity != bluehole.IDENTITY:
+                groups.setdefault(replacements.get(addon.identity, addon.identity), []).append(addon)
+        selected = {replacements.get(key, key) for key in state['selected']}
+        installed = {}
+        managed_modules = {entry['module'] for entry in state['installed'].values()}
+        for key, entry in state['installed'].items():
+            installed.setdefault(replacements.get(key, key), {})[key] = entry
+        unmanaged = {}
+        for item in found.values():
+            if item['module'] not in managed_modules:
+                key = package_identity(item['kind'], item['module'])
+                unmanaged.setdefault(replacements.get(key, key), item)
+        identities = (set(groups) | selected | set(installed) | set(unmanaged)) - {bluehole.IDENTITY}
+        identities = sorted(identities, key=lambda key: (groups[key][0].name.casefold() if key in groups else key.casefold(), key))
         self._project_bluehole_choice(state, found)
-        identities = [identity for identity in identities if identity != bluehole.IDENTITY]
-        self._project_addon_choices(identities, entries, selected, state, found, actual)
+        self._project_addon_choices(identities, groups, selected, installed, found, unmanaged)
         if root is not None:
             self._choices_context = (self.release.version, self.preset.currentText())
             self.bluehole_group.setEnabled(True)
             self.apply_button.setEnabled(True)
+
+    def _show_bluehole_source(self):
+        local = self.bluehole_source.currentText() == 'Local'
+        self.bluehole_form.setRowVisible(self.bluehole_branch, not local)
+        self.bluehole_form.setRowVisible(self.bluehole_checkout_row, local)
+
+    def _browse_bluehole_checkout(self):
+        path = qt.QFileDialog.getExistingDirectory(self, 'Choose Blue Hole Checkout', self.bluehole_checkout.text())
+        if path:
+            self.bluehole_checkout.setText(path)
 
     def _project_bluehole_choice(self, state, found):
         """Show requested channel settings beside the separately recorded installation."""
         config = state.get('bluehole', bluehole.DEFAULT)
         config = bluehole.validate(config)
         self.bluehole_enabled.setChecked(config['enabled'])
+        self.bluehole_source.setCurrentText('Local' if config.get('source') == 'local' else 'GitHub')
+        self.bluehole_checkout.setText(config.get('path', ''))
         self.bluehole_branch.setCurrentText(config['branch'])
         runtime_deluxe = self.release is not None and bluehole.uses_runtime_deluxe(self.release)
         self.bluehole_form.setRowVisible(self.bluehole_deluxe, not runtime_deluxe)
@@ -493,21 +516,26 @@ class BlenderPage(qt.QWidget):
             if runtime_deluxe else 'Deluxe copies Blue Hole keymaps and stamps this preset’s saved preferences.')
         current = state.get('installed_bluehole') or state.get('bluehole', {})
         bh = state['installed'].get(bluehole.IDENTITY)
-        if bh and bh['module'] in found:
+        if bh and bh['module'] in found and current.get('source') == 'local':
+            self.bluehole_installed.setText(f"Local checkout · {current['version']}")
+            self.bluehole_installed.setToolTip(current.get('path', ''))
+        elif bh and bh['module'] in found:
             commit = current.get('commit')
             self.bluehole_installed.setText(f"{current.get('branch', 'Unknown branch')} · {commit[:12] if commit else 'Commit unknown'} · {bh.get('version') or found[bh['module']]['version'] or 'Version unknown'}")
             self.bluehole_installed.setToolTip(commit or 'No installed commit recorded')
         else:
             self.bluehole_installed.setText('Not installed')
-            self.bluehole_installed.setToolTip('The selected branch will be checked on launch')
+            self.bluehole_installed.setToolTip('The selected source will be checked on launch')
 
-    def _project_addon_choices(self, identities, entries, selected, state, found, actual):
+    def _project_addon_choices(self, identities, groups, selected, installed_groups, found, unmanaged):
         """Render one admitted catalog/selection/filesystem snapshot into retained rows."""
         self.choices.setRowCount(len(identities))
         for row, identity in enumerate(identities):
-            releases = [a for a in entries if a.identity == identity]
+            releases = groups.get(identity, [])
             latest = max(releases, key=lambda a: version_tuple(a.version), default=None)
-            resolved = self.library.resolve(identity, self.release, entries=entries) if self.release else None
+            replacements = {addon.identity: identity for addon in releases}
+            resolved = (self.library.resolve(identity, self.release, entries=releases, replacements=replacements)
+                        if self.release else None)
             check = qt.QTableWidgetItem('')
             check.setData(qt.Qt.ItemDataRole.UserRole, identity)
             check.setFlags(qt.Qt.ItemFlag.ItemIsEnabled | qt.Qt.ItemFlag.ItemIsUserCheckable)
@@ -515,10 +543,15 @@ class BlenderPage(qt.QWidget):
             if not resolved and identity not in selected:
                 check.setFlags(qt.Qt.ItemFlag.NoItemFlags)
             self.choices.setItem(row, 0, check)
-            installed = state['installed'].get(identity)
-            physical = found.get(installed['module']) if installed else actual.get(identity)
+            managed = installed_groups.get(identity, {})
+            installed = managed.get(resolved.identity) if resolved else None
+            if not installed and managed:
+                installed = next((entry for entry in managed.values() if entry['module'] in found),
+                                 next(iter(managed.values())))
+            unmanaged_copy = unmanaged.get(identity)
+            physical = found.get(installed['module']) if installed else unmanaged_copy
             installed_version = (physical.get('version') or (installed.get('version') if installed else None) or 'Unknown') if physical else '—'
-            if physical and not installed:
+            if unmanaged_copy:
                 status = 'Installed outside library'
                 check.setToolTip('These files are not managed by Logistics; use Installed files to inspect them.')
                 if identity not in selected:
@@ -529,6 +562,8 @@ class BlenderPage(qt.QWidget):
                 status = 'Removal pending'
             elif physical and not resolved:
                 status = 'Missing from library' if not releases else 'No compatible version'
+            elif physical and len(managed) > 1:
+                status = 'Package cleanup pending'
             elif physical and resolved and installed['digest'] == resolved.digest:
                 status = 'Up to date'
             elif physical:
@@ -543,7 +578,9 @@ class BlenderPage(qt.QWidget):
             else:
                 status = 'Available' if resolved else 'Incompatible'
             title = latest.name if latest else installed.get('name', identity) if installed else physical.get('name', identity) if physical else identity
-            values = (title, installed_version, resolved.version if resolved else '—', status, source_label(resolved.source) if resolved else '—')
+            kind = resolved.kind if resolved else physical['kind'] if physical else latest.kind if latest else '—'
+            values = (title, installed_version, resolved.version if resolved else '—', status,
+                      source_label(resolved.source) if resolved else '—', kind)
             for column, value in enumerate(values, 1):
                 self.choices.setItem(row, column, qt.QTableWidgetItem(value))
             if resolved:
@@ -551,7 +588,10 @@ class BlenderPage(qt.QWidget):
                 detail += f"\n{resolved.package_name or resolved.package.name}" + (f"\nPackage date: {resolved.published}" if resolved.published else '')
                 self.choices.item(row, 3).setToolTip(detail)
             if installed:
-                self.choices.item(row, 2).setToolTip(f"{source_label(installed.get('source', 'Managed'))}\n{installed['path']}\n{installed.get('package_name', '')}")
+                installed_kind = 'Extension' if installed['module'].startswith('bl_ext.') else 'Legacy addon'
+                self.choices.item(row, 2).setToolTip(
+                    f"{installed_kind} · {source_label(installed.get('source', 'Managed'))}\n"
+                    f"{installed['path']}\n{installed.get('package_name', '')}")
         self.choices.resizeColumnsToContents()
 
     def _apply_addons(self):
@@ -562,6 +602,8 @@ class BlenderPage(qt.QWidget):
                       if self.choices.item(row, 0).checkState() == qt.Qt.CheckState.Checked]
         release, name = self.release, self.preset.currentText()
         config = {'enabled': self.bluehole_enabled.isChecked(), 'branch': self.bluehole_branch.currentText()}
+        if self.bluehole_source.currentText() == 'Local':
+            config.update(source='local', path=self.bluehole_checkout.text().strip())
         if not bluehole.uses_runtime_deluxe(release):
             config['deluxe'] = self.bluehole_deluxe.currentText() == 'Yes'
         try:

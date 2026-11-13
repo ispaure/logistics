@@ -110,10 +110,38 @@ class BlenderPageTests(QtTestCase):
         self.assertEqual(state['bluehole'], {'enabled': False, 'branch': 'beta'})
         self.assertFalse(panel.presets.bluehole_form.isRowVisible(panel.presets.bluehole_deluxe))
         self.assertIn('Updates & Deluxe', panel.presets.bluehole_deluxe_note.text())
-        with patch.object(BlenderPage, 'release', self.builds[1]):
+        with patch.object(BlenderPage, 'release', self.builds[-1]):
             panel.presets._project_bluehole_choice({'installed': {}}, {})
         self.assertTrue(panel.presets.bluehole_form.isRowVisible(panel.presets.bluehole_deluxe))
         self.assertFalse(self.manager.software.exists())
+
+    def test_local_bluehole_source_picker_saves_for_this_preset(self):
+        import subprocess
+
+        root = self.manager.create_preset(self.builds[0], 'Art')
+        checkout = Path(self.temporary.name) / 'checkout'
+        checkout.mkdir()
+        subprocess.run(['git', 'init', '-q', str(checkout)], check=True)
+        (checkout / '__init__.py').write_text('bl_info={"name":"Blue Hole","version":(1,0,0),"blender":(5,2,2)}')
+        (checkout / 'keymaps').mkdir()
+        (checkout / 'keymaps/deluxe-defaults.json').write_text('{}')
+        page = BlenderPage(manager=self.manager, settings_mode=True)
+        self.assertEqual(page.bluehole_source.currentText(), 'GitHub')
+        self.assertFalse(page.bluehole_form.isRowVisible(page.bluehole_checkout_row))
+        page.bluehole_source.setCurrentText('Local')
+        self.assertFalse(page.bluehole_form.isRowVisible(page.bluehole_branch))
+        self.assertTrue(page.bluehole_form.isRowVisible(page.bluehole_checkout_row))
+        with patch('features.blender.ui.page.qt.QFileDialog.getExistingDirectory', return_value=str(checkout)):
+            page._browse_bluehole_checkout()
+        page.bluehole_enabled.setChecked(True)
+        page._apply_addons()
+        self.assertEqual(page.library.selection(root)['bluehole'],
+                         {'enabled': True, 'branch': 'main', 'source': 'local', 'path': str(checkout.resolve())})
+        self.assertEqual(page.bluehole_source.currentText(), 'Local')
+        self.assertEqual(page.bluehole_checkout.text(), str(checkout.resolve()))
+        page.bluehole_source.setCurrentText('GitHub')
+        page._apply_addons()
+        self.assertEqual(page.library.selection(root)['bluehole'], {'enabled': True, 'branch': 'main'})
 
     def test_shared_library_groups_versions_and_preset_import_is_private(self):
         import zipfile
@@ -124,9 +152,12 @@ class BlenderPageTests(QtTestCase):
         page, catalog = panel.presets, panel.library
         root = catalog.library.provided_root / 'Tool'
         root.mkdir(parents=True)
-        for version in (1, 2):
-            with zipfile.ZipFile(root / f'tool-{version}.zip', 'w') as archive:
-                archive.writestr('tool/__init__.py', f'bl_info={{"name":"Tool","version":({version},0,0),"blender":(4,2,0)}}')
+        with zipfile.ZipFile(root / 'tool-1.zip', 'w') as archive:
+            archive.writestr('tool/__init__.py', 'bl_info={"name":"Tool","version":(1,0,0),"blender":(4,2,0)}')
+        with zipfile.ZipFile(root / 'tool-2.zip', 'w') as archive:
+            archive.writestr('blender_manifest.toml', 'id="tool"\nname="Tool"\nversion="2.0.0"\n'
+                             'type="add-on"\nblender_version_min="5.3.0"\n')
+            archive.writestr('__init__.py', '# extension')
         personal = Path(self.temporary.name) / 'personal.zip'
         with zipfile.ZipFile(personal, 'w') as archive:
             archive.writestr('tool/__init__.py', 'bl_info={"name":"Tool","version":(3,0,0),"blender":(4,2,0)}')
@@ -136,15 +167,19 @@ class BlenderPageTests(QtTestCase):
         self.assertFalse(group.isExpanded())
         self.assertEqual([group.child(i).text(0) for i in range(group.childCount())], ['2.0.0', '1.0.0'])
         self.assertEqual(group.child(0).text(5), 'Shared')
+        self.assertEqual([group.child(i).text(4) for i in range(2)], ['Extension', 'Legacy addon'])
         group.setExpanded(True)
         with patch('features.blender.ui.page.qt.QFileDialog.getOpenFileName', return_value=(str(personal), '')):
             page.add_addon.click()
         self._wait_for_operation(page)
         self.assertEqual(page.choices.item(0, 3).text(), '3.0.0')
         self.assertEqual(page.choices.item(0, 5).text(), 'Preset provided')
+        self.assertEqual(page.choices.item(0, 6).text(), 'Legacy addon')
         page.preset_list.setCurrentRow(1)
         self.assertEqual(page.choices.item(0, 3).text(), '2.0.0')
         self.assertEqual(page.choices.item(0, 5).text(), 'Shared')
+        self.assertEqual(page.choices.item(0, 6).text(), 'Extension')
+        self.assertEqual(page.choices.rowCount(), 1)
         catalog.refresh()
         group = catalog.tree.topLevelItem(0)
         self.assertTrue(group.isExpanded())

@@ -1,7 +1,7 @@
 """Shared addon catalog, independent of individual preset management."""
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.status_line import StatusLine
-from features.blender.addons.library import version_tuple
+from features.blender.addons.library import addon_replacements, version_tuple
 from features.blender.addons import bluehole
 
 
@@ -40,10 +40,11 @@ class AddonLibraryPage(qt.QWidget):
         self.tree.clearSelection()
         try:
             entries = self.library.entries(shared_only=True)
+            replacements = addon_replacements(entries)
             groups = {}
             for addon in entries:
                 if addon.identity != bluehole.IDENTITY:
-                    groups.setdefault(addon.identity, []).append(addon)
+                    groups.setdefault(replacements.get(addon.identity, addon.identity), []).append(addon)
             expanded = {self.tree.topLevelItem(i).data(0, qt.Qt.ItemDataRole.UserRole)
                         for i in range(self.tree.topLevelItemCount()) if self.tree.topLevelItem(i).isExpanded()}
             self.tree.clear()

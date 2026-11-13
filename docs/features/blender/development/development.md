@@ -50,7 +50,8 @@ adapter. See [mobile availability](../user_mobile/user_mobile.md).
 - `addons/library.py` owns the versioned private ZIP library and preset selection JSON.
   Legacy module names and extension IDs are distinct identities. Literal AST/TOML
   metadata supplies release versions, inclusive minima, exclusive extension maxima
-  and platform limits. Resolution selects the highest numeric compatible version.
+  and platform limits. Confirmed legacy-to-extension pairs share one preset
+  selection while installed records keep their actual package identities.
   Import validates paths, duplicate names, symlinks and bounded metadata/archive size;
   it stages a private copy and rejects conflicting same-version contents. Library
   imports and Blue Hole commit-cache publication use the same no-replace primitive.
@@ -263,8 +264,12 @@ List rebuilding retains the current preset and selects newly created/copied entr
 The shareable library contains one folder per addon, with ZIPs such as
 `Anytree/Anytree_2.1.3_2026_10_12.zip`. Identity, numeric version and compatibility
 come from package metadata; a trailing `_YYYY_MM_DD` names a package revision.
-Resolution chooses the highest declared-compatible numeric version, then the
-newest date for that version. Same-version/date packages with conflicting bytes
+Resolution chooses the highest declared-compatible numeric version, preferring
+the legacy package if both formats have that version, then the newest date.
+Unambiguous normalized module and name matches pair the two formats. Zen UV
+also has a publisher-confirmed rename rule. Presets retain confirmed pairings
+for selected addons so removing an old ZIP does not lose the selection.
+Apply checks for unmanaged copies of paired packages before replacing files. Same-version/date packages with conflicting bytes
 are rejected. Preset versions override provided packages of the same declared
 version; preset imports preserve revision/name in `origin.json`, and their
 managed folders include the date. Old undated imports remain discoverable.
@@ -277,7 +282,7 @@ catalog snapshot instead of rehashing the library for every addon row. The cache
 is in-memory, bounded and performs no addon imports. First inspection still reads
 and hashes every ZIP. Package dates are not proofs of runtime compatibility.
 
-Preset management shows Installed, Latest compatible, Status and Library source.
+Preset management shows Installed, Latest compatible, Status, Library source and package Type.
 Installed versions come from files actually found in the preset, with recorded
 managed metadata as fallback. Missing files/library packages and pending
 installation/removal have separate statuses. Successful apply records numeric
@@ -314,6 +319,13 @@ Blue Hole artist environments are stored in the preset’s `addon-data/bluehole/
 Catalog scans quarantine unreadable packages and conflicting identity/version/date entries, exposing per-file errors while retaining healthy addons. Selected identities without a valid compatible package still fail before mutation. Preset choices are cleared and their owner context invalidated before refresh; saving is guarded until the current preset completes a successful refresh.
 
 Before modifying a preset, changed ZIPs and Deluxe payload ZIPs are copied into the private transaction workspace and inspected against the resolved SHA-256. Extraction and Deluxe stamping read only those verified snapshots. A concurrent source change before copying aborts without mutation; a later change cannot alter installed contents.
+
+The Local Blue Hole source validates the Git checkout and creates a directory
+symlink or Windows junction at the preset's Blue Hole add-on path. The managed
+link is excluded from backup copies. Apply moves the link itself for rollback,
+and GitHub installs a real directory in its place. A copied preset keeps the
+selection and recreates the link on its next launch. Local mode uses the
+worktree directly and never queries GitHub.
 
 Remote Blue Hole check/download failures raise UpdateUnavailable. Apply can retain
 a recorded, present, declared-compatible installed copy without a cached ZIP. It
