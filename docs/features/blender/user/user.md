@@ -182,8 +182,11 @@ Use local ZIP imports for now.
 
 Blue Hole is a dedicated optional configuration above the normal addon list in
 **Presets**; it is omitted from the regular library list. **Enable Blue Hole** is
-on by default. Choose **main**, **beta** or **alpha**, and **Deluxe: No / Yes**.
-Deluxe defaults to No. Save the selection before launching.
+on by default. Choose **main**, **beta** or **alpha**, then save the selection
+before launching. For Blender 5.2.2 and newer, enable Deluxe in Blender under
+**Blue Hole → Updates & Deluxe → Enable Deluxe Keymaps**. Blender keeps that
+choice for the same preset once preferences are saved. Use **Save Preferences**
+if Blender's **Auto-Save Preferences** is disabled.
 
 Each launch with Blue Hole enabled resolves the channel’s compatible versioned
 branch and checks its GitHub head. The
@@ -195,7 +198,13 @@ or download happens merely by viewing the page or creating a preset. An invalid 
 update stops launch and preserves the existing preset files/preferences. Network
 failures can use the installed-copy fallback described below.
 
-Deluxe copies `overlays/deluxe/payload/userpref.blend` into the preset's config
+For Blender 5.2.2 and newer, Logistics installs Blue Hole and preserves the
+preset's existing settings. If the old Deluxe preset is active, use Blue Hole's
+backup action and review the existing keymaps before switching to the built-in
+**Blender** preset and enabling runtime Deluxe.
+
+On older Blender versions, **Deluxe: Yes** copies
+`overlays/deluxe/payload/userpref.blend` into the preset's config
 and `payload/keyconfig/BH_Keymaps.py` into its scripts/presets/keyconfig folder,
 before applying addon selections. It replaces that preset's preferences; an existing
 file is retained as `config/userpref.before-bluehole-deluxe.blend`. The payload is

@@ -485,7 +485,12 @@ class BlenderPage(qt.QWidget):
         config = bluehole.validate(config)
         self.bluehole_enabled.setChecked(config['enabled'])
         self.bluehole_branch.setCurrentText(config['branch'])
+        runtime_deluxe = self.release is not None and bluehole.uses_runtime_deluxe(self.release)
+        self.bluehole_form.setRowVisible(self.bluehole_deluxe, not runtime_deluxe)
         self.bluehole_deluxe.setCurrentText('Yes' if config['deluxe'] else 'No')
+        self.bluehole_deluxe_note.setText(
+            'Enable Deluxe Keymaps in Blender under Blue Hole → Updates & Deluxe.'
+            if runtime_deluxe else 'Deluxe copies Blue Hole keymaps and stamps this preset’s saved preferences.')
         current = state.get('installed_bluehole') or state.get('bluehole', {})
         bh = state['installed'].get(bluehole.IDENTITY)
         if bh and bh['module'] in found:
@@ -556,8 +561,9 @@ class BlenderPage(qt.QWidget):
         identities = [self.choices.item(row, 0).data(qt.Qt.ItemDataRole.UserRole) for row in range(self.choices.rowCount())
                       if self.choices.item(row, 0).checkState() == qt.Qt.CheckState.Checked]
         release, name = self.release, self.preset.currentText()
-        config = {'enabled': self.bluehole_enabled.isChecked(), 'branch': self.bluehole_branch.currentText(),
-                  'deluxe': self.bluehole_deluxe.currentText() == 'Yes'}
+        config = {'enabled': self.bluehole_enabled.isChecked(), 'branch': self.bluehole_branch.currentText()}
+        if not bluehole.uses_runtime_deluxe(release):
+            config['deluxe'] = self.bluehole_deluxe.currentText() == 'Yes'
         try:
             self.library.save_pending_selection(release, name, identities, bluehole=config)
             self._show_choices()

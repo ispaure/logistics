@@ -107,7 +107,12 @@ class BlenderPageTests(QtTestCase):
         panel.presets.bluehole_branch.setCurrentText('beta')
         panel.presets._apply_addons()
         state = panel.presets.library.selection(self.manager.preset(self.builds[0], 'Art'))
-        self.assertEqual(state['bluehole'], {'enabled': False, 'branch': 'beta', 'deluxe': False})
+        self.assertEqual(state['bluehole'], {'enabled': False, 'branch': 'beta'})
+        self.assertFalse(panel.presets.bluehole_form.isRowVisible(panel.presets.bluehole_deluxe))
+        self.assertIn('Updates & Deluxe', panel.presets.bluehole_deluxe_note.text())
+        with patch.object(BlenderPage, 'release', self.builds[1]):
+            panel.presets._project_bluehole_choice({'installed': {}}, {})
+        self.assertTrue(panel.presets.bluehole_form.isRowVisible(panel.presets.bluehole_deluxe))
         self.assertFalse(self.manager.software.exists())
 
     def test_shared_library_groups_versions_and_preset_import_is_private(self):
