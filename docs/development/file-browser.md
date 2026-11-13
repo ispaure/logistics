@@ -42,6 +42,18 @@ separate from offscreen host tests.
 
 ### Directory-index admission and foreground demand
 
+| Surface | Trigger and scope | Cache and worker ownership |
+| --- | --- | --- |
+| Desktop Files | Open/navigation reconcile the visible folder; initial discovery can recurse. Refresh covers the subtree. Search and size views read saved snapshots. | Launch-owned Qt `IndexService`, commonUtils platform-cache database and durable queue. Each view retires its own subscription. |
+| Mobile Files | Opening Search or changing its location prepares the recursive ordinary-local scope. Settled typing reads saved results, joining preparation when no snapshot exists. | App-private `Cache/directory-index.sqlite3`; one leased host runner, independent query/preparation cancellation. |
+| Desktop/mobile Notes filenames | A settled nonempty query validates the library root. Navigation supplies priority hints without starting a scan. | Same ordinary database/coordinator as Files on that host; separate scoped readers and query-generation fences. |
+| Notes Files, Calendar, content and links | Navigation lists a folder; Calendar and backlink discovery visit their bounded inventories; content search reads eligible bodies; direct/suffix links retain specialized lookup. | Provider-owned work. LocalCrypt inventories reuse its fingerprinted RAM/optional sealed names; content and direct links retain separate freshness checks. |
+
+The ordinary queue and elected-runner lock sit beside the index as
+`directory-index.jobs.sqlite3` and `directory-index.jobs.lock`. Private, session-only,
+virtual and remote providers never enter these ordinary stores. LocalCrypt sealed
+records use the provider's credential-bound `Cache/LocalCryptNames` owner instead.
+
 The desktop launch-owned `IndexService` registers its commonUtils coordinator
 with `services.directory_index`. Mobile hosts acquire a process-shared lease for
 their app-private index; a second iPad scene shares the same runner. The mobile
