@@ -86,9 +86,10 @@ def retained_workspace(path, *, keep=False):
             remove_tree(path, ownership_files=('.manager-scratch',))
 
 
-def run(output, *, reuse=None, image=None, software_decode=False, retain_build=False):
+def run(output, *, reuse=None, image=None, model=None, software_decode=False, retain_build=False):
     output.mkdir(parents=True, exist_ok=False)
     options, _ = manager_settings.settings(ROOT / 'mobile_build')
+    model = model or options['android.model']
     env = dict(os.environ, ANDROID_HOME=options['tools.android_sdk'],
                ANDROID_SDK_ROOT=options['tools.android_sdk'], JAVA_HOME=options['tools.java'])
     observations = {}
@@ -131,7 +132,7 @@ def run(output, *, reuse=None, image=None, software_decode=False, retain_build=F
     with (scratch(ROOT) if reuse is None else retained_workspace(reuse, keep=retain_build)) as workspace:
         if retain_build: (workspace / '.keep').touch()
         (output / 'workspace.json').write_text(json.dumps(dict(workspace=str(workspace), retained=retain_build)))
-        (output / 'configuration.json').write_text(json.dumps(dict(image=image or options['android.image'], software_decode=software_decode, gpu='host')))
+        (output / 'configuration.json').write_text(json.dumps(dict(image=image or options['android.image'], model=model, software_decode=software_decode, gpu='host')))
         project = workspace / 'project'
         assets, sources = project_files(project)
         assets.mkdir(parents=True, exist_ok=True)
@@ -148,7 +149,7 @@ def run(output, *, reuse=None, image=None, software_decode=False, retain_build=F
                                    startup_timeout=600, gpu='host')
         record = None
         try:
-            record = emulator.start(image or options['android.image'], options['android.model'])
+            record = emulator.start(image or options['android.image'], model)
             serial = record['serial']
             emulator.invoke('-s', serial, 'install', str(project / 'app/build/outputs/apk/debug/app-debug.apk'), timeout=180)
             emulator.invoke('-s', serial, 'shell', 'settings', 'put', 'system', 'screen_off_timeout', '600000')
@@ -201,10 +202,12 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--reuse-workspace', type=Path, help='Explicitly pinned manager scratch build; removed after this run')
     parser.add_argument('--image', help='An already installed manager Android image')
+    parser.add_argument('--model', help='Override the configured Android emulator hardware profile')
     parser.add_argument('--software-decode', action='store_true', help='Test-only workaround for virtual MediaCodec stalls')
     parser.add_argument('--retain-build', action='store_true', help='Pin the managed scratch build for an explicit retry; caller owns final removal')
     args = parser.parse_args()
-    run(args.output.resolve(), reuse=args.reuse_workspace.resolve() if args.reuse_workspace else None, image=args.image, software_decode=args.software_decode, retain_build=args.retain_build)
+    run(args.output.resolve(), reuse=args.reuse_workspace.resolve() if args.reuse_workspace else None,
+        image=args.image, model=args.model, software_decode=args.software_decode, retain_build=args.retain_build)
 
 
 if __name__ == '__main__':

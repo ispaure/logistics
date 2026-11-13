@@ -12,6 +12,7 @@ import android.view.ViewGroup;
 import android.view.WindowInsets;
 import android.widget.FrameLayout;
 import android.widget.ImageButton;
+import android.widget.Button;
 import org.json.JSONArray;
 import org.json.JSONObject;
 import java.io.File;
@@ -86,6 +87,28 @@ public final class VideoPipQAActivity extends Activity {
         }
         sample("fullscreen-controls");
     }
+    private void checkControlLock() throws Exception {
+        java.lang.reflect.Field field = VideoPlayer.class.getDeclaredField("tools");
+        field.setAccessible(true);
+        PlaybackControls controls = (PlaybackControls)field.get(video);
+        controls.lock(true);
+        Button unlock = null;
+        for (int i = 0; i < video.root.getChildCount(); i++) {
+            View child = video.root.getChildAt(i);
+            if (child instanceof Button && "Unlock controls".contentEquals(((Button)child).getText()))
+                unlock = (Button)child;
+        }
+        int types = WindowInsets.Type.navigationBars() | WindowInsets.Type.tappableElement()
+            | WindowInsets.Type.mandatorySystemGestures();
+        int bottom = video.root.getRootWindowInsets().getInsetsIgnoringVisibility(types).bottom;
+        require(unlock != null && unlock.isShown(), "Control lock has no visible unlock button");
+        int[] location = new int[2];
+        unlock.getLocationInWindow(location);
+        require(location[1] + unlock.getHeight() <= video.root.getHeight() - bottom,
+            "Unlock button overlaps the system navigation area");
+        require(unlock.performClick() && !controls.locked, "Unlock did not restore playback controls");
+        sample("control-lock-clearance");
+    }
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
         setContentView(new FrameLayout(this));
@@ -129,6 +152,7 @@ public final class VideoPipQAActivity extends Activity {
                         .put("interactive", ((android.os.PowerManager)getSystemService(POWER_SERVICE)).isInteractive())
                         .put("audioMode", ((android.media.AudioManager)getSystemService(AUDIO_SERVICE)).getMode()));
                     checkFullscreenControls();
+                    checkControlLock();
                     lastPlayAttempt = SystemClock.uptimeMillis(); playAttempts++;
                     video.startByUser(); tick();
                 } catch (Throwable error) { result(error); }

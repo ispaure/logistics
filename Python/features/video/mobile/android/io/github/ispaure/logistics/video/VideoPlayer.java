@@ -174,7 +174,8 @@ public final class VideoPlayer {
             @Override protected void onMeasure(int widthSpec, int heightSpec) {
                 // Choose the rows before children are measured. A change during
                 // layout would place stale full-width rows side by side.
-                arrangeControls(View.MeasureSpec.getSize(widthSpec));
+                FrameLayout.LayoutParams frame = (FrameLayout.LayoutParams) controlsScroll.getLayoutParams();
+                arrangeControls(View.MeasureSpec.getSize(widthSpec) - frame.leftMargin - frame.rightMargin);
                 super.onMeasure(widthSpec, heightSpec);
             }
         };
@@ -232,24 +233,27 @@ public final class VideoPlayer {
         videoHeader.addView(sourceLabel);
         root.addView(videoHeader, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
         root.setOnApplyWindowInsetsListener((view, insets) -> {
+            // AppCompat can consume insets before they reach this decor overlay.
+            // Read the window's insets so a transient bar or tablet taskbar still
+            // reserves space for the controls even when the video runs behind it.
+            WindowInsets windowInsets = view.getRootWindowInsets();
+            if (windowInsets == null) windowInsets = insets;
             FrameLayout.LayoutParams frame = (FrameLayout.LayoutParams) controlsScroll.getLayoutParams();
             int margin = dp(12), extent = dp(48);
             JSONObject layout = tools == null ? null : tools.settings.optJSONObject("reader_layout");
             if (layout != null) { margin = dp(layout.optInt("margin", 12)); extent = dp(layout.optInt("extent", 48)); }
-            int left = insets.getSystemWindowInsetLeft(), top = insets.getSystemWindowInsetTop();
-            int right = insets.getSystemWindowInsetRight(), bottomInset = insets.getSystemWindowInsetBottom();
-            if (Build.VERSION.SDK_INT >= 30 && fullscreen) {
-                // Transient bars overlay the player. Keep the controls clear
-                // of their footprint and of cutouts even when bars are hidden.
-                Insets safe = insets.getInsetsIgnoringVisibility(
-                    WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
-                left = Math.max(left, safe.left); top = Math.max(top, safe.top);
-                right = Math.max(right, safe.right); bottomInset = Math.max(bottomInset, safe.bottom);
+            int left = windowInsets.getSystemWindowInsetLeft(), top = windowInsets.getSystemWindowInsetTop();
+            int right = windowInsets.getSystemWindowInsetRight(), bottomInset = windowInsets.getSystemWindowInsetBottom();
+            if (Build.VERSION.SDK_INT >= 30) {
+                int types = WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()
+                    | WindowInsets.Type.tappableElement() | WindowInsets.Type.mandatorySystemGestures();
+                Insets safe = fullscreen ? windowInsets.getInsetsIgnoringVisibility(types) : windowInsets.getInsets(types);
+                left = safe.left; top = safe.top; right = safe.right; bottomInset = safe.bottom;
             } else if (fullscreen) {
-                left = Math.max(left, insets.getStableInsetLeft());
-                top = Math.max(top, insets.getStableInsetTop());
-                right = Math.max(right, insets.getStableInsetRight());
-                bottomInset = Math.max(bottomInset, insets.getStableInsetBottom());
+                left = Math.max(left, windowInsets.getStableInsetLeft());
+                top = Math.max(top, windowInsets.getStableInsetTop());
+                right = Math.max(right, windowInsets.getStableInsetRight());
+                bottomInset = Math.max(bottomInset, windowInsets.getStableInsetBottom());
             }
             frame.setMargins(left + margin, top + margin, right + margin, bottomInset + dp(6));
             try {
@@ -260,7 +264,7 @@ public final class VideoPlayer {
                 JSONArray corners = new JSONArray();
                 if (Build.VERSION.SDK_INT >= 31) {
                     for (int position = 0; position < 4; position++) {
-                        android.view.RoundedCorner corner = insets.getRoundedCorner(position);
+                        android.view.RoundedCorner corner = windowInsets.getRoundedCorner(position);
                         if (corner == null) continue;
                         corners.put(new JSONArray().put(position == 1 || position == 2).put(position >= 2)
                             .put(corner.getCenter().x).put(corner.getCenter().y).put(corner.getRadius()));
@@ -272,6 +276,7 @@ public final class VideoPlayer {
                     (int)Math.ceil(fitted.getDouble(2)), (int)Math.ceil(fitted.getDouble(3)));
             } catch (Exception ignored) { /* System safe insets remain the fallback. */ }
             controlsScroll.setLayoutParams(frame);
+            if (tools != null) tools.layoutUnlock(frame);
             FrameLayout.LayoutParams header = (FrameLayout.LayoutParams) videoHeader.getLayoutParams();
             header.setMargins(frame.leftMargin, frame.topMargin, frame.rightMargin, 0);
             videoHeader.setLayoutParams(header);
