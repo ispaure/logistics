@@ -1,6 +1,7 @@
 """Real local Git-object repair; no VM, network, installation or runtime edits."""
 import json
 from pathlib import Path
+from shutil import copytree
 import subprocess
 from tempfile import TemporaryDirectory
 import unittest
@@ -19,26 +20,74 @@ def git(root,*args):
 
 
 class GuestSourceReadinessTests(unittest.TestCase):
+    repository = 'https://github.com/fixture/manager.git'
+
+    @classmethod
+    def setUpClass(cls):
+        temporary = TemporaryDirectory()
+        cls.addClassCleanup(temporary.cleanup)
+        root = Path(temporary.name).resolve()
+        shared = root / 'cu-prototype'
+        manager = root / 'manager-prototype'
+        shared.mkdir()
+        manager.mkdir()
+        git(shared, 'init', '-q')
+        (shared / 'source').write_text('old')
+        git(shared, 'add', '.')
+        git(shared, 'commit', '-qm', 'old')
+        cls.old_cu = git(shared, 'rev-parse', 'HEAD')
+        git(manager, 'init', '-q')
+        package = manager / 'Python/build_manager'
+        package.mkdir(parents=True)
+        (package / '__init__.py').write_text('# fixture\n')
+        git(manager, 'add', '.')
+        git(manager, 'update-index', '--add', '--cacheinfo', '160000,' + cls.old_cu + ',Python/commonUtils')
+        git(manager, 'commit', '-qm', 'old')
+        cls.old = git(manager, 'rev-parse', 'HEAD')
+
+        # Capture the old object stores before either repository has a new commit.
+        cls.old_checkout = root / 'old'
+        git(root, 'clone', '-q', str(manager), str(cls.old_checkout))
+        git(root, 'clone', '-q', str(shared), str(cls.old_checkout / 'Python/commonUtils'))
+        (shared / 'source').write_text('new')
+        git(shared, 'add', '.')
+        git(shared, 'commit', '-qm', 'new')
+        cls.new_cu = git(shared, 'rev-parse', 'HEAD')
+        git(manager, 'update-index', '--add', '--cacheinfo', '160000,' + cls.new_cu + ',Python/commonUtils')
+        (manager / 'new').write_text('new')
+        git(manager, 'add', 'new')
+        git(manager, 'commit', '-qm', 'new')
+        cls.new = git(manager, 'rev-parse', 'HEAD')
+        cls.new_checkout = root / 'new'
+        git(root, 'clone', '-q', str(manager), str(cls.new_checkout))
+        git(root, 'clone', '-q', str(shared), str(cls.new_checkout / 'Python/commonUtils'))
+        for checkout in (cls.old_checkout, cls.new_checkout):
+            git(checkout, 'remote', 'set-url', 'origin', cls.repository)
+
     def setUp(self):
-        temp=TemporaryDirectory();self.addCleanup(temp.cleanup);self.root=Path(temp.name).resolve()
-        self.cache=owner.private(self.root)/'tooling';self.cache.mkdir(parents=True)
-        self.cu=self.root/'cu-prototype';self.cu.mkdir();git(self.cu,'init','-q');(self.cu/'source').write_text('old');git(self.cu,'add','.');git(self.cu,'commit','-qm','old');self.old_cu=git(self.cu,'rev-parse','HEAD')
-        proto=self.root/'manager-prototype';proto.mkdir();git(proto,'init','-q');(proto/'Python/build_manager').mkdir(parents=True);(proto/'Python/build_manager/__init__.py').write_text('# fixture\n');git(proto,'add','.');git(proto,'update-index','--add','--cacheinfo','160000,'+self.old_cu+',Python/commonUtils');git(proto,'commit','-qm','old');self.old=git(proto,'rev-parse','HEAD')
-        self.target=self.cache/self.old;git(self.root,'clone','-q',str(proto),str(self.target));git(self.root,'clone','-q',str(self.cu),str(self.target/'Python/commonUtils'))
-        (self.cu/'source').write_text('new');git(self.cu,'add','.');git(self.cu,'commit','-qm','new');self.new_cu=git(self.cu,'rev-parse','HEAD')
-        git(proto,'update-index','--cacheinfo','160000,'+self.new_cu+',Python/commonUtils');(proto/'new').write_text('new');git(proto,'add','new');git(proto,'commit','-qm','new');self.new=git(proto,'rev-parse','HEAD')
-        self.current=self.cache/self.new;git(self.root,'clone','-q',str(proto),str(self.current));git(self.root,'clone','-q',str(self.cu),str(self.current/'Python/commonUtils'))
-        self.declared=dict(schema=1,adapter_api=1,repository='https://github.com/fixture/manager.git',revision=self.new)
-        self.snapshot=self.root/'snapshot';self.snapshot.mkdir();(self.snapshot/'build-manager-dependency.json').write_text(json.dumps(self.declared))
-        for repo in (self.target,self.current):git(repo,'remote','set-url','origin',self.declared['repository'])
-        self.proof=self.target.with_suffix('.ownership.json');self.proof.write_text(json.dumps(dict(self.declared,root=str(self.root),revision=self.old)))
-        self.enterContext(patch.object(build_manager,'__file__',str(self.current/'Python/build_manager/__init__.py')))
-        self.heads=(git(self.target,'rev-parse','HEAD'),git(self.target/'Python/commonUtils','rev-parse','HEAD'))
+        temporary = TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name).resolve()
+        cache = owner.private(self.root) / 'tooling'
+        self.target = cache / self.old
+        self.current = cache / self.new
+        # Each case can change refs, objects and metadata without touching the
+        # templates or any other case. Do not share Git objects via hardlinks.
+        copytree(self.old_checkout, self.target)
+        copytree(self.new_checkout, self.current)
+        self.declared = dict(schema=1, adapter_api=1, repository=self.repository, revision=self.new)
+        self.snapshot = self.root / 'snapshot'
+        self.snapshot.mkdir()
+        (self.snapshot / 'build-manager-dependency.json').write_text(json.dumps(self.declared))
+        self.proof = self.target.with_suffix('.ownership.json')
+        self.proof.write_text(json.dumps(dict(self.declared, root=str(self.root), revision=self.old)))
+        self.enterContext(patch.object(build_manager, '__file__', str(self.current / 'Python/build_manager/__init__.py')))
 
     def repair(self):return owner.ensure(self.root,self.snapshot,self.target,{})
 
     def unchanged(self):
-        self.assertEqual(self.heads,(git(self.target,'rev-parse','HEAD'),git(self.target/'Python/commonUtils','rev-parse','HEAD')))
+        heads = (git(self.target, 'rev-parse', 'HEAD'), git(self.target / 'Python/commonUtils', 'rev-parse', 'HEAD'))
+        self.assertEqual(heads, (self.old, self.old_cu))
         self.assertEqual(git(self.target,'status','--porcelain','--untracked-files=all'),'')
         self.assertEqual(git(self.target/'Python/commonUtils','status','--porcelain','--untracked-files=all'),'')
 
