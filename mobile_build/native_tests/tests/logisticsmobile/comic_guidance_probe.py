@@ -79,7 +79,7 @@ class ComicGuidanceProbe(LogisticsMobile):
         await self.until(lambda: owner.session.id not in owner.workspace.sessions
                          or owner.manager.close(owner.session.id), 'Synthetic reader did not close')
 
-    def checkpoint(self, report, phase):
+    def record_progress(self, report, phase):
         report['phase'] = phase
         (Path(self.paths.cache) / 'comic-guidance-progress.json').write_text(json.dumps(report, indent=2))
 
@@ -224,7 +224,7 @@ class ComicGuidanceProbe(LogisticsMobile):
                     assert current is owner and current.crypt_reader.key == 'Comics/02.cbz'
                 report['neighbors'].append(dict(rtl=rtl, direction=direction,
                     previous=previous, following=following, opened=current.crypt_reader.key))
-                self.checkpoint(report, 'provider-matrix')
+                self.record_progress(report, 'provider-matrix')
         provider.available = {'01.cbz', '02.cbz', '03.cbz'}
         owner = await self.provider_owner(provider, copies)
         for failure in ('pending', 'failed'):
@@ -292,7 +292,7 @@ class ComicGuidanceProbe(LogisticsMobile):
                     await capture_window(self, Path(self.paths.cache) / name)
                     report['visuals'].append(dict(rtl=rtl, dark=dark, orientation=orientation,
                         fullscreen=immersive, geometry=region, screenshot=name))
-                    self.checkpoint(report, 'visuals')
+                    self.record_progress(report, 'visuals')
         if self.android:
             (Path(self.paths.cache) / 'creation-orientation').write_text('portrait')
         await rotate(self, 'portrait', settle=.2)
@@ -487,7 +487,7 @@ class ComicGuidanceProbe(LogisticsMobile):
         report = dict(success=False, platform='android' if self.android else 'ios',
             neighbors=[], availability=[], motion=[], visuals=[], lifecycle=[], static=[], library=[], layouts=[])
         try:
-            self.checkpoint(report, 'startup')
+            self.record_progress(report, 'startup')
             await self.until(lambda: not getattr(self, '_startup_in_progress', False), 'Startup did not settle', 30)
             self.preferences.values.update(comic_layout='single', comic_split_wide='false', android_eink='false')
             for rtl in (False, True):
@@ -503,11 +503,11 @@ class ComicGuidanceProbe(LogisticsMobile):
                 owner = await self.provider_matrix(rtl, provider, copies, report)
                 owner = await self.visual_checks(owner, rtl, report)
                 if rtl:
-                    self.checkpoint(report, 'lifecycle')
+                    self.record_progress(report, 'lifecycle')
                     await self.lifecycle_checks(owner, report)
                 else:
                     await self.close_owner(owner)
-                self.checkpoint(report, 'library-and-layouts')
+                self.record_progress(report, 'library-and-layouts')
                 await self.library_checks(source, rtl, report)
                 assert sha256(source.read_bytes()).hexdigest() == original, 'Guidance modified the archive'
             report['fold_environment'] = pose_snapshot(self)
