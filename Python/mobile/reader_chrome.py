@@ -173,7 +173,7 @@ class ReaderChrome:
         self.reader_immersive = False
         content = self.book_content
         if not comic:
-            from .chapter_drawer import ChapterDrawer
+            from .reading.chapter_drawer import ChapterDrawer
             self.chapter_rows = toga.Box(style=Pack(direction=COLUMN))
             tree = toga.Box(children=[toga.Label('Chapters', style=Pack(font_size=20)),
                 self.chapter_rows, self.bookmark_button, self.bookmark_selector],

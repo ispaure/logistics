@@ -66,7 +66,7 @@ def notebook_canvas_edges(view, container, edge, home):
     left = float(container.left_inset) if edge == 1 else 0
     right = float(container.right_inset) if edge == 2 else 0
     if left or right:
-        from .ios_content_background import reduce_transparency
+        from ..ios_content_background import reduce_transparency
         if reduce_transparency():
             left = right = 0
     if left or right:
@@ -82,7 +82,7 @@ def notebook_canvas_edges(view, container, edge, home):
 
 def layout_notebook_rail(web, container, left, right):
     from rubicon.objc import ObjCClass, ObjCInstance, CGRect, CGPoint
-    from .screen_privacy import native_value
+    from ..screen_privacy import native_value
     native = web._impl.native
     parent = native_value(native, 'superview')
     if parent is None:
@@ -126,7 +126,7 @@ def compact_apple_reader(container, *, notebook=None):
     app = container.content.interface.app
     if app is None:
         return False
-    from .document_location import side_title_reader
+    from ..document_location import side_title_reader
     # Title mounting can precede route_changed, while app.body still points at
     # the previous page. Measure this container's content, never that stale route.
     root = container.content.interface
@@ -141,13 +141,13 @@ def compact_apple_reader(container, *, notebook=None):
         if (view._impl.container is not container
                 or (getattr(view, '_notebook_canvas', None) is None and page_footer(view) is None)):
             return False
-    from .screen_privacy import native_value
+    from ..screen_privacy import native_value
     window = native_value(container.native, 'window')
     if window is None:
         return False
     changed = False
-    from .ios_toolbar import vertical_edge
-    from .ios_system_occlusions import content_column_top
+    from ..ios_toolbar import vertical_edge
+    from ..ios_system_occlusions import content_column_top
     edge = vertical_edge(getattr(container, 'controller', None))
     if reader is not None and getattr(reader, '_reader_top_band_state', None) is not None:
         # The native header owns actual system-region clearance inside content.
@@ -160,7 +160,7 @@ def compact_apple_reader(container, *, notebook=None):
         # Notes has interactive rows across the full content width. UIKit can
         # extend that width beneath the floating rail during a layout pass.
         if getattr(reader, '_notes_title_controls', ()) and edge in (1, 2):
-            from .ios_reader_chrome import occlusion_geometry
+            from ..ios_reader_chrome import occlusion_geometry
             width = float(container.native.bounds.size.width)
             regions = occlusion_geometry(container.native)
             if edge == 1:
@@ -190,7 +190,7 @@ def compact_apple_reader(container, *, notebook=None):
     if container.bottom_inset != bottom:
         container.bottom_inset = bottom
         changed = True
-    from .appearance import reserve_navigation
+    from ..appearance import reserve_navigation
     reserve_navigation(app, view=view)
     drawers = getattr(view, '_notes_drawers', None)
     if drawers is not None:
@@ -238,7 +238,7 @@ def refresh_progress_edges(footer):
     base = READER_LAYOUT.progress_margin
     if type(widget._impl).__module__.startswith('toga_iOS.'):
         if not footer.vertical:
-            from .screen_privacy import native_value
+            from ..screen_privacy import native_value
             window = native_value(widget._impl.native, 'window')
             home = float(window.safeAreaInsets.bottom) if window is not None else 0
             original, raised = _caption_margins(footer, home)

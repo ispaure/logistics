@@ -8,7 +8,7 @@ import unittest
 from unittest.mock import patch
 
 from mobile_build.native_tests.tests.logisticsmobile import rotation_checks
-from mobile.reader_edges import compact_apple_reader
+from mobile.reading.reader_edges import compact_apple_reader
 
 
 def rectangle(x, y, width, height):
@@ -124,7 +124,7 @@ class RotationSafeGeometryTests(unittest.TestCase):
 
     def check(self, app, *, compact=True):
         with patch('mobile.ios_content_background.preview_edge', return_value=0), \
-                patch('mobile.reader_edges.page_footer', return_value=NS() if compact else None), \
+                patch('mobile.reading.reader_edges.page_footer', return_value=NS() if compact else None), \
                 patch('mobile.ios_toolbar.vertical_edge', return_value=True), \
                 patch.object(rotation_checks.sys, 'platform', 'ios'):
             return rotation_checks.safe_geometry(app)

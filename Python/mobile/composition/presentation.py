@@ -81,7 +81,7 @@ def mobile_presentation(app):
     from mobile.document_sources import folder_action
     from mobile.fold_layout import reserved_divisions, division, is_iphone_duo
     from mobile.document_location import bind_apple_hold
-    from mobile.reader_edges import clear_notebook_rail, compact_apple_reader
+    from mobile.reading.reader_edges import clear_notebook_rail, compact_apple_reader
     from mobile.reader_top_band import NOTEBOOK_TOOLBAR_CLEARANCE, reset_notebook_clearance
     from mobile.layout_participants import participants
     from mobile.favourites import favourite_resource

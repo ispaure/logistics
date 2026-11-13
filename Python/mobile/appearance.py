@@ -249,7 +249,7 @@ def reserve_navigation(app, *, view=None):
     home_bottom = float(window.safeAreaInsets.bottom)
     safe_bottom = float(window.bounds.size.height) - home_bottom
     from commonUtils.ui.readers.layout import remaining_clearance
-    from .reader_edges import footer_bottom_extension
+    from .reading.reader_edges import footer_bottom_extension
     extension = footer_bottom_extension(view, home_bottom)
     if getattr(view, '_notebook_canvas', None) is None:
         extra = max(extra, remaining_clearance(bottom - extension, safe_bottom))
@@ -605,7 +605,7 @@ def refresh_appearance(app):
         picker.preview_color()
     from .page_animation import sync_preferences
     sync_preferences(app)
-    from .reader_progress import refresh_progress
+    from .reading.reader_progress import refresh_progress
     refresh_progress()
     snow = getattr(app, 'seasonal_snow', None)
     if snow is not None:

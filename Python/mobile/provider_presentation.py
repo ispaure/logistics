@@ -400,7 +400,7 @@ def prepare_epub_page(host, controller, view, content):
         initial_position = False
         if hasattr(controller, 'page_footer'):
             controller.page_footer.chapter_progress(index, len(book.spine), value, content[1].length)
-    from .chapter_drawer import ChapterDrawer
+    from .reading.chapter_drawer import ChapterDrawer
     old_panel = getattr(view, 'provider_epub_view', None)
     speech = getattr(old_panel, 'speech_panel', None)
     restored_offset = max(0, min(offset, content[1].length))

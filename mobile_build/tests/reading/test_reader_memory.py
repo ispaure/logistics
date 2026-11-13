@@ -6,7 +6,7 @@ TEST_STAGE = TestStage.EXTENDED
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
-from mobile.reader_memory import (private_buffer_bytes, NATIVE_ARCHIVE_POOL,
+from mobile.reading.reader_memory import (private_buffer_bytes, NATIVE_ARCHIVE_POOL,
                                           PRIVATE_BUFFERS, MANAGED_RESERVE, MIB, trim_content_cache)
 
 

@@ -195,7 +195,7 @@ def install():
                 changed = compact_home(container) or changed
                 from .ios_content_background import expand_preview
                 changed = expand_preview(container) or changed
-                from .reader_edges import compact_apple_reader
+                from .reading.reader_edges import compact_apple_reader
                 changed = compact_apple_reader(container) or changed
             if changed and container.content is not None:
                 container.content.interface.refresh()

@@ -46,7 +46,7 @@ class BandGeometryTests(unittest.TestCase):
 
 class NativeBandContentInsetsTests(unittest.TestCase):
     def test_native_header_reserves_clock_inside_content_without_negative_window_origin(self):
-        from mobile.reader_edges import compact_apple_reader
+        from mobile.reading.reader_edges import compact_apple_reader
         for origin_y, expected in ((0,0),(-20,20)):
             with self.subTest(origin_y=origin_y):
                 window=NS(safeAreaInsets=NS(top=82,bottom=34))

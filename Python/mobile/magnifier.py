@@ -73,7 +73,7 @@ def setting(app, title='Comic & PDF magnifier zoom'):
     from toga.style import Pack
     from toga.style.pack import COLUMN
     from .appearance import accessible_name
-    from .reader_progress import style_slider
+    from .reading.reader_progress import style_slider
     from .settings.forms import SettingsLabel
 
     preferences = app.preferences
