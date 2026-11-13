@@ -3,10 +3,12 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+import os
 import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.code_editor import CodeEdit
@@ -162,7 +164,8 @@ class HunkRestoreTests(QtTestCase):
                 self.app.processEvents()
                 self.assertLess(time.monotonic(), deadline)
                 time.sleep(.005)
-        with tempfile.TemporaryDirectory() as directory:
+        with tempfile.TemporaryDirectory() as directory, patch.dict(
+                os.environ, GIT_CEILING_DIRECTORIES=str(Path(directory).resolve().parent)):
             root = Path(directory)
             path = root / 'a.py'
             path.write_text('original\n')
