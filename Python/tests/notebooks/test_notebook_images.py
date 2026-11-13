@@ -148,6 +148,54 @@ console.log(JSON.stringify({passed:true,bare_command_does_not_paint:true,pen_pai
             editor.apply(dict(op='undo'))
             self.assertEqual(book.page(0).order,[a.id,picture.id,b.id])
 
+    def test_mixed_stack_anchors_allow_insertion_without_circular_dependencies(self):
+        from graphlib import CycleError, TopologicalSorter
+        from features.notebooks._vendor.rmscene.scene_stream import SceneLineItemBlock
+        from features.notebooks._vendor.rmscene.tagged_block_common import CrdtId
+
+        def check():
+            ink = Notebook.read(book.to_bytes()).page(0)
+            items = [b.item for b in ink._blocks if isinstance(b, (SceneLineItemBlock, ImageItem))]
+            identities = {item.item_id for item in items}
+            dependencies = {item.item_id: {item.left_id, item.right_id} - {CrdtId(0, 0)} for item in items}
+            self.assertTrue(all(anchors <= identities for anchors in dependencies.values()))
+            try:
+                inserted = list(TopologicalSorter(dependencies).static_order())
+            except CycleError:
+                self.fail('Mixed objects require each other to exist before either can be inserted')
+            self.assertEqual(set(inserted), identities)
+            for item in items:
+                for anchor in dependencies[item.item_id]:
+                    self.assertLess((anchor.part2, anchor.part1), (item.item_id.part2, item.item_id.part1),
+                                    'Native insertion anchors must refer to older object IDs')
+            return ink
+
+        directory = TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        repository = Repository(directory.name)
+        book = Notebook.new(); key = repository.create(book)
+        editor = Editor(book, lambda value: repository.save(key, value))
+        editor.apply(dict(op='stroke', points=[[450,400,.5],[750,400,1]]))
+        editor.apply(paste_action())
+        check()
+        editor.apply(dict(op='stroke', points=[[450,600,1],[650,800,.5]]))
+        baseline = check()
+        strokes = [stroke.payload() for stroke in baseline.strokes]
+        picture = baseline.images[0]
+        assets = {name: data for name, data in book.members.items() if name.endswith('.png')}
+        other_frames = [raw for raw, block in zip(baseline._frames, baseline._blocks)
+                        if not isinstance(block, (SceneLineItemBlock, ImageItem))]
+        for direction in ('back', 'forward', 'front', 'backward'):
+            with self.subTest(direction=direction):
+                editor.apply(dict(op='arrange-image', id=picture.id, direction=direction))
+                saved = check()
+                self.assertEqual(saved.order, book.page(0).order)
+                self.assertEqual([stroke.payload() for stroke in saved.strokes], strokes)
+                self.assertEqual(saved.images[0].payload(), picture.payload())
+                self.assertEqual({name: data for name, data in book.members.items() if name.endswith('.png')}, assets)
+                self.assertEqual([raw for raw, block in zip(saved._frames, saved._blocks)
+                                  if not isinstance(block, (SceneLineItemBlock, ImageItem))], other_frames)
+
     def test_failed_checkpoint_rolls_back_assets_geometry_and_order(self):
         book=Notebook.new();editor=Editor(book)
         before=book.to_bytes()

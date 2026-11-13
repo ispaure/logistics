@@ -25,7 +25,7 @@ class NativeImageFixtureTests(unittest.TestCase):
         self.assertEqual(generate(),data)
         self.assertIs(secrets.token_bytes,original)
         self.assertEqual(sha256(data).hexdigest(),IMAGE_FIXTURE_SHA256)
-        self.assertEqual(len(data),2748)
+        self.assertEqual(len(data),2746)
 
     def test_public_aes256_fixture_rejects_wrong_password_and_preserves_native_scene(self):
         enable_aes()

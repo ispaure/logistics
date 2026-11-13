@@ -129,6 +129,24 @@ native ink files and the PNG resource were absent; the importer also assigned
 new document and page IDs. The original synthetic fixture incorrectly combined
 `formatVersion: 1` with `cPages`. Preparation now rejects that combination. This
 is a confirmed failed preservation check; the inconsistent version is a suspected
-cause, not a proven complete diagnosis. A corrected candidate still needs native
-validation. Folder creation was user-confirmed; rename, move, trash/restore and
-cleanup remain outstanding.
+cause, not a proven complete diagnosis. A separate format-version-2 candidate
+preserved the PDF, PNG and second-page ink, but its rewritten first-page scene
+lost a horizontal stroke beside an image. Three subsequent diagnostic pages
+retained their scene bytes after viewing without edits; that does not qualify
+native ink saving or establish a repair.
+
+Matched pen-edit checks isolated mixed-object sequence anchors. A mutual
+next/previous chain lost a stroke. Using only left anchors preserved the normal
+ink–image–ink arrangement, but moving an image before or after the strokes still
+lost an object whose anchor had a newer native ID. Changing physical frame order
+alone did not repair those cases.
+
+The mixed-scene writer now reconstructs insertion anchors in native ID clock
+order, so both anchors refer only to older objects. It preserves IDs, physical
+frame order, geometry, resources and unrelated frames. The two previously failing
+arrangements then preserved every original stroke, image, stacking position,
+PNG resource and PDF byte after native pen edits, saving and USB re-export on
+user-reported firmware 3.29.1.0. Host regression coverage checks anchor age,
+dependencies, arrangement and preservation. This bounded result does not qualify
+every scene type or tablet mutation. Folder creation was user-confirmed; rename,
+move, trash/restore and cleanup remain outstanding.
