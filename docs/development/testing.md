@@ -881,10 +881,11 @@ remain host-only. Do not copy a host virtual environment into a mobile payload.
 ## Local disk usage and private files
 
 Virtual environments, `mobile_build/build/`, `mobile_build/payload/`, `mobile_build/logs/`,
-`mobile_build/.tools/` and `mobile_build/.deploy-workspaces/` are ignored generated output.
-They can be much larger than the tracked source. Git exclusions do not reclaim
-local space. Stop builds and apps, and save wanted reports before removing a
-particular generated directory; the corresponding setup/build recreates it.
+`mobile_build/.tools/`, `mobile_build/.deploy-workspaces/` and checkout-root
+`tmp/` are ignored generated output. Use the [artifact locations](validation-artifacts.md#find-an-output)
+to find reports, scratch runs and probe compiler caches. For managed outputs,
+preview [storage retention](build-manager.md#automatic-storage-retention) before
+cleanup and save any evidence you need to keep.
 Keep credentials, `.env` files and signing keys local. Never put real secret values
 in examples or fixtures. Release packaging also excludes conventional private
 files and generated mobile output, even if accidentally tracked.

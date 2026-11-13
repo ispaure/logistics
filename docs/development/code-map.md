@@ -18,6 +18,7 @@ put new code.
 | `Python/models/` | Host-level models, including folder identities |
 | `Python/services/` | Logistics policies and host services; see the [domain map](services.md) |
 | `Python/mobile/` | Toga mobile host and composed workflows; see the [module and test map](mobile-runtime.md) |
+| `Python/mobile/native/` | Android WebView adapters for inline HTML and native Markdown font responses |
 | `Python/commonUtils/` | Separate Git submodule for reusable machinery; maintain its implementation and API docs in that repository |
 | `mobile_build/` | Mobile packaging, deployment, native bridges and validation; the app source is under `Python/` |
 | `Python/tests/` | Desktop regressions plus portable/mobile contracts and packaging checks |
@@ -27,8 +28,8 @@ put new code.
 | `.github/workflows/`, `.github/scripts/` | CI, release gates and release packaging |
 | `docs/development/` | Cross-cutting contracts and development guides |
 
-`mobile_build/build/`, `mobile_build/payload/`, caches and test results are generated outputs,
-not the source to edit. Root platform launchers remain desktop entry points.
+`mobile_build/build/`, `mobile_build/payload/` and the [local artifact directories](validation-artifacts.md#find-an-output)
+contain generated output. Root platform launchers remain desktop entry points.
 
 ## Directory names and native compatibility
 
