@@ -83,6 +83,12 @@ class NotesSearchProbe(ChatSettingsProbe):
             if writable:
                 assert await owner.open_editor()
                 editor = owner.embedded
+                formatted = editor.formatted
+                async with asyncio.timeout(10):
+                    ready = ('!!window.markdownSnapshot && document.documentElement.dataset.editorBridge === '
+                             + json.dumps(formatted.bridge))
+                    while not await formatted.view.evaluate_javascript(ready):
+                        await asyncio.sleep(.05)
                 assert await editor.choose_mode(False)
                 editor.source.value = '# Saved from native Search\n'
                 async def cancel():
