@@ -14,7 +14,9 @@ def _failed_setup(directory, previous):
     """Resolve only the declared direct attempt, never arbitrary report paths."""
     directory = Path(directory)
     attempt = Path(previous.get('attempt_directory', ''))
-    if (previous.get('status') != 'running' or previous.get('backend') != 'Parallels Windows'
+    status = previous.get('status')
+    setup_failure = status in {'failed', 'cancelled'} and previous.get('stage') == 'guest-setup'
+    if (not (status == 'running' or setup_failure) or previous.get('backend') != 'Parallels Windows'
             or attempt.parent != directory / 'attempts' or len(attempt.name) != 32
             or any(c not in '0123456789abcdef' for c in attempt.name)
             or any(path.is_symlink() for path in (directory, directory/'attempts', attempt,
@@ -24,14 +26,13 @@ def _failed_setup(directory, previous):
     if (prepared.get('status') != 'failed' or prepared.get('tests_run') is not False
             or not isinstance(prepared.get('token'), str) or len(prepared['token']) != 32
             or any(c not in '0123456789abcdef' for c in prepared['token'])
-            or not isinstance(prepared.get('vm'), str)):
+            or not isinstance(prepared.get('vm'), str)
+            or setup_failure and previous.get('vm') != prepared['vm']):
         raise ValueError('Only a failed pre-test setup can be reconciled as absent.')
     return attempt, prepared
 
 
 def _setup_reconciled(directory, previous):
-    if previous.get('status') != 'running' or previous.get('backend') != 'Parallels Windows':
-        return False
     try:
         attempt, prepared = _failed_setup(directory, previous)
         receipt = json.loads((attempt/'setup-reconciliation.json').read_text())
