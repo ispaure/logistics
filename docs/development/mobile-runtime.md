@@ -46,6 +46,7 @@ different lifetimes.
 | Provider Markdown modes, controls and preview lifecycle | `services/documents/authoring/provider_markdown.py`, composed by `composition.presentation.provider_markdown`; session source input remains authoritative |
 | Ordinary and provider reader ownership | `reader_sessions.py`, `private_sessions.py` |
 | Session Close/Back decisions and source return | `session_workflows/transitions.py`, source-specific `session_workflows/adapters.py`; facade in `reader_lifecycle.py` |
+| Notes Library browsing, Search return and active document | [Notes Library mobile lifecycle](../features/notes_library/development/development.md#mobile-browsing-and-document-lifecycle) maps browser, panel and document owners. |
 | Provider opening, session and controls | `provider_opening.py` prepares and publishes; `provider_document.py` owns the reader session; `provider_view.py` builds unpublished controls; `provider_presentation.py` builds chrome; `provider_ui.py` retains session commands |
 | Reader surface publication and footer/chrome synchronization | `reading/publication.py`, validity captures in `reading/sources.py` |
 | Reader chapter drawer, edge geometry, memory and progress | `reading/{chapter_drawer,reader_edges,reader_memory,reader_progress}.py` |
@@ -1297,8 +1298,9 @@ discards stale switch references and rebuilds the categories lazily.
 ## October 20 ownership cleanup
 
 Books and Comics now own imported/provider format controllers, and Books owns
-mixed library presentation and its portable metadata index. Text Editor owns the
-mobile Notes Library browser. The host composes explicit presentation services
+mixed library presentation and its portable metadata index. The
+[Notes Library feature](../features/notes_library/development/development.md#mobile-browsing-and-document-lifecycle)
+owns the mobile library browser and active document. The host composes explicit presentation services
 in `composition/presentation.py` and keeps storage/provider discovery, workspace identities,
 credentials and private publication. Reader and private-session compatibility
 accessors delegate format state to its owning controller; prepared view handoff
