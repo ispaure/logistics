@@ -13,6 +13,10 @@ from build_manager.profiles import save_json
 from build_manager.redaction import Redactor
 
 
+SHUTDOWN_OBSERVATION_WINDOW = 60
+SHUTDOWN_OBSERVATION_INTERVAL = 5
+
+
 @contextmanager
 def vm_attempt(args, client, cancelled, *, backend, workspace_key):
     """Keep power teardown inside the attempt that received the start receipt."""
@@ -66,6 +70,9 @@ def _stop_started_guest(client, vm, result):
     teardown = result['vm_shutdown'] = dict(command='failed', state_verified=False)
     try:
         client.shutdown(vm)
+    except subprocess.TimeoutExpired as error:
+        teardown.update(error=Redactor()(str(error)), command_timed_out=True)
+        _observe_timed_out_shutdown(client, vm, teardown)
     except Exception as error:
         teardown['error'] = Redactor()(str(error))
     else:
@@ -87,7 +94,32 @@ def _stop_started_guest(client, vm, result):
     if result['status'] != 'failed':
         teardown['prior_status'] = result['status']
     result['status'] = 'failed'
-    print('Unable to confirm shutdown of the selected Parallels VM: ' + teardown['error'], file=sys.stderr)
+    message = ('Parallels shutdown command timed out. The selected VM was subsequently verified stopped: '
+               if teardown['state_verified'] else 'Unable to confirm shutdown of the selected Parallels VM: ')
+    print(message + teardown['error'], file=sys.stderr)
+
+
+def _observe_timed_out_shutdown(client, vm, teardown):
+    # The stop RPC may still take effect. Observe under the caller's existing
+    # VM slot. Only start reads within this window. Each inventory RPC has its
+    # own 30-second transport timeout, including the last read.
+    deadline = time.monotonic() + SHUTDOWN_OBSERVATION_WINDOW
+    while time.monotonic() < deadline:
+        try:
+            state = _guest_power_state(client, vm)
+        except Exception as error:
+            teardown['observation_error'] = Redactor()(str(error))
+            return
+        teardown['observed_state'] = state
+        if state == 'stopped':
+            teardown['state_verified'] = True
+            return
+        if state not in ('running', 'stopping'):
+            return
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(SHUTDOWN_OBSERVATION_INTERVAL, remaining))
+    teardown['observation_window_expired'] = True
 
 
 def _guest_power_state(client, vm):

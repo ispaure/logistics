@@ -7,6 +7,7 @@ import json
 import os
 import argparse
 from pathlib import Path
+import subprocess
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import Mock, patch
@@ -351,6 +352,113 @@ class GuestToolPreparationTests(unittest.TestCase):
         wait.assert_called_once_with(5)
         self.assertEqual(result, dict(status='passed', vm_shutdown=dict(
             command='succeeded', observed_state='stopped', state_verified=True)))
+
+    def test_windows_timeout_keeps_setup_failure_and_verifies_late_stop(self):
+        from logistics_build import guest_results
+
+        vm = '06cb6c74-b519-4d86-93a5-217e38e2bbd8'
+        elapsed = 0
+        observations = []
+
+        def sleep(seconds):
+            nonlocal elapsed
+            elapsed += seconds
+
+        def selected(selector):
+            self.assertEqual(selector, vm)
+            observations.append(elapsed)
+            return dict(uuid='{' + vm.upper() + '}', status='stopped' if elapsed >= 40 else 'running')
+
+        timeout = subprocess.TimeoutExpired(['prlctl', 'stop', vm], 120)
+        with (TemporaryDirectory() as directory, patch.object(windows_backend, 'Parallels') as transport,
+              patch.object(windows_backend.signal, 'signal'), patch.object(windows_backend, 'prepare') as prepare,
+              patch.object(guest_results.time, 'monotonic', side_effect=lambda: elapsed),
+              patch.object(guest_results.time, 'sleep', side_effect=sleep)):
+            root = Path(directory)
+            fixture = root / 'invalid-preparation.json'
+            fixture.write_text(json.dumps(dict(vm=vm, status='controlled-invalid-preparation')))
+            args = argparse.Namespace(vm=vm, results=root / 'results', source_identity={},
+                                      prepared=fixture, shutdown=True)
+            client = transport.return_value
+            client.start.return_value = dict(uuid=vm, status='stopped')
+            client.shutdown.side_effect = timeout
+            client.selected.side_effect = selected
+            with self.assertRaisesRegex(ValueError, 'Prepared tools belong to another guest or are incomplete'):
+                windows_backend.run(args)
+            result = json.loads((args.results / 'result.json').read_text())
+            prepare.assert_not_called()
+            client.start.assert_called_once_with(vm)
+            client.shutdown.assert_called_once_with(vm)
+        self.assertEqual(observations, list(range(0, 41, 5)))
+        self.assertEqual((result['status'], result['stage']), ('failed', 'guest-setup'))
+        self.assertEqual(result['error'], 'Prepared tools belong to another guest or are incomplete.')
+        self.assertEqual(result['phases'], [])
+        self.assertNotIn('workspace', result)
+        self.assertEqual(result['vm_shutdown'], dict(command='failed', command_timed_out=True,
+                         error=str(timeout), observed_state='stopped', state_verified=True))
+
+    def test_shutdown_timeout_observation_is_bounded_and_fails_closed(self):
+        from logistics_build import guest_results
+
+        cases = (
+            (dict(uuid='owned-vm', status='running'), dict(observed_state='running', observation_window_expired=True), 60),
+            (dict(uuid='owned-vm', status='suspended'), dict(observed_state='suspended'), 0),
+            (dict(uuid='other-vm', status='stopped'), dict(observation_error='Parallels returned a different guest UUID.'), 0),
+            (RuntimeError('inventory unavailable'), dict(observation_error='inventory unavailable'), 0),
+        )
+        for row, expected, duration in cases:
+            with self.subTest(observation=row):
+                elapsed = 0
+
+                def sleep(seconds):
+                    nonlocal elapsed
+                    elapsed += seconds
+
+                timeout = subprocess.TimeoutExpired('stop', 120)
+                client = Mock()
+                client.shutdown.side_effect = timeout
+                client.selected.side_effect = [row] * (12 if duration else 1)
+                result = dict(status='cancelled', error='primary result preserved')
+                with (patch.object(guest_results.time, 'monotonic', side_effect=lambda: elapsed),
+                      patch.object(guest_results.time, 'sleep', side_effect=sleep)):
+                    guest_results._stop_started_guest(client, 'owned-vm', result)
+                self.assertEqual(elapsed, duration)
+                client.shutdown.assert_called_once_with('owned-vm')
+                self.assertEqual([entry.args for entry in client.selected.call_args_list],
+                                 [('owned-vm',)] * (12 if duration else 1))
+                self.assertEqual(result, dict(status='failed', error='primary result preserved', vm_shutdown=dict(
+                    command='failed', command_timed_out=True, error=str(timeout), state_verified=False,
+                    prior_status='cancelled', **expected)))
+
+    def test_shutdown_timeout_still_fails_a_pass_after_a_slow_final_read_verifies_stop(self):
+        from logistics_build import guest_results
+
+        elapsed = 0
+        observations = []
+
+        def sleep(seconds):
+            nonlocal elapsed
+            elapsed += seconds
+
+        def selected(vm):
+            observations.append(elapsed)
+            sleep(30)
+            return dict(uuid=vm, status='stopped' if elapsed >= 60 else 'running')
+
+        timeout = subprocess.TimeoutExpired('stop', 120)
+        client = Mock()
+        client.shutdown.side_effect = timeout
+        client.selected.side_effect = selected
+        result = dict(status='passed')
+        with (patch.object(guest_results.time, 'monotonic', side_effect=lambda: elapsed),
+              patch.object(guest_results.time, 'sleep', side_effect=sleep)):
+            guest_results._stop_started_guest(client, 'owned-vm', result)
+        client.shutdown.assert_called_once_with('owned-vm')
+        self.assertEqual(observations, [0, 35])
+        self.assertEqual(elapsed, 65)
+        self.assertEqual(result, dict(status='failed', vm_shutdown=dict(
+            command='failed', command_timed_out=True, error=str(timeout), observed_state='stopped',
+            state_verified=True, prior_status='passed')))
 
     def test_acknowledged_shutdown_requires_the_exact_guest_to_be_stopped(self):
         from logistics_build import guest_results
