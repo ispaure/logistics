@@ -80,7 +80,7 @@ See [worker lifetime and cancellation](architecture.md#long-running-workflows-an
 | Native color application, system appearance and E Ink exceptions | `Python/mobile/appearance.py`, using commonUtils `ui/native/appearance.py` |
 | Mobile control text sizes and touch targets | `Python/mobile/ui_metrics.py`; preference defaults in `preference_schema.py` and reader sizing in `font_scaling.py` |
 | Native form fitting and settings rows | commonUtils `ui/native/forms.py`; Logistics settings composition in `Python/mobile/settings/forms.py` |
-| Transfer WebView typography, spacing, responsive controls and status colors | `Python/features/rclone/transfers/assets/surface.css`; `mobile/surface.py` supplies palette CSS and font/E Ink state |
+| Transfer WebView typography, spacing, responsive controls and status colors | [Mobile transfer appearance](../features/rclone/development/transfers.md#mobile-transfer-appearance) maps the CSS defaults and the palette, font and E Ink inputs from `mobile/surface.py`. |
 
 Shared API contracts belong in the [commonUtils appearance guide](../../Python/commonUtils/docs/development/reference/ui/appearance/appearance.md).
 The mobile font-unit adapter applies to explicit Toga widget fonts; WebView CSS,
