@@ -9,7 +9,7 @@ import argparse
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from build_manager.guest_tools import LINUX_BOOTSTRAP, WINDOWS_PREPARE, linux_parameters
 from logistics_build import vm_backend, windows_backend
@@ -256,7 +256,7 @@ class GuestToolPreparationTests(unittest.TestCase):
     def test_windows_attempt_reclaims_only_disposable_tools_after_evidence_transfer(self):
         tool_paths = {'environment', 'cache', 'python', 'tools', 'downloads'}
         for reuse, transfer_fails, cleanup_fails, shutdown_fails, observed in (
-            (False, False, False, False, 'stopped'), (True, False, False, False, 'stopping'),
+            (False, False, False, False, 'stopped'), (True, False, False, False, 'stopped'),
             (False, True, False, False, 'stopped'), (False, False, True, False, 'stopped'),
             (False, False, False, True, None),
         ):
@@ -333,3 +333,47 @@ class GuestToolPreparationTests(unittest.TestCase):
                         client.selected.assert_called_once_with('test-vm')
                         self.assertEqual(result['vm_shutdown'], dict(command='succeeded', observed_state=observed,
                                                                      state_verified=observed == 'stopped'))
+
+    def test_shutdown_rechecks_a_stopping_guest(self):
+        from logistics_build import guest_results
+
+        with patch.object(guest_results.time, 'sleep') as wait:
+            client = Mock()
+            client.selected.side_effect = [
+                dict(uuid='owned-vm', status='stopping'),
+                dict(uuid='owned-vm', status='stopped'),
+            ]
+            result = dict(status='passed')
+            guest_results._stop_started_guest(client, 'owned-vm', result)
+
+        client.shutdown.assert_called_once_with('owned-vm')
+        self.assertEqual([entry.args for entry in client.selected.call_args_list], [('owned-vm',), ('owned-vm',)])
+        wait.assert_called_once_with(5)
+        self.assertEqual(result, dict(status='passed', vm_shutdown=dict(
+            command='succeeded', observed_state='stopped', state_verified=True)))
+
+    def test_acknowledged_shutdown_requires_the_exact_guest_to_be_stopped(self):
+        from logistics_build import guest_results
+
+        cases = (
+            (dict(uuid='owned-vm', status='running'), 'observed_state', 'running'),
+            (dict(uuid='other-vm', status='stopped'), 'observation_error', 'different guest UUID'),
+            (RuntimeError('inventory unavailable'), 'observation_error', 'inventory unavailable'),
+        )
+        for observation, field, detail in cases:
+            with self.subTest(detail=detail), patch.object(guest_results.time, 'sleep') as wait:
+                client = Mock()
+                client.selected.side_effect = [observation]
+                result = dict(status='cancelled', error='primary result preserved')
+                guest_results._stop_started_guest(client, 'owned-vm', result)
+                client.shutdown.assert_called_once_with('owned-vm')
+                client.selected.assert_called_once_with('owned-vm')
+                wait.assert_not_called()
+                self.assertEqual(result['status'], 'failed')
+                self.assertEqual(result['error'], 'primary result preserved')
+                teardown = result['vm_shutdown']
+                self.assertEqual(teardown['command'], 'succeeded')
+                self.assertFalse(teardown['state_verified'])
+                self.assertEqual(teardown['prior_status'], 'cancelled')
+                self.assertIn('stop could not be verified', teardown['error'])
+                self.assertIn(detail, teardown[field])

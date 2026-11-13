@@ -231,8 +231,8 @@ cleanup cannot finish, the remaining workspace/error is reported for recovery.
 from a stopped state by that run. The Fedora and Windows adapters attempt
 shutdown after guest-dependent evidence and cleanup, including when setup fails
 after start. The attempt records the shutdown command outcome and observed
-power state. A failed shutdown command fails the phase, and an unverified stop
-is reported for inspection. A guest that was already running or resumed from
+power state. A failed shutdown command or an unverified final stopped state
+fails the phase. A guest that was already running or resumed from
 suspended stays running. VM creation, resets, resource changes, disk passphrases
 and account sign-in are outside this runner.
 

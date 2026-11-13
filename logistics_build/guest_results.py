@@ -53,24 +53,33 @@ def _stop_started_guest(client, vm, result):
         client.shutdown(vm)
     except Exception as error:
         teardown['error'] = Redactor()(str(error))
-        if result['status'] != 'failed':
-            teardown['prior_status'] = result['status']
-        result['status'] = 'failed'
-        print('Unable to shut down the selected Parallels VM: ' + teardown['error'], file=sys.stderr)
-        return
+    else:
+        teardown['command'] = 'succeeded'
+        try:
+            teardown['observed_state'] = _guest_power_state(client, vm)
+            if teardown['observed_state'] == 'stopping':
+                # Allow a short grace period for a reported shutdown transition.
+                time.sleep(5)
+                teardown['observed_state'] = _guest_power_state(client, vm)
+            teardown['state_verified'] = teardown['observed_state'] == 'stopped'
+        except Exception as error:
+            teardown['observation_error'] = Redactor()(str(error))
+        if teardown['state_verified']:
+            return
+        teardown['error'] = ('Parallels acknowledged shutdown, but the stop could not be verified. '
+                             'Check the selected VM power state in Parallels.')
 
-    teardown['command'] = 'succeeded'
-    try:
-        observed = client.selected(vm)
-        if observed['uuid'].strip('{}').lower() != vm.strip('{}').lower():
-            raise ValueError('Parallels returned a different guest UUID.')
-        teardown['observed_state'] = observed['status']
-        teardown['state_verified'] = observed['status'] == 'stopped'
-    except Exception as error:
-        teardown['observation_error'] = Redactor()(str(error))
-    if not teardown['state_verified']:
-        print('Parallels acknowledged shutdown, but the VM stop was not verified. '
-              'Check the selected VM power state in Parallels.', file=sys.stderr)
+    if result['status'] != 'failed':
+        teardown['prior_status'] = result['status']
+    result['status'] = 'failed'
+    print('Unable to confirm shutdown of the selected Parallels VM: ' + teardown['error'], file=sys.stderr)
+
+
+def _guest_power_state(client, vm):
+    observed = client.selected(vm)
+    if observed['uuid'].strip('{}').lower() != vm.strip('{}').lower():
+        raise ValueError('Parallels returned a different guest UUID.')
+    return observed['status']
 
 
 def verified_manager_completion(directory, source, backend, manager_commit, source_plan_identity=''):
