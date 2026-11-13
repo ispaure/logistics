@@ -45,7 +45,7 @@ class MarkdownFontProbe(toga.App):
     async def probe(self):
         from android.graphics import Paint, Typeface
         from android.graphics.text import TextRunShaper
-        from mobile import android_markdown_font as bridge
+        from mobile.native import android_markdown_font as bridge
         from mobile.preview import markdown_preview
         from services.documents.authoring.markdown_editor import editor_html
         from features.books.mobile.private_view import PrivateWebView
