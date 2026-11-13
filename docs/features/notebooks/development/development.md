@@ -8,6 +8,8 @@ New ink's bounded point reduction and imported-stroke preservation are described
 in [saved stroke sampling](stroke-sampling.md).
 Native lasso controls and clipboard contracts are described in
 [stroke selection](stroke-selection.md).
+Local candidate checks, recovery receipts and the device qualification boundary
+are described in [SSH upload and organize contracts](ssh-transfers.md).
 
 ## Read-only SSH browser and local overwrite
 
@@ -31,6 +33,11 @@ occurrences plus that count equals received archive entries, not a guarantee of
 a coherent tablet snapshot. SSH failure or cancellation raises without returning
 a partial receipt. Synthetic Root and Unfiled rows are excluded. Corpus helpers
 can reconcile omissions using this receipt without logging document titles.
+Enumeration accepts a directory or broken symlink as the first glob match and
+uses `tar --no-recursion` to account for its header without reading descendants
+or following links. A tablet tar build lacking that option fails the request;
+there is no recursive fallback. A real POSIX shell/tar fixture checks the
+directory-first, broken-link-first and empty-store cases.
 
 The snapshot keeps document and collection IDs separate from display names,
 including empty folders and duplicate sibling labels. Deleted/trash ancestry is
@@ -63,7 +70,9 @@ simulation, replacement, decline and concurrent destination changes. They use
 synthetic metadata, native archives and an in-memory SSH stream. The macOS 26.6.2 /
 Qt 6.12 native-picker attempt could not automate the system panel buttons, so
 native acceptance remains pending. Physical tablet/firmware behavior is also
-unverified. Upload, tablet mutations and firmware index refresh remain unimplemented.
+unverified. Local upload-candidate preparation and member comparison are available
+as described in the transfer contract; remote upload, tablet mutations and firmware
+index refresh remain unimplemented.
 
 ## Current implementation and acceptance boundary
 
