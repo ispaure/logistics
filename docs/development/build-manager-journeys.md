@@ -1,13 +1,35 @@
 # Combined validation and delivery
 
-Logistics now declares the manager's journey schema 1 in `build-project.json`.
+Logistics declares the manager's journey schema 1 in `build-project.json`.
 The standalone manager uses `logistics_build.manager_journeys` through
 `LogisticsProject.make_journey`. The isolated script
 `logistics_build/manager_bridge.py` exposes the same `journey_plan` action.
-The old dedicated deployment window is retired; project device/signing/provider
-helpers remain adapter implementation details.
 
 For the operator workflow, see [validating and delivering Logistics](../user/build-manager-journeys.md).
+
+## Trace a validation plan
+
+1. In the standalone manager, select a trusted Logistics checkout with
+   [project tooling ready](../user/build-manager.md#project-tooling-readiness-and-repair).
+   Choose **Run checks**, a supported platform and a local execution host.
+   Select **Next: review plan** and inspect the source, host, phases and
+   prerequisites. Stop at review for this walkthrough. **Start validation**
+   executes the reviewed plan.
+2. In the checkout, follow `build-project.json` to
+   `logistics_build/build_project.py:LogisticsProject.make_journey` and
+   `logistics_build/manager_journeys.py`. Follow the plan's test groups into
+   [suite discovery](#shared-tests-and-suite-discovery). Logistics declares
+   project inputs and gates. Build Manager reviews and executes the plan.
+3. To exercise the adapter with synthetic source and settings, use the root
+   desktop environment with the pinned manager installed:
+
+   ```sh
+   python3 dev.py test desktop --exact-file Python/tests/tooling/test_manager_journeys.py
+   ```
+
+   This runs the portable journey contracts with fixture plans and mocked
+   native and provider commands. Use `py` on Windows. For missing manager
+   imports, see [local manager dependency and verification](#local-manager-dependency-and-verification).
 
 ## Source, settings and resource integrity
 

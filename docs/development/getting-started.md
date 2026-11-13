@@ -19,10 +19,11 @@ python3 dev.py doctor
 On Windows use `py` in place of `python3`. The setup preview prints its intended
 command; setup then installs the locked desktop environment at root `.venv`.
 Doctor reads interpreter, package, submodule and optional-tool status without
-changing the environment or reading credentials. It checks both desktop and mobile
-host environments; missing mobile host packages can therefore make it nonzero
-after desktop-only setup. Missing optional native tools are informational and do
-not affect its exit status. Read the specific diagnostic before choosing a check. See [setup details](testing.md#set-up-a-checkout).
+changing the environment or reading credentials. It checks both host
+environments and, where applicable, project native prerequisites. A mobile
+diagnostic can appear after a successful desktop setup. For the desktop walkthrough,
+check that the desktop environment, commonUtils and uv report `OK`. See
+[setup details](testing.md#set-up-a-checkout).
 
 For an existing checkout, keep your current branch and preserve local edits.
 Initialize missing submodules only after checking for changes inside them.
@@ -62,7 +63,8 @@ The three repositories have distinct jobs:
 | Build Deployment Manager | The change concerns generic plan execution, review, scheduling, transports or retention mechanics |
 
 A shared-library edit is a separate repository change, even though its files are
-under `Python/commonUtils`. It does not update another consumer's pin.
+under `Python/commonUtils`. It does not update another consumer's pin. To trace
+a build or validation workflow, follow the [Build Manager plan walkthrough](build-manager-journeys.md#trace-a-validation-plan).
 
 ## 4. Make a small change and check it
 
