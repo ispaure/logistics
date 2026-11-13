@@ -1,14 +1,76 @@
 """Project-owned guest evidence collection and conditional cleanup outcomes."""
+from contextlib import contextmanager
 import json
 import hashlib
 from pathlib import Path
 import subprocess
+import sys
 import time
 
-from build_manager.profiles import save_json
-
-
 from build_manager.guest_workload import GuestResultLifecycle, waiting_progress
+from build_manager.profiles import save_json
+from build_manager.redaction import Redactor
+
+
+@contextmanager
+def vm_attempt(args, client, cancelled, *, backend, workspace_key):
+    """Keep power teardown inside the attempt that received the start receipt."""
+    args.results.mkdir(parents=True, exist_ok=False)
+    result = dict(schema=1, source=args.source_identity, backend=backend, status='running',
+                  stage='vm-start', vm_selector=args.vm, phases=[])
+    lifecycle = GuestResultLifecycle(result, args.results, backend, workspace_key)
+    started_vm = None
+    primary_error = None
+    try:
+        if not cancelled.is_set():
+            initial = client.start(args.vm)
+            result.update(vm=initial['uuid'], original_state=initial['status'], stage='guest-setup')
+            if args.shutdown and result['original_state'] == 'stopped':
+                started_vm = result['vm']
+            save_json(args.results / 'result.json', result)
+        if cancelled.is_set():
+            result['status'] = 'cancelled'
+        yield result, lifecycle
+    except BaseException as error:
+        primary_error = error
+        result['status'] = 'cancelled' if cancelled.is_set() or isinstance(error, KeyboardInterrupt) else 'failed'
+        result.setdefault('error', Redactor()(str(error)))
+        raise
+    finally:
+        if started_vm is not None:
+            _stop_started_guest(client, started_vm, result)
+        try:
+            lifecycle.finish()
+        except (OSError, ValueError) as error:
+            if primary_error is None:
+                raise
+            print('Unable to write final guest attempt: ' + Redactor()(str(error)), file=sys.stderr)
+
+
+def _stop_started_guest(client, vm, result):
+    teardown = result['vm_shutdown'] = dict(command='failed', state_verified=False)
+    try:
+        client.shutdown(vm)
+    except Exception as error:
+        teardown['error'] = Redactor()(str(error))
+        if result['status'] != 'failed':
+            teardown['prior_status'] = result['status']
+        result['status'] = 'failed'
+        print('Unable to shut down the selected Parallels VM: ' + teardown['error'], file=sys.stderr)
+        return
+
+    teardown['command'] = 'succeeded'
+    try:
+        observed = client.selected(vm)
+        if observed['uuid'].strip('{}').lower() != vm.strip('{}').lower():
+            raise ValueError('Parallels returned a different guest UUID.')
+        teardown['observed_state'] = observed['status']
+        teardown['state_verified'] = observed['status'] == 'stopped'
+    except Exception as error:
+        teardown['observation_error'] = Redactor()(str(error))
+    if not teardown['state_verified']:
+        print('Parallels acknowledged shutdown, but the VM stop was not verified. '
+              'Check the selected VM power state in Parallels.', file=sys.stderr)
 
 
 def verified_manager_completion(directory, source, backend, manager_commit, source_plan_identity=''):

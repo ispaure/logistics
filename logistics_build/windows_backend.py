@@ -15,8 +15,9 @@ from build_manager import Phase, Plan
 from build_manager.parallels import Parallels
 from build_manager.windows_guest import WindowsGuest
 from build_manager.guest_tools import WINDOWS_PREPARE
+from build_manager.profiles import save_json
 from logistics_build.build_snapshots import source_members
-from logistics_build.guest_results import GuestResultLifecycle, waiting_progress
+from logistics_build.guest_results import vm_attempt, waiting_progress
 
 
 PREPARE = WINDOWS_PREPARE
@@ -49,12 +50,18 @@ def _run_attempt(args):
     cancelled = Event()
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: cancelled.set())
-    args.results.mkdir(parents=True, exist_ok=False)
-    selected = client.start(args.vm)
+    with vm_attempt(args, client, cancelled, backend='Parallels Windows',
+                    workspace_key='test_workspace') as (result, lifecycle):
+        if result['status'] == 'running':
+            _run_guest(args, client, cancelled, result, lifecycle)
+    return int(result['status'] != 'passed')
+
+
+def _run_guest(args, client, cancelled, result, lifecycle):
     reuse_prepared = args.prepared is not None and args.prepared.is_file()
     if reuse_prepared:
         prepared = json.loads(args.prepared.read_text())
-        if prepared.get('vm') != selected['uuid'] or prepared.get('status') != 'prepared':
+        if prepared.get('vm') != result['vm'] or prepared.get('status') != 'prepared':
             raise ValueError('Prepared tools belong to another guest or are incomplete.')
     else:
         prepared = prepare(args.vm, args.results / 'prepared.json')
@@ -74,11 +81,10 @@ def _run_attempt(args):
         environment['LOGISTICS_MANAGER_LOCAL_TEST_SOURCE'] = args.manager_working_tree
     if os.environ.get('LOGISTICS_REUSE_TEST_RESULTS') == 'off':
         environment['LOGISTICS_REUSE_TEST_RESULTS'] = 'off'
-    result = dict(schema=1, status='running', source=args.source_identity, backend='Parallels Windows', original_state=selected['status'],
-                  started_at=datetime.now(timezone.utc).isoformat(), guest_architecture=prepared['guestArchitecture'],
-                  runtime=prepared['runtime'], workspace=prepared['workspace'], workspace_token=prepared['token'], operation=operation,
-                  public_tool_cache_retained=True)
-    lifecycle = GuestResultLifecycle(result, args.results, 'Parallels Windows', 'test_workspace')
+    result.update(started_at=datetime.now(timezone.utc).isoformat(), guest_architecture=prepared['guestArchitecture'],
+                  runtime=prepared['runtime'], workspace=prepared['workspace'], workspace_token=prepared['token'],
+                  operation=operation, public_tool_cache_retained=True, stage='guest-workspace')
+    save_json(args.results / 'result.json', result)
     manager = 'manager-' + operation
     try:
         payload = source_zip(args.snapshot)
@@ -135,6 +141,7 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
                     args.source_identity, phases, str(root / ('operation-' + operation)), backend='Parallels Windows')
         plan_name = 'plan-' + operation + '.json'
         from build_manager.guest_workload import execute_plan
+        result['stage'] = 'guest-tests'
         code = execute_plan(plan=plan, python=python,
             write=lambda data: guest.write(plan_name, data),
             execute=lambda argv, env, timeout: guest.run(argv[0], argv[1:], source, reports,
@@ -159,10 +166,6 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
             lambda: guest.collect([reports, source + '/test-results'], args.results / 'guest'),
             args.results / 'guest' / reports / 'manager/result.json',
             cleanup)
-        lifecycle.finish()
-    if args.shutdown and selected['status'] == 'stopped':
-        client.shutdown(selected['uuid'])
-    return int(result['status'] != 'passed')
 
 
 def main():

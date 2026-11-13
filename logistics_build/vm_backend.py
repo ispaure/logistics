@@ -13,8 +13,9 @@ from uuid import uuid4
 from build_manager import Phase, Plan
 from build_manager.parallels import Parallels
 from build_manager.guest_tools import LINUX_BOOTSTRAP, linux_parameters
+from build_manager.profiles import save_json
 from logistics_build.build_snapshots import source_members
-from logistics_build.guest_results import GuestResultLifecycle, waiting_progress
+from logistics_build.guest_results import vm_attempt, waiting_progress
 
 
 INSPECT = '''import json,os,pathlib,platform,pwd
@@ -40,8 +41,15 @@ def _run_attempt(args):
     for sig in (signal.SIGINT, signal.SIGTERM):
         signal.signal(sig, lambda *_: cancelled.set())
     client = Parallels()
-    original = client.start(args.vm)
-    vm = original['uuid']
+    with vm_attempt(args, client, cancelled, backend='Parallels ' + args.distribution,
+                    workspace_key='guest_workspace') as (result, lifecycle):
+        if result['status'] == 'running':
+            _run_guest(args, client, cancelled, result, lifecycle)
+    return int(result['status'] != 'passed')
+
+
+def _run_guest(args, client, cancelled, result, lifecycle):
+    vm = result['vm']
     deadline = time.monotonic() + 120
     while True:
         try:
@@ -66,10 +74,8 @@ def _run_attempt(args):
     container = None
     token = uuid4().hex
     workspace = '/var/tmp/' + token
-    result = dict(schema=1, vm=vm, original_state=original['status'], environment=info,
-                  workspace=workspace, workspace_token=token, source=args.source_identity, status='running', phases=[])
-    args.results.mkdir(parents=True, exist_ok=False)
-    lifecycle = GuestResultLifecycle(result, args.results, 'Parallels ' + args.distribution, 'guest_workspace')
+    result.update(environment=info, workspace=workspace, workspace_token=token, stage='guest-workspace')
+    save_json(args.results / 'result.json', result)
     staged = False
     transfer_attempted = False
     try:
@@ -157,7 +163,7 @@ subprocess.run(['uv','venv','--python',json.loads(sys.argv[2])['python'],'--seed
         if code:
             result['status'] = 'cancelled' if cancelled.is_set() else 'failed'
             result['failure'] = 'Guest isolated interpreter setup failed: ' + str(code)
-            return 1
+            return
         guest_python = workspace + '/environment/bin/python'
         if args.manager_checkout:
             from logistics_build.guest_manager import stage_linux
@@ -190,15 +196,14 @@ subprocess.run(['uv','venv','--python',json.loads(sys.argv[2])['python'],'--seed
         plan = Plan('Logistics', 'Focused Linux contracts' if args.pattern else 'Full local Linux platform checks', args.source_identity, phases,
                     workspace + '/operation', backend='Parallels ' + args.distribution)
         from build_manager.guest_workload import execute_plan
+        result['stage'] = 'guest-tests'
         code = execute_plan(plan=plan, python=guest_python,
             write=lambda data: client.write_owned(vm, workspace, token, 'plan.json', data, account['uid'], account['gid']),
             execute=execute, plan_path=workspace + '/plan.json', reports=reports + '/manager',
             environment=env, timeout=max(3400, sum(phase.timeout for phase in phases) + 300))
         result['status'] = 'cancelled' if cancelled.is_set() else 'passed' if code == 0 else 'failed'
-        return int(code != 0)
     except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as error:
         result.update(status='failed', error=str(error))
-        return 1
     finally:
         if container:
             try:
@@ -218,9 +223,6 @@ subprocess.run(['uv','venv','--python',json.loads(sys.argv[2])['python'],'--seed
                 lambda: client.collect(vm, workspace, token, args.results / 'guest'),
                 args.results / 'guest/reports/manager/result.json',
                 lambda: client.remove(vm, workspace, token))
-        lifecycle.finish()
-        if args.shutdown and original['status'] == 'stopped':
-            client.shutdown(vm)
 
 
 def main():
@@ -241,9 +243,7 @@ def main():
     args = parser.parse_args()
     if args.native_notebooks and not args.pattern:
         parser.error('--native-notebooks requires an explicit focused test pattern')
-    code = run(args)
-    report = json.loads((args.results / 'result.json').read_text())
-    return code or int(report['status'] != 'passed')
+    return run(args)
 
 
 if __name__ == '__main__':
