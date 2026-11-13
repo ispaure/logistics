@@ -492,11 +492,22 @@ case counts must not be added as interchangeable coverage.
 The descriptor now declares `portable.contracts` (tooling contracts under
 `Python/tests/tooling`), `desktop.ui` (application/UI checks under
 `Python/tests/application`), `android.native`, `android.runtime`, `ios.native`,
-`ios.runtime` and `release.acceptance`. These map existing owners into contracts, UI, native
+`ios.runtime`, `android.incoming`, `ios.incoming` and `release.acceptance`. These map existing owners into contracts, UI, native
 and acceptance groups without moving their fixtures or imports. Full Test retains
 its canonical suite inventory. A named host suite intersects its filename pattern;
 native and release suites reject focused patterns. Named selection on hosted/VM
 backends is explicitly unsupported rather than silently broadened.
+
+The incoming-file suites build a disposable receiver with the normal app entry
+point and native receivers, plus a separate source app. Each suite creates a
+fresh sender and receiver pair for the phone, cleans it up, then repeats on the
+tablet. Transport copies synthetic fixtures only into the source app; the
+system Sharesheet or Files Open With menu performs delivery into Logistics.
+These local suites use the current **On My Phone / On My Tablet** route and
+retain byte, filename, lifecycle and cleanup receipts under ignored test
+results. See [incoming-file validation](mobile-preparation.md#incoming-files-and-inbox)
+for the platform boundaries. They do not replace the canonical native/runtime
+inventories or release acceptance.
 
 The isolated regression runner accepts `--junit PATH` alongside its JSON timing
 report. It retains measured cases, failure messages, skips, subtest/fixture errors

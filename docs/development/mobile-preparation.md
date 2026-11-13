@@ -804,9 +804,9 @@ reads. The update used the existing app identity and preserved its data.
 ### Incoming files and Inbox
 
 `mobile/incoming_files.py` publishes complete handoffs to the ordinary files
-root exposed as **On My Phone**. iOS uses the public Documents root. Android
-uses `<collection-base>/Files`. The ordinary provider excludes the managed
-copy folder, legacy reserved names and temporary intake files.
+root exposed as **On My Phone** or **On My Tablet**. iOS uses the public Documents
+root. Android uses `<collection-base>/Files`. The ordinary provider excludes the
+managed copy folder, legacy reserved names and temporary intake files.
 
 Legacy private and system `Inbox` trees are copied and verified before the
 public-layout upgrade, with the originals retained. The public-layout journal
@@ -868,12 +868,71 @@ size limits, resource identities and repeated native project configuration.
 The reusable `received_files_probe.py` QA entry point checks the real iOS
 Documents root, legacy-byte preservation, Browse All Files navigation and native
 URL intake. These checks passed on an iOS 27 simulator on October 24, 2026;
-physical-device share-extension and Android native acceptance remain separate.
+that probe did not establish actual Android Sharesheet delivery or distinguish
+iOS main-app Open In from a Share extension selected through a similar menu.
 Reusable native sender fixtures live in `mobile_build/native_tests/android/incoming/`
 and `mobile_build/native_tests/ios/IncomingSender.m`; iOS menu tests use
-`IncomingFilesUITests.swift`. Keep generated projects, screenshots and test
-reports outside the wiki. Physical iPhone/iPad acceptance still requires properly
-provisioned App Group handoff; simulator results do not satisfy that gate.
+`IncomingFilesUITests.swift`. The build manager's local `android.incoming` and
+`ios.incoming` suites use `logistics_build/incoming_acceptance.py` to build a
+disposable QA receiver (`io.github.ispaure.logisticsinboxqa`) with the normal
+application entry point. The synthetic source app uses
+`io.github.ispaure.logisticsincomingsender` on both platforms. Platform drivers in
+`mobile_build/validation/incoming_android.py` and `incoming_ios_tools.py` relay
+synthetic files between separate source-app instances, then drive the real OS
+receiving route. They inspect the published bytes and raw filenames, open files
+through **Workspaces → Local → On My Phone / On My Tablet**, and reopen the app.
+Android uses untargeted single/multiple Sharesheets; iOS distinguishes the main
+app in Files' **Open With** menu from the Share extension. A share-cell selection
+alone does not prove main-app Open In.
+
+The iPhone profile checks chooser dismissal, cold and warm Files **Open With**,
+Share extension handoff, opening and reopening shared files, duplicate names,
+cancellation and provider failure. The iPad profile checks Files **Open With**
+with two existing workspace windows, Share extension handoff, and opening and
+reopening shared files in the tablet interface. The profiles share the native
+receiver, so the iPhone cases cover shared lifecycle, duplicate-name,
+cancellation and failure behavior. The explicit Home-resume and provider-retry
+cases remain available as diagnostics.
+
+iPhone simulator validation covers chooser dismissal, cold launch and warm
+resumption through Files **Open With**, Share extension handoff, and opening
+both shared files from **On My Phone**, including after restart. Duplicate
+names also passed: both actual shares retained the same receiver process, and
+the original and numbered files opened with distinct contents after each of two
+restarts. This does not assert refresh of a retained folder while a reader is open.
+Cancellation and provider failure also passed, preserving the completed first
+file and both source originals while leaving no incomplete second publication.
+On the iPad
+simulator, Share extension handoff and opening both shared files from
+**On My Tablet**, including after restart, have been verified. Files **Open With**
+and its window-routing check also passed.
+
+UIKit can deliver URLs to a new or existing workspace scene. The verified iPad
+simulator route opened a new interactive Home window while both existing windows
+retained App Settings. Exactly one file reached the ordinary root through the
+main-app route. After recording scene preservation, the test restarted the app,
+opened the file from **On My Tablet**, and restarted again to reopen it. The suite
+records a passing `window_routing` result only when the UI check and one exact
+main-app publication both pass. The window-controls diagnostic checks window
+creation and controls only.
+
+The controlled iOS cancellation/error source records its offered file types and
+load events. Before interrupting the second file, the driver verifies the first
+complete Share handoff while the main app is stopped, then acknowledges that
+checkpoint in the source fixture's private directory. The UI test waits for
+this acknowledgement before Cancel or provider failure. A missing share target,
+an early load or an unobserved checkpoint fails the case. XCTest can replace the
+source app's data container during target installation, so the observer resolves
+that container again while telemetry is absent and records the actual binding.
+
+The suites preserve the main app (`io.github.ispaure.logisticsmobile`) and its
+data. Manager-owned scratch, exact device leases and cleanup phases remove only
+their disposable builds, apps and virtual devices after evidence is saved.
+Handled cancellation and provider errors clean partial handoffs immediately.
+Force-killed receivers retain incomplete handoffs under the existing 24-hour
+expiry policy. Completed files remain discoverable in both cases. Keep generated
+projects, screenshots and test reports outside the wiki. Physical App Group
+provisioning remains a separate device check.
 
 ### iOS shared Local storage
 

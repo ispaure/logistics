@@ -47,6 +47,40 @@ class IncomingTests(unittest.TestCase):
         self.assertTrue((self.inbox / 'hello (1).txt').exists())
         self.assertEqual(consume(self.queue, self.inbox), (0, 0))
 
+    def test_enabled_layout_publishes_to_current_device_provider_without_overwrite(self):
+        from mobile.local_sources import device_files, PhoneFiles
+        from services.documents.mobile_locations import _enabled, reserved_phone_name
+        from services.documents.migrations.mobile_layout import prepare_android, prepare_layout
+
+        for platform in ('android', 'ios'):
+            with self.subTest(platform=platform):
+                private = self.root / platform / 'private'
+                private.mkdir(parents=True)
+                self.addCleanup(_enabled.discard, private)
+                if platform == 'ios':
+                    documents = self.root / platform / 'Documents'
+                    documents.mkdir()
+                    use_shared_local(private, documents)
+                    self.addCleanup(_shared_local_roots.pop, private, None)
+                    prepare_layout(private, documents, ios=True)
+                    expected = documents
+                else:
+                    prepare_android(private)
+                    expected = private / 'Files'
+                original = expected / 'été.txt'
+                original.write_bytes(b'original\r\n\n')
+                self.delivery(name=original.name, data=b'incoming\n\n')
+                self.assertEqual(inbox_path(private), expected)
+                self.assertEqual(consume(self.queue, inbox_path(private), reserved=reserved_phone_name), (1, 0))
+                provider = device_files(private)
+                self.assertIsInstance(provider, PhoneFiles)
+                self.assertEqual(provider.root, expected)
+                self.assertEqual({row['name'] for row in provider.list()}, {'été.txt', 'été (1).txt'})
+                self.assertEqual(original.read_bytes(), b'original\r\n\n')
+                self.assertEqual((provider.root / 'été (1).txt').read_bytes(), b'incoming\n\n')
+                self.assertFalse((expected / 'Received Files').exists())
+                self.assertEqual(consume(self.queue, inbox_path(private), reserved=reserved_phone_name), (0, 0))
+
     def test_existing_user_file_is_never_overwritten(self):
         (self.inbox / 'hello.txt').write_bytes(b'user data')
         self.delivery()
