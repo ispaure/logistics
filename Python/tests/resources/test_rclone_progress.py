@@ -10,6 +10,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 import unittest
+import warnings
 from commonUtils.tests.qt_test_case import QtTestCase
 from features.rclone.transfers.progress import RcloneProgressParser
 from features.rclone.transfers.sync import build_sync_arguments, rclone_sync
@@ -73,14 +74,44 @@ class RcloneProgressTests(QtTestCase):
             destination = Path(temp) / 'destination'
             with patch('features.rclone.transfers.sync.executable.ensure_rclone', return_value=Path('/rclone')), \
                     patch('commonUtils.ui.tasks.process_progress.open_process') as opened, \
-                    patch('features.rclone.transfers.sync._watch_transfer') as watch, \
+                    patch('features.rclone.transfers.ui.progress.watch_transfer') as watch, \
                     patch('features.rclone.transfers.sync.cmdShellWrapper.exec_cmd') as console:
-                self.assertTrue(rclone_sync('Remote:', destination, config_path='/selected.conf'))
+                with warnings.catch_warnings(record=True) as caught:
+                    warnings.simplefilter('always')
+                    self.assertTrue(rclone_sync('Remote:', destination, config_path='/selected.conf'))
+                self.assertEqual(caught, [])
                 console.assert_not_called()
                 watch.assert_called_once()
                 self.assertEqual(Path(opened.call_args.args[1]), Path('/rclone'))
                 self.assertIn('/selected.conf', opened.call_args.args[2])
                 self.assertTrue(destination.is_dir())
+
+    def test_legacy_presentation_helpers_delegate_and_warn_once_per_call_site(self):
+        from features.rclone.transfers import progress, sync
+        window, config_path, revoked, cancelled = object(), Path('/selected.conf'), object(), object()
+        with patch('features.rclone.transfers.ui.progress.watch_transfer') as watch, \
+                patch('features.rclone.transfers.ui.progress.add_removal_statistics') as statistics, \
+                warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter('default', FutureWarning)
+            for _ in range(2):
+                self.assertIs(sync._watch_transfer(window, config_path, revoked, cancelled,
+                    session_bound=True), watch.return_value)
+                self.assertIs(progress.add_removal_statistics(window, dry_run=True), statistics.return_value)
+        self.assertEqual(watch.call_count, 2)
+        watch.assert_called_with(window, config_path, revoked, cancelled, session_bound=True)
+        self.assertEqual(statistics.call_count, 2)
+        statistics.assert_called_with(window, dry_run=True)
+        self.assertEqual(len(caught), 2)
+        for warning, old, new in zip(caught, (
+                'features.rclone.transfers.sync._watch_transfer',
+                'features.rclone.transfers.progress.add_removal_statistics'), (
+                'features.rclone.transfers.ui.progress.watch_transfer',
+                'features.rclone.transfers.ui.progress.add_removal_statistics')):
+            self.assertIs(warning.category, FutureWarning)
+            self.assertIn(old, str(warning.message))
+            self.assertIn(new, str(warning.message))
+            self.assertIn('same arguments', str(warning.message))
+            self.assertEqual(Path(warning.filename), Path(__file__))
 
     def test_real_local_rclone_sync_and_failure_when_executable_available(self):
         import time
