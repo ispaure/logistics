@@ -1,6 +1,8 @@
 """Native drawing chrome mirrors DOM controls without owning notebook edits."""
 import asyncio
 import json
+import os
+import sys
 import unittest
 from types import SimpleNamespace as NS
 from dataclasses import replace
@@ -59,8 +61,9 @@ class NativeToolsTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_initial_canvas_ready_requests_native_header_render_without_rotation(self):
         from features.notebooks.mobile.panel import NotebookPanel
-        panel = NS(web=object(), native_drawing_tools=object(),
-            app=NS(adaptive=NS(render=unittest.mock.Mock())), refresh_fold=unittest.mock.Mock())
+        panel = NS(web=object(), bridge=object(), native_drawing_tools=object(),
+            app=NS(adaptive=NS(render=unittest.mock.Mock())), refresh_fold=unittest.mock.Mock(),
+            prefetch_pdf_neighbors=unittest.mock.Mock())
         await NotebookPanel.canvas_loaded(panel, panel.web)
         self.assertTrue(panel._canvas_ready)
         panel.app.adaptive.render.assert_called_once_with()
@@ -334,6 +337,28 @@ class NativeToolsMountTests(unittest.TestCase):
 
 
 class NotebookPresentationBoundaryTests(unittest.TestCase):
+    def test_host_reports_duo_identity_before_webview_rendering(self):
+        from features.notebooks.editor import Editor
+        from features.notebooks.mobile.panel import NotebookPanel
+        from features.notebooks.notebook import Notebook
+        from mobile_build.tests.support.app import create_app
+
+        app = create_app(self)
+        panel = NotebookPanel(app, library=False)
+        self.addCleanup(panel.dispose)
+        panel.editor = Editor(Notebook.new())
+        self.assertIsNone(panel.web)
+        for platform, model, expected in (
+                ('ios', 'iPhone19,4', True),
+                ('ios', 'iPhone18,1', False),
+                ('android', 'iPhone19,4', False)):
+            with (
+                self.subTest(platform=platform, model=model),
+                patch.object(sys, 'platform', platform),
+                patch.dict(os.environ, SIMULATOR_MODEL_IDENTIFIER=model),
+            ):
+                self.assertIs(panel.state()['iphone_duo'], expected)
+
     def test_host_retirement_callback_and_standalone_default(self):
         from dataclasses import fields
         from services.mobile_presentation import MobilePresentation
@@ -354,7 +379,8 @@ class NotebookPresentationBoundaryTests(unittest.TestCase):
             panel.retire_canvas()
         callback.assert_called_once_with(panel.view)
         standalone = MobilePresentation(**{field.name:getattr(app.presentation, field.name)
-            for field in fields(MobilePresentation) if field.name != 'reset_reader_layout'})
+            for field in fields(MobilePresentation) if field.name not in ('reset_reader_layout', 'is_iphone_duo')})
         self.assertIsNone(standalone.reset_reader_layout(panel.view))
+        self.assertFalse(standalone.is_iphone_duo())
         self.assertEqual(panel.view._notebook_dom_epoch, 2)
         panel.dispose()

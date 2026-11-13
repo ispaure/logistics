@@ -121,3 +121,4 @@ class MobilePresentation:
     native_notebook_toolbar: bool = False
     favourite_resource: Callable | None = None
     reset_reader_layout: Callable[[Any], None] = lambda view: None
+    is_iphone_duo: Callable[[], bool] = lambda: False
