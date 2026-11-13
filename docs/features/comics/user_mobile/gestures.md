@@ -17,10 +17,18 @@ reader. It works on single pages and spreads, including Local/LocalCrypt comics.
 
 Comic pages use native pinch zoom and panning on iOS and Android. Fit page resets
 zoom; swipe left for the next page and right for the previous page at fit size.
-Manga reverses those directions. At the beginning, a backward boundary swipe
-briefly shows the reading direction and offers the previous volume when available.
-At the end, a forward boundary swipe offers the next volume. Repeat the boundary
-swipe within 2.5 seconds to open the offered volume; otherwise the hint clears.
+Manga reverses those directions. A swipe past either boundary briefly shows a
+finger demonstrating the next-page gesture: **right to left** for ordinary comics,
+**left to right** for right-to-left manga. A separate bottom line offers the
+previous volume at the beginning or the next volume at the end, only when that
+neighbor is available. Follow that line's physical direction and repeat the
+boundary swipe within 2.5 seconds to open the offered volume; otherwise the cue
+clears. Pending, failed and missing neighbors have no volume instruction. If a
+neighbor disappears before opening, a recoverable message leaves the comic open.
+The finger makes two short strokes. Reduced motion, disabled Android animations
+and E Ink mode use a static finger with labeled start/end positions. The cue lets
+page touches pass through and clears on page movement, leaving or closing the
+reader, and background/privacy cover.
 Folder-backed volumes come from the current folder, in case-insensitive alphabetical filename order.
 No adjacent file means the current comic stays open. Page changes slide horizontally in the reading direction, including manga
 and spreads, with controls visible or hidden. Reduced motion on iOS, disabled

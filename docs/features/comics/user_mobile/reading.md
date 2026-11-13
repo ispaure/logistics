@@ -98,12 +98,13 @@ pages and applies to imported, Local, LocalCrypt and remote comics.
 
 Paired pages touch with no added gutter on phones, iPad landscape, TV output and
 an unfolded Duo. An active reserved hinge region remains clear while folding.
-At the beginning, a swipe before the first page briefly shows an arrow for the
-reading direction (reversed for manga). If a previous volume is available, the
-hint also offers it: repeat the boundary swipe within 2.5 seconds to open it.
-At the end, the first forward boundary swipe offers the next volume; repeat
-within 2.5 seconds to open it. Without an adjacent volume the hint says so and
-keeps the current comic open. Folder-backed readers choose CBZ/ZIP files alphabetically by filename in the
+At a beginning/end boundary, an animated finger demonstrates the physical
+next-page swipe: right to left normally, left to right for manga. Reduced motion
+and E Ink mode show a static finger with start/end labels. A separate bottom hint
+offers only the corresponding available volume; it names the actual gesture,
+which reverses at the beginning. Repeat that boundary swipe within 2.5 seconds to
+open the offered volume. Missing or unresolved neighbors have no volume hint.
+A failed open leaves the current comic usable. Folder-backed readers choose CBZ/ZIP files alphabetically by filename in the
 current folder (case-insensitive, so Volume 10 precedes Volume 2). Legacy imported
 readers use their original folder when it is available.
 Hints appear on the internal screen only and clear on navigation or privacy cover.

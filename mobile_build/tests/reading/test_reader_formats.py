@@ -90,7 +90,7 @@ class ReaderFormatTests(unittest.TestCase):
                         middle = current()
                         await swipe(middle, -1)
                         self.assertIs(current(), middle)
-                        self.assertIn(('→' if rtl else '←') + ' Swipe to read', app._comic_boundary_feedback.message)
+                        self.assertIn('Swipe ' + ('left to right' if rtl else 'right to left') + ' to read', app._comic_boundary_feedback.reading_text)
                         await swipe(middle, -1)
                         self.assertEqual(identity(current()), expected[0])
                         await current().next_provider_comic_file()
@@ -100,7 +100,7 @@ class ReaderFormatTests(unittest.TestCase):
                         self.assertIn('End of comic', app._comic_boundary_feedback.message,
                             (provider, getattr(middle, 'comic_navigation', None).__dict__ if not hasattr(middle, 'crypt_reader')
                              else middle.crypt_reader.comic_navigation.__dict__))
-                        self.assertNotIn('Swipe to read', app._comic_boundary_feedback.message)
+                        self.assertIn('next volume', app._comic_boundary_feedback.volume_text)
                         self.assertEqual(identity(current()), expected[1])
                         await swipe(middle, 1)
                         self.assertEqual(identity(current()), expected[2])
@@ -108,7 +108,7 @@ class ReaderFormatTests(unittest.TestCase):
                         await swipe(last, 1)
                         await swipe(last, 1)
                         self.assertIs(current(), last)
-                        self.assertIn('No next volume', app._comic_boundary_feedback.message)
+                        self.assertEqual(app._comic_boundary_feedback.volume_text, '')
                 try:
                     app.loop.run_until_complete(exercise())
                 finally:

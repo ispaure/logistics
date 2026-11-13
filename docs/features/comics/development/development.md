@@ -155,6 +155,39 @@ write failures leave session suggestions usable. Skip linked/data folders and
 retry unreadable archives on refresh. Background suggestions must not overwrite
 pending edits. Encrypted metadata must never enter this persistent cache.
 
+## Mobile boundary guidance
+
+`mobile/comic_feedback.py` owns the window-local boundary state and the existing
+2.5-second repeat window. Only an offered, available neighbor arms a repeat;
+availability becoming known after the first swipe requires a fresh offer.
+`mobile/comic_guidance.py` presents an original vector finger in passive native
+views, with literal physical movement and a separate bottom volume instruction.
+Its two finite strokes respect iOS reduced motion, Android's animation duration
+scale and E Ink mode. Native accessibility announcements accompany the labels.
+Shallow panes use a horizontal cue layout; active fold reservations and system
+insets bound the cue inside the reader's content area.
+
+The library/provider comic controllers retain their folder and access contracts.
+Lookup generations discard stale results; a shared operation guard prevents a
+swipe and toolbar action from opening two neighbors concurrently. Each open
+refreshes availability. Failure preserves the current reader and returns recovery
+text without arming another volume gesture. Navigation, publication before page
+snapshots, provider disposal and background/privacy transitions remove the native
+view, animations, timeout and layout subscription. The cue never enters the comic
+canvas, source archive or external-display image pipeline. Desktop presentation
+does not call this mobile presenter.
+
+Focused host coverage lives in `test_comic_feedback.py`,
+`test_comic_neighbor_guidance.py`, `test_comic_file_navigation.py`,
+`test_reader_formats.py`, `test_reader_gestures.py`, `test_reader_sessions.py`,
+`test_comic_split.py`, `test_reading_publication.py` and `test_reader_lifecycle.py`.
+Desktop `test_comic_spreads.py` checks unchanged boundary behavior with no mobile
+presentation. The synthetic `comic_guidance_probe.py` runs through the owning
+`document_storage_tools --probe comic-guidance` helper on disposable iOS/Android
+devices. Its reports distinguish native motion/static rendering from injected
+iOS reduced-motion policy, physical e-ink quality and external-display hardware
+acceptance; simulator results do not establish those hardware claims.
+
 ## Password-protected CBZs
 
 Use `services.documents.zip_passwords` for ancestor `[LogisticsZIP] archive_password` policy;

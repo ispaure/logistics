@@ -73,7 +73,10 @@ show their logical LocalCrypt path. The dialog contains no credentials.
 In the comic reader, horizontal swipes turn pages in both normal and fullscreen
 views, including swipes from the screen edge. They do not navigate Back. Zoomed
 pages use dragging to pan; fit the page to resume swipe paging. Use the visible
-Back control to leave the reader.
+Back control to leave the reader. At a comic boundary, a brief finger cue shows
+the physical reading swipe. The bottom line offers a previous/next volume only
+when available; repeat the stated swipe within 2.5 seconds to open it. See
+[comic gestures](../../comics/user_mobile/gestures.md) for direction and motion settings.
 Comics fill the available reading width immediately on opening and resize with
 the reader. The image keeps its aspect ratio, so some pages can have natural
 letterboxing. With controls visible, books and comics use the same hamburger

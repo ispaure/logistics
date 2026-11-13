@@ -136,6 +136,48 @@ class ComicFileNavigationTests(unittest.TestCase):
                 self.assertEqual(len(store.stored_files()[0]), 1)
             app.loop.run_until_complete(check())
 
+    def test_disappeared_neighbor_keeps_actual_local_and_imported_reader_usable(self):
+        from commonUtils.runtime.resources.documents import LocalDocuments
+        from mobile.document_imports import open_local_document
+        from mobile_build.tests.support.app import mobile_app
+
+        for imported in (False, True):
+            for direction in (-1, 1):
+                with self.subTest(imported=imported, direction=direction), TemporaryDirectory() as directory:
+                    root = Path(directory).resolve()
+                    _, fixture = make_books(root)
+                    folder = root / 'Series'
+                    folder.mkdir()
+                    volumes = [folder / name for name in ('01.cbz', '02.cbz', '03.cbz')]
+                    for path in volumes:
+                        path.write_bytes(fixture.read_bytes())
+                    with mobile_app(root=root / 'private') as app:
+                        async def check():
+                            if imported:
+                                store = app.reader_manager().catalog.library_store
+                                record = store.import_book(LocalDocuments(), volumes[1])
+                                self.assertTrue(await app.open_book(record['id']))
+                                owner = app.readers.active
+                                adjacent = owner.adjacent_book_comic
+                                move = owner.move_book_page
+                            else:
+                                self.assertTrue(await open_local_document(app, volumes[1]))
+                                owner = app.private_sessions.active
+                                adjacent = owner.adjacent_provider_comic
+                                move = owner.move_private_page
+                            self.assertEqual(owner.comic_header.available, (True, True))
+                            volumes[0 if direction < 0 else 2].unlink()
+                            self.assertIn('no longer available', await adjacent(direction))
+                            self.assertIs(owner.manager.active, owner)
+                            self.assertIn(owner.session.id, app.workspace.sessions)
+                            self.assertFalse(owner.comic_header.available[0 if direction < 0 else 1])
+                            await move(1)
+                            if imported:
+                                self.assertEqual(owner.book_record['position'], 1)
+                            else:
+                                self.assertEqual(owner.crypt_page.value, owner.crypt_reader.labels[1])
+                        app.loop.run_until_complete(check())
+
     def exercise(self, storage):
         with TemporaryDirectory() as directory:
             root = Path(directory).resolve()
@@ -193,7 +235,7 @@ class ComicFileNavigationTests(unittest.TestCase):
                     self.assertIs(app.private_sessions.active, owner)
                     self.assertEqual(owner.crypt_reader.key, names[1])
                     self.assertEqual(owner.crypt_page.value, owner.crypt_reader.labels[1])
-                    self.assertTrue(owner.comic_header.following.enabled)
+                    self.assertFalse(owner.comic_header.following.enabled)
                     self.assertEqual(len(app.private_sessions.controllers), 1)
                     await owner.previous_provider_comic_file()
                     await app.private_sessions.active.next_provider_comic_file()

@@ -19,6 +19,9 @@ class ReadingPublication:
     def begin(self, direction):
         if not self.current():
             return False
+        if direction:
+            from mobile.comic_feedback import clear
+            clear(getattr(self.owner, 'app', self.owner), owner=self.owner)
         from mobile.page_animation import begin_page_slide
         begin_page_slide(self.container, direction, self.owner.preferences.values)
         self.begun = True
