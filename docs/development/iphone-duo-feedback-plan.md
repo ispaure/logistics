@@ -56,16 +56,9 @@ File ownership is exclusive during implementation. These are initial source entr
 
 ### Brief 1 implementation contract
 
-Keep feature headers on the existing `ios_toolbar` / `reader_top_band` owners.
-System reservations are queried in the receiving native view's coordinates;
-window position, bounds, all safe-area edges and the current bar edge participate
-in custom-layout invalidation. UIKit owns native bar capacity, placement and
-overflow through real grouped bar items and visibility/compression priorities;
-do not add native bar insets or estimate slots from Island dimensions. A same-size
-activity change refreshes custom content clearance while unchanged native groups
-retain their live action/menu ownership. Only the shared container policy may
-reclaim an unused content band; feature pages must not add Island-specific offsets.
-See the [implemented native/custom boundary](mobile-workspace-navigation.md#system-occlusion-clearance).
+The [system occlusion clearance guide](mobile-workspace-navigation.md#system-occlusion-clearance)
+owns the implemented native and custom header contract. It also describes the
+[shell validation procedure](mobile-workspace-navigation.md#verify-native-shell-clearance).
 
 Reader acceptance also includes the later report that a notebook appeared clear
 in one right-hand two-app Split View capture and overlapped after a retry. One
@@ -99,12 +92,7 @@ deployment. Completed checks:
 | Ordinary iPhone 17 | 63 | Static shell/rotation inventory with the legacy native-container path |
 | iPad Pro 11-inch (M5) | 63 | Static shell/rotation inventory and retained Settings/content routes |
 
-The audit retains raw control frames and measures visible clipping bounds so
-UIKit's hidden, collapsed-tab views are not mistaken for rendered collisions.
-It records native hit tests and enforces reachable 44-point targets for projected
-headers. External playback must produce an observed reserved-region transition;
-starting a player alone is insufficient. Temporary apps, compilers and simulators
-use the build manager's scratch and owned-device cleanup.
+The audit used the [native shell geometry and hit-target checks](mobile-workspace-navigation.md#verify-native-shell-clearance).
 
 The shared navigation, toolbar, region bridge, fold layout, Home header, reader
 header, Settings and notebook host regressions pass. Genuine two-app Split View,
