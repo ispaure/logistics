@@ -1,6 +1,7 @@
 """Build and run focused document/notebook probes with owned disposable devices."""
 import argparse
 import json
+from math import isfinite
 import os
 from pathlib import Path
 import plistlib
@@ -25,6 +26,7 @@ UNIFIED_PROGRESS_ENTRY = 'tests.logisticsmobile.unified_progress_probe'
 UNIFIED_PROGRESS_RESULT = 'unified-progress-result.json'
 UNIFIED_PROGRESS_ANDROID_ENTRY = 'tests.logisticsmobile.unified_progress_android_probe'
 UNIFIED_PROGRESS_VIDEO_ENTRY = 'tests.logisticsmobile.unified_progress_video_probe'
+COMIC_SCOPES = ('matrix', 'basic', 'lifecycle', 'library', 'readers', 'windows', 'fold', 'reduced-motion')
 QA_BUNDLES = {UNIFIED_PROGRESS_BUNDLE, BUNDLE, 'io.github.ispaure.logisticsnotesauditqa', 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
               'io.github.ispaure.logisticscomicqa',
               'io.github.ispaure.logisticsnotebookqa', 'io.github.ispaure.logisticsfeaturesqa',
@@ -46,7 +48,18 @@ def diagnostics(entry_point):
             for direction in ('ltr', 'rtl') for theme in ('light', 'dark')
             for orientation in ('portrait', 'landscape-left') for mode in ('normal', 'full')) + tuple(
             f'comic-guidance-{direction}-frame-{frame}.png'
-            for direction in ('ltr', 'rtl') for frame in ('start', 'end'))
+            for direction in ('ltr', 'rtl') for frame in ('start', 'end')) + tuple(
+            f'comic-guidance-bitmap-{direction}-{mask}-{boundary}{suffix}.png'
+            for direction in ('ltr', 'rtl') for mask in ('00', '10', '01', '11')
+            for boundary in (-1, 1) for suffix in ('', '-thumbnail')) + tuple(
+            f'comic-guidance-layout-{direction}-{part}{suffix}.png'
+            for direction in ('ltr', 'rtl') for part in ('half-0', 'half-1', 'spread-0')
+            for suffix in ('', '-thumbnail')) + tuple(
+            f'comic-guidance-external-{direction}-{phase}.png'
+            for direction in ('ltr', 'rtl') for phase in ('before', 'during')) + (
+            'comic-guidance-os-static-ltr.png', 'comic-guidance-os-static-rtl.png',
+            'comic-guidance-scene-return.png', 'comic-guidance-fold-portrait.png',
+            'comic-guidance-fold-landscape-left.png')
     if entry_point == UNIFIED_PROGRESS_ANDROID_ENTRY:
         return ('progress-fixture-epub-before.png', 'progress-fixture-epub-after.png')
     if entry_point == UNIFIED_PROGRESS_ENTRY:
@@ -122,10 +135,58 @@ def comic_guidance_action(raw, *, android=False):
     except (ValueError, UnicodeError):
         return None
     action = value.get('action') if isinstance(value, dict) else None
-    allowed = ('background', 'reduce-motion-on', 'reduce-motion-off') if android else ('background',)
+    allowed = ('background', 'reduce-motion-on', 'reduce-motion-off') if android else ('background', 'native-tap', 'native-swipe')
     if action not in allowed:
         raise ValueError('Unexpected comic guidance driver action')
+    if action in ('native-tap', 'native-swipe'):
+        points = value.get('points')
+        count = 2 if action == 'native-tap' else 4
+        if (not isinstance(points, list) or len(points) != count
+                or any(type(point) not in (int, float) or point < 0
+                       or (isinstance(point, float) and not isfinite(point)) for point in points)):
+            raise ValueError('Native comic touch requires flat finite nonnegative points.')
     return action
+
+
+def validate_comic_scope(entry_point, scope, *, platform, family=None, pose=None):
+    if scope is None:
+        return
+    if not entry_point.endswith('.comic_guidance_probe') or scope not in COMIC_SCOPES:
+        raise ValueError('--comic-scope requires the comic-guidance probe and a supported scope.')
+    if scope == 'windows' and (platform != 'ios' or family != 'iPad'):
+        raise ValueError('The windows comic scope requires iOS --family iPad.')
+    if scope == 'fold' and (platform != 'ios' or family != 'iPhone Duo' or pose != 'partial'):
+        raise ValueError('The fold comic scope requires iOS --family "iPhone Duo" --pose partial.')
+
+
+def prepare_comic_ios(client, device, output, scope):
+    # A cold Preferences launch can outlast the short guidance cue.
+    if scope in ('matrix', 'lifecycle', 'reduced-motion'):
+        client.invoke('launch', device, 'com.apple.Preferences')
+    if scope == 'reduced-motion':
+        client.invoke('spawn', device, 'defaults', 'write', 'com.apple.Accessibility',
+                      'ReduceMotionEnabled', '-int', '1')
+        value = client.invoke('spawn', device, 'defaults', 'read',
+                              'com.apple.Accessibility', 'ReduceMotionEnabled')
+        (output / 'ios-os-reduced-motion.json').write_text(json.dumps(dict(value=value, device=device)))
+        if value.strip() != '1':
+            raise RuntimeError('iOS Reduce Motion could not be enabled.')
+
+
+def prepare_comic_android(emulator, serial, bundle, output, env, scope):
+    emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'mkdir', '-p', 'cache')
+    # adb shell forwards stdin to tee; quoting shell redirection is unnecessary.
+    subprocess.run([str(emulator.adb), '-s', serial, 'shell', 'run-as', bundle,
+        'tee', 'cache/comic-guidance-scope'], input=('matrix' if scope == 'basic' else scope).encode(),
+        env=env, capture_output=True, check=True, timeout=15)
+    if scope == 'basic':
+        emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'touch', 'cache/comic-guidance-basic')
+    if scope == 'reduced-motion':
+        emulator.invoke('-s', serial, 'shell', 'settings', 'put', 'global', 'animator_duration_scale', '0')
+        value = emulator.invoke('-s', serial, 'shell', 'settings', 'get', 'global', 'animator_duration_scale')
+        (output / 'android-os-reduced-motion.json').write_text(json.dumps(dict(value=value, device=serial)))
+        if value.strip() not in ('0', '0.0'):
+            raise RuntimeError('Android reduced motion could not be enabled.')
 
 
 def command(args, output, *, cwd=None, env=None, timeout=1200):
@@ -237,7 +298,9 @@ def check_progress_report(result, initial_pid):
 
 def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
             entry_point='tests.logisticsmobile.document_storage_probe',
-            result_name='document-storage-result.json', family='iPhone', increase_contrast=False, duoctl=None, source_app=None, pose=None, runtime_id=None):
+            result_name='document-storage-result.json', family='iPhone', increase_contrast=False, duoctl=None, source_app=None, pose=None, runtime_id=None,
+            comic_scope=None):
+    validate_comic_scope(entry_point, comic_scope, platform='ios', family=family, pose=pose)
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
     if source_app is None:
@@ -321,7 +384,8 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
             try:
                 reports.append(exercise_ios_app(app, destination, env, bundle=bundle,
                     entry_point=entry_point, result_name=result_name, family=device_family,
-                    increase_contrast=increase_contrast, duoctl=duoctl, pose=pose, runtime_id=runtime_id))
+                    increase_contrast=increase_contrast, duoctl=duoctl, pose=pose, runtime_id=runtime_id,
+                    comic_scope=comic_scope))
             except Exception as error:
                 reports.append(dict(success=False, family=label, error=str(error)))
             (output / 'matrix.json').write_text(json.dumps(reports, indent=2))
@@ -332,7 +396,8 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
             raise RuntimeError('Viewer matrix has failures; inspect matrix.json')
         return reports
     return exercise_ios_app(app, output, env, bundle=bundle, entry_point=entry_point,
-        result_name=result_name, family=family, increase_contrast=increase_contrast, duoctl=duoctl, pose=pose, runtime_id=runtime_id)
+        result_name=result_name, family=family, increase_contrast=increase_contrast, duoctl=duoctl, pose=pose, runtime_id=runtime_id,
+        comic_scope=comic_scope)
 
 
 def simulator_selection(inventory, family, runtime_id=None):
@@ -351,7 +416,14 @@ def simulator_selection(inventory, family, runtime_id=None):
 def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
         entry_point='tests.logisticsmobile.document_storage_probe',
         result_name='document-storage-result.json', family='iPhone', increase_contrast=False,
-        duoctl=None, pose=None, keyboard_intro=None, runtime_id=None):
+        duoctl=None, pose=None, keyboard_intro=None, runtime_id=None, comic_scope=None):
+    validate_comic_scope(entry_point, comic_scope, platform='ios', family=family, pose=pose)
+    if comic_scope is not None:
+        env = dict(env)
+        env.pop('SIMCTL_CHILD_LOGISTICS_COMIC_GUIDANCE_BASIC', None)
+        env['SIMCTL_CHILD_LOGISTICS_COMIC_GUIDANCE_SCOPE'] = 'matrix' if comic_scope == 'basic' else comic_scope
+        if comic_scope == 'basic':
+            env['SIMCTL_CHILD_LOGISTICS_COMIC_GUIDANCE_BASIC'] = '1'
     output.mkdir(parents=True, exist_ok=True)
     client = AppleSimulators(env)
     inventory = client.devices()['devices']
@@ -363,6 +435,8 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
     initial_progress_pid = None
     try:
         client.boot(device)
+        if comic_scope is not None:
+            prepare_comic_ios(client, device, output, comic_scope)
         if entry_point.endswith(('.document_creation_probe', '.lockscreen_probe')):
             # Dismiss only the fresh QA simulator's first-use keyboard lesson.
             client.invoke('spawn', device, 'defaults', 'write', 'com.apple.keyboard.preferences',
@@ -417,14 +491,29 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
         while time.monotonic() < deadline:
             comic_request = cache / 'comic-guidance-request.json'
             if entry_point.endswith('.comic_guidance_probe') and comic_request.exists():
-                action = comic_guidance_action(comic_request.read_bytes())
+                raw = comic_request.read_bytes()
+                action = comic_guidance_action(raw)
                 if action is not None:
                     comic_request.unlink()
-                    client.invoke('launch', device, 'com.apple.Preferences')
-                    time.sleep(1)
-                    client.invoke('launch', device, bundle)
+                    if action == 'background':
+                        client.invoke('launch', device, 'com.apple.Preferences')
+                        time.sleep(1)
+                        client.invoke('launch', device, bundle)
+                        (output / 'ios-comic-lifecycle.json').write_text(json.dumps(dict(background_resume=True)))
+                    else:
+                        if duoctl is None or family != 'iPhone Duo':
+                            raise ValueError('Native comic touch requires the reviewed helper and owned Duo simulator.')
+                        points = json.loads(raw)['points']
+                        gesture = 'tap' if action == 'native-tap' else 'swipe'
+                        arguments = [sys.executable, str(duoctl), '-d', device, gesture, *map(str, points)]
+                        if gesture == 'swipe':
+                            arguments += ['--duration', '.25']
+                        subprocess.run(arguments, env=env, timeout=30, check=True, capture_output=True)
+                        receipt = output / 'ios-comic-native-touches.json'
+                        rows = json.loads(receipt.read_text()) if receipt.exists() else []
+                        rows.append(dict(action=action, points=points, device=device, completed=True))
+                        receipt.write_text(json.dumps(rows, indent=2))
                     (cache / 'comic-guidance-done').touch()
-                    (output / 'ios-comic-lifecycle.json').write_text(json.dumps(dict(background_resume=True)))
             background_request = cache / 'file-transfer-background'
             if entry_point.endswith(('.file_transfer_probe', '.drawer_privacy_probe')) and background_request.exists():
                 background_request.unlink()
@@ -646,7 +735,8 @@ def prepare_chat_notes_emulator(emulator, serial, output):
 def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 entry_point='tests.logisticsmobile.document_storage_probe',
                 result_name='document-storage-result.json', device=None, tablet=False, reuse_project=False,
-                observe=None, probe_timeout=None):
+                observe=None, probe_timeout=None, comic_scope=None):
+    validate_comic_scope(entry_point, comic_scope, platform='android')
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
     if entry_point.endswith('.comic_guidance_probe') and device is not None:
@@ -690,16 +780,17 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
     return exercise_android_app(project / 'app/build/outputs/apk/debug/app-debug.apk',
         workspace, output, env, options, bundle=bundle, entry_point=entry_point,
         result_name=result_name, device=device, tablet=tablet, reuse_project=reuse_project,
-        observe=observe, probe_timeout=probe_timeout)
+        observe=observe, probe_timeout=probe_timeout, comic_scope=comic_scope)
 
 
 def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
         entry_point='tests.logisticsmobile.document_storage_probe',
         result_name='document-storage-result.json', device=None, tablet=False, startup_timeout=600, install_timeout=180, reuse_project=False,
-        observe=None, probe_timeout=None):
+        observe=None, probe_timeout=None, comic_scope=None):
     """Run a verified QA APK on an owned device, independently of its build phase."""
     from hashlib import file_digest
     from mobile_build.deployment.android_deploy import build_tools
+    validate_comic_scope(entry_point, comic_scope, platform='android')
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
     if entry_point.endswith('.comic_guidance_probe') and device is not None:
@@ -766,6 +857,8 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
             emulator.invoke('-s', serial, 'shell', 'pm', 'enable', bundle)
         if device is None and entry_point.endswith('.chat_notes_feedback_probe'):
             prepare_chat_notes_emulator(emulator, serial, output)
+        if comic_scope is not None:
+            prepare_comic_android(emulator, serial, bundle, output, env, comic_scope)
         if observe is not None:
             observe('installed', emulator, record, output)
         emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity')
@@ -1031,7 +1124,14 @@ def main():
     parser.add_argument('--duoctl', type=Path, help='Reviewed external simulator-only Duo pose helper')
     parser.add_argument('--increase-contrast', action='store_true')
     parser.add_argument('--android-tablet', action='store_true', help='Use a tablet viewport on the disposable Android emulator.')
+    parser.add_argument('--comic-scope', choices=COMIC_SCOPES,
+                        help='Run one comic-guidance acceptance scope (default: matrix).')
     args = parser.parse_args()
+    try:
+        validate_comic_scope('tests.logisticsmobile.' + args.probe.replace('-', '_') + '_probe',
+            args.comic_scope, platform=args.platform, family=args.family, pose=args.pose)
+    except ValueError as error:
+        parser.error(str(error))
     if args.external_subtitle_only and (args.platform != 'ios' or args.probe != 'unified-progress'):
         parser.error('--external-subtitle-only requires the iOS unified-progress probe.')
     if args.probe in ('unified-progress', 'unified-progress-video') and args.device:
@@ -1095,7 +1195,8 @@ def main():
             result_name='document-creation-evidence/result.json') if args.probe == 'creation' else {}
         if args.probe == 'comic-guidance':
             creation_profile = dict(bundle='io.github.ispaure.logisticscomicqa',
-                entry_point='tests.logisticsmobile.comic_guidance_probe', result_name='comic-guidance-result.json')
+                entry_point='tests.logisticsmobile.comic_guidance_probe', result_name='comic-guidance-result.json',
+                comic_scope=args.comic_scope or 'matrix')
         if args.probe == 'workspace-edges':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.workspace_edges_probe', result_name='workspace-edges-result.json')

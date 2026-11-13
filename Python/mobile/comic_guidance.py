@@ -182,6 +182,16 @@ class AppleCue(Cue):
         x, y = max(raw[0], float(safe.left)), max(raw[1], float(safe.top))
         right = min(raw[0] + raw[2], float(size.width - safe.right))
         bottom = min(raw[1] + raw[3], float(size.height - safe.bottom))
+        # A folded reader can retain a larger content box than its page's
+        # touch surface. Keep every cue over the actual gesture viewport.
+        from .external_display import comic_canvas
+        canvas = comic_canvas(content)
+        if canvas is not None:
+            view = canvas._impl.native
+            viewport = view.convertRect(view.bounds, toView=self.window)
+            x, y = max(x, float(viewport.origin.x)), max(y, float(viewport.origin.y))
+            right = min(right, float(viewport.origin.x + viewport.size.width))
+            bottom = min(bottom, float(viewport.origin.y + viewport.size.height))
         geometry = (x, y, max(1, right - x), max(1, bottom - y))
         if self.geometry == geometry:
             return
@@ -265,9 +275,9 @@ class AndroidCue(Cue):
                     path.cubicTo(*p)
             path.close()
             paint = Paint(1)
-            paint.setColor(-1)
+            paint.setARGB(255, 255, 255, 255)
             drawing.drawPath(path, paint)
-            paint.setColor(-16777216)
+            paint.setARGB(255, 0, 0, 0)
             paint.setStyle(Paint.Style.STROKE)
             paint.setStrokeWidth(2.0)
             drawing.drawPath(path, paint)
@@ -333,6 +343,7 @@ class AndroidCue(Cue):
         right, bottom = min(location[0] + native.getWidth(), safe.right), min(location[1] + native.getHeight(), safe.bottom)
         geometry = ((x - origin[0]) / self.scale, (y - origin[1]) / self.scale,
                     max(1, right - x) / self.scale, max(1, bottom - y) / self.scale)
+        geometry = self.region(content, geometry)
         if geometry == self.geometry:
             return
         if self.geometry is not None and self.hand is not None:

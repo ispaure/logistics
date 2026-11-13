@@ -7,7 +7,7 @@ TEST_STAGE = TestStage.REGRESSION
 import sys
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, call, patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 from mobile.screen_privacy import ScreenPrivacy
 from services.session_auth import ResumePassword
@@ -58,6 +58,58 @@ class ScreenPrivacyTests(unittest.TestCase):
         self.assertEqual(set(process.listeners), listeners)
         self.assertEqual(set(process.windows), windows)
         self.assertFalse(app._layout_participants.entries)
+
+    def test_ordinary_reader_interruption_clears_guidance_and_repeat(self):
+        import asyncio
+        from mobile.comic_feedback import boundary, clear
+
+        class Host:
+            pass
+
+        app, owner = Host(), Host()
+        app.loop = asyncio.new_event_loop()
+        app._impl, app.active_host = SimpleNamespace(), True
+        owner.app, owner.session = app, SimpleNamespace(id='ordinary-comic')
+        owner.resume_suspended_page = Mock()
+        app.readers = SimpleNamespace(active=owner)
+        app.visible_reader = lambda: owner.session.id
+        self.addCleanup(close_loop, app.loop)
+        self.addCleanup(clear, app)
+        privacy = app.screen_privacy = self.privacy(app, 'toga_dummy.app')
+        self.assertFalse(privacy.sensitive())
+        adjacent, native = AsyncMock(), Mock()
+        with patch('mobile.comic_guidance.present', side_effect=[native, Mock()]) as present, \
+                patch.object(privacy, 'conceal') as conceal:
+            app.loop.run_until_complete(boundary(owner, 1, right_to_left=False,
+                available=True, adjacent=adjacent))
+            feedback = app._comic_boundary_feedback
+            subscription, timer = feedback.subscription, feedback.timer
+            self.assertTrue(feedback.armed)
+            self.assertIn(subscription.key, subscription.participants.entries)
+
+            privacy.interrupt()
+
+            conceal.assert_not_called()
+            self.assertFalse(privacy.inactive)
+            native.close.assert_called_once()
+            self.assertTrue(timer.cancelled())
+            self.assertNotIn(subscription.key, subscription.participants.entries)
+            self.assertIsNone(feedback.native)
+            self.assertIsNone(feedback.timer)
+            self.assertIsNone(feedback.owner)
+            self.assertFalse(feedback.message)
+            self.assertFalse(feedback.armed)
+            privacy.reveal()
+            self.assertIs(app.readers.active, owner)
+            owner.resume_suspended_page.assert_called_once()
+            self.assertEqual(present.call_count, 1)
+
+            # Returning to this reader starts a fresh deliberate-repeat gesture.
+            app.loop.run_until_complete(boundary(owner, 1, right_to_left=False,
+                available=True, adjacent=adjacent))
+            adjacent.assert_not_awaited()
+            self.assertTrue(feedback.armed)
+            self.assertIn('next volume', feedback.message)
 
     def test_partial_ios_registration_is_rolled_back(self):
         stages = (*range(6), 'trait setup', 'trait registration', 'refresh')
