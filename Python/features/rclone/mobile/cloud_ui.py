@@ -34,7 +34,6 @@ class CloudUI(LocalCryptUI):
         self.cloud_open_remote = None
         self.cloud_rows = {}
         self.cloud_crypt_remotes = set()
-        self.cloud_pending_zip = None
         self._cloud_setup_error = ''
         if self.cloud_client is None:
             try:
@@ -86,11 +85,17 @@ class CloudUI(LocalCryptUI):
 
     def _build_cloud_controls(self, error):
         """Construct retained connection, browser and download controls."""
-        self.cloud_choose = toga.Button('Choose credential ZIP…', on_press=self.choose_cloud_package, style=Pack(height=44))
+        async def choose(widget, **kwargs):
+            await self.credential_workflow.choose_cloud_package(automatic=True)
+
+        async def unlock(widget, **kwargs):
+            await self.credential_workflow.import_cloud_package(interactive=True)
+
+        self.cloud_choose = toga.Button('Choose credential ZIP…', on_press=choose, style=Pack(height=44))
         self.cloud_selected_zip = self.rclone_ui.settings.note('')
         self.cloud_import_message = self.rclone_ui.settings.note('Choose a credential ZIP to add its connections.')
-        self.cloud_password = PasswordInput(placeholder='ZIP password (if encrypted)', on_confirm=self.import_cloud_package, style=Pack(flex=1, height=44))
-        self.cloud_import = toga.Button('Unlock', on_press=self.import_cloud_package, style=Pack(height=44, font_weight='bold'))
+        self.cloud_password = PasswordInput(placeholder='ZIP password (if encrypted)', on_confirm=unlock, style=Pack(flex=1, height=44))
+        self.cloud_import = toga.Button('Unlock', on_press=unlock, style=Pack(height=44, font_weight='bold'))
         self.cloud_probe = toga.Button('Check rclone engine', on_press=self.probe_cloud, style=Pack(height=44))
         self.cloud_remember = toga.Switch('Save credentials on this device', value=True, style=Pack(height=44))
         self.cloud_package = toga.Label('Credential package: none', style=Pack(font_size=14))
@@ -238,7 +243,7 @@ class CloudUI(LocalCryptUI):
 
     async def begin_cloud_import(self, widget=None, **kwargs):
         if self.show_cloud_import() is not False:
-            await self.choose_cloud_package(automatic=True)
+            await self.credential_workflow.choose_cloud_package(automatic=True)
 
     def show_cloud_import(self, widget=None, **kwargs):
         if not self.app.require_feature('rclone'):
@@ -246,8 +251,23 @@ class CloudUI(LocalCryptUI):
         self.show_cloud(present=False)
         if self.cloud_busy:
             return False
-        self.credential_workflow.cancel_import()
-        return self.show_view(self.cloud_import_view, destination='settings', route='import-credentials', title='Import credential ZIP')
+        shown = self.show_view(self.cloud_import_view, destination='settings', route='import-credentials', title='Import credential ZIP')
+        if shown is not False:
+            self.credential_workflow.cancel_import()
+        return shown
+
+    def _reset_cloud_import_form(self):
+        if not hasattr(self, 'cloud_import_view'):
+            return
+        self.cloud_password.value = ''
+        self.cloud_selected_zip.text = ''
+        page = self.cloud_import_view.content
+        if self.cloud_import_message.parent is not page:
+            if self.cloud_import_message.parent is not None:
+                self.cloud_import_message.parent.remove(self.cloud_import_message)
+            page.add(self.cloud_import_message)
+        self.cloud_import_message.text = 'Choose a credential ZIP to add its connections.'
+        self.cloud_import.enabled = False
 
     def _show_cloud_import_password(self, package):
         ui = self.rclone_ui
@@ -260,15 +280,18 @@ class CloudUI(LocalCryptUI):
             self.cloud_import_message, self.cloud_import,
             toga.Button('Choose a different ZIP…', on_press=self.begin_cloud_import, style=Pack(height=48)),
             toga.Button('Cancel', on_press=lambda widget: self._finish_cloud_import(), style=Pack(height=48))])
-        if self.show_view(page, destination='settings', route='import-credentials-password', title='Unlock credential ZIP') is not False:
+        shown = self.show_view(page, destination='settings', route='import-credentials-password', title='Unlock credential ZIP')
+        if shown is not False:
             self.cloud_password.focus()
+        return shown
 
     def _finish_cloud_import(self):
-        self.credential_workflow.cancel_import()
         screens = self.routes.screens['settings']
         first = next((i for i, (route, *_) in enumerate(screens) if route.startswith('import-credentials')), None)
         if first is not None:
             self.routes.trim('settings', first)
+        else:
+            self.credential_workflow.cancel_import()
         self.show_cloud_connections()
 
     def refresh_retained_credentials(self):
@@ -308,7 +331,7 @@ class CloudUI(LocalCryptUI):
             self.cloud_password.value = self.crypt_password.value = ''
             if hasattr(self, 'credential_unlock_password'):
                 self.credential_unlock_password.value = ''
-            self.cloud_pending_zip = None
+            self.credential_workflow.cancel_import()
             self.cloud_selected_zip.text = 'No ZIP selected'
             self.cloud_rows = {}
             self.cloud_entries.items = []
@@ -339,10 +362,12 @@ class CloudUI(LocalCryptUI):
             # Native spinners can report the previous row during a source reset.
             return None
 
-    def set_cloud_busy(self, value):
+    def set_cloud_busy(self, value, *, refresh_credentials=True):
         if getattr(self, '_storage_changing', False) and not value:
             return
         self.cloud_busy = value
+        if not getattr(self, 'active_host', True):
+            return
         privacy = getattr(self, 'screen_privacy', None)
         if privacy is not None:
             privacy.refresh()
@@ -361,7 +386,7 @@ class CloudUI(LocalCryptUI):
             item = getattr(self, name, None)
             if item is not None:
                 item.enabled = not value and self.cloud_client is not None
-        self.cloud_import.enabled = not value and self.cloud_client is not None and self.cloud_pending_zip is not None
+        self.cloud_import.enabled = not value and self.cloud_client is not None and self.credential_state.cloud_pending_zip is not None
         self.cloud_cancel.enabled = value
         # Request controls take no list space while the browser is idle.
         header = self.remote_browser.location_bar
@@ -377,9 +402,10 @@ class CloudUI(LocalCryptUI):
                 self.cloud_transfer_progress.parent.remove(self.cloud_transfer_progress)
         if not self.cloud_path:
             self.cloud_up.enabled = True
-        self.refresh_folder_actions()
+        self.refresh_folder_actions(refresh_choices=refresh_credentials)
         self.download_open.enabled = self.download_export.enabled = not value and bool(self.download_labels)
-        self.refresh_retained_credentials()
+        if refresh_credentials:
+            self.refresh_retained_credentials()
 
     def cloud_remote_changed(self, widget=None, **kwargs):
         self.refresh_cloud_remote_help()
@@ -472,11 +498,12 @@ class CloudUI(LocalCryptUI):
         finally:
             self.set_cloud_busy(False)
 
-    async def choose_cloud_package(self, widget=None, **kwargs):
-        return await self.credential_workflow.choose_cloud_package(widget, **kwargs)
+    async def choose_cloud_package(self, widget=None, *, automatic=False, **kwargs):
+        return await self.credential_workflow.choose_cloud_package(automatic=automatic or widget is not None)
 
-    async def import_cloud_package(self, widget=None, **kwargs):
-        return await self.credential_workflow.import_cloud_package(widget, **kwargs)
+    async def import_cloud_package(self, widget=None, *, interactive=False, **kwargs):
+        return await self.credential_workflow.import_cloud_package(
+            interactive=interactive or widget is not None, choose_if_missing=widget is None)
 
     async def browse_cloud(self, widget=None, *, preserve_path=False, **kwargs):
         if not self.app.require_feature('rclone'):
@@ -636,7 +663,7 @@ class CloudUI(LocalCryptUI):
             self.cloud_password.value = ''
             if hasattr(self, 'credential_unlock_password'):
                 self.credential_unlock_password.value = ''
-            self.cloud_pending_zip = None
+            self.credential_workflow.cancel_import()
             self.cloud_selected_zip.text = 'No ZIP selected'
             self.cloud_import_message.text = import_hint('Choose a ZIP, then enter its password and tap Unlock.')
             self.cloud_package.text = 'Credential package: none'

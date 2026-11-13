@@ -15,7 +15,7 @@ from features.rclone.diagnostics import report_failure
 from .credential_catalog import CredentialCatalog, remember_association
 from .service import native_service
 from .credential_loading import NativeCredentialLoad, run_credentials
-from .credential_workflow import CredentialPresentation, CredentialLoadWorkflow
+from .credential_workflow import CredentialLoadWorkflow
 
 
 class SelectedCredentialZIP:
@@ -50,7 +50,10 @@ class SelectedCredentialZIP:
 class CredentialState:
     credential_packages: Any = field(init=False, repr=False)
     session_credential_packages: Any = field(init=False, repr=False)
-    cloud_pending_zip: Any = field(init=False, repr=False)
+    cloud_pending_zip: SelectedCredentialZIP | None = field(default=None, repr=False)
+    import_epoch: int = 0
+    import_encrypted: bool = False
+    import_storage_choice: bool | None = None
 
 
 class CredentialLoadPresentation:
@@ -91,7 +94,9 @@ class CredentialLoadPresentation:
 class CredentialWorkflow:
     def __init__(self, cloud):
         self.cloud = cloud
-        self.presentation: CredentialPresentation = CredentialLoadPresentation(cloud)
+        self.state = CredentialState()
+        self.import_in_progress = False
+        self.presentation = CredentialLoadPresentation(cloud)
         self.loader = CredentialLoadWorkflow(self.presentation)
 
     def _current(self, client, *, navigation=None, generation=None):
@@ -230,7 +235,7 @@ class CredentialWorkflow:
                                                  if item['zip'] != name]
             cloud.set_loaded_remote_names(cloud.loaded_remote_names())
             cloud.cloud_password.value = cloud.credential_unlock_password.value = ''
-            cloud.cloud_pending_zip = None
+            self.cancel_import()
             cloud.cloud_crypt_remotes.intersection_update(cloud.loaded_remote_names())
             cloud.cloud_rows = {}
             cloud.cloud_entries.items = []
@@ -251,10 +256,16 @@ class CredentialWorkflow:
         finally:
             cloud.set_cloud_busy(False)
 
-    async def _load_crypt_remote_names(self):
+    async def _load_crypt_remote_names(self, *, valid=None):
         cloud = self.cloud
         client = cloud.cloud_client
         generation = getattr(client, 'generation', 0)
+
+        def current():
+            return (valid is None or valid()) and self._current(client, generation=generation)
+
+        if not current():
+            return False
         # Alternate client adapters may not expose crypt support.
         kinds = getattr(client, 'crypt_remotes', lambda: ())
         records = getattr(client, 'package_records', ())
@@ -262,7 +273,7 @@ class CredentialWorkflow:
             crypt_remotes = {remote for record in records for remote in record['crypt_identities']}
         else:
             crypt_remotes = set(await asyncio.to_thread(kinds))
-        if not self._current(client, generation=generation):
+        if not current():
             return False
         cloud.cloud_crypt_remotes = crypt_remotes
         try:
@@ -279,22 +290,25 @@ class CredentialWorkflow:
                         await run_credentials(native_service(client).credentials.retain,
                             NativeCredentialMetadata(cache, key, generation, tuple(cloud.cloud_crypt_remotes),
                                 record.get('aliases', {}) if record else {}),
-                            valid=lambda: self._current(client, generation=generation))
-                        if not self._current(client, generation=generation):
+                            valid=current)
+                        if not current():
                             return False
         except (OSError, ValueError) as error:
-            if not self._current(client, generation=generation):
+            if not current():
                 return False
             cloud.folder_hub_error = 'Could not save folder type metadata: ' + str(error)[:200]
-        if not self._current(client, generation=generation):
+        if not current():
             return False
         try:
-            await cloud.refresh_hub_crypt_locations()
+            if valid is None:
+                await cloud.refresh_hub_crypt_locations()
+            else:
+                await cloud.app.folder_controller().refresh_hub_crypt_locations(valid=current)
         except (OSError, ValueError) as error:
-            if not self._current(client, generation=generation):
+            if not current():
                 return False
             cloud.folder_hub_error = str(error)[:300]
-        if not self._current(client, generation=generation):
+        if not current():
             return False
         cloud.refresh_cloud_remote_help()
         return True
@@ -315,9 +329,9 @@ class CredentialWorkflow:
         cloud = self.cloud
         import json
         previous = json.loads(cloud.preferences.values['remote_packages'])
-        update = remember_association(previous, getattr(cloud, 'session_credential_packages', ()),
+        update = remember_association(previous, getattr(self.state, 'session_credential_packages', ()),
                                       name, remotes, session_only=session_only)
-        cloud.session_credential_packages = update.sessions
+        self.state.session_credential_packages = update.sessions
         if not session_only and update.saved != previous:
             cloud.preferences.save(remote_packages=json.dumps(update.saved))
 
@@ -332,13 +346,13 @@ class CredentialWorkflow:
         return method(label, fallback) if method else fallback
 
     def remember_loaded_packages(self, label, names, *, session_only):
-        cloud = self.cloud
-        records = getattr(cloud.cloud_client, 'package_records', ())
+        records = getattr(self.cloud.cloud_client, 'package_records', ())
         if records:
             for item in records:
-                cloud.remember_credential_association(item['package_name'], cloud.visible_remote_names(item['remotes']), session_only=not item['saved'])
+                self.remember_credential_association(
+                    item['package_name'], self.visible_remote_names(item['remotes']), session_only=not item['saved'])
         else:
-            cloud.remember_credential_association(label, cloud.visible_remote_names(names), session_only=session_only)
+            self.remember_credential_association(label, self.visible_remote_names(names), session_only=session_only)
 
     def loaded_package_label(self):
         cloud = self.cloud
@@ -631,156 +645,171 @@ class CredentialWorkflow:
                                    if names else 'No saved credential package. Import a ZIP to get started.')
 
     def cancel_import(self):
-        cloud = self.cloud
-        cloud.cloud_pending_zip = None
-        cloud.cloud_password.value = ''
-        cloud.cloud_selected_zip.text = ''
-        page = cloud.cloud_import_view.content
-        if cloud.cloud_import_message.parent is not page:
-            if cloud.cloud_import_message.parent is not None:
-                cloud.cloud_import_message.parent.remove(cloud.cloud_import_message)
-            page.add(cloud.cloud_import_message)
-        cloud.cloud_import_message.text = 'Choose a credential ZIP to add its connections.'
-        self._import_storage_choice = None
-        self._import_encrypted = False
-        cloud.cloud_import.enabled = False
+        self.state.import_epoch += 1
+        self.state.cloud_pending_zip = None
+        self.state.import_storage_choice = None
+        self.state.import_encrypted = False
+        self.cloud._reset_cloud_import_form()
 
-    async def choose_cloud_package(self, widget=None, *, automatic=False, **kwargs):
+    def _import_scope(self, client):
+        epoch = self.state.import_epoch
+        origin = self.cloud.navigation_generation
+
+        def current(generation=None):
+            return (self.state.import_epoch == epoch
+                    and self._current(client, navigation=origin, generation=generation))
+
+        return current
+
+    def _finish_import_work(self, *, current):
+        # Import retains the host's busy flag until its admitted work settles.
+        self.import_in_progress = False
+        self.cloud.set_cloud_busy(False, refresh_credentials=current)
+
+    async def choose_cloud_package(self, *, automatic=False):
         cloud = self.cloud
-        pick_document = cloud.rclone_ui.pick_document
-        if cloud.cloud_busy or cloud.cloud_client is None:
+        client = cloud.cloud_client
+        if not cloud.active_host or self.import_in_progress or cloud.cloud_busy or client is None:
             return
-        automatic = automatic or widget is not None
         self.cancel_import()
-        client, origin = cloud.cloud_client, cloud.navigation_generation
+        current = self._import_scope(client)
         generation = getattr(client, 'generation', 0)
-        package = None
-        encrypted = False
-        picker_cancelled = False
+        self.import_in_progress = True
         cloud.set_cloud_busy(True)
+        picker_cancelled = False
         try:
-            selected = await pick_document(cloud)
-            if not self._current(client, navigation=origin, generation=generation):
+            selected = await cloud.rclone_ui.pick_document()
+            if not current(generation):
                 return
             if selected is None:
                 picker_cancelled = True
                 cloud.cloud_import_message.text = 'No file selected.'
                 return
             package = await asyncio.to_thread(SelectedCredentialZIP, *selected)
-            if automatic:
-                encrypted = await asyncio.to_thread(package.needs_password)
-            if not self._current(client, navigation=origin, generation=generation):
-                package = None
+            encrypted = automatic and await asyncio.to_thread(package.needs_password)
+            if not current(generation):
                 return
-            cloud.cloud_pending_zip = package
-            self._import_encrypted = encrypted
+            self.state.cloud_pending_zip = package
+            self.state.import_encrypted = encrypted
             cloud.cloud_selected_zip.text = import_hint('Selected ZIP: ' + package.name)
             cloud.cloud_import_message.text = 'Reading credential ZIP…'
         except Exception as error:
-            package = None
-            cloud.cloud_import_message.text = import_hint('Could not select ZIP: ' + str(error)[:150])
+            if current(generation):
+                cloud.cloud_import_message.text = import_hint('Could not select ZIP: ' + str(error)[:150])
+            return
         finally:
-            cloud.set_cloud_busy(False)
-            if picker_cancelled and automatic and self._current(client, navigation=origin, generation=generation):
+            self._finish_import_work(current=current(generation))
+            if automatic and picker_cancelled and current(generation):
                 cloud._finish_cloud_import()
-        if automatic and package is not None and cloud.cloud_pending_zip is package:
+        if automatic and current(generation):
             if encrypted:
-                cloud._show_cloud_import_password(package)
+                if cloud._show_cloud_import_password(package) is False:
+                    self.cancel_import()
             else:
-                await cloud.import_cloud_package(interactive=True)
+                await self.import_cloud_package(interactive=True)
 
-    async def import_cloud_package(self, widget=None, *, interactive=False, **kwargs):
+    async def import_cloud_package(self, *, interactive=False, choose_if_missing=False):
         cloud = self.cloud
-        if cloud.cloud_busy or cloud.cloud_client is None:
+        if not cloud.active_host or self.import_in_progress or cloud.cloud_busy or cloud.cloud_client is None:
             return
         # Retain the direct-call API for native validation clients; the visible
         # Unlock button is enabled only after Choose ZIP succeeds.
-        if cloud.cloud_pending_zip is None:
-            if widget is not None:
+        if self.state.cloud_pending_zip is None:
+            if not choose_if_missing:
                 cloud.cloud_import_message.text = import_hint('Tap Choose credential ZIP first, then enter its password and tap Unlock.')
                 return
-            await cloud.choose_cloud_package()
-            if cloud.cloud_pending_zip is None:
+            await self.choose_cloud_package()
+            if self.state.cloud_pending_zip is None:
                 return
-        interactive = interactive or widget is not None
+        selected = self.state.cloud_pending_zip
         password = cloud.cloud_password.value
         cloud.cloud_password.value = ''
-        if interactive and getattr(self, '_import_encrypted', False) and not password:
+        if interactive and self.state.import_encrypted and not password:
             cloud.cloud_import_message.text = 'Enter the ZIP password to continue.'
             return
-        selected = cloud.cloud_pending_zip
+        client = cloud.cloud_client
+        current = self._import_scope(client)
+        generation = getattr(client, 'generation', 0)
+        self.import_in_progress = True
         cloud.set_cloud_busy(True)
         cloud.cloud_import_message.text = 'Loading remotes…'
         finished = False
         return_to_connections = False
         try:
-            client, origin = cloud.cloud_client, cloud.navigation_generation
-            generation = getattr(client, 'generation', 0)
-            remember = (getattr(self, '_import_storage_choice', None) if interactive else cloud.cloud_remember.value)
+            remember = self.state.import_storage_choice if interactive else cloud.cloud_remember.value
             if interactive and remember is None:
                 remember = await self.choose_credential_storage(selected.name)
+            if not current(generation):
+                return
             if remember is None:
-                self.cancel_import()
                 return_to_connections = True
                 return
-            if not self._current(client, navigation=origin, generation=generation):
-                cloud.cloud_import_message.text = 'Credentials changed. Try unlocking this package again.'
-                return
             if interactive:
-                self._import_storage_choice = remember
+                self.state.import_storage_choice = remember
             if not self.presentation.prepare_publication():
                 cloud.cloud_import_message.text = import_hint('Save or discard your private edits before loading another package.')
                 return
             result = await self.loader.load(client,
-                NativeCredentialLoad(selected, None, remember=remember), password,
-                navigation=origin, generation=generation)
+                NativeCredentialLoad(selected, None, remember=remember, view_current=current), password,
+                generation=generation, current=current)
+            password = None
             if result is None:
                 return
-            current = lambda: self._current(client, navigation=origin, generation=result.generation)
+            generation = result.generation
+            await self._load_crypt_remote_names(valid=lambda: current(generation))
+            if not current(generation):
+                return
             names = list(result.remotes)
-            loaded_generation = result.generation
-            cloud.remember_loaded_packages(selected.name, names, session_only=not remember)
+            self.remember_loaded_packages(selected.name, names, session_only=not remember)
             cache_error = ''
             try:
                 cache = cloud.retained_packages()
                 if cache is not None:
                     from .credential_retention import NativeCredentialRetention
-                    remotes = tuple(cloud.visible_remote_names(cloud.package_remote_names(selected.name, names)))
+                    remotes = tuple(self.visible_remote_names(self.package_remote_names(selected.name, names)))
                     await run_credentials(native_service(client).credentials.retain,
-                        NativeCredentialRetention(cache, selected, remotes, loaded_generation, tuple(cloud.cloud_crypt_remotes)),
-                        valid=current)
+                        NativeCredentialRetention(cache, selected, remotes, generation, tuple(cloud.cloud_crypt_remotes)),
+                        valid=lambda: current(generation))
             except (OSError, ValueError) as error:
                 cache_error = ' ZIP not retained; select it again next time. ' + str(error)[:120]
-            if not current():
+            if not current(generation):
                 return
-            cloud.set_loaded_remote_names(cloud.visible_remote_names(names))
-            cloud.cloud_package.text = cloud.loaded_package_label()
+            cloud.set_loaded_remote_names(self.visible_remote_names(names))
+            cloud.cloud_package.text = self.loaded_package_label()
             cloud.cloud_location.value = cloud.cloud_path = ''
             cloud.cloud_open_remote = None
             cloud.cloud_rows = {}
             cloud.cloud_entries.items = []
-            cloud.cloud_pending_zip = None
+            self.state.cloud_pending_zip = None
+            self.state.import_storage_choice = None
+            self.state.import_encrypted = False
             cloud.cloud_selected_zip.text = import_hint('Loaded ZIP: ' + selected.name)
             cloud.cloud_import_message.text = import_hint(f'{len(names)} total remote(s) available. Open Workspaces or Browse remote files to choose a remote, then tap Browse folder.' + cache_error)
             cloud.app.credential_document_lists.refresh()
             cloud.cloud_status.value = f'{selected.name} loaded ({"Persistent save" if remember else "Session-Only"}). {len(names)} total remote(s) available. Open Workspaces to browse. No connection has been made yet.'
             finished = True
         except CredentialBusyError as error:
-            cloud.cloud_status.value = str(error)
-            cloud.cloud_import_message.text = import_hint(str(error))
+            if current(generation):
+                cloud.cloud_status.value = str(error)
+                cloud.cloud_import_message.text = import_hint(str(error))
         except Exception as error:
+            if not current():
+                return
             report_failure('import credential package', error)
-            cloud.cloud_status.value = 'Import failed: ' + str(error)[:300]
+            if current(generation):
+                cloud.cloud_status.value = 'Import failed: ' + str(error)[:300]
+            # Persistent save can attach the vault and advance the client
+            # generation before rejecting an incorrect ZIP password.
             if interactive:
                 cloud.cloud_import_message.text = ('Could not unlock this ZIP. Check the password or choose a different file.'
-                    if getattr(self, '_import_encrypted', False)
+                    if self.state.import_encrypted
                     else 'Could not import this ZIP. Choose a different credential package.\n' + str(error)[:150])
             else:
                 cloud.cloud_import_message.text = import_hint('Could not load ZIP. Check the password and tap Unlock again.\n' + str(error)[:150])
         finally:
             password = None
-            cloud.set_cloud_busy(False)
-            if interactive and (finished or return_to_connections) and self._current(client, navigation=origin):
+            self._finish_import_work(current=current(generation))
+            if interactive and (finished or return_to_connections) and current(generation):
                 cloud._finish_cloud_import()
                 cloud.cloud_connections_status.text = selected.name + ' added.' + cache_error if finished else 'Import cancelled.'
 

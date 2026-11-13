@@ -52,7 +52,7 @@ class MobileHostUI:
     private_label: Callable[[Any], str]
     visible_remotes: Callable[[Iterable[str]], list[str]]
     exclusions: Callable[[], Any]
-    pick_document: Callable[[Any], Awaitable[Any]]
+    pick_document: Callable[[], Awaitable[tuple[Any, Any] | None]]
     ResourceImports: Callable
     export_file: ExportFile
     accessible_name: Callable[[Any, str], Any]
