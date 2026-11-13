@@ -14,7 +14,7 @@ from uuid import uuid4
 from PIL import Image
 from build_manager.android_emulators import AndroidEmulator
 from build_manager.retention import lease, remove_tree
-from logistics_build.build_retention import scratch, owned_scratch
+from logistics_build.build_retention import owned_scratch, scratch, scratch_location
 from mobile_build.deployment import manager_settings
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -75,15 +75,17 @@ def project_files(project):
 
 @contextmanager
 def retained_workspace(path, *, keep=False):
-    if path.parent != ROOT / 'test-results/build-scratch' or not owned_scratch(path) or not (path / '.keep').is_file():
+    if not scratch_location(path, ROOT) or not owned_scratch(path) or not (path / '.keep').is_file():
         raise ValueError('Reuse requires an explicitly pinned manager scratch workspace.')
-    try:
-        with lease(path):
+    with lease(path):
+        if not scratch_location(path, ROOT) or not owned_scratch(path) or not (path / '.keep').is_file():
+            raise ValueError('Retained scratch ownership or pin changed.')
+        try:
             yield path
-    finally:
-        if not keep:
-            (path / '.keep').unlink()
-            remove_tree(path, ownership_files=('.manager-scratch',))
+        finally:
+            if not keep:
+                (path / '.keep').unlink()
+                remove_tree(path, ownership_files=('.manager-scratch',))
 
 
 def run(output, *, reuse=None, image=None, model=None, software_decode=False, retain_build=False):

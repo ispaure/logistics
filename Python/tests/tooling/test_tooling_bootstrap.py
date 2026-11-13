@@ -337,6 +337,15 @@ class ToolingBootstrapTests(TestCase):
             pass
         self.assertTrue(lock.exists())
 
+    @skipUnless(os.name == 'posix', 'POSIX tooling mutation guard')
+    def test_scratch_lease_blocks_tooling_mutation(self):
+        from logistics_build.build_retention import scratch
+        with scratch(self.root):
+            with self.assertRaises(tooling.ActiveWorkflowError), tooling.mutation_guard(self.root):
+                self.fail('Tooling mutation entered while scratch was leased')
+        with tooling.mutation_guard(self.root):
+            pass
+
     def test_post_sync_is_opt_in_and_uses_declared_repair(self):
         with patch.object(tooling, 'update') as update:
             self.assertIsNone(tooling.after_sync(self.root))

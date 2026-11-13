@@ -6,8 +6,9 @@ owning tool's ignored `mobile_build/logs/` directory. They are excluded from sou
 releases and mobile offline help.
 
 Run one-off commands through `python -m logistics_build.build_retention --scratch
-COMMAND ...`; `{workspace}` arguments expand to the disposable directory. The
-command receives its own `COMMONUTILS_STORAGE_ROOT`, so automatic document history
+COMMAND ...`. Arguments containing `{workspace}` expand to the disposable
+directory under `tmp/runs/scratch/`. The command receives its own
+`COMMONUTILS_STORAGE_ROOT`, so automatic document history
 and shared caches cannot write into the user's normal cache. This overrides an
 inherited storage root. Save evidence outside the workspace before it exits.
 Python callers of `scratch()` must set `COMMONUTILS_STORAGE_ROOT` inside their

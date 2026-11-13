@@ -329,7 +329,7 @@ class IncomingAcceptanceToolsTests(unittest.TestCase):
 
     def test_cleanup_rejects_unowned_workspace_and_main_app_identity(self):
         with TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             workspace = root / 'test-results/build-scratch/run-test'
             workspace.mkdir(parents=True)
             sentinel = workspace / 'preserve'
@@ -345,6 +345,23 @@ class IncomingAcceptanceToolsTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'unowned'):
                 cleanup(recipe)
             self.assertTrue(sentinel.exists())
+
+    def test_cleanup_accepts_current_and_saved_legacy_scratch_receipts(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            for relative in ('tmp/runs/scratch', 'test-results/build-scratch'):
+                with self.subTest(relative=relative):
+                    workspace = root / relative / 'run-test'
+                    workspace.mkdir(parents=True)
+                    (workspace / '.manager-scratch').touch()
+                    (workspace / '.keep').touch()
+                    recipe = root / 'recipe.json'
+                    recipe.write_text(json.dumps(dict(schema=1, bundle=QA_BUNDLE,
+                                                      root=str(root), workspace=str(workspace))))
+                    for _ in range(2):
+                        cleanup(recipe)
+                        self.assertFalse(workspace.exists())
+                        self.assertTrue(json.loads(recipe.read_text())['workspace_removed'])
 
 
 if __name__ == '__main__':

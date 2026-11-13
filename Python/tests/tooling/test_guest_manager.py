@@ -73,7 +73,7 @@ class GuestManagerTests(unittest.TestCase):
                 self.assertIn('.git/HEAD',names)
                 self.assertIn('.git/refs/' if kind=='zip' else '.git/refs',names)
                 self.assertNotIn('private-credential',names)
-        self.assertEqual(list((self.project/'test-results/build-scratch').glob('run-*')),[])
+        self.assertEqual(list((self.project/'tmp/runs/scratch').glob('run-*')),[])
 
     def test_wrong_pin_and_modified_tracked_source_are_rejected(self):
         (self.project/'build-manager-dependency.json').write_text(json.dumps(dict(schema=1,adapter_api=1,repository='https://github.com/fixture/manager.git',revision='0'*40)))

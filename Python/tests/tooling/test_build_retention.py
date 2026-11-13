@@ -12,7 +12,8 @@ import sys
 from unittest.mock import patch
 
 from logistics_build.build_retention import (clean, compiler_cache, compiler_cache_group,
-                                            COMPILER_CACHE_MARKER, enroll_output, scratch, storage_inventory)
+                                            COMPILER_CACHE_MARKER, delete_storage, enroll_output,
+                                            scratch, storage_inventory)
 from build_manager.retention import lease
 
 
@@ -110,7 +111,7 @@ Path(sys.argv[1]).write_text(json.dumps(dict(storage=os.environ['COMMONUTILS_STO
                 self.assertEqual(os.environ['COMMONUTILS_STORAGE_ROOT'], str(live))
             result = json.loads(evidence.read_text())
             self.assertEqual(result['titles'], ['Welcome.md'])
-            self.assertTrue(Path(result['storage']).is_relative_to(root / 'test-results/build-scratch'))
+            self.assertTrue(Path(result['storage']).is_relative_to(root / 'tmp/runs/scratch'))
             self.assertFalse(Path(result['storage']).exists())
             self.assertEqual(catalog.path().read_bytes(), before)
 
@@ -241,6 +242,69 @@ Path(sys.argv[1]).write_text(json.dumps(dict(storage=os.environ['COMMONUTILS_STO
             with scratch(directory) as kept:
                 (kept / '.keep').touch()
             self.assertTrue(kept.exists())
+
+    def test_scratch_retention_keeps_legacy_group_and_respects_both_roots(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            for relative, label in (('test-results/build-scratch', 'Disposable scratch'),
+                                    ('tmp/runs/scratch', 'Disposable scratch / tmp')):
+                with self.subTest(relative=relative):
+                    parent = root / relative
+                    old, active, pinned, latest = (parent / ('run-' + name)
+                                                   for name in ('old', 'active', 'pinned', 'latest'))
+                    for path in (old, active, pinned, latest):
+                        path.mkdir(parents=True)
+                        (path / '.manager-scratch').touch()
+                    (pinned / '.keep').touch()
+                    unknown = parent / 'historical-checkout'
+                    unknown.mkdir()
+                    (unknown / '.git').write_text('gitdir: elsewhere')
+                    with lease(active):
+                        for stamp, path in enumerate((old, active, pinned, latest, unknown), 1):
+                            os.utime(path, (stamp, stamp))
+                        self.assertEqual(clean(root, snapshots=False), [str(old)])
+                        self.assertTrue(old.exists())
+                        self.assertEqual(clean(root, snapshots=False, apply=True), [str(old)])
+                        self.assertFalse(old.exists())
+                    self.assertTrue(all(path.exists() for path in (active, pinned, latest, unknown)))
+                    rows = {row['name'] for row in storage_inventory(root) if row['group'] == label}
+                    self.assertEqual(rows, {active.name, pinned.name, latest.name})
+                    outcome = delete_storage(root, {label: [latest.name]})
+                    self.assertEqual(outcome['removed'], [str(latest)])
+
+    def test_scratch_refuses_linked_output_root(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            outside = root / 'outside'
+            outside.mkdir()
+            (root / 'tmp').symlink_to(outside, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, 'linked storage'), scratch(root):
+                self.fail('Linked output root was accepted')
+            self.assertEqual(list(outside.iterdir()), [])
+
+    def test_pinned_video_workspace_reuse_obeys_the_lease_in_both_roots(self):
+        from mobile_build.validation import video_android_pip_tools as pip
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            with patch.object(pip, 'ROOT', root):
+                for relative in ('tmp/runs/scratch', 'test-results/build-scratch'):
+                    with self.subTest(relative=relative):
+                        workspace = root / relative / 'run-video'
+                        workspace.mkdir(parents=True)
+                        (workspace / '.manager-scratch').touch()
+                        pin = workspace / '.keep'
+                        pin.touch()
+                        with lease(workspace), self.assertRaises(RuntimeError):
+                            with pip.retained_workspace(workspace):
+                                self.fail('Retained workspace was reused during an active lease')
+                        self.assertTrue(pin.exists())
+                        with pip.retained_workspace(workspace, keep=True) as reused:
+                            self.assertEqual(reused, workspace)
+                        self.assertTrue(pin.exists())
+                        with pip.retained_workspace(workspace):
+                            pass
+                        self.assertFalse(workspace.exists())
 
 
 if __name__ == '__main__':
