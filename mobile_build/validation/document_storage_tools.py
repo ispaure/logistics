@@ -115,6 +115,19 @@ def lockscreen_capture_name(raw):
     return name
 
 
+def comic_guidance_action(raw, *, android=False):
+    """Absent adb files and incomplete writes mean the next request is pending."""
+    try:
+        value = json.loads(raw)
+    except (ValueError, UnicodeError):
+        return None
+    action = value.get('action') if isinstance(value, dict) else None
+    allowed = ('background', 'reduce-motion-on', 'reduce-motion-off') if android else ('background',)
+    if action not in allowed:
+        raise ValueError('Unexpected comic guidance driver action')
+    return action
+
+
 def command(args, output, *, cwd=None, env=None, timeout=1200):
     print('Running ' + str(args[0]) + '; log: ' + str(output), flush=True)
     with output.open('w') as stream:
@@ -404,15 +417,14 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
         while time.monotonic() < deadline:
             comic_request = cache / 'comic-guidance-request.json'
             if entry_point.endswith('.comic_guidance_probe') and comic_request.exists():
-                action = json.loads(comic_request.read_text()).get('action')
-                if action != 'background':
-                    raise ValueError('Unexpected iOS comic guidance driver action')
-                comic_request.unlink()
-                client.invoke('launch', device, 'com.apple.Preferences')
-                time.sleep(1)
-                client.invoke('launch', device, bundle)
-                (cache / 'comic-guidance-done').touch()
-                (output / 'ios-comic-lifecycle.json').write_text(json.dumps(dict(background_resume=True)))
+                action = comic_guidance_action(comic_request.read_bytes())
+                if action is not None:
+                    comic_request.unlink()
+                    client.invoke('launch', device, 'com.apple.Preferences')
+                    time.sleep(1)
+                    client.invoke('launch', device, bundle)
+                    (cache / 'comic-guidance-done').touch()
+                    (output / 'ios-comic-lifecycle.json').write_text(json.dumps(dict(background_resume=True)))
             background_request = cache / 'file-transfer-background'
             if entry_point.endswith(('.file_transfer_probe', '.drawer_privacy_probe')) and background_request.exists():
                 background_request.unlink()
@@ -765,10 +777,8 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
             if entry_point.endswith('.comic_guidance_probe'):
                 request = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                     'cat', 'cache/comic-guidance-request.json'], env=env, capture_output=True, timeout=15)
-                if request.returncode == 0 and request.stdout.strip():
-                    action = json.loads(request.stdout).get('action')
-                    if action not in ('background', 'reduce-motion-on', 'reduce-motion-off'):
-                        raise ValueError('Unexpected Android comic guidance driver action')
+                action = comic_guidance_action(request.stdout, android=True) if request.returncode == 0 else None
+                if action is not None:
                     emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'rm', 'cache/comic-guidance-request.json')
                     if action == 'background':
                         emulator.invoke('-s', serial, 'shell', 'input', 'keyevent', 'KEYCODE_HOME')
