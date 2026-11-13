@@ -3,7 +3,7 @@ import asyncio
 from features.images.document import adjacent_image
 
 
-def install(owner, view, *, icon_button):
+def install(owner, view, *, icon_button, capture_replacement_slide, finish_replacement_slide):
     store = view._crypt_reader_store
     provider = getattr(store, 'provider', None) or getattr(store, 'resource', None)
     reader = view.crypt_reader
@@ -27,7 +27,6 @@ def install(owner, view, *, icon_button):
                 button.enabled = available
 
     async def switch(direction):
-        from mobile.page_animation import capture_replacement_slide, finish_replacement_slide
         if owner.cloud_busy or owner.crypt_reader is not reader or provider is None:
             return
         token = owner.workspace.token(owner.session.id)
