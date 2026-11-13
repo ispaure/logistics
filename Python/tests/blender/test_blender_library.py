@@ -3,7 +3,10 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+from dataclasses import replace
+import json
 from pathlib import Path
+import subprocess
 from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
@@ -33,6 +36,116 @@ class BlenderLibraryTests(unittest.TestCase):
             archive.writestr(f'{module}/__init__.py', f'bl_info={info!r}\n' + body)
             archive.writestr(f'{module}/helper.py', '# companion module')
         return path
+
+    def extension(self, filename, *, module='tool', version='2.0.0', minimum='5.3.0'):
+        path = self.root / filename
+        with zipfile.ZipFile(path, 'w') as archive:
+            archive.writestr('blender_manifest.toml', f'id="{module}"\nname="Artist Tool"\n'
+                             f'version="{version}"\ntype="add-on"\nblender_version_min="{minimum}"\n'
+                             'platforms=["windows-x64"]\n')
+            archive.writestr('__init__.py', '# extension')
+        return path
+
+    def test_selection_switches_formats_and_survives_removal_of_one_archive(self):
+        from shutil import copyfile
+
+        self.library.provided_root.mkdir()
+        legacy = self.library.provided_root / 'legacy.zip'
+        copyfile(self.package('tool.zip', module='Tool'), legacy)
+        self.library.save_pending_selection(self.release, 'Art', ['legacy:Tool'],
+                                            bluehole={'enabled': False, 'branch': 'main'})
+        with patch.object(self.manager, 'executable', return_value=Path('/unused/blender')), \
+                patch('features.blender.addons.scanning.run_blender_script') as run:
+            self.library.apply(self.release, 'Art', ['legacy:Tool'])
+            self.assertTrue((self.preset / 'scripts/addons/Tool/__init__.py').is_file())
+            copyfile(self.extension('replacement.zip'), self.library.provided_root / 'extension.zip')
+            copyfile(self.extension('unrelated.zip', module='unrelated'), self.library.provided_root / 'unrelated.zip')
+            older = replace(self.release, version='5.2.2')
+            other_platform = replace(self.release, platform='macos-arm64')
+            self.assertEqual(self.library.resolve('extension:tool', older).identity, 'legacy:Tool')
+            self.assertEqual(self.library.resolve('legacy:Tool', other_platform).identity, 'legacy:Tool')
+            self.assertIsNone(self.library.resolve('extension:unrelated', older))
+            self.assertEqual(self.library.resolve('legacy:Tool', self.release).identity, 'extension:tool')
+            run.side_effect = lambda exe, env, script, request, **kwargs: requests.append(json.loads(request.read_text()))
+            requests = []
+            self.library.apply(self.release, 'Art', ['legacy:Tool', 'extension:tool'])
+            self.assertEqual(requests[-1]['enable'], ['bl_ext.logistics.tool'])
+            self.assertEqual(requests[-1]['disable'], ['Tool'])
+            self.assertFalse((self.preset / 'scripts/addons/Tool').exists())
+            self.assertTrue((self.preset / 'extensions/logistics/tool/__init__.py').is_file())
+            state = self.library.selection(self.preset)
+            self.assertEqual(state['selected'], ['legacy:Tool'])
+            self.assertEqual(list(state['installed']), ['extension:tool'])
+            self.assertEqual(state['replacements'], {'extension:tool': 'legacy:Tool'})
+            copied = self.manager.duplicate_preset(self.release, 'Art', 'Art', target_release=older)
+            self.library.apply(older, 'Art', state['selected'])
+            self.assertTrue((copied / 'scripts/addons/Tool/__init__.py').is_file())
+            self.assertFalse((copied / 'extensions/logistics/tool').exists())
+            legacy.unlink()
+            self.library.apply(self.release, 'Art', state['selected'])
+            self.assertEqual(self.library.selection(self.preset), state)
+
+    def test_replacement_refuses_an_unmanaged_legacy_copy(self):
+        self.library.add(self.package('legacy.zip'))
+        self.library.for_preset(self.preset).add(self.extension('extension.zip'))
+        unmanaged = self.preset / 'scripts/addons/tool'
+        unmanaged.mkdir()
+        (unmanaged / '__init__.py').write_text('# unmanaged')
+        with patch.object(self.manager, 'executable', return_value=Path('/unused/blender')), \
+                patch('features.blender.addons.scanning.run_blender_script') as run:
+            with self.assertRaisesRegex(ValueError, 'installed outside the addon library'):
+                self.library.apply(self.release, 'Art', ['legacy:tool'])
+        run.assert_not_called()
+        self.assertEqual((unmanaged / '__init__.py').read_text(), '# unmanaged')
+
+    def test_local_bluehole_link_rolls_back_and_github_replaces_only_the_link(self):
+        from commonUtils.filesystem.links import is_junction
+
+        checkout = self.root / 'checkout'
+        checkout.mkdir()
+        subprocess.run(['git', 'init', '-q', str(checkout)], check=True)
+        source = checkout / '__init__.py'
+        original = 'bl_info={"name":"Blue Hole","version":(1,0,0),"blender":(5,2,2)}\n'
+        source.write_text(original)
+        profile = checkout / 'keymaps/deluxe-defaults.json'
+        profile.parent.mkdir()
+        profile.write_text('{}')
+        config = {'enabled': True, 'branch': 'alpha', 'source': 'local', 'path': str(checkout)}
+        self.library.save_pending_selection(self.release, 'Art', [], bluehole=config)
+        destination = self.preset / 'scripts/addons/BlueHole'
+        remote_package = inspect_package(self.package('remote.zip', body='# from GitHub', module='BlueHole'))
+        with patch.object(self.manager, 'executable', return_value=Path('/unused/blender')), \
+                patch('features.blender.addons.bluehole.update', return_value=(remote_package, 'a' * 40)) as update, \
+                patch('features.blender.addons.scanning.run_blender_script') as run:
+            self.library.apply(self.release, 'Art', [])
+            self.assertTrue(destination.is_symlink() or is_junction(destination))
+            self.assertEqual(destination.resolve(), checkout.resolve())
+            source.write_text(original + '# unstaged edit')
+            self.assertEqual((destination / '__init__.py').read_text(), original + '# unstaged edit')
+            (destination / 'keymaps/deluxe-defaults.json').write_text('{"edited": true}')
+            self.assertEqual(profile.read_text(), '{"edited": true}')
+            self.assertEqual(self.library.selection(self.preset)['installed_bluehole'],
+                             {'source': 'local', 'path': str(checkout.resolve()), 'version': '1.0.0'})
+            update.assert_not_called()
+            copied = self.manager.duplicate_preset(self.release, 'Art', 'Copy')
+            self.assertFalse((copied / 'scripts/addons/BlueHole').exists())
+            self.library.apply(self.release, 'Copy', [])
+            self.manager.remove_preset(self.release, 'Copy')
+            self.assertTrue(source.is_file())
+            state = self.library.selection(self.preset)
+            github = {'enabled': True, 'branch': 'alpha'}
+            run.side_effect = OSError('prepare failed')
+            with self.assertRaisesRegex(OSError, 'prepare failed'):
+                self.library.apply(self.release, 'Art', [], bluehole=github)
+            self.assertEqual(self.library.selection(self.preset), state)
+            self.assertEqual(destination.resolve(), checkout.resolve())
+            run.side_effect = None
+            self.library.apply(self.release, 'Art', [], bluehole=github)
+            self.assertFalse(destination.is_symlink() or is_junction(destination))
+            self.assertIn('# from GitHub', (destination / '__init__.py').read_text())
+            self.assertEqual(source.read_text(), original + '# unstaged edit')
+            self.assertEqual(profile.read_text(), '{"edited": true}')
+            self.assertEqual(self.library.selection(self.preset)['installed_bluehole']['commit'], 'a' * 40)
 
     def test_import_refuses_destination_created_during_copy(self):
         from features.blender.addons import library

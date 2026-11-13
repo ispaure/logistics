@@ -14,6 +14,7 @@ from tempfile import TemporaryDirectory
 import tomllib
 import zipfile
 
+from commonUtils.filesystem.links import create_link, is_junction
 from commonUtils.persistence.atomic import atomic_write_bytes
 from commonUtils.persistence.publication import rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
@@ -163,10 +164,64 @@ def _inspect_package(package):
             raise ValueError('Single-file addons must contain only their Python file')
         with package.open('rb') as stream:
             digest = hashlib.file_digest(stream, 'sha256').hexdigest()
-        return Addon(('extension:' if kind == 'Extension' else 'legacy:') + module,
+        return Addon(package_identity(kind, module),
                      str(info.get('name') or module), legacy_version(info.get('version', '')) if kind == 'Legacy addon' else version_string(info.get('version', '')),
                      version_string(minimum) if minimum else '', version_string(maximum) if maximum else '',
                      kind, module, prefix, tuple(platforms), package, digest, published=package_date(package.name), package_name=package.name)
+
+
+def package_identity(kind, module):
+    return 'extension:' + module.rsplit('.', 1)[-1] if kind == 'Extension' else 'legacy:' + module
+
+
+def addon_replacements(entries, state=None):
+    """Map unambiguous extension successors to the saved legacy selection."""
+    from features.blender.addons.bluehole import IDENTITY
+
+    def normalized(value):
+        return re.sub(r'[\s_-]+', '', value.casefold())
+
+    legacy = [addon for addon in entries if addon.kind == 'Legacy addon' and addon.identity != IDENTITY]
+    extensions = [addon for addon in entries if addon.kind == 'Extension']
+    candidates = {}
+    for extension in extensions:
+        name = normalized(extension.name)
+        for addon in legacy:
+            if normalized(addon.name) != name:
+                continue
+            # The vendor confirms the Zen UV conversion, including packages with a renamed module.
+            if (normalized(addon.module) == normalized(extension.module)
+                    or (addon.identity == 'legacy:ZenUV' and name == 'zenuv')):
+                candidates.setdefault(extension.identity, set()).add(addon.identity)
+    counts = {}
+    for matches in candidates.values():
+        for identity in matches:
+            counts[identity] = counts.get(identity, 0) + 1
+    replacements = {}
+    if state is not None:
+        # Keep a confirmed pairing when one ZIP is removed from the library.
+        replacements.update(state.get('replacements', {}))
+    available = {addon.identity for addon in entries}
+    for extension, legacy_id in list(replacements.items()):
+        if extension in available and legacy_id in available:
+            # Recheck an installed pairing when both packages can be compared.
+            replacements.pop(extension)
+    for identity, matches in candidates.items():
+        if len(matches) == 1:
+            match, = matches
+            if counts[match] == 1 and match not in replacements.values():
+                replacements[identity] = match
+    return replacements
+
+
+def record_replacements(state, replacements):
+    selected = set(state['selected'])
+    confirmed = {key: identity for key, identity in replacements.items() if identity in selected}
+    if confirmed:
+        state['replacements'] = confirmed
+    else:
+        state.pop('replacements', None)
+
 
 
 class AddonLibrary:
@@ -200,7 +255,8 @@ class AddonLibrary:
             if self.preset_root is not None:
                 layers.append(('Preset', self.root))
         if self.preset_root is not None and legacy_identities is None:
-            legacy_identities = self.selection(self.preset_root)['selected']
+            state = self.selection(self.preset_root)
+            legacy_identities = set(state['selected']) | set(state.get('replacements', {}))
         for source, root in layers:
             if not root.is_dir():
                 continue
@@ -266,9 +322,14 @@ class AddonLibrary:
             rename_exclusive(staged, destination)
         return replace(inspect_package(destination / 'addon.zip'), published=addon.published, package_name=addon.package_name, source='Preset' if self.preset_root is not None else 'Personal')
 
-    def resolve(self, identity, release, *, entries=None):
-        choices = [item for item in (self.entries() if entries is None else entries) if item.identity == identity and item.compatible(release)]
-        return max(choices, key=lambda item: (version_tuple(item.version), item.published), default=None)
+    def resolve(self, identity, release, *, entries=None, replacements=None):
+        entries = self.entries() if entries is None else entries
+        replacements = addon_replacements(entries) if replacements is None else replacements
+        family = replacements.get(identity, identity)
+        choices = [item for item in entries if replacements.get(item.identity, item.identity) == family
+                   and item.compatible(release)]
+        return max(choices, key=lambda item: (version_tuple(item.version), item.kind == 'Legacy addon', item.published),
+                   default=None)
 
     def selection(self, root):
         path = root / SELECTION_FILE
@@ -284,6 +345,14 @@ class AddonLibrary:
                        or any(not isinstance(entry[field], str) for field in ('module', 'path', 'digest'))
                        for entry in value['installed'].values())):
             raise ValueError('Invalid preset addon selection')
+        replacements = value.get('replacements', {})
+        if (not isinstance(replacements, dict)
+                or any(not re.fullmatch(r'extension:[A-Za-z_][A-Za-z_0-9]*', key)
+                       or not isinstance(identity, str)
+                       or not re.fullmatch(r'legacy:[A-Za-z_][A-Za-z_0-9]*', identity)
+                       or identity == 'legacy:BlueHole' for key, identity in replacements.items())
+                or len(set(replacements.values())) != len(replacements)):
+            raise ValueError('Invalid preset addon replacements')
         return value
 
     def save_pending_selection(self, release, name, identities, *, bluehole):
@@ -295,6 +364,12 @@ class AddonLibrary:
         if bluehole_source.uses_runtime_deluxe(release):
             config.pop('deluxe')
         root = self.manager.preset(release, name)
+        if config['enabled'] and config.get('source') == 'local':
+            checkout = bluehole_source.local_checkout(config['path'])
+            if checkout.is_relative_to(root.resolve()) or root.resolve().is_relative_to(checkout):
+                raise ValueError('Choose a Blue Hole checkout outside this Blender preset')
+            bluehole_source.local_addon(checkout, release)
+            config['path'] = str(checkout)
         with installation_lock(root):
             self.manager._require_idle(release, name)
             state = self.selection(root)
@@ -303,7 +378,13 @@ class AddonLibrary:
                 state['installed_bluehole'] = {key: previous.get(key) for key in ('branch', 'commit')}
             if config.get('deluxe'):
                 config['deluxe_stamp'] = previous.get('deluxe_stamp')
-            state.update(selected=list(identities), bluehole=config)
+            catalog = self.for_preset(root)
+            previous_ids = set(state['selected']) | set(state.get('replacements', {}))
+            entries = catalog.entries(legacy_identities=previous_ids | set(identities))
+            replacements = addon_replacements(entries, state)
+            selected = sorted({replacements.get(identity, identity) for identity in identities})
+            state.update(selected=selected, bluehole=config)
+            record_replacements(state, replacements)
             self._publish_selection(root, state)
 
     def _publish_selection(self, root, state):
@@ -313,10 +394,11 @@ class AddonLibrary:
     def apply(self, release, name, identities, *, bluehole=None, cancelled=lambda: False):
         self.warnings = []
         from features.blender.installation.install import installation_lock
-        with installation_lock(self.manager.preset(release, name)):
-            return self._apply(release, name, identities, bluehole=bluehole, cancelled=cancelled)
+        root = self.manager.preset(release, name)
+        with installation_lock(root), TemporaryDirectory(prefix='.addon-update-', dir=root.parent) as temp:
+            return self._apply(release, name, identities, Path(temp), bluehole=bluehole, cancelled=cancelled)
 
-    def _apply(self, release, name, identities, *, bluehole=None, cancelled=lambda: False):
+    def _apply(self, release, name, identities, backup, *, bluehole=None, cancelled=lambda: False):
         """Rollback files/preferences if Blender fails to prepare the resolved selection."""
         manager = self.manager
         manager._require_idle(release, name)
@@ -325,7 +407,7 @@ class AddonLibrary:
         state = self.selection(root)
         from features.blender.addons.bluehole import IDENTITY
         identities = [identity for identity in identities if identity != IDENTITY]
-        resolved = self._resolve_addons(release, root, identities)
+        identities, resolved, replacements = self._resolve_addons(release, root, identities, state)
         from features.blender.addons import bluehole as bluehole_source
         bluehole = bluehole_source.validate(bluehole if bluehole is not None else state.get('bluehole', {'enabled': False, 'branch': 'main'}))
         runtime_deluxe = bluehole_source.uses_runtime_deluxe(release)
@@ -335,86 +417,149 @@ class AddonLibrary:
         commit = None
         installed_branch = bluehole['branch']
         fallback = False
+        checkout = None
         if bluehole['enabled']:
-            try:
-                addon, commit = bluehole_source.update(manager, release, bluehole['branch'], cancelled=cancelled)
-                installed_branch = addon.branch or bluehole['branch']
-            except bluehole_source.UpdateUnavailable as error:
-                check_cancelled(cancelled)
-                addon, installed_branch, commit = bluehole_source.installed_fallback(manager, release, root, state)
-                fallback = True
-                pending = 'update and Deluxe changes' if stamp_deluxe else 'update'
-                self.warnings.append(f'{error}. Using installed Blue Hole {installed_branch} · {commit[:12]}; {pending} will be retried next launch.')
-            resolved = [item for item in resolved if item.identity != bluehole_source.IDENTITY]
+            if bluehole.get('source') == 'local':
+                checkout = bluehole_source.local_checkout(bluehole['path'])
+                if checkout.is_relative_to(root.resolve()) or root.resolve().is_relative_to(checkout):
+                    raise ValueError('Choose a Blue Hole checkout outside this Blender preset')
+                bluehole['path'] = str(checkout)
+                addon = bluehole_source.local_addon(checkout, release)
+            else:
+                try:
+                    addon, commit = bluehole_source.update(manager, release, bluehole['branch'], cancelled=cancelled)
+                    installed_branch = addon.branch or bluehole['branch']
+                except bluehole_source.UpdateUnavailable as error:
+                    check_cancelled(cancelled)
+                    addon, installed_branch, commit = bluehole_source.installed_fallback(manager, release, root, state)
+                    fallback = True
+                    pending = 'update and Deluxe changes' if stamp_deluxe else 'update'
+                    self.warnings.append(f'{error}. Using installed Blue Hole {installed_branch} · {commit[:12]}; {pending} will be retried next launch.')
             resolved.append(addon)
         resolved.sort(key=lambda a: (a.name.casefold(), a.module.casefold(), a.identity))
         old = state['installed']
-        new, payloads, retained = self._plan_managed_payloads(root, resolved, old)
+        old_link = self.checkout_link(root, state)
+        new, payloads, retained = self._plan_managed_payloads(root, resolved, old, old_link=old_link)
+        if checkout is not None or old_link is not None:
+            retained.discard(bluehole_source.IDENTITY)
         manager.environment(release, name)  # Validate all resource folders before copying.
         environments = manager._contained(root, 'addon-data', 'bluehole')
-        with TemporaryDirectory(prefix='.addon-update-', dir=root.parent) as temp:
-            backup = Path(temp)
-            packages = backup / 'packages'
-            packages.mkdir()
-            snapshots = self._snapshot_packages(resolved, retained, packages,
-                                                deluxe=stamp_deluxe and not fallback, cancelled=cancelled)
-            resolved = [snapshots[addon.identity] for addon in resolved]
-            payloads = [(snapshots[addon.identity], relative) for addon, relative in payloads]
-            folders = ('config', 'scripts', 'extensions', 'addon-data')
-            existing = {folder for folder in folders if (root / folder).exists()}
+        packages = backup / 'packages'
+        packages.mkdir()
+        snapshots = self._snapshot_packages(resolved, retained, packages,
+                                            deluxe=stamp_deluxe and not fallback, cancelled=cancelled)
+        resolved = [snapshots[addon.identity] for addon in resolved]
+        payloads = [(snapshots[addon.identity], relative) for addon, relative in payloads]
+        folders = ('config', 'scripts', 'extensions', 'addon-data')
+        existing = {folder for folder in folders if (root / folder).exists()}
+        for folder in folders:
+            if folder in existing:
+                ignore = self.ignore_checkout if old_link is not None and folder == 'scripts' else None
+                shutil.copytree(root / folder, backup / folder, symlinks=True, ignore=ignore)
+        saved_link = backup / 'BlueHole-link'
+        try:
+            previous_bluehole = old.get(bluehole_source.IDENTITY)
+            if previous_bluehole and old_link is None and (root / previous_bluehole['path']).is_dir():
+                if environments.exists():
+                    shutil.rmtree(environments)
+                bluehole_source.preserve_environments(root / previous_bluehole['path'], environments, cancelled=cancelled)
+            for key, entry in old.items():
+                target = root / entry['path']
+                if old_link is not None and key == bluehole_source.IDENTITY:
+                    target.rename(saved_link)
+                if key in retained:
+                    continue
+                if target.is_dir():
+                    shutil.rmtree(target)
+                elif target.exists():
+                    target.unlink()
+            self._install_payloads(root, payloads, retained, environments, cancelled=cancelled)
+            deluxe_stamp = state.get('bluehole', {}).get('deluxe_stamp') if fallback else None
+            if stamp_deluxe and not fallback:
+                bluehole_addon = next(a for a in resolved if a.identity == bluehole_source.IDENTITY)
+                deluxe_stamp = bluehole_source.apply_deluxe(bluehole_addon, root,
+                                state.get('bluehole', {}).get('deluxe_stamp'), cancelled=cancelled)
+            request = backup / 'request.json'
+            request.write_text(json.dumps({'enable': [e['module'] for e in new.values()],
+                                           'disable': [e['module'] for e in old.values() if e['module'] not in [v['module'] for v in new.values()]],
+                                           'extensions': str(root / 'extensions/logistics') if any(a.kind == 'Extension' for a in resolved) else ''}), encoding='utf-8')
+            from features.blender.addons.scanning import run_blender_script
+            run_blender_script(executable, manager.environment(release, name), Path(__file__).with_name('apply_addons.py'),
+                               request, cancelled=cancelled)
+            check_cancelled(cancelled)
+            installed_bluehole = ({
+                'branch': installed_branch,
+                'commit': commit,
+                'version': new.get(bluehole_source.IDENTITY, {}).get('version', ''),
+            } if commit else None)
+            if checkout is not None:
+                installed_bluehole = {'source': 'local', 'path': bluehole['path'],
+                                      'version': new[bluehole_source.IDENTITY]['version']}
+            selection = {
+                'selected': identities,
+                'installed': new,
+                'installed_bluehole': installed_bluehole,
+                'bluehole': {**bluehole, 'commit': commit},
+            }
+            if not runtime_deluxe:
+                selection['bluehole']['deluxe_stamp'] = deluxe_stamp
+            record_replacements(selection, replacements)
+            self._publish_selection(root, selection)
+        except BaseException:
+            link_path = root / bluehole_source.ADDON_PATH
+            if old_link is not None and (link_path.is_symlink() or is_junction(link_path)):
+                if saved_link.is_symlink() or is_junction(saved_link):
+                    self.remove_checkout_link(link_path)
+                else:
+                    link_path.rename(saved_link)
+            elif checkout is not None:
+                self.remove_checkout_link(link_path)
             for folder in folders:
+                if (root / folder).exists():
+                    shutil.rmtree(root / folder)
                 if folder in existing:
-                    shutil.copytree(root / folder, backup / folder, symlinks=True)
-            try:
-                previous_bluehole = old.get(bluehole_source.IDENTITY)
-                if previous_bluehole and (root / previous_bluehole['path']).is_dir():
-                    if environments.exists():
-                        shutil.rmtree(environments)
-                    bluehole_source.preserve_environments(root / previous_bluehole['path'], environments, cancelled=cancelled)
-                for key, entry in old.items():
-                    if key in retained:
-                        continue
-                    target = root / entry['path']
-                    if target.is_dir():
-                        shutil.rmtree(target)
-                    elif target.exists():
-                        target.unlink()
-                self._install_payloads(root, payloads, retained, environments, cancelled=cancelled)
-                deluxe_stamp = state.get('bluehole', {}).get('deluxe_stamp') if fallback else None
-                if stamp_deluxe and not fallback:
-                    bluehole_addon = next(a for a in resolved if a.identity == bluehole_source.IDENTITY)
-                    deluxe_stamp = bluehole_source.apply_deluxe(bluehole_addon, root,
-                                    state.get('bluehole', {}).get('deluxe_stamp'), cancelled=cancelled)
-                request = backup / 'request.json'
-                request.write_text(json.dumps({'enable': [e['module'] for e in new.values()],
-                                               'disable': [e['module'] for e in old.values() if e['module'] not in [v['module'] for v in new.values()]],
-                                               'extensions': str(root / 'extensions/logistics') if any(a.kind == 'Extension' for a in resolved) else ''}), encoding='utf-8')
-                from features.blender.addons.scanning import run_blender_script
-                run_blender_script(executable, manager.environment(release, name), Path(__file__).with_name('apply_addons.py'),
-                                   request, cancelled=cancelled)
-                check_cancelled(cancelled)
-                installed_bluehole = ({
-                    'branch': installed_branch,
-                    'commit': commit,
-                    'version': new.get(bluehole_source.IDENTITY, {}).get('version', ''),
-                } if commit else None)
-                selection = {
-                    'selected': sorted(set(identities)),
-                    'installed': new,
-                    'installed_bluehole': installed_bluehole,
-                    'bluehole': {**bluehole, 'commit': commit},
-                }
-                if not runtime_deluxe:
-                    selection['bluehole']['deluxe_stamp'] = deluxe_stamp
-                self._publish_selection(root, selection)
-            except BaseException:
-                for folder in folders:
-                    if (root / folder).exists():
-                        shutil.rmtree(root / folder)
-                    if folder in existing:
-                        shutil.copytree(backup / folder, root / folder, symlinks=True)
-                raise
+                    shutil.copytree(backup / folder, root / folder, symlinks=True)
+            if old_link is not None:
+                saved_link.rename(link_path)
+            raise
+        self.remove_checkout_link(saved_link)
         return root
+
+    @staticmethod
+    def ignore_checkout(folder, _names):
+        path = Path(folder)
+        return {'BlueHole'} if path.name == 'addons' and path.parent.name == 'scripts' else set()
+
+    @staticmethod
+    def create_checkout_link(checkout, target):
+        create_link(checkout, target, 'junction' if os.name == 'nt' else 'symbolic')
+
+    @staticmethod
+    def remove_checkout_link(target):
+        if is_junction(target):
+            target.rmdir()
+        elif target.is_symlink():
+            target.unlink()
+
+    def checkout_link(self, root, state):
+        """Recognize only the preset's recorded link without following it for mutations."""
+        from features.blender.addons.bluehole import ADDON_PATH, IDENTITY
+
+        entry = state['installed'].get(IDENTITY)
+        current = state.get('installed_bluehole') or {}
+        path = current.get('path')
+        if (not entry or entry['module'] != 'BlueHole' or entry['path'] != ADDON_PATH
+                or current.get('source') != 'local' or not isinstance(path, str)):
+            return None
+        target = self.manager._contained(root, 'scripts', 'addons') / 'BlueHole'
+        checkout = Path(path)
+        if not checkout.is_absolute():
+            raise ValueError('Invalid recorded Blue Hole checkout path')
+        if not target.is_symlink() and not is_junction(target):
+            return None
+        if target.resolve() != checkout:
+            raise ValueError('The Blue Hole link points to a different checkout than the preset records')
+        return checkout
 
     def _install_payloads(self, root, payloads, retained, environments, *, cancelled):
         """Install verified packages inside the caller's backup/rollback boundary."""
@@ -423,6 +568,9 @@ class AddonLibrary:
             if addon.identity in retained:
                 continue
             target = root / relative
+            if addon.identity == bluehole_source.IDENTITY and addon.source == 'Local checkout':
+                self.create_checkout_link(Path(addon.package_name), target)
+                continue
             with zipfile.ZipFile(addon.package) as archive:
                 for member in archive.infolist():
                     check_cancelled(cancelled)
@@ -439,19 +587,35 @@ class AddonLibrary:
             if addon.identity == bluehole_source.IDENTITY:
                 bluehole_source.preserve_environments(environments, target, cancelled=cancelled)
 
-    def _resolve_addons(self, release, root, identities):
+    def _resolve_addons(self, release, root, identities, state):
         """Resolve regular selections from one preset catalog before any mutation."""
+        from features.blender.addons.scanning import scan_preset
+
+        catalog = self.for_preset(root)
+        visible = set(identities) | set(state['selected']) | set(state.get('replacements', {}))
+        entries = catalog.entries(legacy_identities=visible)
+        replacements = addon_replacements(entries, state)
+        identities = sorted({replacements.get(identity, identity) for identity in identities})
         resolved = []
-        entries = self.for_preset(root).entries(legacy_identities=identities)
-        for identity in sorted(set(identities)):
-            addon = self.resolve(identity, release, entries=entries)
+        for identity in identities:
+            addon = self.resolve(identity, release, entries=entries, replacements=replacements)
             if addon is None:
                 raise ValueError(f'No declared-compatible release is available for {identity}')
             resolved.append(addon)
-        return resolved
+        families = set(identities).intersection(replacements.values())
+        if families:
+            managed = {entry['module'] for entry in state['installed'].values()}
+            for item in scan_preset(root):
+                identity = package_identity(item['kind'], item['module'])
+                if replacements.get(identity, identity) in families and item['module'] not in managed:
+                    raise ValueError(f"{item['name']} is installed outside the addon library as {item['module']}; "
+                                     'move that copy before applying the selection')
+        return identities, resolved, replacements
 
-    def _plan_managed_payloads(self, root, resolved, old):
+    def _plan_managed_payloads(self, root, resolved, old, *, old_link=None):
         """Describe destinations and unchanged packages, rejecting unmanaged collisions."""
+        from features.blender.addons import bluehole as bluehole_source
+
         new = {}
         payloads = []
         for addon in resolved:
@@ -465,7 +629,8 @@ class AddonLibrary:
             rel = relative_path(entry['path'])
             if (len(rel.parts) != 3 or rel.parts[:2] not in [('scripts', 'addons'), ('extensions', 'logistics')]):
                 raise ValueError('Invalid managed addon destination')
-            self.manager._contained(root, *rel.parts)
+            if old_link is None or rel.as_posix() != bluehole_source.ADDON_PATH:
+                self.manager._contained(root, *rel.parts)
         for key, entry in new.items():
             target = root / entry['path']
             if target.exists() and not any(e['path'] == entry['path'] for e in old.values()):
@@ -481,7 +646,8 @@ class AddonLibrary:
         from features.blender.addons import bluehole as bluehole_source
         snapshots = {}
         for index, addon in enumerate(resolved):
-            if addon.identity in retained and not (addon.identity == bluehole_source.IDENTITY and deluxe):
+            if addon.source == 'Local checkout' or (
+                    addon.identity in retained and not (addon.identity == bluehole_source.IDENTITY and deluxe)):
                 snapshots[addon.identity] = addon
                 continue
             staged_package = packages / f'{index}.zip'

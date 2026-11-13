@@ -61,13 +61,13 @@ class BlenderManagerTests(unittest.TestCase):
         return response
 
     def test_catalog_has_exact_releases_and_platform_specific_hashes(self):
-        self.assertEqual([version_from_path(path) for path in release_config_paths()], ['5.2.2', '4.5.1'])
+        self.assertEqual([version_from_path(path) for path in release_config_paths()], ['5.3.0', '5.2.2', '4.5.1'])
         hashes = set()
         for platform in ('windows-x64', 'windows-arm64', 'linux-x64', 'macos-arm64'):
             builds = load_releases(platform=platform)
-            self.assertEqual([build.version for build in builds], ['5.2.2', '4.5.1'])
+            self.assertEqual([build.version for build in builds], ['5.3.0', '5.2.2', '4.5.1'])
             hashes.update(build.sha256 for build in builds)
-        self.assertEqual(len(hashes), 8)
+        self.assertEqual(len(hashes), 12)
         self.assertEqual([build.version for build in load_releases(platform='macos-x64')], ['4.5.1'])
         self.assertEqual(load_releases(platform='linux-arm64'), [])
 

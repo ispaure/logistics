@@ -119,10 +119,19 @@ Older imports from the previous per-user library remain available to presets
 that already selected their identity, labelled **User provided (legacy)**.
 They are retained on disk and are not newly offered to unrelated presets.
 
-Legacy module names and extension manifest IDs identify addons, regardless of
-folder or display name. Keep these identities stable across releases. Exact
-reimports are harmless; conflicting contents for one identity/version/date are
-rejected. Different module names remain distinct even if display names match.
+Legacy module names and extension manifest IDs identify packages. Logistics
+groups a legacy addon with its extension when both the module and display name
+match after ignoring capitalization, spaces, underscores and hyphens. It also
+recognizes the documented Zen UV migration. A display-name match alone or an
+ambiguous match keeps the packages separate. Exact reimports are harmless;
+conflicting contents for one identity/version/date are rejected.
+
+Select a matched addon once. A newer compatible extension replaces the managed
+legacy package on the next launch. If the extension requires a newer Blender
+version or another platform, Logistics can use the compatible legacy ZIP.
+Keep both ZIPs in the library if you support Blender versions that need both
+formats. Blender stores preferences under each package's own module, so whether
+settings carry over depends on the addon's migration support.
 
 Metadata is read without importing addon code. Legacy packages use the literal
 `bl_info` dictionary in `__init__.py` (or a single root Python file); its `version`
@@ -182,13 +191,13 @@ Use local ZIP imports for now.
 
 Blue Hole is a dedicated optional configuration above the normal addon list in
 **Presets**; it is omitted from the regular library list. **Enable Blue Hole** is
-on by default. Choose **main**, **beta** or **alpha**, then save the selection
-before launching. For Blender 5.2.2 and newer, enable Deluxe in Blender under
+on by default. With **Source → GitHub**, choose **main**, **beta** or **alpha**,
+then save the selection before launching. For Blender 5.2.2 and newer, enable Deluxe in Blender under
 **Blue Hole → Updates & Deluxe → Enable Deluxe Keymaps**. Blender keeps that
 choice for the same preset once preferences are saved. Use **Save Preferences**
 if Blender's **Auto-Save Preferences** is disabled.
 
-Each launch with Blue Hole enabled resolves the channel’s compatible versioned
+Each launch with the GitHub source resolves the channel’s compatible versioned
 branch and checks its GitHub head. The
 manager downloads that exact commit only when it is not already cached, using the
 public `ispaure/BlueHole` repository. Branch snapshots have their own commit cache,
@@ -197,6 +206,17 @@ Blender compatibility is checked before applying the snapshot. No GitHub access
 or download happens merely by viewing the page or creating a preset. An invalid or incompatible
 update stops launch and preserves the existing preset files/preferences. Network
 failures can use the installed-copy fallback described below.
+
+To test unpublished changes, choose **Source → Local → Browse…**, select the
+Blue Hole Git checkout or worktree root, and click **Save Addon Selection**.
+Logistics links the preset's Blue Hole add-on to that checkout, using a
+symbolic link on macOS and Linux or a junction on Windows. The checkout's
+current branch and uncommitted changes are available when you launch Blender.
+Close Blender before switching branches. In Blue Hole versions that edit the
+bundled keymap catalog, **Apply Changes** updates the checkout's
+`keymaps/deluxe-defaults.json`. Switching the source to **GitHub** replaces
+the link with the downloaded add-on at the next launch. GitHub mode edits its
+installed copy, which a Blue Hole update replaces with the shipped catalog.
 
 For Blender 5.2.2 and newer, Logistics installs Blue Hole and preserves the
 preset's existing settings. If the old Deluxe preset is active, use Blue Hole's
@@ -264,7 +284,9 @@ folder defaults to `Software/Blender_Addons_Library`; you can distribute that
 folder and change `Resources.blender_addons_path` to its location.
 
 In **Settings → Blender → Presets → Addons**, compare **Installed** with **Latest
-compatible**. Status indicates Up to date, Update available, Installation pending,
+compatible**. **Type** shows Legacy addon or Extension for the compatible
+package. Hover over **Installed** to see the installed package type and path.
+Status indicates Up to date, Update available, Installation pending,
 Removal pending, incompatible packages, or missing files/library entries. Saving
 selection records what the next launch should apply. **Installed files** also
 shows addons placed directly in the preset, including those outside the library.
@@ -281,9 +303,9 @@ you do not need to edit it when adding ZIPs. Refresh the library tab to rescan i
 Unknown compatibility is not automatically selected. The package date alone does
 not establish compatibility. Python caches are not needed in shared ZIPs.
 
-Blue Hole's **Currently installed** row shows its installed branch, short commit
-and version; hover to see the complete commit. The branch dropdown describes the
-next launch, which may differ from what is installed now. Updating Blue Hole
+Blue Hole's **Currently installed** row shows its GitHub branch, short commit
+and version, or Local checkout and version. Hover to see the full commit or
+checkout path. The source and branch fields describe the next launch. Updating Blue Hole
 refreshes `envFiles/default` and preserves the artist's other envFiles folders.
 Non-addon backup data in `_support` is retained for manual use and not installed
 as an addon.

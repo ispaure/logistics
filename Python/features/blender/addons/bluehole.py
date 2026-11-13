@@ -1,7 +1,9 @@
-"""Blue Hole-only GitHub branch tracking; downloads are pinned to resolved commits."""
+"""Blue Hole packages from pinned GitHub commits or a local working tree."""
+import ast
 from dataclasses import replace
 from pathlib import Path, PurePosixPath
 import re
+import subprocess
 from tempfile import TemporaryDirectory
 from urllib.request import Request, urlopen
 from urllib.parse import quote
@@ -10,10 +12,11 @@ import zipfile
 from commonUtils.persistence.publication import rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.streams import copy_stream
-from features.blender.addons.library import inspect_package, version_tuple
+from features.blender.addons.library import Addon, inspect_package, legacy_version, version_string, version_tuple
 from features.blender.installation.releases import relative_path
 
 IDENTITY = 'legacy:BlueHole'
+ADDON_PATH = 'scripts/addons/BlueHole'
 BRANCHES = ('main', 'beta', 'alpha')
 DEFAULT = {'enabled': True, 'branch': 'main', 'deluxe': False}
 VERSION_BRANCH = re.compile(r'blender-(\d+\.\d+\.\d+)/(main|beta|alpha)')
@@ -65,7 +68,74 @@ def validate(value):
         raise ValueError('Choose main, beta or alpha for Blue Hole')
     if not isinstance(value.get('deluxe', False), bool):
         raise ValueError('Choose Yes or No for Blue Hole Deluxe')
-    return {'enabled': value['enabled'], 'branch': value['branch'], 'deluxe': value.get('deluxe', False)}
+    config = {'enabled': value['enabled'], 'branch': value['branch'], 'deluxe': value.get('deluxe', False)}
+    source = value.get('source', 'github')
+    if source == 'local':
+        path = value.get('path', '')
+        if not isinstance(path, str):
+            raise ValueError('Choose a local Blue Hole checkout folder')
+        config.update(source=source, path=path)
+    elif source != 'github':
+        raise ValueError('Choose GitHub or Local for Blue Hole')
+    return config
+
+
+def checkout_git(root, *args):
+    try:
+        return subprocess.run(['git', '-C', str(root), *args], check=True, capture_output=True,
+                              timeout=30).stdout
+    except (OSError, subprocess.SubprocessError) as error:
+        raise ValueError('Could not read the Blue Hole checkout with Git') from error
+
+
+def local_checkout(path):
+    if not path.strip() or not Path(path).expanduser().is_absolute():
+        raise ValueError('Choose the root folder of a local Blue Hole checkout')
+    root = Path(path).expanduser().resolve()
+    if not (root / '__init__.py').is_file() or not (root / '.git').exists():
+        raise ValueError('Choose the root folder of a local Blue Hole checkout')
+    if checkout_git(root, 'rev-parse', '--is-inside-work-tree').strip() != b'true':
+        raise ValueError('Choose the root folder of a local Blue Hole checkout')
+    return root
+
+
+def local_addon(root, release):
+    """Read metadata from the checked-out source without importing it."""
+    from hashlib import sha256
+
+    script = root / '__init__.py'
+    if script.resolve() != script or script.stat().st_size > 1024 ** 2:
+        raise ValueError('The Blue Hole checkout entrypoint is invalid')
+    content = script.read_bytes()
+    info = addon_info(content, script)
+    if info.get('name') != 'Blue Hole':
+        raise ValueError('The checkout is not the Blue Hole add-on')
+    if uses_runtime_deluxe(release):
+        profile = root / 'keymaps/deluxe-defaults.json'
+        if not profile.is_file() or profile.resolve() != profile:
+            raise ValueError('The Blue Hole checkout must contain keymaps/deluxe-defaults.json')
+    addon = Addon(IDENTITY, info['name'], legacy_version(info.get('version', '')),
+                  version_string(info['blender']) if info.get('blender') else '', '', 'Legacy addon',
+                  'BlueHole', 'BlueHole/', (), None, sha256(content).hexdigest(),
+                  source='Local checkout', package_name=str(root))
+    if not addon.compatible(release):
+        raise ValueError(f'The local Blue Hole checkout is not declared compatible with Blender {release.version}')
+    return addon
+
+
+def addon_info(content, script):
+    from features.blender.addons.metadata import parse_addon_source
+
+    try:
+        for node in parse_addon_source(content.decode('utf-8-sig'), script).body:
+            if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'bl_info'
+                                                    for target in node.targets):
+                info = ast.literal_eval(node.value)
+                if isinstance(info, dict):
+                    return info
+    except (SyntaxError, UnicodeError) as error:
+        raise ValueError('The Blue Hole metadata is invalid') from error
+    raise ValueError('The Blue Hole metadata is invalid')
 
 
 def branch_commit(branch):
@@ -146,8 +216,6 @@ def update(manager, release, branch, *, cancelled=lambda: False):
 
 def installed_fallback(manager, release, root, state):
     """Use only a recorded, present, declared-compatible installed Blue Hole copy."""
-    import ast
-    from features.blender.addons.library import Addon, legacy_version, version_string
     entry = state['installed'].get(IDENTITY)
     current = state.get('installed_bluehole') or state.get('bluehole', {})
     if (not entry or entry['module'] != 'BlueHole' or entry['path'] != 'scripts/addons/BlueHole'
@@ -161,14 +229,7 @@ def installed_fallback(manager, release, root, state):
     script = manager._contained(root, 'scripts', 'addons', 'BlueHole', '__init__.py')
     if not script.is_file() or script.stat().st_size > 1024 ** 2:
         raise ValueError('The installed Blue Hole entrypoint is missing or invalid')
-    info = {}
-    from features.blender.addons.metadata import parse_addon_source
-    for node in parse_addon_source(script.read_text(encoding='utf-8-sig'), script).body:
-        if isinstance(node, ast.Assign) and any(isinstance(target, ast.Name) and target.id == 'bl_info' for target in node.targets):
-            info = ast.literal_eval(node.value)
-            break
-    if not isinstance(info, dict):
-        raise ValueError('The installed Blue Hole metadata is invalid')
+    info = addon_info(script.read_bytes(), script)
     addon = Addon(IDENTITY, str(info.get('name') or 'Blue Hole'), legacy_version(info.get('version', '')),
                   version_string(info['blender']) if info.get('blender') else '', '', 'Legacy addon',
                   'BlueHole', 'BlueHole/', (), None, entry['digest'], source=entry.get('source', f"GitHub · {current['branch']}"),
@@ -215,9 +276,14 @@ def apply_deluxe(addon, root, previous_stamp, *, cancelled=lambda: False):
         if path.is_symlink() or any(parent.is_symlink() for parent in path.parents if parent.is_relative_to(root)):
             raise ValueError('Deluxe destinations cannot use symbolic links')
     payload = 'BlueHole/overlays/deluxe/payload/'
-    with zipfile.ZipFile(addon.package) as archive:
-        preference = archive.read(payload + 'userpref.blend')
-        keymap = archive.read(payload + 'keyconfig/BH_Keymaps.py')
+    if addon.package is None:
+        local_payload = Path(addon.package_name) / 'overlays/deluxe/payload'
+        preference = (local_payload / 'userpref.blend').read_bytes()
+        keymap = (local_payload / 'keyconfig/BH_Keymaps.py').read_bytes()
+    else:
+        with zipfile.ZipFile(addon.package) as archive:
+            preference = archive.read(payload + 'userpref.blend')
+            keymap = archive.read(payload + 'keyconfig/BH_Keymaps.py')
     if not preference or not keymap:
         raise ValueError('Blue Hole Deluxe payload is missing or empty')
     stamp = hashlib.sha256(preference + keymap).hexdigest()

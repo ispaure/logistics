@@ -105,8 +105,13 @@ class BlenderManager:
                     copy_stream(inp, out, cancelled=cancelled)
                 shutil.copystat(source, target)
                 return target
+            from features.blender.addons.library import AddonLibrary
+
+            library = AddonLibrary(self)
+            linked = library.checkout_link(source, library.selection(source))
             staged = Path(workspace) / 'preset'
-            shutil.copytree(source, staged, symlinks=True, copy_function=copy)
+            shutil.copytree(source, staged, symlinks=True, copy_function=copy,
+                            ignore=library.ignore_checkout if linked is not None else None)
             check_cancelled(cancelled)
             rename_exclusive(staged, destination)
         return destination
@@ -121,7 +126,14 @@ class BlenderManager:
 
     def remove_preset(self, release, name):
         self._require_idle(release, name)
-        shutil.rmtree(self.preset(release, name))
+        from features.blender.addons.bluehole import ADDON_PATH
+        from features.blender.addons.library import AddonLibrary
+
+        root = self.preset(release, name)
+        library = AddonLibrary(self)
+        if library.checkout_link(root, library.selection(root)) is not None:
+            library.remove_checkout_link(root / ADDON_PATH)
+        shutil.rmtree(root)
 
     def environment(self, release, name):
         root = self.preset(release, name)
