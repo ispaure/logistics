@@ -41,6 +41,9 @@ def directory_index(library):
 def _indexed_filename_search(library, cache, root, query, *, visible, cancelled, progress, folder_pages):
     from commonUtils.search.indexed import IndexedLocalSearch
     from services.directory_index import foreground
+    class SavedPageReady(Exception):
+        """Release the provisional SQL cursor after its first useful page."""
+
     searcher = IndexedLocalSearch(cache.database, eligible=lambda provider: True, cache=cache)
     allowed = {}
     def project(result):
@@ -74,17 +77,28 @@ def _indexed_filename_search(library, cache, root, query, *, visible, cancelled,
         warm = saved is not None
         if saved is not None:
             saved.close()
-        # The shared path validates each saved hit before a bounded publication.
-        result = project(searcher.search(library.provider, library.root, query, cancelled=cancelled,
-            progress=(lambda result: progress(project(result))) if progress is not None else None))
         if warm:
+            if progress is not None:
+                def saved_page(result):
+                    result = project(result)
+                    if result.rows:
+                        progress(result)
+                        raise SavedPageReady()
+                try:
+                    # Validate only the first useful saved page. The refreshed
+                    # pass below checks every final hit; finishing both complete
+                    # passes would double provider work for a large warm query.
+                    searcher.search(library.provider, library.root, query,
+                                    cancelled=cancelled, progress=saved_page)
+                except SavedPageReady:
+                    pass
             # Retain saved rows while refreshing; do not replace them with the
             # smaller prefix of a second traversal. Final reconciliation wins.
             searcher.prepare(library.provider, library.root, cancelled=cancelled)
             if folder_pages is not None:
                 folder_pages.clear()
-            result = project(searcher.search(library.provider, library.root, query, cancelled=cancelled))
-        return result
+        return project(searcher.search(library.provider, library.root, query, cancelled=cancelled,
+            progress=(lambda result: progress(project(result))) if progress is not None and not warm else None))
 
 
 def search(library, query, *, include_text, visible=None, cancelled=lambda: False, progress=None,
