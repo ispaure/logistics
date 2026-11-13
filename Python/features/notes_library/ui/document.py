@@ -384,9 +384,20 @@ class DocumentPresentation:
         notebooks_enabled = registry.is_feature_enabled('notebooks')
         current = self.history[self.index] if self.index >= 0 else ''
         def read(report, cancelled):
-            return prepare_document(self.library, path, current=current, resolve_link=resolve_link,
+            result = prepare_document(self.library, path, current=current, resolve_link=resolve_link,
                 cancelled=cancelled, notebooks_enabled=notebooks_enabled,
                 stage=lambda message: self.progress.progress_changed.emit(0, 0, message))
+            if result.preview is not None and result.rendered is not None:
+                from commonUtils.runtime.operations import check_cancelled
+                from .file_preview import prepare_file_preview
+                try:
+                    check_cancelled(cancelled)
+                    result.rendered = prepare_file_preview(result.rendered)
+                    check_cancelled(cancelled)
+                except BaseException:
+                    result.close()
+                    raise
+            return result
         self.progress.start(read, message='Finding file…' if resolve_link else 'Reading ' + PurePosixPath(path).name + '…')
 
 

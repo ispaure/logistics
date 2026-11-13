@@ -1,10 +1,13 @@
 """Provider-backed embedded source editing with the regular native CodeInput."""
 import asyncio
+from threading import Event
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN
 from commonUtils.persistence.text import decode_bytes
+from commonUtils.runtime.operations import OperationCancelled
 from services.documents.storage import DocumentResource
+from services.worker_retirement import drain_worker
 from ..notes import MAX_NOTE
 from ..preparation import PreparedDocument
 from .preparation import read_prepared
@@ -17,6 +20,7 @@ class LibraryText(LibraryTools):
     def __init__(self, library, path, snapshot, resource, prepared=None):
         self.library, self.path, self.snapshot, self.resource = library, path, snapshot, resource
         self.closed = self.busy = False
+        self._save_worker = None
         self.mode_generation = 0
         self.text = snapshot.text
         self.view = toga.Box(style=Pack(direction=COLUMN, flex=1))
@@ -110,22 +114,49 @@ class LibraryText(LibraryTools):
             if not self.dirty:
                 return True
             text, snapshot = self.text, self.snapshot
+            cancel = Event()
+            def cancelled():
+                return cancel.is_set() or self.closed or not self.library.valid()
             def write():
                 data = snapshot.encode(text)
-                self.resource.save(data, cancelled=lambda: self.closed or not self.library.valid())
+                self.resource.save(data, cancelled=cancelled)
                 return decode_bytes(data, path=snapshot.path)
-            saved = await asyncio.to_thread(write)
+            interruption = None
+            worker = self._save_worker = asyncio.create_task(asyncio.to_thread(write))
+            try:
+                saved = await asyncio.shield(worker)
+            except asyncio.CancelledError as error:
+                interruption = error
+                cancel.set()
+                await drain_worker(worker)
+                if worker.cancelled() or worker.exception() is not None:
+                    raise
+                saved = worker.result()
+            finally:
+                self._save_worker = None
+                if self.closed:
+                    self.resource.close()
             if self.closed or not self.library.valid():
+                if interruption is not None:
+                    raise interruption
                 return False
             self.snapshot = saved
             self.library.refresh_library_indexes()
+            if interruption is not None:
+                # Save completed before cancellation reached the writer. Keep
+                # newer input dirty against the bytes actually on disk.
+                self.changed(self.text)
+                raise interruption
             await self.flush()
             if self.closed or not self.library.valid():
                 return False
             self.changed(self.text)
             return not self.dirty
         except (OSError, ValueError) as error:
-            self.library.notice.text = str(error)
+            if not self.closed and self.library.valid():
+                self.library.notice.text = str(error)
+            return False
+        except OperationCancelled:
             return False
         finally:
             self.busy = False
@@ -138,7 +169,8 @@ class LibraryText(LibraryTools):
         self.view.clear()
         if self.formatted is not None:
             self.formatted.dispose()
-        self.resource.close()
+        if self._save_worker is None:
+            self.resource.close()
         if self.source is not None:
             self.source.dispose()
             self.source.value = ''

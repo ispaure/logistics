@@ -4,6 +4,21 @@ from PySide6.QtCore import QByteArray
 from features.pdf.ui.continuous import ContinuousPDFView, load_pdf
 
 
+def prepare_file_preview(content):
+    """Decode into a QImage on the document worker, before widget publication."""
+    image = None
+    if content.image:
+        from features.images.ui.decoding import read_oriented
+        buffer = qt.QBuffer()
+        buffer.setData(content.image)
+        buffer.open(qt.QIODevice.OpenModeFlag.ReadOnly)
+        try:
+            image = read_oriented(qt.QImageReader(buffer), content.image)
+        finally:
+            buffer.close()
+    return content, image
+
+
 class PreviewBrowser(qt.QStackedWidget):
     def __init__(self):
         super().__init__()
@@ -20,16 +35,11 @@ class PreviewBrowser(qt.QStackedWidget):
         self.addWidget(self.details)
         self.addWidget(self.scroll)
 
-    def set_content(self, content):
+    def set_content(self, content, image):
         self.clear()
         self.content = content
-        if content.image:
-            data = content.image
-            buffer = qt.QBuffer()
-            buffer.setData(data)
-            buffer.open(qt.QIODevice.OpenModeFlag.ReadOnly)
-            from features.images.ui.decoding import read_oriented
-            self.pixmap = qt.QPixmap.fromImage(read_oriented(qt.QImageReader(buffer), data))
+        if image is not None:
+            self.pixmap = qt.QPixmap.fromImage(image)
             if self.pixmap.isNull():
                 self.details.setPlainText('Cannot decode this image.')
                 self.setCurrentWidget(self.details)
@@ -94,7 +104,7 @@ class LibraryFilePreview(qt.QWidget):
             self.browser.video.player.pause()
         super().hideEvent(event)
 
-    def load(self, preview, content):
+    def load(self, preview, prepared):
         self.clear()
         self.preview, self.index = preview, 0
         if preview.document is not None:
@@ -104,7 +114,7 @@ class LibraryFilePreview(qt.QWidget):
             self.pdf.jump(0)
             self.browser.setCurrentWidget(self.pdf)
         else:
-            self.browser.set_content(content)
+            self.browser.set_content(*prepared)
         if preview.video_url:
             from pathlib import PurePosixPath
             from commonUtils.ui.markdown.videos import VideoCard

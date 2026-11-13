@@ -131,6 +131,103 @@ class MarkdownLibraryWorkflowTests(unittest.TestCase):
             self.assertEqual((self.vault / 'Home.md').read_text(), '# Retry draft\n')
         self.run_async(exercise())
 
+    def test_interrupted_save_keeps_admission_and_reconciles_published_bytes(self):
+        import asyncio
+        from threading import Event
+
+        async def exercise():
+            library = await open_vault(self.app, self.provider, 'Vault', 'files')
+            path = self.vault / 'attachment.txt'
+            for published in (False, True):
+                with self.subTest(published=published):
+                    self.assertTrue(await library.open_text('Vault/attachment.txt'))
+                    editor = library.embedded
+                    previous = path.read_text()
+                    submitted = previous + '\nSubmitted edit'
+                    later = submitted + '\nLater edit'
+                    editor.source.value = submitted
+                    entered, release = asyncio.Event(), Event()
+                    finished = asyncio.Event()
+                    original = editor.resource.save
+                    loop = asyncio.get_running_loop()
+
+                    def interrupted(data, **options):
+                        try:
+                            if published:
+                                original(data, **options)
+                            loop.call_soon_threadsafe(entered.set)
+                            if not release.wait(5):
+                                raise TimeoutError('Writer was not released')
+                            if not published:
+                                original(data, **options)
+                        finally:
+                            loop.call_soon_threadsafe(finished.set)
+
+                    with patch.object(editor.resource, 'save', side_effect=interrupted):
+                        task = asyncio.create_task(editor.save())
+                        try:
+                            await asyncio.wait_for(entered.wait(), 3)
+                            for _ in range(2):
+                                task.cancel()
+                                await asyncio.sleep(0)
+                            self.assertTrue(editor.busy)
+                            editor.source.value = later
+                            self.assertFalse(await editor.save())
+                        finally:
+                            release.set()
+                            with self.assertRaises(asyncio.CancelledError):
+                                await task
+                            await asyncio.wait_for(finished.wait(), 3)
+                    expected = submitted if published else previous
+                    self.assertFalse(editor.busy)
+                    self.assertEqual(path.read_text(), expected)
+                    self.assertEqual(editor.snapshot.text, expected)
+                    self.assertEqual(editor.text, later)
+                    self.assertTrue(editor.dirty)
+                    self.assertTrue(await editor.save())
+                    self.assertEqual(path.read_text(), later)
+                    self.assertFalse(editor.dirty)
+
+        self.run_async(exercise())
+
+    def test_retired_text_editor_waits_to_release_active_writer(self):
+        import asyncio
+        from threading import Event
+
+        async def exercise():
+            library = await open_vault(self.app, self.provider, 'Vault', 'files')
+            self.assertTrue(await library.open_text('Vault/attachment.txt'))
+            editor = library.embedded
+            resource = editor.resource
+            editor.source.value = 'Abandoned synthetic edit'
+            entered = asyncio.Event()
+            release = Event()
+            loop = asyncio.get_running_loop()
+            original = resource.save
+
+            def write(data, **options):
+                loop.call_soon_threadsafe(entered.set)
+                if not release.wait(5):
+                    raise TimeoutError('Writer was not released')
+                return original(data, **options)
+
+            with patch.object(resource, 'save', side_effect=write), \
+                    patch.object(library, 'refresh_library_indexes') as refresh:
+                task = asyncio.create_task(editor.save())
+                try:
+                    await asyncio.wait_for(entered.wait(), 3)
+                    library.dispose()
+                    self.assertTrue(editor.closed)
+                    self.assertFalse(resource.closed)
+                finally:
+                    release.set()
+                    self.assertFalse(await task)
+                refresh.assert_not_called()
+            self.assertTrue(resource.closed)
+            self.assertEqual((self.vault / 'attachment.txt').read_text(), 'Not a note')
+
+        self.run_async(exercise())
+
     def test_save_refreshes_content_search_and_open_links_without_reopening_closed_panel(self):
         import asyncio
         async def exercise():
