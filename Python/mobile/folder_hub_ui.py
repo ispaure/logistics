@@ -123,7 +123,7 @@ class FolderHubUI(WorkspacesScreen):
             self.set_folder_loading()
         return True
 
-    async def refresh_hub_crypt_locations(self):
+    async def refresh_hub_crypt_locations(self, *, valid=lambda: True):
         """Resolve native crypt locations once when credentials load."""
         client = getattr(self, 'cloud_client', None)
         generation = getattr(client, 'generation', None)
@@ -132,7 +132,7 @@ class FolderHubUI(WorkspacesScreen):
             locations = dict(self.existing_crypt_locations(roots=roots))
             return locations, roots
         locations, roots = await asyncio.to_thread(discover)
-        if (self.active_host and client is getattr(self, 'cloud_client', None)
+        if (valid() and self.active_host and client is getattr(self, 'cloud_client', None)
                 and generation == getattr(client, 'generation', None)):
             self.hub_crypt_locations = list(locations.items())
             self.hub_crypt_roots = roots

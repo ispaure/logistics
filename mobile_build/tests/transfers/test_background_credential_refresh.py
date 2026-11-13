@@ -224,23 +224,28 @@ class CredentialFreshnessTests(IsolatedAsyncioTestCase):
         from features.rclone.credential_loading import CredentialResult
         client = SimpleNamespace(generation=1)
         selected = SimpleNamespace(name='Original.zip')
-        async def metadata():
+        async def metadata(*, valid):
+            self.assertTrue(valid())
             client.generation = 2
+            self.assertFalse(valid())
         app = SimpleNamespace(cloud_client=client, active_host=True, cloud_busy=False,
-            navigation_generation=1, cloud_pending_zip=selected,
+            navigation_generation=1,
             cloud_password=SimpleNamespace(value='synthetic'), cloud_remember=SimpleNamespace(value=False),
             cloud_import_message=SimpleNamespace(text=''), set_cloud_busy=Mock(),
-            clear_private_reader=lambda: True, clear_private_catalog=Mock(),
-            _load_crypt_remote_names=metadata, remember_loaded_packages=Mock(), retained_packages=Mock())
+            clear_private_reader=lambda: True, clear_private_catalog=Mock(), retained_packages=Mock())
+        workflow = CredentialWorkflow(app)
+        workflow.state.cloud_pending_zip = selected
+        workflow._load_crypt_remote_names = metadata
+        workflow.remember_loaded_packages = Mock()
         result = CredentialResult('Original.zip', ('Original',), False, 1)
         with patch('features.rclone.mobile.credential_workflow.native_service'), \
              patch('features.rclone.mobile.credential_workflow.run_credentials', new=AsyncMock(return_value=result)):
-            await CredentialWorkflow(app).import_cloud_package()
-        app.remember_loaded_packages.assert_not_called()
+            await workflow.import_cloud_package()
+        workflow.remember_loaded_packages.assert_not_called()
         app.retained_packages.assert_not_called()
-        self.assertIs(app.cloud_pending_zip, selected)
+        self.assertIs(workflow.state.cloud_pending_zip, selected)
         self.assertEqual(app.cloud_password.value, '')
-        app.set_cloud_busy.assert_called_with(False)
+        app.set_cloud_busy.assert_called_with(False, refresh_credentials=False)
 
 
 class RetainedCredentialWorkflowTests(IsolatedAsyncioTestCase):
@@ -252,6 +257,7 @@ class RetainedCredentialWorkflowTests(IsolatedAsyncioTestCase):
         client = SimpleNamespace(generation=2)
         view = Mock()
         view.current.return_value = True
+        view.refresh_kinds = AsyncMock()
         workflow = CredentialLoadWorkflow(view)
         workflow.load = AsyncMock(return_value=CredentialResult('Other.zip', ('Other',), False, 2))
         with self.assertRaisesRegex(ValueError, 'does not match'):

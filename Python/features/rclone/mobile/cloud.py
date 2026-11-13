@@ -115,6 +115,9 @@ class CloudClient:
         return self.credential_state.publish(action, values, info)
 
     def import_package(self, access, reference, password, *, remember=True):
+        return self.import_package_guarded(access, reference, password, remember=remember)
+
+    def import_package_guarded(self, access, reference, password, *, remember, before_submit=None):
         with access.open(reference) as (name, source):
             data = source.read(PACKAGE_LIMIT + 1)
         if len(data) > PACKAGE_LIMIT:
@@ -125,7 +128,10 @@ class CloudClient:
         attached = self.vault_attached
         aliases = access.aliases(reference) if hasattr(access, 'aliases') else {}
         extra = {'aliases': aliases} if aliases else {}
-        names = self.request('import', **extra, package=base64.b64encode(data).decode('ascii'),
+        encoded = base64.b64encode(data).decode('ascii')
+        if before_submit is not None:
+            before_submit()
+        names = self.request('import', **extra, package=encoded,
                              password=password, package_name=name, session_only=not remember)
         self.vault_attached = attached
         self.package_name = name

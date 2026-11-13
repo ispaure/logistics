@@ -41,7 +41,7 @@ def rclone_host_ui(app):
         private_label=private_label,
         visible_remotes=visible_remotes,
         exclusions=exclusions,
-        pick_document=lambda owner: pickers.pick_document(app),
+        pick_document=lambda: pickers.pick_document(app),
         ResourceImports=ResourceImports,
         export_file=lambda owner, selected: pickers.export_file(app, selected),
         accessible_name=accessible_name,

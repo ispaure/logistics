@@ -5,7 +5,7 @@ from typing import Any
 from services.workflow_host import HostAttribute, HostService, StateAttribute
 from .smb_connection import SMBConnection, SMBFormState
 from .downloads import DownloadWorkflow, DownloadState
-from .credentials_ui import CredentialWorkflow, CredentialState
+from .credentials_ui import CredentialWorkflow
 from features.rclone.mobile.cloud_ui import CloudUI, CloudBrowserPresentation, CloudActivityPresentation
 from .activity import RemoteActivity
 from .browser_workflow import RemoteBrowserState, RemoteBrowserWorkflow
@@ -158,8 +158,8 @@ class CloudController(CloudUI):
 
     def __init__(self, app):
         self.app = app
-        self.credential_state = CredentialState()
         self.credential_workflow = CredentialWorkflow(self)
+        self.credential_state = self.credential_workflow.state
         self.download_state = DownloadState()
         self.download_workflow = DownloadWorkflow(self)
         self.state = CloudState()
@@ -170,6 +170,11 @@ class CloudController(CloudUI):
         )
         self.smb_form = SMBFormState()
         self.smb_connection = SMBConnection(self, self.smb_form)
+
+    def cancel_cloud(self, widget=None, **kwargs):
+        if self.credential_workflow.import_in_progress:
+            self.credential_workflow.cancel_import()
+        return super().cancel_cloud(widget, **kwargs)
 
     downloads = StateAttribute("download_state", "downloads")
     download_labels = StateAttribute("download_state", "download_labels")

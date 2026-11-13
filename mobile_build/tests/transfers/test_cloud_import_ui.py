@@ -4,10 +4,14 @@ from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+import asyncio
+from contextlib import contextmanager
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from threading import Event
+from types import SimpleNamespace
 import unittest
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from commonUtils.runtime.resources.documents import LocalDocuments
 from mobile.app import LogisticsMobile
@@ -48,7 +52,7 @@ class AutomaticCredentialImportTests(unittest.TestCase):
         self.enterContext(patch.object(self.app, 'retained_packages', return_value=None))
         self.dialog = self.enterContext(patch.object(self.app.main_window, 'dialog', new=AsyncMock(return_value=False)))
 
-    def choose(self, *, encrypted):
+    def archive(self, *, encrypted):
         from io import BytesIO
         from zipfile import ZipFile
         from mobile_build.tests.transfers.test_credential_packages import PACKAGE
@@ -60,8 +64,12 @@ class AutomaticCredentialImportTests(unittest.TestCase):
             with ZipFile(content, 'w') as archive:
                 archive.writestr('Secret.txt', 'type = local\n')
             source.write_bytes(content.getvalue())
-        with patch('mobile.pickers.pick_document', new=AsyncMock(return_value=(LocalDocuments(), source))) as picker:
-            self.app.loop.run_until_complete(self.app.begin_cloud_import())
+        return LocalDocuments(), source
+
+    def choose(self, *, encrypted):
+        selected = self.archive(encrypted=encrypted)
+        with patch('mobile.pickers.pick_document', new=AsyncMock(return_value=selected)) as picker:
+            self.app.loop.run_until_complete(self.app.cloud_import_entry.on_press())
         return picker
 
     def test_plain_zip_imports_without_password_or_extra_import_tap(self):
@@ -74,7 +82,21 @@ class AutomaticCredentialImportTests(unittest.TestCase):
         self.assertEqual(self.dialog.await_count, 1)
 
     def test_encrypted_zip_opens_password_panel_and_retries_same_file(self):
-        picker = self.choose(encrypted=True)
+        owner = self.app.cloud_controller()
+        state = owner.credential_workflow.state
+        show_password = owner._show_cloud_import_password
+
+        def advance(package):
+            epoch = state.import_epoch
+            self.assertIs(state.cloud_pending_zip, package)
+            result = show_password(package)
+            self.assertIs(state.cloud_pending_zip, package)
+            self.assertEqual(state.import_epoch, epoch)
+            return result
+
+        with patch.object(owner, '_show_cloud_import_password', side_effect=advance) as password_route:
+            picker = self.choose(encrypted=True)
+        password_route.assert_called_once()
         self.assertEqual(self.client.calls, [])
         self.dialog.assert_not_awaited()
         self.assertEqual(self.app.routes.screens['settings'][-1][0], 'import-credentials-password')
@@ -98,6 +120,32 @@ class AutomaticCredentialImportTests(unittest.TestCase):
         self.assertEqual(self.client.calls, [('', True)])
         self.assertTrue(self.client.package_records[0]['saved'])
         self.assertEqual(self.dialog.await_count, 1)
+
+    def test_persistent_password_retry_after_vault_attachment_advances_generation(self):
+        self.dialog.return_value = True
+        self.choose(encrypted=True)
+        selected = self.app.cloud_pending_zip
+        load = self.client.import_package
+        generation = self.client.generation
+
+        def load_after_vault_attachment(*args, remember):
+            if not self.client.calls and remember:
+                self.client.generation += 1
+            return load(*args, remember=remember)
+
+        with patch.object(self.client, 'import_package', side_effect=load_after_vault_attachment):
+            self.app.cloud_password.value = 'wrong'
+            self.app.loop.run_until_complete(self.app.cloud_import.on_press())
+            self.assertEqual(self.client.generation, generation + 1)
+            self.assertIs(self.app.cloud_pending_zip, selected)
+            self.assertEqual(self.app.cloud_password.value, '')
+            self.assertTrue(self.app.cloud_import.enabled)
+            self.assertIn('Check the password', ' '.join(self.app.cloud_import_message.text.split()))
+            self.app.cloud_password.value = 'correct'
+            self.app.loop.run_until_complete(self.app.cloud_import.on_press())
+        self.assertEqual(self.client.calls, [('wrong', True), ('correct', True)])
+        self.assertEqual(self.dialog.await_count, 1)
+        self.assertEqual(self.app.routes.screens['settings'][-1][0], 'connections')
 
     def test_empty_password_does_not_prompt_for_storage_or_load(self):
         self.choose(encrypted=True)
@@ -151,6 +199,237 @@ class AutomaticCredentialImportTests(unittest.TestCase):
         self.assertIsNone(self.app.cloud_pending_zip)
         self.assertEqual(self.client.calls, [])
         self.dialog.assert_not_awaited()
+
+    def test_retiring_plain_route_during_preparation_refuses_native_commit(self):
+        from features.rclone.mobile.credentials import NativeCredentials
+        prepare = NativeCredentials.prepare
+        started, release = Event(), Event()
+        stages = []
+
+        def prepare_then_wait(backend, request, password):
+            stage = prepare(backend, request, password)
+            stages.append(stage)
+            stage.close = Mock(wraps=stage.close)
+            started.set()
+            if not release.wait(5):
+                stage.close()
+                raise TimeoutError('Credential preparation fixture did not release')
+            return stage
+
+        async def exercise():
+            task = self.app.cloud_import_entry.on_press()
+            try:
+                self.assertTrue(await asyncio.to_thread(started.wait, 2))
+                self.assertTrue(self.app.cloud_busy)
+                self.trim_import('import-credentials')
+                self.assertIsNone(self.app.cloud_pending_zip)
+                self.assertEqual(self.app.cloud_password.value, '')
+                self.assertTrue(self.app.cloud_busy)
+                message = self.app.cloud_import_message.text
+            finally:
+                release.set()
+                await task
+            self.assertFalse(self.app.cloud_busy)
+            self.assertEqual(self.client.calls, [])
+            self.assertEqual(self.app.cloud_import_message.text, message)
+            stages[0].close.assert_called_once()
+
+        with patch('mobile.pickers.pick_document', new=AsyncMock(return_value=self.archive(encrypted=False))), \
+                patch.object(NativeCredentials, 'prepare', prepare_then_wait):
+            self.app.loop.run_until_complete(exercise())
+
+    def test_retiring_password_route_at_process_lock_refuses_native_commit(self):
+        self.choose(encrypted=True)
+        entered, release = Event(), Event()
+
+        @contextmanager
+        def publication(*, blocking):
+            self.assertFalse(blocking)
+            entered.set()
+            if not release.wait(5):
+                raise TimeoutError('Credential lock fixture did not release')
+            yield
+
+        async def exercise():
+            self.app.cloud_password.value = 'correct'
+            task = self.app.cloud_import.on_press()
+            try:
+                self.assertTrue(await asyncio.to_thread(entered.wait, 2))
+                self.trim_import('import-credentials-password')
+                self.assertEqual(self.app.routes.screens['settings'][-1][0], 'import-credentials')
+                self.assertIsNone(self.app.cloud_pending_zip)
+                self.assertEqual(self.app.cloud_password.value, '')
+                self.assertTrue(self.app.cloud_busy)
+                message = self.app.cloud_import_message.text
+            finally:
+                release.set()
+                await task
+            self.assertFalse(self.app.cloud_busy)
+            self.assertEqual(self.client.calls, [])
+            self.assertEqual(self.app.cloud_import_message.text, message)
+
+        self.client.credential_state = SimpleNamespace(publication=publication)
+        self.app.loop.run_until_complete(exercise())
+
+    def test_retiring_persistent_import_during_vault_attachment_stops_zip_submission(self):
+        from features.rclone.mobile.cloud import CloudClient
+        from features.rclone.mobile.credential_state import NativeCredentialState
+
+        client = CloudClient.__new__(CloudClient)
+        client.credential_state = NativeCredentialState()
+        client.package_name = ''
+        client.vault_attached = False
+        client.request = Mock(side_effect=AssertionError('Retired ZIP reached native submission'))
+        self.app.cloud_client = client
+        self.dialog.return_value = True
+        self.choose(encrypted=True)
+        client.vault = SimpleNamespace(set_label=Mock())
+        started, release = Event(), Event()
+
+        def attach_vault(*, create):
+            self.assertTrue(create)
+            started.set()
+            if not release.wait(5):
+                raise TimeoutError('Vault fixture did not release')
+            client.credential_state.generation += 1
+            client.vault_attached = True
+            return []
+
+        async def exercise():
+            self.app.cloud_password.value = 'correct'
+            task = self.app.cloud_import.on_press()
+            try:
+                self.assertTrue(await asyncio.to_thread(started.wait, 2))
+                self.trim_import('import-credentials-password')
+                self.assertIsNone(self.app.cloud_pending_zip)
+                self.assertEqual(self.app.cloud_password.value, '')
+                self.assertTrue(self.app.cloud_busy)
+            finally:
+                release.set()
+                await task
+            self.assertFalse(self.app.cloud_busy)
+            self.assertTrue(client.vault_attached)
+            client.request.assert_not_called()
+            client.vault.set_label.assert_not_called()
+
+        try:
+            with patch.object(client, 'restore', side_effect=attach_vault):
+                self.app.loop.run_until_complete(exercise())
+        finally:
+            self.app.cloud_client = self.client
+
+    def test_retired_view_ignores_success_or_failure_after_native_commit(self):
+        owner = self.app.cloud_controller()
+        for error in (None, OSError('late metadata failure')):
+            with self.subTest(error=error):
+                started, release = Event(), Event()
+                generation = self.client.generation
+
+                def crypt_remotes():
+                    started.set()
+                    if not release.wait(5):
+                        raise TimeoutError('Credential metadata fixture did not release')
+                    if error:
+                        raise error
+                    return ['Late crypt']
+
+                async def exercise():
+                    task = self.app.cloud_import_entry.on_press()
+                    try:
+                        self.assertTrue(await asyncio.to_thread(started.wait, 2))
+                        self.assertEqual(self.client.generation, generation + 1)
+                        self.trim_import('import-credentials')
+                        self.app.show_home()
+                        self.app.cloud_status.value = 'Current remote status'
+                        self.app.cloud_connections_status.text = 'Current connections status'
+                        owner.cloud_crypt_remotes = {'Current crypt'}
+                        message = self.app.cloud_import_message.text
+                    finally:
+                        release.set()
+                        await task
+                    self.assertEqual(self.app.native_host.state.destination, 'home')
+                    self.assertFalse(self.app.cloud_busy)
+                    self.assertIsNone(self.app.cloud_pending_zip)
+                    self.assertEqual(self.app.cloud_status.value, 'Current remote status')
+                    self.assertEqual(self.app.cloud_connections_status.text, 'Current connections status')
+                    self.assertEqual(self.app.cloud_import_message.text, message)
+                    self.assertEqual(owner.cloud_crypt_remotes, {'Current crypt'})
+
+                self.app.show_cloud_connections()
+                picker = AsyncMock(return_value=self.archive(encrypted=False))
+                with patch('mobile.pickers.pick_document', new=picker), \
+                        patch.object(self.client, 'crypt_remotes', side_effect=crypt_remotes), \
+                        patch.object(owner.credential_workflow, 'remember_loaded_packages') as remember:
+                    self.app.loop.run_until_complete(exercise())
+                remember.assert_not_called()
+
+    def test_route_host_uninstall_retires_picker_and_ignores_its_late_error(self):
+        app = self.app
+
+        async def exercise():
+            started, release = asyncio.Event(), asyncio.Event()
+
+            async def picker(host):
+                self.assertIs(host, app)
+                started.set()
+                await release.wait()
+                raise OSError('late picker failure')
+
+            with patch('mobile.pickers.pick_document', new=picker):
+                task = app.cloud_import_entry.on_press()
+                try:
+                    await asyncio.wait_for(started.wait(), 2)
+                    app.routes.uninstall()
+                    self.assertTrue(app.cloud_busy)
+                    self.assertIsNone(app.cloud_pending_zip)
+                    message = app.cloud_import_message.text
+                finally:
+                    release.set()
+                    await task
+            self.assertFalse(app.cloud_busy)
+            self.assertEqual(self.client.calls, [])
+            self.assertEqual(app.cloud_import_message.text, message)
+            self.dialog.assert_not_awaited()
+
+        app.loop.run_until_complete(exercise())
+
+    def test_retired_import_cannot_replace_the_folder_hub_cache(self):
+        folder = self.app.folder_controller()
+        started, release = Event(), Event()
+
+        def discover(*, roots):
+            roots['Late folder'] = ('Secret', 'late-identity')
+            started.set()
+            if not release.wait(5):
+                raise TimeoutError('Folder discovery fixture did not release')
+            return {'Late folder': 'Secret'}
+
+        async def exercise():
+            task = self.app.cloud_import_entry.on_press()
+            try:
+                self.assertTrue(await asyncio.to_thread(started.wait, 2))
+                self.assertEqual(self.client.calls, [('', False)])
+                self.trim_import('import-credentials')
+                folder.hub_crypt_locations = [('Current folder', 'Other')]
+                folder.hub_crypt_roots = {'Current folder': ('Other', 'current-identity')}
+                folder.folder_hub_error = 'Current discovery status'
+            finally:
+                release.set()
+                await task
+            self.assertEqual(folder.hub_crypt_locations, [('Current folder', 'Other')])
+            self.assertEqual(folder.hub_crypt_roots, {'Current folder': ('Other', 'current-identity')})
+            self.assertEqual(folder.folder_hub_error, 'Current discovery status')
+
+        picker = AsyncMock(return_value=self.archive(encrypted=False))
+        with patch.object(folder, 'existing_crypt_locations', side_effect=discover), \
+                patch('mobile.pickers.pick_document', new=picker):
+            self.app.loop.run_until_complete(exercise())
+
+    def trim_import(self, route):
+        routes = self.app.routes
+        index = next(index for index, screen in enumerate(routes.screens['settings']) if screen[0] == route)
+        routes.trim('settings', index)
+        routes.render('settings')
 
 
 class CredentialImportUITests(unittest.TestCase):

@@ -1,5 +1,6 @@
 """Native credential adapter; publication remains process-wide across scenes."""
 from contextlib import contextmanager
+from commonUtils.runtime.operations import check_cancelled
 from features.rclone.service import CredentialGrant
 from features.rclone.credential_loading import CredentialBusyError, CredentialResult, CredentialStage
 
@@ -21,9 +22,10 @@ class NativeCredentials:
         publish, valid = stage.publish, stage.valid
         def commit(context):
             with self._publication(blocking=False):
-                # Recheck after taking the shared lock: another scene may have
-                # published between service admission and native commit.
-                if not valid():
+                # The view or client can retire between service admission and
+                # entry to the process-wide native publication scope.
+                check_cancelled(context.cancelled)
+                if not context.valid() or not valid():
                     raise ValueError('Credentials changed while loading. Try again.')
                 return publish(context)
         return CredentialStage(publish=commit, valid=valid, close=stage.close)

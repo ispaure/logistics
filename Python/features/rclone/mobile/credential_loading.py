@@ -2,7 +2,9 @@
 from contextlib import contextmanager
 from dataclasses import dataclass, field
 from io import BytesIO
+from typing import Callable
 
+from commonUtils.runtime.operations import check_cancelled
 from features.rclone.credential_loading import CredentialStage, CredentialResult
 from services.worker_retirement import drain_worker
 from .cloud import PACKAGE_LIMIT, download_name
@@ -13,6 +15,7 @@ class NativeCredentialLoad:
     access: object = field(repr=False)
     reference: object = field(repr=False)
     remember: bool = True
+    view_current: Callable[[], bool] | None = field(default=None, repr=False)
 
 
 @dataclass(frozen=True)
@@ -55,9 +58,22 @@ def prepare(client, request, password):
     except BaseException:
         secret.clear()
         raise
+
+    def check_view(context):
+        check_cancelled(context.cancelled)
+        # Vault attachment may advance the generation inside this transaction.
+        # At submission recheck the originating view and client independently.
+        if not request.view_current():
+            raise ValueError('Credential loading is no longer current. Try again.')
+
     def publish(context):
         if package is not None:
-            names = client.import_package(package, None, secret[0], remember=request.remember)
+            guarded_import = getattr(client, 'import_package_guarded', None)
+            if request.view_current is not None and guarded_import is not None:
+                names = guarded_import(package, None, secret[0], remember=request.remember,
+                                       before_submit=lambda: check_view(context))
+            else:
+                names = client.import_package(package, None, secret[0], remember=request.remember)
         else:
             names = client.add_smb(request.name, request.host, request.user, secret[0],
                                    request.domain, request.port, remember=request.remember)

@@ -33,6 +33,7 @@ class MobileRoutes(Routes):
     def uninstall(self):
         if not self._retired:
             self._retired = True
+            self.retire_credential_import()
             task, self.back_task = self.back_task, None
             if (task is not None and not task.done()
                     and not (isinstance(task, asyncio.Task) and task.cancelling())):
@@ -144,10 +145,8 @@ class MobileRoutes(Routes):
         removed_library = library_view is not None and any(
             contains(panel, library_view) for _, panel, _ in self.screens[destination][count:])
         removed = [screen[0] for screen in self.screens[destination][count:]]
-        if 'import-credentials-password' in removed:
-            owner = self.app.__dict__.get('_cloud_controller')
-            if owner is not None:
-                owner.credential_workflow.cancel_import()
+        if {'import-credentials', 'import-credentials-password'}.intersection(removed):
+            self.retire_credential_import()
         if any(route in ('browser', 'remote-browser', 'workspace-browser')
                or route.startswith(('folder:', 'notes-library:')) for route in removed):
             # A retained browser may reopen the same folder after Back. Its
@@ -164,6 +163,11 @@ class MobileRoutes(Routes):
             self.folders.forget(destination, route)
         if removed:
             self._selection_returns[destination] = self.body(destination)
+
+    def retire_credential_import(self):
+        owner = self.app.__dict__.get('_cloud_controller')
+        if owner is not None:
+            owner.credential_workflow.cancel_import()
 
     def render(self, destination):
         super().render(destination)
