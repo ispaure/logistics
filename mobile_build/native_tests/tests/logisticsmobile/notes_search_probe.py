@@ -1,15 +1,18 @@
 """Native independent document/name search controls and retained results."""
 import asyncio
+from dataclasses import replace
 import json
 from pathlib import Path
 import sys
 import traceback
 
 from commonUtils.runtime.resources.local import LocalFiles
+from commonUtils.runtime.resources.provider import ResourceCapabilities
 from commonUtils.testing.stages import TestStage
 from mobile.obsidian import open_vault
 from .chat_settings_probe import ChatSettingsProbe
 from .fixtures import capture_window
+from .notes_tree_helpers import activate_entry, native_row_control, row_paths
 
 TEST_STAGE = TestStage.REGRESSION
 
@@ -46,6 +49,76 @@ async def check_panel_tab_switching(owner):
 
 
 class NotesSearchProbe(ChatSettingsProbe):
+    async def search_round_trip(self, root, *, writable):
+        class ReadOnly(LocalFiles):
+            capabilities = ResourceCapabilities()
+
+        provider = LocalFiles(root) if writable else ReadOnly(root)
+        owner = await open_vault(self, provider, '', 'files')
+        try:
+            owner.sidebar.show_sidebar()
+            assert owner.sidebar.side == 'files' and not owner.sidebar.expanded
+            owner.search.value = 'Journey'
+            await owner.search_task
+            rows = owner.rows
+            target = 'Journey 24.md'
+            await native_row_control(owner, target)
+            position = rows.vertical_position
+            assert position > 0, position
+            await activate_entry(owner, target)
+            assert owner.path == target and owner.sidebar.side is None
+            first_base = owner.base
+
+            # These backends omit the URL from the load event. Check that the
+            # admitted DOM, including the second note below, actually becomes ready.
+            async with asyncio.timeout(10):
+                while not owner.page_search.ready:
+                    await asyncio.sleep(.05)
+
+            async def back():
+                assert self.routes.system_back()
+                return await self.routes.back_task
+
+            original = (root / target).read_text()
+            if writable:
+                assert await owner.open_editor()
+                editor = owner.embedded
+                assert await editor.choose_mode(False)
+                editor.source.value = '# Saved from native Search\n'
+                async def cancel():
+                    return 'cancel'
+                owner.host = replace(owner.host, confirm=cancel)
+                assert not await back() and owner.embedded is editor and editor.dirty
+                async def save():
+                    return 'save'
+                owner.host = replace(owner.host, confirm=save)
+                (root / 'Journey 99.md').write_text('# Added during edit\n')
+            else:
+                assert not owner.library.writable and not await owner.open_editor()
+            assert await back()
+            if writable:
+                await owner.search_task
+                assert editor.closed and editor.resource.closed
+                assert (root / target).read_text() == '# Saved from native Search\n'
+                assert 'Journey 99.md' in row_paths(owner)
+            else:
+                assert (root / target).read_text() == original
+            async with asyncio.timeout(5):
+                while abs(rows.vertical_position - position) > 1:
+                    await asyncio.sleep(.05)
+            assert owner.path is None and owner.rows is rows
+            assert owner.sidebar.side == 'files' and owner.panel_tab == 'Search'
+            assert owner.search.value == 'Journey' and owner.selected_path == target
+            await activate_entry(owner, 'Journey 25.md')
+            assert owner.path == 'Journey 25.md' and owner.base != first_base
+            async with asyncio.timeout(10):
+                while not owner.page_search.ready:
+                    await asyncio.sleep(.05)
+            assert await back() and owner.path is None
+            return dict(writable=writable, position=position, results=len(row_paths(owner)))
+        finally:
+            owner.dispose()
+
     async def probe(self, app):
         output = Path(self.paths.cache)
         report = dict(success=False, samples=[])
@@ -89,6 +162,11 @@ class NotesSearchProbe(ChatSettingsProbe):
             owner = None
             assert names_input.value == documents_input.value == ''
             assert not names_rows.children and not documents_rows.children
+            await self.rotate_probe('portrait')
+            for index in range(40):
+                (root / f'Journey {index:02}.md').write_text(f'# Original {index}\n')
+            report['round_trips'] = [await self.search_round_trip(root, writable=writable)
+                                     for writable in (True, False)]
             report['success'] = True
         except BaseException:
             report['error'] = traceback.format_exc()

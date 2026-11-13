@@ -14,6 +14,152 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class NotesLibraryPanelTests(unittest.TestCase):
+    async def search_library(self, *, provider=None):
+        for index in range(12):
+            (self.vault / f'Match {index:02}.md').write_text(f'# Original {index}\n\nMatch fixture\n')
+        owner = await open_vault(self.app, provider or self.provider, 'Vault', 'files')
+        owner.reflow(390)
+        owner.sidebar.show_sidebar()
+        owner.select_panel_tab('Search')
+        owner.search_mode.value = 'Search within Documents'
+        owner.search.value = 'Match'
+        await owner.search_task
+        return owner
+
+    async def activate_search_note(self, owner, index):
+        path = f'Vault/Match {index:02}.md'
+        button = next(button for row in owner.rows.children for button in getattr(row, 'children', ())
+                      if getattr(button, 'vault_path', None) == path)
+        await button.on_press()
+        return path
+
+    async def search_back(self):
+        self.assertTrue(self.app.routes.system_back())
+        task = self.app.routes.back_task
+        self.assertIsNotNone(task)
+        return await task
+
+    def test_search_save_and_return_keeps_live_results_selection_and_scroll(self):
+        from dataclasses import replace
+        async def exercise():
+            owner = await self.search_library()
+            query, rows = owner.search, owner.rows
+            paths = [row['path'] for row in owner.search_rows]
+            position = 240
+            def read_position():
+                return position
+            def set_position(value):
+                nonlocal position
+                position = value
+            clear = rows.clear
+            def reset_scroll():
+                set_position(0)  # Native recycler resets its offset on replacement.
+                clear()
+            with patch.object(owner, 'host', replace(owner.host, confirm=AsyncMock(return_value='save'))), \
+                    patch.object(owner, 'search_position', side_effect=read_position), \
+                    patch.object(owner, 'restore_search_position', side_effect=set_position), \
+                    patch.object(rows, 'clear', side_effect=reset_scroll):
+                path = await self.activate_search_note(owner, 8)
+                self.assertEqual(owner.path, path)
+                self.assertTrue(await owner.open_editor())
+                editor = owner.embedded
+                self.assertTrue(await editor.choose_mode(False))
+                editor.source.value = '# Saved from search\n\nMatch fixture\n'
+                position = 0  # Drawer detachment can reset the old viewport.
+                (self.vault / 'Match 12.md').write_text('# Added after opening\n\nMatch fixture\n')
+                self.assertTrue(await self.search_back())
+                await owner.search_task
+            self.assertTrue(editor.closed)
+            self.assertTrue(editor.resource.closed)
+            self.assertIsNone(owner.path)
+            self.assertFalse(owner.session.dirty)
+            self.assertEqual((self.root / path).read_text(), '# Saved from search\n\nMatch fixture\n')
+            self.assertIs(owner.search, query)
+            self.assertIs(owner.rows, rows)
+            self.assertEqual([row['path'] for row in owner.search_rows], paths + ['Vault/Match 12.md'])
+            self.assertEqual((owner.sidebar.side, owner.panel_tab, owner.selected_path, position),
+                             ('files', 'Search', path, 240))
+        self.run_async(exercise())
+
+    def test_search_return_cancel_failed_save_and_failed_open_retain_draft(self):
+        from dataclasses import replace
+        async def exercise():
+            owner = await self.search_library()
+            path = await self.activate_search_note(owner, 8)
+            self.assertTrue(await owner.open_editor())
+            editor = owner.embedded
+            editor.changed('# Unsaved draft')
+            with patch.object(owner, 'host', replace(owner.host, confirm=AsyncMock(return_value='cancel'))):
+                self.assertFalse(await self.search_back())
+            with patch.object(owner, 'host', replace(owner.host, confirm=AsyncMock(return_value='save'))), \
+                    patch.object(editor.resource, 'save', side_effect=OSError('Save failed')):
+                self.assertFalse(await self.search_back())
+                self.assertEqual(owner.notice.text, 'Save failed')
+            with patch.object(owner, 'host', replace(owner.host, confirm=AsyncMock(return_value='discard'))):
+                self.assertFalse(await owner.open_note('Vault/Missing.md'))
+                self.assertIs(owner.embedded, editor)
+                self.assertEqual((owner.path, owner.sidebar.side, editor.text), (path, None, '# Unsaved draft'))
+                self.assertTrue(editor.dirty)
+                self.assertTrue(await self.search_back())
+            self.assertTrue(editor.closed)
+            self.assertEqual((self.root / path).read_text(), '# Original 8\n\nMatch fixture\n')
+            self.assertEqual(owner.sidebar.side, 'files')
+        self.run_async(exercise())
+
+    def test_read_only_search_return_and_late_load_are_scoped_to_the_note(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from commonUtils.runtime.resources.provider import ResourceCapabilities
+        class ReadOnly(LocalFiles):
+            capabilities = ResourceCapabilities()
+
+        async def exercise():
+            owner = await self.search_library(provider=ReadOnly(self.root))
+            first = await self.activate_search_note(owner, 3)
+            base, marker = owner.base, owner.document._load_marker
+            self.assertFalse(await owner.open_editor())
+            self.assertTrue(await self.search_back())
+            self.assertIsNone(owner.path)
+            self.assertEqual(owner.selected_path, first)
+            second = await self.activate_search_note(owner, 4)
+            with patch.object(owner.web, 'evaluate_javascript', new=AsyncMock(return_value='logistics-note:' + marker)), \
+                    patch.object(owner.page_search, 'loaded') as loaded:
+                owner.page_loaded(url=base)
+                await owner.document.verify_page_load(base, marker)
+                loaded.assert_not_called()
+            self.assertEqual(owner.path, second)
+            self.assertTrue(await self.search_back())
+            self.assertEqual((owner.selected_path, owner.search.value), (second, 'Match'))
+        self.run_async(exercise())
+
+    def test_new_open_invalidates_an_older_confirmation_before_it_can_save_or_publish(self):
+        from dataclasses import replace
+        async def exercise():
+            owner = await self.search_library()
+            await self.activate_search_note(owner, 3)
+            self.assertTrue(await owner.open_editor())
+            editor = owner.embedded
+            editor.changed('# Unsaved draft')
+            entered, release = asyncio.Event(), asyncio.Event()
+            async def confirm():
+                if entered.is_set():
+                    return 'cancel'
+                entered.set()
+                await release.wait()
+                return 'save'
+            owner.host = replace(owner.host, confirm=confirm)
+            pending = asyncio.create_task(owner.open_note('Vault/Match 04.md'))
+            await asyncio.wait_for(entered.wait(), 2)
+            try:
+                self.assertFalse(await owner.open_note('Vault/Match 05.md'))
+            finally:
+                release.set()
+            self.assertFalse(await pending)
+            self.assertIs(owner.embedded, editor)
+            self.assertEqual(owner.path, 'Vault/Match 03.md')
+            self.assertTrue(editor.dirty)
+            self.assertIn('Original 3', (self.vault / 'Match 03.md').read_text())
+        self.run_async(exercise())
+
     def test_outgoing_tab_is_ready_while_backlinks_are_loading(self):
         from features.notes_library.notes_links import connections
         started, release = Event(), Event()

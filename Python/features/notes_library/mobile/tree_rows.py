@@ -26,6 +26,17 @@ class NativeTreeRows:
         return self.widget.style
 
     @property
+    def vertical_position(self):
+        get_position = getattr(self.native_list._impl, 'get_vertical_position', None)
+        return get_position() if get_position is not None else 0
+
+    @vertical_position.setter
+    def vertical_position(self, position):
+        set_position = getattr(self.native_list._impl, 'set_vertical_position', None)
+        if set_position is not None:
+            set_position(position)
+
+    @property
     def children(self):
         return list(self.native_list.data)
 
@@ -98,7 +109,7 @@ class NativeTreeRows:
         if not self.current(row):
             return
         if row.page is not None:
-            await self.owner.open_selected_note(row.page)
+            await self.owner.open_selected_note(row.page, row_path=row.path)
         elif row.folder and row.searching:
             await self.owner.reveal_folder(row.path)
         elif row.folder:
