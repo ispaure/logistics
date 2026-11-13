@@ -40,7 +40,7 @@ Sidebar navigation reuses the current inner document owner, preserving its
 history and existing save/discard/cancel transition. Explicit `new_tab=True`
 opens/focuses a separate document. Files without a Markdown/source/notebook
 adapter use a memory-only `FilePreview` in the same library pane; images and
-PDF pages use existing image validation and PDF backends. Other formats display
+PDFs use the shared [continuous PDF views](../../pdf/development/development.md#continuous-pages). Other formats display
 metadata without loading arbitrary binary data. Selecting a video file hands off
 to the full platform Video Player while retaining the library document. The
 desktop and mobile Markdown readers render video controls from the authored
@@ -57,8 +57,9 @@ contained files and retains hidden-path and library-root restrictions. Notes Lib
 image preparation builds one bounded inventory on the first suffix fallback and
 reuses it for the rest of the render. LocalCrypt uses one recursive rclone listing
 for that inventory. Individual links and on-demand videos still use its ciphertext-name search.
-File previews retire rendered content, PDF bytes and video streams on replacement, close or lock;
-page workers finish before their content is released.
+File previews retire rendered content, PDF bytes and video streams on
+replacement, close or lock. In-flight mobile PDF renders own their backend
+input and their results cannot publish to a retired preview.
 File-preview creation also closes its stream if validation fails while leaving
 the provider operation. A failed media resolution revalidates cached video
 streams, retires deleted or revoked entries, and preserves the resolver's error
@@ -66,10 +67,8 @@ for the rendered placeholder. Standalone video embeds try decoded URL names
 before their literal spelling, matching image and navigation fallbacks.
 Each opening render passes its own cancellation predicate into media lookup;
 the document's reusable media owner does not retain a cancelled render predicate.
-Cancelled mobile PDF page tasks keep their busy state until the underlying
-renderer finishes; retirement then closes its bytes. Page-render errors leave
-the previous page selected and remain visible. Switching to an embedded file,
-source editor or drawing retires the previous Markdown media and reader DOM.
+Switching to an embedded file, source editor or drawing retires the previous
+Markdown media and reader DOM.
 Extensionless links prefer exact current-folder/root filenames before `.md`.
 
 Desktop Markdown toolbars host the library-only Links toggle after the reader
@@ -761,9 +760,8 @@ using commonUtils' shared `MarkdownNavigation` group beside Contents and the
 other document tools. Each tab's buttons use its own document history. Switching tabs does not
 append history; parent-folder navigation uses the clicked tab's current file. Child operation
 footers are hosted below the outer splitter, selected with the active tab
-(including its first pending open), and retired when the child closes. Data-view
-reads, Markdown rendering, source-file saves, embedded notebook saves/exports and
-PDF page reads share that footer placement. Notebook canvas replacement retires
+(including its first pending open), and retired when the child closes. Data-view reads, Markdown rendering, source-file saves and embedded notebook
+saves/exports share that footer placement. Notebook canvas replacement retires
 its previous progress widget before creating the next one. Tabs
 keep Markdown notices, rendering indicators and source-save results in one horizontal
 footer row, alongside active operations; long notices are elided with full tooltips
@@ -826,11 +824,10 @@ room for host links, styling and scripts. These are allocation guardrails, not
 measurements of maximum safe page sizes on each device. The Android
 appearance adapter respects each private surface's configured HTML bound.
 Opening failures dismiss the loading panel, retain the published document,
-and show a native error dialog instead of placing the error above the page.
-The HTML bound is checked after link rewriting and data-view decoration. Native
-HTML admission precedes history changes and editor retirement, so a synchronous
-WebView rejection preserves the current document and draft. Embedded file opens
-and PDF page-turn failures use the same host-owned dialog. Host regressions cover
+and show a native error dialog. The HTML bound is checked after link rewriting
+and data-view decoration. Native HTML admission precedes history changes and
+editor retirement, so a synchronous WebView rejection preserves the current
+document and draft. Embedded file opens use the same host-owned dialog. Host regressions cover
 an image-heavy page above 32 MiB, Markdown source above 2 MiB, decoration growth, native rejection from both
 reading and editing, and retained page-turn state. Formatted-editor failures also
 show a dialog while retaining the Source fallback and its unchanged text. These
@@ -937,9 +934,8 @@ is introduced by the connection optimization.
 `FilePreview.content()` returns `PreviewContent` with image bytes, MIME type,
 metadata and an admitted video URL. Desktop consumes image bytes directly through
 the existing oriented image decoder; it does not serialize or regex-parse HTML.
-Mobile and existing HTML callers use `FilePreview.page()`/`PreviewContent.html()`.
-PDF workers return structured page content on desktop and retain the same deferred
-resource retirement. Library/tab and mobile preview regressions cover image/PDF/
+Mobile HTML previews use `FilePreview.page()` and `PreviewContent.html()`.
+PDF previews pass the admitted document to the continuous PDF surface. Library/tab and mobile preview regressions cover image/PDF/
 video/unknown files, cancellation and cleanup; a native desktop image contract
 check refuses any HTML serialization while opening the preview.
 

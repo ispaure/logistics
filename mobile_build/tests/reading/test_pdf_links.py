@@ -1,9 +1,8 @@
-"""Finger link dispatch, spread geometry, undo and retained-session retirement."""
+"""Finger link dispatch, undo and retained-session retirement."""
 import asyncio
 from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from types import SimpleNamespace
 from unittest.mock import patch
 import unittest
 from commonUtils.testing.event_loop import close_loop
@@ -25,45 +24,6 @@ def linked_pdf():
 
 
 class PDFMobileLinkTests(unittest.TestCase):
-    @patch('features.pdf.links.safe_page_links', side_effect=lambda data, index: [index])
-    @patch('features.images.validation.image_dimensions', side_effect=lambda page: page)
-    def test_only_committed_spreads_replace_link_geometry(self, dimensions, links):
-        from features.pdf.mobile.canvas import PDFNavigation
-
-        for action in ('failed load', 'back probe', 'uncommitted resize'):
-            with self.subTest(action=action):
-                document = SimpleNamespace(data=b'', count=5, page=lambda index: (300, 600))
-                navigation = PDFNavigation(document)
-                viewport = (1200, 800)
-                indices, _ = navigation.load(2, viewport)
-                navigation.commit(indices, viewport)
-                shown_sizes = {index: navigation.sizes[index] for index in indices}
-                shown_links = dict(navigation.links)
-                if action == 'failed load':
-                    def page(index):
-                        if index == 1:
-                            raise OSError('Cannot read second page')
-                        return (300, 600)
-                    document.page = page
-                    with self.assertRaisesRegex(OSError, 'Cannot read second page'):
-                        navigation.load(0, viewport)
-                elif action == 'back probe':
-                    self.assertEqual(navigation.previous(), 0)
-                else:
-                    document.page = lambda index: (600, 1200)
-                    navigation.load(2, (600, 1000))
-
-                self.assertEqual(navigation.indices, indices)
-                self.assertEqual(navigation.viewport, viewport)
-                self.assertEqual(navigation.links, shown_links)
-                self.assertEqual({index: navigation.sizes[index] for index in indices}, shown_sizes)
-
-                document.page = lambda index: (400, 800)
-                next_indices, _ = navigation.load(0, viewport)
-                navigation.commit(next_indices, viewport)
-                self.assertEqual(navigation.links, {0: [0], 1: [1]})
-                self.assertEqual(navigation.sizes[0], (400, 800))
-
     def test_link_undo_expiry_and_retired_session(self):
         with TemporaryDirectory() as directory, patch('features.pdf.document.PDFDocument.open', native_pdf):
             previous_root = LogisticsMobile.storage_root
@@ -78,15 +38,14 @@ class PDFMobileLinkTests(unittest.TestCase):
                 # A reader progress write owns the document without setting
                 # cloud_busy. The accepted link must wait before selecting.
                 release_progress = asyncio.Event()
-                progress = SimpleNamespace(worker=None, task=None,
-                                           sample_surface=lambda: None, stop_surface=lambda: None)
+                progress = owner._provider_progress
                 async def save_progress():
                     await release_progress.wait()
                     progress.worker = None
 
-                with patch.object(owner, '_provider_progress', progress, create=True):
+                with patch.object(progress, 'worker', None), patch.object(progress, 'task', None):
                     progress.worker = progress.task = asyncio.create_task(save_progress())
-                    link = asyncio.create_task(canvas.jump_link(2))
+                    link = asyncio.create_task(canvas.jump_link(2, 0))
                     try:
                         await asyncio.sleep(0)
                         self.assertFalse(link.done())
@@ -95,22 +54,17 @@ class PDFMobileLinkTests(unittest.TestCase):
                         self.assertEqual(owner.crypt_page.value, owner.crypt_reader.labels[0])
                     finally:
                         release_progress.set()
-                    # Publication can now capture progress again.
-                    progress.capture = lambda **kw: None
                     await link
-                self.assertEqual(owner.crypt_reader.pdf_navigation.indices[0], 2)
+                self.assertEqual(owner.crypt_reader.pdf_navigation.index, 2)
                 self.assertEqual(canvas.return_page, (0, 2))
                 self.assertEqual(len(canvas.return_box.children), 1)
                 await canvas.undo_link()
-                self.assertEqual(owner.crypt_reader.pdf_navigation.indices[0], 0)
+                self.assertEqual(owner.crypt_reader.pdf_navigation.index, 0)
                 self.assertIsNone(canvas.return_page)
                 # Dispatch through the same normalized callback used by native taps.
                 nav = owner.crypt_reader.pdf_navigation
-                from features.comics.mobile.composite import spread_geometry
-                size, rects = spread_geometry([nav.sizes[i] for i in nav.indices], nav.viewport)
-                left, top, width, height = rects[0]
                 old_image = canvas.image
-                old_indices = nav.indices
+                old_index = nav.index
                 from mobile.reading.publication import ReadingPublication
                 mount = ReadingPublication.mount
                 rejected = []
@@ -124,30 +78,30 @@ class PDFMobileLinkTests(unittest.TestCase):
                     await owner.move_private_page(1)
                 self.assertEqual(rejected, [False])
                 self.assertIn(canvas, owner.crypt_content.children)
-                self.assertEqual(nav.indices, old_indices)
+                self.assertEqual(nav.index, old_index)
                 retained_image = canvas.image
-                self.assertTrue(canvas.on_tap((left+width*.3)/size[0], (top+height*.2)/size[1]))
+                [link] = canvas.scroll.pages[0][1]
+                canvas.action({'target': link['index'], 'from': 0})
                 while not canvas.return_page:
                     await asyncio.sleep(.01)
-                self.assertEqual(owner.crypt_reader.pdf_navigation.indices[0], 2)
+                self.assertEqual(owner.crypt_reader.pdf_navigation.index, 2)
                 self.assertIs(retained_image, old_image)
                 await owner.move_private_page(1)
                 self.assertIsNone(canvas.return_page)
-                await canvas.jump_link(0)
+                await canvas.jump_link(0, 1)
                 self.assertIsNotNone(canvas.return_page)
                 canvas.clear_return()  # timer invokes this exact expiry callback
                 await canvas.undo_link()
-                self.assertEqual(owner.crypt_reader.pdf_navigation.indices[0], 0)
+                self.assertEqual(owner.crypt_reader.pdf_navigation.index, 0)
                 owner.set_cloud_busy(True)
-                self.assertFalse(canvas.follow_link(.3,.2))
+                await canvas.jump_link(2, 0)
                 owner.set_cloud_busy(False)
                 app.show_settings()
-                await canvas.jump_link(2)
-                self.assertEqual(owner.crypt_reader.pdf_navigation.indices[0], 0)
-                self.assertFalse(canvas.follow_link(.3,.2))
+                await canvas.jump_link(2, 0)
+                self.assertEqual(owner.crypt_reader.pdf_navigation.index, 0)
                 canvas.dispose()
-                self.assertIsNone(canvas.on_tap)
-                self.assertFalse(canvas.link_alive())
+                self.assertIsNone(canvas.scroll.on_action)
+                self.assertFalse(canvas.active())
             try:
                 app.loop.run_until_complete(asyncio.wait_for(check(), 10))
             finally:

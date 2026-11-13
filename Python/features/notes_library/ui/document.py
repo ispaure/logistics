@@ -417,7 +417,7 @@ class DocumentPresentation:
     def can_leave_document(self):
         preview = getattr(self, 'file_preview', None)
         if preview is not None and self.document_stack.currentWidget() is preview:
-            return not preview.busy
+            return True
         if self.text_document is not None and self.document_stack.currentWidget() is self.text_document:
             return self.text_document.can_leave()
         if self.canvas is None or self.document_stack.currentWidget() is not self.canvas:
@@ -446,8 +446,7 @@ class DocumentPresentation:
 
     @property
     def document_saving(self):
-        return (bool(getattr(self, 'file_preview', None) and self.file_preview.busy)
-                or self.viewer.document_state.save_pending or bool(self.canvas and self.canvas.busy)
+        return (self.viewer.document_state.save_pending or bool(self.canvas and self.canvas.busy)
                 or bool(self.text_document and self.text_document.busy))
 
 
@@ -468,20 +467,11 @@ class DocumentPresentation:
         if getattr(self, 'file_preview', None) is None:
             from .file_preview import LibraryFilePreview
             self.file_preview = LibraryFilePreview(self)
-            self.file_preview.idle.connect(self.file_preview_idle)
-            self.operation_footer.layout().addWidget(self.file_preview.operation, 1)
             self.document_stack.addWidget(self.file_preview)
         self.file_preview.load(preview, content)
         self.document_resource_path = self.provider.root / preview.path
         self.document_provider = self.provider
         self.document_stack.setCurrentWidget(self.file_preview)
-
-
-    def file_preview_idle(self):
-        if self.closing or self.locked or self.pending_close:
-            self.close()
-        elif not self.resume_after_save(''):
-            self.idle.emit()
 
 
     def show_text(self, resource, snapshot):
@@ -892,13 +882,9 @@ class NotesDocumentPane(LibraryConnections, DocumentPresentation, qt.QWidget):
         if self.text_document is not None:
             self.text_document.operation.request_cancel()
             self.text_document.search.close_panel()
-        preview = getattr(self, 'file_preview', None)
-        if preview is not None:
-            preview.operation.request_cancel()
         return (not self.progress.busy and not self.connections_progress.busy
                 and not (self.viewer.data_views and self.viewer.data_views.progress.busy)
-                and not (self.text_document and (self.text_document.busy or self.text_document.search.busy))
-                and not (preview and preview.busy))
+                and not (self.text_document and (self.text_document.busy or self.text_document.search.busy)))
 
     def closeEvent(self, event):
         if not self.prepare_close():

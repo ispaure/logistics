@@ -147,7 +147,8 @@ class ExternalComicDisplay:
                   or not any(view == picture for _, _, picture in self.ios.values())):
                 self.detach_video()
         canvas = comic_canvas(app.body) if allowed and video is None else None
-        image = canvas._impl.picture.image if self.ios and canvas is not None else None
+        artwork = getattr(canvas, 'artwork', canvas)
+        image = artwork._impl.picture.image if self.ios and artwork is not None else None
         mirror = (self.ios and allowed and video is None and canvas is None
                   and comic_canvas(app.body, include_empty=True) is None)
         for scene, window, picture in self.ios.values():
@@ -168,7 +169,7 @@ class ExternalComicDisplay:
             picture = self.ios_video[1] if self.ios_video else next(iter(self.ios.values()))[2]
             self.ios_video = (video.native, picture) if video.native.set_external_display(picture) else None
         if self.android is not None:
-            self.android.setImage(canvas._impl.native.getDrawable() if canvas is not None else None)
+            self.android.setImage(artwork._impl.native.getDrawable() if artwork is not None else None)
         self.update_ios_status(image is not None)
         self.diagnose_ios()
 

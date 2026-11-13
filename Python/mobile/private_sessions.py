@@ -37,8 +37,7 @@ class PrivateController(ReaderHost, ProviderUI):
 
     def watch_provider_layout(self):
         if self.crypt_reader is not None and self.crypt_reader.kind == '.pdf':
-            from features.pdf.mobile.canvas import watch_pdf_layout
-            return watch_pdf_layout(self)
+            return None
         return self.provider_comic_controller().watch_provider_layout()
 
     @property
@@ -431,7 +430,7 @@ class PrivateSessions:
                     delattr(owner, name)
                     owner.page_suspended = True
             image = getattr(owner, 'crypt_image', None)
-            if image is not None and image.image is not None:
+            if image is not None and (image.image is not None or hasattr(image, 'scroll')):
                 image.image = None
                 owner.page_suspended = True
             source = getattr(owner.crypt_reader, 'source', None)

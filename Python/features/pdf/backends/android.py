@@ -67,6 +67,13 @@ class AndroidPDF:
     def __exit__(self, *args):
         self.document.close()
 
+    def page_size(self, index):
+        page = self.document.openPage(index)
+        try:
+            return page.getWidth(), page.getHeight()
+        finally:
+            page.close()
+
     def render(self, index, *, edge=PAGE_EDGE):
         from java import jclass, jint
 

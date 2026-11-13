@@ -15,7 +15,9 @@
     "mobile/annotation.py",
     "mobile/canvas.py",
     "mobile/contents.py",
+    "mobile/continuous.py",
     "mobile/copies.py",
+    "mobile/scroll_script.py",
     "mobile/search.py",
     "search.py",
     "search_controller.py"

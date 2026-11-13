@@ -1,5 +1,4 @@
 """Read-only files stay in the library article pane and its document lifetime."""
-import asyncio
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
@@ -18,6 +17,7 @@ class LibraryFilePreview:
         self.library, self.preview, self.index = library, preview, 0
         self.path, self.closed, self.busy = preview.path, False, False
         self.web = library.access.webview(style=Pack(flex=1), max_bytes=48 * 1024 * 1024)
+        self.pdf = None
         self.previous = toga.Button('Previous page', on_press=lambda widget: self.turn(-1))
         self.following = toga.Button('Next page', on_press=lambda widget: self.turn(1))
         self.label = toga.Label('')
@@ -26,7 +26,15 @@ class LibraryFilePreview:
             self.view.add(toga.Box(children=[self.previous, self.label, self.following], style=Pack(direction=ROW)))
         self.view.add(self.web)
         try:
-            self.publish(html)
+            if preview.document is None:
+                self.publish(html)
+            else:
+                from features.pdf.mobile.continuous import PDFScroll
+                ratios, first = html
+                self.pdf = PDFScroll(self.web, preview.document, ratios, loop=library.host.loop,
+                                     active=self.active, on_position=self.position)
+                self.pdf.jump(0, first)
+                self.position(0, None)
         except BaseException:
             self.dispose()
             raise
@@ -39,7 +47,12 @@ class LibraryFilePreview:
             result = PreparedDocument(path, None)
             try:
                 result.preview = FilePreview.open(library.provider, path, cancelled=cancelled)
-                result.rendered = result.preview.page()
+                if result.preview.document is None:
+                    result.rendered = result.preview.page()
+                else:
+                    from features.pdf.mobile.continuous import page_ratios, render_page
+                    document = result.preview.document
+                    result.rendered = page_ratios(document, cancelled=cancelled), render_page(document, 0)
                 return result
             except BaseException:
                 result.close()
@@ -53,45 +66,27 @@ class LibraryFilePreview:
             result.close()
             raise
 
-    def publish(self, html, *, index=None):
+    def active(self):
+        return (not self.closed and self.library.valid() and self.library.embedded is self
+                and self.view.parent is not None)
+
+    def publish(self, html):
         self.library.access.validate_preview(html, 48 * 1024 * 1024)
         set_inline_html(self.web, 'https://library-file.invalid/', html)
-        if index is not None:
+
+    def position(self, index, location):
+        if index != self.index or not self.label.text:
             self.index = index
-        self.label.text = f'Page {self.index + 1} of {self.preview.count}'
-        self.previous.enabled = self.index > 0
-        self.following.enabled = self.index + 1 < self.preview.count
+            self.label.text = f'Page {index + 1} of {self.preview.count}'
+            self.previous.enabled = index > 0
+            self.following.enabled = index + 1 < self.preview.count
 
     async def turn(self, direction):
-        index = self.index + direction
-        if self.closed or self.busy or not self.library.valid() or not 0 <= index < self.preview.count:
-            return
-        self.busy = True
-        self.previous.enabled = self.following.enabled = False
-        preview = self.preview
-        task = asyncio.create_task(asyncio.to_thread(preview.page, index))
-        try:
-            html = await asyncio.shield(task)
-            if not self.closed and self.library.valid():
-                self.publish(html, index=index)
-        except (OSError, ValueError) as error:
-            if not self.closed and self.library.valid():
-                await self.library.document_error('Could not open page', error)
-        finally:
-            if task.done():
-                self.page_finished(task)
-            else:
-                task.add_done_callback(self.page_finished)
-
-    def page_finished(self, task):
-        if not task.cancelled():
-            task.exception()  # Also consume a detached worker's rendering error.
-        self.busy = False
-        if self.closed:
-            self.preview.close()
-        elif self.library.valid():
-            self.previous.enabled = self.index > 0
-            self.following.enabled = self.index + 1 < self.preview.count
+        if self.pdf is not None and self.active():
+            index = self.index + direction
+            if 0 <= index < self.preview.count:
+                self.pdf.jump(index, None, {'zoom': (self.pdf.location or {}).get('zoom', 1)})
+                self.position(index, None)
 
     async def flush(self):
         return
@@ -100,7 +95,9 @@ class LibraryFilePreview:
         if self.closed:
             return
         self.closed = True
-        retire_webview(self.web)
+        if self.pdf is not None:
+            self.pdf.dispose()
+        else:
+            retire_webview(self.web)
         self.view.clear()
-        if not self.busy:
-            self.preview.close()
+        self.preview.close()

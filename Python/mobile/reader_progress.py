@@ -68,6 +68,7 @@ class VerticalPageSlider(toga.Canvas):
         self._value = 0
         self._height, self._width = 100, 44
         self.commit = on_release
+        self.tracking = False
         super().__init__(on_resize=self.resize_track, on_press=self.drag_track,
                          on_drag=self.drag_track, on_release=self.release_track, **kwargs)
         _sliders.add(self)
@@ -98,12 +99,14 @@ class VerticalPageSlider(toga.Canvas):
 
     def drag_track(self, widget, x, y, **kwargs):
         if self.enabled:
+            self.tracking = True
             fraction = min(1, max(0, (y - 12) / max(1, self._height - 24)))
             self.value = self.min + fraction * (self.max - self.min)
 
     async def release_track(self, widget, x, y, **kwargs):
         if self.enabled:
             self.drag_track(widget, x, y)
+            self.tracking = False
             await self.commit(self)
 
     def paint_track(self):

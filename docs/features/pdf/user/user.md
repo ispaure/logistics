@@ -11,10 +11,10 @@ and the existing file is preserved. The file browser's selected-PDF actions
 also offer this command. Creation requires a writable folder and supports
 up to 1,000 pages within the notebook's archive limits.
 
-Use **Page** to enter the current page number (starting at 1), or use Previous
-page and Next page. Swipe or drag upward to advance and downward to go back.
-The mouse wheel and Up/Down or Page Up/Page Down keys also turn pages. The reader
-shows one fitted page at a time; the page count and buttons reflect its position.
+Scroll with the wheel or trackpad. You can stop with the bottom of one page
+and the top of the next in view. The page indicator follows the scroll
+position. Use **Page** to jump to a page by number, or use **Previous page** and
+**Next page**.
 
 PDFs are read-only. Files up to 32 MiB are loaded into memory, including remote
 and decrypted LocalCrypt documents; no plaintext PDF cache or library import is
@@ -48,16 +48,14 @@ Page turns use a short slide within the reading area. The toolbar stays still.
 
 ## Reading position and platform differences
 
-Provider-backed readers can restore a saved page. Private credential-backed
+Provider-backed readers can restore a saved page and scroll position. Private credential-backed
 positions use the owning credential ZIP password; passwordless private sessions
 keep positions in memory. See [reader state and history clearing](../../../development/reader-state.md)
 for restoration, password changes and clearing controls. Search queries and
 snippets are not reading-position checkpoints.
 
-The desktop reader displays a single page. Embedded contents navigation, adaptive
-two-page spreads and the hold magnifier described in the
-[mobile guide](../user_mobile/user_mobile.md) belong to the mobile reader. Desktop
-does not expose those controls. To edit ink, open the duplicated `.rmdoc` in
+The [mobile guide](../user_mobile/user_mobile.md) covers embedded contents and
+the hold magnifier. To edit ink, open the duplicated `.rmdoc` in
 [Notebooks](../../notebooks/user/user.md); the original PDF remains read-only.
 
 

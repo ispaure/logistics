@@ -52,10 +52,11 @@ class PDFDocument:
 
     @contextmanager
     def open(self):
-        if not self.data:
+        data = self.data
+        if not data:
             raise ValueError('PDF is closed.')
         backend = ApplePDF if sys.platform == 'ios' else AndroidPDF if sys.platform == 'android' or hasattr(sys, 'getandroidapilevel') else QtPDF
-        with backend(self.data) as document:
+        with backend(data) as document:
             yield document
 
     def page(self, index):

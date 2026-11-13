@@ -158,8 +158,7 @@ def _pdf_tools(self, view):
             return
         token = self.workspace.token(self.session.id)
         navigation = self.app.navigation_generation
-        # A native viewport refresh can already be rendering the current page.
-        # Retain the submitted number before that refresh synchronizes the input.
+        # Keep the submitted page while an existing explicit read finishes.
         while self.cloud_busy:
             view.pdf_jump_status.text = 'Loading the current page…'
             await self.operation_idle.wait()
@@ -171,7 +170,15 @@ def _pdf_tools(self, view):
             return
         view.pdf_jump_status.text = ''
         await self.move_private_page(index)
-    view.pdf_number = toga.TextInput(value='1', on_confirm=jump, style=Pack(flex=1, height=44))
+    def focus_number(widget, **kwargs):
+        widget._pdf_entering_page = True
+
+    def blur_number(widget, **kwargs):
+        widget._pdf_entering_page = False
+
+    view.pdf_number = toga.TextInput(value=str(view.crypt_reader.pdf_navigation.index + 1),
+        on_confirm=jump, on_gain_focus=focus_number, on_lose_focus=blur_number,
+        style=Pack(flex=1, height=44))
     view.pdf_jump_status = toga.Label('')
     jump_row = toga.Box(children=[toga.Label(f'Page / {len(view.crypt_reader.labels)}'),
         view.pdf_number, toga.Button('Go', on_press=jump, style=Pack(height=44))], style=Pack(direction=ROW))

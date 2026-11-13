@@ -451,40 +451,41 @@ class NotesLibraryTests(unittest.TestCase):
             owner.dispose()
         self.run_async(exercise())
 
-    def test_cancelled_page_worker_keeps_content_until_rendering_finishes(self):
+    def test_switching_document_rejects_pending_pdf_raster(self):
         from threading import Event
         from mobile.obsidian import open_vault
-        from mobile_build.tests.support.pdf import PDF, native_pdf
+        from mobile_build.tests.support.pdf import PDF, PNG, native_pdf
         (self.vault / 'Document.pdf').write_bytes(PDF)
         entered, release = Event(), Event()
+
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
             with patch('features.pdf.document.PDFDocument.open', native_pdf):
                 self.assertTrue(await owner.open_note('Vault/Document.pdf'))
                 preview = owner.embedded
-                original = preview.preview.page
-                def render(index):
+                pdf = preview.pdf
+                state = dict(page=0, offset=.8, zoom=1, x=.5, wanted=[0, 1], missing=[1],
+                             action=None, revision=pdf.revision)
+                from unittest.mock import AsyncMock
+                pdf.js = AsyncMock(side_effect=[True, state])
+                def render(document, index, **kwargs):
                     entered.set()
-                    release.wait(5)
-                    return original(index)
-                with patch.object(preview.preview, 'page', side_effect=render):
-                    task = asyncio.create_task(preview.turn(1))
+                    if not release.wait(5):
+                        raise TimeoutError('Page render was not released')
+                    return PNG, []
+                with patch('features.pdf.mobile.continuous.render_page', side_effect=render):
+                    task = asyncio.create_task(pdf.update())
                     try:
                         self.assertTrue(await asyncio.to_thread(entered.wait, 5))
-                        task.cancel()
-                        with self.assertRaises(asyncio.CancelledError):
-                            await task
-                        self.assertTrue(preview.busy)
-                        owner.dispose()
-                        self.assertEqual(preview.preview.path, 'Vault/Document.pdf')
+                        self.assertTrue(await owner.open_note('Vault/Home.md'))
+                        self.assertTrue(pdf.closed)
+                        self.assertEqual(preview.preview.path, '')
                     finally:
                         release.set()
-                    for _ in range(100):
-                        if not preview.busy:
-                            break
-                        await asyncio.sleep(.01)
-                    self.assertFalse(preview.busy)
-                    self.assertEqual(preview.preview.path, '')
+                        await task
+                self.assertFalse(pdf.pages)
+                self.assertEqual(pdf.js.await_count, 2)
+                owner.dispose()
         self.run_async(exercise())
 
     def test_library_markdown_and_source_editing_work_with_text_editor_disabled(self):

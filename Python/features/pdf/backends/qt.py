@@ -28,6 +28,10 @@ class QtPDF:
         self.document.close()
         self.buffer.close()
 
+    def page_size(self, index):
+        size = self.document.pagePointSize(index)
+        return size.width(), size.height()
+
     def render(self, index, *, edge=PAGE_EDGE):
         from PySide6.QtCore import QBuffer, QIODevice, QSize
 
