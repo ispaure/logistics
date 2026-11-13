@@ -211,6 +211,7 @@ class ReuseSwitchTests(unittest.TestCase):
             guest_plan = replace(plan, source={}, phases=fresh.phases)
             self.assertTrue(all(not p.reuse_key for p in with_reuse(guest_plan).phases))
 
+    @patch.dict(os.environ, {'LOGISTICS_REUSE_TEST_RESULTS': 'on', 'GITHUB_REF': ''})
     def test_fresh_local_leaves_github_publication_reuse_enabled(self):
         from build_manager import Plan
         from logistics_build.manager_journeys import run_values
