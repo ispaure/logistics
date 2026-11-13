@@ -131,7 +131,7 @@ def _json_member(stream, size):
 
 def _read_metadata(host, cancelled, *, port):
     command = '''set -- ./*.metadata
-if [ -f "$1" ]; then exec tar -cf - "$@"; fi'''
+if [ -e "$1" ] || [ -L "$1" ]; then exec tar --no-recursion -cf - "$@"; fi'''
     entries = {}
     observations = []
     with ssh_stream(host, command, cancelled, port=port) as stream:
