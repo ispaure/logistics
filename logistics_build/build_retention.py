@@ -25,6 +25,8 @@ RESERVED_OUTPUTS = {'firebase', 'testflight', 'mobile_app', 'logisticsmobile',
                     'physical-device', 'cloud-host', 'go-cache'}
 
 COMPILER_CACHE_MARKER = '.manager-compiler-cache'
+SCRATCH_DIRECTORY = 'tmp/runs/scratch'
+LEGACY_SCRATCH_DIRECTORY = 'test-results/build-scratch'
 
 
 def compiler_cache_group(root=ROOT):
@@ -88,6 +90,24 @@ def owned_snapshot(path):
 def owned_scratch(path):
     marker = path / '.manager-scratch'
     return not linked(marker) and marker.is_file()
+
+
+def scratch_location(path, root):
+    """Recognize a direct run path, including a saved path already cleaned up."""
+    root = Path(root).resolve()
+    return (path.parent in (root / SCRATCH_DIRECTORY, root / LEGACY_SCRATCH_DIRECTORY)
+            and path.name.startswith('run-')
+            and not any(linked(part) for part in (path, path.parent, *path.parent.parents)))
+
+
+def scratch_groups(root):
+    # Preserve the legacy group ID for existing cleanup selections.
+    return {
+        label: dict(root=root / directory, eligible=owned_scratch,
+                    ownership_files=('.manager-scratch',), protection=nested_workflow_hold_reason)
+        for label, directory in (('Disposable scratch', LEGACY_SCRATCH_DIRECTORY),
+                                 ('Disposable scratch / tmp', SCRATCH_DIRECTORY))
+    }
 
 
 def device_group(root, platform):
@@ -223,8 +243,8 @@ def clean(root=ROOT, *, apply=False, snapshots=True, warnings=None):
                              last_used=lambda p: (p / MARKER).stat().st_mtime, apply=apply)
         if sys.platform == 'darwin':
             removed += clean_simulators(root, apply=apply, warnings=warnings)
-    removed += prune(root / 'test-results/build-scratch',
-                     eligible=owned_scratch, ownership_files=('.manager-scratch',), protection=nested_workflow_hold_reason, keep=1, age_days=1, apply=apply)
+    for group in scratch_groups(root).values():
+        removed += prune(**group, keep=1, age_days=1, apply=apply)
     return removed
 
 
@@ -247,7 +267,9 @@ def clean_builds(mobile):
 
 @contextmanager
 def scratch(root=ROOT):
-    parent = Path(root).resolve() / 'test-results/build-scratch'
+    parent = Path(root).resolve() / SCRATCH_DIRECTORY
+    if any(linked(part) for part in (parent, *parent.parents)):
+        raise ValueError('Scratch workspaces refuse linked storage.')
     parent.mkdir(parents=True, exist_ok=True)
     path = Path(tempfile.mkdtemp(prefix='run-', dir=parent))
     with lease(path):
@@ -316,8 +338,7 @@ def storage_groups(root=ROOT):
             eligible=owned_snapshot, ownership_files=('.manager-source.json',),
             lock_path=lambda p: p.with_suffix('.lock')),
         **{'Device workspaces / ' + platform: device_group(root, platform) for platform in ('ios', 'android')},
-        'Disposable scratch': dict(root=root / 'test-results/build-scratch', eligible=owned_scratch, ownership_files=('.manager-scratch',),
-            protection=nested_workflow_hold_reason),
+        **scratch_groups(root),
     }
     groups.update(device_intermediates(root))
     groups.update(snapshot_intermediates(root))

@@ -192,20 +192,19 @@ def prepare(root, platform, output, environment=None):
 
 def cleanup(recipe):
     """Remove only the scratch tree named by this receiver's build receipt."""
-    from logistics_build.build_retention import owned_scratch
+    from logistics_build.build_retention import owned_scratch, scratch_location
     from build_manager.locking import workspace_lock
     from build_manager.retention import remove_tree
     recipe = Path(recipe)
     record = json.loads(recipe.read_text())
     workspace, root = Path(record['workspace']), Path(record['root'])
     if (record.get('schema') != 1 or record.get('bundle') != QA_BUNDLE
-            or workspace.parent != root / 'test-results/build-scratch'
-            or not workspace.name.startswith('run-') or workspace.is_symlink()):
+            or not scratch_location(workspace, root)):
         raise ValueError('Refusing cleanup of an unowned incoming acceptance workspace.')
     if workspace.exists():
         lock = workspace.parent / ('.' + workspace.name + '.retention.lock')
         with workspace_lock(lock):
-            if not owned_scratch(workspace):
+            if not scratch_location(workspace, root) or not owned_scratch(workspace):
                 raise ValueError('Incoming acceptance scratch ownership is missing.')
             (workspace / '.keep').unlink(missing_ok=True)
             remove_tree(workspace, ownership_files=('.manager-scratch',))

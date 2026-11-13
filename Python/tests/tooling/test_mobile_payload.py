@@ -31,7 +31,7 @@ class MobilePayloadTests(unittest.TestCase):
                 stage_payload(root,'python',failure)
             self.assertEqual((payload/'proof').read_text(),'new')
             self.assertFalse((payload/'partial').exists())
-            self.assertFalse([p for p in (root/'test-results/build-scratch').iterdir() if p.is_dir()])
+            self.assertFalse([p for p in (root/'tmp/runs/scratch').iterdir() if p.is_dir()])
 
     def test_reject_unowned_source_and_linked_payload(self):
         with TemporaryDirectory() as temporary:

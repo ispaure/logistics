@@ -479,13 +479,13 @@ manager, or run a command in a disposable working directory:
 python -m logistics_build.build_retention --scratch /absolute/path/to/python /absolute/path/to/probe.py --output '{workspace}'
 ```
 
-Scratch work stays under ignored `test-results/build-scratch/` and is removed on
-normal exit or failure. Save required evidence outside that directory first.
-A root `.keep` file retains a scratch directory deliberately; otherwise abandoned
-marked scratch directories become eligible after one day (the newest is retained).
-A force-killed command cannot run its finalizer, so the next retention pass handles
-its expired workspace. This is a shared lifecycle for agent-created probes as well
-as human-driven builds, not a system-wide cache cleaner.
+New scratch runs are created under ignored `tmp/runs/scratch/` and removed on
+normal exit or failure. Save required evidence outside the run before it exits.
+Existing marked runs under `test-results/build-scratch/` retain their original
+paths for saved receipts and recovery. Preview and cleanup recognize both roots
+and keep the newest marked run in each. Older marked runs become eligible after
+one day, with active leases, `.keep` pins and retained workflow holds protected.
+A force-killed command leaves its marked workspace for a later retention pass.
 
 ## Guided manager suites and tester acceptance
 
