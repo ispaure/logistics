@@ -16,6 +16,7 @@ EXCLUDED_DIRS = {
 }
 REQUIRED = {
     'build-project.json', 'logistics_build/manager_bridge.py', 'logistics_build/tooling_bootstrap.py',
+    'logistics_build/native_tooling.py', 'logistics_build/native_tooling.json',
     'logistics_build/install_build_manager.py', 'build-manager-dependency.json',
     'logistics_build/__init__.py', 'logistics_build/source_layout.py',
     'logistics_build/build_project.py', 'logistics_build/build_snapshots.py',
