@@ -72,6 +72,29 @@ class LibraryFolderTests(unittest.TestCase):
 
 
 class LibrarySearchTests(unittest.TestCase):
+    def test_warm_search_stops_saved_validation_after_first_page(self):
+        with TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / 'library'
+            root.mkdir()
+            for number in range(125):
+                (root / f'Note-{number:03}.md').write_text('# Synthetic note')
+            provider = LocalFiles(root)
+            library = NotesLibrary(provider, index_database=base / 'index.sqlite3')
+            self.addCleanup(library.close)
+            expected = library_files.search(library, 'Note', include_text=False).rows
+            with patch.object(provider, 'entry', wraps=provider.entry) as entry:
+                updates = []
+                result = library_files.search(library, 'Note', include_text=False, progress=updates.append)
+                self.assertEqual(result.rows, expected)
+                self.assertEqual([len(update.rows) for update in updates], [50])
+                self.assertFalse(updates[0].complete)
+                self.assertEqual(entry.call_count, 50 + 125)
+                entry.reset_mock()
+                result = library_files.search(library, 'Note', include_text=False)
+                self.assertEqual(result.rows, expected)
+                self.assertEqual(entry.call_count, 125)
+
     def test_mobile_search_collapses_only_the_matching_folders_own_landing_note(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

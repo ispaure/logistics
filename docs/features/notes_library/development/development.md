@@ -70,8 +70,9 @@ Ordinary filename search uses the host's shared directory coordinator, with
 names-only recursive validation separate from File Browser's full metadata
 checks. Saved matches stream through SQL and are revalidated by the current
 provider before the first batch of 50 is delivered. A deleted or newly linked
-path cannot appear merely because it was indexed earlier. Saved rows remain
-visible during the refresh; its final result reconciles additions/removals and
+path cannot appear merely because it was indexed earlier. The provisional pass
+stops after its first useful page; synchronous callers skip that pass. Saved rows
+remain visible during refresh; its final result reconciles additions/removals and
 does not replace them with a smaller refresh prefix. Hidden paths and host folder
 visibility remain excluded, and filename search never reads note bodies.
 
