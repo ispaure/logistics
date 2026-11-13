@@ -6,7 +6,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import toga
 from commonUtils.runtime.resources.local import LocalFiles
@@ -16,6 +16,7 @@ from features.notes_library.notes import NotesLibrary
 from features.notes_library.playlists import PlaylistStore
 from features.books.mobile.media_controls import SpeechPlayback, enforce_privacy
 from features.books.mobile.speech_host import SpeechPresentation
+from mobile.markdown_speech import clear_view, highlight_view, prepare_view, stop_markdown_speech
 from mobile.preferences import Preferences
 from mobile_build.tests.editing.test_markdown_speech import Engine
 from mobile_build.tests.editing.test_speech_media import Media
@@ -48,7 +49,9 @@ class PlaylistSpeechTests(unittest.TestCase):
                         ('c.md', ' '.join('charlie' + str(i) for i in range(70)))):
                     (root / path).write_text(source)
                     record = catalog.add(record.id, path)
-                speech = PlaylistSpeech(owner, catalog, lambda: None, app=app)
+                speech = PlaylistSpeech(owner, catalog, lambda: None, app=app,
+                                        stop_markdown_speech=lambda: stop_markdown_speech(app),
+                                        prepare_view=prepare_view, highlight_view=highlight_view, clear_view=clear_view)
                 try:
                     with patch('features.books.mobile.speech_view.NativeSpeech', Engine):
                         await fixture(speech, record, library, app, privacy)
@@ -65,6 +68,29 @@ class PlaylistSpeechTests(unittest.TestCase):
                 return
             await asyncio.sleep(.01)
         self.fail('Playlist did not complete the requested transition')
+
+    def test_playlist_stops_standalone_speech_and_uses_rendered_note(self):
+        async def fixture(speech, record, library, app, privacy):
+            standalone = Mock()
+            app._markdown_speech = [standalone]
+            owner = speech.owner
+            owner.path, owner.base, owner.editing = 'a.md', 'note-a', False
+            rendered = app.loop.create_future()
+            rendered.set_result('[["Rendered note", 0, "", ""]]')
+            owner.web = SimpleNamespace(evaluate_javascript=Mock(return_value=rendered))
+            speech.play(record.id)
+            await self.idle(speech)
+            standalone.close.assert_called_once_with()
+            self.assertEqual(speech.queue.current.text, 'Rendered note')
+            _, _, _, key = speech.snapshot
+            speech.follow(0, 8)
+            highlight = owner.web.evaluate_javascript.call_args.args[0]
+            self.assertIn(key, highlight)
+            self.assertIn('})(0,8)', highlight)
+            speech.clear_snapshot()
+            self.assertIn(f'delete window["{key}"]', owner.web.evaluate_javascript.call_args.args[0])
+            self.assertIsNone(speech.snapshot)
+        self.exercise(fixture)
 
     def test_media_skips_across_empty_entry_and_deletion_retires_session(self):
         async def fixture(speech, record, library, app, privacy):

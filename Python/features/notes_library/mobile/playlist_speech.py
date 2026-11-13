@@ -5,7 +5,6 @@ from uuid import uuid4
 
 from commonUtils.runtime.operations import OperationCancelled
 from features.books.mobile.speech_view import ReadAloudPanel
-from mobile.markdown_speech import stop_markdown_speech
 from services.access_policy import speech_allowed
 
 from ..playlist_queue import MAX_PREPARED, NeedsUnlock, PlaylistQueue, prepare_passage
@@ -66,8 +65,13 @@ class PlaylistPanel(ReadAloudPanel):
 
 
 class PlaylistSpeech:
-    def __init__(self, owner, catalog, changed, *, app):
+    def __init__(self, owner, catalog, changed, *, app, stop_markdown_speech,
+                 prepare_view, highlight_view, clear_view):
         self.owner, self.catalog, self.changed, self.app = owner, catalog, changed, app
+        self.stop_markdown_speech = stop_markdown_speech
+        self.prepare_view = prepare_view
+        self.highlight_view = highlight_view
+        self.clear_view = clear_view
         self.queue = PlaylistQueue(catalog)
         self.panel = None
         self.epoch = 0
@@ -172,7 +176,7 @@ class PlaylistSpeech:
                 self.schedule(self.start())
             return
         self._retire_panel()
-        stop_markdown_speech(self.app)
+        self.stop_markdown_speech()
         self.panel = PlaylistPanel(self, self.app)
         self.panel.show_over(self.owner.view, anchor=anchor)
         self.schedule(self.select(playlist_id, entry_id))
@@ -229,11 +233,10 @@ class PlaylistSpeech:
             raise NeedsUnlock
         read_epoch = self.read_epoch
         if self.owner.path == entry.path and not self.owner.editing and not getattr(self.owner, 'data_views_loading', False):
-            from mobile.markdown_speech import clear_view, prepare_view
             base = self.owner.base
             key = 'logisticsPlaylistSpeech-' + uuid4().hex
             try:
-                prepared = await prepare_view(self.owner.web, selection=False, key=key)
+                prepared = await self.prepare_view(self.owner.web, selection=False, key=key)
                 if epoch != self.epoch:
                     raise asyncio.CancelledError
                 if not self.can_read() or read_epoch != self.read_epoch:
@@ -247,7 +250,7 @@ class PlaylistSpeech:
                     raise NeedsUnlock
             finally:
                 if self.snapshot is None or self.snapshot[3] != key:
-                    clear_view(self.owner.web, key=key)
+                    self.clear_view(self.owner.web, key=key)
 
         def cancelled():
             return epoch != self.epoch or read_epoch != self.read_epoch or not self.can_read()
@@ -428,17 +431,15 @@ class PlaylistSpeech:
     def follow(self, start, end):
         if start < 0:
             if self.can_read() and self.snapshot is not None:
-                from mobile.markdown_speech import highlight_view
                 _, base, prepared, key = self.snapshot
                 if self.owner.base == base:
-                    highlight_view(self.owner.web, prepared, start, end, key=key)
+                    self.highlight_view(self.owner.web, prepared, start, end, key=key)
             return
         self.queue.observe(start)
         if self.can_read() and self.snapshot is not None and self.queue.current is not None:
             entry, base, prepared, key = self.snapshot
             if self.owner.base == base and entry == self.queue.current.entry:
-                from mobile.markdown_speech import highlight_view
-                highlight_view(self.owner.web, prepared, start, end, key=key)
+                self.highlight_view(self.owner.web, prepared, start, end, key=key)
         if self.can_read() and (self.caption_at < 0 or abs(start - self.caption_at) > 38):
             self.caption_at = start
             self.spoken_line = self.queue.spoken_line(start, end)
@@ -481,8 +482,7 @@ class PlaylistSpeech:
 
     def clear_snapshot(self):
         if self.snapshot is not None:
-            from mobile.markdown_speech import clear_view
-            clear_view(self.owner.web, key=self.snapshot[3])
+            self.clear_view(self.owner.web, key=self.snapshot[3])
             self.snapshot = None
 
     def _retire_panel(self):
