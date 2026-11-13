@@ -15,6 +15,8 @@ class IOSVideo:
         self.disposed = False
         self.disposal = None
         self.presentation = None
+        self.display = getattr(getattr(owner.app, 'scene_manager', None), 'external_comics', None)
+        self.display_registration = None
         self.native = ObjCClass('LGVideoController').alloc().init()
         self.native.videoURL = owner.transport.url
         self.native.startMilliseconds = position
@@ -27,6 +29,12 @@ class IOSVideo:
         self.closed = Block(lambda: owner.app.loop.create_task(owner.close()), None)
         self.native.allowed = self.allowed
         self.native.closed = self.closed
+        self.external_display_allowed = Block(lambda: self.display is not None
+            and self.display.allowed_host(owner.app) and owner.allowed(external=True), c_bool)
+        self.native.externalDisplayAllowed = self.external_display_allowed
+        if self.display is not None:
+            self.output_changed = Block(lambda: owner.app.loop.call_soon_threadsafe(self.display.refresh), None)
+            self.native.externalOutputChanged = self.output_changed
         from rubicon.objc import objc_id, ObjCInstance
         self.command = Block(lambda name, value: owner.controls.dispatch(str(ObjCInstance(name)), str(ObjCInstance(value))), None, objc_id, objc_id)
         self.native.command = self.command
@@ -38,7 +46,31 @@ class IOSVideo:
         self.container.view.backgroundColor = native_value(ObjCClass('UIColor'), 'blackColor')
         self.container.navigationBar.tintColor = native_value(ObjCClass('UIColor'), 'whiteColor')
         self.native.loadViewIfNeeded()
+
+    def present(self):
+        if self.display is not None:
+            self.display.select(self.owner.app)
         self.show()
+
+    def set_external_display(self, view):
+        return bool(self.native.moveVideoToExternalHost(view))
+
+    def external_display_diagnostics(self):
+        import json
+        return json.loads(str(self.native.externalDisplayDiagnosticJSON()))
+
+    def refresh_display_diagnostics(self):
+        if self.display is not None:
+            self.display.diagnose_ios()
+
+    def revoke_external_display(self):
+        self.native.revokeExternalVideo()
+
+    def disconnect_external_display(self):
+        self.native.externalDisplayDisconnected()
+
+    def continues_after_display_disconnect(self):
+        return bool(self.native.continuesAfterDisplayDisconnect())
 
     def configure(self, settings, queue):
         from .controls import native_options
@@ -94,6 +126,10 @@ class IOSVideo:
         presenter = self.container.presentingViewController
         if presenter is not None and presenter.presentedViewController == self.container:
             presenter.dismissViewControllerAnimated(False, completion=None)
+        registration = getattr(self, 'display_registration', None)
+        if registration is not None:
+            self.container.unregisterSceneAccessory(registration)
+            self.display_registration = None
 
     def show(self):
         if self.disposed or self.owner.closed or self.owner.hidden or not self.owner.allowed():
@@ -114,6 +150,8 @@ class IOSVideo:
         if native_value(host, 'isBeingDismissed') or native_value(host, 'isBeingPresented'):
             self.presentation = self.owner.app.loop.call_later(.05, self.show)
             return
+        if self.display is not None and self.display_registration is None:
+            self.display_registration = self.display.register_ios_controller(self.container)
         host.presentViewController(self.container, animated=False, completion=None)
 
     async def wait_ready(self):
@@ -148,4 +186,6 @@ class IOSVideo:
             self.disposal = None
             raise
         self.dismiss()
+        if self.display is not None:
+            self.display.refresh()
         return self.disposal

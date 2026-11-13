@@ -347,9 +347,37 @@ embedded tracks, external subtitles, long seeks, completion/reopen, ciphertext
 resume records and revocation on each target. Validate Android and iPad PiP,
 receiver playback, rotation and exact lock/unlock behavior on hardware. In
 particular, iPad protected-data notifications do not yet establish immediate
-pause on every lock during background PiP/casting. AirPlay video output remains
-unimplemented. Native adapters therefore remain pending acceptance; do not treat
-host tests as a completed mobile release gate. Cloud emulator/simulator acceptance is recorded below; live-provider and physical-device acceptance remain separate.
+pause on every lock during background PiP/casting. Dedicated iOS output needs
+physical AirPlay acceptance as described below. Cloud emulator/simulator
+acceptance is recorded below.
+
+### Dedicated iOS display output
+
+`mobile.external_display` uses the same scene lifecycle as comics and PDFs.
+The iOS 27 accessory is also registered on the presented video controller’s
+navigation container. The native owner reparents the live VLC drawable and
+its subtitles into the external window. The destination uses its own bounds
+and the selected track’s display aspect ratio. The original player, audio and
+playback controls stay live on the device. Explicit Cast takes the drawable
+out of the display scene. An active PiP session holds it inline until PiP ends.
+
+The process protection scope and source authorization gate the move. Revocation
+hides the drawable before moving it back, mutes and pauses VLC, and requires
+explicit playback after authorization. The existing policy can also retire the
+player when its credential scope changes. Ordinary video can continue if the
+dedicated display’s audio route disconnects and a replacement route is present.
+Bluetooth loss and protected audio keep their existing pause policy.
+
+Use `video_chrome_tools --external-display` for a live VLC drawable handoff to
+a synthetic viewport. For physical acceptance, launch with
+`LOGISTICS_DISPLAY_DIAGNOSTICS=1` and record `LOGISTICS_EXTERNAL_DISPLAY` from
+the console. Compare the scene role, current screen mode, scene bounds and video
+rectangle against the visible TV picture for 16:9 and a second aspect ratio.
+Repeat with the TV connected before opening the video and during playback.
+Check pause, seeking, audible audio, subtitles, fold/rotation, disconnect while
+paused and playing, and mirroring or document output on exit. Exercise
+session-only credentials and retained protected content at entry and during
+playback. Keep the logs and TV evidence in the ignored test-results directory.
 
 ## Cloud range playback
 

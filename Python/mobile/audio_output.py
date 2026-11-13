@@ -50,10 +50,10 @@ class AudioOutput:
         except ValueError:
             return {}  # Invalid consent data grants no Bluetooth approval.
 
-    def register(self, player, pause):
+    def register(self, player, pause, *, continues_after_display_disconnect=None):
         if self.closed:
             return
-        self.players[player] = pause
+        self.players[player] = pause, continues_after_display_disconnect
 
     def unregister(self, player):
         self.players.pop(player, None)
@@ -76,14 +76,18 @@ class AudioOutput:
         elif not self.app.loop.is_closed():
             self.app.loop.call_soon_threadsafe(self.pause)
 
-    def refresh(self, *, lost=False):
+    def refresh(self, *, lost=False, display_lost=False):
         if self.closed:
             return
         self.scope.changed()
         protected = self.protected()
-        changed = self.policy.observe(self.outputs(), require_consent=protected)
+        outputs = self.outputs()
+        changed = self.policy.observe(outputs, require_consent=protected)
         if lost or (protected and changed):
-            self.pause()
+            continuing = ()
+            if display_lost and outputs and not protected and self.policy.manual_play:
+                continuing = {player for player, (_, check) in self.players.items() if check and check()}
+            self._pause_players(continuing=continuing)
         if protected and changed and self.players:
             self.offer()
 
@@ -97,14 +101,17 @@ class AudioOutput:
         if not self.closed:
             self._pause_players()
 
-    def _pause_players(self, *, retiring=False):
-        self.policy.pause()
+    def _pause_players(self, *, retiring=False, continuing=()):
+        if not continuing:
+            self.policy.pause()
         if self.pausing:
             return
         self.pausing = True
         failure = None
         try:
-            for player, pause in tuple(self.players.items()):
+            for player, (pause, _) in tuple(self.players.items()):
+                if player in continuing:
+                    continue
                 try:
                     pause()  # Explicit pause, never toggle or resume.
                 except Exception as error:

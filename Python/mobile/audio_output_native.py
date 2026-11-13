@@ -85,6 +85,7 @@ class AppleOutputs:
         self.active_interruption = False
         interruption_key = objc_const(self.library, 'AVAudioSessionInterruptionTypeKey')
         route_key = objc_const(self.library, 'AVAudioSessionRouteChangeReasonKey')
+        previous_route_key = objc_const(self.library, 'AVAudioSessionRouteChangePreviousRouteKey')
 
         def notification_number(pointer, key, default):
             # Rubicon Block supplies a raw objc_id. Resolve the dictionary key
@@ -104,6 +105,13 @@ class AppleOutputs:
             if self.closed:
                 return
             number = notification_number(note, route_key, 0)
+            if number == 2:
+                info = ObjCInstance(note).userInfo
+                previous = info.get(previous_route_key)
+                outputs = list(value(previous, 'outputs')) if previous is not None else []
+                if len(outputs) == 1 and str(value(outputs[0], 'portType')) in {'AirPlay', 'HDMIOutput', 'DisplayPort'}:
+                    changed(lost=True, display_lost=True)
+                    return
             changed(lost=number in (2, 7))  # Old output unavailable / no suitable route.
         queue = value(ObjCClass('NSOperationQueue'), 'mainQueue')
         try:

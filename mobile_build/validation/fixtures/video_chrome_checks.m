@@ -223,6 +223,67 @@
     });
 }
 - (BOOL)application:(UIApplication *)app didFinishLaunchingWithOptions:(NSDictionary *)options { return YES; }
+- (void)checkExternalDrawable {
+    LGVideoController *v = self.video;
+    AVSampleBufferDisplayLayer *layer = [v sampleBufferLayer:v.movie.layer];
+    if (!layer || !v.player.isPlaying || [v positionMilliseconds] < 1000) {
+        [self finish:@"Playback did not produce a live video layer"]; return;
+    }
+    UIView *host = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 320, 180)];
+    [self.window addSubview:host];
+    __block BOOL allowed = NO;
+    v.externalDisplayAllowed = ^BOOL { return allowed; };
+    if ([v moveVideoToExternalHost:host]) { [self finish:@"Protected entry moved the drawable"]; return; }
+    allowed = YES;
+    VLCMediaPlayer *player = v.player;
+    [v setting:@"aspect" value:@"fill"];
+    if (![v moveVideoToExternalHost:host] || !CGRectEqualToRect(v.movie.frame, host.bounds) ||
+        ![layer.videoGravity isEqualToString:AVLayerVideoGravityResizeAspect] || v.controlsScroll.window != self.window ||
+        v.player != player || [v sampleBufferLayer:v.movie.layer] != layer) {
+        [self finish:@"The external viewport did not take the existing drawable in Fit mode"]; return;
+    }
+    host.frame = CGRectMake(0, 0, 320, 240);
+    [v layoutVideoDrawable];
+    if (!CGRectEqualToRect(v.movie.frame, CGRectMake(0, 30, 320, 180))) {
+        [self finish:@"The drawable did not refit after an external size change"]; return;
+    }
+    [v externalDisplayDisconnected];
+    if (v.movie.superview != v.inlineMovie || !v.playRequested || !v.player.isPlaying ||
+        ![v continuesAfterDisplayDisconnect] || ![v moveVideoToExternalHost:host]) {
+        [self finish:@"Disconnect interrupted active playback or prevented reconnect"]; return;
+    }
+    [v pause];
+    int64_t position = [v positionMilliseconds];
+    [v externalDisplayDisconnected];
+    if (v.movie.superview != v.inlineMovie || v.player != player || v.playRequested ||
+        [v positionMilliseconds] != position || ![v continuesAfterDisplayDisconnect]) {
+        [self finish:@"Disconnect changed the paused video or its position"]; return;
+    }
+    v.pipActive = YES;
+    if ([v moveVideoToExternalHost:host]) { [self finish:@"PiP admitted a second output"]; return; }
+    v.pipActive = NO;
+    v.casting = YES;
+    if ([v moveVideoToExternalHost:host]) { [self finish:@"Cast admitted a second output"]; return; }
+    v.casting = NO;
+    if (![v moveVideoToExternalHost:host]) { [self finish:@"Paused video did not reconnect"]; return; }
+    allowed = NO;
+    [v tick:nil];
+    [v startByUser];
+    if (v.playRequested || !v.movie.hidden || !v.player.audio.isMuted) {
+        [self finish:@"Explicit play bypassed the active protection"]; return;
+    }
+    allowed = YES;
+    if (v.movie.superview != v.inlineMovie || !v.movie.hidden || !v.player.audio.isMuted ||
+        v.playRequested || [v moveVideoToExternalHost:host]) {
+        [self finish:@"Revocation did not conceal, mute and require explicit play"]; return;
+    }
+    [v startByUser];
+    if (![v moveVideoToExternalHost:host] || v.movie.hidden || !v.playRequested) {
+        [self finish:@"Explicit play did not restore the eligible output"]; return;
+    }
+    [self.samples addObject:@{@"event": @"external-drawable-handoff", @"position": @(position)}];
+    [self finish:nil];
+}
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)options {
     self.samples = [NSMutableArray array];
     self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
@@ -258,6 +319,10 @@
         if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAStreamProbe"] boolValue]) [self.video setNetworkWaiting:YES];
         [self.video startByUser];
         self.started = NSProcessInfo.processInfo.systemUptime;
+        if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAExternalDisplay"] boolValue]) {
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ [self checkExternalDrawable]; });
+            return;
+        }
         self.sampler = [NSTimer scheduledTimerWithTimeInterval:1.0/60 target:self selector:@selector(sample:) userInfo:nil repeats:YES];
         if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPipSubtitles"] boolValue]) return;
         if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPipControls"] boolValue]) {

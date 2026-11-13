@@ -156,12 +156,60 @@ class ExternalDisplayTests(unittest.TestCase):
 
     def test_disconnect_clears_and_forgets_external_image(self):
         sync(self.host, select=True)
-        scene = NS(session=NS(persistentIdentifier='tv'))
-        self.output.disconnect_ios(scene)
+        self.output.disconnect_ios(self.scene)
         self.assertIsNone(self.picture.image)
         self.assertTrue(self.window.hidden)
         self.window.setHidden.assert_called_with(True)
         self.assertEqual(self.output.ios, {})
+
+    def test_video_claims_scene_in_either_connection_order_and_restores_document(self):
+        for connect_first in (False, True):
+            with self.subTest(connect_first=connect_first):
+                self.output.ios.clear()
+                self.host.video_player = None
+                sync(self.host, select=True)
+                if connect_first:
+                    self.output.ios['tv'] = self.scene, self.window, self.picture
+                    self.output.refresh()
+                    self.assertEqual(self.picture.image, 'page one')
+                native = Mock()
+                self.host.video_player = NS(closed=False, hidden=False, native=native, allowed=Mock(return_value=True))
+                self.output.refresh()
+                if not connect_first:
+                    native.set_external_display.assert_not_called()
+                    self.output.ios['tv'] = self.scene, self.window, self.picture
+                    self.output.refresh()
+                native.set_external_display.assert_called_with(self.picture)
+                self.assertIsNone(self.picture.image)
+                self.output.disconnect_ios(self.scene)
+                native.disconnect_external_display.assert_called_once()
+                self.output.ios['tv'] = self.scene, self.window, self.picture
+                self.output.refresh()
+                self.host.video_player.closed = True
+                self.output.refresh()
+                native.set_external_display.assert_called_with(None)
+                self.assertEqual(self.picture.image, 'page one')
+
+    def test_video_denies_protected_entry_and_revokes_on_process_protection(self):
+        from mobile.protection import for_app
+        process = for_app(self.host).process
+        protected = process.window()
+        self.addCleanup(protected.dispose)
+        release = protected.register(self, lambda: (), protected=lambda: True)
+        native = Mock()
+        self.host.video_player = NS(closed=False, hidden=False, native=native, allowed=Mock(return_value=True))
+        sync(self.host, select=True)
+        native.set_external_display.assert_not_called()
+        self.assertIsNone(self.picture.image)
+        self.assertIs(self.window.windowScene, self.scene)
+        release()
+        self.output.refresh()
+        native.set_external_display.assert_called_once_with(self.picture)
+        protected.register(self, lambda: (NS(locked=False),))
+        self.output.refresh()
+        native.revoke_external_display.assert_called_once()
+        self.assertIsNone(self.output.ios_video)
+        self.assertIsNone(self.picture.image)
 
     def test_sharing_layout_wakes_only_on_connection_or_permission_changes(self):
         with patch('mobile.layout_events.notify_layout') as wake:
@@ -178,7 +226,7 @@ class ExternalDisplayTests(unittest.TestCase):
             self.output.refresh()
             self.assertTrue(self.output.sharing(self.host))
             self.assertEqual(wake.call_count, 3)
-            self.output.disconnect_ios(NS(session=NS(persistentIdentifier='tv')))
+            self.output.disconnect_ios(self.scene)
             self.assertFalse(self.output.sharing(self.host))
             self.assertEqual(wake.call_count, 4)
 
@@ -233,7 +281,7 @@ class ExternalDisplayTests(unittest.TestCase):
             self.privacy.gates = lambda: ()
             self.output.refresh()
             second = self.output.ios_status[1]
-            self.output.disconnect_ios(NS(session=NS(persistentIdentifier='tv')))
+            self.output.disconnect_ios(self.scene)
             second.removeFromSuperview.assert_called_once()
             self.assertIsNone(self.output.ios_status)
 

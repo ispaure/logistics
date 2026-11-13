@@ -67,5 +67,5 @@ class ExternalSceneActivationTests(unittest.TestCase):
     def test_older_ios_does_not_require_accessory_class(self):
         output = ExternalComicDisplay(NS())
         with patch.dict(sys.modules, {'rubicon.objc': NS(ObjCClass=Mock(side_effect=NameError))}):
-            output.register_ios(NS())
+            self.assertIsNone(output.register_ios_controller(NS()))
         self.assertIsNone(output.ios_registration)

@@ -1,4 +1,4 @@
-"""Dedicated document output with system mirroring between readers on iOS."""
+"""Dedicated document and video output with system mirroring between viewers on iOS."""
 import weakref
 import json
 import os
@@ -23,6 +23,7 @@ class ExternalComicDisplay:
         self.ios = {}
         self.ios_registration = None
         self.ios_status = None
+        self.ios_video = None
         self.android = None
         self.android_refresh = None
         self._sharing_host = None
@@ -51,24 +52,26 @@ class ExternalComicDisplay:
             diagnostics=os.environ.get('LOGISTICS_DISPLAY_DIAGNOSTICS'))))
 
     def register_ios(self, app):
-        """iOS 27 requires an accessory registration before offering a TV scene."""
+        controller = app.main_window._impl.native.rootViewController
+        if controller is None or (self.ios_registration is not None and self.ios_registration[0] == controller):
+            return
+        self.unregister_ios()
+        registration = self.register_ios_controller(controller)
+        if registration is not None:
+            self.ios_registration = controller, registration
+
+    def register_ios_controller(self, controller):
+        """iOS 27 offers the scene to the active controller's accessory."""
         from rubicon.objc import ObjCClass
         try:
             accessory_class = ObjCClass('UISceneAccessory')
         except NameError:  # iOS 26 and earlier use the scene manifest automatically.
             return
-        controller = app.main_window._impl.native.rootViewController
-        if controller is None:
-            return
-        if self.ios_registration is not None and self.ios_registration[0] == controller:
-            return
-        self.unregister_ios()
         configuration = ObjCClass('UISceneConfiguration').alloc().initWithName(
             'Logistics comic display', sessionRole='UIWindowSceneSessionRoleExternalDisplayNonInteractive')
         configuration.delegateClass = self.manager.external_scene_delegate
         accessory = accessory_class.externalNonInteractiveSceneAccessoryWithConfiguration(configuration)
-        registration = controller.registerSceneAccessory(accessory)
-        self.ios_registration = controller, registration
+        return controller.registerSceneAccessory(accessory)
 
     def unregister_ios(self):
         if self.ios_registration is not None:
@@ -114,19 +117,39 @@ class ExternalComicDisplay:
         app = self.source() if self.source is not None else None
         return comic_canvas(app.body) if self.allowed_host(app) else None
 
+    def detach_video(self, *, revoke=False):
+        if self.ios_video is not None:
+            video, _ = self.ios_video
+            self.ios_video = None
+            if revoke:
+                video.revoke_external_display()
+            else:
+                video.set_external_display(None)
+
     def refresh(self):
         app = self.source() if self.source is not None else None
         if app is None or type(app._impl).__module__.startswith('toga_iOS.'):
             self.reader_cover.refresh(app, self.allowed_host)
         self.sync_sharing_layout()
         if not self.ios and self.android is None:
+            self.detach_video()
             self.update_ios_status(False)
             self.diagnose_ios()
             return
         allowed = self.allowed_host(app)
-        canvas = comic_canvas(app.body) if allowed else None
+        video = self.current_video(app) if self.ios else None
+        video_allowed = allowed and video is not None and video.allowed(external=True)
+        if self.ios_video is not None:
+            attached, view = self.ios_video
+            if not allowed or (video is not None and not video_allowed):
+                self.detach_video(revoke=True)
+            elif (video is None or video.native is not attached
+                  or not any(view == picture for _, _, picture in self.ios.values())):
+                self.detach_video()
+        canvas = comic_canvas(app.body) if allowed and video is None else None
         image = canvas._impl.picture.image if self.ios and canvas is not None else None
-        mirror = self.ios and allowed and canvas is None and comic_canvas(app.body, include_empty=True) is None
+        mirror = (self.ios and allowed and video is None and canvas is None
+                  and comic_canvas(app.body, include_empty=True) is None)
         for scene, window, picture in self.ios.values():
             picture.image = image
             if mirror:
@@ -139,6 +162,11 @@ class ExternalComicDisplay:
                 window.frame = scene.coordinateSpace.bounds
                 # Use the native selector for UIKit's isHidden property.
                 window.setHidden(False)
+        if video_allowed:
+            # One drawable may belong to one display. Keep its target stable if
+            # UIKit offers additional scenes while that display is connected.
+            picture = self.ios_video[1] if self.ios_video else next(iter(self.ios.values()))[2]
+            self.ios_video = (video.native, picture) if video.native.set_external_display(picture) else None
         if self.android is not None:
             self.android.setImage(canvas._impl.native.getDrawable() if canvas is not None else None)
         self.update_ios_status(image is not None)
@@ -148,6 +176,11 @@ class ExternalComicDisplay:
         if self.ios_status is not None:
             self.ios_status[1].removeFromSuperview()
             self.ios_status = None
+
+    @staticmethod
+    def current_video(app):
+        video = getattr(app, 'video_player', None)
+        return video if video is not None and not video.closed and not video.hidden and video.native is not None else None
 
     def update_ios_status(self, casting):
         """A phone-only, noninteractive badge survives immersive reader chrome."""
@@ -208,6 +241,10 @@ class ExternalComicDisplay:
                 comic_layout=app.preferences.values['comic_layout'],
                 split_wide=app.preferences.values['comic_split_wide'],
                 outputs=[dict(
+                    role=str(scene.session.role),
+                    mode_size=([float(scene.screen.currentMode.size.width), float(scene.screen.currentMode.size.height)]
+                               if scene.screen.currentMode is not None else None),
+                    native_bounds=[float(scene.screen.nativeBounds.size.width), float(scene.screen.nativeBounds.size.height)],
                     window_bounds=[float(window.bounds.size.width), float(window.bounds.size.height)],
                     screen_bounds=[float(scene.screen.bounds.size.width), float(scene.screen.bounds.size.height)],
                     scene_bounds=[float(scene.coordinateSpace.bounds.size.width), float(scene.coordinateSpace.bounds.size.height)],
@@ -218,6 +255,8 @@ class ExternalComicDisplay:
                     image=picture.image is not None,
                     image_size=([float(picture.image.size.width), float(picture.image.size.height)]
                                 if picture.image is not None else None),
+                    video=(self.ios_video[0].external_display_diagnostics()
+                           if self.ios_video is not None and self.ios_video[1] == picture else None),
                 ) for scene, window, picture in self.ios.values()],
                 source_active=bool(getattr(app, 'active_host', False)),
                 source_comic=comic_canvas(app.body) is not None,
@@ -255,18 +294,39 @@ class ExternalComicDisplay:
         window.rootViewController = controller
         picture.frame = window.bounds
         picture.autoresizingMask = 18  # flexible width and height
-        self.ios[str(scene.session.persistentIdentifier)] = scene, window, picture
+        key = str(scene.session.persistentIdentifier)
+        previous = self.ios.get(key)
+        if previous is not None:
+            self.disconnect_ios(previous[0])
+        self.ios[key] = scene, window, picture
         self.refresh()
         return window
 
     def disconnect_ios(self, scene):
-        target = self.ios.pop(str(scene.session.persistentIdentifier), None)
-        if target is not None:
+        key = str(scene.session.persistentIdentifier)
+        target = self.ios.get(key)
+        if target is not None and target[0] == scene:
+            del self.ios[key]
             _, window, picture = target
+            if self.ios_video is not None and self.ios_video[1] == picture:
+                if self.allowed_host(self.source() if self.source else None):
+                    video, _ = self.ios_video
+                    self.ios_video = None
+                    video.disconnect_external_display()
+                else:
+                    self.detach_video(revoke=True)
             picture.image = None
             window.setHidden(True)
             window.windowScene = None
         self.refresh()
+
+    def resize_ios(self, scene):
+        target = self.ios.get(str(scene.session.persistentIdentifier))
+        if target is not None and target[0] == scene:
+            _, window, _ = target
+            if window.windowScene == scene:
+                window.frame = scene.coordinateSpace.bounds
+                self.refresh()
 
     def install_android(self, app):
         if self.android is None:
@@ -280,6 +340,7 @@ class ExternalComicDisplay:
                 app._impl.native, self.android_refresh)
 
     def dispose(self):
+        self.detach_video(revoke=True)
         self.reader_cover.clear()
         self.clear_ios_status()
         self.unregister_ios()

@@ -342,6 +342,25 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.owner.permitted())
         self.dialog.assert_not_awaited()
 
+    async def test_display_audio_loss_only_continues_an_eligible_ordinary_video(self):
+        self.protected = False
+        self.owner.register('video', self.pause_video, continues_after_display_disconnect=lambda: True)
+        self.route = (output('test', 'display', 'TV'),)
+        self.assertTrue(self.owner.request_play())
+        self.pause_video.reset_mock()
+        self.pause_speech.reset_mock()
+        self.route = (SPEAKER,)
+        self.owner.refresh(lost=True, display_lost=True)
+        self.assertTrue(self.owner.permitted())
+        self.pause_video.assert_not_called()
+        self.pause_speech.assert_called_once()
+        self.protected = True
+        self.assertTrue(self.owner.request_play())
+        self.pause_video.reset_mock()
+        self.owner.refresh(lost=True, display_lost=True)
+        self.pause_video.assert_called_once()
+        self.assertFalse(self.owner.permitted())
+
     async def test_ordinary_playback_ignores_settings_list_removal(self):
         self.protected = False
         self.route = (CAR,)
@@ -579,6 +598,9 @@ class AppleRouteEventTests(unittest.TestCase):
                     changed.assert_called_with(lost=lost)
             callback(NS(note=NS(userInfo=None)))
             changed.assert_called_with(lost=False)
+            callback(NS(note=NS(userInfo={b'AVAudioSessionRouteChangeReasonKey': 2,
+                b'AVAudioSessionRouteChangePreviousRouteKey': NS(outputs=[NS(portType='AirPlay')])})))
+            changed.assert_called_with(lost=True, display_lost=True)
         finally:
             monitor.dispose()
 

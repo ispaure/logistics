@@ -157,9 +157,10 @@
 }
 - (void)applyPictureSize {
     if (!self.player || !self.movie) return;
-    NSString *aspect = [[self playbackOptions][@"aspect"] isEqualToString:@"fill"] ? @"fill" : @"fit";
-    NSString *label = [aspect isEqualToString:@"fill"] ? @"Fit view" : @"Fill view";
+    BOOL fill = [[self playbackOptions][@"aspect"] isEqualToString:@"fill"];
+    NSString *label = fill ? @"Fit view" : @"Fill view";
     if (![self.pictureButton.accessibilityLabel isEqualToString:label]) [self updateItem:self.pictureButton label:label];
+    NSString *aspect = fill && !self.externalVideoHost ? @"fill" : @"fit";
     CGRect bounds = self.movie.bounds;
     NSString *geometry = [NSString stringWithFormat:@"%@:%g:%g", aspect, bounds.size.width, bounds.size.height];
     if ([self.pictureGeometry isEqualToString:geometry]) return;
@@ -223,7 +224,7 @@
 }
 - (void)doubleTapVideo:(UITapGestureRecognizer *)tap {
     if (self.controlsLocked || ![self canPlay:NO]) return;
-    CGFloat x = [tap locationInView:self.movie].x, width = self.movie.bounds.size.width;
+    CGFloat x = [tap locationInView:self.inlineMovie].x, width = self.inlineMovie.bounds.size.width;
     if (x < width * .4) [self skipMilliseconds:-10000];
     else if (x > width * .6) [self skipMilliseconds:10000];
     else [self togglePlay:tap];
