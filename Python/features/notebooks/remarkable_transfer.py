@@ -54,6 +54,8 @@ class UploadComparison:
 
 
 def _validate(book, cancelled):
+    if 'cPages' in book.content and (type(book.content.get('formatVersion')) is not int or book.content['formatVersion'] != 2):
+        raise ValueError('Modern page tables require formatVersion 2 for upload preparation; the source is unchanged.')
     if not UUID.fullmatch(book.id) or any(not UUID.fullmatch(page.id) for page in book.pages):
         raise ValueError('Upload preparation requires native document and page UUIDs.')
     if book.metadata.get('type') != 'DocumentType' or book.metadata.get('deleted') or book.metadata.get('parent') == 'trash':

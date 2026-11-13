@@ -53,6 +53,7 @@ class RemarkableTransferTests(unittest.TestCase):
         members = read_archive(book.to_bytes())
         content = json.loads(members[book.id + '.content'])
         content.pop('pages')
+        content['formatVersion'] = 2
         deleted = str(uuid4())
         content['cPages'] = dict(pages=[dict(id=book.pages[0].id, idx=dict(timestamp='1:1', value='ba'),
             future=dict(preserve=True)), dict(id=deleted, deleted=dict(timestamp='1:2', value=1))], future='preserve')
@@ -63,6 +64,22 @@ class RemarkableTransferTests(unittest.TestCase):
         self.assertEqual(candidate.archive, source)
         self.assertEqual(candidate.receipt.page_ids, (book.pages[0].id,))
         self.assertEqual(read_archive(candidate.archive), members)
+
+    def test_modern_page_table_with_legacy_or_unqualified_version_is_rejected(self):
+        book = fixture(template='Logistics Grid')
+        members = read_archive(book.to_bytes())
+        content = json.loads(members[book.id + '.content'])
+        content.pop('pages')
+        content['cPages'] = dict(pages=[dict(id=book.pages[0].id, idx=dict(timestamp='1:1', value='ba'))])
+        for version in (None, 1, 3, '2', True):
+            with self.subTest(version=version):
+                content['formatVersion'] = version
+                members[book.id + '.content'] = json_bytes(content)
+                source = archive_bytes(members)
+                with self.assertRaisesRegex(ValueError, 'Modern page tables require formatVersion 2'):
+                    prepare_upload(source)
+                # Conservative preparation does not change opaque read/retrieval.
+                self.assertEqual(Notebook.read(source).members, members)
 
     def test_custom_background_preparation_preserves_ink_images_and_source(self):
         book = fixture(template='Logistics Grid')
