@@ -10,7 +10,9 @@ import unittest
 
 from commonUtils.filesystem.local_access import protect_local_root
 from commonUtils.runtime.resources.local import LocalFiles
-from services.documents.storage import DocumentResource, export_local_document
+from services.documents.storage import DocumentResource, export_local_document, stage_local_document_export
+from unittest.mock import patch
+from commonUtils.runtime.operations import OperationCancelled
 
 
 class DocumentExportTests(unittest.TestCase):
@@ -90,3 +92,103 @@ class DocumentExportTests(unittest.TestCase):
         self.assertFalse(ComicDocument('comic.cbz', source=source).private)
         source.provider = SimpleNamespace(private=True)
         self.assertTrue(ComicDocument('comic.cbz', source=source).private)
+
+
+class StreamingDocumentExportTests(unittest.TestCase):
+    def setUp(self):
+        temporary = TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.path = self.root / 'copy.rmdoc'
+        self.path.write_bytes(b'original')
+        self.provider = LocalFiles(self.root)
+        self.revision = self.provider.entry(self.path.name)['revision']
+
+    def assert_clean(self):
+        self.assertEqual(list(self.root.glob('.document-export-*')), [])
+
+    def test_default_refuses_replacement_and_approved_revision_replaces(self):
+        with self.assertRaises(FileExistsError):
+            with stage_local_document_export(self.path):
+                self.fail('Default export admitted an existing destination')
+        self.assertEqual(self.path.read_bytes(), b'original')
+        with stage_local_document_export(self.path, expected_revision=self.revision) as stream:
+            stream.write(b'verified new content')
+            self.assertEqual(self.path.read_bytes(), b'original')
+        self.assertEqual(self.path.read_bytes(), b'verified new content')
+        self.assert_clean()
+
+    def test_changed_before_staging_is_rejected(self):
+        self.path.write_bytes(b'external revision')
+        with self.assertRaisesRegex(ValueError, 'File changed'):
+            with stage_local_document_export(self.path, expected_revision=self.revision):
+                self.fail('Stale approval was accepted')
+        self.assertEqual(self.path.read_bytes(), b'external revision')
+        self.assert_clean()
+
+    def test_changed_or_removed_during_export_is_preserved(self):
+        for change in ('write', 'remove'):
+            with self.subTest(change=change):
+                self.path.write_bytes(b'original')
+                revision = self.provider.entry(self.path.name)['revision']
+                with self.assertRaises((ValueError, FileNotFoundError)):
+                    with stage_local_document_export(self.path, expected_revision=revision) as stream:
+                        stream.write(b'new')
+                        if change == 'write':
+                            self.path.write_bytes(b'external revision')
+                        else:
+                            self.path.unlink()
+                if change == 'write':
+                    self.assertEqual(self.path.read_bytes(), b'external revision')
+                else:
+                    self.assertFalse(self.path.exists())
+                self.assert_clean()
+
+    def test_new_file_appearing_during_export_is_preserved(self):
+        self.path.unlink()
+        with self.assertRaises(FileExistsError):
+            with stage_local_document_export(self.path) as stream:
+                stream.write(b'new')
+                self.path.write_bytes(b'concurrent creator')
+        self.assertEqual(self.path.read_bytes(), b'concurrent creator')
+        self.assert_clean()
+
+    def test_cancel_and_validation_failure_preserve_approved_file(self):
+        cancelled = False
+        with self.assertRaises(OperationCancelled):
+            with stage_local_document_export(self.path, expected_revision=self.revision,
+                                             cancelled=lambda: cancelled) as stream:
+                stream.write(b'new')
+                cancelled = True
+        with self.assertRaisesRegex(ValueError, 'Invalid archive'):
+            with stage_local_document_export(self.path, expected_revision=self.revision) as stream:
+                stream.write(b'bad')
+                raise ValueError('Invalid archive')
+        self.assertEqual(self.path.read_bytes(), b'original')
+        self.assert_clean()
+
+    def test_failed_atomic_replace_preserves_approved_file(self):
+        with patch('commonUtils.runtime.resources.local.os.replace', side_effect=PermissionError('Denied')):
+            with self.assertRaises(PermissionError):
+                with stage_local_document_export(self.path, expected_revision=self.revision) as stream:
+                    stream.write(b'new')
+        self.assertEqual(self.path.read_bytes(), b'original')
+        self.assert_clean()
+
+    def test_protected_or_linked_destination_is_rejected(self):
+        release = protect_local_root(object(), self.root, 'Use its provider')
+        try:
+            with self.assertRaises(PermissionError):
+                with stage_local_document_export(self.path, expected_revision=self.revision):
+                    self.fail('Protected destination accepted')
+        finally:
+            release()
+        other = self.root / 'original'
+        self.path.rename(other)
+        self.path.symlink_to(other)
+        with self.assertRaises(ValueError):
+            with stage_local_document_export(self.path, expected_revision=self.revision):
+                self.fail('Linked destination accepted')
+        self.assertEqual(other.read_bytes(), b'original')
+        self.assertTrue(self.path.is_symlink())
+        self.assert_clean()

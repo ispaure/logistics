@@ -331,18 +331,30 @@ def export_local_document(path, data, *, max_bytes, validate=lambda data: None,
 
 
 @contextmanager
-def stage_local_document_export(path, *, cancelled=lambda: False):
-    """Give a streaming export a private stage and publish it without replacement."""
+def stage_local_document_export(path, *, expected_revision=None, cancelled=lambda: False):
+    """Publish a verified stream; replace only a caller-approved file revision.
+
+    None retains exclusive creation. Capture an existing destination's LocalFiles
+    revision when its replacement is approved, before starting the export worker.
+    The caller must finish archive verification before leaving this context.
+    """
     import os
     from tempfile import NamedTemporaryFile
     from commonUtils.filesystem.local_access import check_local_path
     from commonUtils.persistence.publication import rename_exclusive
+    from commonUtils.runtime.resources.local import LocalFiles
 
     target = Path(path).absolute()
     check_local_path(target)
     check_cancelled(cancelled)
-    if os.path.lexists(target):
-        raise FileExistsError('A file already exists at the chosen destination.')
+    provider = LocalFiles(target.parent)
+    if expected_revision is None:
+        if os.path.lexists(target):
+            raise FileExistsError('A file already exists at the chosen destination.')
+    else:
+        row = provider.entry(target.name)
+        if row['directory'] or row['revision'] != expected_revision:
+            raise ValueError('File changed; original preserved.')
     stage = None
     try:
         with NamedTemporaryFile(prefix='.document-export-', dir=target.parent, delete=False) as stream:
@@ -352,7 +364,10 @@ def stage_local_document_export(path, *, cancelled=lambda: False):
             os.fsync(stream.fileno())
         check_local_path(target)
         check_cancelled(cancelled)
-        rename_exclusive(stage, target)
+        if expected_revision is None:
+            rename_exclusive(stage, target)
+        else:
+            provider.replace_created(stage.name, target.name, expected_revision)
     finally:
         if stage is not None:
             stage.unlink(missing_ok=True)

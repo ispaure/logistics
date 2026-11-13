@@ -90,3 +90,46 @@ class RemarkableSSHTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'invalid archive path'):
                 remarkable_ssh.export_document('tablet', DOC, destination)
             self.assertEqual(list(destination.parent.iterdir()), [])
+
+
+    def test_verified_overwrite_and_failures_preserve_approved_destination(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from commonUtils.runtime.operations import OperationCancelled
+        from features.notebooks.notebook import Notebook
+        book = Notebook.new('Synthetic checked replacement', template='Blank')
+        with ZipFile(BytesIO(book.to_bytes())) as archive:
+            entries = {name: archive.read(name) for name in archive.namelist()}
+        failure, cancelled = None, False
+
+        @contextmanager
+        def stream(*_, port):
+            nonlocal cancelled
+            payload = dict(entries)
+            if failure == 'invalid':
+                del payload[book.id + '.content']
+            with tar_stream(payload) as data:
+                yield data
+            if failure == 'disconnect':
+                raise OSError('Synthetic disconnect')
+            if failure == 'cancel':
+                cancelled = True
+
+        with TemporaryDirectory() as folder, patch.object(remarkable_ssh, 'ssh_stream', stream):
+            target = Path(folder) / 'copy.rmdoc'
+            provider = LocalFiles(folder)
+            for failure, expected in (('invalid', KeyError), ('disconnect', OSError), ('cancel', OperationCancelled)):
+                with self.subTest(failure=failure):
+                    target.write_bytes(b'previous archive')
+                    revision = provider.entry(target.name)['revision']
+                    cancelled = False
+                    with self.assertRaises(expected):
+                        remarkable_ssh.export_document('synthetic.invalid', book.id, target,
+                            expected_revision=revision, cancelled=lambda: cancelled)
+                    self.assertEqual(target.read_bytes(), b'previous archive')
+                    self.assertEqual(list(target.parent.glob('.document-export-*')), [])
+            failure, cancelled = None, False
+            remarkable_ssh.export_document('synthetic.invalid', book.id, target,
+                expected_revision=provider.entry(target.name)['revision'])
+            self.assertEqual(Notebook.read(target.read_bytes()).name, book.name)
+            with ZipFile(target) as archive:
+                self.assertEqual({name: archive.read(name) for name in archive.namelist()}, entries)

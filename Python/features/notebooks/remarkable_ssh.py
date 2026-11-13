@@ -173,7 +173,9 @@ if [ -f "$1" ]; then exec tar -cf - "$@"; fi'''
     return sorted(result, key=lambda item: (item.folder.casefold(), item.title.casefold(), item.id))
 
 
-def export_document(host, identity, destination, *, port=DEFAULT_PORT, report=lambda *_: None, cancelled=lambda: False):
+def export_document(host, identity, destination, *, port=DEFAULT_PORT, expected_revision=None,
+                    report=lambda *_: None, cancelled=lambda: False):
+    """Retrieve a complete archive; replacing a local file requires its approved revision."""
     if not UUID.fullmatch(identity):
         raise ValueError('Invalid tablet document ID.')
     destination = Path(destination)
@@ -187,7 +189,7 @@ if [ ! -f "$identity.metadata" ] || [ ! -f "$identity.content" ]; then
     exit 1
 fi
 exec tar -cf - "$@"'''
-    with stage_local_document_export(destination, cancelled=cancelled) as target:
+    with stage_local_document_export(destination, expected_revision=expected_revision, cancelled=cancelled) as target:
         with ssh_stream(host, command, cancelled, port=port) as stream, \
                 tarfile.open(fileobj=stream, mode='r|') as source, \
                 ZipFile(target, 'w') as archive:

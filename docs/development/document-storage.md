@@ -7,6 +7,19 @@ commonUtils' verified resource mutations. Closing it releases only that document
 lease. `DocumentPolicy` supplies write and persistence policy; a read-only remote
 cannot gain write access through a local cache or wrapper.
 
+## Streaming local exports
+
+`stage_local_document_export` keeps the existing destination untouched while a
+caller streams and verifies its output. Its default remains exclusive creation.
+To replace an approved existing file, pass the `LocalFiles.entry()` revision
+captured with that approval as `expected_revision`, including through the SSH
+retrieval API. The stage rejects a changed revision before transfer and uses the
+local provider's checked replacement after verification and cancellation checks.
+Declines must not start an export; do not infer approval in the worker from the
+destination's current existence. Callers own the picker and final extension.
+The provider's revision check and atomic rename are separate system operations;
+this does not lock out unrelated external writers between those operations.
+
 ## Ownership
 
 `services.documents.destinations.DestinationRequest` captures a picker operation
