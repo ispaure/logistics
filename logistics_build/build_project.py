@@ -64,7 +64,7 @@ class LogisticsProject:
         return operations_for(self.descriptor, target)
 
     def settings_view(self):
-        values, sources = manager_settings.settings(self.mobile)
+        values, sources, resets = manager_settings.settings_with_resets(self.mobile)
         rows = {}
         reserved = {'vm.shared_host', 'vm.shared_guest'}
         guarded = {'testflight.app_id', 'testflight.bundle_id', 'firebase.bundle_id',
@@ -75,6 +75,8 @@ class LogisticsProject:
                     'directory' if name in {'tools.xcode', 'tools.android_sdk', 'tools.java', 'tools.manager_checkout', 'tools.node_modules', 'vm.shared_host'} else
                     'reference' if name.endswith('reference') or name.startswith('signing.') or name.endswith('_python') or name in {'tools.node', 'tools.chrome'} else 'text')
             rows[name] = dict(value=value, origin=sources[name], kind=kind, read_only=name in guarded or name in reserved or name in {'android.image', 'android.model'})
+            if name in resets:
+                rows[name]['reset'] = resets[name]
             if name in reserved:
                 rows[name]['origin'] += '; legacy reserved field, not used by isolated local backends'
             if name == 'android.avd':
@@ -131,8 +133,8 @@ class LogisticsProject:
         defaults['testers.message'] = ios if ios == android else ''
         return defaults
 
-    def save_settings(self, values):
-        manager_settings.save(self.mobile, values)
+    def save_settings(self, values, *, resets=()):
+        manager_settings.save(self.mobile, values, resets=resets)
 
     def set_app_version(self, value):
         from logistics_build.app_version import set_version
