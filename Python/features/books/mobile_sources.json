@@ -16,6 +16,7 @@
     "mobile/epub_speech.py",
     "mobile/library/__init__.py",
     "mobile/library/catalog.py",
+    "mobile/library/catalog_panel.py",
     "mobile/media_android.py",
     "mobile/media_controls.py",
     "mobile/media_ios.py",
