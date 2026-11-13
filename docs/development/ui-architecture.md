@@ -71,6 +71,29 @@ scope changes and `can_close()` behavior. Start with
 
 See [worker lifetime and cancellation](architecture.md#long-running-workflows-and-safe-closing).
 
+## Appearance and shared control edit points
+
+| Change | Owner |
+| --- | --- |
+| Desktop light/dark palette, standard buttons and progress styling | commonUtils `ui/appearance/theme.py`; font families, role sizes and saved defaults in `styling.py`, `font_families.py` and `typography.py` |
+| Logistics native semantic colors and embedded CSS variables | `Python/services/appearance_palette.py`; native palette selection in `Python/mobile/palette.py` |
+| Native color application, system appearance and E Ink exceptions | `Python/mobile/appearance.py`, using commonUtils `ui/native/appearance.py` |
+| Mobile control text sizes and touch targets | `Python/mobile/ui_metrics.py`; preference defaults in `preference_schema.py` and reader sizing in `font_scaling.py` |
+| Native form fitting and settings rows | commonUtils `ui/native/forms.py`; Logistics settings composition in `Python/mobile/settings/forms.py` |
+| Transfer WebView typography, spacing, responsive controls and status colors | `Python/features/rclone/transfers/assets/surface.css`; `mobile/surface.py` supplies palette CSS and font/E Ink state |
+
+Shared API contracts belong in the [commonUtils appearance guide](../../Python/commonUtils/docs/development/reference/ui/appearance/appearance.md).
+The mobile font-unit adapter applies to explicit Toga widget fonts; WebView CSS,
+direct native font APIs and system default sizes keep their own units. Qt uses
+its existing palette and font-role bindings. Native scrolling and scrollbars
+remain toolkit-owned; transfer web scrolling is feature CSS.
+
+Transfer action/status colors in `surface.css` and terminal-state overrides in
+commonUtils `ui/tasks/process_progress.py` are separate defaults today. Changing
+those colors or adopting a shared semantic role is a separate appearance change,
+with light/dark, scaled-text and E Ink validation as applicable. Moving ownership
+does not establish that the different controls should have identical styling.
+
 ## Desktop Workspaces details
 
 ### Desktop hover initialization

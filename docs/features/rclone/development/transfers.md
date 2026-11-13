@@ -5,6 +5,12 @@ callers use `run` explicitly. Both use the captured platform plan and mandatory
 execution preflight. Credential loading and persistence are described in
 [credential lifetime](credentials.md).
 
+`Scripts/architecture.json` explicitly includes `transfers/service.py`,
+`review.py` and `presentation.py` in the portable contract. The existing static
+architecture and blocked-import checks reject presentation dependencies in these
+shared owners, including deferred imports. Desktop `progress.py` remains a Qt
+process adapter; it is not part of that portable contract.
+
 ## Follow a transfer
 
 1. Desktop `transfers/workflow.py` captures a `DesktopTransferRequest`; native
