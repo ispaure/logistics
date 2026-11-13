@@ -3,6 +3,7 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+import os
 import subprocess
 import shutil
 import tempfile
@@ -146,6 +147,9 @@ class AutoSaveTests(QtTestCase):
 
     def setUp(self):
         self.directory = self.temporary_directory()
+        # Non-repository fixtures can live under an ignored checkout scratch path.
+        parent = str(Path(self.directory.name).resolve().parent)
+        self.enterContext(patch.dict(os.environ, GIT_CEILING_DIRECTORIES=parent))
         self.path = Path(self.directory.name) / 'file.py'
         self.path.write_bytes(b'original\r\n')
         self.view = ProjectWorkspace(Project('Test', self.directory.name))

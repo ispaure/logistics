@@ -3,8 +3,10 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+import os
 from pathlib import Path
 import subprocess
+from unittest.mock import patch
 
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
@@ -142,6 +144,7 @@ class ProjectBrowserTests(QtTestCase):
     def test_non_git_project_has_no_status_colors(self):
         with self.temporary_directory() as directory:
             root = Path(directory).resolve()
+            self.enterContext(patch.dict(os.environ, GIT_CEILING_DIRECTORIES=str(root.parent)))
             (root / 'file.py').touch()
             owner = qt.QWidget()
             browser = ProjectBrowser(Project('test', str(root), autosave='off'), owner)
