@@ -151,6 +151,7 @@ Only the 19 explicitly listed files in `Python/tests/parallel_regressions.py`
 can overlap. Their real Git repositories, preferences, Qt applications and
 storage are private to each process. New and unreviewed files remain exclusive:
 they wait for active work to finish and retain the original serial child path.
+Changes to an admitted file's resource use require another overlap and cleanup audit.
 No stages overlap. Fast mode still gates later work on smoke; fail-fast stops
 new admissions while already running files finish.
 
@@ -170,12 +171,21 @@ reject the nested worker opt-in; Manager's existing phase/platform admission and
 resource owners remain in charge. Do not infer full-platform or release coverage
 from this selected group.
 
-On the frozen Logistics `805ccc7c` / commonUtils `cee7537` baseline, a prototype
-using the existing children matched all 152 Git cases plus 96 smoke cases.
-Including structure preflight and both desktop smoke gates, the quiet 19-file
-pair took 158.78 seconds with one worker and 84.46 seconds with two. A reverse
-parallel run took 84.28 seconds. The serial repeat that overlapped compiler work
-is excluded. These selected-slice measurements are separate from Brief 09's
+The implementation at `50c488f0`, based on Logistics `805ccc7c` and unchanged
+commonUtils `cee7537`, matched all 152 Git cases plus 96 smoke cases, all 33
+file-stage outcomes and all Git JUnit case/file identities. Including structure
+preflight and both smoke gates, its quiet serial/two-worker pair took
+**160.98 / 85.02 seconds**, saving **75.97 seconds (47.2%)**. Gate costs were
+6.19 / 6.22 seconds; the one-time 6.09-second source/environment preparation was
+measured separately. Sampled aggregate process-tree RSS rose from 252.7 to
+385.9 MiB. Trial CPU was 148.23 / 120.88 seconds, including the measurement
+driver and its process sampling; this is not a pure application CPU comparison.
+RSS was sampled approximately every 100 ms and can count shared pages twice.
+
+The earlier quiet prototype pair took 158.78 / 84.46 seconds, with a reverse
+parallel repeat of 84.28 seconds. Three four-file repetitions had medians of
+48.68 / 28.69 seconds. A serial repetition that overlapped compiler work is
+excluded. These selected-slice measurements are separate from Brief 09's
 12.31-second matched full-macOS improvement; they are not a measured full-suite
 speedup. Two workers are the supported limit.
 
