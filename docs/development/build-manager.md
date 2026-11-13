@@ -823,12 +823,14 @@ shared enum/validator APIs are documented in commonUtils' own testing reference.
 
 Each suite opts into a `<suite>.smoke` phase through `smoke_args`. All selected
 smoke phases precede broad regression phases, preserving shared-library prerequisite
-order. Full phases still select all stages and produce complete evidence. Smoke
-success alone cannot satisfy a full or release phase, and phase IDs/arguments keep
-these receipts distinct. Manager dependencies leave downstream phases unrun after
-a failed gate; independent diagnostic work can still complete. Cleanup phases keep
-their existing always-run graph. Local direct runners default to diagnostic mode;
-`--mode fast` gates later work after smoke and `--fail-fast` stops at the first failure.
+order. The standard desktop platform plan runs the full smoke stage first and then
+selects regression and extended cases. Both parts are required, and each reports
+its own results. Smoke runs fresh. A matching receipt can satisfy the later phase
+for its exact inputs and arguments. Developer full runs and separately selected
+suites keep their existing stage selection. Manager dependencies leave downstream
+phases unrun after a failed gate. Independent diagnostics and always-run cleanup
+can still complete. Local direct runners default to diagnostic mode. With
+`--mode fast`, smoke gates later work. `--fail-fast` stops at the first failure.
 See [testing](testing.md#execution-stages-and-failure-policy) for profiles and reports.
 
 Logistics adds this checker to native preparation/testing plans too, before builds
