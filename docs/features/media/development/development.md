@@ -1,68 +1,60 @@
-# Media Feature
+# Develop Media Tools
 
-For workflows, settings and troubleshooting, see the [user guide](../user/user.md).
+Media Tools renames Matroska Audio (`.mka`) chapter files using titles in a CSV.
+Playback is owned by the [Video Player feature](../../video/development/development.md).
+See the [Media Tools user guide](../user/user.md) for the desktop workflow.
 
-Developer notes. See the [user guide](../user/user.md) for controls and setup,
-and [UI architecture](../../../development/features.md) for shared contribution conventions.
+## Try a chapter filename change
 
-Provides media-specific file operations for Logistics.
+On desktop, enable **Media Tools** in **Settings → Features**. In a disposable
+folder, create an empty `Chapter_01.mka` and a `names.csv` containing
+`1,Introduction` on its first line. Open **Debug → Rename MKA from CSV…**, select
+the folder and click **Review names**. Expect `1 - Introduction.mka` in the
+destination column. The tool works with an empty fixture because it only reads
+filenames and CSV rows.
 
-## Responsibilities
+For a small experiment, use an underscore separator so the review shows
+`1_Introduction.mka`. Change the destination format in `_build_rename_plan`
+in `Python/features/media/mka.py`, then relaunch and review again. Apply the
+reviewed names to check the result. In the test file below, adjust the expected
+destination names, failure-injection target and progress text together so the
+rollback case still exercises failure on the second move. Run from the
+repository root with the desktop environment installed.
 
-- Own CSV-based audio chapter renaming.
-- Provide reusable validation and execution logic for media maintenance tools.
+```sh
+python3 dev.py test desktop --exact-file Python/tests/integrations/test_mka_renames.py
+```
 
-## Structure
-
-- `mka.py` contains Matroska Audio (`.mka`) operations.
-- Playback belongs to the separate [Video Player feature](../../video/development/development.md).
+Expect the new names and unchanged file bytes on success. The failure case
+should restore both source names and bytes. This check uses placeholder files and exercises renaming without
+opening an audio decoder. The dialog tests check progress,
+fresh review after a failed apply, cancellation and unresolved recovery paths.
 
 ## MKA Chapter Rename
 
-The current MKA workflow renames top-level files named like:
+`Python/features/media/ui_contributions.py` registers the Debug action and
+lazily opens `ui/dialogs.py` (`RenameMkaDialog`). **Review names** calls
+`mka.plan_from_csv()`; the planner scans only the target folder's top level.
+It requires exactly one CSV and names with a `Chapter_` prefix and positive
+chapter number. Chapter N uses CSV row N, starting at one with no header.
+Column A must agree with the file's chapter number. The planner removes
+double quotes and trims the title in column B and requires a nonempty result.
 
-`Chapter_01.mka`
+The shared `commonUtils.filesystem.rename` engine validates the complete batch
+through `plan_named_renames()`. Destinations must be portable, stay in their
+source folder and be unique across case and Unicode equivalents. An occupied
+destination prevents the batch from starting.
 
-using chapter names from the single CSV file in the same directory.
-
-The CSV is expected to contain:
-
-- Column A: chapter number
-- Column B: chapter name
-
-Before any files are renamed, Logistics validates the entire batch:
-
-- The target directory exists.
-- Exactly one CSV file is present.
-- Every MKA filename contains a valid chapter number.
-- Every chapter has a matching CSV row.
-- CSV chapter numbering matches the MKA chapter number.
-- Every row referenced by an MKA contains a chapter name.
-- Chapter N uses row N (one-based); a header row is not skipped.
-- Destination filenames are portable, stay in their original folder, and are unique
-  including case and Unicode equivalents.
-- No destination filename already exists.
-
-Only after the complete rename plan passes validation are files renamed. The shared
-`plan_named_renames` / `apply_renames` engine revalidates source stamps and destinations
-before execution, stages the batch, and rolls it back if publication fails. Any
-unresolved recovery paths are reported rather than overwritten.
-
-`ui/dialogs.py:RenameMkaDialog` consumes the approved plan before dispatching
-the worker and forwards the rename engine's progress. Failure or cancellation
-requires a fresh review. The shared engine checks cancellation between atomic
-renames and attempts to roll back the batch if interrupted.
-`Python/tests/integrations/test_mka_renames.py` covers failed apply, fresh review
-and progress forwarding.
-
-The [earlier video brief](video-player.md) redirects to the Video Player owner.
+The dialog consumes the approved plan when applying it. `apply_renames()`
+rechecks source stamps and destinations, stages the batch, then publishes the
+renames. Cancellation is checked between atomic moves. Publication failure or
+cancellation triggers a rollback attempt and requires a fresh review. If
+rollback cannot restore a file, keep the staged file and use the reported
+staged and original paths to recover it.
 
 ## Platform boundary and validation
 
-`ui_contributions.py` registers a desktop Debug action and lazily opens
-`ui/dialogs.py`. There is no mobile MKA management adapter or feature-owned mobile
-source manifest. Mobile playback belongs to Video Player.
-
-`Python/tests/integrations/test_mka_renames.py` covers portable-name rejection,
-duplicate chapter destinations and rollback after publication failure. Its file
-fixtures verify rename behavior, not audio decoding or a physical-device UI.
+The MKA workflow runs in desktop Qt. See the
+[mobile boundary](../user_mobile/user_mobile.md) for supported mobile workflows.
+The [earlier Video Player brief](video-player.md) points to the playback owner's
+requirements.
