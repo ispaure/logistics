@@ -46,8 +46,12 @@ renaming a project-specific module does not make its policy generic.
 ## Current operator paths
 
 Use the standalone manager for Run checks, Build only and Prepare and deliver.
-Build only uses the existing Android test APK or iOS simulator-app build and
-stops before tests or delivery. Release/tester preparation retains its full
+Build only produces an Android test APK or an iOS simulator app and stops
+before tests or delivery. For iOS, `ios_simulator_workspace.py` owns the
+standalone recipe when the captured runner supports it. Follow the
+[workspace policy](build-manager.md#automatic-storage-retention) to find the
+app and DerivedData under `tmp/build/mobile/ios/`. Older captured runners
+build in their source snapshot. Release/tester preparation retains its full
 project gates and signing requirements. Local tester and Release-device
 preparation can use captured working-tree application and commonUtils sources;
 GitHub publication requires committed source and a clean checkout. There is no generic
