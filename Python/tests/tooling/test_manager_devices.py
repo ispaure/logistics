@@ -297,7 +297,7 @@ class ManagerDeviceTests(unittest.TestCase):
         with patch.object(devices, 'check_source'), patch.object(android, 'PROJECT', self.root / 'gradle'), \
                 patch.object(devices, 'sign_android_debug', return_value='certificate'), patch.object(android, 'deploy') as build:
             devices.prepare(recipe, file_sha256(recipe))
-        build.assert_called_once_with(build_only=True, devices=[], discover=False)
+        build.assert_called_once_with(build_only=True, devices=[], discover=False, skip_tests=False)
         self.assertEqual((workspace / 'app.apk').read_bytes(), b'build')
         self.assertTrue((workspace / 'prepared.json').exists())
 
