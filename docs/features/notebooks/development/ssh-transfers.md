@@ -135,7 +135,8 @@ It uses the existing host verification and askpass path, retires its private
 control socket on exit, and prevents clients from falling back to another login
 when the master disappears. `ssh_stream` can reuse that connection and stream
 immutable input concurrently with output. Cancellation terminates owned client
-processes. The existing standalone read/retrieve route remains available.
+processes. `export_document` can reuse the same connection for exact-ID
+retrieval. The existing standalone read/retrieve route remains available.
 
 `remarkable_mutations.plan_metadata_change` prepares rename, move, trash and
 explicit-destination restore from raw metadata. It preserves unknown fields,
@@ -166,6 +167,10 @@ upload and must not retry blindly. Synthetic shell/service tests cover these
 boundaries, including process termination before and after rename. Actual
 firmware detachment, restart and native acceptance still require qualification.
 [systemd service lifecycle](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html)
+
+The receipt inspector uses shell `read` for its fixed outcome values. The
+observed firmware's reduced BusyBox `head` does not support `-c`; requiring that
+option interrupted an initial readback despite completed service restoration.
 
 On November 13, 2026, a disposable USB import on user-reported firmware 3.29.1.0
 returned HTTP 201, but the user saw only its two PDF backgrounds. The native
@@ -207,3 +212,21 @@ are at root, and Xochitl/rm-sync are active. The model is still unidentified.
 These checks establish observed native UI semantics on user-reported 3.29.1.0;
 direct SSH publication, recovery and the remaining integrated controls remain
 unqualified.
+
+An explicitly authorized direct-metadata trial on hardware identifying itself
+as `reMarkable Chiappa`, with systemd 259.5 and user-reported firmware 3.29.1.0,
+rejected a stale destination guard without changing the document. Rename and
+moves through two disposable folders subsequently preserved every original
+content member in native USB exports. The rename job survived an SSH client
+disconnect after submission. A later trash checkpoint lost its connection;
+read-only uptime checks established that a device reboot had occurred. The
+current trash metadata and all original content were then recovered over SSH.
+Interface and sync services were running without restart-count increases during
+the observation window. The reboot cause is not established.
+
+The trial was stopped. No further restart-based tests or firmware write
+capability were enabled. Return-to-root/rename-back acceptance remains unfinished;
+the disposable copy was left in native Trash to avoid further interface
+interruption. This result does not qualify the stop/start publication procedure
+for that firmware, even though the inspected document bytes survived. Keep the
+browser read-only while the restart behavior and recovery boundary are unresolved.

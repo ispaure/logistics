@@ -206,10 +206,12 @@ class RemarkableSSHTests(unittest.TestCase):
             f'{DOC}/{PAGE}/image.png': b'native image',
         }
         failed = False
+        owned_connection = object()
 
         @contextmanager
-        def stream(*_, port):
+        def stream(*_, port, connection):
             self.assertEqual(port, 2222)
+            self.assertIs(connection, owned_connection)
             with tar_stream(entries) as data:
                 yield data
             if failed:
@@ -219,10 +221,10 @@ class RemarkableSSHTests(unittest.TestCase):
             destination = Path(directory) / 'Journal.rmdoc'
             failed = True
             with self.assertRaisesRegex(OSError, 'SSH did not finish'):
-                remarkable_ssh.export_document('tablet', DOC, destination, port=2222)
+                remarkable_ssh.export_document('tablet', DOC, destination, port=2222, connection=owned_connection)
             self.assertEqual(list(destination.parent.iterdir()), [])
             failed = False
-            remarkable_ssh.export_document('tablet', DOC, destination, port=2222)
+            remarkable_ssh.export_document('tablet', DOC, destination, port=2222, connection=owned_connection)
             with ZipFile(destination) as archive:
                 self.assertEqual({name: archive.read(name) for name in archive.namelist()}, entries)
             with self.assertRaises(FileExistsError):

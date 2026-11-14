@@ -360,7 +360,7 @@ def list_documents(host, cancelled=lambda: False, *, port=DEFAULT_PORT):
 
 
 def export_document(host, identity, destination, *, port=DEFAULT_PORT, expected_revision=None,
-                    report=lambda *_: None, cancelled=lambda: False):
+                    report=lambda *_: None, cancelled=lambda: False, connection=None):
     """Retrieve a complete archive; replacing a local file requires its approved revision."""
     if not UUID.fullmatch(identity):
         raise ValueError('Invalid tablet document ID.')
@@ -375,8 +375,9 @@ if [ ! -f "$identity.metadata" ] || [ ! -f "$identity.content" ]; then
     exit 1
 fi
 exec tar -cf - "$@"'''
+    session = {'connection': connection} if connection is not None else {}
     with stage_local_document_export(destination, expected_revision=expected_revision, cancelled=cancelled) as target:
-        with ssh_stream(host, command, cancelled, port=port) as stream, \
+        with ssh_stream(host, command, cancelled, port=port, **session) as stream, \
                 tarfile.open(fileobj=stream, mode='r|') as source, \
                 ZipFile(target, 'w') as archive:
             names = set()

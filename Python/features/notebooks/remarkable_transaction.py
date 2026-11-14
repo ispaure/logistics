@@ -166,7 +166,13 @@ cat > "$stage/payload.tar"
     inspect = prefix + f'''systemctl show {unit} --property=ActiveState --property=SubState --property=Result || :
 for name in outcome service-state; do
     if [ -f "$stage/$name" ] && [ ! -L "$stage/$name" ]; then
-        printf '%s=' "$name"; head -c 32 "$stage/$name"
+        value=''
+        IFS= read -r value < "$stage/$name" || :
+        case "$name:$value" in
+            outcome:unchanged|outcome:committed|outcome:conflict|service-state:restored)
+                printf '%s=%s\\n' "$name" "$value" ;;
+            *) echo 'Invalid native transaction receipt.' >&2; exit 1 ;;
+        esac
     fi
 done
 if [ ! -e "$root/active" ] && [ ! -L "$root/active" ]; then
