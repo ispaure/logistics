@@ -59,3 +59,18 @@ class SearchPanel(HistoryPanel):
     def query(self):
         return (self.search.text(), self.mode.currentText(),
                 self.from_date.date().toString('yyyy-MM-dd'), self.to_date.date().toString('yyyy-MM-dd'))
+
+
+def build_search(workspace):
+    search_view = qt.QSplitter(qt.Qt.Orientation.Vertical)
+    search_view.addWidget(workspace.search_results)
+    search_bottom = qt.QSplitter(qt.Qt.Orientation.Horizontal)
+    search_bottom.addWidget(workspace.search_results.details)
+    search_preview_host = qt.QWidget()
+    workspace.search_preview_layout = qt.QVBoxLayout(search_preview_host)
+    workspace.search_preview_layout.setContentsMargins(0, 0, 0, 0)
+    search_bottom.addWidget(search_preview_host)
+    search_bottom.setSizes([450, 550])
+    search_view.addWidget(search_bottom)
+    search_view.setSizes([440, 300])
+    workspace.views.addTab(search_view, 'Search')

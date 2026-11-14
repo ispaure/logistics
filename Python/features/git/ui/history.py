@@ -330,3 +330,18 @@ class HistoryPanel(qt.QWidget):
     def _edit(self, item, column):
         entry = item.data(0, qt.Qt.ItemDataRole.UserRole)
         if entry: self.edit_requested.emit(entry.path)
+
+
+def build_history(workspace):
+    history_view = qt.QSplitter(qt.Qt.Orientation.Vertical)
+    history_view.addWidget(workspace.history)
+    workspace.history_bottom = qt.QSplitter(qt.Qt.Orientation.Horizontal)
+    workspace.history_bottom.addWidget(workspace.history.details)
+    workspace.history_preview_host = qt.QWidget()
+    workspace.history_preview_layout = qt.QVBoxLayout(workspace.history_preview_host)
+    workspace.history_preview_layout.setContentsMargins(0, 0, 0, 0)
+    workspace.history_bottom.addWidget(workspace.history_preview_host)
+    workspace.history_bottom.setSizes([450, 550])
+    history_view.addWidget(workspace.history_bottom)
+    history_view.setSizes([440, 300])
+    workspace.views.addTab(history_view, 'History')
