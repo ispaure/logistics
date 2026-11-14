@@ -25,6 +25,8 @@ name = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
 state = pathlib.Path(os.environ['LQA_SERVICE_STATE'])
 if name == 'systemctl':
+    with pathlib.Path(os.environ['LQA_SERVICE_CALLS']).open('a') as calls:
+        calls.write(' '.join(args) + '\n')
     if args[0] == 'is-active':
         print(state.read_text() if args[1] in ('xochitl', 'rm-sync') else 'inactive')
     elif args[0] == 'stop':
@@ -35,6 +37,8 @@ if name == 'systemctl':
         state.write_text('active')
     elif args[0] == 'show':
         print('ActiveState=inactive\nSubState=dead\nResult=success')
+        if '--property=LoadState' in args:
+            print('LoadState=' + ('not-found' if os.environ.get('LQA_UNIT_MISSING') else 'loaded'))
     else:
         sys.exit('Unexpected service command')
 elif name == 'systemd-run':
@@ -92,6 +96,10 @@ class MetadataTransactionTests(unittest.TestCase):
             executable.chmod(0o700)
         self.services = self.root / 'services'
         self.services.write_text('active')
+        self.service_calls = self.root / 'service-calls'
+        self.service_calls.touch()
+        self.boot_id = self.root / 'boot-id'
+        self.boot_id.write_text('33333333-3333-4333-8333-333333333333\n')
         self.before = json.dumps(dict(type='DocumentType', visibleName='Original', parent='', lastModified='1000')).encode()
         folder = json.dumps(dict(type='CollectionType', visibleName='Folder', parent='', lastModified='1000')).encode()
         self.records = {DOC: self.before, FOLDER: folder}
@@ -103,13 +111,15 @@ class MetadataTransactionTests(unittest.TestCase):
         (self.store / 'unselected.metadata').write_bytes(b'private sentinel')
         self.change = plan_metadata_change(self.records, DOC, 'move', destination=FOLDER, modified_ms=1001)
         for patcher in (patch.object(transactions, 'STORE_PATH', str(self.store)),
-                        patch.object(transactions, 'TRANSACTION_ROOT', str(self.transactions))):
+                        patch.object(transactions, 'TRANSACTION_ROOT', str(self.transactions)),
+                        patch.object(transactions, 'BOOT_ID_PATH', str(self.boot_id))):
             patcher.start()
             self.addCleanup(patcher.stop)
         self.transaction = transactions.prepare_metadata_transaction(self.change)
         self.stage = Path(self.transaction.directory)
         self.env = dict(os.environ, PATH=str(self.bin) + os.pathsep + os.environ['PATH'],
-                        LQA_SERVICE_STATE=str(self.services), LQA_TARGET=str(self.target), COPYFILE_DISABLE='1')
+                        LQA_SERVICE_STATE=str(self.services), LQA_SERVICE_CALLS=str(self.service_calls),
+                        LQA_TARGET=str(self.target), COPYFILE_DISABLE='1')
 
     def run_command(self, command, *, payload=None, **environment):
         return subprocess.run(['/bin/sh', '-c', command], cwd=self.store, env=dict(self.env, **environment),
@@ -117,6 +127,7 @@ class MetadataTransactionTests(unittest.TestCase):
 
     def prepare(self):
         self.stage.mkdir(mode=0o700)
+        (self.stage / 'boot-id').write_bytes(self.boot_id.read_bytes())
         with tarfile.open(fileobj=BytesIO(self.transaction.archive)) as archive:
             for member in archive:
                 self.assertTrue(member.isfile())
@@ -144,6 +155,7 @@ class MetadataTransactionTests(unittest.TestCase):
         result = self.run_command(self.transaction.inspect_command)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(b'outcome=committed', result.stdout)
+        self.assertIn(b'boot=same', result.stdout)
         (self.stage / 'outcome').write_text('unexpected receipt\n')
         self.assertNotEqual(self.run_command(self.transaction.inspect_command).returncode, 0)
         (self.stage / 'outcome').write_text('committed\n')
@@ -175,6 +187,52 @@ class MetadataTransactionTests(unittest.TestCase):
         self.assertFalse((self.stage / 'service-state').exists())
         self.assertNotEqual(self.run_command(self.transaction.cleanup_command).returncode, 0)
         self.assertEqual(self.run_command(self.transaction.recovery_command).returncode, 0)
+        self.assertEqual(self.services.read_text(), 'active')
+        self.assertFalse((self.transactions / 'active').exists())
+
+    def test_reboot_or_missing_boot_receipt_refuses_recovery_without_service_actions(self):
+        self.prepare()
+        self.assertEqual(self.run_script('apply.sh').returncode, 0)
+        # A reboot loses the transient unit. An inactive/success response alone
+        # must not authorize restarting the new boot's interface.
+        self.services.write_text('active')
+        self.boot_id.write_text('44444444-4444-4444-8444-444444444444\n')
+        for receipt, diagnostic in ((self.stage / 'boot-id', 'changed'), (None, 'unknown')):
+            with self.subTest(boot=diagnostic):
+                if receipt is None:
+                    (self.stage / 'boot-id').unlink()
+                before = {item.name: item.read_bytes() for item in self.stage.iterdir()}
+                calls = self.service_calls.read_text()
+                self.assertNotEqual(self.run_script('restart.sh').returncode, 0)
+                self.assertNotEqual(self.run_command(self.transaction.recovery_command).returncode, 0)
+                self.assertEqual(self.service_calls.read_text(), calls)
+                self.assertEqual({item.name: item.read_bytes() for item in self.stage.iterdir()}, before)
+                self.assertEqual((self.transactions / 'active').read_text().strip(), self.transaction.token)
+                self.assertEqual(self.target.read_bytes(), self.change.after)
+                self.assertEqual(self.services.read_text(), 'active')
+                result = self.run_command(self.transaction.inspect_command, LQA_UNIT_MISSING='yes')
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(('boot=' + diagnostic).encode(), result.stdout)
+                self.assertIn(b'LoadState=not-found', result.stdout)
+                self.assertIn(b'lease=owned', result.stdout)
+                self.assertNotIn(b'service-state=restored', result.stdout)
+                self.assert_preserved()
+
+    def test_prepared_previous_boot_transaction_cannot_stop_services(self):
+        self.prepare()
+        self.boot_id.write_text('44444444-4444-4444-8444-444444444444\n')
+        self.assertNotEqual(self.run_script('apply.sh').returncode, 0)
+        self.assertEqual(self.service_calls.read_text(), '')
+        self.assertEqual(self.target.read_bytes(), self.before)
+        self.assertEqual(self.services.read_text(), 'active')
+        self.assertFalse((self.transactions / 'active').exists())
+
+    def test_launch_without_readable_boot_id_never_submits_a_job(self):
+        self.boot_id.unlink()
+        result = self.run_command(self.transaction.launch_command, payload=self.transaction.archive)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(self.service_calls.read_text(), '')
+        self.assertEqual(self.target.read_bytes(), self.before)
         self.assertEqual(self.services.read_text(), 'active')
         self.assertFalse((self.transactions / 'active').exists())
 
@@ -218,6 +276,37 @@ class MetadataTransactionTests(unittest.TestCase):
         before = {item.name: item.read_bytes() for item in self.stage.iterdir()}
         self.assertNotEqual(self.run_command(self.transaction.cleanup_command).returncode, 0)
         self.assertEqual({item.name: item.read_bytes() for item in self.stage.iterdir()}, before)
+
+    def test_nonregular_owned_member_blocks_cleanup_without_removing_evidence(self):
+        result = self.run_command(self.transaction.launch_command, payload=self.transaction.archive)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        # A known filename does not prove that it is a transaction-owned file.
+        for name in ('before', 'service-state'):
+            with self.subTest(member=name):
+                member = self.stage / name
+                original = member.read_bytes()
+                member.unlink()
+                os.mkfifo(member)
+                before = {item.name: item.lstat().st_mode for item in self.stage.iterdir()}
+                self.assertNotEqual(self.run_command(self.transaction.cleanup_command).returncode, 0)
+                self.assertEqual({item.name: item.lstat().st_mode for item in self.stage.iterdir()}, before)
+                member.unlink()
+                member.write_bytes(original)
+        self.assertEqual(self.target.read_bytes(), self.change.after)
+        self.assertEqual(self.services.read_text(), 'active')
+
+    def test_outstanding_lease_blocks_cleanup_even_with_completed_receipts(self):
+        result = self.run_command(self.transaction.launch_command, payload=self.transaction.archive)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        lease = self.transactions / 'active'
+        before = {item.name: item.read_bytes() for item in self.stage.iterdir()}
+        for token in (self.transaction.token, 'another transaction'):
+            with self.subTest(owned=token == self.transaction.token):
+                lease.write_text(token + '\n')
+                self.assertNotEqual(self.run_command(self.transaction.cleanup_command).returncode, 0)
+                self.assertEqual({item.name: item.read_bytes() for item in self.stage.iterdir()}, before)
+                self.assertEqual(lease.read_text(), token + '\n')
+                self.assertEqual(self.services.read_text(), 'active')
 
     def test_other_lease_and_repeated_or_incomplete_upload_never_replace_state(self):
         self.prepare()
