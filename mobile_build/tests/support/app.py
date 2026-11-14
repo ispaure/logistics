@@ -24,6 +24,9 @@ def _retire_document_app(app):
             # window designation before closing so every window detaches.
             cleanup.callback(setattr, app, 'main_window', None)
         cleanup.callback(lifecycle(app).abort_startup)
+        primary_editor = getattr(app, 'editor_view', None)
+        if primary_editor is not None:
+            cleanup.callback(primary_editor.dispose)
         # Retire these directly so disposal errors surface as fixture failures.
         owner = getattr(app, 'vault_browser', None)
         if owner is not None:
