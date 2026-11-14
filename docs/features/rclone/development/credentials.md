@@ -8,6 +8,11 @@ configured local credential folder. It never combines the two lists. Imports
 and the displayed import folder use that same selection. Config and session keys
 retain their existing ZIP-basename identity.
 
+In Desktop Settings → rclone → **Credential packages**, edit the package list,
+**Selected Credential Package**, **Loaded remotes** and **Manage credentials…**
+in `ui/credential_panels.py`. The `Credential packages` settings contribution
+still constructs `ui/page.py:RclonePage`, which owns signals and worker lifetime.
+
 Desktop Settings discovers credential packages with a cancellable
 `OperationProgress` worker, including optional-root selection and recursive
 scanning. It retains the previous rows, selection and password until a successful
