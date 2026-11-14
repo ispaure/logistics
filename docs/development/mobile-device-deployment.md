@@ -158,77 +158,64 @@ tests cover refreshing an existing generated project, including repeated runs.
 
 ## Local-only file-sharing verification, 2026-10-15
 
-The signed development update was installed in place on the paired iPhone and
-launched successfully. Its built plist contains both file-sharing keys. A device
-inventory comparison found all 8,678 pre-existing files under the new private
-Application Support root with matching sizes, including 8,617 encrypted files
-totalling 48,372,039,025 bytes. This comparison checked metadata, not content
-hashes. There were no ordinary `LocalFiles` files on this phone before migration;
-nonempty Local migration remains covered by the focused host fixtures.
+The dated migration and file-sharing results are in Git history. Use these
+checks when verifying a new in-place update.
 
-The device's shared Documents directory reported Apple's MobileBackup exclusion
-attribute. A real House Arrest `VendDocuments` session over the existing wireless
-tunnel wrote/read/deleted a temporary file, verified its bytes, and denied access
-to private Application Support storage. The shared directory was empty again
-after cleanup. A physical-device screenshot showed the normal Settings UI.
-This validates the Documents-only service without claiming a manual Finder USB
-interaction. Ignored evidence is retained in `mobile_build/logs/iphone-local-sharing-*`.
+### Verify an in-place iOS update
 
-`deploy` verifies CoreDevice transport immediately before installation.
-`localNetwork` (Xcode 27.1) and `wireless` are accepted; a wired deployment
-requires explicit `--allow-wired`. Installation is an in-place CoreDevice app
-update, followed by launch. There is no uninstall/reset/unpair operation or
-fallback to a different signing identity. `launch` retries an already installed
-app without rebuilding, useful after the first on-device profile trust step.
-Errors stop the workflow and retain diagnostic logs. Local configuration,
-profiles, certificates, payloads, environments, screenshots and device logs
-are excluded from Git; no credentials are written by the helper.
+`deploy` verifies CoreDevice transport before installation. It accepts
+`localNetwork` and `wireless`. Wired deployment requires `--allow-wired`.
+After installation, check that the app launches and existing files remain
+available. Compare relative paths and sizes for inventory checks because iOS
+can relocate the data-container path. Compare hashes when verifying byte equality.
+Use `launch` to retry an already installed app after the first on-device trust step.
 
-Focused unit checks in `mobile_build/tests/tooling/test_device_tools.py` cover identity
-rejection, normal-launcher restoration, physical-device selection and SDK
-paths containing spaces. Actual build/install/launch evidence lives in ignored
-`mobile_build/logs/device-*.log` and `device-deployment.json`; this workflow does not
-claim the full mobile functional test suite passed on the physical device.
+For file sharing, confirm the built plist contains both sharing keys. A House
+Arrest `VendDocuments` check can write, read and delete a disposable file in
+shared Documents and verify that private Application Support stays inaccessible.
+Record that protocol check separately from a manual Finder interaction.
+
+`mobile_build/tests/tooling/test_device_tools.py` covers identity rejection,
+normal-launcher restoration, device selection and SDK paths containing spaces.
+Save build, install and launch evidence in the
+[local artifact locations](validation-artifacts.md#find-an-output).
 
 ## Local verification, 2026-10-13
 
-Xcode 27.1 / SDK 27.1 built and signed version 0.1.5 for an iPhone 15 Pro Max
-running iOS 26.6.2. With USB unplugged, CoreDevice reported `localNetwork`;
-installation and launch succeeded after the initial on-device developer trust
-step. The persistent launcher also completed a subsequent build/install/launch.
-The app process remained running and a device screenshot showed the normal
-Logistics UI. All seven focused deployment/SDK unit checks passed, and the
-bridge's Go tests passed during the workflow.
-
-After the in-place update, all five existing document/preference files remained
-listed by CoreDevice. iOS relocated the data-container path during installation;
-path equality is not used as a data-preservation assertion. This check examined
-file metadata, not document contents, and does not establish byte-for-byte
-data equality. No uninstall, device reset or unpairing was performed.
-
+The dated signed-install results are in Git history. For current checks, use
+[deployment verification](#verify-an-in-place-ios-update).
 
 ## Packaged-startup regression (2026-10-15)
 
-`recent_documents.py` must ship with the application: startup imports it before
-creating the main window. Omitting it from `APP_MODULES` left the physical iPhone
-showing a black screen even though signing, installation and process launch all
-succeeded. Simulator probes that overlay the whole source package do not detect
-an omitted allowlist entry.
+See [diagnose startup after installation](#diagnose-startup-after-installation).
+The dated device result is in Git history.
 
-`mobile_build/tools.py` now rejects app-relative imports absent from the allowlist before
-creating a payload. Packaging tests remove the recent-documents entry to assert
-that this check fails. `mobile_build/tests/tooling/test_packaged_startup.py` stages the actual
-allowlist and starts Home in a separate process with only that payload on its
-application import path, using empty and existing-document storage. This host test
-uses Toga's dummy backend; a successful deploy must still be visually checked on
-the physical device when diagnosing native startup problems.
+### Diagnose startup after installation
 
+A successful build, signature, install and process launch can still leave the
+app without a usable window. Check the device's unified system log for Python
+callback exceptions when `devicectl --console` shows only initialization.
+An empty Workspaces page with default star tabs can indicate failure before the
+navigation adapter installs. Check the startup traceback before changing icons.
 
-The corrected signed build was installed in place over Wi-Fi on the existing
-paired iPhone 15 Pro Max. A physical-device screenshot showed Home and the
-existing unsaved document's Continue card. No app uninstall or data reset was
-performed. The screenshot and deployment logs are retained locally as
-`mobile_build/logs/iphone-startup-check.png` and `iphone-startup-fix-deploy.log`.
+Run the payload and appearance checks from the repository root:
+
+```sh
+python3 dev.py test desktop test_mobile_packaging.py
+python3 dev.py test mobile test_packaged_startup.py
+python3 dev.py test mobile --exact-file mobile_build/tests/workspace/test_appearance.py
+```
+
+`mobile_build/tools.py` validates imports against the mobile allowlist before
+staging. The packaging test checks that omitting `recent_documents.py` is
+rejected. Packaged startup runs with only the staged payload on its application
+import path and checks both empty and existing-document storage.
+
+Appearance fixtures cover UIKit bridge shapes for transparent color properties
+and callable or property-based size getters used by workspace group headings.
+For native diagnosis, verify the window and the affected controls on the
+relevant iOS version. Include saved nested groups when the traceback involves
+group headings.
 
 ## Deployment terminology
 
@@ -239,47 +226,13 @@ identity and app data; do not uninstall to bypass deployment errors.
 
 ## Native appearance startup regression (2026-10-18)
 
-The physical iPhone system log identified a startup failure while constructing
-the editor's transparent Save button: `apple_color('transparent')` called
-`UIColor.clearColor()` even though Rubicon exposes that getter as a color
-property. The resulting `TypeError: 'ObjCInstance' object is not callable`
-aborted startup before the main window existed, leaving a black screen.
-The getter now uses property access. `test_appearance.py` covers painting an
-iOS transparent control with a non-callable native color, alongside the
-packaged-startup check. The dummy backend alone cannot exercise UIKit getters.
-
-Python callback tracebacks may appear in the device's unified system log even
-when `devicectl --console` shows only native Python initialization. Inspect the
-system log when installation and process launch succeed without a usable UI.
-
-The corrected signed build was installed in place on the paired iPhone over
-Wi-Fi. A physical-device screenshot showed Workspaces and the destination bar;
-the local evidence is `mobile_build/logs/iphone-startup-appearance-fixed.png`.
-All 10 focused appearance and packaged-startup tests passed. No uninstall or
-app-data reset was performed.
+See [diagnose startup after installation](#diagnose-startup-after-installation).
+The dated device result is in Git history.
 
 ## Grouped workspace startup regression (2026-10-18)
 
-The physical iPhone log exposed an `AttributeError` in `folder_hub_style.tree_anchor`:
-on its UIKit version, Rubicon exposes `intrinsicContentSize` as a bound method.
-Reading `.width` directly aborted startup while building saved nested workspace
-groups, before installing the native navigation adapter. The partially built
-window showed Toga's default star tab icons and an empty Workspaces page.
-An empty test workspace did not exercise the failing group-heading measurement.
-
-`tree_anchor` now resolves either a callable getter or a size property before
-reading the width. The appearance regression test covers both bridge shapes and
-the long-heading anchor limit. When investigating default stars together with
-missing page content, inspect startup exceptions before changing tab artwork.
-
-The fix was installed in place on the paired iPhone and iPad. Physical iPhone
-screenshots confirmed the normal destination icons and the populated, saved
-Cloud workspace hierarchy. Local evidence is retained at
-`mobile_build/logs/iphone-workspace-startup-fixed-home.png`,
-`iphone-workspaces-restored.png` and `iphone-workspace-startup-failure.log`.
-All 44 appearance, workspace-hub and packaged-startup host checks passed.
-No uninstall or app-data reset was performed; this does not certify every
-feature workflow on the physical devices.
+See [diagnose startup after installation](#diagnose-startup-after-installation).
+The dated device result is in Git history.
 
 ## Wireless Android discovery and recovery
 

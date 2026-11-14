@@ -54,6 +54,13 @@ Independent Android and iOS branches can overlap. Each branch keeps its
 own cleanup and result dependencies, so failure in one branch does not
 block unrelated artifact review or delivery.
 
+For Android device delivery, a new independent Debug plan that captures its own
+source and prepares its own package uses `tmp/build/mobile/android/`. Plans
+with a shared build, a retained source snapshot or mixed signing use the
+existing device-workspace path. Mixed Debug/Beta plans retain a workspace per
+signing group and lock every group's workspace throughout execution. See
+[storage retention](build-manager.md#automatic-storage-retention) for both roots.
+
 Credentials remain protected references or inherited environment variables.
 Profiles and plans never contain private-key/token contents. Changing a credential
 file reference in Settings requires a location outside Git checkouts; existing

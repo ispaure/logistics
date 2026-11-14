@@ -98,6 +98,16 @@ A local dry run reads tracked working-tree files, so it may contain your unstage
 edits. New untracked application files are omitted. CI uses the clean tagged
 checkout. Generated ZIPs belong outside the checkout and are never committed.
 
+### Export a manual source snapshot
+
+From the checkout root on macOS, run `bash PackageSnapshot.command`. The script
+writes a timestamped ZIP beside the launcher. It includes current tracked edits,
+nonignored untracked files and initialized submodule files. Use a clean checkout
+at the intended revision when verifying what the snapshot contains. The script
+checks common secret formats and names the offending file if it stops. Review the
+ZIP's member list before sharing it. This export uses the working checkout's
+files and its ignore rules. The release ZIP above uses its own packaging rules.
+
 ## In-app update channels
 
 Use `v0.1.0-main.01` for main (legacy `v1.0.0` is also recognized), `v1.0.0-beta.1` for beta, or `v1.0.0-alpha.1` for alpha.
