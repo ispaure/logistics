@@ -7,13 +7,44 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 
 HELPERS = r'''window.imageQA = {
+  click(control) {
+    if (!control?.getClientRects().length || control.disabled) {
+      throw Error('Notebook control unavailable: ' + (control?.id || control?.getAttribute('aria-label')));
+    }
+    control.click();
+  },
   captureMode(enabled) {
     if ((mode === 'capture') === enabled) return;
-    if (document.body.classList.contains('notebook-mobile')) window.notebookNativeAction('view');
-    const button=$('capture');
-    if (!button.getClientRects().length) throw Error('Ordinary Capture action is not visible');
-    button.click();
+    if (document.body.classList.contains('notebook-mobile')) {
+      if (enabled) {
+        const select = $('select');
+        if (mode !== 'select') this.click(select);
+        if ($('mobileSheet').hidden || $('mobileSheet').dataset.panel !== 'selection') this.click(select);
+        this.click($('capture'));
+      } else {
+        this.click($('brushToggle'));
+      }
+    } else {
+      this.click($('capture'));
+    }
     if ((mode === 'capture') !== enabled) throw Error('Ordinary Capture action did not change mode');
+  },
+  overlapBrush() {
+    this.captureMode(false);
+    if (document.body.classList.contains('notebook-mobile')) {
+      const splitTools = !$('laptopTools').hidden;
+      const brushPanel = $(splitTools ? 'laptopTools' : 'mobileSheet');
+      if (!splitTools) this.click($('brushToggle'));
+      this.click(brushPanel.querySelector('[data-tool="17"]'));
+      this.click(brushPanel.querySelector('[data-color="0"]'));
+      this.click(brushPanel.querySelector('[data-width="3"]'));
+      if (!splitTools) this.click($('brushToggle'));
+    } else {
+      for (const [id, value] of [['tool', '17'], ['color', '0'], ['width', '3']]) {
+        $(id).value = value;
+        $(id).dispatchEvent(new Event('change'));
+      }
+    }
   },
   event(p, type='touch') {
     const r=canvas.getBoundingClientRect();
@@ -156,6 +187,15 @@ class ImageWorkflow:
         await self.wait("!state.password_required && $('pdfBackground').complete && $('pdfBackground').naturalWidth>0", 'Protected PDF did not render')
         self.cases.append('wrong password, retry, cleared password input, native protected-PDF raster')
 
+    async def decoded_clip(self, message):
+        await self.evaluate(
+            "window.qaClip=null;window.qaClipError=null;imageQA.clipPixels().then("
+            "pixels=>window.qaClip=pixels,error=>window.qaClipError=String(error));true")
+        await self.wait('window.qaClip!==null || window.qaClipError!==null', message)
+        error = await self.js('return window.qaClipError')
+        assert error is None, message + ': ' + str(error)
+        return await self.js('return window.qaClip')
+
     async def verify_capture(self, clip):
         red, green, ink, outside = clip['pixels']
         try:
@@ -181,17 +221,14 @@ class ImageWorkflow:
         await self.evaluate("(()=>{window.imageQAOriginalBackground=$('pdfBackground').src;const c=document.createElement('canvas');c.width=100;c.height=50;const g=c.getContext('2d');g.fillStyle='#e64c26';g.fillRect(0,0,100,50);$('pdfBackground').src=c.toDataURL();return true})()")
         await self.wait("$('pdfBackground').complete && $('pdfBackground').naturalWidth===100", 'Wide background did not decode')
         await self.action("imageQA.captureMode(true);$('newCutout').click();imageQA.gesture([[100,100],[500,100],[500,350],[350,420],[100,420],[100,100]])")
-        await self.evaluate("window.qaClip=null;imageQA.clipPixels().then(p=>window.qaClip=p);true")
-        await self.wait('window.qaClip!==null', 'Wide-background capture did not decode')
-        letterbox=await self.js('return window.qaClip.pixels[0]')
+        wide_clip = await self.decoded_clip('Wide-background capture did not decode')
+        letterbox = wide_clip['pixels'][0]
         assert all(v>245 for v in letterbox[:3]) and letterbox[3]==255, letterbox
         await self.evaluate("$('pdfBackground').src=window.imageQAOriginalBackground;true")
         await self.wait("$('pdfBackground').complete && $('pdfBackground').naturalWidth!==100", 'PDF background restore did not decode')
         self.cases.append('capture preserves displayed background aspect ratio and letterboxing')
         await self.action("imageQA.captureMode(true);$('newCutout').click();imageQA.gesture([[100,100],[500,100],[500,350],[350,420],[100,420],[100,100]])")
-        await self.evaluate("window.qaClip=null;imageQA.clipPixels().then(p=>window.qaClip=p);true")
-        await self.wait('window.qaClip!==null', 'Clipboard PNG did not decode')
-        clip = await self.js('return window.qaClip')
+        clip = await self.decoded_clip('Clipboard PNG did not decode')
         # Pointer coordinates round through each WebView's viewport scale.
         assert abs(clip['width']-400)<=1 and abs(clip['height']-320)<=1, clip
         await self.verify_capture(clip)
@@ -232,7 +269,7 @@ class ImageWorkflow:
         picture = next(picture for picture in ink.images if picture.id == selected)
         # Stroke acknowledgements preserve ink already painted by real input.
         # Sending a bare command skips that painting and cannot prove overlap.
-        await self.action("imageQA.captureMode(false);$('tool').value='17';$('tool').dispatchEvent(new Event('change'));$('color').value='0';$('color').dispatchEvent(new Event('change'));$('width').value='3';$('width').dispatchEvent(new Event('change'))")
+        await self.action("imageQA.overlapBrush()")
         assert await self.js("return mode==='ink' && $('tool').value==='17' && $('color').value==='0' && $('width').value==='3'")
         await self.action('imageQA.gesture('+json.dumps([[center[0]-30,center[1]],[center[0]+30,center[1]]])+",'pen')")
         added = [stroke for stroke in self.editor().notebook.page(0).strokes
