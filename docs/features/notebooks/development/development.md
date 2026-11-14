@@ -49,4 +49,4 @@ Fence pending canvas edits before save, page changes and close. Replacement canv
 
 - Portable tests cover creation, ink, export and recovery. Open checks include Linux/Windows stress latency, the macOS native save picker and current mobile template and command-fence payloads.
 - Use [hardware acceptance](hardware-acceptance.md) for physical Boox/Pencil input and reMarkable editing. The [3.29.1.0 direct-write trial](ssh-transfers.md#evidence-and-exact-device-work-needed) remains halted. The browser stays read-only.
-- Synthetic corpus rehearsal covered inventory, render receipts and width calibration. Personal-corpus acquisition and end-to-end acceptance are pending.
+- [Read-only corpus validation](corpus-validation.md) covers synthetic inventory, editor observations and width calibration. Personal-corpus acquisition and end-to-end acceptance are pending.
