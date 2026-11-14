@@ -135,7 +135,10 @@ class ImageWorkflow:
 
     async def idle(self):
         await self.wait("typeof window.notebookIdle==='function' && window.notebookIdle()", 'Notebook command queue did not drain')
-        await self.wait("!state.images.length || state.images.every(p=>imageCache.get(p.src)?.complete && imageCache.get(p.src)?.naturalWidth)", 'Images did not decode')
+        # Locked pages retain image records but must keep their decoded cache empty.
+        await self.wait("state.password_required ? imageCache.size === 0 : "
+                        "state.images.every(p=>imageCache.get(p.src)?.complete && imageCache.get(p.src)?.naturalWidth)",
+                        'Notebook image cache did not become ready')
 
     async def action(self, code):
         await self.evaluate('(()=>{' + code + ';return true})()')
