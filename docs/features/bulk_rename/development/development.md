@@ -1,117 +1,129 @@
 # Bulk rename integration
 
-[User guide: rules, preview, apply and recovery](../user/user.md).
+Bulk Rename previews and applies filename changes on Qt desktop. See the
+[user guide](../user/user.md) for rules, apply, undo and recovery.
+
+## Try a preview styling change
+
+Open **Bulk Rename** from the desktop navigation rail. Choose a disposable
+folder with one file named `page2.txt`, then enter `New_` in **Add → Prefix**.
+The proposed name becomes `New_page2.txt`, with the new prefix in bold. Use
+the preview to inspect the change before applying it.
+
+To try a different emphasis, switch from bold to underlined text in
+`change_formats` in `Python/desktop/bulk_rename/preview.py`. This function
+supplies Qt text formats to `RenamePreviewDelegate.paint`. Keep the UTF-16
+offset conversion so matches after emoji stay aligned. Update the font
+assertion in `test_preview_bolds_changed_spans_and_prioritizes_filename_columns`
+to check the underline.
+
+Run this from the repository root using the
+[desktop environment](../../../development/getting-started.md).
 
 ```sh
-# From a consuming project's root, with commonUtils under Python/:
-PYTHONPATH=Python python -m desktop.bulk_rename /path/to/folder
-# Or display only explicitly supplied files/folders:
-PYTHONPATH=Python python -m desktop.bulk_rename --paths /path/to/a.jpg /path/to/b.jpg
+python3 dev.py test desktop --exact-file Python/tests/files/test_bulk_rename_ui.py
+```
+
+Expect the synthetic preview to mark the changed character after an emoji and
+show the prefixed name while leaving the original file in place. The test file
+also covers background apply and undo, stale previews, presets, scope and close.
+
+## Main-window hosting
+
+The rail's `bulk_rename` destination is declared in
+`Python/desktop/navigation/catalog.py`. `MainWindow._show_bulk_rename` in
+`Python/desktop/main_window.py` opens the single retained page.
+`Python/desktop/file_browser.py` installs the same tool's
+`bulk_rename_actions` provider for File Browser selections. That provider calls
+`open_bulk_rename(paths=...)`, which forwards to the registered main-window host.
+
+A new browser request replaces the page's candidates and retains rules and
+filters. During scans or previews, the latest request wins. An active apply
+or undo finishes before the replacement selection loads. The host regression
+uses a real main window with a synthetic selection and checks that the same
+page remains active with the new selection, existing rules and filter.
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/files/test_bulk_rename_host.py
 ```
 
 ## Embed or launch from a button
 
-Applications with an existing QApplication can use:
+From the Logistics root with its desktop environment active, these commands
+open a standalone window for a directory or a supplied selection. On Windows,
+set `PYTHONPATH=Python` using the shell's environment syntax before invoking
+the module.
+
+```sh
+PYTHONPATH=Python python -m desktop.bulk_rename /path/to/folder
+PYTHONPATH=Python python -m desktop.bulk_rename --paths /path/to/a.jpg /path/to/b.jpg
+```
+
+Applications with an existing QApplication can open the tool or embed
+`BulkRenameWidget` in their own layout.
 
 ```python
 from desktop.bulk_rename import BulkRenameWidget, open_bulk_rename
 
-window = open_bulk_rename('/path/to/library', parent=application_window)
-selected_window = open_bulk_rename(paths=selected_paths, parent=application_window)
+tool = open_bulk_rename(paths=selected_paths, parent=application_window)
 widget = BulkRenameWidget('/path/to/library', parent=application_window)
 layout.addWidget(widget)
 widget.renamed.connect(lambda receipt: browser.refresh())
 ```
 
-`open_bulk_rename()` reveals the retained main-window page when Logistics is running, or retains a standalone window until it is closed. `widget.preview_ready`
-signals a `RenamePlan`; `widget.renamed` signals a successful `RenameResult` after applying or undoing a batch.
-`selected_paths()`, `load_directory(path)`, `apply()` and `undo()` are available.
-The folder tree retains its filesystem root while revealing the current folder.
-Reveal explicitly fetches unloaded folder contents, including empty folders that
-Qt does not expand, and retries queued row insertion/layout until the selected
-row has stable visible geometry. Already-populated ancestors need not emit a
-fresh load notification. A temporarily missing model index also retains the
-reveal retry, including when a new branch arrives after its parent's load signal.
-Each retry fetches and expands ancestors from the filesystem root down before
-requesting the leaf index, so an unloaded parent cannot stall a missing child.
-Later notifications do not reopen user-collapsed branches.
-The private `_FolderTree` view owns deferred layout correction, independently of
-filesystem scans and rename workers. Queued model sorting and row insertion
-preserve a selection that was visible
-before the model change. The deferred layout correction scrolls without expanding
-branches; a selection already outside the viewport is left alone, preserving
-manual scrolling. Hidden/closed widgets do not apply that correction.
-Scrolling also accounts for the selected folder's indentation: Qt may otherwise
-align the column's left edge after layout and hide a deep folder to the right
-of a narrow sidebar even though its selected row remains vertically visible.
-An embedding host should honor `widget.can_close()` (false while work is running,
-with cancellation requested) and retry closing on `widget.idle` if it initiated
-that close. Do not destroy a running widget or its worker.
+`open_bulk_rename` returns the hosted widget or a retained standalone window.
+Use `standalone=True` to select the latter explicitly. `preview_ready` publishes
+a `RenamePlan`, and `renamed` publishes a successful `RenameResult` after apply
+or undo. The widget exposes `selected_paths()`, `load_directory(path)`,
+`apply()` and `undo()`.
 
-A file-browser action provider can add the tool without changing library defaults:
+A standalone File Browser can opt in with
+`FileBrowser('/path/to/library', action_providers=(bulk_rename_actions,))`,
+importing `FileBrowser` from `commonUtils.ui.file_browser` and
+`bulk_rename_actions` from `desktop.bulk_rename`. The provider limits candidates
+to the selection and refreshes the browser after successful apply or undo.
 
-```python
-from desktop.bulk_rename import bulk_rename_actions
-from commonUtils.ui.file_browser import FileBrowser
-
-browser = FileBrowser('/path/to/library', action_providers=(bulk_rename_actions,))
-```
-
-The provider opens only selected paths and refreshes the browser after a successful
-rename or undo. It is opt-in; existing browsers keep their current actions. When
-a parent is supplied to the standalone window, its normal Close event is deferred
-until any rename worker has cancelled and rolled back safely.
+An embedding host should call `widget.can_close()` before closing. Busy workers
+receive a cancellation request. If close is deferred, retry on `widget.idle`.
+The standalone window also defers a supplied parent's close while the worker
+retires. This lets apply or undo finish rollback before the host is destroyed.
 
 ## Widget composition
 
-`BulkRenameWidget` initializes worker/preview state and timers, then schedules the
-initial candidate load. Its private `_build_folder_controls`, `_build_browser_area`
-and `_build_action_area` methods assemble the existing controls in the same order.
-They remain in the widget owner; there is no extra controller or package layer.
-Folder controls own address/filter construction, the browser area owns tree/table
-and rule panes, and the action area owns progress/preset/apply controls. Scanning,
-preview generations, mutation results and cooperative close stay on the widget.
+Under `Python/desktop/bulk_rename/`, `rules.py` owns rule controls, `widget.py`
+owns scanning, preview and worker state, `preview.py` owns filename rendering,
+and `menus.py` owns the shared window menus. Widget construction separates
+folder controls, browser and rule panes, and footer actions. Rule groups pack
+into up to six vertical stacks while retaining control identities and values.
+The browser/rules splitter starts with more space for rules, and narrow
+windows keep a scroll area.
 
-The action area names rule/preview control construction and preset-menu binding
-separately from footer layout. `_show_plan` keeps generation admission, signal and
-scroll guards, status and preview publication; `_project_plan_rows` only projects
-the admitted plan into retained rows while those guards are held.
+`_show_plan` only admits the current preview generation and owns the signal
+and scroll guards. `_project_plan_rows` updates retained rows under those
+guards. Keep proposed names as plain text when editing their appearance.
+
+The folder tree retains its filesystem root while revealing the current folder.
+Reveal fetches and expands unloaded ancestors root-first, including paths whose
+model rows arrive after their parent's load signal. The retry waits for stable
+visible geometry, including for empty folders. `_FolderTree` handles deferred
+scroll correction for selections that were visible before layout changes,
+including horizontally clipped deep rows. Preserve collapsed branches and
+manual scrolling when adjusting that correction.
 
 ## Shared engine boundary
 
-The Logistics widget imports planning, apply and undo from
-`commonUtils.filesystem.rename` and candidate traversal from
-`commonUtils.filesystem.traversal`. Shared engine APIs and transaction mechanics
-belong in commonUtils' own documentation; see the
-[commonUtils integration boundary](../../../development/commonutils-integration.md).
-Logistics owns rule controls in `rules.py`, worker/UI coordination in `widget.py`,
-preview rendering in `preview.py`, menus in `menus.py`, and host/window lifetime
-in `__init__.py`. There is no local `renameUtils.py` engine.
+The widget calls `commonUtils.filesystem.rename` for planning, applying and
+undoing batches, and `commonUtils.filesystem.traversal` for candidate discovery.
+See the [commonUtils integration boundary](../../../development/commonutils-integration.md)
+for where to change shared APIs. In Logistics, keep the apply action tied to a
+fresh preview and show stale-source or occupied-destination errors to the user.
 
-## Main-window hosting
-
-Logistics keeps one Bulk Rename destination. Browser requests replace its candidate
-selection while retaining rules and filters; they do not create more tabs or windows.
-The latest request wins during scanning/preview; an active rename or undo finishes
-before the new selection loads. Closing Logistics cooperatively stops the worker.
-`open_bulk_rename` uses the registered main-window host when available and otherwise
-opens the standalone window. Pass `standalone=True` to explicitly bypass hosting.
-
-Rule groups use independent vertical stacks, up to six columns selected by the
-available width. Packing uses group size hints; paired numeric fields and
-checkboxes reduce row count. Controls retain their identities and values during
-reflow. The browser/rules splitter initially gives the rules more vertical space;
-narrow windows keep a scroll area. Rename planning/apply behavior is unchanged.
+If an external change blocks rollback, retain and report the current staged
+path and the original path. The [user recovery guide](../user/user.md#applying-cancelling-and-undo)
+explains how to recover the staged file. The undo receipt lasts for the current
+session and covers the last successful batch.
 
 ## Platform and validation scope
 
-This is a Qt desktop integration; it has no Android/iOS registration in
-`Python/services/mobile_features.py`. See [mobile availability](../user_mobile/user_mobile.md).
-
-`Python/tests/files/test_bulk_rename_ui.py` covers rule reflow, preset admission,
-preview generations and cancellation, selected-path scope, apply/undo, stale
-sources, tree reveal and cooperative close. `test_bulk_rename_host.py` covers
-retaining one hosted page and replacing its selection while preserving rules.
-These are test coverage descriptions, not a new GUI acceptance result. This
-documentation audit used source/test review and static checks only; desktop UI
-and filesystem transaction tests were not rerun under the release quiet hold.
+The host and action provider are desktop integrations. See
+[mobile availability](../user_mobile/user_mobile.md) for Android and iOS.

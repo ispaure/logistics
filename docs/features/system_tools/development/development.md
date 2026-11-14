@@ -1,75 +1,70 @@
-# System Tools Feature
+# System Tools development
 
-For workflows, settings and troubleshooting, see the [user guide](../user/user.md).
+System Tools contributes Windows repair and macOS power commands to the desktop
+**Debug** page. See the [user guide](../user/user.md) for operator workflows.
 
-Developer notes. See the [user guide](../user/user.md) for controls and setup,
-and [UI architecture](../../../development/features.md) for shared contribution conventions.
+## Try a clearer repair message
 
-Provides operating-system maintenance actions for Logistics.
+On Windows desktop, find **Repair configured NTFS drive** under **System Tools**
+on the **Debug** page. Its drive comes from the INI editor in the
+**System Tools** feature settings. The Debug button opens a confirmation for a
+real repair. Exercise the command-building change below with the mocked test.
 
-## Responsibilities
+Follow `Python/features/system_tools/ui_contributions.py:get_contributions`
+to the button's callback, `run_repair_ntfs_on_d` in
+`Python/features/system_tools/actions.py`. For example, change the PowerShell
+message from `Repairing E:` to `Running CHKDSK on E:` by editing the string
+that interpolates the normalized drive. Update the corresponding
+`Write-Host` assertion in `test_ntfs_repair_uses_normalized_configured_drive`.
 
-- Run embedded Windows maintenance commands in a separate administrator console.
-- Run macOS lid-sleep configuration commands.
+Run this from the repository root using the
+[desktop environment](../../../development/getting-started.md). The test
+supplies a simulated Windows platform and mocks the launcher, so it also runs
+on macOS and Linux.
 
-## Structure
+```sh
+python3 dev.py test desktop --exact-file Python/tests/application/test_system_tools.py
+```
 
-- `actions.py` contains Windows and macOS maintenance actions.
-
-## Windows Actions
-
-- Repair Windows system files with DISM ScanHealth/RestoreHealth, SFC, and AppX re-registration.
-- Run CHKDSK `/f /r` for the configured drive (default D:).
-
-These actions are available only on Windows. The existing commonUtils PowerShell
-wrapper starts a separate elevated PowerShell console through `Start-Process`
-with `-Verb RunAs`. The command payload is UTF-16LE base64 for `-EncodedCommand`;
-`-NoExit` keeps results and interactive CHKDSK prompts visible. Drive input must
-match one drive letter and colon. Startup waits for UAC/console creation, not for
-repair completion. A denied or failed launch returns False. No batch files or
-temporary scripts are used.
-
-## macOS Actions
-
-- Disable battery-powered lid sleep.
-- Restore battery-powered lid sleep.
-
-These actions launch `sudo pmset` in an authentication-capable terminal. The
-first disable saves battery settings; restore uses those saved values. A launch
-return value reports terminal startup, not successful system modification.
-
-## Safety Notes
-
-System Tools can modify operating-system configuration or run disk repairs.
-
-These actions should only be run deliberately on the intended platform.
+Expect the decoded payload for the input ` e: ` to print
+`Running CHKDSK on E:` and pass `E: /f /r` to CHKDSK. Invalid drive strings
+must still raise before launch.
 
 ## Registration, settings and saved state
 
-`ui_contributions.py` declares destructive Debug actions and a Configuration
-settings contribution for `config.ini`. OS checks disable irrelevant actions;
-`actions.py` also rejects calls on the wrong platform. Windows drive settings
-are trimmed and uppercased before validation; arbitrary paths and command text
-are rejected before launching.
+`Python/features/system_tools/__init__.py:register` loads the settings and
+Debug contributions from `ui_contributions.py`. `DebugPage` in
+`Python/desktop/pages/debug.py` renders the buttons. The shared
+`desktop.actions.execute_action` confirms destructive actions before invoking
+the callback. Contribution enablement follows the OS and the callbacks check
+the OS again. Linux has no enabled repair actions. See
+[mobile availability](../user_mobile/user_mobile.md) for Android and iOS.
 
-On macOS, the first disable reads battery `sleep` from `pmset -g custom` and
-system-wide `SleepDisabled` from `pmset -g`. Both values must be available.
-`battery-power.json`, beside the feature preferences file, is written atomically
-before launching the terminal. Existing backups are reused, and restore leaves
-the backup in place. Thus restore means the first recorded values, not the most
-recent state before each disable. A missing backup or invalid nonnegative integer
-values blocks restore; a desktop Mac without battery settings blocks capture.
-The backup records intended recovery values, not proof that sudo succeeded.
+The feature settings expose `Python/features/system_tools/config.ini`. Windows reads
+`[Windows] ntfs_drive`, defaulting to `D:`, strips surrounding whitespace,
+uppercases it and accepts one ASCII drive letter followed by a colon.
 
-## Platform and validation scope
+On macOS, the first disable reads battery `sleep` from `pmset -g custom`
+and system-wide `SleepDisabled` from `pmset -g`. Both values are required.
+`disable_macos_lid_sleep` writes `battery-power.json` atomically beside the
+feature preferences before launching the terminal. Later disables reuse the
+first backup, and restores leave it in place. The backup records the values
+that restore will apply. Restore requires a backup with both values stored
+as nonnegative integers. When no backup exists, choose sleep behavior in
+macOS System Settings. Capture requires a Mac that reports battery settings.
 
-These are Windows/macOS desktop actions. Linux has no enabled repair actions;
-Android/iOS have no System Tools mobile catalogue entry or UI. See
-[mobile availability](../user_mobile/user_mobile.md).
+## Command launch and validation
 
-`Python/tests/application/test_system_tools.py` checks command payload order,
-encoded elevated launch, normalized/invalid drives, launch failure, wrong-OS
-rejection, battery capture and restore commands using mocks. It does not prove
-successful operating-system repair or power behavior. This documentation audit
-reviewed source/tests and ran static checks only; no repair, terminal, device or
-GUI action was launched under the release quiet hold.
+The Windows system-files action runs DISM ScanHealth, DISM RestoreHealth, SFC
+and AppX re-registration in that order. The NTFS action runs CHKDSK
+`/f /r` on the configured drive. Both use the commonUtils PowerShell wrapper
+and `Start-Process -Verb RunAs`. The launcher passes the UTF-16LE base64 payload
+to `-EncodedCommand` and keeps the console open with `-NoExit` for output and
+interactive prompts. Commands ship in the Python module. A denied or failed
+console startup returns `False`.
+
+The macOS actions open an authentication-capable terminal with `sudo pmset`.
+On both platforms, a successful launch reports startup. Inspect the terminal's
+output to verify repair or configuration changes. The focused tests cover
+command payloads, platform guards, launch failure and backup handling with
+mocks. Actual repair and power behavior require platform validation.
