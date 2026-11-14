@@ -115,7 +115,9 @@ toolbar, including Commit/Pull/Push/Fetch/Branch, remote/folder/terminal actions
 settings. Real toolbar actions remain accessible through Qt's overflow menu in
 narrow or floating panes. Open, Clone, Init and bookmarks are available from the repository tab’s **+** menu. A reference tree
 provides File status, History and Search, hierarchical branches/remotes, tags,
-stashes, configured submodules and saved subtrees. File status uses two separately
+stashes, configured submodules and saved subtrees. For the panel layouts and
+preview hosts, start at `ui/changes.py:build_file_status()`,
+`ui/history.py:build_history()` or `ui/search.py:build_search()`. File status uses two separately
 resizable lists, a shared diff preview and a bottom commit composer. History puts
 the graph above a files/metadata pane and the preview. The same CodeEdit preview
 moves between hosts, keeping a single selection/search implementation. Content uses

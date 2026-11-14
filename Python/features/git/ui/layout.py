@@ -3,9 +3,9 @@ from commonUtils.ui.appearance.typography import point_size
 import sys
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.status_line import StatusFooter
-from .changes import ChangesPanel
-from .history import HistoryPanel
-from .search import SearchPanel
+from .changes import ChangesPanel, build_file_status
+from .history import HistoryPanel, build_history
+from .search import SearchPanel, build_search
 from .preview import Preview
 from .chrome import toolbar_button, WORKSPACE_STYLE
 from .navigation import NavigationTree
@@ -129,45 +129,9 @@ class RepositoryLayout:
         code_font = qt.QFont(self.preview.editor.font())
         code_font.setPointSizeF(max(point_size(6.75), code_font.pointSizeF()))
         self.preview.editor.setFont(code_font)
-        self.change_split = qt.QSplitter(qt.Qt.Orientation.Horizontal)
-        self.change_split.addWidget(self.changes)
-        self.change_preview_host = qt.QWidget()
-        self.change_preview_layout = qt.QVBoxLayout(self.change_preview_host)
-        self.change_preview_layout.setContentsMargins(0, 0, 0, 0)
-        self.change_preview_layout.addWidget(self.preview)
-        self.change_split.addWidget(self.change_preview_host)
-        self.change_split.setSizes([350, 650])
-        change_view = qt.QWidget()
-        change_layout = qt.QVBoxLayout(change_view)
-        change_layout.setContentsMargins(0, 0, 0, 0)
-        change_layout.setSpacing(0)
-        change_layout.addWidget(self.change_split, 1)
-        change_layout.addWidget(self.changes.composer)
-        self.views.addTab(change_view, 'File status')
-        history_view = qt.QSplitter(qt.Qt.Orientation.Vertical)
-        history_view.addWidget(self.history)
-        self.history_bottom = qt.QSplitter(qt.Qt.Orientation.Horizontal)
-        self.history_bottom.addWidget(self.history.details)
-        self.history_preview_host = qt.QWidget()
-        self.history_preview_layout = qt.QVBoxLayout(self.history_preview_host)
-        self.history_preview_layout.setContentsMargins(0, 0, 0, 0)
-        self.history_bottom.addWidget(self.history_preview_host)
-        self.history_bottom.setSizes([450, 550])
-        history_view.addWidget(self.history_bottom)
-        history_view.setSizes([440, 300])
-        self.views.addTab(history_view, 'History')
-        search_view = qt.QSplitter(qt.Qt.Orientation.Vertical)
-        search_view.addWidget(self.search_results)
-        search_bottom = qt.QSplitter(qt.Qt.Orientation.Horizontal)
-        search_bottom.addWidget(self.search_results.details)
-        search_preview_host = qt.QWidget()
-        self.search_preview_layout = qt.QVBoxLayout(search_preview_host)
-        self.search_preview_layout.setContentsMargins(0, 0, 0, 0)
-        search_bottom.addWidget(search_preview_host)
-        search_bottom.setSizes([450, 550])
-        search_view.addWidget(search_bottom)
-        search_view.setSizes([440, 300])
-        self.views.addTab(search_view, 'Search')
+        build_file_status(self)
+        build_history(self)
+        build_search(self)
         self.content.addWidget(self.views)
         self.content.setSizes([192, 1058])
         self.content.setStretchFactor(0, 0)

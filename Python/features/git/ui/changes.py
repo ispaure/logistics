@@ -198,3 +198,21 @@ class ChangesPanel(qt.QWidget):
     def unstage_all(self): self.unstage_requested.emit(self.paths([c for c in self.changes if c.staged]))
     def stage_all(self): self.stage_requested.emit(self.paths([c for c in self.changes if c.unstaged]))
     def discard_selected(self): self.discard_requested.emit(self.selected(False))
+
+
+def build_file_status(workspace):
+    workspace.change_split = qt.QSplitter(qt.Qt.Orientation.Horizontal)
+    workspace.change_split.addWidget(workspace.changes)
+    workspace.change_preview_host = qt.QWidget()
+    workspace.change_preview_layout = qt.QVBoxLayout(workspace.change_preview_host)
+    workspace.change_preview_layout.setContentsMargins(0, 0, 0, 0)
+    workspace.change_preview_layout.addWidget(workspace.preview)
+    workspace.change_split.addWidget(workspace.change_preview_host)
+    workspace.change_split.setSizes([350, 650])
+    change_view = qt.QWidget()
+    change_layout = qt.QVBoxLayout(change_view)
+    change_layout.setContentsMargins(0, 0, 0, 0)
+    change_layout.setSpacing(0)
+    change_layout.addWidget(workspace.change_split, 1)
+    change_layout.addWidget(workspace.changes.composer)
+    workspace.views.addTab(change_view, 'File status')
