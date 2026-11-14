@@ -241,8 +241,12 @@ Use physical hardware for mixed-DPI monitor crossings. See [platform checks](pla
 for hosted deadlines and diagnostics. Manager runs fresh smoke before regression and extended
 phases. Full mobile release plans also run architecture, toolchain, hygiene and lint on captured source.
 [Source releases](../build-release/releasing.md) require all desktop platform and archive
-checks, Android/iOS native acceptance and both embedded runtime gates. Hosted
-[runtime checks](../build-release/mobile-launchers.md#hosted-builds-and-runtime-checks)
+checks, Android/iOS native acceptance and both embedded runtime gates. Each
+managed mobile platform runs fresh smoke for its host suites before their
+regression and extended stages. The platform's native and runtime gates still
+depend on the complete host coverage. iOS and Android host receipts are scoped
+to their respective platforms.
+Hosted [runtime checks](../build-release/mobile-launchers.md#hosted-builds-and-runtime-checks)
 require the pinned interpreter, exact source, complete cases and zero failures/skips.
 Publish commonUtils revisions before Logistics commits that reference them.
 

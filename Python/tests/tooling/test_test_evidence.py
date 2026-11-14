@@ -51,7 +51,11 @@ class InputIdentityTests(unittest.TestCase):
             original = key_for(phase, runtime=runtime)
             mac = replace(phase, environment={'BUILD_MANAGER_TEST_PLATFORM': 'macos', 'BUILD_MANAGER_TEST_WORKERS': '4'})
             ios = replace(mac, environment=dict(mac.environment, BUILD_MANAGER_TEST_PLATFORM='ios', BUILD_MANAGER_RESERVED_TEST_WORKERS='4'))
-            self.assertEqual(key_for(mac, runtime=runtime), key_for(ios, runtime=runtime))
+            android = replace(ios, environment=dict(ios.environment, BUILD_MANAGER_TEST_PLATFORM='android'))
+            self.assertNotEqual(key_for(mac, runtime=runtime), key_for(ios, runtime=runtime))
+            self.assertNotEqual(key_for(ios, runtime=runtime), key_for(android, runtime=runtime))
+            new_reservation = replace(ios, environment=dict(ios.environment, BUILD_MANAGER_RESERVED_TEST_WORKERS='2'))
+            self.assertEqual(key_for(ios, runtime=runtime), key_for(new_reservation, runtime=runtime))
             self.assertNotEqual(key_for(mac, runtime=runtime), key_for(replace(mac,
                 environment=dict(mac.environment, BUILD_MANAGER_TEST_WORKERS='8')), runtime=runtime))
             partitioned = replace(phase, argv=(*phase.argv, '--stage', 'regression', '--stage', 'extended'))
@@ -142,6 +146,62 @@ class InputIdentityTests(unittest.TestCase):
             self.assertNotIn('reused', third['phases'][1])
             self.assertEqual(count.read_text(), 'xx')
 
+    @patch.dict(os.environ, {'LOGISTICS_REUSE_TEST_RESULTS': 'on', 'GITHUB_REF': ''})
+    def test_retained_timing_tracks_fresh_attempt_and_cache_misses(self):
+        import json
+        import sys
+        from build_manager import Executor, Plan
+        from logistics_build.manager_suites import with_reports
+        from logistics_build.test_evidence import with_reuse
+
+        actual = Path(__file__).resolve().parents[3]
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(['git', 'init', '-q', str(root)], check=True)
+            runner = root / 'Python/tests/run_regressions.py'
+            runner.parent.mkdir(parents=True)
+            runner.write_text(
+                'import sys\nfrom pathlib import Path\n'
+                'junit, timing = (Path(sys.argv[sys.argv.index(flag)+1]) for flag in ("--junit", "--report"))\n'
+                'junit.parent.mkdir(parents=True, exist_ok=True)\n'
+                'timing.write_text(\'{"duration_seconds": 12.5}\')\n'
+                'junit.write_text(\'<testsuite><testcase name="passed"/></testsuite>\')\n')
+            source = root / 'Python/commonUtils/tests/test_fixture.py'
+            source.parent.mkdir(parents=True)
+            source.write_text('# TEST_STAGE = TestStage.REGRESSION\n')
+            subprocess.run(['git', '-C', str(root), 'add', 'Python'], check=True)
+            phase = Phase('commonutils', (sys.executable, 'Python/tests/run_regressions.py',
+                          'Python/commonUtils/tests', '--isolate-modules'), str(root), effect='test',
+                          environment={'PYTHONPATH': os.pathsep.join((str(actual), str(actual/'Python')))})
+            draft = Plan('Fixture', 'Retained timing', {}, (phase,), str(root / 'workspace'))
+            executor = Executor(resource_directory=root/'resources', evidence_directory=root/'cache')
+
+            original = with_reuse(with_reports(draft, 'macos'))
+            fresh = executor.run(original, root/'first')['phases'][0]
+            self.assertEqual(fresh['status'], 'passed', fresh)
+            self.assertNotIn('reused', fresh)
+            self.assertEqual([item['kind'] for item in fresh['artifacts']], ['junit', 'json'])
+
+            new_paths = with_reuse(with_reports(draft, 'macos'))
+            reused = executor.run(new_paths, root/'second')['phases'][0]
+            self.assertTrue(reused['reused'])
+            self.assertEqual(reused['seconds'], 0)
+            self.assertEqual(reused['reuse']['original_seconds'], fresh['seconds'])
+            self.assertEqual(reused['reuse']['output'], str((root/'first').resolve()))
+            self.assertEqual(reused['reuse']['started_at'], fresh['started_at'])
+            for artifact, old in zip(reused['artifacts'], fresh['artifacts'], strict=True):
+                self.assertNotEqual(artifact['path'], old['path'])
+                self.assertNotEqual(artifact['original_path'], old['original_path'])
+                self.assertEqual(artifact['sha256'], old['sha256'])
+                self.assertEqual(Path(artifact['path']).read_bytes(), Path(old['path']).read_bytes())
+            original_timing, copied_timing = fresh['artifacts'][1], reused['artifacts'][1]
+            self.assertEqual(json.loads(Path(copied_timing['path']).read_text())['duration_seconds'], 12.5)
+            Path(original_timing['original_path']).unlink()
+            self.assertTrue(Path(copied_timing['path']).is_file())
+            fallback = executor.run(with_reuse(with_reports(draft, 'macos')), root/'third')['phases'][0]
+            self.assertEqual(fallback['status'], 'passed', fallback)
+            self.assertNotIn('reused', fallback)
+
 
 class SnapshotInputIdentityTests(unittest.TestCase):
     def test_materialized_submodule_inputs_are_complete_and_match_active_checkout(self):
@@ -196,6 +256,28 @@ class SnapshotInputIdentityTests(unittest.TestCase):
 
 
 class ReuseSwitchTests(unittest.TestCase):
+    @patch.dict(os.environ, {'LOGISTICS_REUSE_TEST_RESULTS': 'on', 'GITHUB_REF': ''})
+    def test_mobile_smoke_stays_fresh_with_same_tools_as_remaining_stages(self):
+        from build_manager import Plan
+        from logistics_build.test_evidence import with_reuse
+
+        with TemporaryDirectory() as folder:
+            root = Path(folder)
+            settings = {'tools.mobile_python': str(root/'mobile_build/.venv/bin/python'), 'tools.java': 'java'}
+            for platform in ('ios', 'android'):
+                with self.subTest(platform=platform), patch('logistics_build.test_evidence.sys.platform', 'darwin'):
+                    env = {'BUILD_MANAGER_TEST_PLATFORM': platform}
+                    smoke = Phase('commonutils.smoke', ('python', 'test.py'), folder, environment=env)
+                    broad = replace(smoke, id='commonutils', dependencies=(smoke.id,))
+                    plan = Plan('Fixture', 'Validation', {'effective_settings': {'values': settings}},
+                                (smoke, broad), str(root/'workspace'))
+                    with patch('logistics_build.test_evidence.key_for', return_value='a'*64) as key:
+                        checked_smoke, checked_broad = with_reuse(plan).phases
+                    self.assertEqual(key.call_count, 1)
+                    self.assertFalse(checked_smoke.reuse_key)
+                    self.assertEqual(checked_smoke.environment, checked_broad.environment)
+                    self.assertEqual(checked_smoke.environment['JAVA_HOME'], 'java')
+
     def test_off_preserves_all_work_but_removes_keys_and_propagates_guest_policy(self):
         from dataclasses import replace
         from unittest.mock import patch

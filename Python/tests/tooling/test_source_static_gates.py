@@ -53,3 +53,29 @@ class SourceStaticGateTests(unittest.TestCase):
         self.assertEqual(result['status'],'failed');self.assertEqual(rows['source-architecture']['status'],'failed')
         self.assertFalse(host.exists());self.assertFalse(build.exists());self.assertTrue(cleanup.exists())
         self.assertEqual(rows['android-cleanup']['status'],'passed')
+
+    def test_mobile_smoke_failure_blocks_remaining_and_native_gates_for_each_platform(self):
+        for target in ('ios', 'android'):
+            with self.subTest(target=target):
+                environment = {'MARKER': target}
+                command = (sys.executable, 'Python/tests/run_regressions.py', 'suite', '--isolate-modules')
+                smoke = replace(self.host, id='mobile-host.smoke', environment=environment,
+                                argv=(*command, '--profile', 'smoke', '--mode', 'fast'))
+                broad = replace(self.host, argv=command, environment=environment, dependencies=(smoke.id,))
+                native = replace(self.subject, id=target + '-native')
+                cleanup = replace(self.cleanup, id=target + '-cleanup', dependencies=(native.id,))
+                draft = replace(self.plan, phases=(native, cleanup))
+                with patch('build_manager.test_manifest.phases', return_value=(smoke, broad)):
+                    planned = with_host_gates(draft, sys.executable)
+                rows = {phase.id: phase for phase in planned.phases}
+                self.assertEqual(rows[broad.id].argv[-4:], ('--stage', 'regression', '--stage', 'extended'))
+                self.assertIn(smoke.id, rows[broad.id].dependencies)
+                self.assertIn(broad.id, rows[native.id].dependencies)
+                planned = replace(planned, phases=tuple(replace(phase, argv=(sys.executable, '-c',
+                    'raise SystemExit(1)' if phase.id == smoke.id else 'pass')) for phase in planned.phases))
+                result = Executor(resource_directory=self.root/'resources', evidence_directory=self.root/'evidence').run(
+                    planned, self.root/target)
+                statuses = {phase['id']: phase['status'] for phase in result['phases']}
+                self.assertEqual(result['status'], 'failed')
+                self.assertEqual([statuses[name] for name in (smoke.id, broad.id, native.id, cleanup.id)],
+                                 ['failed', 'skipped', 'skipped', 'passed'])

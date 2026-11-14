@@ -85,7 +85,8 @@ def inputs(root, scopes):
 
 def host_environment(phase, source):
     """Use one configured Mac host environment for identical host-only suites."""
-    if phase.id.rsplit('.', 1)[-1] not in HOST_SUITES or sys.platform != 'darwin':
+    suite = phase.id.removesuffix('.smoke').rsplit('.', 1)[-1]
+    if suite not in HOST_SUITES or sys.platform != 'darwin':
         return dict(phase.environment)
     values = source.get('effective_settings', {}).get('values', {})
     mobile_python = values.get('tools.mobile_python')
@@ -144,6 +145,11 @@ def key_for(phase, *, runtime=None):
     environment = {k: normalized(v) for k, v in phase.environment.items()
                    if k not in {'LOGISTICS_MANAGER_PROFILE', 'LOGISTICS_MANAGER_ACCOUNT_DEFAULTS',
                                 'BUILD_MANAGER_TEST_PLATFORM', 'BUILD_MANAGER_RESERVED_TEST_WORKERS'}}
+    # The mobile branches carry distinct tool and worker declarations. Do not
+    # share a receipt between them, even if their normalized environment matches.
+    platform = phase.environment.get('BUILD_MANAGER_TEST_PLATFORM')
+    if platform in {'android', 'ios'}:
+        environment['BUILD_MANAGER_TEST_PLATFORM'] = platform
     for name in ('LOGISTICS_MANAGER_PROFILE', 'LOGISTICS_MANAGER_ACCOUNT_DEFAULTS'):
         if phase.environment.get(name):
             path = Path(phase.environment[name])
@@ -184,6 +190,12 @@ def with_reuse(plan):
             for phase in plan.phases))
     phases = []
     for phase in plan.phases:
+        # Mobile smoke stays fresh, with the same configured tool environment
+        # as the phases whose smoke coverage it supplies.
+        if (phase.id.endswith('.smoke') and phase.kind == 'test'
+                and phase.environment.get('BUILD_MANAGER_TEST_PLATFORM') in {'ios', 'android'}):
+            phases.append(replace(phase, environment=host_environment(phase, plan.source), reuse_key='', reuse_probe=()))
+            continue
         if phase.id.rsplit('.', 1)[-1] not in HOST_SUITES or phase.kind != 'test' or phase.always:
             phases.append(phase)
             continue
