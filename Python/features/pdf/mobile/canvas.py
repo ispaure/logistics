@@ -18,12 +18,14 @@ class PDFCanvas(ImageCanvas):
 class PDFReaderCanvas(toga.Box):
     _external_document_page = True
 
-    def __init__(self, owner, reader):
+    def __init__(self, owner, reader, *, on_artwork_change, private_label):
         from services.documents.mobile_views import document_webview
         from services.documents.storage import DocumentPolicy
         from types import SimpleNamespace
         from commonUtils.ui.native.private_webview import private_webview_supported
         self.owner, self.reader = owner, reader
+        self.on_artwork_change = on_artwork_change
+        self.private_label = private_label
         self.artwork = PDFCanvas()
         self.canvases = [self.artwork]
         self.on_page = owner.swipe_crypt_page
@@ -87,10 +89,7 @@ class PDFReaderCanvas(toga.Box):
         else:
             self.artwork.image = None
         if self.active():
-            from mobile.external_display import sync
-            from mobile.ios_content_background import sync as sync_background
-            sync(self.owner.app)
-            sync_background(self.owner.app)
+            self.on_artwork_change()
 
     def scrolled(self, index, location):
         if self.owner.cloud_busy:
@@ -100,7 +99,7 @@ class PDFReaderCanvas(toga.Box):
         if index != navigation.index:
             self.clear_return()
             navigation.index = index
-            sync_pdf_selection(self.owner, index)
+            sync_pdf_selection(self.owner, index, private_label=self.private_label)
         progress = getattr(self.owner, '_provider_progress', None)
         if progress is not None:
             progress.capture_pdf(index, location)
@@ -160,6 +159,7 @@ class PDFReaderCanvas(toga.Box):
         self.scroll.dispose()
         self.artwork.dispose()
         self.on_page = self.on_toggle = self.owner = self.reader = None
+        self.on_artwork_change = None
 
 
 class PDFTools:
@@ -222,8 +222,7 @@ def sync_pdf_progress(view):
     view.next_page.enabled = navigation.next() is not None
 
 
-def sync_pdf_selection(view, index):
-    from mobile.provider_ui import private_label
+def sync_pdf_selection(view, index, *, private_label):
     view._provider_displayed_index = index
     view.crypt_page.value = view.crypt_reader.labels[index]
     view.crypt_title.text = private_label(f'Page {index + 1} / {len(view.crypt_reader.labels)}')

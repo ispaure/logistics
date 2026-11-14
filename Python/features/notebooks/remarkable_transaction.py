@@ -140,7 +140,8 @@ rm "$root/active"
                'restart.sh': restart.encode(), 'lease-token': (token + '\n').encode(),
                'manifest.json': (json.dumps(manifest, sort_keys=True) + '\n').encode()}
     buffer = BytesIO()
-    with tarfile.open(fileobj=buffer, mode='w', format=tarfile.USTAR_FORMAT) as archive:
+    # This uncompressed archive is built entirely in memory for SSH transport.
+    with tarfile.TarFile(fileobj=buffer, mode='w', format=tarfile.USTAR_FORMAT) as archive:
         for name, data in members.items():
             item = tarfile.TarInfo(name)
             item.size, item.mode = len(data), 0o600

@@ -9,6 +9,7 @@ from types import SimpleNamespace
 def exercise_ios_storage(app):
     from mobile.ios_storage import prepare_for_app
     from services.documents.locations import collection_path, _shared_local_roots
+    from services.documents.mobile_locations import COPIES, ENCRYPTED_COPIES, _enabled
     root = app.private_root / 'ios-storage-probe'
     documents = root / 'Documents'
     (documents / 'LocalFiles').mkdir(parents=True)
@@ -19,14 +20,15 @@ def exercise_ios_storage(app):
     private = paths.config.parent / 'Logistics'
     try:
         assert prepare_for_app(SimpleNamespace(paths=paths)) == private
-        local = documents / 'Local'
+        local = documents / COPIES
         assert collection_path(private) == local
         assert (local / 'native.txt').read_bytes() == b'ordinary native fixture'
         assert not (documents / 'Credentials').exists()
         assert (private / 'Credentials/probe.bin').read_bytes() == b'wrapped native fixture'
         assert prepare_for_app(SimpleNamespace(paths=paths)) == private
-        assert collection_path(private, True) == private / 'LocalCryptFolders'
+        assert collection_path(private, True) == private / ENCRYPTED_COPIES
         assert not (documents / 'native.txt').exists()
         print('LOGISTICS_NATIVE_IOS_STORAGE=private-migration-and-shared-local-verified', flush=True)
     finally:
         _shared_local_roots.pop(private, None)
+        _enabled.discard(private)
