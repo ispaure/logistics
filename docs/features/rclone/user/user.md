@@ -271,15 +271,20 @@ for the comic's ZIP password. On mobile, the file/folder **•••** page also
 with an optional inner ZIP password for archives. File-opening progress and
 failures appear above the browser listing.
 Other formats and content exceeding the direct-reader limits show a dialog asking
-you to manually make a local copy and open it. External applications require an
+you to download a local copy and open it. External applications require an
 explicit local copy. Remote readers cannot save text or metadata back to storage and show no Save,
 Save As or metadata-edit controls.
 
-Desktop remote browsers offer browsing and direct previews. To create an
-offline copy on desktop, use **Pull** from Workspaces and choose the storage type
-when prompted. On mobile, a file or folder's **••• → Download locally…** menu
-also offers a selected-item pull to an ordinary or unlocked LocalCrypt folder;
-see the [mobile workflow](../user_mobile/workflows.md#mobile-folder-navigation).
+On desktop, right-click a file or folder in **Workspaces → Cloud → Files** and
+choose **Download locally…**. Pick a local folder, then keep or change the item
+name. Follow progress or cancel in the **Pull** view in **Workspace actions**.
+In a standalone File Browser, progress can open in its own window.
+The download runs once and requires a new destination name. For a crypt
+remote, confirm that the readable copy will remain accessible after locking.
+Use **Pull** from Workspaces for a managed offline copy.
+On mobile, a file or folder's **••• → Download locally…** menu also supports
+unlocked LocalCrypt destinations.
+See the [mobile workflow](../user_mobile/workflows.md#mobile-folder-navigation).
 Opening a preview alone never creates an offline copy. Session-only credentials do not create a persistent
 remote document; locking or replacing credentials retires its open readers.
 

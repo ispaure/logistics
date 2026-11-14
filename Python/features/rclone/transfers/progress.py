@@ -40,6 +40,9 @@ class RcloneProgressParser:
             record = json.loads(line)
         except ValueError:
             record = {'msg': line}
+        return self.parse_record(record)
+
+    def parse_record(self, record):
         if not isinstance(record, dict):
             return None
         message = str(record.get('msg', ''))

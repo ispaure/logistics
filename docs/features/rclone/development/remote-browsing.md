@@ -8,6 +8,13 @@ Enter through **Workspaces → Cloud** or desktop **File Browser → File → Op
 
 Use isolated child credentials, process-private aliases and null config. Check saved revisions and live grants before/after I/O. Readers keep leases beyond tab closure; revocation retires existing readers. CLI failures expose sanitized recovery or exit status, with revocation taking precedence. Keep remote paths out of local mutations, indexes and external launchers.
 
+**Download locally…** runs `transfers/remote_download.py` under the browser's
+credential grant. It uses rclone `copyto` for files and `copy` for folders,
+including empty directories. The worker stages beside the chosen destination
+and publishes with an exclusive rename after checking cancellation and access.
+The desktop Pull progress view shows rclone transfer statistics and reports
+completion after publication.
+
 ## Mobile listings and connection admission
 
 `mobile/browser_workflow.py` owns captured-location requests; `CloudBrowserPresentation` adapts controls. Restore a failed listing only for the same host, client and credential generation. `mobile/activity.py` owns status and rejects late callbacks. Online rows skip thumbnails; identity checks and native decoding run off the UI thread.
@@ -18,7 +25,7 @@ Loaded and retained packages supply Cloud rows. A matching copy scopes only its 
 
 `remote_readers.py:RemoteReaders` hands off an independent grant. `remote_source.py:RemoteSource` owns revision-bound ranges and remains re-exported by `remote_readers`. EPUB/ZIP uses `remote_cache_open` to fetch a validated RAM snapshot (128 MiB/file, 256 MiB/process); member reads use opaque tokens without further network I/O. Release on failure, close or revocation. Keep plaintext out of temporary files. [Reader lifecycle](../../../development/architecture/document-storage.md#trace-a-mobile-provider-reader)
 
-Remote editors and metadata saves are read-only. Unsupported files offer manual copy. Archive password retry binds the item and generation and clears the field. [Selected mobile downloads](development.md#selected-remote-item-downloads-on-mobile)
+Remote editors and metadata saves are read-only. Unsupported files offer a local copy. Archive password retry binds the item and generation and clears the field. [Selected mobile downloads](development.md#selected-remote-item-downloads-on-mobile)
 
 ## Mobile document history
 

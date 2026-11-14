@@ -6,6 +6,94 @@ shared window/runner retain rendering, process lifetime and workspace hosting.
 from features.rclone import session
 
 
+def open_download_progress(provider, path, destination):
+    """Present a staged download using the same progress view as a Pull."""
+    from threading import Event
+
+    from commonUtils.runtime.operations import OperationCancelled
+    from commonUtils.ui import pyside as qt
+    from commonUtils.ui.tasks.operations import ProgressOperation
+    from commonUtils.ui.tasks.process_host import show_process
+    from commonUtils.ui.tasks.process_progress import ProcessProgressWindow, _windows
+    from commonUtils.ui.tasks.process_runner import ProcessResult
+    from features.rclone.transfers.progress import RcloneProgressParser
+    from features.rclone.transfers.remote_download import download_remote_item
+
+    class DownloadRunner(qt.QObject):
+        output = qt.Signal(str)
+        status = qt.Signal(str, int, str)
+        progress = qt.Signal(object)
+        completed = qt.Signal(object)
+
+        def __init__(self, release):
+            super().__init__()
+            self.release = release
+            self.busy = False
+            self.cancelled = Event()
+            self.parser = RcloneProgressParser()
+            self.worker = ProgressOperation(self)
+            self.worker.thread.finished.connect(self.finish, qt.Qt.ConnectionType.QueuedConnection)
+
+        def start(self):
+            self.busy = True
+            self.worker.callback = self.download
+            self.status.emit('running', 1, 'Preparing download…')
+            self.worker.start()
+
+        def download(self):
+            try:
+                return download_remote_item(provider, path, destination,
+                    cancelled=self.cancelled.is_set, progress=self.report)
+            except OperationCancelled:
+                return None
+            finally:
+                self.release()
+
+        def report(self, stats):
+            update = self.parser.parse_record({'stats': stats})
+            self.progress.emit(update)
+            if not self.cancelled.is_set():
+                self.status.emit(update.state, 1, update.message)
+
+        def cancel(self):
+            if self.busy:
+                self.cancelled.set()
+                self.status.emit('running', 1, 'Cancelling safely…')
+
+        @qt.Slot()
+        def finish(self):
+            self.worker.thread.wait()
+            self.worker.callback = None
+            self.busy = False
+            error = self.worker.error or ''
+            if self.worker.result is not None:
+                result = ProcessResult('succeeded', 0, 1)
+                message = 'Downloaded successfully.'
+            elif error:
+                result = ProcessResult('failed', None, 1, error)
+                self.output.emit(error)
+                message = error
+            else:
+                result = ProcessResult('cancelled', None, 1)
+                message = 'Cancelled.'
+            self.status.emit(result.state, 1, message)
+            self.completed.emit(result)
+
+    release = provider.acquire()
+    try:
+        window = ProcessProgressWindow('Pull · Download locally', runner=DownloadRunner(release),
+            context={'operation': 'Pull', 'source': provider.storage_label, 'destination': str(destination)})
+        # Retain standalone windows and include them in the normal process shutdown.
+        _windows.append(window)
+        window.destroyed.connect(lambda: _windows.remove(window) if window in _windows else None)
+        show_process(window)
+        window.runner.start()
+    except BaseException:
+        release()
+        raise
+    return window
+
+
 def open_transfer_progress(arguments, *, source, destination, dry_run,
                            credential_path, revoked, cancelled, session_bound,
                            environment=None):
