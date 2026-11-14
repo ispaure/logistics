@@ -16,6 +16,9 @@ from commonUtils.testing.waiting import wait_until, wait_for_assertion
 from .settings import ROTATION_SETTLE, IOS_ROTATION_ACK_TIMEOUT, CONTROL_SETTLE_TIMEOUT
 
 
+INVENTORY_LAYOUT_TIMEOUT = 6
+
+
 def panel_state(app):
     destination = app.native_host.state.destination
     body = app.body
@@ -502,9 +505,9 @@ async def settled_rotation_layout(app, acknowledged, diagnostics):
     """Require four consecutive matching native samples within one deadline."""
     required = 4
     started = monotonic()
-    # Android emulator event-loop turns can be delayed under concurrent native
-    # validation. Keep the sample and geometry requirements under a bounded budget.
-    timeout = 6 if sys.platform == 'android' else CONTROL_SETTLE_TIMEOUT
+    # Hosted simulators and emulators can delay layout and event-loop turns.
+    # Keep the same sample and geometry requirements under a bounded budget.
+    timeout = INVENTORY_LAYOUT_TIMEOUT
     deadline = started + timeout
     recent = deque(maxlen=4)
     previous = None
