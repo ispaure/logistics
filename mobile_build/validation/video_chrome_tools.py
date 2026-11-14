@@ -15,12 +15,13 @@ import time
 from uuid import uuid4
 
 from build_manager.apple_simulators import AppleSimulators
+from mobile_build.build_support.video_build import install_remux_headers
 from logistics_build.build_retention import scratch
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def run(framework, output, model, orientation='portrait', hdr=False, resume=0, fold=False, *, movie=None, url=None, duration=30000, unknown_duration=False, pause_transitions=False, pip_controls=False, pip_subtitles=False, embedded_subtitles=False, external_display=False):
+def run(framework, output, model, orientation='portrait', hdr=False, resume=0, fold=False, *, movie=None, url=None, duration=30000, unknown_duration=False, pause_transitions=False, pip_controls=False, pip_subtitles=False, embedded_subtitles=False, external_display=False, airplay_controls=False):
     output.mkdir(parents=True, exist_ok=False)
     client = AppleSimulators()
     device = None
@@ -33,13 +34,15 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
         shutil.copytree(framework, app / 'Frameworks/VLCKit.framework', symlinks=True)
         source = workspace / 'main.m'
         controller = ROOT / 'Python/features/video/mobile/ios/VideoPlayer.m'
-        fixture = ROOT / 'mobile_build/validation/fixtures/video_chrome_checks.m'
+        fixture = ROOT / 'mobile_build/validation/fixtures' / ('video_airplay_checks.m' if airplay_controls else 'video_chrome_checks.m')
         geometry = ('#define LG_VIDEO_FOLD_QA 1\n' +
                     (ROOT / 'mobile_build/validation/fixtures/video_fold_geometry.m').read_text()) if fold else ''
         source.write_text('#import ' + json.dumps(str(controller)) + '\n' + geometry + fixture.read_text())
+        if airplay_controls:
+            install_remux_headers(workspace)
         sdk = subprocess.check_output(['xcrun', '--sdk', 'iphonesimulator', '--show-sdk-path'], text=True).strip()
         command = ['xcrun', 'clang', '-fobjc-arc', '-fmodules', '-fmodules-cache-path=' + str(workspace / 'modules'),
-                   '-I', str(fixture.parent), '-target', 'arm64-apple-ios17.0-simulator', '-isysroot', sdk, '-I', str(ROOT / 'Python/mobile/ios'), '-F', str(framework.parent),
+                   '-I', str(fixture.parent), '-I', str(workspace / 'VideoFFmpeg'), '-target', 'arm64-apple-ios17.0-simulator', '-isysroot', sdk, '-I', str(ROOT / 'Python/mobile/ios'), '-F', str(framework.parent),
                    '-framework', 'UIKit', '-framework', 'AVFoundation', '-framework', 'AVKit', '-framework', 'CoreImage', '-framework', 'CallKit', '-framework', 'VLCKit',
                    '-Wl,-rpath,@executable_path/Frameworks', str(source), '-o', str(app / 'VideoChromeQA')]
         result = subprocess.run(command, text=True, capture_output=True)
@@ -58,8 +61,9 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
         if movie is not None:
             shutil.copyfile(movie, app / 'fixture.mp4')
         else:
+            audio = ['-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-c:a', 'aac'] if airplay_controls else []
             subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
-                            'color=c=0x102040:size=640x360:rate=24' if pip_subtitles else 'testsrc2=size=128x72:rate=12', '-t', '30',
+                            'color=c=0x102040:size=640x360:rate=24' if pip_subtitles else 'testsrc2=size=128x72:rate=12', *audio, '-t', '30',
                             '-threads', '1', *codec, str(app / 'fixture.mp4')], check=True)
         if embedded_subtitles:
             muxed = workspace / 'captioned.mp4'
@@ -67,6 +71,12 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
                 '-i', str(app / 'captions.srt'), '-c:v', 'copy', '-c:s', 'mov_text',
                 '-disposition:s:0', 'default', str(muxed)], check=True)
             shutil.move(muxed, app / 'fixture.mp4')
+        if airplay_controls:
+            subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:size=160x90:rate=24000/1001',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-t', '3', '-c:v', 'libx265',
+                '-preset', 'ultrafast', '-pix_fmt', 'yuv420p10le', '-g', '48', '-bf', '2',
+                '-x265-params', 'pools=1:frame-threads=1:log-level=error:hdr10=1:colorprim=9:transfer=16:colormatrix=9',
+                '-c:a', 'libopus', '-ac', '6', str(app / 'airplay.mkv')], check=True)
         metadata = subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', 'v:0',
             '-show_streams', '-of', 'json', str(app / 'fixture.mp4')], text=True)
         (output / 'fixture.json').write_text(metadata)
@@ -82,7 +92,7 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
             CFBundleShortVersionString='1.0', CFBundlePackageType='APPL', MinimumOSVersion='17.0',
             UIDeviceFamily=[1, 2], UILaunchScreen={},
             UIApplicationSceneManifest=dict(UIApplicationSupportsMultipleScenes=False, UISceneConfigurations={
-                'UIWindowSceneSessionRoleApplication': [dict(UISceneConfigurationName='QA', UISceneDelegateClassName='LGVideoChromeChecks')]}),
+                'UIWindowSceneSessionRoleApplication': [dict(UISceneConfigurationName='QA', UISceneDelegateClassName='LGVideoAirPlayChecks' if airplay_controls else 'LGVideoChromeChecks')]}),
             UISupportedInterfaceOrientations=['UIInterfaceOrientationPortrait', 'UIInterfaceOrientationLandscapeLeft',
                                               'UIInterfaceOrientationLandscapeRight'])))
         subprocess.run(['codesign', '--force', '--deep', '--sign', '-', str(app)], check=True, capture_output=True)
@@ -143,6 +153,7 @@ def main():
     parser.add_argument('--hdr', action='store_true', help='Decode 10-bit BT.2020 PQ HEVC and inspect the native HDR layer.')
     parser.add_argument('--pip-subtitles', action='store_true', help='Exercise composited subtitles, real PiP/background, track-off/on and skip callbacks.')
     parser.add_argument('--pip-controls', action='store_true', help='Check live PiP delegate skips, boundaries and lock; no system PiP window.')
+    parser.add_argument('--airplay-controls', action='store_true', help='Check local mute recovery and simulated receiver loading, seeks and route layout.')
     parser.add_argument('--external-display', action='store_true', help='Exercise the live drawable handoff into a synthetic external viewport.')
     parser.add_argument('--pause-transitions', action='store_true', help='Run native Play/Pause/Resume checks in both HDR modes without chrome timing checks.')
     parser.add_argument('--resume', type=int, default=0, help='Resume milliseconds in the 30-second fixture.')
@@ -151,7 +162,7 @@ def main():
     args = parser.parse_args()
     if args.embedded_subtitles and not args.pip_subtitles:
         parser.error("--embedded-subtitles requires --pip-subtitles")
-    run(args.framework.resolve(), args.output.resolve(), args.model, args.orientation, args.hdr, args.resume, args.fold, pause_transitions=args.pause_transitions, pip_controls=args.pip_controls, pip_subtitles=args.pip_subtitles, embedded_subtitles=args.embedded_subtitles, external_display=args.external_display)
+    run(args.framework.resolve(), args.output.resolve(), args.model, args.orientation, args.hdr, args.resume, args.fold, pause_transitions=args.pause_transitions, pip_controls=args.pip_controls, pip_subtitles=args.pip_subtitles, embedded_subtitles=args.embedded_subtitles, external_display=args.external_display, airplay_controls=args.airplay_controls)
 
 
 if __name__ == '__main__':

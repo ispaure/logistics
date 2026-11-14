@@ -2,27 +2,15 @@
 // control the same playback clock during native AirPlay.
 @implementation LGVideoController (AirPlay)
 - (void)installAirPlayControls {
-    UIStackView *row = [UIStackView new];
-    row.alignment = UIStackViewAlignmentCenter;
-    row.spacing = 4;
-    self.airPlayLabel = [UILabel new];
-    self.airPlayLabel.text = @"AirPlay";
-    self.airPlayLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleFootnote];
-    self.airPlayLabel.adjustsFontForContentSizeCategory = YES;
-    self.airPlayLabel.textColor = UIColor.whiteColor;
-    [row addArrangedSubview:self.airPlayLabel];
     self.airPlayPicker = [[AVRoutePickerView alloc] initWithFrame:CGRectZero];
     self.airPlayPicker.prioritizesVideoDevices = YES;
     self.airPlayPicker.tintColor = UIColor.whiteColor;
     self.airPlayPicker.delegate = self;
     self.airPlayPicker.accessibilityIdentifier = @"video.AirPlay";
-    [self.airPlayPicker.widthAnchor constraintEqualToConstant:44].active = YES;
-    [self.airPlayPicker.heightAnchor constraintEqualToConstant:44].active = YES;
-    [row addArrangedSubview:self.airPlayPicker];
-    UIStackView *centered = [[UIStackView alloc] initWithArrangedSubviews:@[row]];
-    centered.axis = UILayoutConstraintAxisVertical;
-    centered.alignment = UIStackViewAlignmentCenter;
-    [self.controls addArrangedSubview:centered];
+    self.airPlayPicker.accessibilityLabel = @"AirPlay";
+    [self.airPlayPicker.widthAnchor constraintEqualToConstant:48].active = YES;
+    [self.airPlayPicker.heightAnchor constraintEqualToConstant:48].active = YES;
+    [self.transport addArrangedSubview:self.airPlayPicker];
 }
 
 - (BOOL)hasAirPlayAudioRoute {
@@ -59,6 +47,7 @@
 - (void)updateAirPlayRoute {
     if (!self.airPlayAvailable || self.retired || self.casting || self.pipActive) return;
     BOOL external = [self hasAirPlayAudioRoute];
+    if (external) self.localAudioNeedsRefresh = YES;
     if (external && self.playRequested) {
         [self pause];
         self.airPlayResumeLocal = YES;
@@ -158,10 +147,13 @@
     if (self.controlsLocked || ![self allowsAirPlay] || ![self canPlay:NO] ||
         !self.requestPlay || !self.requestPlay() || ![self canPlay:NO]) return;
     self.playRequested = YES;
-    if (!self.airPlayPlayer.externalPlaybackActive)
-        self.airPlayConnectionDeadline = NSProcessInfo.processInfo.systemUptime + 12;
+    if (!self.airPlayPlayer.externalPlaybackActive || self.airPlayPlayer.currentItem.status != AVPlayerItemStatusReadyToPlay)
+        self.airPlayConnectionDeadline = NSProcessInfo.processInfo.systemUptime + 45;
     if (self.ended) [self seekAirPlay:0];
-    else if (self.airPlaySeekTarget < 0) [self playAirPlayAtRequestedRate];
+    // Starting playback initiates the receiver handoff. Waiting for the resume
+    // seek first can deadlock that handoff on large HLS inputs. Pending seeks
+    // keep output muted until AVKit has positioned the receiver.
+    [self playAirPlayAtRequestedRate];
     [self updatePlayButton];
 }
 
@@ -177,15 +169,18 @@
 - (void)submitAirPlaySeek {
     int64_t target = self.airPlaySeekTarget;
     self.airPlaySeekPending = YES;
+    self.airPlaySeekDeadline = NSProcessInfo.processInfo.systemUptime + 20;
     NSUInteger generation = ++self.airPlaySeekGeneration;
     __weak LGVideoController *owner = self;
-    [self.airPlayPlayer seekToTime:CMTimeMake(target, 1000) toleranceBefore:kCMTimeZero
-        toleranceAfter:kCMTimeZero completionHandler:^(BOOL finished) {
+    [self.airPlayPlayer seekToTime:CMTimeMake(target, 1000) toleranceBefore:CMTimeMake(250, 1000)
+        toleranceAfter:CMTimeMake(250, 1000) completionHandler:^(BOOL finished) {
         dispatch_async(dispatch_get_main_queue(), ^{
             if (!owner.airPlayPlayer || owner.airPlaySeekGeneration != generation) return;
             owner.airPlaySeekPending = NO;
+            owner.airPlaySeekDeadline = 0;
             owner.airPlaySeekTarget = -1;
-            if (finished && owner.playRequested && [owner allowsAirPlay] && [owner canPlay:NO])
+            if (!finished) [owner showStatus:@"The TV couldn’t seek to that position. Try the timeline again."];
+            if (owner.playRequested && [owner allowsAirPlay] && [owner canPlay:NO])
                 [owner playAirPlayAtRequestedRate];
         });
     }];
@@ -265,36 +260,40 @@
         return;
     }
     if (player.status == AVPlayerStatusFailed || player.currentItem.status == AVPlayerItemStatusFailed) {
+        NSError *error = player.currentItem.error ?: player.error;
+        NSLog(@"[VideoAirPlay] failed domain=%@ code=%ld", error.domain, (long)error.code);
         [self finishAirPlayWithMessage:@"AirPlay couldn’t play this video."];
+        return;
+    }
+    NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
+    BOOL ready = player.externalPlaybackActive && player.currentItem.status == AVPlayerItemStatusReadyToPlay;
+    if (ready) self.airPlayConnectionDeadline = 0;
+    if ((self.airPlayConnectionDeadline > 0 && now >= self.airPlayConnectionDeadline) ||
+        (self.airPlaySeekPending && self.airPlaySeekDeadline > 0 && now >= self.airPlaySeekDeadline)) {
+        NSLog(@"[VideoAirPlay] timeout item=%ld external=%d seek=%d", (long)player.currentItem.status,
+            player.externalPlaybackActive, self.airPlaySeekPending);
+        [self finishAirPlayWithMessage:@"AirPlay couldn’t finish loading this video."];
         return;
     }
     if (self.airPlaySeekTarget >= 0 && !self.airPlaySeekPending &&
         player.currentItem.status == AVPlayerItemStatusReadyToPlay) [self submitAirPlaySeek];
-    if (player.externalPlaybackActive) {
-        self.airPlayConnectionDeadline = 0;
+    if (ready) {
         if (!self.airPlayWasExternal) {
             self.airPlayWasExternal = YES;
             [self applyAirPlayPlaybackOptions];
             if (self.airPlaySeekTarget < 0 &&
                 llabs([self airPlayTime:player.currentTime] - self.airPlayStartPosition) > 250)
                 [self seekAirPlay:self.airPlayStartPosition];
-            self.airPlayLabel.text = @"Playing on TV";
+            self.airPlayPicker.accessibilityValue = @"Playing on TV";
             [self showStatus:@""];
-        } else if (![self.airPlayLabel.text isEqualToString:@"Playing on TV"]) {
-            self.airPlayLabel.text = @"Playing on TV";
         }
         player.muted = self.airPlaySeekTarget >= 0 || self.resumeMuted;
     } else {
         player.muted = YES;
         if (self.airPlayWasExternal) {
-            self.airPlayLabel.text = @"AirPlay";
+            self.airPlayPicker.accessibilityValue = @"Connecting";
             if (self.airPlayConnectionDeadline <= 0)
                 self.airPlayConnectionDeadline = NSProcessInfo.processInfo.systemUptime + 3;
-        }
-        if (self.airPlayConnectionDeadline > 0 &&
-            NSProcessInfo.processInfo.systemUptime >= self.airPlayConnectionDeadline) {
-            [self finishAirPlayWithMessage:@"AirPlay couldn’t connect to the TV."];
-            return;
         }
     }
     if (self.airPlaySeekTarget < 0) {
@@ -325,6 +324,7 @@
     self.lastPosition = self.startMilliseconds;
     self.airPlaySeekGeneration++;
     self.airPlaySeekPending = NO;
+    self.airPlaySeekDeadline = 0;
     self.airPlayConnectionDeadline = 0;
     [player pause];
     player.muted = YES;
@@ -341,7 +341,8 @@
     if (!keepRoute) player.allowsExternalPlayback = NO;
     [player replaceCurrentItemWithPlayerItem:nil];
     self.airPlayPlayer = nil;
-    self.airPlayLabel.text = @"AirPlay";
+    self.airPlayPicker.accessibilityValue = nil;
+    self.localAudioNeedsRefresh = YES;
     self.airPlayPreparing = NO;
     self.playRequested = NO;
     if (!self.retired) {

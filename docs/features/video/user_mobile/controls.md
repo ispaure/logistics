@@ -81,10 +81,13 @@ to return to classic PiP. Changing this preference leaves active playback intact
 ## Watching on a TV with iPhone or iPad
 
 Turn on **Settings → Video → Native AirPlay video**, then open a local MP4,
-MOV, M4V or MKV. Tap the **AirPlay** picker in the Logistics player and choose
+MOV, M4V or MKV. Tap **AirPlay** beside **Forward 10 seconds** and choose
 your TV. Use the same timeline, play/pause and skip controls while the TV plays.
 To return to the Duo, choose **iPhone** in the same picker. Playback returns
 to the current position when the audio route switches.
+The timeline accepts a new position while the TV loads a movie. If a connection
+or seek cannot finish, the player reports the failure; choose **iPhone** in the
+same picker to continue locally.
 
 Compatible MKVs stream over Wi-Fi. Logistics copies H.264 or H.265 (HEVC)
 video, including HDR metadata, and offers compatible AAC, AC-3, E-AC-3 and

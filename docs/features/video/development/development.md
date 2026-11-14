@@ -114,6 +114,20 @@ failure, the picker stays available. VLC waits for the audio route to return
 before resuming. Revocation disables external playback and detaches the item.
 A window reuses its empty AVPlayer for successive requests.
 
+Playback starts the receiver handoff while a saved-position seek is pending;
+output stays muted until the seek completes. Loading keeps the known-duration
+timeline usable. Connection and seek deadlines prevent an unresponsive receiver
+from retaining the player indefinitely. Local mute is user intent, separate
+from VLC's transient output state; returning from AirPlay flushes queued audio
+at the held position.
+
+`video_chrome_tools --airplay-controls` checks the production controller with
+real VLC audio state and simulated AVPlayer loading, interrupted and stale seek
+completions, explicit Pause and timeout recovery. It also measures the system
+route picker's alignment beside Forward and verifies HDR metadata with the
+pinned iOS remuxer. This disposable simulator check does not establish physical
+receiver compatibility.
+
 An iPad simulator smoke test verified local H.264/AAC and HEVC/AAC playback
 from a saved seek position, pause and teardown, with external playback enabled.
 On physical Apple TV, test H.264/AAC and HEVC/AAC separately. Confirm the
@@ -147,10 +161,13 @@ plain-text WebVTT derived from embedded SubRip or WebVTT and ordinary local
 SRT or WebVTT sidecars. Audio and subtitle menus select the AVPlayer media
 options while on TV and read the current selection when reopened, including
 changes initiated by the receiver. The master declares the output codecs,
-video dimensions and available HDR range, and retains language, forced subtitle,
+video dimensions, frame rate and HDR range, and retains language, forced subtitle,
 SDH and audio-description roles for native receiver menus. Commentary remains
-manually selectable. Host tests cover these declarations and bounded HTTP
-requests; actual Apple TV menu presentation and selection need receiver acceptance.
+manually selectable. A bounded stream-info probe resolves cadence and color
+from the bitstream when the container omits them. HDR variants include both VIDEO-RANGE and
+FRAME-RATE; Apple rejects an incomplete or incorrect HDR declaration.
+Host tests cover these declarations and bounded HTTP requests; actual Apple TV
+menu presentation and selection need receiver acceptance.
 Each fragment starts a fresh
 decoder and encoder, using audio preroll and a shared AAC sample grid so
 fragments can be generated out of order. The HEVC bitstream and color signaling
