@@ -169,8 +169,12 @@ def make_plan(project, platform, targets, context, revision, *, shared=None, ret
                 names = {phase.id: 'signing-' + mode + '.' + phase.id for phase in plan.phases}
                 plans.append(replace(plan, phases=tuple(replace(phase, id=names[phase.id],
                     dependencies=tuple(names[dep] for dep in phase.dependencies)) for phase in plan.phases)))
+            locks = dict.fromkeys(lock for plan in plans for lock in plan.resource_locks)
+            # The executor locks the primary workspace itself. Enclosing
+            # journeys add that lock when they adopt this plan as a branch.
+            locks.update(dict.fromkeys(str(Path(plan.workspace) / 'operation.lock') for plan in plans[1:]))
             return replace(plans[0], phases=tuple(phase for plan in plans for phase in plan.phases),
-                resource_locks=tuple(dict.fromkeys(lock for plan in plans for lock in plan.resource_locks)))
+                resource_locks=tuple(locks))
         signing_mode = next(iter(groups))
         # A saved Debug recipient cannot consume the Beta-signed Firebase APK.
         # Prepare its own development package; never silently replace a key.
