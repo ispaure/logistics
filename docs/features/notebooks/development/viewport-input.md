@@ -4,6 +4,18 @@ The mobile canvas chooses a paper view from the available layout. These choices
 change the displayed region and zoom, without changing the document's page size
 or stored handwriting.
 
+Edit `Python/features/notebooks/assets/viewport.js` for framing, zoom and
+coordinate mapping. Touch and pen share `assets/input.js` and the native
+adapters. From the repository root, use the desktop host for the portable touch
+routing checks. Put Node.js on PATH so both checks execute:
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/notebooks/test_touch_navigation.py
+```
+
+Expect page swipes, PDF link taps and two-finger pinch/pan to keep their own
+routes, with pen and palm guards active.
+
 | Layout | Default view |
 | --- | --- |
 | Narrow phone or closed Duo in portrait | Fit the centered Paper Pro Move width |
@@ -68,18 +80,6 @@ swipes, link taps, cancellation, two-finger pan/pinch and page-creation acknowle
 Mobile dummy-backend tests cover notebook drawer exclusion, button access and
 restoring ordinary Notes Library swipes after returning to Markdown.
 
-On November 4, 2026, the actual Cocoa Qt WebEngine check passed on Logistics
-`71629c9e`, build-manager `ffbc831c` and commonUtils `64f93308`: nine desktop and
-22 mobile assertions, including the document capture listeners at 200% zoom,
-viewport-margin paging, stationary PDF links, no one-finger panning, two-finger
-panning in both axes and the measured right-side page-creation button with an
-explicit click and acknowledgment. Both layouts also passed the real three-second
-Undo expiry. Rendered compositor screenshots were inspected; owned process groups,
-source scratch and private SDK bootstrap were removed. The browser check dispatches
-DOM PointerEvents; it does not certify OS finger delivery, native Notes Library
-pane buttons or physical stylus behavior. Those native boundaries remain separate
-from the passing browser and dummy-backend contracts.
-
 ## Palm rejection
 
 The shared canvas rejects touch drawing, panning and pinching during a pen
@@ -105,25 +105,21 @@ on hardware that does not report it.
 
 ## Validation boundary
 
-The reusable `notebook_viewport_probe.py` exercises measured browser geometry,
-fold transitions, zoom/focal-point preservation, reset controls and page changes.
-On November 4, 2026, its real Qt WebEngine run passed eight phone/tablet/Duo
-layouts, including laptop width fitting and hinge clearance. It also passed
-surrounding-ink and PDF framing, manual Move selection, manual zoom through
-rotation/folding, page-away/back resets and synthetic palm/contact/grace checks.
-The browser result is bound to a captured source inventory. Layout checks wait
-for the actual viewport size and completed resize acknowledgment, rather than
-assuming a fixed number of frames. Each reloaded test canvas gets a fresh bridge
-identity and command sequence, matching the native canvas lifetime.
+Run the geometry check with the desktop environment on macOS or Linux:
 
-Native adapter mock checks cover capability selection and observer retirement;
-shared V8 checks cover proximity/contact/grace state. The changed Android hover
-listener still needs compilation and native event acceptance, and the UIKit
-observer needs a simulator installation/lifecycle check.
-These checks do not certify physical hinge reporting, OS palm classification,
-Pencil hover range, optical latency or stylus behavior on an actual tablet.
-Current test results must be bound to the source and packaged native input code;
-an older Android QA package does not validate a changed `NotebookInput` class.
+```sh
+PYTHONPATH=Python:. .venv/bin/python Python/tests/notebooks/notebook_viewport_probe.py --output test-results/notebook-viewport
+```
+
+Expect the phone, tablet and Duo fixtures to fit the visible paper, keep a
+deliberate zoom through fold changes, and reset the viewport on page changes.
+The probe waits for measured viewport bounds and resize acknowledgement.
+A reloaded canvas gets a fresh bridge identity and command sequence.
+
+The host covers browser geometry and synthetic contact handling. For changes
+to Android hover or UIKit bindings, verify the current compiled input code.
+Use [hardware acceptance](hardware-acceptance.md) for hinge reporting, real
+palm classification, Pencil hover and optical latency.
 
 ## Native iOS Pencil transport
 
