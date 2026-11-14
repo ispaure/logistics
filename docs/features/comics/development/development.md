@@ -14,7 +14,7 @@ For a 100-byte source page, expect 75-byte WebP to win, 76 bytes to retain the o
 
 ## Find the desktop edit point
 
-- `ui_contributions.py` routes activation to the reader, compression to `ui/dialogs.py:CompressCbzDialog`, and folder collections to `ui/library.py`. `[LogisticsComics] libraries` orders immediate child tabs. The catalog stays rooted at the collection.
+- `ui_contributions.py` routes activation to `ui/reader_opening.py:open_reader` (retained Qt windows), compression to `ui/dialogs.py:CompressCbzDialog`, and folder collections to `ui/library.py`. `[LogisticsComics] libraries` orders immediate child tabs. The catalog stays rooted at the collection.
 - `comicinfo.py` and `ui/metadata_editor.py` patch only explicit fields, preserving unknown XML, image bytes and page records. Numbers may include suffixes. Batch preflight enforces 4 MiB ComicInfo, rejects links and atomically replaces each archive. Retry against refreshed baselines. `catalog.py` rebuilds invalid suggestion caches and excludes protected metadata. See the [ComicRack compression policy](compression.md#comicrack-compatibility-rebuilding-page-records).
 - `conversion.py` uses patool's external RAR extractor. Verify the new CBZ before deleting the source. Folder organization copies before deleting and stops on failure.
 

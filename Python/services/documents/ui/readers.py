@@ -31,7 +31,7 @@ def choose_reader_document(parent, kind, *, current=None, open_local=None):
             if controller is None:
                 controller = owner._books_controller = BooksController(owner)
             return controller.open(path)
-        from features.comics.reader import open_reader
+        from features.comics.ui.reader_opening import open_reader
         return open_reader(path)
     return open_reader_choice(choice, parent, kind)
 
@@ -97,7 +97,7 @@ def open_reader_choice(choice, parent, kind, *, password=None):
                 transferred = True
                 opened.append(window)
             else:
-                from features.comics.reader import open_reader
+                from features.comics.ui.reader_opening import open_reader
                 window = open_reader(document)
                 from services.documents.ui.private_views import protect_private_view
                 protect_private_view(window, choice.provider)

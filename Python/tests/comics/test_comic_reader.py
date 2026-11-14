@@ -206,12 +206,15 @@ class ReaderTests(ReaderFixture, QtTestCase):
 
     def test_native_windows_reused_and_changed_archives_show_errors(self):
         from commonUtils.ui import pyside as qt
-        from features.comics import reader
+        from features.comics.ui import reader_opening as reader
         self.app = qt.QApplication.instance() or qt.QApplication([])
         first = reader.open_reader(self.path)
         self.wait_reader(first)
         first.toggle_fullscreen()
         self.assertIs(reader.open_reader(self.path), first)
+        from features.comics.reader import open_reader as legacy_open
+        with self.assertWarnsRegex(FutureWarning, r'features\.comics\.ui\.reader_opening\.open_reader'):
+            self.assertIs(legacy_open(self.path), first)
         self.assertTrue(first.isFullScreen())
         self.assertTrue(first.fullscreen_action.isChecked())
         first.leave_fullscreen()
