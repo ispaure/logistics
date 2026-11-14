@@ -22,12 +22,16 @@ def exercise_ios_storage(app):
         assert prepare_for_app(SimpleNamespace(paths=paths)) == private
         local = documents / COPIES
         assert collection_path(private) == local
-        assert (local / 'native.txt').read_bytes() == b'ordinary native fixture'
+        # Untracked legacy LocalFiles entries become Files documents.
+        assert (documents / 'native.txt').read_bytes() == b'ordinary native fixture'
+        assert not (local / 'native.txt').exists()
         assert not (documents / 'Credentials').exists()
         assert (private / 'Credentials/probe.bin').read_bytes() == b'wrapped native fixture'
         assert prepare_for_app(SimpleNamespace(paths=paths)) == private
         assert collection_path(private, True) == private / ENCRYPTED_COPIES
-        assert not (documents / 'native.txt').exists()
+        assert (documents / 'native.txt').read_bytes() == b'ordinary native fixture'
+        assert not (documents / 'Local').exists()
+        assert not (documents / 'LocalFiles').exists()
         print('LOGISTICS_NATIVE_IOS_STORAGE=private-migration-and-shared-local-verified', flush=True)
     finally:
         _shared_local_roots.pop(private, None)
