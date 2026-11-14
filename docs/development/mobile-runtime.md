@@ -30,6 +30,8 @@ different lifetimes.
 | --- | --- |
 | Startup and application wiring | `app.py`, `composition/assembly.py`, `composition/presentation.py` |
 | Home and Documents presentation | `home.py:HomeScreen`, `documents_hub.py:DocumentsHub`, shared controls in `hub_controls.py`; `hub_ui.py` retains session summaries/reopen/refresh |
+| Mobile Chat settings | [LM mobile ownership](../features/lm/development/development.md#mobile-ownership) maps the settings panel, conversation view and route. |
+| Mobile Books & Comics catalogue | [Books & Comics panel](../features/books/development/development.md#find-the-mobile-books--comics-panel) maps panel controls, inventory and reader routes. |
 | Workspace identities, generations and sessions | `workspace.py`, `window_owners.py`, `window_scenes.py` |
 | Adaptive panes and destination drawers | `workspace_navigation.py`, `adaptive_workspace.py` |
 | Retained destination browser, provider and listing lifetime | `file_drawer.py`; pane placement remains in `workspace_navigation.py` |
@@ -1297,34 +1299,16 @@ discards stale switch references and rebuilds the categories lazily.
 
 ## October 20 ownership cleanup
 
-Books and Comics now own imported/provider format controllers, and Books owns
-mixed library presentation and its portable metadata index. The
-[Notes Library feature](../features/notes_library/development/development.md#mobile-browsing-and-document-lifecycle)
-owns the mobile library browser and active document. The host composes explicit presentation services
-in `composition/presentation.py` and keeps storage/provider discovery, workspace identities,
-credentials and private publication. Reader and private-session compatibility
-accessors delegate format state to its owning controller; prepared view handoff
-uses setters so state cannot bypass these owners.
+Use the [mobile owner map](#owners) for the current host and feature boundaries.
+[Notes Library development](../features/notes_library/development/development.md#mobile-browsing-and-document-lifecycle)
+covers browsing, document retirement and focused validation. The mobile host
+retains storage and provider discovery, workspace identity, credential access
+and private publication. Reader compatibility accessors delegate format state
+to the owning controller.
 
-The feature's `mobile/library_panels.py` owns Files/Calendar and contextual file
-commands; `library_files.py` owns filename-only daily-note discovery and verified,
-provider-backed copy/delete operations. Calendar results stay in memory and are
-cancelled on disposal. Notes drawers opt into the host overlay's modal dimming;
-speech overlays retain their existing default. A cancelled library open advances
-its epoch, restores the retained document and rejects late results. Scroll-position
-retrieval has a 250 ms limit and is skipped while the embedded editor is active;
-opening a Markdown note updates existing tree selection without rebuilding rows.
-Focused host coverage includes calendar duplicates/creation races, read-only
-guards, copy collisions/root containment, opening cancellation and mocked native
-overlay dismissal. This does not establish device performance or native visual
-acceptance for the new calendar and dimming.
-
-Comic folder batch plans/views are owned by a composed feature controller.
-Generic speech, private WebView and image-header mechanisms live in commonUtils;
-voice preferences, media privacy gates and document routing remain here. Native
-payload allowlists include all moved modules and explicitly stage new shared
-modules in local development payloads. See [mobile preparation](mobile-preparation.md)
-for the payload contract.
+Generic speech, private WebView and image-header mechanisms live in commonUtils.
+Logistics owns voice preferences, media privacy gates and document routing. See
+[mobile preparation](mobile-preparation.md) for payload membership.
 
 ## Pinned-folder workflow capabilities
 

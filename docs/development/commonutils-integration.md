@@ -132,95 +132,24 @@ for ownership and canonical paths.
 
 ## Consumer consolidation (October 14, 2026)
 
-Feature preference and Obsidian registry writers use shared atomic byte publication.
-Logistics still owns their serialization, schemas, paths, recovery and error messages.
-Registry writes preserve compact UTF-8 JSON and the trailing newline.
+The consolidation notes are in Git history. Use the current boundaries below
+when changing a shared mechanism or its Logistics caller.
 
-Mobile startup binds its cooperative loop through `commonUtils.ui.native.event_loop`.
-The shared helper owns dispatch context restoration; Logistics owns loop lifetime.
+### Shared mechanisms in Logistics
 
-Native memory/configuration subscriptions use shared `ui.native.memory`. Logistics
-guards active hosts and chooses resource cleanup/theme refresh; subscriptions
-suppress queued callbacks after disposal.
+| Workflow | commonUtils owns | Logistics owns |
+| --- | --- | --- |
+| Preferences and Notes Library registry | Atomic byte publication | Serialization, schema, path, recovery and error reporting |
+| Mobile startup, layout and memory | Event-loop dispatch context, native subscriptions and coalesced layout signals | Loop lifetime, host validity, geometry filtering and resource cleanup |
+| Native document pickers and editors | Scoped document access, menu primitives and Find/Replace | Name, MIME and size policy, import storage, draft/session lifetime and editor menu rebinding |
+| Mobile reading and appearance | Draw acknowledgement, measured progress, WebView HTML loading and reflow, native controls and painting | Loading and publication policy, document identifiers, privacy, format preferences, palette, E Ink and reader routing |
+| Private copies, repeatable pulls and Calibre exports | Content snapshots, hashing and stream helpers | Persisted baseline format, revision validation, export planning and destination validation |
+| Archive metadata and rclone migration | Byte manifests, archive member replacement and directory relocation | Format-specific limits and EPUB member rules, storage locations and migration triggers |
+| Device-protected keys | Native key storage mechanisms | Key identifiers, protected records, ciphertext paths, backup exclusions, and forget/recovery policy |
 
-System document selection and scoped byte access live in shared native documents
-and runtime document-access adapters. `mobile.pickers` retains document
-name validation, text export limits and MIME policy; Logistics owns import storage.
-
-Native menu construction and presentation helpers now use shared `ui.native`
-components. Logistics' action adapters retain editor rebinding, session checks,
-transfer guards and coroutine scheduling. Editor disposal retires its native menu.
-
-Mobile editors bind shared native Find/Replace to explicit editor/container widgets.
-TextEditorView still owns text-change notification, draft retention and session saves.
-
-Mobile browser byte labels use shared `filesystem.format_size` with binary units.
-
-Repeatable pulls and private-copy revisions use shared verified content snapshots.
-Persisted baselines retain relative names and SHA-256 hex; private revisions retain
-their original five-field stat tuple and digest bytes. Calibre hashing uses shared
-streams; its export plan and destination validation remain feature-owned.
-
-Shared archive rebuilding owns byte manifests and member replacement. Logistics'
-metadata service retains comic/EPUB plans, the processing limit and EPUB mimetype
-ordering/storage rules. Native archive shortcuts still avoid decoding whole files.
-
-Legacy rclone migration delegates directory relocation/link rebasing to shared
-filesystem relocation. Application Support locations and migration triggers remain
-in `features.rclone.storage`. Neither repository changes existing stored paths.
-
-Device-key mechanics use shared `runtime.protected_keys`. Logistics supplies its
-existing Android alias/AAD prefixes and iOS Keychain service/labels unchanged;
-protected-key records, backup exclusions, ciphertext paths and forget/recovery
-policy remain local. No key or credential migration is performed.
-
-These extractions preserve the Qt/Toga split and existing user workflows. Mobile
-staging explicitly requires the new shared modules and removes their former
-Logistics implementations. The host still owns scene/workspace composition,
-private-content policy and cloud transfer approval. File-object copying is unchanged.
-
-Native draw acknowledgement now lives in commonUtils. Logistics keeps loading
-panel composition and route/privacy revalidation after the wait.
-
-Keyboard dismissal gestures and Android search-focus handling now use shared
-native utilities. Logistics retains IME editor compression and window ownership.
-
-Read measurement and loop-coalesced progress delivery live in commonUtils.
-Logistics retains task-context selection, loading text, active-document guards
-and the Text Editor-specific provider choice.
-
-Native text-size gestures and in-place WebView reflow live in commonUtils.
-Logistics retains format keys, settings fanout, private-surface validity and errors.
-
-Mobile notebook, Markdown and EPUB panes load their fully inlined HTML through
-`commonUtils.ui.native.inline_html.set_inline_html`. Logistics keeps the original
-document identifiers in link and bridge metadata and owns navigation decisions,
-private-surface policy and document retirement. On iOS, the native content base
-uses a local document scheme instead of a synthetic website origin. This changes
-the load origin without changing the document's routing identifiers or assets.
-
-Page transition and slider painting mechanics live in commonUtils. Logistics
-retains E Ink animation policy, reader value reversal, palette and theme refresh.
-
-Native surface painting, batching, drawable caches, dynamic Apple color providers,
-accessibility names and contrast calculations now use commonUtils. Logistics keeps
-its Slate roles, E Ink decisions, bar placement, icon tinting, refresh registries
-and application-wide backend hooks.
-
-Mobile control icons use the commonUtils native renderer. Logistics retains
-its named artwork, folder artwork inputs, accessibility text, palette selection
-and E Ink tint policy. Shared browser and navigation controls reuse the renderer.
-
-Settings and connection pages use commonUtils measured text, grouped row,
-accessory and retained disclosure primitives. Logistics owns category composition,
-preference validation, connection switches, appearance roles and page reflow.
-
-Reader chrome uses commonUtils retained native bar mounting and centered titles.
-Logistics keeps reader action grouping, window ownership, privacy/fullscreen policy,
-status selection, navigation routing and safe-area integration.
-
-Reader layout wakeups use the commonUtils loop-local coalesced signal. Logistics
-retains native geometry filtering, app ownership and reader-task cancellation.
+See [mobile runtime ownership](mobile-runtime.md#owners) for the application
+adapters and [mobile preparation](mobile-preparation.md) for staging shared
+dependencies. API details live in the pinned commonUtils wiki.
 
 ## Resource and lifetime migration
 
