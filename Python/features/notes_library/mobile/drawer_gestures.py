@@ -1,7 +1,8 @@
-"""Observe article swipes without taking over its native scrolling controls."""
+"""Observe Notes article and drawer swipes alongside native child controls."""
 from weakref import ref
 
 _apple_target = None
+_swipe_class = None
 
 
 def opening_swipes_allowed(owner):
@@ -73,7 +74,7 @@ def install_opening_swipes(owner):
             _apple_target = LogisticsNotesOpeningSwipe
         target = _apple_target.alloc().init()
         target.owner = ref(owner)
-        window = owner.app.main_window._impl.native
+        window = owner.host.window()
         strip = getattr(owner, 'breadcrumb_scroll', None)
         for direction in (1, 2):
             gesture = ObjCClass('UISwipeGestureRecognizer').alloc().initWithTarget(target, action=SEL('swipe:'))
@@ -138,3 +139,72 @@ def clear_opening_swipes(owner):
         else:
             native.setOnTouchListener(getattr(target, 'previous_touch', None))
     owner.opening_gestures.clear()
+
+
+def install_dismiss_swipe(owner, panel):
+    backend = type(panel._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        from rubicon.objc import ObjCClass, ObjCProtocol, SEL, objc_method
+        # An overlay owns its recognizer target; release both on dismissal.
+        global _swipe_class
+        if _swipe_class is None:
+            class LogisticsNotesDrawerSwipe(ObjCClass('NSObject'), protocols=(ObjCProtocol('UIGestureRecognizerDelegate'),)):
+                @objc_method
+                def gestureRecognizer_shouldRecognizeSimultaneouslyWithGestureRecognizer_(self, gesture, other) -> bool:
+                    return True
+
+                @objc_method
+                def swipe_(self, gesture) -> None:
+                    if self.owner is not None:
+                        self.owner.swipe(1 if int(gesture.direction) == 1 else -1)
+            _swipe_class = LogisticsNotesDrawerSwipe
+        target = _swipe_class.alloc().init()
+        target.owner = owner
+        native = owner.overlay.container.native
+        gesture = ObjCClass('UISwipeGestureRecognizer').alloc().initWithTarget(target, action=SEL('swipe:'))
+        gesture.direction = 2 if owner.side == 'files' else 1
+        gesture.delegate = target
+        native.addGestureRecognizer(gesture)
+        owner.gestures.append((native, gesture, target))
+    elif backend.startswith('toga_android.'):
+        from android.view import View
+        from java import dynamic_proxy
+        class Touch(dynamic_proxy(View.OnTouchListener)):
+            start = None
+            def onTouch(self, view, event):
+                action = event.getActionMasked()
+                if action == 0:
+                    self.start = (event.getRawX(), event.getRawY(), event.getEventTime())
+                elif action == 2 and self.start is not None:
+                    x, y, _ = self.start
+                    dx, dy = event.getRawX() - x, event.getRawY() - y
+                    density = view.getContext().getResources().getDisplayMetrics().density
+                    if abs(dy) > 10 * density and abs(dx) < 2 * abs(dy):
+                        self.start = None
+                elif action == 1 and self.start is not None:
+                    x, y, started = self.start
+                    self.start = None
+                    dx, dy = event.getRawX() - x, event.getRawY() - y
+                    density = view.getContext().getResources().getDisplayMetrics().density
+                    if abs(dx) > 60 * density and abs(dx) > 2 * abs(dy) and event.getEventTime() - started < 800:
+                        return owner.swipe(1 if dx > 0 else -1)
+                elif action in (3, 5):
+                    self.start = None
+                return False
+        # PopupWindow observes the complete stream before child controls
+        # consume it. Per-widget listeners miss scrolls and native children.
+        popup = owner.overlay.popup
+        listener = Touch()
+        popup.setTouchInterceptor(listener)
+        owner.gestures.append((popup, None, listener))
+
+
+def clear_dismiss_swipes(owner):
+    for native, gesture, target in owner.gestures:
+        if gesture is not None:
+            native.removeGestureRecognizer(gesture)
+            gesture.delegate = None
+            target.owner = None
+        else:
+            native.setTouchInterceptor(None)
+    owner.gestures.clear()

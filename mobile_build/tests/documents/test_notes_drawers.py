@@ -9,6 +9,7 @@ from threading import Event
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 import unittest
+from features.notes_library.mobile.drawer_gestures import install_dismiss_swipe, clear_dismiss_swipes
 from commonUtils.testing.stages import TestStage
 from commonUtils.runtime.operations import OperationCancelled
 from features.notes_library.notes import NotesLibrary, vault_root
@@ -77,7 +78,7 @@ class NotesDrawerTests(unittest.TestCase):
             owner.reflow(390)
             owner.sidebar.show_sidebar()
             overlay = owner.sidebar.overlay
-            with patch('mobile.notes_motion.slide_out', return_value=.02), patch.object(overlay, 'close') as close:
+            with patch('features.notes_library.mobile.drawer_motion.slide_out', return_value=.02), patch.object(overlay, 'close') as close:
                 owner.sidebar.show_detail()
                 self.assertIsNone(owner.sidebar.overlay)
                 close.assert_not_called()
@@ -87,7 +88,7 @@ class NotesDrawerTests(unittest.TestCase):
                 self.assertEqual(owner.sidebar.retiring, [])
             owner.sidebar.show_links()
             overlay = owner.sidebar.overlay
-            with patch('mobile.notes_motion.slide_out', return_value=10), patch.object(overlay, 'close') as close:
+            with patch('features.notes_library.mobile.drawer_motion.slide_out', return_value=10), patch.object(overlay, 'close') as close:
                 owner.sidebar.show_detail()
                 owner.dispose()
                 close.assert_called_once()
@@ -212,15 +213,15 @@ class NotesDrawerTests(unittest.TestCase):
 
     def test_landscape_fold_aligns_retained_files_and_document_to_crease(self):
         from mobile.fold_layout import Division
-        from mobile.notes_motion import resize_panes
+        from features.notes_library.mobile.drawer_motion import resize_panes
 
         async def exercise():
-            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
-            await owner.open_note('Vault/Home.md')
-            owner.reflow(900)
-            self.assertEqual(owner.tree.style.width, 320)
-            with (patch('mobile.fold_layout.division') as division,
-                  patch('mobile.notes_motion.resize_panes', wraps=resize_panes) as animate):
+            with patch('mobile.fold_layout.division', return_value=None) as division:
+                owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+                await owner.open_note('Vault/Home.md')
+                owner.reflow(900)
+                self.assertEqual(owner.tree.style.width, 320)
+            with patch('features.notes_library.mobile.drawer_motion.resize_panes', wraps=resize_panes) as animate:
                 # A side bar can reduce the allocation below the flat-layout
                 # threshold and offset the crease from the row's midpoint.
                 for x, gap in ((401, 40), (388, 64)):
@@ -359,7 +360,7 @@ class NotesDrawerTests(unittest.TestCase):
         self.run_async(exercise())
 
     def test_ios_window_swipes_defer_to_breadcrumbs_and_web_content(self):
-        from mobile.notes_gestures import install_opening_swipes, clear_opening_swipes
+        from features.notes_library.mobile.drawer_gestures import install_opening_swipes, clear_opening_swipes
         class NSObject:
             def __init_subclass__(cls, **kwargs):
                 super().__init_subclass__()
@@ -391,12 +392,12 @@ class NotesDrawerTests(unittest.TestCase):
         document = SimpleNamespace(window=native.window, hidden=False, pointInside=Mock(return_value=False))
         owner.document_web = SimpleNamespace(parent=object(), _impl=SimpleNamespace(native=document))
         gesture_class, window = Mock(), Mock()
-        owner.app = SimpleNamespace(main_window=SimpleNamespace(_impl=SimpleNamespace(native=window)))
+        owner.host = SimpleNamespace(window=lambda: window)
         modules = {'rubicon.objc': SimpleNamespace(
             ObjCClass=lambda name: NSObject if name == 'NSObject' else
                 gesture_class if name == 'UISwipeGestureRecognizer' else name,
             ObjCProtocol=lambda name: name, SEL=lambda name: name, objc_method=lambda method: method)}
-        with patch.dict('sys.modules', modules), patch('mobile.notes_gestures._apple_target', None):
+        with patch.dict('sys.modules', modules), patch('features.notes_library.mobile.drawer_gestures._apple_target', None):
             install_opening_swipes(owner)
             for _, gesture, delegate in owner.opening_gestures:
                 gesture.requireGestureRecognizerToFail.assert_called_with(strip.panGestureRecognizer)
@@ -418,7 +419,7 @@ class NotesDrawerTests(unittest.TestCase):
         self.assertEqual(window.removeGestureRecognizer.call_count, 2)
 
     def test_android_empty_swipes_chain_and_restore_toga_inner_scroll_listener(self):
-        from mobile.notes_gestures import install_opening_swipes, clear_opening_swipes
+        from features.notes_library.mobile.drawer_gestures import install_opening_swipes, clear_opening_swipes
         vertical, horizontal, previous = Mock(), Mock(), Mock()
         previous.onTouch.return_value = True
         detail = SimpleNamespace(_impl=type('AndroidBox', (), {'__module__': 'toga_android.widgets.box'})())
@@ -441,7 +442,7 @@ class NotesDrawerTests(unittest.TestCase):
         horizontal.setOnTouchListener.assert_called_with(previous)
 
     def test_android_empty_state_observes_scroll_surface_and_releases_it(self):
-        from mobile.notes_gestures import install_opening_swipes, clear_opening_swipes
+        from features.notes_library.mobile.drawer_gestures import install_opening_swipes, clear_opening_swipes
         native = Mock()
         detail = SimpleNamespace(_impl=type('AndroidBox', (), {'__module__': 'toga_android.widgets.box'})())
         owner = type('Owner', (), {})()
@@ -486,7 +487,7 @@ class NotesDrawerTests(unittest.TestCase):
         self.assertEqual(owner.opening_gestures, [])
 
     def test_android_popup_observes_child_touches_and_releases_its_listener(self):
-        from mobile.notes_drawers import NotesDrawers
+        from features.notes_library.mobile.drawers import NotesDrawers
         owner = NotesDrawers.__new__(NotesDrawers)
         owner.gestures = []
         owner.swipe = Mock(return_value=True)
@@ -497,7 +498,7 @@ class NotesDrawerTests(unittest.TestCase):
             'android.view': SimpleNamespace(View=SimpleNamespace(OnTouchListener=object)),
             'java': SimpleNamespace(dynamic_proxy=lambda interface: object),
         }):
-            owner.install_swipe(panel)
+            install_dismiss_swipe(owner, panel)
         listener = popup.setTouchInterceptor.call_args.args[0]
         view = Mock()
         view.getContext().getResources().getDisplayMetrics.return_value.density = 2
@@ -523,12 +524,12 @@ class NotesDrawerTests(unittest.TestCase):
         touch(2, 5, 80, 50)
         self.assertFalse(touch(1, 150, time=100))
         owner.swipe.assert_not_called()
-        owner.clear_gestures()
+        clear_dismiss_swipes(owner)
         popup.setTouchInterceptor.assert_called_with(None)
         self.assertEqual(owner.gestures, [])
 
     def test_android_wrong_direction_preserves_child_touch_and_refresh_preserves_swipe(self):
-        from mobile.notes_drawers import NotesDrawers
+        from features.notes_library.mobile.drawers import NotesDrawers
         owner = NotesDrawers.__new__(NotesDrawers)
         owner.side, owner.gestures = 'files', []
         owner.action_choice = None
@@ -550,7 +551,7 @@ class NotesDrawerTests(unittest.TestCase):
             'android.view': SimpleNamespace(View=SimpleNamespace(OnTouchListener=object)),
             'java': SimpleNamespace(dynamic_proxy=lambda interface: object),
         }):
-            owner.install_swipe(panel)
+            install_dismiss_swipe(owner, panel)
             # A swipe toward the already-open Files drawer must still reach
             # its child control, including the final up event.
             touch(0, 100)
@@ -563,7 +564,7 @@ class NotesDrawerTests(unittest.TestCase):
             self.assertTrue(touch(1, 100, 100))
             owner.show_detail.assert_called_once()
             self.assertEqual(popup.setTouchInterceptor.call_count, 1)
-        owner.clear_gestures()
+        clear_dismiss_swipes(owner)
 
     @unittest.skipUnless(NODE, 'Node required for document touch events')
     def test_document_touch_events_open_from_center_and_preserve_reading_gestures(self):

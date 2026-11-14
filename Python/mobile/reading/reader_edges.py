@@ -192,15 +192,15 @@ def compact_apple_reader(container, *, notebook=None):
         changed = True
     from ..appearance import reserve_navigation
     reserve_navigation(app, view=view)
-    drawers = getattr(view, '_notes_drawers', None)
-    if drawers is not None:
+    extend_bottom = getattr(view, '_reader_bottom_extension', None)
+    if extend_bottom is not None:
         extension = 0
         if edge in (1, 2):
             frame = container.native.convertRect(container.native.bounds, toView=window)
             bottom_gap = (float(window.bounds.size.height - frame.origin.y - frame.size.height)
                           + container.bottom_inset + view.style.margin_bottom)
             extension = max(0, round(bottom_gap))
-        changed = drawers.extend_files_bottom(extension) or changed
+        changed = extend_bottom(extension) or changed
     return changed
 
 

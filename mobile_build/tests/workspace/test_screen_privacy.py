@@ -605,10 +605,11 @@ class ResumeLockTests(unittest.TestCase):
 
     def test_notes_drawers_are_detached_before_password_resume(self):
         import toga
-        from mobile.notes_drawers import NotesDrawers
+        from features.notes_library.mobile.drawers import NotesDrawers
+        from mobile.composition.presentation import notes_drawer_host
         for side in ('files', 'links'):
             with self.subTest(side=side):
-                drawer = NotesDrawers(toga.Box(), toga.Box(), toga.Box(), app=self.app)
+                drawer = NotesDrawers(toga.Box(), toga.Box(), toga.Box(), host=notes_drawer_host(self.app))
                 drawer.show(side)
                 overlay = drawer.overlay
                 self.assertIsNotNone(overlay)
@@ -635,13 +636,14 @@ class ResumeLockTests(unittest.TestCase):
 
     def test_lock_removes_a_panel_already_animating_closed(self):
         import toga
-        from mobile.notes_drawers import NotesDrawers
-        drawer = NotesDrawers(toga.Box(), toga.Box(), toga.Box(), app=self.app)
+        from features.notes_library.mobile.drawers import NotesDrawers
+        from mobile.composition.presentation import notes_drawer_host
+        drawer = NotesDrawers(toga.Box(), toga.Box(), toga.Box(), host=notes_drawer_host(self.app))
         drawer.show_links()
         overlay = drawer.overlay
         popup = Mock()
         overlay.popup = popup
-        with patch('mobile.notes_motion.slide_out', return_value=60):
+        with patch('features.notes_library.mobile.drawer_motion.slide_out', return_value=60):
             drawer.show_detail()
         self.assertEqual(len(drawer.retiring), 1)
         popup.dismiss.assert_not_called()

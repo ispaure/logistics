@@ -38,6 +38,35 @@ python3 dev.py test mobile --exact-file mobile_build/tests/documents/test_notes_
 
 Expect restored panels, guarded publication and retired private access. For native rows, keyboard and return flows, use the Notes Library and `notes-markdown-feedback` probes. [Mobile commands](../../../development/build-release/mobile-launchers.md)
 
+### Files and Links drawers
+
+From **Browse Notes Library** or **Links**, follow `VaultBrowser` to
+`mobile/drawers.py:NotesDrawers`. Files stays beside the document on wide or
+vertically folded layouts. Compact Files and Links use overlays. The feature
+owns those transitions, the pending File actions choice and Back. It cancels
+choices and retires overlays when the library closes.
+
+`drawer_gestures.py` binds UIKit recognizers and Android touch listeners.
+It defers to breadcrumbs, web content and embedded editors where those surfaces
+own the gesture. `notes_swipe.py` handles the Markdown document's own swipe
+admission. `drawer_motion.py` owns drawer animation and respects reduced motion
+and the Android E Ink setting. Disposal detaches opening observers, restores
+any replaced Android listener and finishes pending dismissals.
+
+`Python/mobile/composition/presentation.py:notes_drawer_host` supplies the
+current window, fold division, appearance, scroll clearance and privacy gate.
+The host-created overlay remains registered with screen privacy, which detaches
+private panels before showing the unlock screen.
+
+```sh
+python3 dev.py test mobile test_notes_drawers.py
+python3 dev.py test mobile test_screen_privacy.py
+```
+
+Expect retained Files across fold changes, child scrolling and selection to
+keep their own gestures, and no private overlays while locked. Use the
+`notes-drawers` native probe for rotation and gestures on disposable devices.
+
 ## Data views and playlists
 
 `dataview.py` discovers top-level fences and brokers bounded read-only requests. `dataview_script.py` implements an independent API subset in a disposable worker without network or writes. Trust defaults on. Generated content stays outside source/save baselines. Navigation retires workers. `test_text_editor_dataview.py` checks Chromium execution and source preservation. [Supported script surface](../user/user.md#json-data-views-in-notes-library)

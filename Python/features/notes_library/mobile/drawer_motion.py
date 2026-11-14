@@ -1,5 +1,22 @@
 """Native motion for Notes drawers and the persistent Files pane."""
 
+from types import SimpleNamespace
+
+
+def slide_in(overlay, direction, *, eink):
+    backend = type(overlay.panel._impl).__module__
+    if eink or not backend.startswith(('toga_iOS.', 'toga_android.')):
+        return
+    from commonUtils.ui.native.transitions import begin_page_slide, finish_page_slide
+    # Animate the overlay container so the whole drawer moves as one panel.
+    native = (overlay.container.native if overlay.container is not None
+              and hasattr(overlay.container, 'native') else overlay.panel._impl.native)
+    impl = type('DrawerImpl', (), {'__module__': backend})()
+    impl.native = native
+    proxy = SimpleNamespace(_impl=impl)
+    begin_page_slide(proxy, direction)
+    finish_page_slide(proxy, direction)
+
 
 def resize_panes(view, apply):
     impl = view._impl
@@ -24,10 +41,10 @@ def resize_panes(view, apply):
     apply()
 
 
-def slide_out(overlay, direction, app):
+def slide_out(overlay, direction, *, eink):
     if overlay.container is None and overlay.popup is None:
         return 0
-    if app.preferences.values.get('android_eink') == 'true':
+    if eink:
         return 0
     backend = type(overlay.panel._impl).__module__
     duration = .22
