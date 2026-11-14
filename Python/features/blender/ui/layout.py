@@ -2,7 +2,8 @@
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.typography import point_size, setting_size
 from commonUtils.ui.appearance.status_line import StatusLine
-from features.blender.addons import bluehole
+
+from .addon_panels import build_addon_selection, build_installed_files
 
 
 def build_layout(page):
@@ -22,7 +23,7 @@ def build_layout(page):
     layout.addWidget(page.stack, 1)
     manage_layout = _build_configuration_pages(page, settings_mode, title, description)
     controls = _build_configuration_controls(page, settings_mode, manage_layout)
-    _build_addon_selection(page, controls, manage_layout)
+    build_addon_selection(page, controls, manage_layout)
     page.add_configuration.clicked.connect(page._add_configuration)
     page.setStyleSheet("""
         QPushButton#launchCard { background: palette(base); border: 1px solid palette(mid); border-radius: 10px; }
@@ -35,14 +36,7 @@ def build_layout(page):
     page.status.setTextFormat(qt.Qt.TextFormat.PlainText)
     page.status.setWordWrap(True)
     layout.addWidget(page.status)
-    page.table = qt.QTableWidget(0, 6)
-    page.table.setHorizontalHeaderLabels(['Addon', 'Version', 'Type', 'Enabled', 'Source', 'Location'])
-    page.table.setSelectionBehavior(qt.QAbstractItemView.SelectionBehavior.SelectRows)
-    page.table.setSelectionMode(qt.QAbstractItemView.SelectionMode.SingleSelection)
-    page.table.setEditTriggers(qt.QAbstractItemView.EditTrigger.NoEditTriggers)
-    page.table.horizontalHeader().setStretchLastSection(True)
-    page.table.setSortingEnabled(True)
-    page.tabs.addTab(page.table, 'Installed files')
+    build_installed_files(page)
     layout.addWidget(page.task)
 
 
@@ -173,66 +167,3 @@ def _build_configuration_controls(page, settings_mode, manage_layout):
     controls.addLayout(primary)
     manage_layout.addWidget(page.controls)
     return controls
-
-
-def _build_addon_selection(page, controls, manage_layout):
-    page.choices = qt.QTableWidget(0, 7)
-    page.choices.setHorizontalHeaderLabels(['Load', 'Addon', 'Installed', 'Latest compatible', 'Status', 'Library', 'Type'])
-    page.choices.setEditTriggers(qt.QAbstractItemView.EditTrigger.NoEditTriggers)
-    page.choices.horizontalHeader().setStretchLastSection(False)
-    for column in range(page.choices.columnCount()):
-        page.choices.horizontalHeader().setSectionResizeMode(column, qt.QHeaderView.ResizeMode.Stretch if column == 1 else qt.QHeaderView.ResizeMode.ResizeToContents)
-    page.apply_button = qt.QPushButton('Save Addon Selection')
-    page.apply_button.clicked.connect(page._apply_addons)
-    page.tabs = qt.QTabWidget()
-    selection_page = qt.QWidget()
-    selection_layout = qt.QVBoxLayout(selection_page)
-    note = qt.QLabel('Choose addons from the library for this preset. Installed shows the current files. Latest compatible and Type show what the next launch will apply.')
-    note.setWordWrap(True)
-    selection_layout.addWidget(note)
-    page.catalog_warning = qt.QLabel()
-    page.catalog_warning.setTextFormat(qt.Qt.TextFormat.PlainText)
-    page.catalog_warning.setWordWrap(True)
-    page.catalog_warning.hide()
-    selection_layout.addWidget(page.catalog_warning)
-    page.bluehole_group = qt.QGroupBox('Blue Hole')
-    bluehole_form = qt.QFormLayout(page.bluehole_group)
-    page.bluehole_enabled = qt.QCheckBox('Enable Blue Hole')
-    page.bluehole_source = qt.QComboBox()
-    page.bluehole_source.addItems(['GitHub', 'Local'])
-    page.bluehole_source.setAccessibleName('Blue Hole source')
-    page.bluehole_checkout = qt.QLineEdit()
-    page.bluehole_checkout.setAccessibleName('Blue Hole checkout folder')
-    page.bluehole_checkout.setToolTip('Link this preset to the selected checkout, including uncommitted changes.')
-    browse = qt.QPushButton('Browse…')
-    browse.clicked.connect(page._browse_bluehole_checkout)
-    page.bluehole_checkout_row = qt.QWidget()
-    checkout_layout = qt.QHBoxLayout(page.bluehole_checkout_row)
-    checkout_layout.setContentsMargins(0, 0, 0, 0)
-    checkout_layout.addWidget(page.bluehole_checkout, 1)
-    checkout_layout.addWidget(browse)
-    page.bluehole_branch = qt.QComboBox()
-    page.bluehole_branch.addItems(bluehole.BRANCHES)
-    page.bluehole_branch.setAccessibleName('Blue Hole branch')
-    page.bluehole_deluxe = qt.QComboBox()
-    page.bluehole_deluxe.addItems(['No', 'Yes'])
-    page.bluehole_deluxe.setAccessibleName('Blue Hole Deluxe')
-    bluehole_form.addRow(page.bluehole_enabled)
-    bluehole_form.addRow('Source', page.bluehole_source)
-    bluehole_form.addRow('Branch', page.bluehole_branch)
-    bluehole_form.addRow('Checkout', page.bluehole_checkout_row)
-    bluehole_form.addRow('Deluxe', page.bluehole_deluxe)
-    page.bluehole_form = bluehole_form
-    page.bluehole_source.currentTextChanged.connect(page._show_bluehole_source)
-    page._show_bluehole_source()
-    page.bluehole_installed = qt.QLabel('Not installed')
-    page.bluehole_installed.setTextInteractionFlags(qt.Qt.TextInteractionFlag.TextSelectableByMouse)
-    bluehole_form.addRow('Currently installed', page.bluehole_installed)
-    page.bluehole_deluxe_note = qt.QLabel()
-    page.bluehole_deluxe_note.setWordWrap(True)
-    bluehole_form.addRow(page.bluehole_deluxe_note)
-    controls.insertWidget(1, page.bluehole_group)
-    selection_layout.addWidget(page.choices)
-    selection_layout.addWidget(page.apply_button, 0, qt.Qt.AlignmentFlag.AlignLeft)
-    page.tabs.addTab(selection_page, 'Addons')
-    manage_layout.addWidget(page.tabs, 1)
