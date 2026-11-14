@@ -178,7 +178,8 @@ subprocess.run(['uv','venv','--python',json.loads(sys.argv[2])['python'],'--seed
         reports = workspace + '/reports'
         if args.pattern:
             from logistics_build.guest_manager import focused_command
-            command = focused_command(guest_python, args.pattern, workspace + '/manager')
+            command = focused_command(guest_python, args.pattern, workspace + '/manager',
+                                      output=reports + '/worker-pilot')
             phases = (Phase('environment', (guest_python, 'Python/tests/run_platform_checks.py', '--install', '--prepare-only', '--results-dir', reports),
                             workspace + '/source', timeout=600, environment=env, kind='setup'),
                       Phase('focused', command,

@@ -8,10 +8,12 @@ import subprocess
 import sys
 
 
-def focused_command(python, pattern, manager):
+def focused_command(python, pattern, manager, *, output=None):
     """Route explicit diagnostic patterns; complete platform gates stay unchanged."""
     if pattern == 'portable-worker-pilot':
-        return (python, 'Python/tests/platform/worker_pilot.py', '--output', '../reports/worker-pilot')
+        if output is None:
+            raise ValueError('The worker pilot requires a guest-owned report path.')
+        return (python, 'Python/tests/platform/worker_pilot.py', '--output', str(output))
     if pattern.startswith('notebooks:'):
         selected = pattern.removeprefix('notebooks:')
         if not selected or not selected.endswith('.py') or any(value in selected for value in ('/', '\\', '..')):
