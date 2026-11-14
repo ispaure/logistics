@@ -165,6 +165,18 @@ class RotationLayoutReadinessTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(await self.settle(), 1)
         self.assertEqual(self.sleep.await_count, 6)
 
+    async def test_android_slow_event_loop_still_requires_four_stable_samples(self):
+        async def delayed_turn(delay):
+            await self.advance(1.25)
+
+        self.sleep.side_effect = delayed_turn
+        with patch.object(rotation_checks.sys, 'platform', 'android'), \
+                patch.object(rotation_checks, 'assert_visible_controls', return_value=4) as controls, \
+                patch.object(rotation_checks, 'safe_geometry', return_value={'view_width': 402}):
+            self.assertEqual(await self.settle(), 4)
+        self.assertEqual(controls.call_count, 4)
+        self.assertEqual(self.elapsed, 3.75)
+
     async def test_one_lost_acknowledgement_restarts_stability(self):
         self.acknowledged.side_effect = [True] * 3 + [False] + [True] * 4
         with patch.object(rotation_checks, 'assert_visible_controls', return_value=4) as controls, \

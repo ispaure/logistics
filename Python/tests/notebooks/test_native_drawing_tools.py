@@ -23,8 +23,12 @@ class CanvasHeaderTests(unittest.TestCase):
     def test_canvas_filename_controls_and_library_panels_at_phone_duo_tablet_sizes(self):
         root = Path(__file__).resolve().parents[3]
         output = root / 'test-results/notebook-canvas-header'
-        result = subprocess.run([sys.executable, '-u', str(Path(__file__).with_name('notebook_mobile_ui_probe.py')),
-                                 '--header-only', '--output', str(output)], capture_output=True, text=True,
-                                timeout=180, env=dict(os.environ, QT_QPA_PLATFORM='offscreen',
-                                    QTWEBENGINE_CHROMIUM_FLAGS='--disable-gpu', QT_QUICK_BACKEND='software'))
+        args = [sys.executable, '-u', str(Path(__file__).with_name('notebook_mobile_ui_probe.py')),
+                '--header-only', '--output', str(output)]
+        env = dict(os.environ, QT_QPA_PLATFORM='offscreen',
+                   QTWEBENGINE_CHROMIUM_FLAGS='--disable-gpu', QT_QUICK_BACKEND='software')
+        if sys.platform == 'linux' and (display := shutil.which('xvfb-run')):
+            args = [display, '-a', '--server-args=-screen 0 1440x1000x24', *args]
+            env.update(QT_QPA_PLATFORM='xcb', QT_OPENGL='software')
+        result = subprocess.run(args, capture_output=True, text=True, timeout=120, env=env)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
