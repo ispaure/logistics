@@ -11,9 +11,9 @@ def output_root(source_root):
     return Path(value).resolve() if value else Path(source_root)
 
 
-def prepare_workspace(source_root):
+def prepare_workspace(source_root, *, workspace=None):
     source_root = Path(source_root)
-    workspace = output_root(source_root)
+    workspace = output_root(source_root) if workspace is None else Path(workspace)
     workspace.mkdir(parents=True, exist_ok=True)
     if workspace != source_root:
         shutil.copyfile(source_root / 'pyproject.toml', workspace / 'pyproject.toml')

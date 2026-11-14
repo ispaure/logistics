@@ -270,19 +270,77 @@ class ManagerAdapterTests(unittest.TestCase):
         project = LogisticsProject(Path(__file__).resolve().parents[3])
         values = manager_settings.defaults(project.mobile)
         source = dict(dirty=True, commonUtils_dirty=True, fingerprint='fixture')
+        legacy_snapshot = project.private / 'snapshots/legacy'
         with patch('logistics_build.build_project.sys.platform', 'darwin'):
-            plan = project.mobile_plan('Build', 'ios', source, project.root,
+            plan = project.mobile_plan('Build', 'ios', source, legacy_snapshot,
                                        project.private / 'fixture-ios', values, {}, '', '', False)
         self.assertEqual([phase.id for phase in plan.phases], ['ios-build'])
         self.assertEqual(plan.effect, 'build')
         self.assertEqual(plan.source, source)
         self.assertIn('logistics_build.ios_backend', plan.phases[0].argv)
         self.assertIn('build', plan.phases[0].argv)
+        self.assertNotIn('--workspace', plan.phases[0].argv)
         self.assertTrue(plan.phases[0].artifacts)
         with patch('logistics_build.build_project.sys.platform', 'linux'):
             with self.assertRaisesRegex(ValueError, 'macOS'):
                 project.mobile_plan('Build', 'ios', source, project.root,
                                     project.private, values, {}, '', '', False)
+
+    def test_standalone_ios_build_owns_workspace_and_preserves_legacy_cli(self):
+        from build_manager import Plan
+        from build_manager.locking import workspace_lock
+        from logistics_build import ios_backend
+        from logistics_build.build_retention import delete_storage
+        from logistics_build.ios_simulator_workspace import build_paths
+        import sys
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            project = LogisticsProject(root)
+            project.private = root / 'mobile_build/.tools/build-manager'
+            snapshot = project.private / 'snapshots' / ('a' * 64)
+            marker = snapshot / 'logistics_build/ios_simulator_workspace.py'
+            marker.parent.mkdir(parents=True)
+            marker.touch()
+            source = dict(dirty=True, fingerprint=snapshot.name)
+            options = {'tools.mobile_python': sys.executable, 'tools.xcode': ''}
+            with patch('logistics_build.build_project.sys.platform', 'darwin'):
+                plan = project.mobile_plan('Build', 'ios', source, snapshot,
+                                           project.private / 'workspaces/ios', options, {}, '', '', False)
+            workspace = Path(plan.workspace)
+            self.assertEqual(workspace.parent, root / 'tmp/build/mobile/ios')
+            result = workspace / 'build.json'
+            saved = root / 'plan.json'
+            plan.save(saved)
+            replay = Plan.load(saved)
+            self.assertEqual(replay.identity, plan.identity)
+            phase = replay.phases[0]
+            self.assertEqual(phase.argv[-2:], ('--workspace', str(workspace)))
+            self.assertEqual(Path(phase.cwd), snapshot)
+            for path in build_paths(snapshot, workspace, result):
+                self.assertTrue(path.is_relative_to(workspace))
+            with patch.object(ios_backend, 'build') as build, patch.object(ios_backend.signal, 'signal'):
+                with patch.object(sys, 'argv', ['ios_backend', *phase.argv[3:]]):
+                    ios_backend.main()
+                build.assert_called_once_with(snapshot, result, workspace=workspace)
+                build.reset_mock()
+                with patch.object(sys, 'argv', ['ios_backend', 'build', '--root', str(snapshot),
+                                               '--result', str(result)]):
+                    ios_backend.main()
+                build.assert_called_once_with(snapshot, result)
+            with self.assertRaisesRegex(ValueError, 'paths do not match'):
+                build_paths(snapshot, workspace, root / 'escaped.json')
+            (workspace / 'build').symlink_to(snapshot, target_is_directory=True)
+            with self.assertRaisesRegex(ValueError, 'linked workspace'):
+                build_paths(snapshot, workspace, result)
+            (workspace / 'build').unlink()
+            selection = {'Device workspaces / ios / tmp': [workspace.name]}
+            with patch('logistics_build.xcode_storage.storage_group', return_value={
+                    'root': root / 'unused', 'eligible': lambda _: False}):
+                with workspace_lock(workspace / 'operation.lock'):
+                    self.assertFalse(delete_storage(root, selection)['removed'])
+                self.assertEqual(delete_storage(root, selection)['removed'], [str(workspace)])
+            self.assertTrue(snapshot.is_dir())
 
     def test_ios_sequence_has_one_build_strict_families_and_owned_cleanup(self):
         project = LogisticsProject(Path(__file__).resolve().parents[3])

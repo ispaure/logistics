@@ -689,10 +689,11 @@ def verify_prebuilt_android(*, local=False):
                 raise ValueError('Cached Android APK is not the matching native test application.')
 
 
-def verify_prebuilt_ios(*, local=False):
+def verify_prebuilt_ios(*, local=False, workspace=Path('.'), app=None):
     """Fail instead of silently rebuilding a missing or mismatched shared app."""
-    project = Path('build/logisticsmobile/ios/xcode')
-    app = project / 'build/Debug-iphonesimulator/Logistics Mobile.app'
+    project = workspace / 'build/logisticsmobile/ios/xcode'
+    if app is None:
+        app = project / 'build/Debug-iphonesimulator/Logistics Mobile.app'
     if not (project / 'briefcase.toml').is_file() or not (app / 'Logistics Mobile').is_file():
         raise ValueError('Shared iOS test application or Briefcase metadata is missing.')
     with (app / 'Info.plist').open('rb') as stream:
@@ -700,7 +701,7 @@ def verify_prebuilt_ios(*, local=False):
     if info.get('MainModule') != 'tests.logisticsmobile':
         raise ValueError('Shared iOS application was not built in test mode.')
     source = json.loads((app / 'app/mobile/source.json').read_text())
-    expected = json.loads(Path('payload/source.json').read_text())
+    expected = json.loads((workspace / 'payload/source.json').read_text())
     root = subprocess.check_output(['git', '-C', str(REPO), 'rev-parse', 'HEAD'], text=True).strip()
     shared = subprocess.check_output(['git', '-C', str(REPO / 'Python/commonUtils'), 'rev-parse', 'HEAD'], text=True).strip()
     if (source != expected or (not local and source.get('dirty') is not False)

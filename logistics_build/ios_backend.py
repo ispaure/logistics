@@ -31,11 +31,15 @@ def bundle_digest(root):
 
 
 
-def build(root, result):
+def build(root, result, *, workspace=None):
     from mobile_build.validation import ui_tools
     mobile = root / 'mobile_build'
     app = mobile / 'build/logisticsmobile/ios/xcode/build/Debug-iphonesimulator/Logistics Mobile.app'
     cache = mobile / 'build/manager-ios-cache.json'
+    if workspace is not None:
+        from logistics_build.ios_simulator_workspace import build_paths, compile_app
+        project, derived, app = build_paths(root, workspace, result)
+        cache = workspace / 'build/manager-ios-cache.json'
     source = json.loads((root / '.manager-source.json').read_text())['source']
     toolchain = dict(xcode=subprocess.check_output(['xcodebuild', '-version'], text=True).strip(),
                      sdk=subprocess.check_output(['xcrun', '--sdk', 'iphonesimulator', '--show-sdk-build-version'], text=True).strip(),
@@ -47,15 +51,20 @@ def build(root, result):
         saved = json.loads(cache.read_text())
         if saved['key'] == key and app.is_dir() and saved['bundle_sha256'] == bundle_digest(app):
             reused = True
-    if not reused:
+    if not reused and workspace is not None:
+        compile_app(root, workspace, project, derived)
+    elif not reused:
         from logistics_build.mobile_payload import stage_payload
         stage_payload(root, sys.executable, command)
         command([sys.executable, 'cloud_build.py', 'licenses', '--platform', 'ios'], mobile)
         command([sys.executable, '-m', 'briefcase', 'create', 'iOS', '--no-input'], mobile)
         command([sys.executable, 'cloud_build.py', 'ios'], mobile)
         command([sys.executable, '-m', 'briefcase', 'build', 'iOS', '--test', '--no-input'], mobile)
-    os.chdir(mobile)
-    ui_tools.verify_prebuilt_ios(local=True)
+    if workspace is None:
+        os.chdir(mobile)
+        ui_tools.verify_prebuilt_ios(local=True)
+    else:
+        ui_tools.verify_prebuilt_ios(local=True, workspace=workspace, app=app)
     record = dict(key=key, bundle_sha256=bundle_digest(app), reused=reused,
                   seconds=time.monotonic()-started, status='passed', app=str(app))
     cache.parent.mkdir(parents=True, exist_ok=True)
@@ -137,6 +146,7 @@ def main():
     parser.add_argument('action', choices=['build', 'test', 'cleanup'])
     parser.add_argument('--root', type=Path, required=True)
     parser.add_argument('--result', type=Path)
+    parser.add_argument('--workspace', type=Path)
     parser.add_argument('--kind', choices=['iphone','duo','ipad'])
     parser.add_argument('--model')
     parser.add_argument('--runtime')
@@ -145,7 +155,10 @@ def main():
     for sig in (signal.SIGTERM, signal.SIGINT):
         signal.signal(sig, interrupt)
     if args.action == 'build':
-        build(args.root, args.result)
+        if args.workspace is None:
+            build(args.root, args.result)
+        else:
+            build(args.root, args.result, workspace=args.workspace)
     elif args.action == 'test':
         test(args.root, args.result, args.kind, args.model, args.runtime, args.lease)
     else:

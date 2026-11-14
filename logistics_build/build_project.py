@@ -611,8 +611,22 @@ class LogisticsProject:
             if options['tools.xcode']:
                 env['DEVELOPER_DIR'] = options['tools.xcode']
             report = workspace / ('build-' + uuid4().hex) / 'build.json'
+            workspace_args = ()
+            # Historical snapshots execute their original runner and CLI.
+            if (snapshot / 'logistics_build/ios_simulator_workspace.py').is_file():
+                from build_manager.profiles import save_json
+                from build_manager.retention import linked
+                from logistics_build.device_workspace_paths import DEVICE_WORKSPACES
+                from logistics_build.ios_simulator_workspace import recipe_binding
+                workspace = self.root / DEVICE_WORKSPACES / 'ios' / uuid4().hex
+                if any(linked(part) for part in (workspace, *workspace.parents)):
+                    raise ValueError('Simulator build requires an unlinked workspace.')
+                workspace.mkdir(parents=True)
+                save_json(workspace / 'recipe.json', recipe_binding(snapshot, workspace))
+                report = workspace / 'build.json'
+                workspace_args = ('--workspace', str(workspace))
             phase = Phase('ios-build', (options['tools.mobile_python'], '-m', 'logistics_build.ios_backend', 'build',
-                '--root', str(snapshot), '--result', str(report)), str(snapshot), timeout=3600,
+                '--root', str(snapshot), '--result', str(report), *workspace_args), str(snapshot), timeout=3600,
                 environment=env, kind='build', artifacts=(str(report),))
             return Plan('Logistics', 'Build native iOS development app; no install', source,
                         (phase,), str(workspace), backend='This Mac', effect='build')

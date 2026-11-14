@@ -441,6 +441,10 @@ inside a source snapshot. Read-only TestFlight `plan` does not prune outputs.
   recipes still identify the workspace at its original path.
   New single-signing Android Debug plans that capture their own source and
   prepare their own package use `tmp/build/mobile/android/`.
+  Standalone iOS Build plans use `tmp/build/mobile/ios/` when their captured
+  runner supports an explicit workspace. The simulator app and DerivedData
+  stay inside the recipe directory and retire with it under the iOS workspace
+  policy. Older commands still build in their source snapshot.
 - New probe compiler caches live under `tmp/cache/compiler/`. Marked legacy
   caches under `mobile_build/.tools/build-manager/compiler-caches/` remain in place
   and share one 12 GiB soft budget with the new caches and eligible snapshot and
