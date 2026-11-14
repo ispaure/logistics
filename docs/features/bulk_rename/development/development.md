@@ -18,7 +18,7 @@ assertion in `test_preview_bolds_changed_spans_and_prioritizes_filename_columns`
 to check the underline.
 
 Run this from the repository root using the
-[desktop environment](../../../development/getting-started.md).
+[desktop environment](../../../development/setup/getting-started.md).
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/files/test_bulk_rename_ui.py
@@ -114,7 +114,7 @@ manual scrolling when adjusting that correction.
 
 The widget calls `commonUtils.filesystem.rename` for planning, applying and
 undoing batches, and `commonUtils.filesystem.traversal` for candidate discovery.
-See the [commonUtils integration boundary](../../../development/commonutils-integration.md)
+See the [commonUtils integration boundary](../../../development/architecture/commonutils-integration.md)
 for where to change shared APIs. In Logistics, keep the apply action tied to a
 fresh preview and show stale-source or occupied-destination errors to the user.
 

@@ -19,7 +19,7 @@ and `_extract` callback. Update the matching menu labels in
 assertion, and relaunch the app to see the new label.
 
 Run the focused routing check from the repository root using the
-[desktop environment](../../../development/getting-started.md).
+[desktop environment](../../../development/setup/getting-started.md).
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/archives/test_archive_browser.py
@@ -48,8 +48,8 @@ belong to commonUtils. See
 [Archive operations](https://github.com/ispaure/commonUtils/blob/main/docs/development/reference/archives/archives.md)
 and [ZIP access](https://github.com/ispaure/commonUtils/blob/main/docs/development/reference/archives/zip_access.md).
 Logistics owns configuration, credentials, UI, routing and notifications. For
-registration changes, use the [browser extension contract](../../../development/file-browser.md)
-and [feature conventions](../../../development/features.md).
+registration changes, use the [browser extension contract](../../../development/architecture/file-browser.md)
+and [feature conventions](../../../development/architecture/features.md).
 
 ## Registration and browser routing
 
@@ -149,5 +149,5 @@ worker or in queued GUI retirement.
 Credential-package publication tests live in
 `Python/tests/resources/test_credential_archive.py`; Comics retry tests have their
 own owner. Shared commonUtils archive tests own low-level format and publication
-contracts. Use [project test selection](../../../development/testing.md) for
+contracts. Use [project test selection](../../../development/testing/testing.md) for
 execution. These desktop integration tests require Qt.

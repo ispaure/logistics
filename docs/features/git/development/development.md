@@ -18,7 +18,7 @@ For a small wording change, edit that notice in
 `ui/preview.py` calls it for the formatted preview and retains the original
 patch for **Raw**. Update the expected notice in
 `test_added_deleted_binary_and_mode_only_files_have_friendly_details`.
-Run from the repository root after [desktop setup](../../../development/getting-started.md):
+Run from the repository root after [desktop setup](../../../development/setup/getting-started.md):
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/version_control/test_git_diff_view.py
@@ -42,9 +42,9 @@ Paths below are relative to `Python/features/git/`.
 | Repository tools or settings | `ui/repository_tools.py` owns worktree, submodule and subtree dialogs. `ui/settings.py` owns repository settings. `ui/application_settings.py` and `ui/application_preferences.py` own feature preferences and their application to retained panes. |
 
 The desktop shell supplies the rail and the close protocol. For contribution
-and window ownership, see [desktop architecture](../../../development/architecture.md).
+and window ownership, see [desktop architecture](../../../development/architecture/architecture.md).
 The feature uses commonUtils Workspace, CodeEdit and process helpers. Shared
-library APIs are documented in the [commonUtils boundary guide](../../../development/commonutils-integration.md).
+library APIs are documented in the [commonUtils boundary guide](../../../development/architecture/commonutils-integration.md).
 
 ## Execution and lifecycle
 

@@ -15,7 +15,7 @@ Try changing `Found` to `Matched` in the summary built by
 `WeirdCharactersDialog._show_results` in
 `Python/features/file_tools/ui/dialogs.py`. Update the summary assertion in
 `test_scan_window_keeps_results_and_unicode_visible`, then run this from the
-repository root using the [desktop environment](../../../development/getting-started.md).
+repository root using the [desktop environment](../../../development/setup/getting-started.md).
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/files/test_file_tools.py
@@ -32,7 +32,7 @@ toggle, reviewed deletion, and cancellation.
 from `ui_contributions.py`. Both actions require a folder selection and pass
 the selected roots to their dialogs. The contribution refreshes the browser
 when the dialog returns. See the shared
-[browser extension contract](../../../development/file-browser.md).
+[browser extension contract](../../../development/architecture/file-browser.md).
 
 `filesystem.py:scan_weird_characters` matches the original Logistics
 `WEIRD_CHARACTERS` set anywhere in the full path, including parent-folder

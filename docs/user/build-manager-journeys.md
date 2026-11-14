@@ -9,8 +9,8 @@ a fresh plan; a retained run stores work already attempted and its evidence.
 
 Open the standalone manager and add or select a trusted Logistics checkout.
 Adding it authorizes its adapter. If its interpreter is missing, repair the
-Logistics environment using [contributor setup](../development/getting-started.md)
-and the [manager integration guide](../development/build-manager.md).
+Logistics environment using [contributor setup](../development/setup/getting-started.md)
+and the [manager integration guide](../development/build-release/build-manager.md).
 
 Choose the intent before selecting destinations:
 

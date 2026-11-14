@@ -39,7 +39,7 @@ and unlock UI without a live service.
 
 For controls and setup, see the [desktop guide](../user/user.md) and
 [mobile guide](../user_mobile/user_mobile.md). See the
-[commonUtils boundary](../../../development/commonutils-integration.md) for
+[commonUtils boundary](../../../development/architecture/commonutils-integration.md) for
 shared library documentation.
 
 ## Registration and lifetime

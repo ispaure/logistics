@@ -1,13 +1,7 @@
 # Session video hardware acceptance
 
-## Resume this test later
-
-When the user says they are ready to test video privacy, resume from this page and
-read the current implementation before preparing anything. Physical acceptance
-was deferred at the user's request; a previously installed QA app was removed.
-**Keep the test sources and instructions, not a saved app build.** Rebuild from the
-current checkout, including the current native adapters. Replacing only Python
-inside an older binary does not test native changes.
+Use a fresh QA build to verify video privacy, interruptions and receiver behavior
+with disposable media. Rebuild the native adapters when they change.
 
 The reusable in-app entry point is
 `mobile_build/native_tests/tests/logisticsmobile/video_hardware_probe.py:main`.
@@ -30,11 +24,8 @@ them. The portable contracts are in
 
 ## Prepare from current source
 
-Use the project's normal build-manager/native-build owners and a leased scratch
-workspace. Select only an explicitly authorized physical device. The earlier
-session authorized the user's iPhone 15 Pro Max; confirm current availability and
-scope from the new conversation before installing. Do not select another paired
-phone or tablet just because it is available.
+Use the project build and deployment owners, a leased scratch workspace and an
+authorized physical test device.
 
 Build a separate QA bundle, with no main-app group access and app-private synthetic
 storage. Preserve the installed Logistics app and its data. Stage the current
@@ -153,6 +144,6 @@ Combine calls, route transitions and approval prompts; stale decisions must not
 approve a replacement output or start audio. Observe real sound as well as logged
 player state; a state log cannot prove absence of a brief acoustic leak.
 
-Read [audio policy ownership and OS limits](../../../development/audio-playback.md)
+Read [audio policy ownership and OS limits](../../../development/architecture/audio-playback.md)
 when updating the probes. These new physical phases remain pending until the user
 is ready; no earlier video-only counts certify them.

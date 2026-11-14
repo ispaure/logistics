@@ -29,7 +29,7 @@ def run_checks(root, checks, *, dry_run=False, stop_on_failure=False):
         for label, interpreter, command, environment in checks:
             if not interpreter.is_file():
                 raise ValueError(f'Environment Python is missing: {interpreter}. '
-                                 'See docs/development/testing.md for setup, or pass --python / --native-python PATH.')
+                                 'See docs/development/testing/testing.md for setup, or pass --python / --native-python PATH.')
         if not (root / 'Python/commonUtils/__init__.py').is_file():
             raise ValueError('commonUtils is missing. Run git submodule update --init --recursive '
                              'in a fresh checkout; preserve any existing submodule edits first.')

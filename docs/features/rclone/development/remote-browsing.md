@@ -138,7 +138,7 @@ owns the generation-bound transport, seekable ranges and native RAM archive toke
 `remote_readers.RemoteSource` remains available as an import for existing callers.
 Decoded header/member lifetime is shared through
 `services/documents/archive_access.py:NativeArchiveAccess`. Follow the
-[source-to-reader trace](../../../development/document-storage.md#trace-a-mobile-provider-reader)
+[source-to-reader trace](../../../development/architecture/document-storage.md#trace-a-mobile-provider-reader)
 for publication, retry and terminal-close ownership.
 
 Mobile remote reads use the existing serialized native network-operation scope.

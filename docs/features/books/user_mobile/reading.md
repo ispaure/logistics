@@ -83,7 +83,7 @@ spacing, width, margins and themes described below. Changing appearance or leavi
 returning to the reader keeps the passage. Provider positions and bookmarks are kept separate from ordinary import records.
 With an owning credential ZIP password, they can persist encrypted; passwordless
 sessions keep them in RAM. Locking retires the active decrypted state. See
-[private reading state](../../../development/reader-state.md).
+[private reading state](../../../development/architecture/reader-state.md).
 Provider-backed books use the same nested chapter sidebar. **Find in chapter…**
 is a separate reader action. A successful search returns to the passage; an
 unsuccessful search keeps its feedback open.

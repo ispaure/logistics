@@ -83,4 +83,4 @@ Actual Java and Bedrock process startup remains a separate desktop check.
 
 Minecraft is absent from the mobile catalog in `Python/services/mobile_features.py`.
 See [mobile availability](../user_mobile/user_mobile.md) and
-[feature conventions](../../../development/features.md).
+[feature conventions](../../../development/architecture/features.md).

@@ -397,7 +397,7 @@
         "Python/features/feature_runtime.py",
         "Python/features/settings.py"
       ],
-      "guide": "docs/development/feature-infrastructure.md",
+      "guide": "docs/development/architecture/feature-infrastructure.md",
       "tests": {
         "desktop": [
           "test_feature_registry.py",
@@ -414,7 +414,7 @@
       "sources": [
         "Python/desktop"
       ],
-      "guide": "docs/development/ui-architecture.md",
+      "guide": "docs/development/architecture/ui-architecture.md",
       "tests": {
         "desktop": [
           "test_main_window_navigation.py",
@@ -437,7 +437,7 @@
         "Python/services/access_policy.py",
         "Python/services/local_storage.py"
       ],
-      "guide": "docs/development/services.md",
+      "guide": "docs/development/architecture/services.md",
       "tests": {
         "desktop": [
           "test_document_protection.py",
@@ -466,7 +466,7 @@
       "sources": [
         "Python/mobile"
       ],
-      "guide": "docs/development/mobile-runtime.md",
+      "guide": "docs/development/architecture/mobile-runtime.md",
       "tests": {
         "mobile": [
           "test_packaged_startup.py",
@@ -499,7 +499,7 @@
         "Python/services/documents/provider_documents.py",
         "Python/mobile/document_imports.py"
       ],
-      "guide": "docs/development/mobile-runtime.md",
+      "guide": "docs/development/architecture/mobile-runtime.md",
       "tests": {
         "mobile": [
           "test_private_sessions.py",
@@ -522,7 +522,7 @@
         "dev.py",
         "Scripts"
       ],
-      "guide": "docs/development/testing.md",
+      "guide": "docs/development/testing/testing.md",
       "tests": {
         "desktop": [
           "test_dev_commands.py",
@@ -541,7 +541,7 @@
         "mobile_build/tools.py",
         ".github"
       ],
-      "guide": "docs/development/mobile-preparation.md",
+      "guide": "docs/development/build-release/mobile-preparation.md",
       "tests": {
         "desktop": [
           "test_mobile_packaging.py"
@@ -555,7 +555,7 @@
         "build-tests.json",
         "build-manager-dependency.json"
       ],
-      "guide": "docs/development/build-manager.md",
+      "guide": "docs/development/build-release/build-manager.md",
       "tests": {
         "desktop": [
           "test_build_*.py",

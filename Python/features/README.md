@@ -1,3 +1,3 @@
 # Feature and application infrastructure ownership
 
-Documentation has moved to the [Feature and application infrastructure ownership guide](../../docs/development/feature-infrastructure.md).
+Documentation has moved to the [Feature and application infrastructure ownership guide](../../docs/development/architecture/feature-infrastructure.md).

@@ -122,7 +122,7 @@ Recovery stores an immutable base archive plus content-addressed ink pages
 and a revisioned manifest. Ordinary ink updates can write only changed pages.
 Unchanged objects and native frames are shared across history to limit memory.
 Source writes use revision checks. Private notebooks keep draft changes in
-memory. See [shared document storage](../../../development/document-storage.md)
+memory. See [shared document storage](../../../development/architecture/document-storage.md)
 for provider, version and lifetime contracts.
 
 New desktop drafts are unsaved until a destination is chosen. Cancelled first
@@ -204,4 +204,5 @@ and swipes keep paging. A successful jump offers Undo for three seconds.
 | Desktop editor | Portable format and host tests cover creation, editing, export and recovery. Linux latency and Windows normal-renderer stress latency remain open. macOS native save-picker acceptance requires direct interaction. |
 | Android and iOS | Managed template checks exercised creation, isolated page changes, inherited paper and save/reopen for their sampled payloads. Bind native template and queued-command fence acceptance to the current payload. |
 | Physical input | Actual Pencil pressure/palm behavior, optical Boox latency and reMarkable select/move/erase checks have separate [hardware procedures](hardware-acceptance.md). |
-| Tablet transfers | See [SSH transfer qualification](ssh-transfers.md#evidence-and-exact-device-work-needed) for bounded firmware findings, corpus preconditions and outstanding write qualification. |
+| Tablet transfers | See [SSH transfer qualification](ssh-transfers.md#evidence-and-exact-device-work-needed) for bounded firmware findings and outstanding write qualification. |
+| Read-only corpus validation | A separate synthetic rehearsal exercised inventory, rendering receipts and width calibration. Personal-corpus acquisition and end-to-end acceptance are pending. |

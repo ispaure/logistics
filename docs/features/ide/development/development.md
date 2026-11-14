@@ -18,7 +18,7 @@ saved values, including 0 for Off. `IDEPage.settings` in `ui/page.py` owns
 the control, and `ProjectWorkspace` in `ui/workspace.py` applies it to existing
 and new editors. Update the default assertions in `test_ide.py` and
 `test_ide_markdown.py`. Run from the repository root after
-[desktop setup](../../../development/getting-started.md):
+[desktop setup](../../../development/setup/getting-started.md):
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/ide/test_ide.py --exact-file Python/tests/ide/test_ide_markdown.py

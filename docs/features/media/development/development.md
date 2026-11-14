@@ -56,5 +56,5 @@ staged and original paths to recover it.
 
 The MKA workflow runs in desktop Qt. See the
 [mobile boundary](../user_mobile/user_mobile.md) for supported mobile workflows.
-The [earlier Video Player brief](video-player.md) points to the playback owner's
+The [Video Player compatibility link](video-player.md) points to the playback owner's
 requirements.

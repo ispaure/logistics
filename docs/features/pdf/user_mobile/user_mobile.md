@@ -32,7 +32,7 @@ scroll position and zoom. Credential-backed remote and LocalCrypt positions can
 persist encrypted with the owning credential ZIP password. Unlock that
 credential again to restore them. Passwordless private sessions retain
 positions only in memory. Locking retires the active reader, rather than deleting
-its encrypted checkpoint. See [reader state and history clearing](../../../development/reader-state.md)
+its encrypted checkpoint. See [reader state and history clearing](../../../development/architecture/reader-state.md)
 for password migration and clearing behavior.
 Decrypted bytes and page images stay in memory and clear on close; remote and
 LocalCrypt sessions also retire when credentials change. Password-protected and

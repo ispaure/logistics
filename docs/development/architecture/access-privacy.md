@@ -1,0 +1,297 @@
+# Access and privacy ownership
+
+Logistics owns application privacy policy; commonUtils owns retained resource,
+cancellation and speech mechanisms. A valid credential grant, an authenticated
+resume challenge, and permission to play or transmit content are different facts.
+Unlocking one does not grant the others.
+
+## Behavior contract
+
+Protection means loaded session-only credentials or a retained protected owner
+that still requires external-sharing refusal. Encrypted storage alone does not
+mean session-only credentials. Scope includes ordinary content in the protected
+process, not just the active file. Closing a view does not unload credentials;
+removing credentials does not make a retained private draft public.
+
+| Situation | Required behavior | Existing regression owner |
+| --- | --- | --- |
+| No protection, Bluetooth selected/changed | No approval-list dependency or protection-specific pause/Play gate, including unknown identity and malformed approvals | `native/test_audio_output.py` |
+| Protected audio, already-connected/new Bluetooth | Selected output approval; adding approval never starts audio; separate Play | `native/test_audio_output.py` |
+| Output loss or call/interruption, either mode | Pause; no automatic resume | audio and native video tests |
+| Protection starts/ends during playback | Reevaluate immediately; reject stale approval; no unsolicited resume | audio tests |
+| Background/screen-off with protected content | Conceal; require eligible resume authentication; retain native immediate safeguards | `workspace/test_screen_privacy.py` |
+| Trusted Wi-Fi resume | Waive only a lifecycle challenge for previously unlocked credentials; unknown/failed lookup challenges normally | `workspace/test_trusted_wifi.py` |
+| Manual lock, initial setup, revoked/replaced grant | Wi-Fi cannot authorize it; authentication cannot revive an invalid grant | Wi-Fi, credential and screen tests |
+| Cast, external display or PiP while protected | Refuse even after password/Wi-Fi authentication | external-display and video tests |
+| Background speech opt-in | Continue admitted content only; retain output/call/capture/grant checks; do not authorize new file reads | speech/audio tests |
+| Read-aloud sleep timer expires | End the listening budget; do not lock credentials or change protection scope | commonUtils speech tests |
+| Progress/recovery/export | Preserve existing provider-owned encrypted publication and explicit plaintext-export consent | document and video-progress tests |
+
+Paths in the table are relative to `mobile_build/tests/` unless noted. See
+[audio playback](audio-playback.md) for platform limitations and hardware probes.
+Device sleep is an environment/lifecycle event; the speech timer counts listening
+time and is not a credential gate.
+
+iOS temporary inactivity (including Control Center) immediately covers protected
+pixels and locks eligible sessions through `ScreenPrivacy.interrupt()` and
+`conceal()`, including the video conceal callback. Returning requires resume
+authentication unless the configured trusted Wi-Fi waiver applies. Unprotected
+interruptions do not lock or conceal ordinary playback; actual background entry
+retains its playback policy. Call, audio interruption, capture and output route
+safeguards remain independent. See [resume challenges](#resume-challenges-and-asynchronous-callbacks).
+
+## Baseline and migration
+
+The starting source is `2fa216af`, with commonUtils `b9c7f78a`. It includes the
+corrected ordinary-playback Bluetooth bypass. Focused baseline audio (21 cases)
+and Wi-Fi (18 cases) host checks passed on October 28, 2026; these are dummy/portable
+checks, not physical Bluetooth or Mirroring acceptance.
+
+The current migration removes provider-policy inference from video, explicit
+feature inventories from screen protection, and authorization based on lock-form
+widgets. Each bounded change must integrate its effects, disposal, tests and
+documentation. Keep provider grant validation at I/O boundaries and native
+immediate denial in platform adapters. Do not replace them with a UI-only check.
+
+No new encrypted format, export policy, desktop Bluetooth feature or generalized
+permission framework is required. Preserve stored settings and credential IDs.
+
+## Provider declarations
+
+Desktop `features.rclone.credential_sessions.CredentialSessions.remember()` takes
+a detached copy of incoming credential data before retiring the old generation.
+Caller mutation cannot alter an active session, and a failed copy leaves the old
+session intact. This does not change storage formats, revocation ordering or the
+separate authentication and persistence policies.
+
+Mobile provider text and notebook Save As capture their source `DocumentPolicy`
+before opening the destination form. A private-to-ordinary export requires the
+existing plaintext-copy confirmation; the picker rechecks its operation and
+source identity after asynchronous dialogs. See the
+[storage and export owner](document-storage.md#privacy-and-lifetime) for the
+handoff and host regression scope.
+
+`services.access_policy.session_only` composes explicit provider declarations
+through document wrappers. Video no longer reads credential package dictionaries
+or guesses retention from context filenames. Desktop LocalCrypt declares its
+memory-only context; native LocalCrypt derives the declaration at its owning
+credential boundary. Unknown private providers conservatively refuse external
+playback. Document persistence and provider I/O grants remain separate.
+
+Desktop and mobile document titles do not append `Session-Only`. The storage
+descriptor below the title retains that label and its security icons for all
+provider-backed document formats. This presentation rule does not change privacy,
+locking or credential lifetime.
+
+## Explicit retained protection sources
+
+Application composition in `mobile.protection` owns a process `ProtectionScope`
+for each shared native credential runtime. `for_credentials` registers the
+runtime's gate supplier and subscribes the scope to credential publication;
+the rclone credential store neither constructs nor exposes a protection scope.
+Registration and subscription share the credential publication lock. Loaded
+gates apply before any scene or player exists. Additional credential sources can
+register independently through `ProtectionScope.register_credentials`; removing
+one source cannot release another source or a retained document.
+`mobile.protection.for_app` creates one window scope in that process scope.
+Private-session managers, EditorPicker, NotebookPanel and ComicBatchController
+register their own gate suppliers; ScreenPrivacy asks the scope instead of inspecting feature
+attributes. Suppliers are synchronous snapshots with no I/O. Process protection evaluates
+them outside its snapshot lock to avoid credential/scope lock inversion; revision
+checks prevent a slow older evaluation from replacing a newer publication. Notebook disposal
+releases its registration; host disposal clears its window sources. Asynchronous
+native teardown holds a separate process resource scope until completion, even
+when its window has already closed. A retained
+draft keeps its gate after credential removal; duplicate contributions share one
+challenge. Providers still validate the original grant independently.
+
+## Resume challenges and asynchronous callbacks
+
+iOS loss of activity uses the same session-lock path as backgrounding, including
+opening the app switcher or Control Center and returning directly to Logistics.
+Protected sessions require authentication on return unless the configured trusted
+Wi-Fi waiver applies. Android continues to lock on activity pause.
+Without protected content, an iOS interruption does not hide the view, lock it
+or pause video; actual background entry retains the existing playback policy.
+Credentials arriving during an interruption are challenged before revealing the
+view, even if their queued refresh has not run. Password verification results
+are discarded if another lifecycle transition occurred while verification ran.
+Lifecycle transitions invalidate pending authentication before native shielding
+or playback callbacks, so a callback failure cannot revive an older Wi-Fi result.
+
+`services.session_auth.ResumePassword` is platform-neutral. It records setup,
+explicit and lifecycle challenge reasons separately from provider revocation.
+A repeated lifecycle callback neither overwrites a manual lock nor restores a
+failed Wi-Fi waiver. `authorize(revision)` accepts a verified result only for
+that challenge; `waive_lifecycle(revision)` additionally requires a still-eligible
+lifecycle lock. Wi-Fi holds only the pending request snapshot, not another global
+lock-provenance dictionary. Network preference changes while a read is pending
+reject its waiver. Multiple passwords remain separate challenges.
+
+Credential publication commits metadata and snapshots observers under the
+credential lock, then calls them after releasing it. Native `CloudClient.request`
+uses the same commit/notify split, so its outer native-publication lock is also
+released before callbacks. Nested credential-service, clear and package-forget
+transactions share a thread-local callback queue; only the outermost transaction
+notifies, after vault work and client metadata updates finish and its lock exits.
+Application protection observers run before ordinary
+UI/document observers; notification fanout attempts every observer even if one
+fails. UI callbacks return to their scene loop. Native screen shielding stays
+synchronous; asynchronous verification cannot reveal content after rebackgrounding or credential replacement. These callbacks never revive a
+revoked I/O grant.
+
+`ScreenPrivacy` and `mobile.audio_output.AudioOutput` retain the exact registrations they own.
+Failed construction unwinds acquired subscriptions; disposal marks callbacks
+inactive before attempting every release. Failed release handles remain available
+for retry, and queued native callbacks cannot revive the disposed owner.
+`test_screen_privacy.py`, `test_audio_output.py` and `test_protection_scope.py`
+exercise setup failure, late callbacks and retry with host fixtures. Native
+observer delivery and teardown still require platform validation.
+
+## Shared presentation and playback questions
+
+`services.access_policy` supplies small pure functions for display, external
+presentation and speech continuation. The process scope notifies explicit
+listeners when protection enters or leaves. Audio invalidates its Play permission
+before scheduling native pause work; new credentials therefore cannot inherit an
+ordinary player's authorization even if the output did not change. Source owners
+notify after publishing retained gates. No UI observer or preference-path scan
+establishes scope. Video contributes its retained content policy until disposal.
+
+Video captures its provider policy with its retained grant. Removing credentials
+cannot relax that policy while content is still retained. Permission queries do
+not resume transport; explicit Play, authorized reveal and the player's watch
+command own that effect. Audio's passive permission query does not poll native
+routes or pause players. Native monitors and explicit Play observe routes.
+Malformed approval data grants no Bluetooth permission under protection; ordinary
+playback bypasses the list entirely. Protective pauses reject reentrant Play.
+Credential metadata publication invalidates stale approval decisions. A queued
+startup/metadata update must not cancel a later, currently authorized Play in
+either mode. Current scope transitions, locks, capture, output/interruption facts
+and source validity decide whether playback stops; a notification alone does not.
+Entering/leaving protection still pauses through the scope transition, and revoked
+content retires through its own grant.
+Native external-playback controls are fixed for one presentation. When process
+protection changes an ordinary video's restriction in either direction, refresh
+retires that player; reopening it uses current policy. Session-only content keeps
+its own restriction even after credentials are removed. Native flags therefore
+cannot leave an ordinary player with a separate, stale casting policy.
+
+Lock-form `saved_content` now belongs only to presentation. Consumers use resume
+challenge state rather than checking whether a widget root was replaced. Device
+sleep/capture/call safeguards remain in the native adapters; the listening timer
+remains in commonUtils. No native adapter interfaces or OS guarantees change.
+
+## Effect order and failure boundaries
+
+`ScreenPrivacy.prepare_native_protection` covers an iOS window or applies Android
+secure-window protection before lock presentation or feature callbacks. An iOS
+transition shield stays installed if a required callback fails; successful lock
+presentation can expose the password form while captured/inactive content stays
+covered. State denial precedes reentrant effects. `mobile.privacy_effects` contains
+the direct feature-retirement sequence, separate from native shielding and policy.
+No command/effect interpreter or plugin registry is involved.
+
+Pause fanout attempts every player even if one fails, then reports the failure.
+A failed native video disposal retains its protection contribution until disposal
+succeeds; setting `closed` denies new commands but cannot make retained pixels or
+buffers public. Provider grants and encrypted checkpoints retain their existing
+validation. Memory pressure and Save/Discard/Cancel vetoes stay with their owners.
+
+Video retirement denies commands and suspends the transport immediately. On iOS,
+VLC stop and final player release run on a serial worker: a decoder can enter
+UIKit during teardown, so joining it on the UI thread can deadlock. Native
+completion returns to the UI loop before the owner closes its provider and
+releases protection. Reopening awaits the same completion task; cancelling a
+navigation request cannot cancel that cleanup. A failed cleanup retains the
+resource and protection rather than reporting successful disposal.
+
+## Adding a protected surface
+
+1. Reuse its provider's declared `session_only` policy and retained grant. Do not
+   derive either from a filename, UI title, saved preference or a different account.
+2. At host composition, register a synchronous gate supplier with
+   `app.protection.register(owner, owner.privacy_gates)`. Store the returned release
+   handle. Managers may supply the gates of their own live documents; native
+   surfaces bound to the same owner do not need duplicate password challenges.
+3. Publish the owner's gate before mounting sensitive content, then call
+   `app.protection.changed()`. A content-only restriction can use the optional
+   `protected` supplier without inventing a password gate. Playback receives the
+   process scope through the existing audio owner; features do not import mobile
+   composition to discover it.
+4. Ask the small named policy functions with current facts. Keep grant checks at
+   read/write boundaries. Use `resume_locked` for resume state; `saved_content`
+   is only the lock form's presentation bookkeeping.
+5. Report environment facts through the existing screen/audio adapters. A capture
+   transition shields first and pauses/conceals afterward. Backgrounding locks
+   eligible challenges and starts the narrow Wi-Fi resume request. Its successful
+   result authorizes only the matching lifecycle challenge, never external output.
+6. Clear native pixels, private labels and buffers before releasing the protection
+   handle. If disposal fails, retain protection and deny new commands. Host
+   replacement disposes its complete window scope without touching another host.
+
+For example, a loaded session credential protects an ordinary video too. Connecting
+an unapproved car output pauses protected audio and asks for approval; approval
+still needs Play. Removing that credential while a protected draft remains keeps
+cast refusal and Bluetooth consent active. Once the last retained owner is
+successfully disposed, ordinary audio bypasses approvals again, but nothing
+silently restarts. Read-aloud timer expiry changes none of those lifetimes.
+
+## Validation scope
+
+Focused migration checks cover audio consent/reentrancy/failure fanout, explicit
+scope lifetime, multiple passwords, Wi-Fi races/preferences, lock shielding,
+notebooks/pickers/readers, video transport and staged imports. Architecture and
+lint checks enforce the feature/host boundary. These tests use synthetic content
+and dummy/native-adapter doubles; they do not certify physical car routing,
+iPhone Mirroring or zero buffered output leakage. Full manager native/runtime,
+desktop and hosted release gates remain required for release delivery. Rebuild
+native adapters before the focused fullscreen/video probe; restaging Python into
+an older native player is insufficient.
+
+Native privacy scenarios exercise local, LocalCrypt, saved remote and
+session-only remote documents, real decoders, app switching and lock/resume.
+Record injected output, network and lock events separately from physical
+Bluetooth, casting, Mirroring, Continuity and acoustic checks.
+
+## Mobile resume form layout
+
+The rounded resume card stays within the available viewport, capped at 560
+logical pixels wide and 520 high. Its form scrolls inside an inset viewport, so
+landscape and software-keyboard layouts preserve all four card corners. Credential
+names and status messages wrap using the shared settings text fitter. Layout subscriptions refit
+on window changes, and the iOS replacement root retains its safe-area callback.
+Android measures the native visible frame independently of the toolkit root
+minimum height; a lock-only global-layout listener refits during IME changes and
+is removed on unlock or disposal. The inner scroll has no toolkit minimum height.
+Very short viewports reduce vertical gutters while keeping at least 48 logical
+pixels available for a scrolling control.
+Host regression tests cover compact/wide and 96-point keyboard bounds, long
+labels, root restoration, safe-area forwarding and password verification.
+The native lockscreen probe exercises the real resume form with native field
+input, portrait and both landscape orientations, rotation with the software
+keyboard open, wrong-password rejection, scrolling to Unlock, navigation
+restoration and keyboard dismissal. It retains full-screen keyboard captures
+and geometry reports outside the documentation wiki, and removes its disposable
+devices. Android acknowledges the Activity configuration/display rotation because
+the ordinary navigation root is detached while locked.
+
+Run from the repository root using the mobile build environment:
+
+```sh
+PYTHONPATH=Python:. mobile_build/.venv/bin/python -m mobile_build.validation.lockscreen_tools ios --output test-results/lockscreen-ios
+PYTHONPATH=Python:. mobile_build/.venv/bin/python -m mobile_build.validation.lockscreen_tools android --android-image 'system-images;android-35;google_apis;arm64-v8a' --output test-results/lockscreen-android
+```
+
+The Android image option selects an explicitly installed manager-supported
+image without changing the saved project profile. The complete Android scenario
+has a ten-minute budget for startup and system screenshots; individual keyboard,
+rotation and unlock assertions retain their own shorter limits.
+
+Functional acceptance passed on an iOS phone simulator and an Android 15
+emulator, including the final native Unlock button and software-keyboard
+dismissal. The Android run used an exact committed Python payload in a retained
+managed Debug native shell; its compiled system-chrome source matched that
+commit. This certifies the lockscreen flow, not a full merged native release or
+the detached navigation rail. All owned test devices and retained QA builds were
+removed after preserving the evidence.
