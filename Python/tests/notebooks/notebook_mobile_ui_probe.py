@@ -122,6 +122,7 @@ def check_canvas_header(view, js, wait, output):
         assert reachable, report
         js("document.querySelector('.mobile-dock').scrollLeft=0")
         QTest.qWait(100)  # Include an actually painted frame in the saved evidence.
+        print(f'Capturing notebook header at {width}×{height}', flush=True)
         view.grab().save(str(output / f'canvas-header-{width}.png'))
         for selector, panel in [('#pagesToggle', 'pages'), ('#layersToggle', 'layers'),
                                 ('.view-options', 'view')]:
@@ -178,6 +179,8 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
                 elif level == QWebEnginePage.JavaScriptConsoleMessageLevel.ErrorMessageLevel:
                     failures.append(message)
 
+        if header_only:
+            print('Opening the notebook header browser', flush=True)
         view = QWebEngineView()
         page = Page(view)
         native = QWebEngineScript()
@@ -212,6 +215,7 @@ def main(output, *, palm_only=False, laptop_only=False, native_only=False, toolb
         wait(lambda: bool(loaded))
         assert loaded[-1]
         if header_only:
+            print('Notebook header browser loaded', flush=True)
             try:
                 assert js("document.querySelector('.notebook-storage svg').getBoundingClientRect().width === 13")
                 reports = check_canvas_header(view, js, wait, output)
