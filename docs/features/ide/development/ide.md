@@ -1,400 +1,173 @@
 # IDE architecture and implementation
 
-Find in Files uses the same Qt Popup/host-and-screen anchoring helper as Find
-Usages. Its bounded executor searches immutable root/options/buffer snapshots;
-debounced changes cancel earlier requests and generations reject stale results.
-Search and preview futures are separately retained and polled on the GUI thread.
-Failed worker submission reports an error in the matching status/preview label,
-sets that request's cancellation flag, and leaves it available for a fresh retry.
-Empty startup/completion exceptions show their type instead of blank feedback.
-Closing/dismissing cancels work, and project shutdown waits for jobs to retire.
-Shared search supplies bounded PCRE matching and UTF-16 positions; CodeEdit supplies syntax
-preview and selections; navigation converts to code-point columns through the
-existing placement API. Result masks, exclusions and traversal limits are supplied by the application
-to commonUtils search; the dialog owns project selection and result navigation. Preview reads are off the GUI thread.
-
-Editor baseline reads and reviewed hunk staging use the executable configured in
-Git settings, independently of Git page activation or repository registration.
-ProjectGitStatus reads bounded, cancellable porcelain-v2 snapshots on an executor,
-including individual untracked files and matching ignored paths, and polls completion on the GUI thread.
-ProjectFilter supplies filename foreground colors and status tooltips from those
-snapshots without changing names, filtering or ordering. Status is confined to
-the project subtree of its containing repository. Folders retain their normal
-foreground when children change, including dirty submodule folders. Git-ignored
-files and folders use olive foregrounds with an Ignored tooltip; ignored directory
-status also applies to its descendants without enumerating them in Git.
-Closing the workspace cancels status reads. Non-Git/unavailable status
-clears the decorations without interrupting browsing. Worker submission failures
-also clear stale decorations and leave the periodic refresh available for retry.
-Dirty submodule statuses are read from their own indexes, bounded to 16 repositories
-and a five-second snapshot budget. Live modified-buffer paths overlay saved Git
-status, including for non-Git projects, and clear on undo, save or close. The tree
-colors filenames while regular type icons, names, paths, filtering and sorting use the
-original filesystem model. Status hues and gutter shapes avoid relying on color alone.
-IDE and Git tooltips share full status labels from features.git.models.status_label.
-ProjectFilter exposes editing flags for eligible items and rechecks pending opens,
-active autosaves, peer-project ownership and destination document collisions when
-committing a rename. It temporarily enables the shared
-BrowserFileSystemModel rename validator, then restores read-only mode.
-FilenameDelegate supplies File Browser's native inline editing, basename selection
-and Enter/Escape handling. Menu/shortcut edits are deferred until menus close.
-Successful filesystem renames retarget existing TextSnapshots, document maps,
-watchers and navigation history without replacing buffers. Split views, modified
-state and undo history remain intact. Folder renames retarget all open descendants.
-File tabs obtain type icons from the browser model, falling back to QFileIconProvider
-while asynchronous model icons load. Icons are reapplied on insertion/moves and
-buffer title changes. ScopedTabBar uses Workspace's neutral × button on the right.
-Project.column_guide defaults to 120, accepts 0–1000 (zero disables), and remains
-compatible with older version-1 project stores. Project settings apply it to all
-open source editors and newly created views through CodeEdit.set_column_guide.
-Gutter markers compare to the
-index when available and otherwise to the saved snapshot; staged changes and
-autosaved non-Git changes therefore clear their respective markers.
-Unequal replacement blocks expose paired modifications and separate surplus
-additions/deletions. Gutter clicks prioritize the red deletion boundary when it
-shares an EOF row with a modification. Restoring EOF deletions preserves their
-line separator even when the current final line has no trailing newline.
-
-## Audit and ownership
-
-`ProjectWorkspace.open_path` captures normalized path, requested group, explicit
-split intent, UTF-16 cursor position and completion callback in `_OpenTarget`.
-`_publish_open` revalidates that group after the read, falling back to the active
-surviving group, and reuses the canonical buffer before selecting/placing the view
-and invoking the callback. Pending-open counts, decoding retry and unavailable
-records stay in the existing worker queue. `_finish_restore` applies saved scroll,
-selection and splitter geometry only at the queued restoration boundary. The
-capture record adds no persistence format or separate job owner. Tests cover a
-destination group closing during a real delayed read, cursor-before-callback
-ordering, retargeting, shared views, unavailable recovery and cooperative close.
-
-The existing TextEditor already consumes commonUtils CodeEdit, EditorViews,
-SyntaxHighlighter (Pygments), SearchPanel and persistence.text. These supply line
-numbers, undo, indentation, pairing, folding, line commands, encoding/BOM/newline
-preservation and conflict-checked atomic saves. No editor relocation is needed.
-TextEditor document/service/session objects own standalone windows and recovery;
-IDE owns project-scoped documents instead, without importing that feature.
-
-GitPage and IDEPage retain their application-level panes in shared Workspace
-containers. IDE project tabs use WorkspacePolicy, including detached local creation
-and full-width headers. Each project is a QMainWindow menu source; its internal
-QTabWidgets use commonUtils ScopedTabBar with the editor splitter as their boundary.
-Internal file gestures never enter the OS-window docking controller. MainWindow's can_close/prepare_close/idle protocol
-remains the shutdown boundary. Shared SearchPanel and ResultWorker require owner
-retention until completion.
-
-The full FileBrowser includes previews, indexing and application activation.
-Reuse its BrowserFileSystemModel (lazy QFileSystemModel, shared File/Directory
-objects and registry), wrapped in an IDE-scoped tree with exclusions. Avoid a
-second browser or recursive UI-thread scan. Historical fileUtils/dirUtils imports
-no longer exist in this checkout; use filesystem packages. File snapshots must
-be refreshed after mutations.
-
-ProjectFilter extends the shared ByteSortModel and sorts the name column ascending,
-retaining folder-first natural ordering, dynamic updates and filesystem-index
-mapping while applying project exclusions and the visible filename filter.
-
-Use Logistics preferences_path for platform conventions and atomic JSON for a
-versioned IDE store, outside source trees. UUIDs identify projects. Missing roots
-remain registered. Save layout on a debounce and close, not every cursor movement.
-
-Jedi 0.19.2 (MIT, pure Python, Windows/macOS/Linux; parso dependency) provides
-project/source-path-aware goto, inference and symbols without an LSP executable
-or server lifecycle. Run requests serially on retained background workers; reject
-stale document results. Import only on demand and preserve editing when absent.
-See https://jedi.readthedocs.io/en/v0.19.2/docs/api.html and
-https://pypi.org/project/jedi/0.19.2/. Add to uv manifest/lock; release packaging
-already ships synchronized dependencies and the pinned commonUtils checkout.
+Use this reference when changing the project tree, editing lifecycle, or
+navigation. Start with the [worked contribution](development.md#try-a-column-guide-change)
+to find the desktop workspace and run a focused check.
 
 ## Implemented contracts
 
-GitPage delegates validated working-file opens through an application-owned
-callback. MainWindow routes to the enabled IDE page's open_registered_file,
-which chooses the deepest resolved registered root, reopens its workspace and
-uses normal open_path document reuse. A false result falls back to Text Editor.
-The callback looks up the current page at invocation, including feature changes;
-Git and IDE do not import each other's document services. Detached projects retain
-their existing workspace. Git's existing filesystem watcher refreshes IDE saves.
-Diff and merge workflows remain owned by Git.
-File status, History and Search file double-clicks share RepositoryView.edit_file;
-historical entries supply their repository-relative path to open the current
-working file, while selection retains the historical preview. Folder rows have
-no file activation, and missing or out-of-repository files fail validation.
+`ProjectWorkspace` registers one buffer per resolved file path within a
+project. `DocumentBuffer` owns the QTextDocument, disk snapshot and highlighter.
+Split views share edits, undo, folding and modified state. Cursor, selection
+and scroll are view-local. When the representative view closes, a surviving
+view takes over. Detach the departing editor from the Qt document layout
+before deferred deletion. The last view prompts for unsaved work, and
+project/application close prompts once per buffer. Save As changes the
+shared path, snapshot and tab titles. Two projects can have independent
+buffers for the same file. Shared text IO detects conflicting saves.
 
-IDE is an independent lazy PageContribution (`ide.workspace`). ProjectStore keeps
-UUID registrations and all project layouts in one version-1 atomic workspace JSON
-beside Logistics preferences. It checks the previous bytes before publication to
-reject competing instance writes (this is not a cross-process lock). Corrupt or
-unsupported stores are retained. Reads and writes share a 4 MiB limit so a saved
-checkpoint remains readable. Conflict validation uses the same bounded reader,
-including files enlarged externally after loading. A successful save advances its
-baseline to the bytes it published, without adopting a subsequent writer's bytes.
-Store write failures are reported in the page;
-they do not trap the application in an endless shutdown wait after document close
-choices have completed.
+`open_path` captures the resolved path, requested group, split intent, cursor
+position and callback in `_OpenTarget`. `_publish_open` rechecks the requested
+group and falls back to a surviving group. It selects or reuses the canonical
+view and places the cursor before invoking the callback. Keep pending opens,
+decoding retries and unavailable records in the existing worker queue.
 
-ProjectWorkspace owns one canonical file registration per resolved path. Each
-registration points to a representative EditorDocument view; all views share a
-DocumentBuffer containing the QTextDocument, disk snapshot and one highlighter.
-The text document is parented to the buffer, not to a disposable tab. Closing the
-representative promotes a remaining view and reattaches highlighting. A departing
-editor is explicitly detached from the shared Qt layout before deferred deletion.
-This ownership boundary is covered by editing after actual native destruction of
-the original view, not merely checking that a tab disappeared.
+`_finish_restore` applies saved editor positions and splitter geometry after
+queued opens finish. The checkpoint tracks project order, active project,
+tab groups and browser state. Repeated paths across groups restore multiple
+views of one buffer. Missing paths retain their layout records. Navigation
+history stays in memory. Reopened projects restore in the main container,
+and detached-window geometry is outside the checkpoint. See
+[checkpoint admission](development.md#workspace-checkpoint-admission) for format
+and recovery limits.
 
-Split right creates another view in a new group. Ordinary opens prefer an existing
-view in the active group. Each group contains at most one view per file. Group
-merges and moves collapse redundant views without discarding shared edits. The
-last view close asks about unsaved work; project/application close prompts once
-per buffer. Save As changes the shared snapshot/path and every tab title. Undo,
-folding and modified state are shared; cursor, selection and scrolling are local.
-Markdown views retain the shared editor's `document_state` owner for file identity
-and exact saved-byte baselines. `MarkdownBuffer.configure()` updates that owner
-for each view while the source QTextDocument remains shared; rich imports and
-search/table presentation stay local to the view. See the
-[shared Markdown ownership contract](../../../../Python/commonUtils/docs/development/reference/ui/markdown/markdown.md#internal-ownership-and-embedding-contracts).
-Internal groups are QTabWidgets with project-confined tab bars. Rename preserves
-open buffers, but rejects affected pending opens, active autosaves and ownership
-in another project. Delete rejects open documents and pending opens; only files
-and empty directories can be deleted. The shared model owns lazy loading and
-rename validation.
+Git's `RepositoryView.edit_file` validates the working path before the shell
+routes it to the enabled IDE's `open_registered_file`. IDE selects the deepest
+registered root and reopens its retained workspace if needed. If IDE cannot
+open the file, the shell can fall back to Text Editor. Historical selections
+keep their Git preview while activation opens the current working file.
 
-ResultWorker requests are serialized per project; a process-wide lock serializes
-Jedi's caches across projects. GUI inputs are copied before dispatch. Analysis
-results validate source identity, revision, cursor and active view. Search and
-quick-open scans have exclusions, limits and cooperative cancellation. Jedi cannot
-be forcibly interrupted; owners are retained until it returns. SearchPanel keeps
-its own cooperative worker lifecycle. No project code is executed by IDE itself;
-Jedi may start its configured Python environment for introspection.
+## Project tree and workspace controls
 
-State captures project order, active project/group/files, tab order, splitter sizes,
-per-view cursor/scroll locations and tree expansion/filter/selection. Repeated
-paths in different group records restore separate views of one buffer; existing
-version-1 stores remain compatible. Missing file
-records survive saves. Navigation history stays in memory. Opening the same path
-in different projects intentionally creates project-independent buffers; shared
-text IO detects conflicting saves. External watchers report changes and saves
-always revalidate original disk bytes. Buffers are not crash checkpoints.
+The project tree wraps the shared lazy `BrowserFileSystemModel`. `ProjectFilter`
+applies exclusions and filename filters while retaining filesystem index mapping
+and folder-first natural ordering. Inline rename uses the shared validation
+and filename delegate. It rejects affected pending opens, active autosaves,
+other-project ownership and destination document collisions. On success it
+retargets snapshots, document maps, watchers and history, including every open
+descendant of a renamed folder. Shared text and undo survive. Deletion is
+limited to files and empty folders, and rejects open files and pending opens.
 
-Jedi 0.19.2 and parso 0.8.7 are MIT/OS-independent Python dependencies pinned in
-uv.lock. Pygments remains 2.19.2. Shared commonUtils changes are limited to language
-detection and a Blade overlay delegating PHP/HTML grammar work to Pygments.
-Future work should move bounded save/reload IO off the GUI thread, add optional
-unsaved-import overlays, and validate native Windows/Linux interaction. Automatic
-diagnostics and automatic hover remain unimplemented. Git working-file handoff
-is implemented as described above.
+`ProjectGitStatus` runs bounded porcelain-v2 reads on an executor and publishes
+on the GUI thread. The tree restricts them to the project subtree. Dirty
+submodule contents are read separately, with a 16-repository and five-second
+budget. Folders keep their normal color when children change. Ignored items
+and descendants show olive foregrounds and status tooltips. Modified buffers
+overlay the Git snapshot, including in projects outside Git, and clear on
+undo, save or close. Status loss or a failed worker submission clears stale
+decorations and permits the next refresh. Closing cancels reads.
 
-## Shared-view implementation and reuse review
+Shared Workspace containers own project docking and detachment. Internal
+`ScopedTabBar` gestures stay within the project's editor splitter and support
+up to three columns. Group moves and merges collapse redundant views while
+preserving the buffer. Project shutdown snapshots layout before dock destruction
+and honors close vetoes across detached containers. See
+[desktop architecture](../../../development/architecture.md) for the shell
+close protocol.
 
-The shared-view update adds four workflow tests covering bidirectional editing,
-shared undo/redo and modified indicators, independent cursor/scroll restoration,
-closing and destroying the original view, Save As propagation, external conflicts,
-reload, duplicate merging and one close prompt per modified buffer, plus navigation from the secondary view. All 18 IDE
-tests pass on macOS/offscreen Qt. The 34 standalone Text Editor tests and three
-shared CodeEdit tests also pass. Ruff and diff whitespace checks pass. Native Windows/Linux checks remain outstanding.
+## Find in Files
 
-The documentation audit updated the user guide, this architecture contract, the
-feature overview and root capability row. It also corrected the analysis limit
-(characters rather than bytes), identified disk-only project search and clarified
-the limits of simultaneous configuration writes. Earlier validation sections are
-historical and do not imply a new full-suite run.
-
-The three follow-up refactors are now implemented:
-
-1. IDE and standalone EditorViews use commonUtils' shared CodeEdit attachment and
-   detachment APIs. Their lifecycle contracts are documented in that repository's
-   code-editor API guide; project paths and close policy remain in Logistics.
-2. IDE rebinds the existing shared highlighter when the original view closes,
-   instead of destroying/recreating it. Its theme timer has highlighter ownership.
-3. IDE Navigation.place_view centralizes cursor clamping, 1-based line/code-point
-   column conversion to Qt UTF-16 offsets, and scroll placement. navigate_to applies
-   locations through open_path's completion callback to the exact opened view.
-   Definitions, project search, history, go-to-line, split creation and session
-   restoration use these helpers, removing the extra queued positioning jobs.
-
-Text snapshot encoding and conflict-checked writes already live in commonUtils;
-do not create another persistence abstraction. Standalone TextEditor's document
-service also owns recovery and window policy, so reusing that whole service for IDE
-would couple distinct workflows. A future async IO refactor should reuse only its
-worker/snapshot boundary, while retaining each feature's close and recovery policy.
-The refactors preserve the documented user workflows and version-1 saved state.
-Regression coverage includes detach/reattach without duplicate folding hooks,
-highlighter rebinding through native view destruction and palette changes, and
-queued navigation with non-BMP characters into distinct target groups.
-
-Refactor validation on macOS/offscreen Qt: 19 IDE tests, 34 standalone Text Editor
-tests and 26 shared code-editor/component tests pass (79 total). Ruff and diff
-whitespace checks pass. Native Windows/Linux and other commonUtils consumers were
-not validated in this pass. Unrelated workspace/menu edits remain outside these
-commits.
-
-## UI refinement — 2026-10-11
-
-ProjectWorkspace menus route through the existing workspace menu publisher. IDEPage
-creates projects in the requesting container and retains registrations across closes.
-Every project remains a single workspace pane, including its browser and editor
-groups. Internal drops move the existing EditorDocument or merge redundant views;
-empty columns are pruned, while closing a group moves files into a remaining group.
-There is a three-column cap and no external/cross-project file-tab transfer path.
-Confined gestures are observed across child-widget event receivers until release
-or cancellation, so a destination editor cannot strand the source's drag state.
-The shared component owns that gesture routing; IDE continues to own drop
-validation, column placement and document lifetimes. Regression tests exercise
-repeated two-column side drops through both source and destination receivers,
-header/center merges, split recreation, Escape/outside cancellation and the cap,
-with unsaved buffers, cursors and undo history retained.
-Drag-completion validation on macOS: all 36 IDE tests in six isolated modules,
-eight shared scoped-tab tests, and four shared workspace test modules passed.
-The 12 focused IDE/scoped-tab tests also passed under native Cocoa. The gesture
-matrix covers 48 side drops across three window widths and both event receivers,
-plus 24 QTest press/move/release side drops, merges and cancellation. Native
-Windows/Linux pointer behavior remains unverified.
-Project close snapshots layout before dock destruction and honors unsaved-close vetoes.
-Application shutdown covers projects in every detached container. Session restore
-reopens projects in the main container; detached OS-window geometry is not persisted.
-
-Tests cover zero/one/two/three projects, equal widths, local detached creation,
-minimum panel widths, group moves/merges, unsaved state, close vetoes and menu routing.
-Platform and full-suite results are recorded in the UI refinement validation report.
+`ui/find_files.py` sends immutable root, options and live-buffer snapshots
+to bounded background search. commonUtils owns matching, masks, exclusions
+and UTF-16 result offsets. The IDE owns project scope, the popup, preview
+and navigation. Search and preview retain separate futures, and generation
+checks reject stale results. Debounced input cancels earlier requests.
+Worker submission errors appear in the affected status label and allow retry.
+Dismissal cancels work. Project shutdown waits for retained jobs to retire.
 
 ## Modifier navigation feedback
 
-IDE EditorDocument views own a transient hyperlink overlay and an 80-ms pointer/
-modifier poll while hovered. Qt ControlModifier represents Command on macOS and
-Ctrl elsewhere. Only Python/stub views expose the hand cursor and request target
-analysis. The overlay uses ExtraSelection, preserving shared editor selections
-and document formatting; standalone CodeEdit/Text Editor behavior is unchanged.
-Navigation uses the existing serialized worker queue, coalesces pending hovers per
-view, and validates source path/revision, hover range, visibility and project
-configuration before showing a blue underline for targets with existing files.
-Missing intelligence silently leaves the symbol unstyled. Leaving, hiding, editing
-or releasing the modifier clears feedback; closing stops the view timer.
-
-Validation: 24 IDE tests (including hover feedback and stale-result coverage) and
-34 standalone Text Editor tests pass on macOS with offscreen Qt. Ruff and diff
-whitespace checks pass. Native Windows/Linux pointer interaction remains untested.
+`ui/documents.py` owns a transient underline overlay and an 80-ms pointer
+poll for Python and stub files while hovered. Qt ControlModifier represents
+Command on macOS and Ctrl elsewhere. Background navigation coalesces hovers
+and verifies source revision, range, visibility and project configuration
+before underlining a resolvable target. Leaving, hiding, editing or releasing
+the modifier clears the overlay. Closing stops the timer.
 
 ## Usage navigation
 
-Modifier-click dispatches a `navigate` analysis snapshot. Jedi's public get_names
-API and the declaration-line prefix identify function/class declaration names
-at the clicked line/column (imported names retain definition navigation); those
-request get_references instead of jumping back to themselves. Calls keep normal
-definition navigation, and F12 remains explicit definition navigation. Shift+F12,
-Navigate → Find usages and modifier+Shift-click explicitly request usages.
-References use Jedi's project scope, omit definition/binding names and builtins,
-filter results to the resolved project root and configured exclusions, deduplicate
-and cap at 200. This is a result limit, not a scan/time limit; Jedi can stop early
-and cannot be forcibly interrupted. Imported aliases/dynamic references may be
-incomplete. The current buffer is a snapshot; other modules use saved content.
-An editor-anchored usage popup is shown even for one usage; selection uses existing history and
-UTF-16-aware navigation. The same revision/caret/view/project checks protect late
-results and popup selection. Hover feedback still uses definition resolution and
-does not run project reference searches. Standalone Text Editor is unchanged.
+`analysis.py` lazily uses Jedi, pinned in `uv.lock`, on serialized background
+workers. A process-wide lock protects Jedi's caches. Keep editing available
+when Jedi is absent. Jedi can start the configured Python environment for
+introspection. A running request can finish after cancellation, so
+publication checks source identity, revision, caret, project and active view.
 
-Usage-navigation validation: all 27 IDE tests pass on macOS/offscreen Qt. The
-focused three-test usage suite also passes after refining import-name detection;
-coverage includes cross-file calls, unrelated same-name functions, exclusions,
-unused declarations, the actual modifier-click picker, Back, and stale edits.
-Ruff and whitespace checks pass. Native Windows/Linux remains untested.
-
-## Embedded Markdown tabs
-
-IDE dispatches `.md`/`.markdown` opens to its MarkdownDocument adapter around
-commonUtils MarkdownViewer. Other files retain EditorDocument. MarkdownBuffer
-owns the source QTextDocument independently of tab lifetime; formatted changes
-synchronize to that source immediately, and other views refresh their presentation.
-The shared rich editor itself and its interactive controls remain in commonUtils;
-project identity, file operations, conflict checks, watcher registration and close
-policy remain in IDE. Standard shortcuts route through project menus, while
-Markdown-specific formatting shortcuts remain local. Local document links request
-project opens rather than replacing a tab's identity. Markdown link destinations
-inherit the originating tab's Read/Edit state and Formatted/Source choice, including
-when reusing an already open destination tab. Native destruction of a Markdown
-view detaches its source document and stops speech/diagram work; project
-shutdown also stops those services. Navigation/persisted positions use source
-UTF-16 offsets. Rich undo stacks are per view; source undo is shared.
-
-Focused regression coverage checks mixed code/Markdown tabs, untouched CRLF saves,
-formatted split synchronization, source editing after native view destruction,
-external conflicts, close vetoes, link routing, Save As identity and reload.
+Modifier-click on a function or class declaration requests usages. Imports
+and calls follow definitions. F12 requests definition explicitly, and
+Shift+F12 requests usages. Usages are deduplicated, limited to the project
+root and exclusions, and capped at 200 results. Jedi can miss dynamic
+references or aliases. The active file uses the current buffer snapshot.
+Other modules use saved content.
 
 ## Usage popup presentation
 
-UsagePopup is a parent-owned Qt.Popup frame, shown without exec or dialog window
-chrome. Its flat table displays filename, line and a bounded code preview, plus
-project scope, count and a local text filter. Preview reads run in the analysis
-worker, are cached per file for the request, skip files over 1 MiB and use the
-current buffer snapshot for the source file. Preview text is plain text; it cannot
-render HTML from project files. Rows retain exact paths/line/code-point columns
-for existing navigation. Escape/outside clicks dismiss, Enter/single-click opens,
-and edits, origin destruction, owner hiding or app deactivation dismiss stale UI.
-Placement clamps to the application/screen intersection near the source caret.
-The existing analysis cap and semantic limits remain unchanged; no project code
-is executed for previews.
+`UsagePopup` anchors to the editor caret and clamps to the application and
+screen. Rows carry exact paths, lines and code-point columns. Navigation
+converts positions for Qt and records Back history. The worker caches plain
+text previews per file for the request and skips disk previews over 1 MiB.
+The current file's preview comes from its live buffer. Origin edits,
+destruction, hiding and app deactivation dismiss stale results. Escape or
+an outside click dismisses the popup.
 
-Popup validation: 37 IDE tests pass on macOS/offscreen Qt; the final focused
-five-test usage suite passes, including outside-click/Escape dismissal, filtering,
-Enter navigation, stale edits, and bounded/unsaved source previews. A rendered
-dark-palette popup was inspected for column layout, selection and truncation.
-Ruff and whitespace checks pass. Native Windows/Linux popup behavior remains
-unverified.
+## Embedded Markdown tabs
+
+`MarkdownDocument` wraps the shared MarkdownViewer for `.md` and `.markdown`
+files. `MarkdownBuffer` owns the shared source QTextDocument. Formatted
+edits synchronize that source and update other views. Source undo is shared
+and formatted undo is view-local. Navigation and persisted positions use
+source UTF-16 offsets. Local links open another project tab and carry the
+origin's Read/Edit and Formatted/Source choices. Project close and native
+view destruction stop speech and diagram work. IDE owns project file identity,
+watching, close and conflict decisions. See the
+[shared Markdown ownership contract](../../../../Python/commonUtils/docs/development/reference/ui/markdown/markdown.md#internal-ownership-and-embedding-contracts).
 
 ## Editor markers and IDE autosave
 
-Logistics `services.editors.ui.changes.ChangeMarkers` owns immutable background diff
-requests, revision/snapshot validation and two-second baseline refresh for IDE and
-Text Editor. It lazily uses Git's read-only `editor_baseline` provider, independent
-of page activation and repository registrations, and falls back to the document's
-saved snapshot when unavailable. Jobs retain Python values only; Qt owners may
-close while reads finish. One pending job per controller and two worker threads
-bound concurrency. Failed worker submission publishes the existing unavailable
-marker state and preserves later refresh/retry; it does not escape the GUI callback.
-Shared gutter APIs are documented in commonUtils.
+`Python/services/editors/ui/changes.py:ChangeMarkers` compares immutable
+background snapshots. It reads the Git index through the configured
+executable when available and otherwise uses the saved file snapshot.
+Revision and snapshot checks guard GUI publication. A failed submission
+reports unavailable markers and permits a later refresh. Shared gutter APIs
+belong to commonUtils.
 
-IDE owns one AutoSave per DocumentBuffer, including Markdown buffers. Project
-metadata stores off/after_delay/focus_change (default after_delay, 1000 ms). Only
-source-text changes restart the debounce; explicit mode/resume scheduling is
-separate so formatting notifications cannot indefinitely postpone a save. Snapshot
-encoding and conflict-checked publication run on the workspace's retained worker
-queue. Completion compares source text with the text submitted for saving,
-so newer text stays dirty while formatting-only Qt revisions do not force another
-save. Active
-writes veto final-buffer close, manual save and reload; workspace shutdown already
-waits for its worker queue. Modal save/close choices suppress autosave. Failures
-pause that buffer until an explicit save/reload succeeds and remain in a dedicated
-notice. Split views do not duplicate writes. Manual save/reload IO remains
-synchronous; autosave provides no crash checkpoint or cross-process writer lock.
-
-Validation on macOS/offscreen Qt: all 40 existing IDE tests and 36 standalone
-Text Editor tests passed, along with seven new baseline/autosave cases. The
-commonUtils suite ran 792 tests across 108 isolated modules with three skips and
-no failures, including marker rendering.
-Visual inspection confirmed separate marker, folding and line-number lanes.
-Native Windows/Linux interaction and other commonUtils consumers remain untested.
+One `AutoSave` per buffer supports Off, After delay (1,000 ms by default)
+and Focus change. Source changes restart the debounce. A worker saves a
+captured snapshot and completion compares the submitted source text with
+the current text, keeping newer edits dirty. Active writes block final-buffer
+close, manual save and reload. Modal save/close choices suppress autosave.
+After a failure, use an explicit save or reload to resume. Manual save and
+reload IO are synchronous. The buffer is not a crash checkpoint.
 
 ### Gutter review and actions
 
-The follow-up `editor_hunks.HunkReview` uses the host's retained worker queue for
-baseline validation and Git jobs. Gutter hits use the current published snapshot
-and document revision; review actions revalidate live buffer identity/text. Revert
-rechecks the Git index (or saved snapshot) and replaces just the selected range
-through one QTextCursor edit block, converting offsets to UTF-16 for Qt. IDE's
-normal autosave policy applies to the resulting edit.
+The shared `editor_hunks.HunkReview` controller rechecks buffer identity, text
+and the Git index or saved snapshot. Revert applies one undoable text edit.
+Staging requires the buffer to match disk and shows the complete Git hunk,
+which can cover several markers. The explicit stage action delegates to
+Git's checked patch application and leaves the working file untouched.
+Stale or destroyed views discard completion, and shutdown cancels queued
+work and active Git reads. Use the Git workspace for unsupported operations.
 
-Staging first verifies that the full buffer matches disk, loads a complete Git
-hunk and shows its exact patch (which may group nearby markers). The explicit stage
-action delegates to Repository.apply_hunk, preserving its status, attribute,
-regular-file and stale-patch validation. Staging never writes the working file.
-GUI completion callbacks reject destroyed views and stale buffers; jobs remain
-owned by each host's existing worker lifecycle. Git UI activation/registration is
-not involved. Untracked and otherwise unsupported hunk operations stay in the
-Git feature's file workflows.
+## Validation
 
-Document destruction cancels queued gutter futures and signals the Git runner to
-stop active reads. No Qt objects enter the background executor.
+| Change | Focused fixture |
+| --- | --- |
+| Canonical buffers, rename, saved settings or open/restore ordering | `Python/tests/ide/test_ide.py` |
+| Lazy tree, ignored paths and dirty submodule files | `Python/tests/ide/test_ide_browser.py` |
+| Markdown split sync, link routing, CRLF and close conflicts | `Python/tests/ide/test_ide_markdown.py` |
+| Definition hover, usage preview and stale results | `Python/tests/ide/test_ide_links.py` and `test_ide_usages.py` |
+| Confined drops, cancellation and group limits | `Python/tests/ide/test_ide_drag.py` |
+| Autosave, baselines and reviewed hunks | `Python/tests/editing/test_editor_changes.py` |
 
-Hunk-action validation on macOS/offscreen Qt: six new hunk/lifecycle tests and the
-seven baseline/autosave tests passed. The existing Git suite passed 121 tests
-across seven isolated modules; standalone Text Editor passed 36 tests across three
-modules after worker integration. Visual inspection covered the review dialog.
+For Find in Files, run from the repository root:
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/ide/test_ide_find_files.py
+```
+
+Expect six passing cases, covering live-buffer navigation, retry after
+submission failure, stale search and preview suppression, and close
+cancellation. Shared search matching fixtures live in commonUtils'
+`tests/browser/test_search.py`. Offscreen tests cover Qt integration and
+document state. Native pointer behavior and appearance require desktop
+runtime checks.
