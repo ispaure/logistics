@@ -85,22 +85,42 @@ class RotationVisitTests(unittest.IsolatedAsyncioTestCase):
                 await rotation_checks.exercise_rotation(object(), **kwargs)
 
     async def test_native_audit_keeps_full_orientation_sequence_and_records_coverage(self):
-        app = NS(show_home=Mock())
+        expected_panels = [screen.panel for screen in rotation_screens.SCREENS]
+        async def visit(app, check, *, panels):
+            self.assertEqual(list(panels), expected_panels)
+            for panel in panels:
+                await check(panel)
+
+        app = NS(paths=NS(cache='/unused'))
         with ExitStack() as stack:
+            stack.enter_context(patch.object(rotation_checks.sys, 'platform', 'ios'))
+            stack.enter_context(patch.object(rotation_screens, 'visit_screens', side_effect=visit))
             stack.enter_context(patch.object(rotation_checks.asyncio, 'sleep', new_callable=AsyncMock))
             stack.enter_context(patch.object(rotation_checks, 'panel_state', return_value='same content'))
-            rotate = stack.enter_context(patch.object(rotation_checks, 'rotate_panel', new_callable=AsyncMock))
-            stack.enter_context(patch.object(rotation_checks, 'settled_rotation_layout', new_callable=AsyncMock, return_value=3))
+            rotate = stack.enter_context(patch.object(rotation_checks, 'rotate_panel', new=AsyncMock(return_value=3)))
             stack.enter_context(patch.object(rotation_checks, 'safe_geometry', return_value={'view_width': 320}))
-            stack.enter_context(patch.object(rotation_checks, 'pose_snapshot', return_value={}))
+            pose = {'duo_capable': True, 'hinge_status': 2, 'division_regions': [{'x': 100}]}
+            stack.enter_context(patch.object(rotation_checks, 'pose_snapshot', return_value=pose))
+            stack.enter_context(patch.object(rotation_checks, 'assert_welcome_actions_reachable', new_callable=AsyncMock))
+            capture = stack.enter_context(patch(
+                'mobile_build.native_tests.tests.logisticsmobile.fixtures.capture_window', new_callable=AsyncMock))
             stack.enter_context(patch('builtins.print'))
-            result = await rotation_checks.exercise_rotation(app, cycles=2, panels={'home'})
-        expected = ['portrait', 'landscape-left', 'portrait', 'landscape-right', 'portrait'] * 2
-        self.assertEqual([row['orientation'] for row in result['rotation_samples']], expected)
-        self.assertEqual([call.kwargs['orientation'] for call in rotate.await_args_list], expected)
-        self.assertEqual([row['cycle'] for row in result['rotation_samples']], [0] * 5 + [1] * 5)
+            result = await rotation_checks.exercise_rotation(app, record=Mock())
+        expected_poses = ['portrait', 'landscape-left', 'portrait', 'landscape-right', 'portrait']
+        expected = [(panel, cycle, orientation) for panel in expected_panels
+                    for cycle in range(2) for orientation in expected_poses]
+        fields = ('panel', 'cycle', 'orientation')
+        samples = result['rotation_samples']
+        self.assertEqual(len(samples), 320)
+        self.assertEqual([tuple(row[field] for field in fields) for row in samples], expected)
+        self.assertEqual([tuple(call.kwargs[field] for field in fields) for call in rotate.await_args_list], expected)
+        self.assertTrue(all(row['pose'] == pose and row['fixed_controls'] == 3 for row in samples))
+        self.assertEqual([call.args[1].name for call in capture.await_args_list],
+                         [f'rotation-{panel}-{orientation}.png' for panel in expected_panels
+                          for orientation in dict.fromkeys(expected_poses)])
         self.assertTrue(result['rotation_preserves_panels'])
-        self.assertEqual([row['panel'] for row in result['rotation_inventory']['screens'] if row['selected']], ['home'])
+        self.assertEqual([row['panel'] for row in result['rotation_inventory']['screens'] if row['selected']],
+                         expected_panels)
 
 
 class RotationScenarioTests(unittest.TestCase):
