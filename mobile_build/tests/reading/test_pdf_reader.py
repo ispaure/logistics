@@ -380,10 +380,16 @@ class PDFMobileTests(unittest.TestCase):
                                 while not started.is_set():
                                     await asyncio.sleep(.001)
                             await asyncio.wait_for(wait_started(), timeout=5)
-                            owner.close_crypt()
+                            self.assertTrue(owner.close_crypt())
                         finally:
                             release.set()
                         await pending
+                    # Provider progress can keep the close pending after the
+                    # search retires. Observe the actual session closing.
+                    async def wait_for_close():
+                        while owner.session.id in app.private_sessions.controllers:
+                            await asyncio.sleep(.01)
+                    await asyncio.wait_for(wait_for_close(), timeout=5)
                     self.assertTrue(search.controller.disposed)
                     self.assertFalse(search.controller.results.matches)
                     self.assertEqual(search.input.value, '')
