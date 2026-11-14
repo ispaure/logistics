@@ -1,129 +1,55 @@
 # LM Chat integration
 
-[Developer index](../../../development/development.md)
-
-`features.lm` owns the text-chat workspace and OpenAI-compatible HTTP adapter.
-Its `Feature` declaration adds `lm.chat` and settings; the generic host does not
-import its implementation. The `lm` sidebar glyph is additive; the reserved Misc
-menu/glyph remains intact. No additional runtime dependency is required.
-
-Desktop presentation lives under `Python/features/lm/ui/`: `page.py` coordinates
-navigation and generation presentation, `generation.py` coordinates request
-preparation/publication/transport over captured inputs, `layout.py` builds widgets, and composer,
-profile, transcript, image and IDE-context modules own their specific UI work.
-The root `session.py` owns the conversation record, edit lease, dirty state and
-response transitions independently of widgets. See the feature's
-[module map](development.md) before changing these owners.
-Root-level presentation forwarding modules have been removed; registration imports
-`ui/page.py` lazily. Import presentation from `features.lm.ui`. Mobile also
-consumes the shared generation/session owners
-through its own execution adapter; see the
-[shared lifecycle contract](development.md#shared-desktop-and-mobile-generation).
-
-Mobile `ChatUI.show_chat` retains profile admission and lazy initial selection;
-named builders assemble input/transcript controls, configuration and the retained
-workspace in their original order. `_project_chat_rows` updates recycled rows
-under the native selection guard without selecting a new record itself. Desktop
-`LMPage._bind_session_controls` retains timers and transport/widget bindings;
-`_populate_conversation_tree` projects records while `refresh` retains the signal
-guard, prior selection and expansion restoration. Neither path adds chat state.
-Transcript workers still capture the conversation and render generation, rejecting
-stale results. Session leases, drafts typed during generation, cancellation,
-session-only keys and the distinct desktop tools/mobile text policies retain their
-existing owners and contracts.
-
-Conversation/profile data are under `preferences_path().parent / 'LM'`, outside
-personal `configuration/` reset. Version-one JSON transcripts have stable UUIDs,
-optimistic revisions, drafts, turn states and generation metadata. UI selection
-holds an exclusive QLockFile edit lease; save publication also holds a short lock
-while checking revisions. Qt's dead-process lock handling allows crash recovery.
-Only a page that acquires the lease marks a saved streaming response interrupted.
-Original malformed or future-version records are preserved.
-
-The conversation tree mirrors nested directories under `LM/conversations`.
-New folder and Move actions create real directories and move the corresponding
-JSON. Flat version-one records remain supported; the optional `folder` field is
-derived from physical placement on read. Global ID lookup detects duplicate files
-across folders, preserves them and blocks ambiguous edits. Moves use the existing
-publication lock and stable root-level ID lease, preserve the source until the
-new record is published without replacement, and advance optimistic revisions.
-Folder paths are relative, portable and do not traverse links. Search spans all
-levels. Server profiles remain in `LM/profiles.json`, independent of this hierarchy.
-
-The composer handles Enter to send and Shift+Enter for a newline, with an input
-method composition guard. Send/Stop shares the composer container; message copy
-controls and the latest-reply retry control live in bubble footers. The transcript
-emits retry requests to the page, which derives request/lease enablement from its
-client and session. Empty save
-errors are hidden so the shared status line remains at the bottom. No
-application-wide Return shortcut is installed.
-
-The transport reads content types through `QNetworkRequest.KnownHeaders`, keeping
-SSE and JSON detection compatible with Qt 6.12's changed raw-header name binding.
-The page dispatches through one request client at a time. The session publishes
-the pending turn before inference and rolls back response insertion/draft clearing
-if publication fails. Deltas update session-owned response state; the page's
-GUI-thread timers schedule rendering and persistence. Cancellation is
-distinct from failure. Requests do not run at discovery, construction or refresh
-of the conversation list. Close participation uses `can_close`, `prepare_close`
-and `idle`; no feature worker is destroyed while live. API tokens live only in
-the page's session memory and never in profiles, conversation metadata or exports.
-
-Context consists of system instructions, recent whole completed turns and the
-latest user prompt. Older omitted history remains saved; failed/partial turns are
-excluded. Budgeting is approximate and the model context limit is configured by
-the user. The UI does not promise cross-conversation memory or model training.
-
-See [implementation contracts](development.md) and
-[user behavior](../user/user.md). Code mode adds a bounded project execution contract: a conversation selects an
-IDE registration, snapshots open editor text on the GUI thread, and offers
-list/search/read tools scoped to that root and its exclusions. An optional
-`allow_edits` toggle enables conflict-checked exact text edits to existing files. Ordinary Chat
-continues rejecting tools. Edits save directly after live editor validation on the GUI thread; no shell tool is provided. `agent.py` owns
-the HTTP/tool loop and cooperative ResultWorker lifecycle; busy remains true
-through tool execution and subsequent requests. Tool definitions/results share
-the configured context budget. JSON response metadata retains tool activity;
-legacy records default to Chat. See the implementation contracts for limits.
+Use this reference when changing conversation files, request settings,
+screenshot input or mobile provider admission. For the desktop worked example,
+shared generation lifecycle and Code tools, see
+[LM feature implementation](development.md).
 
 ## Organization and controls
 
-Conversation pinning is an optional boolean in the existing version-1 record;
-legacy records default to unpinned. Forks get a new conversation ID and fresh
-message IDs, while preserving message timestamps and text. Tree drops request
-page-owned storage operations instead of allowing Qt to rearrange rows alone.
-Folder moves hold the publication lock and all descendant conversation leases,
-then perform one no-overwrite rename. Actual file placement remains authoritative
-for folder names, so moving a subtree does not rewrite each JSON file.
+Desktop `storage.py:Store` keeps records under `LM/conversations`. The tree
+mirrors real directories. Version-one records can include `folder`; reads
+derive the value from physical placement, so old flat and manually relocated
+files still load. Malformed, duplicate-ID and oversized files remain available
+for recovery. The inventory warns about them and excludes them from editing
+baselines. Reads are bounded to 32 MiB plus one byte.
 
-Message timestamps render locally from the existing `created` field. The LM footer
-uses QStatusBar with the browser workspace's 10/8/10/8 content margins and a
-zero-margin StatusLine. Chat action buttons share one accessible construction
-helper. Context menus and header menus reuse the same actions and enabled state.
+The stable conversation ID owns the edit lease, regardless of folder. A short
+publication lock serializes revision checks and writes. Moves first publish a
+new copy without clobbering a destination, verify both revisions, then retire
+the original. If removal fails, rollback removes the new copy only while both
+copies still match the verified revisions. Preserve a changed copy or the sole
+surviving copy and report the conflict for recovery. Profiles have independent
+locking and expected-value checks. Desktop profile records publish ID, name
+and base URL. API keys stay in memory.
+
+Draft publication debounces at 700 ms and active replies checkpoint at one
+second. A failed publication cancels generation and keeps an exportable copy in
+memory. Closing waits on persistence and cooperative request retirement before
+releasing the edit lease. Close can proceed after explicit discard.
+See [shared generation](development.md#shared-desktop-and-mobile-generation).
+Use `test_lm.py`, `test_lm_session.py` and the widget/loopback fixtures in
+`test_lm_ui.py` for storage and lifecycle coverage.
 
 ## Mode-specific conversation navigation
 
-Chat/Code are sidebar tabs above the conversation browser. The persisted mode
-is a conversation property, set on creation rather than changed by navigation.
-Browser records/searches filter by mode; legacy records appear in Chat. Switching
-saves the outgoing draft before releasing its lease and restores the target
-mode’s last conversation, or opens/creates one if needed. Save failure vetoes
-the switch. Tabs are disabled during both HTTP and tool work. Folder placement
-and storage identities remain shared, so existing leases and moves still apply.
-
-HTTP 400 diagnostics retain at most 16 KiB of JSON error text internally for
-static classification (no loaded model, unavailable model, context limit). Raw
-server text is never displayed or persisted; unknown errors retain the generic
-message. Authentication error bodies remain ignored.
+Desktop Chat/Code tabs filter by saved conversation mode with separate
+selections. Switching filter leaves each record's mode intact. Missing `mode`
+in legacy version-one files means Chat. The request estimates context with
+whole completed turns, newest first, and uses the latest completed answer per
+turn. Effective settings, endpoint, chosen message IDs and any returned
+completion/usage details are saved with the response. The model/server
+tokenizer remains authoritative. See [Code mode](development.md#code-mode-and-optional-direct-edits)
+for project settings and write recovery.
 
 ## Mobile native action placement
 
-Chat declares New Conversation and its action menu as screen-level toolbar
-controls for the iOS host. The conversations drawer occupies the leading native
-navigation group; UIKit owns its horizontal or Duo vertical placement. The
-composer and Send/Stop remain in the message pane. Sidebar settings uses a
-preferences symbol so ellipsis remains reserved for overflow. The feature keeps
-its conversation title/model content and command callbacks; Android retains its
-existing header layout.
+On iOS, New Conversation and the action menu are screen-level controls.
+The conversations drawer occupies the leading navigation group. UIKit
+places it according to the window and orientation. Composer and Send/Stop
+stay in the message pane. Android uses its native header layout. The
+managed `chat-settings` and `chat-laptop` probes exercise rotation, native
+control placement and retained drafts with synthetic inputs.
 
 ## Mobile server setup
 
@@ -233,3 +159,20 @@ error preservation and a saved UI conversation without an address or key.
 the Android host minimum. Disposable native host builds verified the Swift bridge
 and Android dependency/API compilation plus manifest merging. Native bridge
 compilation is separate from successful inference on eligible physical devices.
+
+## Mobile persistence and validation boundaries
+
+`mobile/storage.py:ChatStore` keeps a flat private directory and separate
+`profile.json`. It accepts text Chat only, with at most 200 messages, 65,536
+draft characters and 2 MiB per record. Profile fields are schema, URL, model,
+generation settings and provider. Session keys stay in memory.
+
+Mobile draft saves debounce at 250 ms with a one-second maximum while
+typing. Sequence and generation guards keep queued writes from overtaking
+explicit saves. The write lock serializes publication, and prior bytes
+are rechecked before replacement. Missing previously saved records and wrong
+revisions are conflicts. Preserve malformed records for recovery. Catalog
+summaries cache ID, title and update time using file identity and timestamps.
+Discovery preserves a draft typed while inventory loads.
+`test_chat_inventory.py`, `test_chat_ui.py`, `test_deferred_chat.py` and
+`test_lm_storage_adapters.py` cover these boundaries.
