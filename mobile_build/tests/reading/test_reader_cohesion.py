@@ -44,7 +44,9 @@ class ReaderCohesionTests(unittest.TestCase):
             owner.set_reading_mode(False)
             view = owner.library_view
             self.assertEqual(view._native_reader_title(), owner.session.title)
-            self.assertEqual(view._document_path(), f"{record['name']}\n\n{path}")
+            title, source_path = view._document_path().split('\n\n', 1)
+            self.assertEqual(title, record['name'])
+            self.assertTrue(Path(source_path).samefile(path))
             path.unlink()
             cached = store.path(record['id'], '.epub' if kind == 'epub' else '.cbz')
             self.assertEqual(view._document_path(), f"{record['name']}\n\n{cached}")

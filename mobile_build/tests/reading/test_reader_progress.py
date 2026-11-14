@@ -168,13 +168,14 @@ class ProviderProgressLifetimeTests(unittest.IsolatedAsyncioTestCase):
         from mobile.provider_progress import ProgressWrites, ProviderProgress
         from services.documents.progress import ProgressStatus
 
-        owner = NS(active_host=True, crypt_reader=NS(labels=['page']),
+        owner = NS(active_host=True, crypt_reader=NS(labels=['page'], kind='.txt'),
                    crypt_page=NS(value='page'), loop=asyncio.get_running_loop())
         progress = ProviderProgress.__new__(ProviderProgress)
         state = NS(flush=Mock(return_value=ProgressStatus.SAVED), retire=Mock(),
                    observe=lambda value: value, load_status=ProgressStatus.ABSENT,
                    write_status=ProgressStatus.SAVED)
         ProgressWrites.__init__(progress, owner, state)
+        progress.reader = owner.crypt_reader
         progress.pending = {'page': 0}
         progress.surface = progress.surface_task = None
         progress.surface_ready = False
