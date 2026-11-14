@@ -50,8 +50,8 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
         with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='cancel')) as decision:
             assert app.close_crypt()
             # An in-flight page operation can defer close first. Closing can
-            # then queue its own final reading-position checkpoint.
-            for task_name in ('_exit_task', '_progress_close_task'):
+            # then flush native Markdown input and save the final reading position.
+            for task_name in ('_exit_task', '_markdown_close_task', '_progress_close_task'):
                 pending = getattr(owner, task_name, None)
                 if pending is not None:
                     await asyncio.wait_for(asyncio.shield(pending), 60)
@@ -60,7 +60,8 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
                 await asyncio.wait_for(asyncio.shield(pending), 60)
                 decision.assert_awaited_once()
         if not dirty:
-            assert owner.session.id not in app.private_sessions.controllers, 'Clean private reader did not close'
+            assert owner.session.id not in app.private_sessions.controllers, (
+                'Clean private reader did not close', owner.session.title)
         # UIKit restores retained folder rows after a reader pop. Finish that
         # navigation before starting another listing on the same browser.
         pending = app.routes.folders.task

@@ -7,6 +7,7 @@ RUN set -e; timeout --kill-after=10s 180s dnf install -y https://download1.rpmfu
 RUN timeout --kill-after=10s 600s dnf install -y git procps-ng python3-pip mesa-libEGL mesa-libGL libxkbcommon dbus-libs \
     fontconfig dejavu-sans-fonts dejavu-sans-mono-fonts glib2 libstdc++ pulseaudio-libs \
     nspr nss alsa-lib libdrm libXcomposite libXdamage libXrandr libxkbfile \
-    libXtst libXScrnSaver cups-libs gtk3 xorg-x11-server-Xvfb xauth xcb-util-cursor tar gzip openssl-libs snappy minizip-ng-compat \
+    libXtst libXScrnSaver cups-libs gtk3 xorg-x11-server-Xvfb xauth libxkbcommon-x11 \
+    xcb-util-cursor xcb-util-image xcb-util-keysyms xcb-util-renderutil xcb-util-wm tar gzip openssl-libs snappy minizip-ng-compat \
     vlc-libs vlc-plugins-base vlc-plugin-ffmpeg vlc-plugins-extra libavcodec-freeworld && dnf clean all
 RUN set -e; timeout --kill-after=10s 180s python3 -m pip install --no-cache-dir uv==0.13.4; :
