@@ -1,69 +1,86 @@
 # Minecraft feature
 
-The desktop feature contributes a local-folder server selector to Workspaces,
-not a standalone destination. See the [user guide](../user/user.md) and
-[mobile availability](../user_mobile/user_mobile.md). Shared contribution contracts
-are described in [feature conventions](../../../development/features.md).
+Minecraft adds server discovery and launch controls to desktop Workspaces.
+
+## Try a Linux launch check
+
+1. Enable **Minecraft Server** in desktop **Settings → Features**. In the
+   managed local workspace root (default `~/Server/Local`), create
+   `MinecraftProbe/ProbeServer` with an empty `server.properties` and an empty
+   `bedrock_server` file. In **Workspaces → Local → Rclone Copies**, use
+   **Refresh folders**, select **MinecraftProbe** and open **Actions**.
+   The **Minecraft** section should open on **Bedrock**. On Linux, a file
+   with mode `0644` leaves **Launch Server**
+   disabled. Change it to `0755`, refresh and reselect the workspace. Expect
+   the button to become enabled. Leave the button unpressed and remove the
+   disposable folder after trying it.
+2. In `Python/features/minecraft/ui/folder_widget.py`,
+   `MinecraftFolderWidget._show_server()` sets button enablement from
+   `MinecraftServer.is_launchable()`. Follow that to
+   `MinecraftServer.__get_disk_app()` in `Python/features/minecraft/server.py`.
+   As a temporary change, replace the Linux permission check's `os.X_OK`
+   with `os.R_OK`. This would offer to launch the readable but nonexecutable
+   file. Run the check, then restore `os.X_OK` and run it again.
+
+Run from the repository root with the desktop environment set up, on Linux
+or macOS:
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/integrations/test_minecraft_platforms.py
+```
+
+Expect `test_linux_binary_is_bedrock_and_requires_execute_permission` to fail
+with the temporary change and both tests to pass after restoring it. The suite
+mocks Linux and the launch adapter. The execute-permission case requires a
+POSIX host and skips on Windows.
 
 ## Owners and registration
 
-- `Python/features/minecraft/__init__.py` exposes `register()` and the compatibility
-  `get_contributions()` entry point, lazily importing `ui_contributions.py`.
-- `ui_contributions.py` returns a `Feature` with one `FolderFeatureContribution`
-  named Minecraft, order 20. It requires a local entry and detected servers.
-  Its flat action list is empty; `create_widget` imports the Qt widget lazily.
-- `detection.py` is the active discovery path. It asks `Directory.list_directories`
-  for immediate children plus two additional levels (`MAX_SERVER_DEPTH = 3`),
-  then admits only directories with a regular `server.properties` file. The
-  selected root itself is excluded. There is no fixed Dropbox root or name-based
-  Backups exclusion in this discovery path.
-- `server.py` owns edition classification, configured application/working-directory
-  resolution, wiki lookup and external folder/editor/browser actions.
-- `ui/folder_widget.py` owns `MinecraftFolderWidget`, Java/Bedrock filtering,
-  initial edition selection and action enablement. Import that owner directly;
-  there is no root `folder_widget.py` compatibility module.
+`Python/features/minecraft/__init__.py` exposes `register()` and the compatibility
+entry point `get_contributions()`. `ui_contributions.py` declares the
+`FolderFeatureContribution`. Its availability check requires a local entry and
+at least one detected server. Workspaces calls the widget factory after
+detection. The factory imports `ui.folder_widget.MinecraftFolderWidget` on
+demand. Import the widget from that module for desktop UI changes.
 
-`server.py` also retains `get_minecraft_server_lst`, an older immediate-child
-helper that excludes names ending in `Backups` and does not require the properties
-marker. The current contribution/widget use `detection.get_servers`, not that
-legacy helper. Keep their behavior distinct when maintaining callers.
+`detection.get_servers()` calls `Directory.list_directories` with
+`MAX_SERVER_DEPTH - 1` to inspect ordinary directories one to three levels
+beneath the selected root. A candidate must contain a regular
+`server.properties` file. Choose the containing workspace if a server is
+missing. `server.get_minecraft_server_lst()` is an older helper for immediate
+children, skipping names ending in `Backups` and accepting candidates without
+the marker. Workspaces uses `detection.get_servers()` and applies no
+name-based `Backups` exclusion.
 
 ## Launch and action boundaries
 
-Either Bedrock executable name classifies the directory as Bedrock regardless of
-host OS. The launch adapter then requires the matching platform file: Windows
-`bedrock_server.exe`, or Linux `bedrock_server` with execute permission. macOS has
-no Bedrock application adapter. Other nonempty directories are classified Java;
-active discovery already requires the properties marker.
+The widget starts on Java when Java servers exist, otherwise Bedrock. Either
+Bedrock executable name classifies the directory as Bedrock on any desktop OS.
+The launch adapter requires `bedrock_server.exe` on Windows or an executable
+`bedrock_server` on Linux. macOS has no Bedrock launch adapter. An ordinary
+discovered directory with no Bedrock executable name uses the Java path.
 
-Java launch lookup reads `[LaunchScript] win`, `mac` or `linux` from the server's
-`logistics_cfg.ini`. A non-None value constructs `DiskApp` with the server folder
-as working directory. `is_launchable()` checks that an adapter exists; it does
-not validate Java availability or script contents. `launch_server()` delegates to
-that adapter and reports an error when it is absent. No server lifecycle monitor,
-embedded console or stop action is registered.
+For Java, `server.py` looks up `[LaunchScript] win`, `mac` or `linux` in
+`logistics_cfg.ini`. A configured value creates a `DiskApp` with the server
+directory as its working directory. `is_launchable()` checks for that adapter.
+Check the script and runtime if startup fails. Logistics delegates launch and
+leaves process management to the server's own controls.
 
-The wiki uses `[Documentation] wiki`; availability checks for a non-None value,
-not successful URL access. Folder availability checks the directory, and property
-editing checks the file before using the external default editor. Editing does
-not reload a running server. See the user guide for the complete INI example.
+`[Documentation] wiki` enables **Open Wiki** when configured. **Open Folder**
+and **server.properties** depend on the directory or file existing. Logistics
+hands off to the system browser, file manager or editor for those actions.
+Reload properties through the server after editing if needed. See the
+[user guide](../user/user.md#configure-launching) for the INI example.
 
 ## Platform scope and validation
 
-`Python/services/mobile_features.py` does not register Minecraft. No mobile
-feature adapter is provided. Desktop folder presentation also keeps local-only
-detectors away from private LocalCrypt entries; remote browsing is not a Minecraft
-server execution environment.
+Workspaces excludes private LocalCrypt copies from ordinary local detection.
+The private-folder case in `Python/tests/files/test_folder_sources_ui.py`
+registers Minecraft among the folder tools and checks that the private
+workspace keeps backend-aware controls while bypassing local-only detection.
+The platform tests check launch adapter selection using synthetic files.
+Actual Java and Bedrock process startup remains a separate desktop check.
 
-`Python/tests/integrations/test_minecraft_platforms.py` covers Linux execute
-permission gating and rejection of a Windows-only Bedrock binary on Linux, using
-mocked platform/application adapters without starting a server. The permission
-case is skipped on Windows. The private-folder case in
-`Python/tests/files/test_folder_sources_ui.py` checks that local-only feature
-detectors are not invoked for a private encrypted copy, including Minecraft's
-contribution. These tests do not establish real Java/Bedrock startup or desktop
-console behavior on Windows, macOS or Linux.
-
-This documentation audit reviewed source and test contracts and ran static
-Markdown/link checks only. No Qt session, server, build or device was launched;
-real server startup acceptance remains outside this audit.
+Minecraft is absent from the mobile catalog in `Python/services/mobile_features.py`.
+See [mobile availability](../user_mobile/user_mobile.md) and
+[feature conventions](../../../development/features.md).

@@ -1,54 +1,77 @@
 # Flight Simulator Feature
 
-See the [desktop workflow](../user/user.md) and
-[mobile availability](../user_mobile/user_mobile.md).
+X-Plane Presets applies desktop X-Plane 12 graphics and window settings for
+three historical macOS M3 Max setups.
+
+## Try a preference error change
+
+1. In desktop **Settings → Features**, enable **X-Plane Presets**. From the
+   Settings menu choose **Open full hub with sidebar**, then open **Debug**.
+   Find **X-Plane 12: M3 Max Standalone** under **X-Plane Presets**. You can open
+   and cancel its confirmation to trace the entry without touching simulator
+   files.
+2. In `Python/features/flight_sim/ui_contributions.py`, that action calls
+   `actions.set_xp12_m3_max_standalone()`. Follow it through
+   `set_all_xp12_settings()` to `_updated_preferences()` in
+   `Python/features/flight_sim/actions.py`. Try appending
+   `in {path.name}; check the installation path in Settings.` to the
+   missing-or-duplicated key error so the operator can identify the file.
+3. In `Python/tests/integrations/test_flight_sim.py`, extend
+   `test_missing_key_does_not_change_file` to expect the synthetic file name
+   `prefs` in the error. Keep the assertions that the bytes match the original
+   and that no recovery copy was created.
+
+Run from the repository root with the desktop environment set up:
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/integrations/test_flight_sim.py
+```
+
+Expect five passing tests. The fixture patches the path lookup and exercises
+the same preference parser, including the new error, without opening X-Plane
+or using a private window preset.
 
 ## Contributions and paths
 
 `Python/features/flight_sim/__init__.py` delegates registration to
-`ui_contributions.py`, which declares feature ID `flight_sim`, label **X-Plane
-Presets**, one **Installation** settings contribution and three destructive Debug
-actions. The desktop action host asks for confirmation before calling the action.
-There is no dedicated feature page.
+`ui_contributions.py`. The feature contributes **Installation** settings and
+three actions to the shared [Debug page](../../../development/extension-points.md#debug).
+The desktop action host confirms destructive actions before calling them.
 
-`detection.py` reads layered settings from `config.ini`. A nonempty
-`[XPlane] installation_path` becomes an expanded-user `Path`; otherwise the path is
-`Steam/steamapps/common/X-Plane 12` beneath the user's Application Support directory.
-The helper appends `Output/Preferences/X-Plane.prf` or
-`Output/Preferences/X-Plane Window Positions.prf`. It does not discover installations,
-create missing preference files or validate simulator versions.
+`detection.py` reads `[XPlane] installation_path` from layered `config.ini`
+settings and expands `~` in an explicit path. If blank it uses
+`Steam/steamapps/common/X-Plane 12` under the user's Application Support
+directory. It appends `Output/Preferences/X-Plane.prf` or
+`Output/Preferences/X-Plane Window Positions.prf`. The action needs both files
+to exist. The fallback is a fixed path and the helper does not check simulator
+versions.
 
-Preset paths come from `LogisticsConfig.path_logistics_software_general` plus
-`x-plane/` and the filenames in the [desktop guide](../user/user.md#prepare).
-They are private inputs, not bundled preset downloads.
+Each callback finds its private window preset under
+`LogisticsConfig.path_logistics_software_general / 'x-plane'`. See
+[Prepare](../user/user.md#prepare) for the three filenames.
 
 ## Preference publication
 
-`actions.py` owns all mutations. `_updated_preferences()` reads UTF-8 preferences,
-retains a leading BOM and each changed line's existing ending, and requires exactly
-one line starting with each requested key (including its trailing space). Values
-must be nonnegative integers; the code does not validate X-Plane's semantic range.
-Unrelated lines remain in order.
+`_updated_preferences()` requires exactly one line beginning with each
+requested key and its trailing space. It accepts nonnegative integers, without
+checking the simulator's allowed range for each key. It preserves the UTF-8
+byte-order mark, line endings and unrelated lines.
 
-`_publish_preferences()` checks that the target still contains the captured bytes,
-creates a UUID-suffixed `.previous-…` copy with overwrite disabled, then publishes
-through the shared atomic-write API with a further unchanged-content check.
-Shared persistence API details belong in commonUtils' own documentation.
+`_publish_preferences()` compares the current bytes to those read earlier,
+writes a UUID-suffixed `.previous-…` recovery copy without overwrite, then
+calls commonUtils' atomic writer with another content check before replacement.
 
-`set_all_xp12_settings()` validates graphics keys and reads existing window
-preferences and the selected preset before the first publication. It publishes graphics first,
-then window positions. If window publication raises, rollback validates that
-graphics still contain the just-published bytes immediately before atomic
-replacement. If rollback fails, the error reports both failures and the retained
-recovery copy. `test_flight_sim.py` covers an external edit during rollback
-staging. This check preserves detected concurrent edits. The two files publish
-separately without a simulator lock. Recovery copies remain after success or
-rollback and are managed manually.
+`set_all_xp12_settings()` validates graphics keys and reads both the existing
+window preferences and the preset before publishing anything. It publishes
+graphics first and window positions second. If window publication fails, it
+restores the graphics original only if the graphics file still matches its
+own update at replacement time. A rollback failure reports both failures and
+the retained graphics recovery path. The two files publish separately, with
+no simulator lock. Close X-Plane before applying a preset. Keep the recovery
+copies until both files are checked and follow [Apply and recover](../user/user.md#apply-and-recover)
+if manual restoration is needed.
 
 ## Fixed graphics presets
-
-The callbacks use the following values; they do not benchmark hardware or tune
-settings automatically.
 
 | Setting key | Standalone | Flight Desk, internal on | Office |
 | --- | --- | --- | --- |
@@ -62,15 +85,11 @@ settings automatically.
 
 ## Platform and validation scope
 
-The shipped workflow targets desktop X-Plane 12 and historical macOS M3 Max setups.
-An explicit installation path is configurable, but there is no general simulator
-support or demonstrated cross-platform acceptance implied by that setting.
-The feature has no mobile adapter or `mobile_sources.json` and is absent from
-`mobile_build/tools.py`'s mobile source-owner list.
+The focused suite checks missing-key refusal, UTF-8 BOM and CRLF retention,
+original-byte recovery copies, external-edit refusal, and rollback after a
+window write failure including an external edit during rollback. An explicit
+install path allows alternate locations. Compatibility with other machines and
+display layouts requires verification in X-Plane.
 
-`Python/tests/integrations/test_flight_sim.py` uses temporary preference fixtures
-and mocked paths to cover missing-key refusal without mutation, BOM/CRLF retention,
-original-byte recovery copies, detected external edits and graphics rollback when
-window publication fails. These tests do not run X-Plane or verify the private
-presets against physical displays. The documentation audit inspected source/tests
-and ran static checks only; it did not run those regressions or launch a simulator.
+The feature has no mobile source owner in `mobile_build/tools.py`. See
+[mobile availability](../user_mobile/user_mobile.md).

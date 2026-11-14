@@ -1,74 +1,80 @@
 # Aviation Tools
 
-For workflows, settings and troubleshooting, see the [user guide](../user/user.md).
+Aviation Tools calculates distances, headings and aircraft performance on
+desktop. It incorporates the former `ft` / Flight Tools project, developed by
+Marc-André Voyer.
 
-The former `ft` / Flight Tools project is now a Logistics feature with its own
-**Aviation Tools** tab. Developed by Marc-André Voyer.
-See the [user guide](../user/user.md) and [UI architecture](../../../development/features.md).
+## Try a distance display change
 
-`register()` contributes a lazy page factory through the normal feature registry.
-No second QApplication, event loop, launcher, dependency environment or copy of
-commonUtils is required. Settings → Features controls the tab with the standard
-saved feature lifecycle; disabling and enabling retains the page's inputs.
+1. Open desktop Logistics and enable **Aviation Tools** in **Settings → Features**
+   if needed. Open **Aviation Tools → Distance**. Use origin latitude and
+   longitude `0, 0` and destination latitude and longitude `0, 1`. Select
+   **Calculate** and expect `Distance: 60.04 NM`.
+2. In `Python/features/aviation_tools/ui/page.py`, change the format in
+   `distance()` from `.2f` to `.3f`. Relaunch and repeat the calculation.
+   Expect `Distance: 60.040 NM`. Keep the full-precision calculation in
+   `mathUtils/flightUtils.py`.
+3. In `Python/tests/integrations/test_aviation_tools.py`, extend
+   `test_invalid_inputs_report_errors_and_allow_retry`. After its invalid inputs,
+   enter those four synthetic coordinates and assert the complete new result
+   string. Keep the separate numeric reference assertion for `60.04046` NM.
+
+From the repository root with the desktop environment set up, run:
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/integrations/test_aviation_tools.py
+```
+
+Expect seven passing tests, including recovery after invalid input and the
+numeric distance reference. See the [desktop guide](../user/user.md) for the
+other calculator controls.
 
 ## Migrated functionality
 
-- Coordinate distance and true/magnetic course.
-- Wind correction angle, true/magnetic heading and ground-speed estimates.
-- KTAS → KIAS (the original 2,000 ft approximation).
-- KIAS → KCAS (linear interpolation, flaps up).
-- Cruise performance (nearest chart values).
-- All aircraft, airport, airspeed calibration and cruise performance CSV files,
-  browsable in the page instead of printed only to the console.
-
-The `mathUtils`, `plane` and `location` modules retain the original backend APIs
-and formulas, with package-scoped imports. `resources.DATA_DIR` resolves data from
-the feature directory regardless of the current working directory. CSV imports
-use Logistics' shared CSVFile API. Invalid magnetic direction, unknown aircraft,
-unknown airport and unsupported weather/chart methods raise recoverable errors
-instead of exiting the application. The tab presents buttons that open modeless, feature-owned tool windows. Windows
-are created on demand and retained by the page, preserving inputs when closed
-and reopened. The layout-based forms display input errors and support copying
-results. Aircraft / Airports opens its own read-only reference window.
-
-This migration preserves the original calculation limitations. In particular,
-the wind tools use the original vector approximation rather than an exact solved
-wind triangle, KTAS conversion only supports 2,000 ft, and cruise performance uses
-nearest values rather than interpolation. The supplied data is historical and
-is not refreshed from external sources. Weight and balance, navigation charts,
-flight plans, a pilot logbook and PDF export were listed as ideas in the old README
-but had no implementation to migrate.
+- Distance, true and magnetic course, wind correction, true and magnetic heading,
+  and ground speed use `mathUtils/flightUtils.py`. Wind uses the original vector
+  approximation. Input validation rejects out-of-range coordinates, non-finite
+  numbers and invalid magnetic directions. Native units appear on each form.
+- The true-to-indicated airspeed approximation (KTAS → KIAS) supports 2,000 ft.
+  `plane/planeAirspeedCalibration.py` converts indicated to calibrated airspeed
+  (KIAS → KCAS) by interpolating between flaps-matched points. The UI uses flaps
+  up and reports speeds outside the chart as errors.
+- `plane/planeCruisePerformance.py` picks the closest altitude, then uses
+  `mathUtils/weatherUtils.py` to adjust the sea-level temperature by 2 °C per
+  1,000 ft at that altitude. It picks the closest reference temperature and
+  RPM from the chart's value lists and looks for one row at the resulting
+  combination. A missing combination displays an error. This lookup uses
+  historical chart values without interpolation.
 
 ## Source ownership and platform boundary
 
-- `Python/features/aviation_tools/__init__.py` registers the lazy desktop page.
-- `ui/page.py` owns the seven calculator forms, result and error presentation,
-  and the retained modeless tool windows. **Aircraft / Airports** opens the
-  read-only `DatasetBrowser` in `ui/dataset_browser.py`.
-- `mathUtils/flightUtils.py` owns coordinate validation, course normalization,
-  distance, wind and airspeed formulas; `weatherUtils.py` owns the temperature helpers.
-- `plane/planeUtils.py` selects registrations/models from the bundled directories.
-  `planeAirspeedCalibration.py` interpolates between flaps-matched chart points;
-  values outside the chart return no result and the UI presents an error.
-- `plane/planeCruisePerformance.py` chooses the nearest altitude, temperature and
-  RPM independently, then looks for a row with that combination. It first applies
-  the stored 2 °C per 1,000 ft lapse helper to the sea-level temperature at the
-  selected altitude. A missing combination returns no result and is reported by
-  the UI; it does not interpolate or synthesize a row.
-- `location/locationUtils.py` loads airport CSV rows and resolves codes without
-  case sensitivity. `resources.py` owns the package-relative data path.
+`Python/features/aviation_tools/__init__.py` registers the desktop page with a
+factory that imports it on demand. `ui/page.py` owns the tool definitions and
+`Calculator.run()` handles conversion, result display and recoverable errors.
+Each calculator opens in a modeless window, so several can stay open at once.
+Closing a tool or disabling and re-enabling the feature preserves inputs while
+the same page instance lives.
 
-There is no mobile adapter or `mobile_sources.json` in this feature. It is absent
-from `mobile_build/tools.py`'s mobile source-owner list. Its PySide6 desktop page
-is not a mobile destination; see [mobile availability](../user_mobile/user_mobile.md).
-Retained dialog state lasts only as long as the desktop page instance.
+**Aircraft / Airports** opens the read-only `DatasetBrowser` in
+`ui/dataset_browser.py`. Import it from that module. The old
+`features.aviation_tools.ui.page.DatasetBrowser` import returns the same class
+with a `FutureWarning`. `resources.DATA_DIR` is package-relative.
+`location/locationUtils.py` resolves airport codes case-insensitively, and
+`plane/planeUtils.py` selects supplied aircraft and models. Both read the
+bundled historical CSV data through commonUtils. Unknown airport and aircraft
+codes raise `ValueError`. The feature ships without a data refresh service.
+
+The page uses PySide6 and runs in the desktop application. The mobile source
+allowlist in `mobile_build/tools.py` omits this feature. See
+[mobile availability](../user_mobile/user_mobile.md) and the shared
+[feature conventions](../../../development/features.md).
 
 ## Validation
 
-`Python/tests/integrations/test_aviation_tools.py` covers feature discovery/tab retention,
-every migrated calculator, popup lifetime/input retention, input error recovery, reference outputs, all datasets
-and loading from an unrelated working directory.
-
-These test files describe executable regression scope; their presence is not
-evidence of current device or release acceptance. The documentation audit used
-source/test inspection and static checks only, with no Qt or device run.
+The worked check covers desktop registration and page retention, calculator
+windows, error recovery, numeric references and every bundled dataset from a
+different working directory. Run
+`python3 dev.py test desktop --exact-file Python/tests/aviation_tools/test_aviation_tools_boundaries.py`
+for coordinate bounds, zero distance and magnetic course wrapping. Those
+fixtures verify the implemented formulas and bundled data access. Operational
+validation of the historical data and approximations is outside their scope.
