@@ -19,7 +19,7 @@ Application-wide guidance has moved to [developer documentation](development.md)
 | Mobile Settings → Appearance | `Python/mobile/settings/appearance.py`; accent controls in `accent.py` beside it | `mobile.app.LogisticsMobile.show_settings()` → `settings.categories.settings_sections()` → `SettingsNavigation` |
 | Mobile Settings → App | `Python/mobile/settings/app.py` | Same lazy category registry |
 | Mobile Settings → Privacy & Security | `Python/mobile/settings/privacy_security.py`; audio and trusted Wi-Fi controls in sibling modules | Same registry; access policy remains with the [privacy owners](access-privacy.md) |
-| Mobile Settings → Markdown, Text or EPUB | `Python/mobile/settings/text.py` | One parameterized font/reading panel, with feature-specific controls retained |
+| Mobile Settings → Markdown, Text or EPUB | `Python/mobile/settings/text.py` for Markdown and Text, `settings/epub.py` for EPUB | The EPUB reader opens the same EPUB form through `show_from_reader()` |
 | Mobile Settings → Workspaces | `Python/mobile/settings/workspaces.py` | Storage and connection actions delegate to their existing owners |
 | Mobile rclone connections → Credential Packages, Import credential ZIP and Unlock credential ZIP | `Python/features/rclone/mobile/credential_panels.py` builds the controls | `cloud_ui.py` presents the Settings routes. [Mobile credential import](../features/rclone/development/credentials.md#mobile-credential-import) traces picker admission, workflow state and route retirement. |
 | Mobile Settings → Help or About | `Python/mobile/settings/help.py`; installed-version content in `information.py` | Help/About share one module; their routes remain separate |
@@ -120,6 +120,13 @@ The mobile font-unit adapter applies to explicit Toga widget fonts; WebView CSS,
 direct native font APIs and system default sizes keep their own units. Qt uses
 its existing palette and font-role bindings. Native scrolling and scrollbars
 remain toolkit-owned; transfer web scrolling is feature CSS.
+
+### Trace a shared control
+
+| Visible control | Application call site | Shared edit point |
+| --- | --- | --- |
+| Desktop progress and cancellation in Blender and rclone credential Settings | `features/blender/ui/page.py` and `features/rclone/ui/page.py` each construct `OperationProgress` and connect their own completion callback | commonUtils `ui/tasks/operation_progress.py` owns the progress widget, cancellation and worker lifetime |
+| Mobile recycled rows in Chat’s Conversations and the Books & Comics catalogue | Both use `summary_list()` through the shell presentation adapters. `mobile/recycled_file_list.py` supplies the Logistics row appearance and icons | commonUtils `ui/native/recycled_list.py` and its platform adapters own row recycling and selection |
 
 Transfer action/status colors in `surface.css` and terminal-state overrides in
 commonUtils `ui/tasks/process_progress.py` are separate defaults today. Changing
