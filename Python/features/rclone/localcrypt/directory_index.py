@@ -38,9 +38,12 @@ class DirectoryIndex:
         with os.scandir(folder) as children:
             for child in children:
                 check_cancelled(cancelled)
-                info = child.stat(follow_symlinks=False)
-                if child.is_symlink() or (hasattr(folder, 'is_junction') and (folder / child.name).is_junction()):
+                path = folder / child.name
+                if child.is_symlink() or (hasattr(path, 'is_junction') and path.is_junction()):
                     raise ValueError('Linked encrypted storage is not supported.')
+                # Windows DirEntry.stat omits the hard-link count and file ID.
+                info = (path.stat(follow_symlinks=False) if os.name == 'nt'
+                        else child.stat(follow_symlinks=False))
                 if not stat.S_ISDIR(info.st_mode) and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
                     raise ValueError('Choose an independent regular file or folder.')
                 entries.append((child.name, info.st_mode, info.st_ino, info.st_size,
