@@ -187,6 +187,20 @@ interpreter used for Logistics tooling:
 mobile_build/.venv/bin/python -m logistics_build.install_build_manager /path/to/build-deployment-manager
 ```
 
+For an offline install from a local checkout, use uv if the target
+environment's pip cannot find the build backend. Initialize the checkout's
+pinned submodules first and make sure uv has a cached `setuptools>=75`.
+Run these commands from the Logistics checkout root:
+
+```sh
+uv pip install --offline --python .venv/bin/python --no-deps -e /path/to/build-deployment-manager/Python
+uv pip install --offline --python mobile_build/.venv/bin/python --no-deps -e /path/to/build-deployment-manager/Python
+python3 logistics_build/tooling_bootstrap.py status
+```
+
+On Windows, use each environment's `Scripts/python.exe` and run the status
+command with `py`. Check that both installed revisions match the declared pin.
+
 ### Project tooling readiness and repair
 
 The manager's **Project tooling** status checks the declared manager pin in both
