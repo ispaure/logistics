@@ -1,543 +1,150 @@
 # Document storage sessions
 
-Document editors consume resources rather than decrypted filesystem paths.
-`services/documents/storage.py:DocumentResource` retains independent provider
-access, bounds input by the format limit, records a revision and publishes through
-commonUtils' verified resource mutations. Closing it releases only that document's
-lease. `DocumentPolicy` supplies write and persistence policy; a read-only remote
-cannot gain write access through a local cache or wrapper.
+`services/documents/storage.py:DocumentResource` retains provider access, reads
+bounded bytes and captures a revision. Providers own encryption, credentials and
+publication. Formats own validation, serialization and size limits. The host
+owns routing and `DocumentPolicy`, including read-only wrapper restrictions.
+Failed or cancelled saves retain the draft and previous baseline.
 
 ## Streaming local exports
 
-`stage_local_document_export` keeps the existing destination untouched while a
-caller streams and verifies its output. Its default remains exclusive creation.
-To replace an approved existing file, use `local_document_export_revision` to
-capture its `LocalFiles.entry()` revision with that approval and pass it as
-`expected_revision`, including through the SSH
-retrieval API. The stage rejects a changed revision before transfer and uses the
-local provider's checked replacement after verification and cancellation checks.
-Declines must not start an export; do not infer approval in the worker from the
-destination's current existence. Callers own the picker and final extension.
-The provider's revision check and atomic rename are separate system operations;
-this does not lock out unrelated external writers between those operations.
-
-## Ownership
-
-`services.documents.destinations.DestinationRequest` captures a picker operation
-before worker I/O. It owns destination resolution and publication; its result
-distinguishes unchanged storage from successful publication and a saved file that
-could not reopen. UI dialogs, current-selection/credential guards and route/editor
-handoff remain in `mobile.editor_picker`. Failed reopening retains the source draft.
-
-`DocumentResource.delete()` checks the retained revision before provider deletion.
-Notebook documents then ask their ordinary recovery repository to delete that
-validated recovery identity. Views do not perform provider deletion or raw recovery
-directory cleanup themselves. Private notebook documents have no recovery repository.
-
-The host resolves ordinary folders, LocalCrypt copy references and remote sources.
-Providers own encryption, credentials, name mapping and publication mechanics.
-Credential replacement never revives an old resource. The document session holds
-its last successful baseline; failed or cancelled saves do not advance it.
-Publication errors distinguish an unchanged destination from a saved file whose
-reopening failed. Consumers keep their draft until a successful handoff.
-
-After publication, a revision change across the verification read permits one
-fresh read. Android SD-card/FUSE storage can retain the replaced inode's metadata
-until the first open refreshes it. The retry must have a stable revision, match
-the published bytes by SHA-256 and pass format validation. Ordinary reads still
-reject revision changes; failed verification retains the previous save baseline.
-
-Mobile Local and Received Files use the same `MobileLocalFiles` publication
-adapter. When an Android SD-card/FUSE mount rejects exclusive rename flags, it
-creates the destination exclusively, verifies the copied bytes and removes the
-staged source. This fallback preserves existing destinations but exposes a partial
-file during copying; it does not provide atomic visibility. Failed copying cleans
-its partial destination, while verification or source-cleanup failures report an
-incomplete mutation for inspection. The notebook creation regression exercises
-Received Files with an injected `EINVAL` rename failure. Physical Boox validation
-also created and reopened a valid `.rmdoc` on the SD card under Received Files,
-rejected duplicate creation without changing its bytes, and removed the temporary
-probe app and test directory afterward.
-
-The mobile import index recognizes both Local and its sibling Received Files on
-the selected Android drive. Received Files retains its private-storage identity
-after relocation; other drive folders remain outside the import boundary. Host
-regressions cover notebook creation through editor handoff and reopening from
-the SD-card Received Files path, plus identity retention and link rejection.
-The updated main app also opened an existing `.rmdoc` from Workspaces → Received
-Files on the physical Boox; its data was preserved and only the main Logistics
-package remained installed.
-
-The mobile public-layout upgrade uses a private, per-location journal. It
-records old and new relative paths before moving received files and renaming
-the managed collection. Direct files and explicitly marked Notes Libraries
-outside known copy targets move to the ordinary files root. Other unclassified
-folders remain browsable in Rclone Copies. iOS preserves same-volume file
-identity. Android verifies copied files on filesystems that reject exclusive
-file rename.
-
-Ordinary document references use `Files://` or `RcloneCopies://` plus the
-relative path. Each alias resolves against the current storage root. Recent
-documents, favourites, pins, notebook source bindings and new import records
-can use these aliases. The reader progress store uses the same namespaces and
-checks legacy checkpoint bindings when a document is next opened. It writes
-compatible legacy positions and bookmarks under the new key. Encrypted
-copies use `RcloneCopiesEncrypted://` with the existing credential and copy
-identities. Legacy bookmarks are resolved after unlock and use the alias when
-saved again. Both managed folders move by directory rename. The temporary
-upgrade lives under `services/documents/migrations/`. Startup keeps its progress
-screen visible while the upgrade worker runs.
-
-`mobile.resource_imports.ResourceImports` rereads its schema-1 index for each
-lookup and before each remember/forget operation. A process-wide mutation lock
-serializes reload, delta and atomic publication across index instances. Remember
-merges into current disk state; the last published mapping wins for the same
-source key. Forget removes current mappings matching the provider and opaque
-resource ID. The 256-entry/64 KiB bounds, hashed relative identities and refusal
-to overwrite invalid or linked indexes remain. This is process-local protection,
-not a cross-process lock or single-flight import. `test_resource_imports.py`
-covers stale instances, interleaved updates and malformed-index preservation.
-
-Collection and Android device-folder browsing share an ordinary-folder snapshot.
-It validates the collection location at listing boundaries rather than reopening
-its settings and SD-card marker for every child. Child link, regular-file and
-protected-root checks still apply. The device root exposes only Local and
-Received Files. Host regressions cover a 120-file snapshot with at most three
-collection-location checks, private-folder rejection and cancellation; these
-checks do not establish physical Boox latency.
-
-Formats own parsing, validation, serialization, size limits and editing state.
-They do not create crypt configurations or write virtual paths to disk.
-`ResourceTextSession` remains the commonUtils text adapter. Ordinary desktop text
-uses the host's local compatibility adapter to retain its established permissions,
-encoding and conflict behavior. Provider-backed Markdown preparation and desktop
-presentation belong to `services/documents/markdown.py` and `ui/markdown.py`,
-including when the selected provider is LocalCrypt. Mobile adapter composition
-belongs to `services/documents/mobile_storage.py`; native archive and metadata
-transactions remain with their provider owners.
-
-Comic and EPUB metadata models already accept a generic archive source. Their
-streamed rewrite, content-manifest verification and revision-safe publication stay
-with that source; ordinary local saves retain their existing backup policy.
-Neither format needs to identify a crypt implementation.
+`stage_local_document_export` defaults to exclusive creation. For an approved
+replacement, capture `local_document_export_revision` at confirmation and pass
+it as `expected_revision`, including through SSH retrieval. Stage, verify and
+check cancellation before publication. Revision checking and rename are separate
+filesystem operations. Declining consent prevents transfer.
 
 ## Trace a mobile provider reader
 
-Start at `mobile.private_sessions.PrivateSessions.open()` for admission and the
-captured workspace/navigation identity. `ProviderDocumentSession` retains the
-opening operation; `mobile.provider_opening.ProviderDocumentOpening` prepares
-content, builds unpublished controls through `provider_view.py`, then adopts them.
-Format presentation remains in `features/books/mobile/`, `features/comics/mobile/`
-and the other format owners.
+Start at `mobile.private_sessions.PrivateSessions.open()` for admission and route
+identity. `ProviderDocumentOpening` prepares, builds unpublished controls through
+`provider_view.py`, then adopts the reader into `ProviderDocumentSession`.
+Format controls belong to the feature.
 
-| Selected storage | Read path | Resource owner |
-| --- | --- | --- |
-| Remote, including an rclone crypt remote | `features/rclone/mobile/remote_resources.py:NativeRemoteResources.readers()` → `remote_readers.py:RemoteReaders.open()` → `remote_source.py:RemoteSource` | Independently reopened remote grant, generation-bound ranges and native RAM archive snapshot |
-| LocalCrypt copy | `features/rclone/localcrypt/mobile/content.py:CryptContentProvider.content_source()` → `archive_source.py:NativeSource` when streaming is supported, otherwise bounded in-memory `DecodedContent` | `ProviderContent` retains provider access; the native source checks client generation and ciphertext revision |
-| Generic provider text/PDF/EPUB/comic | `services/documents/provider_documents.py:ProviderDocuments.open()` → commonUtils `ProviderContent` → provider content factory | Independent content access; an explicitly supplied read provider also survives inner-password retry |
+| Source | Reader path |
+| --- | --- |
+| Remote or rclone crypt | `features/rclone/mobile/remote_resources.py` → `remote_readers.py` → `RemoteSource`, with generation-bound ranges or RAM archive snapshot |
+| Offline LocalCrypt | `CryptContentProvider.content_source()` → `NativeSource` or bounded `DecodedContent` |
+| Generic provider | `services/documents/provider_documents.py` → commonUtils `ProviderContent` → provider content factory |
 
-The native rclone bridge under `mobile_build/rclone_bridge/` owns crypt decoding;
-the Python sources expose decoded ranges or archive members to the format reader.
-Remote byte streams use the existing seekable `RangeReader`; remote archive
-snapshots and decoded member caches stay bounded in RAM. The native remote and
-LocalCrypt implementations do not materialize a plaintext working file; a generic
-provider's transport remains its own contract. Export and saved reader state remain separate
-policies; see [reader state](reader-state.md) and [access/privacy](access-privacy.md).
-
-`services/documents/archive_access.py:NativeArchiveAccess` owns native archive
-headers, member-cache publication, inner-password revision and terminal close.
-`RemoteSource`, LocalCrypt `NativeSource` and `mobile/comic_source.py:LocalComicSource`
-share it. Native I/O runs outside the cache lock; completion must still pass
-open/version checks and the captured password revision before publishing. Changing
-a password away and back cannot admit an older completion. Closing clears retained
-password/cache state, rejects further access and prevents late reads from refilling
-the cache. This is resource retirement, not a secure-memory-erasure guarantee.
-
-Browser close releases its own grant; independently opened remote readers retain
-theirs. Credential replacement invalidates old generations. Failed opens close
-unpublished format/source resources, and ordinary session disposal closes adopted
-readers. Start with `test_localcrypt_access.py` and `test_remote_service.py` in the
-mobile host suite for synthetic retirement, range and retry checks. Native bridge
-and device checks remain necessary for their platform behavior.
+The native rclone bridge exposes decoded ranges and bounded RAM archives for
+remote and LocalCrypt reads. `NativeArchiveAccess` publishes cached members only
+if the source and inner-password revision are still current. Terminal close
+clears caches and rejects late completions. Browser close releases its own grant.
+Adopted readers retain independent access until disposal or credential
+replacement. Failed opens retire newly acquired resources. A supplied prepared
+reader remains caller-owned until adoption. Check `test_localcrypt_access.py` and
+`test_remote_service.py` in the mobile host suite.
 
 ## Privacy and lifetime
 
-Browser and Notes Library renames update favourites and recent references using
-logical provider paths, including descendants of renamed folders and the saved
-Notes Library opening root. Desktop LocalCrypt keeps these updates in the same
-credential-encrypted catalog; mobile also updates unlocked encrypted recent/open
-lists for documents that are closed. Failed renames leave references unchanged.
-Remote providers remain read-only and do not offer rename. The desktop and mobile
-rename-reference suites cover these flows (`test_rename_references.py` plus
-`test_local_crypt_rename_*.py` on desktop); desktop exercises standard,
-obfuscated and unencrypted filename modes with real rclone providers. Mobile's
-native crypt case requires the host bridge; host checks do not certify device UI.
-Mobile history reconciliation runs on the UI loop even if the separate favourite
-catalog fails. Restored encrypted-document placeholders follow the new identity.
-Downloaded encrypted files retain their stable record keys while their saved
-display titles follow a rename. Notes Library keeps its operation guard until a
-cancelled worker retires and reconciles any rename that already committed.
-Local catalog matching also handles Windows drive and UNC paths, including
-descendants and saved library roots. Desktop favourites and recent catalogs
-reconcile independently when either catalog fails. A separately open desktop
-text buffer retains its draft after a browser rename and rejects saving to the
-removed path; Save As can preserve those edits without recreating the old file.
+Private and remote sessions stay out of ordinary recovery and history. The host
+handles lock, revocation and plaintext export consent. The provider still
+validates the grant and revision during I/O. Desktop `DocumentProtection` composes
+wrapper restrictions, concealment, revocation and resume proof. Failed cleanup
+stays locked and retains release handles for retry. Private notebook WebViews use
+nonpersistent storage. See [access and privacy](access-privacy.md).
 
-Private or remote resources cannot use ordinary recovery, history or saved
-workspace records. The host owns requested-lock dirty/busy decisions, revocation,
-screen privacy and confirmation before publishing private bytes to ordinary
-storage. Format canvases receive a checkpoint callback. Provider operations still
-validate credentials and revisions during I/O; hiding a view does not authorize a
-save after revocation. Memory-only drafts do not imply secure memory erasure.
+`EditorPicker` captures the source policy for text and notebook Save As. For
+private-to-ordinary export, obtain `confirm_plaintext()` and recheck the operation,
+origin and destination after dialogs. `DestinationRequest` distinguishes
+unchanged storage from a saved file that failed to reopen. Keep the source draft
+until a successful handoff. Check `test_editor_picker.py`.
 
-Mobile `editor_picker.PickerOperation` captures the source `DocumentPolicy` for
-provider text and notebook Save As. Before destination resolution/publication,
-`EditorPicker` uses `confirm_plaintext()` to request consent for a private source
-being saved to ordinary storage. It checks the captured workspace origin before
-work and again after dialogs, along with the current picker operation and target
-name. Cancellation or a stale source prevents publication. The form builder in
-`mobile/document_destination_form.py` owns controls; source policy, consent and
-publication remain in `EditorPicker`. `test_editor_picker.py` covers private text
-and notebook export, declined consent and source/destination changes on the host.
+`DocumentReadCapabilities` declares privacy, write access, credential lifetime,
+offline availability and remote access independently. `required_feature` is a
+separate admission check. Ordinary Local remains available with rclone disabled.
+Unknown compatibility adapters default to private and credential-bound.
+`document_source` dispatches optional provider hooks or the generic reader.
 
-Mobile reader adapters declare `DocumentReadCapabilities` in
-`services/documents/mobile_reading.py`: privacy, write access, credential-bound
-lifetime, offline availability and remote access are separate properties.
-An optional `required_feature` declares feature admission separately from privacy
-or credential lifetime; a different encrypted provider does not require rclone.
-`reading_capabilities` preserves wrapped-provider privacy and read-only rules.
-LocalCrypt declares private, writable offline access; Cloud declares private,
-read-only credential-bound access without claiming that every remote is encrypted.
-Ordinary text adapters derive policy from their provider. Unknown compatibility
-adapters default to private, credential-bound sessions.
+## Publication and compatibility
 
-`commonUtils.runtime.resources.content.ProviderContent` retains independent
-content access. Its provider-supplied `content_source` class/function factory can
-add decoding and authenticated native archive access. The generic
-`services/documents/provider_documents.py:ProviderDocuments` adapter uses that
-boundary for text, PDF, EPUB and comics; notebooks retain bounded
-`DocumentResource` sessions over the same provider byte contract. See the shared
-[content factory and replacement contracts](../../../Python/commonUtils/docs/development/reference/ui/resource-providers.md#injected-content-mechanisms).
+- `publish_document_stream` and `document_transaction` own archive metadata
+  publication and local backup callbacks. Desktop text retains its encoding,
+  permission and conflict adapter. Private formatted Markdown falls back to
+  Source on unsupported native backends.
+- Android Local and Received Files share `MobileLocalFiles`. When SD-card/FUSE
+  rejects exclusive rename, copy into an exclusively created target, verify and
+  remove staging. The target may be visible during copying. A changed
+  post-publication revision permits one stable read matching SHA-256 and format.
+- The public-layout migration journals moves. Local and copy references use
+  `Files://`, `RcloneCopies://` and `RcloneCopiesEncrypted://`. Resolve against
+  current roots and migrate legacy progress on use. `ResourceImports` merges
+  under a process-local lock and preserves invalid or linked indexes.
+- Verified renames reconcile Recent, favourites, and saved library roots by
+  logical path. LocalCrypt catalogs stay encrypted. If a separate open desktop
+  buffer loses its source, preserve its draft through Save As. See [reader
+  state](reader-state.md) and [LocalCrypt](../../features/rclone/development/localcrypt.md).
 
-Mobile `document_source` selects a provider's optional `document_readers` and
-`document_key` hooks, with the generic adapter as its default. It imports no
-concrete backend. LocalCrypt's managed and existing offline-copy providers use
-one `CryptContentProvider` for native content, ciphertext staging and verified
-byte/member replacement. The older copy catalog delegates document I/O to those
-providers. Captured access callbacks, rather than the app's current Cloud client,
-control reader and Notes Library revocation. A successful editor replacement
-retires the old source after adopting its replacement.
+Recovery verification belongs with the adapter. In the Android rename fallback,
+failed copying removes its partial target. Verification or staging cleanup
+failure reports the incomplete mutation. The legacy-layout migration records
+paths before moving files, keeps unclassified folders in Rclone Copies and
+moves loose files and explicit Notes Libraries to ordinary Files. Startup waits
+for the migration worker. Managed aliases resolve legacy positions and
+bookmarks when the document next opens or unlocks. Received Files keeps its
+import identity across SD-card relocation and rejects links. Use
+`test_resource_imports.py` for stale index instances and malformed index retention.
 
-Ordinary collection locations and drive migration belong to
-`services/documents/locations.py`; ordinary import/reopen routing belongs to
-`mobile/document_imports.py`. Local browsing, text opening and picker setup do not
-construct Cloud controls. Disabling rclone preserves ordinary document access;
-LocalCrypt and remote adapters explicitly retain their rclone feature requirement.
-
-The session manager resolves the selected source, key and password before calling
-the generic document opener. `ProviderDocumentSession` owns cancellation and busy
-state; existing `_crypt_cancel` and reader-control names remain compatibility
-accessors. Newly acquired readers are closed if opening fails before adoption,
-regardless of storage type. Supplied prepared readers remain caller-owned until
-adoption; an adopted reader is closed by session disposal. Cleanup includes native
-PDF handles and archive sources. The opening workflow does not select credentials
-or change the global connection's busy state.
-
-`test_storage_independence.py` forbids rclone imports while exercising ordinary
-local storage and verifies another private provider's read/save path with rclone
-disabled. Shared factory tests cover class injection, revision/cancellation checks
-and capability-checked replacement. Real host-bridge regressions cover encrypted
-text/archive writes, streamed moves, notebooks and revocation; they do not replace
-physical-device UI validation.
-
-Private notebook canvases use off-the-record Qt WebEngine profiles or native
-nonpersistent mobile WebViews. Android loads even large private HTML directly
-in memory, bypassing the toolkit’s disk-backed large-content cache.
-
-A binary buffer save uses the native `crypt_write_buffer` operation, bounded to
-32 MiB of input. It encrypts RAM bytes into an exclusive empty ciphertext staging
-descriptor. Legacy text editing retains its 1 MiB text contract. Existing file
-streams continue using the streamed descriptor transfer path. No plaintext
-intermediate file is required.
-
-Desktop providers expose a `document_protection` capability described by
-`services.documents.protection.DocumentProtection`: access validation, revocation
-subscription, requested-lock matching and resume authorization. Generic private
-view guards and video authorization consume this capability across provider
-wrappers without inspecting rclone contexts, config suffixes or credential ZIPs.
-Repeated capabilities are deduplicated; every distinct wrapper restriction applies.
-Combined resume proofs verify established credentials before configuring temporary
-passwords, and expose an unconfigured gate when confirmation is required.
-`features.rclone.document_protection.DesktopDocumentProtection` adapts the existing
-session registry and exact-package resume proof. A document without a provider
-resume proof needs a temporary session password. Read/write grant checks remain
-at provider I/O boundaries; resume authorization does not restore a revoked grant.
-
-Desktop hosts register provider guards even for ordinary editors, so Save As
-into LocalCrypt starts revocation protection immediately. Guards also validate the
-retained credential generation, including a revocation that precedes UI handoff.
-A guard disables and conceals the window and redacts its title before invoking
-owner cleanup. Reentrant retirement cannot run disposal twice; successful cleanup
-is idempotent and failed cleanup stays locked for retry. Provider handoff failures
-also deny display. Unsubscription attempts every wrapped source, retains failed
-release handles and reports the first error so cleanup can be retried. Revocation
-checks validate declared protection capabilities, not source-file availability;
-an ordinary source disappearing must not retire its retained unsaved draft.
-Revoked Markdown clears its source, formatted view and cached baselines; late save
-acknowledgements cannot revive its content. Failed notebook opening releases the
-resource and retires the incomplete window.
-
-Mobile notebook canvas remounting preserves the existing model, dirty flag and
-undo history without reading a recovery repository. Ordinary recovery still opens
-when its original source folder disappears, detaching the source and preserving
-unsaved edits for Save As.
-
-## Consumer integration and checks
-
-The [notebook development guide](../../features/notebooks/development/development.md)
-covers notebook draft/recovery adapters. The
-[LocalCrypt guide](../../features/rclone/development/localcrypt.md) owns encryption
-and credential policy. Reusable resource API documentation remains in
-[commonUtils](../../../Python/commonUtils/docs/development/reference/ui/resource-providers.md).
-
-Focused host contracts include backend-independent revocation and wrapped resume
-proofs in `Python/tests/resources/test_document_protection.py`,
-`Python/tests/resources/test_document_storage.py`,
-`Python/tests/resources/test_local_crypt_lifetime*.py`,
-`Python/tests/resources/test_local_crypt_storage.py` and the mobile document-storage tests.
-Native bridge tests cover binary round trips, limits, cancellation and rejection
-of nonempty output descriptors. Host tests do not establish native widget or
-physical-device behavior.
-
-Recent deletion acceptance uses
-`Python/tests/editing/recent_deletion_probe.py --output <evidence-directory>`
-with the desktop interpreter and `PYTHONPATH=Python:.`, and
-`python -m mobile_build.validation.document_storage_tools android --probe recent-deletion
---device <serial> --output <evidence-directory>` with the mobile interpreter.
-Keep evidence under ignored `test-results/`. Both use retention-owned scratch
-storage. The Android helper installs an isolated QA identity, collects its result
-and screenshot, then uninstalls it; the main app and its data are preserved.
-The desktop probe uses Cocoa Qt windows with inspectable Qt message dialogs.
-
-For deletion acceptance, check that open text keeps its live buffer, failed
-saves keep edits without recreating the source and closed deleted files leave
-Recent. Check the stale-row dialog and a retained EPUB import separately.
-These fixtures cover ordinary local files and retained imports.
+For provider renames, update both file and descendant references only after the
+mutation commits. Reconcile desktop favourites and Recent independently so a
+catalogue failure cannot block the other. Mobile reconciles on the UI loop even
+after picker cancellation if the provider already committed. Encrypted imports
+keep their stable record keys and update display names. Run the rename-reference
+and LocalCrypt rename tests for persisted identities.
 
 ## Document action matrix
 
-These are Logistics document-editor actions. Creation is offered for text,
-Markdown and notebooks; readers do not gain a new document constructor merely
-because their storage provider is writable.
+| Format | Local and writable LocalCrypt | Cloud |
+| --- | --- | --- |
+| Text and Markdown | Create, edit, Save, Save As | Read-only preview |
+| Notebook `.rmdoc` | Create, edit, Save, Save As, Export Copy | Direct open unavailable |
+| PDF and images | Read or preview | Bounded preview |
+| EPUB and supported comics | Read and edit supported metadata | Read-only preview |
 
-| Format | Ordinary Local | LocalCrypt | Cloud |
-| --- | --- | --- | --- |
-| Text and supported source/configuration files | Create/open, edit, Save and Save As | Same actions through the provider | Supported text previews are read-only |
-| Markdown | Create/open, formatted or source editing, Save and Save As | Same actions; document/resources stay in session memory | Read-only preview |
-| Notebook `.rmdoc` | Create/open, ink/page/layer editing, Save, Save As and Export Copy | Same document actions; private checkpoints stay in RAM and Save publishes ciphertext | Direct notebook opening and writing unavailable |
-| PDF | Open/read | Open/read | Bounded read-only preview |
-| EPUB | Open/read and edit supported metadata | Open/read and edit supported metadata | Read-only preview |
-| Comics `.cbz` and supported comic ZIPs | Open/read and edit supported metadata | Open/read and edit supported metadata | Read-only preview |
-| Images | No document creator/content editor; browser previews and Image Tools are separate | Provider/browser preview support; no document creator/content editor | Bounded PNG/JPEG/WebP preview |
+Image Tools runs separate filesystem batches. Text/Markdown limits are 16/8 MiB
+on desktop and 1 MiB on mobile. Notebooks admit up to 32 MiB compressed, 128 MiB
+expanded and 1,000 pages. Native `crypt_write_buffer` stages up to 32 MiB directly
+as ciphertext. See [notebook storage and recovery](../../features/notebooks/development/development.md#editing-and-recovery).
 
-Image Tools' batch WebP conversion and JPG EXIF utilities are filesystem tools,
-rather than document editors. They have not been migrated into document sessions.
-Archive/password/image support retains each reader's existing format limits.
-Desktop text editing is bounded to 16 MiB and Markdown to 8 MiB; mobile text/source
-and Markdown editing are bounded to 1 MiB. Notebook archives are bounded to 32 MiB
-compressed and 128 MiB expanded, with at most 1,000 pages. Unsupported notebook
-scenes remain preserved with their existing editing restrictions.
+Ordinary notebook recovery distinguishes successful publication, uncertain
+durability and unknown outcome. Keep the draft for recovery or Save As when
+its original folder is unavailable. A verified Move/Rename can retarget the
+open session without losing undo state. Ordinary Export Copy verifies the
+destination and rejects host-protected provider roots.
 
-Ordinary notebook checkpoints support recovery. Private notebook drafts have no
-ordinary recovery or saved-history record. A successful Save advances the resource
-baseline; Save As retargets the retained editor while Export Copy leaves its source
-binding intact. Requested locking refuses busy or unsaved private notebooks;
-unexpected credential revocation retires their canvas and pending private picker
-material. Mobile Move/Rename retargets open notebook sessions through the existing
-verified mutation plan, retaining the draft and undo history.
-
-For ordinary notebook recovery, the
-[checkpoint and Discard contract](../../features/notebooks/development/development.md#editing-and-recovery)
-separates rejected publication, visible publication with unconfirmed durability,
-and unknown outcomes. Host source-binding intent and recovery revisions stay
-coordinated without claiming a crash-atomic transaction across their two files.
-Unknown outcomes retain the draft until recovery is confirmed or the draft is
-saved successfully. Save As can preserve a draft whose original source is
-unavailable; explicit Discard retains its own revision checks. Private notebooks
-still have no ordinary recovery repository.
-
-
-Mobile discard/reopen regression coverage lives in
-`mobile_build/tests/documents/test_discard_reopen.py`. It exercises managed text
-recovery before and after queued checkpoints publish; file-backed text, Markdown,
-JSON and HTML; Notes Library text/Markdown/code; and EPUB/comic metadata through
-both provider-backed and imported-copy routes. Discard must preserve saved bytes
-and reopen without the abandoned draft. These are host-side mobile contracts,
-with dummy native widgets; they do not certify a physical-device build.
-
-
-## Editor boundary
-
-All current document editors enter through the shared host storage family:
-`DocumentResource` for bounded bytes, the desktop text compatibility adapter for
-encoding/recovery, and `publish_document_stream` / `document_transaction` for
-archive metadata. Streaming archives retain their provider transaction and local
-backup callbacks; they do not inherit the text or notebook byte limit.
-
-Notebook mobile host composition lives in `services/documents/mobile_notebooks.py`;
-the former feature module is a compatibility entry.
-
-Notes Library reads, creation and saves use the same verified resource boundary.
-Its location resolution, credential lifetime and private WebView policy belong
-to the document host. Mobile file browsers, workspace drawers, Notes Library,
-move/rename and saved-source reopening use `document_source` or
-`open_provider_document`, including notebook dispatch. `LocalTextCopies` remains a
-compatibility import for the host-owned `TextDocumentCopies` adapter.
-
-Format code receives capabilities and persistence policy, rather than choosing
-LocalCrypt implementations. Host composition and provider adapters intentionally
-still resolve local, LocalCrypt and remote sources. Policy walks provider wrappers,
-so a writable local cache cannot grant writes or persistence to a remote source.
-Private formatted Markdown fails closed on unsupported native backends and leaves
-Source mode available. The boundary regression tests check imports, wrapped remote
-policy, Notes Library publication and workspace-drawer notebook dispatch.
-
-Desktop notebook Export Copy uses `export_local_document`: a picker-approved
-ordinary destination goes through the same bounded, validated, revision-checked
-publication and exact-byte reopening as other resources. It cannot write through
-an ordinary path into a host-protected provider root. Export keeps the source
-binding intact. EPUB/comic reader privacy follows shared persistence policy,
-including provider wrappers; a provider-backed ordinary file remains ordinary.
-
-## Mobile creation form
-
-`mobile/document_choices.py` opens the shared `EditorPicker` directly. New
-documents choose their name, format and provider folder on one route; there is
-no preliminary completion action before location selection. iOS retains a text
-**Create document** action, while Android uses the same action in the form.
-The selected format validates the filename; notebook bytes are generated from
-the final name at publication so renaming cannot leave a stale notebook title.
-Cancellation returns to the opening screen and successful creation retires the
-route before opening the editor. The shared picker keeps its existing keyboard
-compaction, provider validation, collision protection and encryption boundary.
-Initial listings retry discarded tokens during cold-start client/credential
-restoration, without waiting for cloud setup or accepting stale directory data.
-
-
-## Enforced architecture contract
-
-`python dev.py architecture` checks every Python descendant of the text editor,
-notebook, EPUB, comic, image and PDF feature packages. `Scripts/architecture.json`
-declares those owners; `Scripts/document_architecture.py` implements the syntax
-checks. New nested modules inherit the contract automatically. A new document
-launcher or `document_editor_id` outside the declared packages fails until its
-storage ownership is classified. Archive workspace tools have separate explicit
-filesystem ownership; the vendored notebook scene codec is excluded as upstream
-in-memory format code.
-
-The check rejects concrete storage backend imports, literal/deferred backend
-factories, backend policy flags, ordinary file opening/byte/text helpers, direct
-provider publication/deletion and filesystem publication APIs. It follows ordinary
-import and assignment aliases, checks reflective access to guarded methods, and
-rejects opaque storage star imports. ZIP writes are reviewed too; serialization
-into a known `BytesIO` remains format-owned. Reader editing controls use shared
-`document_writable` policy, so wrappers cannot hide read-only storage. Ordinary
-notebook/PDF imports and text/XML compatibility reads use bounded host helpers.
-
-Intentional persistence exceptions identify an exact module, qualified function,
-operation and reason. They cover recovery/preferences, the ordinary collection
-index, anonymous Android PDF memory and existing verified archive callbacks/tools.
-The existing image compression tool retains narrowly scoped staging, verified
-publication and cleanup exceptions; provider-backed image viewing has none.
-Exceptions cannot waive backend selection, do not exempt a whole editor, and fail
-when unused. Archive callbacks must retain their declared shared transaction or
-streamed-publication entry. Adding a new operation requires a reviewed policy change.
-
-CI runs the architecture command and `test_document_architecture.py`, which injects
-forbidden imports, backend flags, aliases, raw exports, provider mutations, new
-editor registrations and detached transaction callbacks into temporary source trees.
-The check imports no feature or GUI toolkit. It is a static architectural guard,
-not a Python sandbox: constructed module names, arbitrary reflection, third-party
-writers and dataflow beyond the supported alias forms still require source review.
-Runtime storage/privacy regressions remain necessary.
-
-Notes Library folder creation and moves enter through the document storage host,
-which checks write policy and access before the shared provider mutation. Local
-provider selection and remote classification also stay in that host. Mobile
-Images receives its icon factory from its caller, and rclone receives the Notes
-Library offer as a presentation callback. The reviewed rclone-to-Images and
-rclone-to-Text Editor dependencies cover its existing desktop document handoffs.
-
+For mobile Create, `document_choices.py` opens `EditorPicker` with name, format
+and provider location in one route. Construct notebook bytes from the final
+validated name. Cancel returns to the origin. Retire the route before opening
+a successful result. Retry an initial folder listing only while its route and
+credential identities remain current.
 
 ## Notebook host actions and deletion
 
-Mobile notebook chrome, Show in Folder and Delete Document decisions are composed
-by `services/documents/mobile_notebooks.py`. The canvas delegates these actions
-without importing application navigation, resource-history owners or another
-editor's dialog. No notebook-to-host or notebook-to-text-editor dependency
-exceptions are needed.
+`services/documents/mobile_notebooks.py` composes Create, Show in Folder and
+Delete. Keep the final name and provider choice in the shared picker. `Export
+Copy` leaves the source binding intact. `DocumentResource.delete()` checks write
+capability, grant, cancellation and expected revision. Capture and recheck the
+active session, source and single-window state around confirmation.
 
-`DocumentResource.delete` requires an admitted file revision, writable wrapper
-policy and declared deletion capability. It checks cancellation and active access
-inside the provider operation; the provider checks the expected revision again
-when removing the file. Directories are not document deletion targets. The
-notebook document coordinates this with its ordinary recovery repository, which
-owns identity-validated, serialized and idempotent cleanup. Private notebooks have
-no ordinary recovery directory.
+Source deletion and ordinary recovery cleanup are separate steps. A partial
+success keeps the draft open, disables Save/checkpoints and permits Save As or
+retry of unfinished cleanup without deleting a replacement file. Hold the busy
+reservation until a cancelled worker settles. Reconcile Recent and close after
+cleanup. Private notebooks have no ordinary recovery directory.
+`test_discard_reopen.py` checks retained bytes and discarded drafts.
 
-Confirmation snapshots the document/session and checks the active host and
-single-window restriction before and after the decision. Failed source deletion
-keeps recovery, history and the editable draft. If source deletion succeeds but
-recovery cleanup fails, the draft stays open with an explicit partial-success
-error. Retrying finishes recovery cleanup without deleting a new file at the old
-path. History/session cleanup follows successful document cleanup, and closing
-uses the host's existing discard path. Focused deletion tests cover cancellation,
-replacement, credential revocation, wrappers/capabilities and cleanup retries.
+## Enforced architecture contract
 
+Run `python3 dev.py architecture`. Every editor package listed in
+`Scripts/architecture.json` inherits the guard recursively. The checker classifies
+new launchers and rejects concrete backends, aliases/deferred factories, raw file
+I/O and direct provider mutations. Persistence exceptions name the module,
+function, operation and reason. Archive callbacks retain their shared transaction
+entry. `test_document_architecture.py` injects forbidden mutations and registrations.
+Native and runtime privacy behavior have separate checks.
 
-## Deletion retry and cancellation review
-
-A live notebook remembers successful source and recovery deletion separately.
-Cleanup retries skip both completed phases, preserving replacement files and
-recovery records at the old identities. After either phase completes, the draft
-becomes read-only: ordinary Save/checkpoints are refused, while Save As and Delete
-cleanup retry remain available. The canvas reports the deleted state explicitly.
-
-Delete confirmation also retains the source path/revision and session resource
-identity. An in-place move, retarget or baseline change requires another decision.
-Only one deletion may own the panel at a time. Cancelling its task keeps the busy
-reservation until the filesystem worker settles, because thread cancellation
-cannot undo deletion. A still-current canvas receives an interruption response;
-a replacement canvas keeps its own busy state. Failed/refused session closing
-reports that notebook data was already deleted and restores the prior navigation
-intent so closing can be retried safely.
-
-
-## Document storage chrome
-
-Desktop `DocumentPane` mounts `DocumentLocationRow` before reader controls;
-title/idle/catalog changes refresh its active provider/path, including adjacent
-image navigation and Save As. Remote names remain in the storage row instead
-of the session-only document title. Credential revocation hides the identity row.
-
-Mobile `document_location.py` builds storage rows with the browser's icon and
-muted-caption roles. Provider sessions, managed text/Markdown, library readers
-and notebook presentation mount these beneath native titles. Reader rows join
-the existing ReadingFrame controls so immersive mode hides them with the other
-controls. Native remote resources expose credential package source, encryption
-and session-only metadata without granting publication capabilities.
-
-
-## Notes Library and shared authoring
-
-`features/notes_library` owns library containment, navigation and document groups.
-The desktop destination reuses retained workspace hosting with a separate named
-host; `services/documents/authoring/` owns mobile Markdown input, provider modes
-and common edit decisions shared by libraries and standalone documents. Neither
-library feature admission nor embedded editing requires Text Editor enabled.
-
-`services/documents/mutations.py` owns verified provider-tree copy/delete under
-`document_operation` and the document write policy. Notes Library validates its
-contained source/destination, root exclusion and supported capabilities before
-calling this service. The copied source stays intact; staged copies are verified
-before a collision-safe rename and are removed on failure.
+See [commonUtils provider contracts](../../../Python/commonUtils/docs/development/reference/ui/resource-providers.md)
+for content factories and replacement. Run `python3 dev.py test-owner document-services`
+for host storage regressions. Notes Library uses the same provider boundary for
+contained, verified authoring and tree mutations while keeping its own navigation.
