@@ -270,9 +270,12 @@ class Cases(unittest.TestCase):
                 '# TEST_STAGE = TestStage.REGRESSION\n' "import os, unittest\n"
                 "class Second(unittest.TestCase):\n"
                 " def test_state(self): self.assertNotIn('LOGISTICS_TEST_PROCESS_STATE', os.environ)\n")
-            result = self.run_modules(root)
+            report = root / 'report.json'
+            result = self.run_modules(root, '--report', str(report))
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertIn('Isolated test files: 2; failures: 0', result.stdout)
+            modules = json.loads(report.read_text())['modules']
+            self.assertEqual({row['path']: row['outcome'] for row in modules},
+                             {'test_first.py': 'passed', 'test_second.py': 'passed'})
 
     def test_manager_profile_and_account_inputs_do_not_escape_into_fixtures(self):
         with TemporaryDirectory() as temporary:
