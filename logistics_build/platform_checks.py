@@ -10,6 +10,10 @@ def run_check(name, argv, *, root, results, environment, timeout):
     results = Path(results)
     execution = results/'checks'/name/uuid4().hex
     from logistics_build.test_evidence import with_reuse
+    # A nested check needs its own reservation. The enclosing runner's
+    # worker variables cannot be carried into the new plan as declarations.
+    environment = {key: value for key, value in environment.items() if key not in {
+        'BUILD_MANAGER_TEST_PLATFORM', 'BUILD_MANAGER_TEST_WORKERS', 'BUILD_MANAGER_RESERVED_TEST_WORKERS'}}
     outputs = tuple(str(argv[index + 1]) for index, value in enumerate(argv[:-1]) if value in {'--junit', '--report'})
     phase = Phase(name, tuple(argv), str(root), timeout=timeout, environment=environment, effect='test',
                   artifacts=outputs, artifact_types={path: 'junit' if path.endswith('.xml') else 'json' for path in outputs})
