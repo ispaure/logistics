@@ -27,7 +27,7 @@ def linked_pdf():
     return stream.getvalue()
 
 
-def cleanup_pdf_fixture(app, owner, canvas, path, original_session, proof, primary):
+async def cleanup_pdf_fixture(app, owner, canvas, path, original_session, proof, primary):
     """Try every owned cleanup step; an existing failure remains authoritative."""
     errors = []
     def attempt(label, action):
@@ -44,7 +44,14 @@ def cleanup_pdf_fixture(app, owner, canvas, path, original_session, proof, prima
         assert app.editor_view.session.id == original_session
         proof['original_session_restored'] = True
     if owner is not None:
-        attempt('clear PDF', owner.clear_private_reader)
+        if canvas is not None:
+            try:
+                await wait_pdf_idle(owner, canvas)
+            except Exception as error:
+                errors.append('settle PDF: ' + repr(error))
+        def clear():
+            assert owner.clear_private_reader(), 'Synthetic PDF reader did not clear'
+        attempt('clear PDF', clear)
         if canvas is not None:
             attempt('retire callbacks', retired)
         attempt('close synthetic session', close)
@@ -85,8 +92,12 @@ async def wait_pdf_idle(owner, canvas):
     loop = asyncio.get_running_loop()
     deadline, stable = loop.time()+15, None
     while True:
-        ready = (not owner.cloud_busy and not navigation_pending(owner, canvas) and
-                 canvas.scroll.pending is None)
+        progress = getattr(owner, '_provider_progress', None)
+        progress_task = getattr(progress, 'task', None)
+        ready = (not owner.cloud_busy and not navigation_pending(owner, canvas)
+                 and canvas.scroll.pending is None
+                 and getattr(progress, 'worker', None) is None
+                 and (progress_task is None or progress_task.done()))
         stable = (stable if stable is not None else loop.time()) if ready else None
         if stable is not None and loop.time()-stable >= .25:
             return
@@ -121,6 +132,10 @@ async def exercise_pdf_edge_links(app):
 
     async def gesture(native, location, **kwargs):
         await Probe.android_gesture(None, native, location, **kwargs)
+
+    def position():
+        scroll = canvas.scroll
+        return scroll.index, (scroll.location or {}).get('offset', 0)
 
     async def returned():
         await wait(lambda: owner.crypt_reader.pdf_navigation.index == 0, 'Native Undo did not return')
@@ -161,15 +176,31 @@ async def exercise_pdf_edge_links(app):
                 await returned()
                 proof['cases'].append('finger_link_and_native_undo_'+str(x))
                 if x != .5:
-                    location = await point(x)
-                    for label, kwargs in (
-                        ('cancel', dict(cancel=True)), ('pen', dict(tool=2)),
-                        ('swipe', dict(end=[location[0], location[1]-native.getHeight()*.2])),
-                        ('move_back', dict(end=[location[0]+(60 if x<.5 else -60), location[1]], moved_back=True)),
-                    ):
+                    for label in ('cancel', 'pen', 'swipe', 'move_back'):
+                        location = await point(x)
+                        kwargs = {
+                            'cancel': dict(cancel=True),
+                            'pen': dict(tool=2),
+                            'swipe': dict(end=[location[0], location[1]-native.getHeight()*.2]),
+                            'move_back': dict(end=[location[0]+(60 if x<.5 else -60), location[1]], moved_back=True),
+                        }[label]
+                        before, revision = position(), canvas.scroll.revision
                         await gesture(native, location, **kwargs)
+                        if label == 'swipe':
+                            await wait(lambda: position() > before or canvas.scroll.revision != revision,
+                                       'Native edge swipe did not scroll the PDF')
                         await idle()  # Drain queued provider/layout work before claiming rejection.
-                        assert owner.crypt_reader.pdf_navigation.index == 0 and canvas.return_page is None, label
+                        # Scrolling may move to another page. Following a link starts an explicit
+                        # seek, which changes the revision even if a later scroll clears Undo.
+                        assert canvas.scroll.revision == revision and canvas.return_page is None, (
+                            label, before, position(), revision, canvas.scroll.revision)
+                        if label == 'swipe':
+                            assert position() > before, (label, before, position())
+                            await owner.move_private_page(0)
+                            await wait(lambda: position() == before, 'PDF did not return to the edge-link fixture')
+                            await idle()
+                        else:
+                            assert position() == before, (label, before, position())
                         proof['cases'].append('edge_no_link_'+str(x)+'_'+label)
             await owner.move_private_page(0)
             canvas.set_zoom(2)
@@ -186,6 +217,6 @@ async def exercise_pdf_edge_links(app):
         proof['error'] = repr(error)
         raise
     finally:
-        cleanup_pdf_fixture(app, owner, canvas, path, original_session, proof, primary)
+        await cleanup_pdf_fixture(app, owner, canvas, path, original_session, proof, primary)
     proof['success'] = True
     return proof

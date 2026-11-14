@@ -23,11 +23,14 @@ def cleanup_fixture(fail):
     calls, proof = [], {}
     app = SimpleNamespace(editor_view=SimpleNamespace(session=SimpleNamespace(id='pdf')))
     canvas = SimpleNamespace(return_timer=object() if fail else None,
-        scroll=SimpleNamespace(on_action=object() if fail else None))
+        scroll=SimpleNamespace(on_action=object() if fail else None, pending=None))
     def clear():
         calls.append('clear')
         if fail:
             raise ValueError('clear failed')
+        progress = getattr(owner, '_provider_progress', None)
+        assert getattr(progress, 'worker', None) is None
+        return True
     def close(key):
         calls.append('close')
         return not fail
@@ -41,20 +44,20 @@ def cleanup_fixture(fail):
     app.close_session = close
     app.session_opener = lambda key: restore
     app.show_documents = show
-    owner = SimpleNamespace(session=SimpleNamespace(id='pdf'), clear_private_reader=clear)
+    owner = SimpleNamespace(session=SimpleNamespace(id='pdf'), clear_private_reader=clear, cloud_busy=False)
     path = SimpleNamespace(unlink=lambda **kwargs: calls.append('unlink'))
     return app, owner, canvas, path, proof, calls
 
 
-class NativePDFCleanupTests(unittest.TestCase):
-    def test_primary_error_identity_survives_all_cleanup_failures(self):
+class NativePDFCleanupTests(unittest.IsolatedAsyncioTestCase):
+    async def test_primary_error_identity_survives_all_cleanup_failures(self):
         app, owner, canvas, path, proof, calls = cleanup_fixture(True)
         primary = AssertionError('PRIMARY native failure')
         with self.assertRaises(AssertionError) as caught:
             try:
                 raise primary
             except BaseException as error:
-                driver().cleanup_pdf_fixture(app, owner, canvas, path, 'original', proof, error)
+                await driver().cleanup_pdf_fixture(app, owner, canvas, path, 'original', proof, error)
                 raise
         self.assertIs(caught.exception, primary)
         self.assertIn('PDF cleanup', primary.__notes__[0])
@@ -62,16 +65,33 @@ class NativePDFCleanupTests(unittest.TestCase):
         self.assertTrue(proof['original_session_restored'])
         self.assertEqual(len(proof['cleanup_errors']), 4)
 
-    def test_cleanup_only_failure_raises_after_all_actions(self):
+    async def test_cleanup_only_failure_raises_after_all_actions(self):
         app, owner, canvas, path, proof, calls = cleanup_fixture(True)
         with self.assertRaisesRegex(AssertionError, 'PDF cleanup'):
-            driver().cleanup_pdf_fixture(app, owner, canvas, path, 'original', proof, None)
+            await driver().cleanup_pdf_fixture(app, owner, canvas, path, 'original', proof, None)
         self.assertEqual(calls, ['clear', 'close', 'unlink', 'restore', 'show'])
         self.assertTrue(proof['original_session_restored'])
 
-    def test_success_records_callback_retirement_and_session_restoration(self):
+    async def test_cleanup_waits_for_debounced_reading_progress(self):
         app, owner, canvas, path, proof, calls = cleanup_fixture(False)
-        driver().cleanup_pdf_fixture(app, owner, canvas, path, 'original', proof, None)
+        progress = owner._provider_progress = SimpleNamespace(worker=None)
+        async def write_progress():
+            await asyncio.sleep(.30)
+            progress.worker = asyncio.current_task()
+            try:
+                await asyncio.sleep(.10)
+                calls.append('progress saved')
+            finally:
+                progress.worker = None
+        progress.task = asyncio.create_task(write_progress())
+        self.addAsyncCleanup(asyncio.gather, progress.task)
+        await driver().cleanup_pdf_fixture(app, owner, canvas, path, 'original', proof, None)
+        self.assertEqual(calls, ['progress saved', 'clear', 'close', 'unlink', 'restore', 'show'])
+        self.assertTrue(proof['callbacks_retired'])
+
+    async def test_success_records_callback_retirement_and_session_restoration(self):
+        app, owner, canvas, path, proof, calls = cleanup_fixture(False)
+        await driver().cleanup_pdf_fixture(app, owner, canvas, path, 'original', proof, None)
         self.assertTrue(proof['callbacks_retired'])
         self.assertTrue(proof['original_session_restored'])
         self.assertEqual(proof['cleanup_errors'], [])
