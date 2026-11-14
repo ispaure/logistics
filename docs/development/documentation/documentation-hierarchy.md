@@ -1,75 +1,43 @@
 # Documentation ownership and hierarchy
 
-The [Logistics wiki](../../docs.md) contains systemic desktop, mobile and developer
-guides plus feature-owned sections under `docs/features/<owner>/`. Source code
-stays with its feature; documentation stays in this root wiki so the Markdown
-viewer exposes one complete sidebar. Bulk Rename uses `docs/features/bulk_rename/`.
-Shared APIs live in commonUtils' own root wiki. Optional external feature internals
-stay in their separate repositories. Source-local README and user_docs entries
-remain short compatibility links rather than duplicate guides.
-
-Screenshots, recordings and raw test results stay in ignored local artifact
-directories, outside the documentation wiki. See [local validation artifacts](../testing/validation-artifacts.md)
-for locations and packaging rules. Public guides must not link to local-only files.
+Start at [the Logistics wiki](../../docs.md). Systemic guides live under
+`docs/user/`, `docs/user_mobile/` and `docs/development/`. Feature guides use
+the corresponding folders under `docs/features/<owner>/`, including
+`bulk_rename`. Give source-local README and `user_docs/index.md` files short
+links to their owning guides. Shared APIs belong in commonUtils' wiki.
+Optional external features keep their internals in their own repositories.
 
 ## Pages and scopes
 
-Each wiki starts at `docs/docs.md`. Audience branches use `user/user.md`,
-`development/development.md`, and `user_mobile/user_mobile.md` when applicable.
-Keep user workflows under `user/` and technical contracts under `development/`
-in Logistics, Build Deployment Manager and commonUtils. commonUtils API references
-use `development/reference/`; Logistics retains its feature and mobile branches.
-Every nested folder has a same-named landing, and its parent links to it.
-Every Markdown file starts with an H1, following optional YAML frontmatter.
-The H1 supplies the visible navigation title. Parent pages explicitly mention
-all immediate children in context or Further reading.
-
-Desktop help entry points use `services.documentation`: feature Settings opens
-the feature guide with the root Logistics docs directory; browser and general help use
-the root Logistics docs directory. Legacy external help remains supported.
-The shared viewer updates the sidebar when a link enters another wiki scope,
-including when returning through history. Rendering and navigation contracts are
-maintained in commonUtils rather than duplicated here.
+Every folder has a same-named landing and links to all its immediate children.
+Every page starts with an H1 after optional YAML. The viewer uses the H1 as
+the sidebar title. Desktop feature and general Help use
+`services.documentation` with the Logistics wiki root. The shared viewer
+handles scope switching and history.
 
 ## Mobile packaging
 
-`mobile_build/tools.py` copies the single root wiki into
-`mobile/help/`, preserving repository-relative paths. It excludes linked
-features and never traverses the external emulation repository. The mirror
-excludes every `mobile-evidence/` directory under `docs/`, including
-feature wikis, while preserving the local files. The Settings
-entry opens `docs/user_mobile/user_mobile.md` with the Logistics tree. Feature links stay inside the same mirrored wiki, so users can read every
-feature guide offline without changing the sidebar scope. Links within the
-Logistics wiki use that packaged tree. Checkout-relative links to source files
-or the separate commonUtils wiki require those files in a source checkout;
-they are not included in this documentation mirror. Shared API documentation
-remains in commonUtils rather than being copied into the mobile help payload.
+`mobile_build/tools.py` mirrors the root wiki into `mobile/help/`.
+Settings opens `docs/user_mobile/user_mobile.md`. Relative wiki links stay
+in the bundled tree. Links to source and the commonUtils wiki require a checkout.
+The mirror excludes `mobile-evidence/`. Keep raw evidence outside the wiki and
+linked feature sources outside the payload. See
+[local artifacts](../testing/validation-artifacts.md).
 
 ## Writing for a first-time reader
 
-Give each page a clear audience and purpose. A task guide should state what the
-reader needs, where to run commands, what to do, what success looks like and how
-to recover from likely failures. Define project terms before using them. Keep
-short learning examples separate from exhaustive API and validation reference;
-link to the owning contract instead of copying it.
-
-Use concrete subjects and verbs, and prefer a disposable worked example over a
-list of internal module names without context. Keep current behavior, supported commands and concise validation scope in the wiki.
-Use Git history for superseded plans, dated audits and implementation logs. This
-approach follows [Diátaxis](https://www.diataxis.fr/start-here/),
-[Write the Docs](https://www.writethedocs.org/guide/writing/beginners-guide-to-docs/)
-and [Google's clear-sentence guidance](https://developers.google.com/tech-writing/one/clear-sentences).
+Start with a visible action, its code owner, an exact focused command and the
+expected result. Include prerequisites, compatibility limits and recovery where
+they affect that task. Link to the owning contract for details used elsewhere.
+Keep dated audits, plans and implementation logs in Git history.
 
 ## Validation
 
-Run the existing layout check from the repository root:
+From the repository root run:
 
 ```sh
 python3 dev.py test desktop test_documentation_layout.py
 ```
 
-It checks H1s, landing-page ownership, parent-child links, migrated Markdown links
-and the repository boundary. Its source is `Python/tests/tooling/test_documentation_layout.py`.
-Desktop Settings and shared wiki tests cover guide entry points and scope changes;
-mobile documentation tests cover offline rendering and scope/history navigation.
-Native appearance still requires device validation.
+Check the [desktop viewer and packaged mobile Help](documentation-viewer-verification.md)
+when changing the tree, links or entry points.
