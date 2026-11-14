@@ -14,6 +14,7 @@ from features.notebooks.mobile.brush_presets import PREFERENCE as NOTEBOOK_BRUSH
 
 DEFAULTS = {
     'notebook_paper_preview': 'true',
+    'native_video_airplay': 'false',
     NOTEBOOK_BRUSH_PRESETS: '[]',
     'notes_library_migrated': 'true',
     'seasonal_snow': 'true',
@@ -76,6 +77,8 @@ def validate(values):
         raise ValueError('Invalid speech lock-screen preference.')
     if values['notebook_paper_preview'] not in {'true', 'false'}:
         raise ValueError('Invalid notebook preview preference.')
+    if values['native_video_airplay'] not in {'true', 'false'}:
+        raise ValueError('Invalid native video AirPlay preference.')
     read_presets(values[NOTEBOOK_BRUSH_PRESETS])
     if values['seasonal_snow'] not in {'true', 'false'}:
         raise ValueError('Invalid seasonal snow preference.')

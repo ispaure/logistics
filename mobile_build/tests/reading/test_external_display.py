@@ -190,6 +190,20 @@ class ExternalDisplayTests(unittest.TestCase):
                 native.set_external_display.assert_called_with(None)
                 self.assertEqual(self.picture.image, 'page one')
 
+    def test_native_airplay_yields_the_legacy_window_and_restores_document_output(self):
+        sync(self.host, select=True)
+        self.assertIs(self.window.windowScene, self.scene)
+        native = Mock(system_airplay=True)
+        self.host.video_player = NS(closed=False, hidden=False, native=native, allowed=Mock(return_value=True))
+        self.output.refresh()
+        native.set_external_display.assert_not_called()
+        self.assertIsNone(self.window.windowScene)
+        self.assertIsNone(self.picture.image)
+        self.host.video_player.closed = True
+        self.output.refresh()
+        self.assertIs(self.window.windowScene, self.scene)
+        self.assertEqual(self.picture.image, 'page one')
+
     def test_video_denies_protected_entry_and_revokes_on_process_protection(self):
         from mobile.protection import for_app
         process = for_app(self.host).process

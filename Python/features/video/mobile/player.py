@@ -2,6 +2,7 @@
 import asyncio
 from contextlib import ExitStack
 from pathlib import Path
+from threading import Event
 
 from features.video.playback import VideoContent, SubtitleContent
 from services.documents.video_progress import VideoProgress
@@ -27,6 +28,11 @@ class MobileVideo:
         self.progress_workers = set()
         self.last_sample = None
         self.discovery = None
+        self.airplay_path = None
+        self.force_vlc = False
+        self.mkv_stream = None
+        self.cancel_remux = Event()
+        self.switching_player = False
         self._release_retirement = None
         self.audio_output = app.audio_output
         self.protection = app.protection
@@ -90,6 +96,7 @@ class MobileVideo:
         if self.retirement is not None:
             return self.retirement
         self.closed = True
+        self.cancel_remux.set()
         self.audio_output.unregister(self)
         if self.task is not None:
             self.task.cancel()
@@ -107,6 +114,9 @@ class MobileVideo:
     async def _finish_retirement(self, disposal):
         if disposal is not None:
             await asyncio.shield(disposal)
+        if self.mkv_stream is not None:
+            await asyncio.to_thread(self.mkv_stream.close)
+            self.mkv_stream = None
         if self.discovery is not None:
             await asyncio.shield(self.discovery)
         await self.controls.finish()
@@ -152,6 +162,16 @@ class MobileVideo:
     def prepare(self):
         position = self.progress.load()
         self.controls.settings = self.controls.store.load()
+        if (not self.content.remote and type(self.app._impl).__module__.startswith('toga_iOS.')
+                and not self.force_vlc):
+            from .ios import airplay_file
+            self.airplay_path = airplay_file(self)
+            if self.airplay_path is not None and self.airplay_path.suffix.lower() == '.mkv':
+                from .mkv import MKVStream
+                try:
+                    self.mkv_stream = MKVStream(self, self.airplay_path, self.cancel_remux)
+                except (OSError, ValueError, NameError):
+                    self.airplay_path = None
         # Remote directory enumeration and optional sidecar stats must not sit
         # in front of the first video request. Keep the retained source until
         # background discovery finishes, including when the viewer closes.
@@ -206,8 +226,12 @@ class MobileVideo:
             from .android import AndroidVideo
             self.native = AndroidVideo(self, position, external, fullscreen=fullscreen)
         elif backend.startswith('toga_iOS.'):
-            from .ios import IOSVideo
-            self.native = IOSVideo(self, position, external)
+            from .ios import IOSAirPlayVideo, IOSVideo
+            path = self.airplay_path if self.allowed(external=True) else None
+            if self.mkv_stream is not None and path is None:
+                self.cancel_remux.set()
+            self.native = (IOSAirPlayVideo(self, path, position, stream=self.mkv_stream)
+                           if path is not None else IOSVideo(self, position, external))
             self.native.present()
         else:
             raise ValueError('Native mobile video playback requires Android or iOS.')
@@ -219,6 +243,20 @@ class MobileVideo:
             self.native.status(self.progress.resume_notice)
         self.task = self.app.loop.create_task(self.watch())
         self.app.routes.sync_back()
+
+    async def switch_to_vlc(self):
+        if self.closed or self.switching_player or not self.allowed():
+            return
+        self.switching_player = True
+        try:
+            self.native.pause()
+            self.accept_sample(*self.native.progress_position())
+            await open_video(self.app, self.content.provider, self.content.path, force_vlc=True)
+        except (OSError, ValueError) as error:
+            if not self.closed:
+                self.native.status(str(error))
+        finally:
+            self.switching_player = False
 
     def allowed(self, external=False):
         try:
@@ -313,7 +351,7 @@ class MobileVideo:
         await asyncio.shield(self.retire())
 
 
-async def open_video(app, provider, path, *, fullscreen=False):
+async def open_video(app, provider, path, *, fullscreen=False, force_vlc=False):
     if not app.require_feature('video') or not app.checkpoint():
         return False
     previous = getattr(app, 'video_player', None)
@@ -342,10 +380,15 @@ async def open_video(app, provider, path, *, fullscreen=False):
         content.close()
         raise
     try:
+        if force_vlc:
+            player.force_vlc = True
         preparation = asyncio.create_task(asyncio.to_thread(player.prepare))
         try:
             position, subtitles = await asyncio.shield(preparation)
         except asyncio.CancelledError:
+            cancel_remux = getattr(player, 'cancel_remux', None)
+            if cancel_remux is not None:
+                cancel_remux.set()
             await drain_worker(preparation)
             raise
         if (not app.active_host or not player.allowed()

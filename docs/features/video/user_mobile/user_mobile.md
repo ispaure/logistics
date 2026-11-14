@@ -1,6 +1,8 @@
 # Mobile Video Player
 
 See [playback tools](controls.md) for speed, picture size, queues, seek undo, preferences and encrypted cloud resume.
+On iPhone and iPad, [Native AirPlay video](controls.md#watching-on-a-tv-with-iphone-or-ipad)
+is an optional player for compatible local files.
 
 Android and iPad builds and focused emulator/simulator playback checks have
 passed for all eight supported codec/container combinations and LocalCrypt.
@@ -78,7 +80,7 @@ sidecars are admitted, each limited to 8 MiB. Subtitles stay in provider streams
 
 For ordinary Local files and mobile LocalCrypt with saved credentials, the
 **More playback options** menu offers **Picture in picture** and **Cast…**. Casting uses VLC's discovered
-receivers (Chromecast); AirPlay video routing is not implemented. iOS defaults
+receivers (Chromecast). This menu belongs to the VLC player. iOS defaults
 to classic PiP. **Playback → Subtitle PiP (reopen video)** selects subtitle
 composition on iOS 17.4 or later; reopen the video to apply the choice. Receiver discovery
 may take a few seconds: reopen Cast to refresh the list. Both actions recheck

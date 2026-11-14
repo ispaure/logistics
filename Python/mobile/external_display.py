@@ -138,7 +138,8 @@ class ExternalComicDisplay:
             return
         allowed = self.allowed_host(app)
         video = self.current_video(app) if self.ios else None
-        video_allowed = allowed and video is not None and video.allowed(external=True)
+        system_video = video is not None and getattr(video.native, 'system_airplay', False) is True
+        video_allowed = allowed and video is not None and not system_video and video.allowed(external=True)
         if self.ios_video is not None:
             attached, view = self.ios_video
             if not allowed or (video is not None and not video_allowed):
@@ -149,8 +150,8 @@ class ExternalComicDisplay:
         canvas = comic_canvas(app.body) if allowed and video is None else None
         artwork = getattr(canvas, 'artwork', canvas)
         image = artwork._impl.picture.image if self.ios and artwork is not None else None
-        mirror = (self.ios and allowed and video is None and canvas is None
-                  and comic_canvas(app.body, include_empty=True) is None)
+        mirror = (self.ios and allowed and (system_video or (
+            video is None and canvas is None and comic_canvas(app.body, include_empty=True) is None)))
         for scene, window, picture in self.ios.values():
             picture.image = image
             if mirror:

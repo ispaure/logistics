@@ -16,7 +16,7 @@ from urllib.request import urlopen
 from zipfile import ZipFile
 
 from logistics_build.build_retention import scratch
-from mobile_build.build_support.video_build import VLC_REVISION
+from mobile_build.build_support.video_build import VLC_REVISION, install_remux_headers
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -45,6 +45,7 @@ def android(workspace):
 
 
 def ios(workspace):
+    install_remux_headers(workspace)
     archive = workspace / 'vlckit.tar.gz'
     download(f'https://api.github.com/repos/videolan/vlckit/tarball/{VLC_REVISION}', archive)
     includes = workspace / 'include/VLCKit'
@@ -60,7 +61,8 @@ def ios(workspace):
     subprocess.run(['xcrun', 'clang', '-fsyntax-only', '-fobjc-arc', '-fmodules',
         '-fmodules-cache-path=' + str(workspace / 'modules'),
         '-target', 'arm64-apple-ios15.0-simulator', '-isysroot', sdk,
-        '-I', str(includes.parent), '-I', str(ROOT / 'Python/mobile/ios'), str(source)], check=True)
+        '-I', str(includes.parent), '-I', str(workspace / 'VideoFFmpeg'),
+        '-I', str(ROOT / 'Python/mobile/ios'), str(source)], check=True)
 
 
 def main():

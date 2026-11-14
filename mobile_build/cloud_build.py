@@ -230,7 +230,13 @@ def ios(project=None, *, include_watch=False):
     pbx.write_bytes(plistlib.dumps(data, sort_keys=False))
     incoming_build.configure_ios(project)
     wifi_build.configure_ios(project)
-    video_build.configure_ios(project)
+    if not __package__:
+        # Direct invocation from the generated mobile workspace.
+        sys.path.insert(0, str(ROOT.parent))
+    from logistics_build.build_retention import scratch
+    with scratch() as workspace:
+        video_build.install_remux_headers(workspace)
+        video_build.configure_ios(project, remux_headers=workspace / 'VideoFFmpeg')
     widget_build.configure_ios(project, include_watch=include_watch)
     lm_build.configure_ios(project)
 

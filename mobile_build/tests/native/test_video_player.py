@@ -28,6 +28,17 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         owner.native.status.assert_called_with('Storage unavailable')
         self.assertFalse(owner.closed)
 
+    async def test_airplay_fallback_samples_position_and_forces_vlc_for_one_open(self):
+        owner = self.player(restricted=False)
+        owner.native.progress_position.return_value = (12000, False)
+        with patch.object(owner, 'accept_sample') as sample, patch(
+                'features.video.mobile.player.open_video', new=AsyncMock()) as reopen:
+            await owner.switch_to_vlc()
+        owner.native.pause.assert_called_once_with()
+        sample.assert_called_once_with(12000, False)
+        reopen.assert_awaited_once_with(owner.app, owner.content.provider, owner.content.path, force_vlc=True)
+        self.assertFalse(owner.switching_player)
+
     def player(self, *, restricted=True):
         from features.video.mobile.player import MobileVideo
         app = SimpleNamespace(audio_output=Mock(), active_host=True, private_root=Path('/unused'), loop=asyncio.get_running_loop())
@@ -634,6 +645,7 @@ class CloudVideoDispatchTests(unittest.IsolatedAsyncioTestCase):
     async def test_optional_cloud_sidecar_failure_does_not_block_video(self):
         from features.video.mobile.player import MobileVideo
         owner = object.__new__(MobileVideo)
+        owner.app = SimpleNamespace(_impl=None)
         owner.progress = Mock(load=lambda: 1234)
         owner.controls = SimpleNamespace(store=Mock())
         owner.content = SimpleNamespace(path='movie.mp4', remote=True,
@@ -848,6 +860,98 @@ class VideoPresentationReadinessTests(unittest.IsolatedAsyncioTestCase):
 
 
 class IOSPresentationPrivacyTests(unittest.TestCase):
+    def test_mkv_hls_range_and_revocation(self):
+        from contextlib import nullcontext
+        from urllib.error import HTTPError
+        from urllib.request import Request, urlopen
+        from threading import Event
+        from features.video.mobile.mkv import MKVStream
+
+        allowed = Mock(return_value=True)
+        owner = SimpleNamespace(allowed=allowed, content=Mock())
+        engine = SimpleNamespace(initialization=b'init', playlist='#EXTM3U\n',
+            segment=Mock(return_value=b'abcdef'))
+        bridge = Mock()
+        bridge.streamAddress.return_value = '127.0.0.1'
+        bridge.alloc.return_value.initWithPath.return_value = engine
+        def from_native(data):
+            return data.payload
+
+        engine.initialization = SimpleNamespace(payload=engine.initialization)
+        engine.segment.return_value = SimpleNamespace(payload=engine.segment.return_value)
+        modules = {
+            'rubicon': SimpleNamespace(),
+            'rubicon.objc': SimpleNamespace(ObjCClass=lambda _: bridge, py_from_ns=from_native),
+            'rubicon.objc.runtime': SimpleNamespace(autoreleasepool=nullcontext),
+        }
+        with patch.dict('sys.modules', modules):
+            cancelled = Event()
+            stream = MKVStream(owner, Path('/movie.mkv'), cancelled)
+            try:
+                with urlopen(stream.url, timeout=2) as response:
+                    self.assertEqual(response.read(), b'#EXTM3U\n')
+                fragment = stream.url.replace('video.m3u8', 'segment-2.m4s')
+                request = Request(fragment, headers={'Range': 'bytes=2-4'})
+                with urlopen(request, timeout=2) as response:
+                    self.assertEqual(response.status, 206)
+                    self.assertEqual(response.read(), b'cde')
+                with urlopen(Request(fragment, method='HEAD'), timeout=2) as response:
+                    self.assertEqual(response.headers['Content-Length'], '6')
+                engine.segment.assert_called_once_with(2)
+                with self.assertRaises(HTTPError) as unrouted:
+                    urlopen(fragment.replace(stream.route, '/unknown/'), timeout=2)
+                self.assertEqual(unrouted.exception.code, 404)
+                allowed.return_value = False
+                with self.assertRaises(HTTPError) as revoked:
+                    urlopen(fragment, timeout=2)
+                self.assertEqual(revoked.exception.code, 404)
+                engine.segment.assert_called_once_with(2)
+            finally:
+                stream.close()
+
+    def test_native_airplay_only_opens_admitted_ordinary_local_files(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from commonUtils.runtime.platform import OS
+        from features.video.mobile.ios import airplay_file
+        from features.video.playback import VideoContent
+        from services.documents.locations import MobileLocalFiles
+
+        with TemporaryDirectory() as directory, patch('commonUtils.runtime.platform.get_os', return_value=OS.IOS):
+            root = Path(directory)
+            path = root / 'My movie.MP4'
+            path.write_bytes(b'local movie fixture')
+            other = root / 'My movie.mkv'
+            other.write_bytes(b'matroska fixture')
+            preferences = SimpleNamespace(values={})
+            for provider_type in (LocalFiles, MobileLocalFiles):
+                with self.subTest(provider=provider_type):
+                    content = VideoContent(provider_type(root), path.name)
+                    self.addCleanup(content.close)
+                    owner = SimpleNamespace(app=SimpleNamespace(preferences=preferences),
+                        content=content, allowed=Mock(return_value=True))
+                    preferences.values.clear()
+                    self.assertIsNone(airplay_file(owner))
+                    preferences.values['native_video_airplay'] = 'true'
+                    self.assertEqual(airplay_file(owner), path)
+                    owner.allowed.return_value = False
+                    self.assertIsNone(airplay_file(owner))
+                    owner.allowed.return_value = True
+                    content.provider.private = True
+                    self.assertIsNone(airplay_file(owner))
+                    content.provider.private = False
+                    content.remote = True
+                    self.assertIsNone(airplay_file(owner))
+                    content.remote = False
+                    content.source.backend = Mock()
+                    self.assertIsNone(airplay_file(owner))
+                    content.source.backend = None
+                    owner.content = VideoContent(provider_type(root), other.name)
+                    self.addCleanup(owner.content.close)
+                    self.assertEqual(airplay_file(owner), other)
+                    owner.content = content
+            path.write_bytes(b'replaced')
+            self.assertIsNone(airplay_file(owner))
+
     def test_delayed_presentation_rechecks_authorization_and_hidden_state(self):
         from features.video.mobile.ios import IOSVideo
         owner = SimpleNamespace(closed=False, hidden=False, allowed=Mock(return_value=False))

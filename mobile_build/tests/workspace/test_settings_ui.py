@@ -87,6 +87,24 @@ class SettingsUITests(unittest.TestCase):
         with patch('features.images.mobile.burst_camera.available', return_value=False):
             self.assertNotIn('Camera', settings_sections(app))
 
+    def test_native_airplay_switch_is_ios_only_off_by_default_and_persisted(self):
+        from mobile.preferences import Preferences
+        from mobile.settings.categories import settings_sections
+
+        app = self.make_app()
+        self.assertNotIn('Video', settings_sections(app))
+        ios = type('IOSApp', (), {'__module__': 'toga_iOS.app'})
+        host = SimpleNamespace(_impl=ios(), preferences=app.preferences, main_window=app.main_window)
+        page = settings_sections(host)['Video']()
+        row = next(child for child in page.children if getattr(child, '_settings_switch_row', False))
+        switch = row.children[-1]
+        self.assertFalse(switch.value)
+        switch.value = True
+        switch.on_change(switch)
+        self.assertEqual(Preferences(app.preferences.path.parent).values['native_video_airplay'], 'true')
+        app.preferences.save(disabled_features='["video"]')
+        self.assertNotIn('Video', settings_sections(host))
+
     def test_read_aloud_loads_automatically_and_refreshes_when_reopened(self):
         app = self.make_app()
         app.preferences.save(speech_voice='Removed voice')

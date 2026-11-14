@@ -104,9 +104,9 @@ def read_ahead(stream, remaining, check, *, waiting=lambda active: None, stall_a
             pending.get_nowait()
 
 
-class _LoopbackHTTPServer(ThreadingHTTPServer):
+class VideoHTTPServer(ThreadingHTTPServer):
     def server_bind(self):
-        # HTTPServer resolves a display hostname even for a literal loopback
+        # HTTPServer resolves a display hostname even for a literal IP
         # bind. Keep startup independent of the system reverse-DNS resolver.
         TCPServer.server_bind(self)
         self.server_name, self.server_port = self.server_address[:2]
@@ -220,7 +220,7 @@ class VideoTransport:
                 finally:
                     transport.slots.release()
 
-        self.server = _LoopbackHTTPServer(('127.0.0.1', 0), Handler)
+        self.server = VideoHTTPServer(('127.0.0.1', 0), Handler)
         # server_close joins handlers and their read-ahead workers before the
         # presentation owner releases the retained provider and privacy scope.
         self.server.daemon_threads = False

@@ -1,4 +1,6 @@
-"""Rubicon presentation of the native VLCKit video controller."""
+"""Rubicon presentation of the iOS video controllers."""
+
+from pathlib import Path
 
 
 def native_value(owner, name):
@@ -189,3 +191,97 @@ class IOSVideo:
         if self.display is not None:
             self.display.refresh()
         return self.disposal
+
+
+def airplay_file(owner):
+    """Resolve a direct file URL only for ordinary, unmapped local storage."""
+    from services.documents.progress_identity import ordinary_local_provider
+
+    content = owner.content
+    if (owner.app.preferences.values.get('native_video_airplay') != 'true'
+            or Path(content.path).suffix.lower() not in {'.mp4', '.mov', '.m4v', '.mkv'}
+            or content.remote or not owner.allowed(external=True)):
+        return None
+    provider = content.provider
+    if content.source.backend is not None or ordinary_local_provider(provider) is not provider:
+        return None
+    try:
+        path = provider.local_move_path(content.path)
+        content.check()
+        return path
+    except (OSError, ValueError):
+        return None
+
+
+class IOSAirPlayVideo(IOSVideo):
+    """Apple's player owns AirPlay routing and the system transport controls."""
+
+    system_airplay = True
+
+    def __init__(self, owner, path, position, *, stream=None):
+        from ctypes import c_bool
+        from rubicon.objc import Block, ObjCClass
+
+        self.owner = owner
+        self.disposed = False
+        self.disposal = None
+        self.presentation = None
+        self.display = None
+        self.display_registration = None
+        self.route_display = getattr(getattr(owner.app, 'scene_manager', None), 'external_comics', None)
+        self.native = ObjCClass('LGAirPlayVideoController').alloc().init()
+        self.native.startMilliseconds = position
+        url = ObjCClass('NSURL')
+        self.native.videoURL = url.URLWithString(stream.url) if stream else url.fileURLWithPath(str(path))
+        self.native.videoTitle = path.name
+        self.allowed = Block(self.playback_allowed, c_bool)
+        self.native.allowed = self.allowed
+        self.audio_available = Block(owner.audio_output.available, c_bool)
+        self.native.audioAvailable = self.audio_available
+        self.request_play = Block(owner.request_play, c_bool)
+        self.native.requestPlay = self.request_play
+        self.closed = Block(self.close_from_player, None)
+        self.native.closed = self.closed
+        self.fallback = Block(lambda: owner.app.loop.create_task(owner.switch_to_vlc()), None)
+        self.native.fallback = self.fallback
+        self.container = ObjCClass('LGVideoNavigationController').alloc().initWithRootViewController(self.native)
+        self.container.modalPresentationStyle = 0
+        self.container.overrideUserInterfaceStyle = 2
+        self.native.loadViewIfNeeded()
+
+    def playback_allowed(self):
+        if not self.owner.allowed(external=True):
+            return False
+        try:
+            self.owner.content.check()
+        except (OSError, ValueError):
+            return False
+        return True
+
+    def close_from_player(self):
+        owner = self.owner
+        if not owner.closed and owner.allowed():
+            try:
+                owner.accept_sample(*self.progress_position())
+            except (OSError, ValueError):
+                pass  # Keep the last valid checkpoint.
+        owner.app.loop.create_task(owner.close())
+
+    def configure(self, settings, queue):
+        pass  # AVKit owns track selection and playback settings for this presentation.
+
+    def add_subtitle(self, url):
+        pass  # AVKit shows the file's supported embedded tracks.
+
+    def cached_ranges(self, value):
+        pass  # AVKit reads the file directly.
+
+    def present(self):
+        if self.route_display is not None:
+            self.route_display.select(self.owner.app)
+        super().present()
+
+    def dismiss(self):
+        super().dismiss()
+        if self.route_display is not None:
+            self.route_display.refresh()
