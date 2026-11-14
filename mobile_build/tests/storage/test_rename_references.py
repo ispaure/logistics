@@ -27,7 +27,7 @@ class MobileRenameReferenceTests(unittest.TestCase):
         source, target = 'Vault/Home.md', 'Vault/Renamed.md'
         store = catalog(app)
         reference, _ = resource_reference(app, self.provider, source)
-        store.remember(reference, 'Home.md', dict(kind='notes', root=str(self.vault.resolve())), favourite=True)
+        store.remember(reference, 'Home.md', dict(kind='notes', root=str(self.vault)), favourite=True)
         committed, release = Event(), Event()
         async def exercise():
             owner = await open_vault(app, self.provider, 'Vault', 'documents')
@@ -60,7 +60,7 @@ class MobileRenameReferenceTests(unittest.TestCase):
         source, target = 'Vault/Home.md', 'Vault/Renamed.md'
         store = catalog(app)
         reference, _ = resource_reference(app, self.provider, source)
-        store.remember(reference, 'Home.md', dict(kind='notes', root=str(self.vault.resolve())), favourite=True)
+        store.remember(reference, 'Home.md', dict(kind='notes', root=str(self.vault)), favourite=True)
         started, release = Event(), Event()
         async def exercise():
             owner = await open_vault(app, self.provider, 'Vault', 'documents')
@@ -95,7 +95,7 @@ class MobileRenameReferenceTests(unittest.TestCase):
         path = folder + '/Private name.md'
         provider.create_file(path, BytesIO(b'# Keep content\n'))
         source, cipher = resource_reference(app, provider, path)
-        opener = dict(kind='notes', root=folder if cipher else str((provider.root / folder).resolve()))
+        opener = dict(kind='notes', root=folder if cipher else str(provider.root / folder))
         store = catalog(app)
         store.remember(source, 'Private name.md', opener, favourite=True, cipher=cipher)
         session = Session('', 'file-reference', 'fixture', 'markdown', title='Private name.md')
@@ -128,7 +128,7 @@ class MobileRenameReferenceTests(unittest.TestCase):
                        if row['source'] == resource_reference(app, provider, expected)[0])
             self.assertEqual(row['title'], 'Renamed café.md')
             expected_root = expected.rpartition('/')[0]
-            self.assertEqual(row['opener']['root'], expected_root if cipher else str((provider.root / expected_root).resolve()))
+            self.assertEqual(row['opener']['root'], expected_root if cipher else str(provider.root / expected_root))
             rows = app.recent_documents.private_items if cipher else app.recent_documents.items
             self.assertTrue(any(row.get('source') == resource_reference(app, provider, expected)[0] for row in rows))
             self.assertFalse(any(row.get('source') == source for row in rows))
