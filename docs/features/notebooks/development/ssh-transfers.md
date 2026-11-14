@@ -146,6 +146,27 @@ authority. Exact no-ops retain the original bytes and timestamp.
 `verify_metadata_revisions` rejects stale records. Neither helper writes to a
 device or qualifies writer exclusion, publication, restart or native acceptance.
 
+`remarkable_transaction.prepare_metadata_transaction` builds an immutable payload
+and commands for a single metadata replacement. It performs no I/O and does not
+enable browser write controls. Its firmware qualification procedure uses a
+private transaction directory outside the native store, an exclusive writer
+lease, revision checks after stopping Xochitl/rm-sync, a preserved original, and
+an atomic same-filesystem rename. Document content is never part of this write.
+All supported writers must respect that exclusion; the lease cannot coordinate
+unrelated root processes that edit the store themselves.
+
+A detached transient systemd service owns publication and a bounded
+`ExecStopPost` restart. Recovery classifies the target as original, committed or
+conflicting without replacing unexpected data. Receipt failures do not precede
+the interface restart. A failed restart retains the writer lease and recovery
+files. Cleanup requires a terminal job, a restored-service receipt, an owned
+manifest and only expected regular files. Failed uploads and conflicting stages
+remain for reconciliation; callers must retain the transaction token before
+upload and must not retry blindly. Synthetic shell/service tests cover these
+boundaries, including process termination before and after rename. Actual
+firmware detachment, restart and native acceptance still require qualification.
+[systemd service lifecycle](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html)
+
 On November 13, 2026, a disposable USB import on user-reported firmware 3.29.1.0
 returned HTTP 201, but the user saw only its two PDF backgrounds. The native
 re-export confirmed that the embedded PDF remained byte-identical while both
