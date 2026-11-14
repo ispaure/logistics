@@ -230,3 +230,10 @@ the disposable copy was left in native Trash to avoid further interface
 interruption. This result does not qualify the stop/start publication procedure
 for that firmware, even though the inspected document bytes survived. Keep the
 browser read-only while the restart behavior and recovery boundary are unresolved.
+
+Subsequent cleanup preserved local recovery evidence, verified that every owned
+test unit was inactive, and removed only the five transaction directories, their
+stale lease and the empty transaction root. The notebook metadata remained
+unchanged and interface/sync service start times and restart counts stayed
+unchanged. Cleanup did not start, stop or restart those services. The disposable
+copy remains in Trash; this housekeeping does not complete writer qualification.
