@@ -1,68 +1,23 @@
 # Open and export Calibre libraries
 
-Calibre controls appear on **Workspaces** when the selected local folder contains an
-immediate child library with `metadata.db`.
-
 ## Open a library
 
-1. Select the local folder on **Workspaces**.
-2. Choose the library in its Calibre section.
-3. Choose **Open Library Folder** to browse its directory, or **Launch Calibre**
-   to open it in the external application. Calibre must be installed or available through the
-   feature's platform-specific software resources.
-
-On Linux, Logistics checks native Calibre and Flatpak. Windows uses the supplied
-executable; macOS retains its bundled-archive installation fallback.
+On **Workspaces**, select the local parent folder of a library containing `metadata.db`. Select the library, then choose **Open Library Folder** or **Launch Calibre**.
 
 ## Export books
 
-Choose **Export books…**, select a dedicated folder and click **Review export**.
-The table lists every copy, update, retained file and deletion. Check it before
-choosing **Apply reviewed export**. The destination is a complete EPUB mirror;
-unrelated files there can be listed for deletion. Keep them in another folder.
-
-The BOOX shortcut fills in `/Volumes/BOOX-SD/Calibre [EPUBs]/<library>` when that
-device is mounted.
-Other devices and platforms use the folder chooser. Work runs in the background;
-cancellation stops between complete steps. Completed changes remain. Changed
-sources or destinations stop the operation; review again before retrying.
+Choose **Export books…**, select a dedicated folder and click **Review export**. Inspect every proposed deletion before **Apply reviewed export**. The destination is an EPUB mirror and unrelated files can be deleted. The BOOX shortcut uses `/Volumes/BOOX-SD/Calibre [EPUBs]/<library>` when mounted.
 
 ## More help
 
-See [Using Logistics](../../../user/user.md) for navigation and settings.
+- [Using Logistics](../../../user/user.md)
+- [Read EPUBs in Books](../../books/user/user.md)
+- [Calibre on mobile](../user_mobile/user_mobile.md)
 
 ## What the export preserves
 
-The library remains the source; export does not edit it or perform format conversion.
-The current dialog exports EPUBs, organized by author and metadata-derived book
-name. Missing formats are reported; malformed metadata can fall back to a cleaned
-folder name. Use [Books](../../books/user/user.md) to read or edit an EPUB
-inside Logistics independently of Calibre.
-
-Source and destination must not overlap or traverse links. Name collisions stop
-the plan. Copies are staged and checked before publication, and obsolete exports
-are removed only after copies succeed. This is not an all-or-nothing rollback:
-interruption during publication/deletion can leave a partly updated mirror. Review
-again to reconcile it; Logistics has no export Undo.
+EPUBs are copied by author and book title. The source library stays intact. Copies are verified before obsolete exports are removed. Interruption can leave a partial mirror. Review again to reconcile it. There is no Undo.
 
 ## If controls or launching are unavailable
 
-Select the parent Local folder containing the library, rather than the library
-folder itself. Detection checks immediate child directories only, and each must
-contain a `metadata.db` file. A `[Calibre]` INI section is not required. This
-feature is separate from the EPUB reader and from configured Books & Comics
-collections.
-
-Windows expects `Calibre2/calibre.exe` under the configured Windows software
-folder. macOS checks `/Applications/calibre.app/Contents/MacOS/calibre`; if absent,
-it attempts to extract `calibre.app.zip` from the configured macOS software
-folder into `/Applications`. Linux first checks `calibre` on PATH, then an
-installed `com.calibre_ebook.calibre` Flatpak. Missing executables or failed
-installation/launch requests are reported by Logistics.
-
-If export review fails, resolve the reported collision, linked path or changed
-file before reviewing again. If the BOOX shortcut says the volume is unmounted,
-mount it or use **Export books…** to choose another dedicated destination.
-
-Calibre controls are desktop-only. See [mobile availability](../user_mobile/user_mobile.md)
-for transferring an EPUB to the native reader.
+Detection checks only immediate child folders. Windows uses configured `Calibre2/calibre.exe`. macOS checks `/Applications/calibre.app` and the configured `calibre.app.zip`. Linux checks native Calibre and Flatpak. Resolve path overlap, directory links or filename collisions before reviewing an export again.

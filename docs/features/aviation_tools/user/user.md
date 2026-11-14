@@ -1,46 +1,19 @@
 # Aviation Tools
 
-Open the **Aviation Tools** tab in Logistics. If it is hidden, enable
-**Aviation Tools** under **Settings → Features**. The choice is saved for later launches.
+Enable **Aviation Tools** in **Settings → Features**, then open its tab and
+choose a calculator. Enter values using the displayed units, then choose
+**Calculate** or press Enter. The window keeps inputs for the current session.
 
-Select a calculator button to open its window. Several tools can remain open
-at once; closing and reopening a tool keeps its inputs for the session.
-Inputs are retained in memory, not saved as calculator sessions across app restarts.
-Enter values using the units beside each field, then select
-**Calculate** or press Enter in a text field. Results appear below the button and
-can be selected and copied. An invalid input displays an error there; correct it
-and calculate again.
+| Tool | Inputs and result |
+| --- | --- |
+| **Distance / Course** | Decimal-degree coordinates give nautical miles or true course. Course also accepts east/west magnetic deviation. |
+| **Wind / Headings** | True course, true airspeed, wind and airport give wind correction and true and magnetic headings. Enter the direction the wind comes from, in degrees true. |
+| **Ground Speed** | Course, airspeed and wind give a vector speed estimate. |
+| **KTAS → KIAS** | The approximation applies at **2,000 ft** only. |
+| **KIAS → KCAS** | Choose an aircraft and an in-range airspeed. The chart uses flaps up. |
+| **Cruise Performance** | Choose aircraft, pressure altitude, RPM and temperature. Read the selected chart row with the estimate. |
 
-- **Distance:** decimal-degree coordinates → nautical miles.
-- **Course:** coordinates and east/west magnetic deviation → true and magnetic course.
-- **Wind / Headings:** true course, true airspeed, wind direction/speed and an airport
-  → wind correction and true/magnetic headings, using stored airport deviation.
-  Wind direction is the direction the wind comes **from**, in degrees true.
-- **Ground Speed:** course, airspeed and wind → the original vector speed estimate.
-- **KTAS → KIAS:** the original approximation supports only **2,000 ft**.
-- **KIAS → KCAS:** choose a supplied aircraft and enter an indicated airspeed within
-  its chart range. Uses linear interpolation and **flaps up**.
-- **Cruise Performance:** choose an aircraft, pressure altitude, RPM and sea-level
-  temperature. Returns the nearest chart row's power, airspeed and fuel consumption;
-  the selected row is shown alongside the results.
-
-Select **Aircraft / Airports** to open the reference window, then choose a dataset to view its read-only table.
-The supplied data includes five aircraft, four airports and charts for C172M and
-C172N models. Dataset files live in the feature's `data` directory; editing those
-files requires restarting Logistics to refresh the selections.
-
-Latitude must be between −90 and 90 degrees and longitude between −180 and 180;
-use negative longitude for west. Numeric fields reject non-finite values. Magnetic
-deviation uses a nonnegative amount and an east/west choice; west adds to the true
-course and east subtracts, with the result wrapped to 0–360 degrees.
-
-These are the existing Flight Tools formulas and historical reference data.
-Wind calculations retain the original vector approximation; cruise performance
-uses nearest chart values, and the airspeed conversion has the limit described
-above. This migration does not validate or update the original calculations or
-reference data. The old project's planned weight-and-balance, flight-plan,
-logbook and PDF-export tools were not implemented and are not included.
-
-This feature is [unavailable on mobile](../user_mobile/user_mobile.md).
-
-[Back to the Logistics user guide](../../../user/user.md)
+Use negative longitude for west. Choose **Aircraft / Airports** to inspect the
+supplied read-only reference tables. These tools use historical data and
+approximations. See [mobile availability](../user_mobile/user_mobile.md) or
+[Using Logistics](../../../user/user.md).

@@ -2,130 +2,16 @@
 
 ## Books and comics
 
-**Books & Comics** lists configured library folders from Local and unlocked
-LocalCrypt copies. Detection uses each collection's `remoteConfig.ini`, matching
-desktop: `[LogisticsComics] libraries = Comics,Mangas` names immediate child
-folders, in that order. Existing ComicRack/YACReaderLibrary configurations also
-identify a collection. Missing folders and unconfigured individual files are not
-listed. Tap a folder to browse it and open a book or comic; **Refresh** discovers
-configuration changes and newly pulled copies. LocalCrypt names stay in memory
-and disappear when credentials are locked or forgotten.
+Open **Books & Comics** and tap a configured Local or unlocked LocalCrypt library folder. In its root `remoteConfig.ini`, set `[LogisticsComics]` and `libraries = Comics,Mangas` on separate lines to list those immediate child folders. Existing ComicRack and YACReaderLibrary configurations are also detected. Use **Refresh** after changing configuration or pulling files.
 
-Use **Import…** for a standalone EPUB or comic. EPUB and
-CBZ/ZIP imports create private copies; the selected source is never
-changed. Imports open directly and remain available through document sessions.
-**Show in folder** reveals the original local file when its saved path is still
-available, including after reopening from Recent or restarting. If the original
-is missing or its path was never recorded (including system-picker imports), the
-command is **Show cached copy in folder** and reveals the private Library copy.
-Older imports can learn their source when reopened from Local after closing the
-reader. LocalCrypt readers use encrypted storage and memory-only decrypted
-content, separate from these saved Library imports.
-On iOS, EPUBs opened from **Workspaces → Local** can live in the shared
-**Files → Logistics → Local** folder. Their import history stays in private app
-storage; reopening the same Local file reuses its imported book and reading
-session, including after the app's storage migration.
-The Books and Comics library shows configured library folders only; it has no
-separate imported-items section, selection switches or imported-results paging.
-There is no folder search field; the available configured folders appear directly.
-Previous/Next and horizontal swipes turn EPUB pages without vertical scrolling.
-The hamburger opens nested chapters; fullscreen hides navigation and reading
-controls. Comic images fit the native image area. The EPUB view follows
-system light/dark appearance and uses the configured font size.
+Use **Import…** for a standalone EPUB or CBZ/ZIP. This creates a private copy and preserves the external source. Reopen through document sessions or Recent. **Show in folder** reveals an available original. **Show cached copy in folder** reveals the private copy when the original is unavailable.
 
-Standalone password-protected CBZ/ZIP comics support AES and legacy ZipCrypto
-on iOS and Android, without rclone or a credential package. Import one through
-Workspaces, then enter its ZIP password and choose **Unlock comic**, or press Enter.
-A wrong password clears the field and keeps the prompt ready for another attempt.
-**Cancel** keeps the imported encrypted copy. The password stays only with the
-active reader; closing the reader clears the password, decoded-page cache and
-displayed pages. Opening after closing or restarting asks again. There is no
-separate relock command. Local/LocalCrypt folder readers continue to use the
-configured INI archive password when available. The library keeps the
-original encrypted archive bytes and never writes an extracted/decrypted archive.
-ZIP member names remain visible, as they do in ordinary password-protected ZIPs.
+For an AES or ZipCrypto comic import, enter the ZIP password and tap **Unlock comic**. A wrong password clears the field for retry. Cancel keeps the encrypted import. Closing clears the active password and decoded pages, so opening asks again. Entry names remain visible. Folder readers can use configured archive passwords.
 
-Progress remembers the EPUB chapter and text anchor, or the current comic page. EPUB **Bookmark** / **Unbookmark** and its
-bookmark selector return to saved passages. Comics have page navigation without
-bookmark controls. Comic pages use
-natural filename order. Right-to-left manga metadata is identified; single-page
-Previous/Next controls still refer to reading-order positions.
-Comic layout defaults to **auto**: two portrait pages when the reading area is
-wider than tall, otherwise one. Right-to-left metadata places the earlier page on
-the right and reverses swipe direction. Existing Single/Double choices can be
-changed under **Appearance → Comic page layout**.
-Comic appearance contains only page layout. Font family/size, line spacing, text
-width, text margins and text themes belong to EPUB appearance. Comic menus omit
-read-aloud, chapter search and contents/bookmarks; imported comics offer **Comic
-pages…** for direct page selection. The same format split applies to LocalCrypt
-and remote previews. Applying comic layout does not change EPUB preferences.
-All comic readers use the same menu order, **Comic pages…** selector and
-**Close comic** command. Read-only previews omit metadata editing. With reading
-controls visible, **Previous comic** (`|≪`) and **Next comic** (`≫|`) are icon
-buttons above the image; page arrows and the page slider remain below it. These
-file buttons hide in fullscreen and remain disabled when unavailable. Switching
-comics with them preserves whether reading controls are visible. First/last page
-jumps use the page slider or **Comic pages…** selector. The overflow menu omits
-file switching and **All documents**; use the existing navigation to leave reading.
-**… → Info…** shows the opened comic's path. Saved imports show their current
-local copy, remote previews show `remote:path`, and LocalCrypt folder readers
-show their logical LocalCrypt path. The dialog contains no credentials.
-In the comic reader, horizontal swipes turn pages in both normal and fullscreen
-views, including swipes from the screen edge. They do not navigate Back. Zoomed
-pages use dragging to pan; fit the page to resume swipe paging. Use the visible
-Back control to leave the reader. At a comic boundary, a brief finger cue shows
-the physical reading swipe. The bottom line offers a previous/next volume only
-when available; repeat the stated swipe within 2.5 seconds to open it. See
-[comic gestures](../../comics/user_mobile/gestures.md) for direction and motion settings.
-Comics fill the available reading width immediately on opening and resize with
-the reader. The image keeps its aspect ratio, so some pages can have natural
-letterboxing. With controls visible, books and comics use the same hamburger
-position as Documents; on iOS it is in the navigation bar. Bottom controls,
-reading status and progress indicators stay above the destination bar.
-
-Ordinary CBZ/ZIP comics stream into the private library without a fixed archive
-or total decompressed-size cap. Reading seeks archive headers and fetches only the
-chosen page. Both EPUB and comic archives are limited to 5,000 entries; EPUB
-imports retain the 256 MiB archive/expanded-total and 8 MiB per-member limits.
-Native comic images must be PNG/JPEG/WebP,
-no larger than 8 MiB or 16 megapixels, with each dimension at most 8,192 pixels.
-Static lossy, lossless and transparent WebP pages render directly at their original
-resolution; archives are preserved. Animated WebP is not supported. Comics with
-other page formats are rejected rather than silently skipping pages.
-EPUB chapters and rendered HTML are limited to 2 MiB. Small PNG/JPEG/WebP illustrations
-(up to 256 KiB each, 1 MiB total) are embedded; unsupported/large illustrations
-show an omission label. Raw scripts, forms, embedded objects, source styles and
-external resources are removed. On iOS and Android, safe archive-local chapter
-and section links work inside the rich reader; external links remain blocked.
-Other backends use the chapter selector in the bounded text fallback.
-DRM, standalone encrypted EPUBs, CBR/RAR and fixed-layout SVG books are not supported.
-
-Imports hash bytes during their streamed copy. The checksum is verified on
-opening after a restart; reopening an unchanged file in the same session reuses
-a bounded revision-keyed verification cache. Changed files invalidate it, and
-individual page reads reject concurrent changes. Re-import a changed private copy as a new entry. Malformed
-library records are preserved and reported. Progress/bookmark writes reject stale
-records rather than overwriting another change.
+EPUB imports permit up to 5,000 entries, 256 MiB for archive and expanded total, and 8 MiB per member. Chapters and rendered HTML are limited to 2 MiB. DRM, encrypted EPUBs and fixed-layout SVG books are unsupported. CBZ/ZIP imports have the 5,000-entry cap and separate per-page limits. See [comic workflows](../../comics/user_mobile/reading.md#native-mobile-library) and [comic gestures](../../comics/user_mobile/gestures.md).
 
 ### Reader navigation and imported metadata
 
-Imported EPUBs now provide nested contents/internal links, current-chapter search,
-page-turn navigation, fullscreen and passage-based resume/bookmarks. Android and iOS provider
-EPUBs share rich rendering, nested contents, internal links, highlighted search and
-appearance controls through a private browser view. Provider reading state uses
-the credential-bound policy described in the [reading guide](reading.md#native-mobile-reading);
-other backends retain bounded native text passages.
+Swipe or use arrows to turn pages. Use EPUB's chapter list and **Bookmark** or **Unbookmark** to navigate by passage. Comics offer **Comic pages…**, a slider and separate neighboring-comic buttons when available. Appearance controls follow the format.
 
-Comic readers offer single/automatic/two-page layouts, manga-aware spreads and
-spread-aware turns. Use **Comic pages…** or the page slider for direct and
-first/last page selection. Neighboring-comic buttons are available when the reader
-has a sibling list. See the [Comics guide](../../comics/user_mobile/reading.md#native-mobile-library).
-
-Imported copies remain available through document sessions rather than a
-separate catalogue list. Reader menus edit metadata on ordinary imported
-EPUBs/comics. These writes change the imported copy, preserve pages/resources and
-leave the external source untouched. Folder comic batches start through
-**Files → Actions → Edit comics in this folder…**; the library has no imported-row
-selection interface. Existing provider metadata saves keep their
-own encrypted-publication policy. A recovery journal completes an imported
-archive/checksum-record publication interrupted after the archive was saved.
+**Edit metadata…** writes to ordinary imported copies and leaves their sources intact. For Local or unlocked LocalCrypt comic folders, use **Files → Actions → Edit comics in this folder…**. See [EPUB reading](reading.md#native-mobile-reading) and [comic batch limits](../../comics/user_mobile/reading.md#mobile-collection-search-and-folder-batches).

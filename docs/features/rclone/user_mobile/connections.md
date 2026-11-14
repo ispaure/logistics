@@ -2,258 +2,83 @@
 
 ## Remote files and credential ZIPs
 
-Open a folder’s **•••** actions in **Workspaces**, then choose **Browse Remote** to open its
-online file browser. Credential setup is under
-**Settings → Workspaces → rclone connections…**. The native app embeds rclone 1.74.1; no desktop
-executable, shell, mount, or separate RC server is required. **Advanced & troubleshooting → Check rclone engine**
-performs an offline in-memory read and displays the engine version.
+1. Open **Settings → Workspaces → rclone connections… → Import credential ZIP…**
+   and select **Choose credential ZIP…**. An unencrypted ZIP continues directly.
+   For an encrypted ZIP, enter its password and tap **Unlock**. A failed password
+   keeps the ZIP selected for retry.
+2. Choose **Session-Only** to keep decoded credentials in memory until lock or
+   exit, or **Persistent credential storage** to restore them after restart.
+   Cancel leaves credentials unchanged.
+3. Select a remote and **Browse folder**, or choose **Workspaces → Cloud** and
+   use a folder’s **••• → Browse Remote**. Tap a supported file for read-only preview.
 
-Home opens before saved connections finish loading in the background. You can
-browse and open ordinary local files during that work. Saved connections load
-automatically without a confirmation prompt or an online connectivity check;
-connection badges update when ready. Opening a cloud-backed file waits for its
-matching saved credentials. Password-protected session-only ZIPs still need their
-password after a restart or lock. Push/Pull review and permanent local-folder
-deletion retain their confirmation dialogs.
-The editor-specific **Open / Save As** picker still waits for initial credential
-loading because it includes encrypted destinations.
+The ZIP supports plain, ZipCrypto and WinZip AES packages with one
+`[Remote name]` and `type` per TXT entry. Limits are 1 MiB per ZIP, 64 entries
+and 256 KiB per TXT. Duplicate remote names within a ZIP and unsafe paths are
+rejected. Import/unlock works offline and keeps the source ZIP intact. If
+credentials are busy, stop the active request and retry. **Advanced &
+troubleshooting → Check rclone engine** runs an offline diagnostic.
 
-Workspaces's **Cloud** tab lists remotes supplied by loaded credentials and known
-remotes from retained credential ZIPs, including remotes without a local copy.
-Opening a locked remote asks for its ZIP password and unlocks it for this session
-without asking how to store it. Retained packages also remain in
-**rclone connections → Credential Packages** for unlocking. Local folders remain
-in **Local** after credentials are locked or forgotten; their names and transfer
-mappings do not create Cloud destinations.
+Embedded rclone supports existing settings for Google Drive, Dropbox, OneDrive,
+S3, WebDAV and SMB, plus one crypt layer over a supported remote. WebDAV and
+custom S3 endpoints require HTTPS with certificate verification. Use a separate
+form for [direct SMB shares](localcrypt.md#smb-and-mac-shared-folders).
 
-In Workspaces's **Cloud** and **Local** tabs, encrypted folders show a combined
-folder-and-lock icon before their name. Blue open padlocks mean unlocked;
-orange closed padlocks mean locked. Each folder reports its own state. Ordinary
-folders use a plain folder icon. Group headings remain expanded.
+**Session-Only** retains password-protected ZIPs under device encryption for
+future unlocking. Re-select unencrypted ZIPs after restart. **Persistent**
+protects decoded settings and refreshed tokens in an AES-256-GCM vault with an
+Android Keystore or device-only iOS Keychain key, outside backup. ZIP passwords
+stay in memory. Saved connections restore in the background. If restoration
+fails, unlock the device and choose **Reload saved credentials**, or forget and
+reimport. Session-only token refreshes may require a fresh package after exit.
 
-The online browser loads filenames and sizes without fetching thumbnails, in
-both list and tile views. The current folder name stays in the header. Loading,
-download progress and errors appear in a smaller status line beneath it, without
-replacing the folder name. Opening a folder or file shows the current step and
-elapsed seconds, with an animated progress bar. Remote previews report connection
-checks, archive index reads and member/data reads; **Cancel** stops the pending
-request. The elapsed time is a wait indicator, not a download percentage.
+The online browser keeps previews in memory. EPUBs and CBZ/ZIP comics use up to
+128 MiB per archive and 256 MiB across open books/comics. Close a reader to free
+its cache or reopen it for a fresh snapshot. If an inner ZIP needs a password,
+the closest `[LogisticsZIP]` section in a parent `remoteConfig.ini`
+supplies `archive_password`. A missing or empty key there stops inheritance.
+Use the password form if needed.
 
-Tap **Import credential ZIP…** to open the separate import page and select your
-existing Logistics credential package. Use **Choose credential ZIP…** to select
-a different ZIP. Its filename appears under the button. Enter its password, then tap
-**Unlock** below the password field, or press Return. Leave the password
-blank for an unencrypted ZIP. A failed load clears the password and keeps the
-selected ZIP ready: correct the password and tap **Unlock** again without
-selecting the file again. After loading, choose a remote and tap **Browse folder**.
-The ZIP password is never saved; selecting a ZIP alone does not load credentials
-or connect to a remote. TXT entries must each contain one `[Remote name]`
-section and rclone settings, including `type`. Plain, ZipCrypto and WinZip AES
-packages are readable; importing never extracts files or modifies the source ZIP.
-ZIPs are limited to 1 MiB, 64 entries and 256 KiB per TXT entry. Duplicate remote
-names within a ZIP, unsafe archive paths and unsupported settings are rejected
-before changing any loaded package. Reloading the same ZIP filename replaces only that package's
-remote list; it makes no remote connection by itself.
-Loading and unlocking work offline once the ZIP is available on the device.
-If another operation is using credentials, loading returns a busy message
-immediately. Stop that operation and retry; it does not queue behind a network
-request or test the account online. Old network clients disconnect in the
-background. Unlocking a remote to continue browsing resumes that online action
-only after the local unlock succeeds.
-
-The mobile adapter includes Google Drive, Dropbox, OneDrive, S3, WebDAV and SMB,
-plus the memory backend used by the offline diagnostic. Existing authenticated
-settings are required. It accepts a deliberately limited set of backend settings;
-local paths, scripts, service-account files, mounts, alias wrappers and
-other backends are not currently supported. WebDAV URLs and custom S3 endpoints
-must use HTTPS. Certificate verification stays enabled. A single crypt layer over
-one supported backing remote is available for [LocalCrypt reading](localcrypt.md#localcrypt-encrypted-offline-reading).
-
-Choose a connection in Settings and tap **Browse remote files** to open the
-browser. Tap folders to open them.
-The header’s parent arrow moves up a folder; at the remote root it returns to
-Workspaces. The bottom **Workspaces** tab also returns to the folder list. Tap supported files for read-only,
-in-memory previews. Unsupported files show a dialog asking you to make a local
-copy yourself. To keep a file or folder, use its **••• → Download locally…** menu
-and choose an ordinary or unlocked LocalCrypt destination. See
-[selected-item downloads](workflows.md#mobile-folder-navigation) for the steps and
-confirmation. Managed Pull workflows remain available to create or refresh mapped
-offline folders.
-
-Remote EPUB books and CBZ/ZIP comics download completely into memory once before opening.
-The status shows downloaded MiB and percentage; subsequent page turns read that
-snapshot without contacting the share. The cache allows up to 128 MiB per archive
-and 256 MiB across open books and comics in all windows. Close a remote reader to free its
-cache. Closing, locking or replacing credentials clears its cache; nothing is
-written to disk. Larger archives require a managed local copy. To see changes made
-to the online archive after it was cached, close and reopen the reader.
-
-While an online request is running, Workspaces's action menus and local folders
-remain available. Another online operation shows a busy message and **Cancel
-current request** rather than silently waiting. LocalCrypt browsing can continue
-during transfers and remote reads; credential replacement must finish first.
-Returning to Workspaces and opening **•••** use the last discovered folder
-metadata without rechecking rclone. Credential loading and **Refresh** update
-encrypted-folder discovery in the background. Opening a mapped remote shows
-**Checking connection…** while its identity and folder path are checked; menus
-and navigation remain usable during that check.
-
-Tap a file to open its preview or a folder to browse it directly. File browser
-rows have no **•••** button. When you open a protected comic, Logistics checks
-`remoteConfig.ini` beside it and up to the remote root. The nearest
-`[LogisticsZIP]` section supplies `archive_password`. An empty or omitted key
-in that section stops inheritance. If no password is found or it is rejected,
-Logistics opens the inner ZIP password form.
-The browser status shows when a remote file is opening and reports opening failures.
-
-The magnifying glass on the right reveals **Search**, which filters names in the
-current folder. **×** clears and hides it. Changing folders clears search.
-Tapping outside a search field dismisses the keyboard.
-Remote listings read only the selected folder's immediate children. Remote
-screens display up to 40 items per page in both List and Tiles, with **Previous** and **Next**
-above the items; paging, sorting and filtering do not contact the remote again.
-The status distinguishes **Listing…** from **Displaying…** and keeps an elapsed
-timer while waiting. Workspaces and its action menus remain available during listing.
-Failed navigation preserves the prior listing and history. Browsing has a
-two-minute deadline; managed Sync has no fixed overall deadline. Cancellation
-may wait for an upstream network call to return.
-
-The remote browser uses a compact location header with a plain directory-name
-label, storage and lock icons, and the search button. It omits item
-counts and the Sort control. Progress and **Cancel** appear only
-while a request is running.
-
-After entering a package password, tap **Unlock**. A popup offers
-**Session-Only** and **Persistent credential storage** as selectable cards. Tap a
-card to choose immediately, or use **Cancel** at the bottom. Cards and Cancel have
-outlines, including in high-contrast mode. The cards contain explanations matching
-the desktop choices. Cancel leaves credentials unchanged. Session-Only keeps
-decoded credentials in memory until locking or exiting. Persistent storage keeps
-them available after restart using the device-protected encrypted vault. The saved
-credentials are not protected by the ZIP password. The ZIP password is never saved.
-Password-protected ZIPs are retained under device encryption with either choice;
-unencrypted ZIPs must be selected again next time. Settings autosave never stores
-session credentials.
-
-The package page separates **Credential removal** from **Loaded remotes**.
-
-Multiple saved and session-only packages can remain loaded together. A Session-Only
-load does not delete an older persistent copy of that package. **Reload saved
-credentials** keeps currently loaded session-only packages active.
-
-Saved settings and refreshed OAuth tokens use an AES-256-GCM encrypted private
-vault. Android Keystore protects its key, and the files are outside Android backup;
-iOS Keychain stores a device-only key available while the device is unlocked, and
-the vault folder is excluded from backup. Saved credentials restore during app
-startup in the background, without contacting a remote. Recent and Documents
-show the restored connection state; opening a cloud file waits for any pending
-restoration and continues directly. Session-only ZIPs still require their password
-after restarting the app. The ZIP password is never saved, and neither
-mode rewrites the source ZIP. A locked device, missing key or damaged vault stops
-restoration; there is no plaintext fallback or silent replacement of saved data.
-Unlock the device and reload, or use **Forget all saved credentials** before reimporting.
-
-Password-protected session-only credential ZIPs also have an **AES-256 ZIP** cache
-for their open and recent file lists. It uses the same credential ZIP password,
-with filenames and paths inside the encrypted payload. Unlocking that credential
-restores the entries in the current window; file contents load only when selected.
-The cache keeps no passwords, document contents or unsaved edits. Locking a session
-preserves the encrypted cache while removing the visible entries. Unencrypted
-credential ZIPs do not enable password-protected list caching.
-
-**Forget all saved credentials** unloads the active session and removes the saved
-ciphertext, its known protected key, retained ZIPs and encrypted open/recent list
-caches in every window, while preserving private downloads. If cleanup reports a
-partial failure, unlock the device and retry forgetting. Private
-downloads follow the platform's normal app-data backup policy. Interactive OAuth
-account setup remains future work. Session-only token updates are lost on exit;
-providers that rotate refresh tokens may require a fresh credential package.
-
-The **rclone connections** page has a **Credential Packages** heading and archive
-rows named after each imported ZIP, without `.zip`. Tap one to open its package
-page. The top title uses the package name, followed by **Locked**, **Persistent
-save** or **Session-Only** status, its password field and **Unlock**. **Loaded
-remotes** lists only that package's active remotes. Tap a remote to browse it.
-**Forget this credential package**, below the remotes, confirms removal of the
-whole package and every remote it supplies. Other packages and local files remain. If removal fails because saved credentials
-cannot be accessed, Logistics attempts to lock all active packages and still
-cleans up independent retained ZIP/list caches. The error requires retrying
-removal; saved credentials may remain. If session locking cannot be confirmed,
-restart Logistics before retrying.
-
-The first page retains **Session → Lock session** and its explanation. Locking
-keeps retained ZIPs and persistent credentials and also locks SMB sessions.
-**Advanced & troubleshooting** contains **Reload saved credentials**, **Check
-rclone engine** and **Forget all saved credentials**. The last action displays a
-severe confirmation warning before removing all credential packages, saved and
-session credentials, and encrypted open/recent lists. Cloud files, local folders
-and downloaded contents are not deleted. Reimport the packages to reconnect.
-
-SMB setup has its own **Settings → Workspaces → SMB shares…** page; see
-[SMB and Mac shared folders](localcrypt.md#smb-and-mac-shared-folders).
+**Cancel** requests a stop. Another online request can show **Cancel current
+request**; local browsing remains available. Browsing has a two-minute deadline
+and cancellation may wait for an upstream call. Use [Download locally…](workflows.md#mobile-folder-navigation)
+for a selected copy, or [LocalCrypt](localcrypt.md#localcrypt-encrypted-offline-reading)
+for managed encrypted copies.
 
 ### Locked credentials and Workspaces
 
-Retained ZIPs stay listed in **Credential Packages** while locked. Open a package,
-enter its password and tap **Unlock**, then choose storage in the popup. Wrong
-passwords keep the page available for retry. LocalCrypt copies can also request
-the matching ZIP password when opened. **Lock session** unloads active contexts
-and keeps known Cloud rows available for password unlock, along with local copies, retained ZIPs and saved
-credentials. Save or discard private edits before locking. Forgetting removes
-the chosen credential material as well as its encrypted open/recent list caches.
+Open a retained package under **Credential Packages** or tap a locked Cloud
+folder and enter its ZIP password. **Session → Lock session** unloads active
+rclone and SMB connections and keeps retained packages and local copies. Save
+or discard private edits before locking.
+
+**Forget this credential package** removes its credentials and encrypted
+open/recent lists. **Advanced & troubleshooting → Forget all saved credentials**
+removes all packages and their caches while preserving downloaded files.
+If removal fails, unlock the device and retry. If locking cannot be confirmed,
+restart the app before retrying.
 
 ### Multiple credential packages on Android and iOS
 
-Choose storage independently in each ZIP’s Unlock popup. For example, load
-Personal with persistent storage and Legacy with Session-Only. Both remain active and
-appear as separate credential groups in Workspaces; select **All** to see all
-available folders. Connections lists each loaded package with **Persistent save** or
-**Session-Only** status. **Show Legacy** still controls Legacy-prefixed groups
-and folders on both platforms.
+Choose storage separately for each ZIP. Up to 32 packages can stay loaded, with
+up to 64 remotes each. A filename identifies its package. Reloading that file
+only replaces that package’s active remotes. Matching remote names across
+packages get qualifiers and keep their own account identities. Use **All** or a
+credential group in Workspaces. **Show Legacy** controls Legacy entries.
 
-Up to 32 loaded packages are supported, with up to 64 configured remotes per
-package. A ZIP filename identifies its package: reloading that filename replaces
-only its active context. If two packages contain a remote with the same name,
-the additional remote is qualified with its package name and an identifying
-suffix. Their backing remotes, account identities and token updates remain
-separate. Existing downloaded copies use their recorded connection identities
-to resolve the matching loaded context.
-
-Saved packages are encrypted in the private device vault and return after
-restart. Session-only decoded credentials and resume-password verifiers remain
-in memory. Session-only imports retain their original password-protected ZIP under device
-encryption for password-only unlocking after restart. The ZIP and its remote
-associations live in private app storage: `CredentialPackages` on iOS, and
-`LogisticsCredentialPackages` in Android’s no-backup storage. Decoded credentials
-and ZIP passwords are never written there. Reloading saved credentials does not discard
-active session packages. Adding or refreshing a saved package never serializes
-session-only contexts. Existing saved vaults migrate using their current device
-key; package vaults use a new header which older builds refuse to load.
-
-Loading a previously saved filename as session-only does not erase its older
-saved copy; use Forget saved credentials if you want to remove saved secrets.
-**Lock session** unloads all active contexts. **Forget this credential package** removes just that package, including an older saved
-copy. **Forget all saved credentials** removes all packages after confirmation.
+Reloading saved credentials preserves active session packages. Importing a
+previously saved filename as Session-Only keeps its older saved copy. Use
+**Forget this credential package** to remove both. Password-protected session
+packages keep encrypted open/recent paths under the ZIP password.
 
 ## Folder search scope
 
-Remote and PC-server search filters every entry in the active folder listing.
-It does not descend into subfolders. Local and LocalCrypt search includes
-subfolders recursively. Neither search has an entry or result count limit.
-The browser shows up to 40 results per page; use the page arrows for more.
+Remote and Home Server searches filter the current folder. Local and LocalCrypt
+include subfolders. Scroll to see more results.
 
 ## Resuming a locked session
 
-When the app locks a session after leaving the foreground, its unlock screen
-shows the credential ZIP filename whose password is required. If several
-credentials are locked, enter their passwords in turn; unlocked filenames
-disappear from the list. A passwordless connection asks you to create a temporary
-session password. These labels and password checks stay in memory.
-
-
-The optional **Settings → Privacy & Security → Skip session password on trusted Wi-Fi**
-setting can skip this repeat foreground-resume check for already-unlocked
-session-only credentials on explicitly listed networks. It is off by default,
-never saves a password and does not bypass app restart or manual session locking.
-See [trusted Wi-Fi session resume](../../../user_mobile/settings/settings.md#trusted-wi-fi-session-resume)
-for setup, permissions and limitations.
+Enter the named ZIP passwords in turn, or the temporary password for a
+passwordless session. The optional [trusted Wi-Fi session resume setting](../../../user_mobile/settings/settings.md#trusted-wi-fi-session-resume)
+can skip the foreground-resume prompt on listed networks for already unlocked
+session-only credentials. Restart and manual lock still require unlocking.

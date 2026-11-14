@@ -1,54 +1,23 @@
 # Open a mounted remote folder
 
-FUSE lets rclone expose a remote as a local folder. It requires a loaded rclone
-config and the platform's filesystem support.
-
 ## Open a mount
 
-1. Load and persist credentials using the [rclone guide](../../rclone/user/user.md).
-   Session-only credentials do not expose this mount action.
-2. Select the remote on **Workspaces**.
-3. Choose **Open Mount Folder** in its FUSE section.
-4. If asked, download the required rclone executable or platform driver installer.
-   Complete driver installation, then retry the mount action.
-
-| Platform | Filesystem support |
-| --- | --- |
-| macOS | macFUSE; a pinned installer can be downloaded |
-| Windows | WinFsp; a pinned installer can be downloaded |
-| Linux | FUSE device plus `fusermount`/`fusermount3`, installed through your distribution |
-
-Opening a folder source alone does not mount or contact its remotes. Mounts are
-created on demand under `~/Server/NetworkMount/<config-id>/<remote>` by default.
-The config ID is derived from the credential config's resolved path. Moving the
-config therefore changes its mount location.
+Persist [rclone credentials](../../rclone/user/user.md), select the remote in
+**Workspaces** and choose **Open Mount Folder**. Install macFUSE on macOS,
+WinFsp on Windows, or FUSE with `fusermount`/`fusermount3` on Linux.
+Mounts default to `~/Server/NetworkMount/<config-id>/<remote>`.
+Edits there affect remote storage.
 
 ## If a mount fails
 
-Read the reported error and check the credential config, connectivity and installed
-filesystem support. On Unix, an unresponsive mount is unmounted before retrying;
-a failed unmount stops recovery. Automatic stale-mount recovery on Windows is not
-supported. A nonempty or linked mount destination is refused rather than cleared.
-
-Different credential configs have separate mount locations even when remote names
-match. This separation applies to mounts; rclone Push/Pull still uses the same
-local folder for same-named remotes. Ordinary transfers can work without FUSE.
+Check connection, credentials and the driver. Nonempty and linked destinations
+are refused. Unix retries stale mounts after unmounting successfully.
 
 ## More help
 
-See [Using Logistics](../../../user/user.md) for navigation and settings.
-
-Mount attempts show a progress dialog. Close/cancel waits for the current attempt;
-an already completed mount remains mounted. Disabling the feature does not unmount
-an existing remote. Changes made through the mounted folder affect its remote
-storage; it is not a separate backup copy.
+See [Using Logistics](../../../user/user.md) and [mobile scope](../user_mobile/user_mobile.md).
 
 ## Credential changes and existing mounts
 
-An existing mount must match the credential file and credential identity that
-created it in this Logistics process. A mount inherited after restarting the app,
-or one whose credentials changed, is refused. Explicitly unmount it using your
-platform’s tools, then retry **Open Mount Folder**. Unknown mounts are preserved.
-
-Mounts are a [desktop capability](../user_mobile/user_mobile.md); Android and iOS
-use online browsing and downloaded copies instead.
+If credentials changed or Logistics restarted with a mount left active, unmount
+it using platform tools and retry. Cancelling can leave a completed mount active.

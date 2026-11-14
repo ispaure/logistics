@@ -12,26 +12,17 @@ preview. The location determines where changes go.
 | Use a configured collection offline | Its Local copy in Workspaces | Changes stay local until you review Push |
 | Keep an offline copy encrypted | Its unlocked LocalCrypt copy | Saved contents stay encrypted; private drafts remain memory-only |
 | Inspect a remote file | Remote/Cloud browsing | Direct previews are read-only; opening does not automatically create an editable copy |
-| Receive a file from another mobile app | Share to Logisticks, then Received Files | A copied attachment, separate from the sending app's original |
+| Receive a file from another mobile app | Share to Logisticks, then On My Phone or On My Tablet | A copied attachment, separate from the sending app's original |
 
-Desktop File Browser can browse ordinary folders outside configured collections.
-Mobile All files is the app's available storage locations, not unrestricted access
-to every device path. The [desktop file guide](files-and-documents.md),
+See the [desktop file guide](files-and-documents.md),
 [mobile document guide](../user_mobile/documents/documents.md) and
-[remote/offline guide](../user_mobile/documents/remote.md) explain those boundaries.
+[remote/offline guide](../user_mobile/documents/remote.md) for location choices.
 
 ## Create and find your first mobile document
 
-Choose New document, enter a name, select Plain text, Markdown or Notebook, and tap
-**Choose location**. Select a writable folder. Create document creates the file in that folder and opens it. Cancel
-before creation creates nothing. A duplicate filename needs a different name;
-do not assume creation replaces the existing file.
-
-Save writes edits back to the opened file. Close uses the save/discard guard.
-Return through Workspaces or All files to confirm the file is where you chose.
-Existing legacy saved documents remain available in Documents; new folder-backed
-documents do not require that older private store. See the
-[current creation steps](../user_mobile/documents/documents.md).
+Choose **New document**, select a format, enter a name and choose a writable
+folder. Save writes to that file. Reopen it through Workspaces to confirm the
+location. See the [creation steps](../user_mobile/documents/documents.md).
 
 ## Know when you are making a copy
 
@@ -67,13 +58,12 @@ owns connection setup, Pull/Push and LocalCrypt details.
 | File was saved but its editor did not reopen | Inspect the destination before retrying; retain the draft and visible error |
 | File is visible but name search misses it | Check index scope/progress/errors and refresh where offered; search metadata can lag behind live browsing |
 | LocalCrypt content disappears after locking | Unlock the intended credentials and reopen; retired readers do not regain access automatically |
-| Received Files seems unavailable on Android | Check that the selected collection drive is connected; completed incoming handoffs can wait for it |
+| An incoming share is unavailable on Android | Check that the selected collection drive is connected; completed incoming handoffs can wait for it |
 | A remote preview offers no Save | Choose the managed offline-copy workflow, edit that copy and review Push |
 
-Keep the application open while preserving an unsaved draft. Repeated retries
-can obscure whether publication already succeeded. A useful report includes
-platform, app/build version, location type, operation and exact error; exclude
-credentials and private document contents.
+Keep the app open while protecting an unsaved draft. When reporting a problem,
+include the platform, build, location type, operation and error. Keep credentials
+and private contents out of the report.
 
 For desktop tools, choose the [feature guide](features.md). For notebooks, use
 [desktop](../features/notebooks/user/user.md) or

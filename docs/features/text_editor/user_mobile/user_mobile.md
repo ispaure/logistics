@@ -1,182 +1,29 @@
 # Text editing on mobile
 
-The mobile app provides its text editor in Documents and Workspaces on iOS and
-Android. Enable **Text Editor** in feature settings for text, Markdown and source
-file workflows. Notes Library has its own feature switch.
+Enable **Text Editor** in Features. Open or create the document from Documents or Workspaces. Markdown opens in preview. Tap **Edit Markdown** for formatted editing or **••• → Source editing** for exact syntax. **Formatted editing** switches back and **View document** opens preview. Both editors use the same draft. Tap **Save** to publish.
 
 ## Plain text, storage and platform scope
 
-Plain text and source files use one native editor with a language dropdown and
-line count. **Find and replace…** searches the current source buffer; it does not
-search files across a workspace. The mobile text workflow limits documents to
-1 MiB. Desktop comparison/merge, multi-cursor, code-folding, shortcut customization
-and same-document split-view commands are not exposed by this mobile editor.
+Ordinary text and source files use the native editor with a language dropdown. **Find and replace…** searches the current source buffer. The standalone editor accepts up to 1 MiB. Desktop merge, multiple cursors, folding and split view are unavailable.
 
-Local files and unlocked LocalCrypt documents support editing and saving. Cloud
-and encrypted-cloud documents remain read-only; create a local copy to edit.
-Ordinary app-stored drafts keep a private recovery copy. LocalCrypt drafts are
-session-only: save before closing or locking; they are not ordinary recovered
-documents. Save errors keep the draft. If an ordinary stored document changes
-outside the editor, use **Save a copy…** to retain your edits.
+Edit Local or unlocked LocalCrypt files. Copy a cloud file locally to edit. Ordinary drafts have private recovery. LocalCrypt drafts are session-only, so save before closing or locking. Failed saves keep edits. Use **Save a copy…** after an external change.
 
-See the [Documents and editing](../../../user_mobile/documents/documents.md) guide for opening, editing, saving and exporting files.
+In Markdown, type headings or emphasis markers or use the formatting toolbar. Use **Format → link** for a URL or relative path. **Find in this page…** searches preview and **Find and replace…** searches Source. Pinch to resize Markdown text. **Settings → Markdown → Justify text** reflows paragraphs and lists without rewriting the source. Use **Read aloud…** for the selected text or the rendered note.
 
-For folder libraries, see the [Notes Library mobile guide](../../notes_library/user_mobile/user_mobile.md).
+**×** closes and prompts when dirty. **Document actions → Delete document…** permanently deletes an app-stored file, its recovery and Recent entry after confirmation. Close other app windows first. Files opened from a folder use that folder's actions.
 
-Markdown opens in preview. The top **pencil** icon (**Edit Markdown**) opens
-directly editable, formatted text. Use **••• → Source editing** for exact syntax,
-or **••• → Formatted editing** to return to styled writing. These commands remain
-available with the keyboard open. The mode selector is shown only in Source;
-formatted editing has its own compact formatting toolbar. The top **page** icon returns to preview. Save is shown
-only after text changes, and disappears after saving or reverting. Reading uses
-one compact top toolbar in portrait and landscape on iOS and Android, with no
-separate edit/save footer or duplicate file-drawer row.
-In formatted editing, type `# Heading` (through six heading levels), `**bold**`,
-`*italic*`, underscores or backticks to see their formatting as you write.
-Select words and type `*` to surround them with emphasis; type a second `*`
-while they remain selected to make them bold. Underscores and backticks also
-wrap selections. Incomplete syntax, escaped markers and text inside code stay
-literal. Inline markers show when the cursor touches or is inside their formatted
-span, or a selection overlaps it. Heading markers show anywhere in that heading.
-Moving elsewhere hides them, including within the same paragraph, following the
-desktop editor’s cursor rules. Toolbar Undo/Redo and hardware keyboard shortcuts
-work with these edits; Ctrl/Cmd+B and Ctrl/Cmd+I apply bold and italic.
-
-In Markdown preview and Notes Library, choose **••• → Find in this page…**
-to highlight text in the open note. A compact panel above the page shows the
-current match and total, with Previous/Next arrows and **Done**. Done clears page
-marks. In the Files drawer, **Search Notes Library** shows one row per matching note or
-folder across the library. **Documents** searches names and Markdown text, with
-name matches first. Choose **Names only** to search file and folder names.
-If results share a name, their parent paths distinguish them. Enter `turtle red`
-to require both words in any order, or `"this follow this"` for a phrase.
-Search ignores case and treats spaces, hyphens and underscores alike in phrases.
-Clear the field to return to the folder tree. In the editor,
-**Find and replace…** searches Source mode and selects the current source match.
-
-Background memory cleanup preserves the active Markdown reading or editing
-surface when returning from sleep. Reading and formatted editing use the
-platform's default font, including the device-selected sans-serif font on Android;
-code retains a monospace font.
-Markdown preview and formatted editing use the app's window background throughout
-the reading area, including text margins, following light and dark mode. The text
-blends into the surrounding view without a separate rectangular panel.
-Pinch Markdown to change its font size and reflow the text within the view.
-Markdown, EPUB and plain text retain separate font-size settings.
-On iOS, text and Markdown editors share the readers' native title bar. The
-filename stays centered, and **Save** appears beside the reading/actions controls
-only while there are unsaved changes. Use **Actions → Rename document…** to change
-a managed document's name. Notes Library shows the current note's filename and
-keeps **‹ / ›** page-history buttons visible beside its reading controls. Use
-**×** to close the library from any page; the parent-folder command is in **•••**.
-Markdown and editable Notes Library pages put **Read aloud…** in **•••** to leave
-room for their titles. When a managed editor has unsaved changes, Save takes
-the primary action slot; **View document** remains available in **•••**.
-Enable **Settings → Markdown → Justify text** to align paragraphs and lists to
-both edges in previews and formatted editing, including folder and vault readers.
-The switch defaults to off and saves on this device independently of EPUB.
-It reflows the display without changing Markdown source or unsaved edits;
-headings, code blocks, tables and Source mode keep their existing alignment.
-Open the **three-dot Document actions** menu in the editor or Markdown preview
-and choose **Delete document…** to remove an app-stored document, including an
-unsaved Untitled document. Confirm the warning to close it and permanently remove
-its saved content, recovery copy and Recent entry. **Cancel** keeps it open.
-The document's **×** keeps the stored document. Unsaved changes open a native
-popup with **Save**, **Quit without saving**, and **Cancel**. Find and Replace
-changes **×** to a back arrow that dismisses search and keeps the document open.
-The three-dot menu omits New, Open from Files, Import and Close. Delete uses red
-destructive styling and a native **Delete / Cancel** confirmation.
-Close other app windows before deleting. Files opened directly from a folder
-continue to use that folder's file-management actions.
-Choose **New Document** from Home, choose a document type, then enter its name
-and choose where to save it. Remarkable Document (`.rmdoc`) opens the drawing editor;
-Markdown (`.md`) opens the Markdown editor. The filename remains independent of the headings you add while editing.
-For a new Markdown document, tap in the blank writing area to place the cursor.
-While editing, Bold, Italic, Undo, Redo and Format appear below the text viewport,
-above the system keyboard. The row remains available with a hardware keyboard,
-alongside the usual keyboard shortcuts.
-Opening the keyboard resizes that area; continuing to type scrolls only as needed
-to keep the caret visible. Plain text and Markdown Source use native text inputs.
-The language dropdown starts on **Automatic**, following the filename and initial
-source line. A manual language stays selected through edits and renaming while
-that editor remains open. **Plain Text** disables highlighting; choose Automatic
-to resume detection. Changing language does not edit the document's text.
-On short phone screens or with enlarged text, the space around the caret shrinks
-to keep the current line inside the writing area above the keyboard.
-On Android, a short keyboard-sized window hides destination navigation and
-secondary mode/language controls while retaining the document action bar, including
-Save and **•••**. Hidden secondary controls return when the keyboard closes.
-In a short formatted writing area, the formatting row uses compact spacing;
-its scrollable Format panel stays above the keyboard. Source mode stays
-inside the app in landscape. The formatting page is anchored to its viewport,
-and tight layouts reduce padding around the writing line.
-The main toolbar uses a compact row while the keyboard is open in a tight window.
-On a horizontal Duo fold, the text viewport fits above the active fold and the
-formatting row stays in the lower available area, above the system keyboard.
-The app does not change the system keyboard’s size.
-In very short formatted editing areas, headings use body-sized text so a line
-fits; their heading levels remain intact.
-Formatting and source share the same
-buffer, recovery and Save actions. There is no automatic preview split on phones
-or tablets. See [Reading and editing](../../../user_mobile/documents/reading-and-editing.md)
-for supported formatting and syntax that uses Source mode.
-
-Rotating Android between portrait and landscape keeps the current Markdown
-document open while the content reflows to the available width. A landscape
-file sidebar collapses on return to portrait so the document uses the full
-reading width; the hamburger can reopen the file drawer.
-
-Choose **Read aloud…** from the Markdown preview’s **•••** menu (or the
-reader’s speaker control where shown) to open **Read aloud** in a floating panel with speed, pause/resume and stop controls.
-The panel leaves the page layout unchanged. Choose the saved offline voice in
-**Settings → Read aloud → Read-aloud voice**. Select a passage to read it, or
-play the whole rendered note. Speech follows the preview: links read their visible
-labels without their destinations, and formatting markers are omitted. Visible
-URLs and literal code remain readable.
-See [Reading and editing](../../../user_mobile/documents/reading-and-editing.md#markdown-read-aloud).
-
-Formatting controls use the same icons as desktop, including Bold, Italic, Undo,
-Redo and the Format menu. Buttons keep accessible names and tooltips.
-In the **Format** menu, tap the **link** icon to open the URL prompt. Enter a URL
-or relative file path and choose **Insert link** (or press Enter). Selected text
-becomes the link; with no selection, the editor inserts “Link”. **Cancel** keeps
-the text and selection unchanged. The URL field appears only in this prompt.
+See [Documents and editing](../../../user_mobile/documents/documents.md) and [Reading and editing](../../../user_mobile/documents/reading-and-editing.md#markdown-read-aloud).
 
 ## Images in folder-backed Markdown
 
-Markdown opened from Local, LocalCrypt or a connected remote displays animated GIFs and static
-WebP, PNG and JPEG images in preview and formatted editing. Use a path relative to the Markdown
-file, for example `![Photo](images/photo.webp)` or `![[images/photo.webp]]`.
-Parent-folder paths work within the same storage root. Bare filenames refer to
-the Markdown file's folder; there is no vault-wide filename search.
+Use a path such as `![Photo](images/photo.webp)` or `![[photo #1.png|400]]`. Size hints accept a width or both dimensions, such as `|400x200`. Notes Library also checks its root and Attachments, Assets and Images folders. Standalone imports may lack access to siblings, so open the source from its folder.
 
-Obsidian embeds accept spaces and `#` in filenames, such as
-`![[photo #1.png|400]]`. In a Notes Library, missing relative images are also
-looked up from the library root, then in `Attachments`, `Assets` and `Images`
-(with lowercase variants). Explicit `./` or `../` paths keep their relative meaning.
-The first matching image is used; this does not scan the library recursively.
-
-Images fit within the page width on phones and tablets. To request a smaller
-width in pixels, use `![[images/demo.gif|200]]` or
-`![Demo|200](images/demo.gif)`. `|400x200` sets both dimensions; oversized requests
-shrink proportionally to fit the page. Formatted editing and saving preserve the
-size hint. Source mode displays the editable reference.
-
-LocalCrypt images are decrypted into memory for display; no decrypted image file
-or separate import is created. Missing, locked, unsupported or oversized images
-show their alternative text. Images are limited to 8 MiB and 16 megapixels each,
-with a 16 MiB image-data budget per render. Animated WebP is unsupported.
-Network URLs and paths outside the current provider root are not loaded.
-Standalone imported Markdown without its original folder cannot resolve sibling
-images; open the file through Local or LocalCrypt to retain folder access.
+PNG, JPEG, GIF and static WebP use an 8 MiB and 16-megapixel limit per image and 16 MiB per render. Missing images show alternative text. LocalCrypt image bytes stay in memory. Paths must remain inside the provider root.
 
 ## Lock-screen speech
 
-Markdown read-aloud shares the system playback controls used by EPUBs, including
-Play/Pause and approximate 15-second skips. Session-only credentials require an
-explicit saved opt-in for background speech; it defaults to off. See
-[Speech while locked](../../../user_mobile/settings/settings.md#speech-while-locked).
+Session-only background read-aloud requires an explicit opt-in. See [Speech while locked](../../../user_mobile/settings/settings.md#speech-while-locked).
 
 ## Notes Library and Documentation Library
 
-See the [Notes Library mobile guide](../../notes_library/user_mobile/user_mobile.md).
+See [mobile Notes Library](../../notes_library/user_mobile/user_mobile.md).

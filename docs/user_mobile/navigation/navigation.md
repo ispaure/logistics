@@ -32,8 +32,8 @@ speech playing.
 ## Home and document search
 
 **Open now** resumes the active document. **Recent** opens a closed file.
-Use **See all** for the matching Documents list. **Search documents** filters
-filenames across open, recent and saved items.
+Use **See all in Documents** to open the Documents list. **Search documents**
+finds on-device filenames and folders, including unopened files.
 
 File-browser search includes local subfolders. Separate words may appear in
 any order. Put a phrase in quotes to keep its words together and ordered.

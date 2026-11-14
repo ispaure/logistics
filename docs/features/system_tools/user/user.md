@@ -1,47 +1,26 @@
 # Run system maintenance actions
 
-System Tools exposes platform-specific actions on **Debug**. These operations can
-change system configuration; select only the action intended for your machine.
+Choose a platform action under **Debug**. These commands change system settings.
 
 | Platform | Action | Effect |
 | --- | --- | --- |
-| Windows | Windows System Files Repair | Runs DISM ScanHealth/RestoreHealth, SFC, and AppX re-registration |
-| Windows | Repair configured NTFS drive | Runs `chkdsk` on the configured drive (default `D:`) |
-| macOS | Disable macOS Lid Sleep | Changes battery-powered lid-sleep settings |
-| macOS | Enable macOS Lid Sleep | Restores the saved battery sleep settings |
+| Windows | **Windows System Files Repair** | Runs DISM, SFC and AppX re-registration. |
+| Windows | **Repair configured NTFS drive** | Runs CHKDSK on the selected drive. Check its letter in **Settings → System Tools** first. |
+| macOS | **Disable macOS Lid Sleep** | Saves and changes battery sleep settings. |
+| macOS | **Enable macOS Lid Sleep** | Restores the saved settings. |
 
-Other-platform actions are disabled. Windows repairs open a separate administrator
-PowerShell console and request Windows approval (UAC). Commands are included in
-Logistics; no repair batch files are required. The console stays open after the
-commands finish. Check the drive target before starting Windows maintenance and
-answer any CHKDSK prompts in that console.
-
-macOS power commands open a terminal for `sudo` authentication. Disabling saves
-the original battery settings; enabling restores that saved state. A launched
-terminal does not mean the repair succeeded: inspect its command output.
-These actions do not provide Linux system repair or a general disk-selection tool.
+Accept Windows UAC or enter the macOS sudo password if requested. Read the
+terminal output to confirm the command succeeded.
 
 ## More help
 
-See [Using Logistics](../../../user/user.md) for navigation and settings.
-
-Choose the Windows NTFS drive in **Settings → System Tools**.
-Use a drive letter such as `D:`. The terminal shows the selected drive before running
-`chkdsk`; inspect its output to confirm completion.
-
-On Mac laptops, the disable action changes battery idle sleep and the system-wide
-sleep-disable flag. Restore uses the saved values for both. Desktop Macs without
-battery settings cannot use this action.
+See [Using Logistics](../../../user/user.md).
 
 ## Platform availability
 
-This guide describes the desktop application. See [mobile availability](../user_mobile/user_mobile.md) for Android and iOS.
+See [mobile availability](../user_mobile/user_mobile.md).
 
 ## Restoring saved Mac settings
 
-The first disable records the original values beside Logistics' feature
-preferences. Later disable/restore actions reuse that backup; restore does not
-capture a new baseline each time. If no saved settings exist, choose sleep
-behavior in macOS System Settings. Keep the terminal output available if
-authentication or a command fails: opening the terminal alone does not verify
-that the change took effect.
+The first disable saves the original battery settings. Later runs reuse that
+backup. If none exists, choose sleep behavior in macOS System Settings.

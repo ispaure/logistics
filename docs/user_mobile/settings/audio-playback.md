@@ -1,26 +1,16 @@
 # Audio playback
 
-Open **Settings → Privacy & Security → Protected audio outputs** to see and remove approved Bluetooth audio
-outputs. The list applies to videos and every read-aloud reader **only while session-only protection is active**. This means at least one session-only credential is loaded, or retained protected content still prevents screencasting. Ordinary playback does not ask for Bluetooth approval or rely on this list. It is saved on
-this device and is separate from Bluetooth pairing in system Settings.
+**Settings → Privacy & Security → Protected audio outputs** manages device-local
+Bluetooth approvals for video and read-aloud during session-only protection.
 
-While protection is active, select a Bluetooth output in system controls, then press Play or **Approve current
-output…**. An unapproved output asks for approval. Approving it leaves playback
-paused until you press Play again. After declining or cancelling, you
-can retry from Play or **Approve current output…**, including when the headset
-was already connected when Logistics opened.
+1. Select a Bluetooth output in system controls.
+2. Tap **Play** or **Approve current output…** and approve the device when prompted.
+3. Tap **Play** again to resume.
 
-During session-only protection, changing the selected audio output pauses playback, even when the new device was already approved. Removing approval also pauses protected playback. Ordinary playback is unaffected by approval-list edits or consent-related output-switch rules. Calls, interruptions and actual headphone/Bluetooth output loss still pause ordinary playback, and reconnecting a device does not restart it automatically. Device labels include a short
-identifier so two devices with the same name can be distinguished.
+Changing outputs or removing approval pauses protected playback. If Logistics
+cannot identify the output, choose another in system controls and retry.
+Ordinary playback needs no approval. Interruptions or loss of the output pause
+it, and reconnecting leaves it paused.
 
-During session-only protection, if Logistics cannot identify the selected output, it keeps playback paused. Unavailable Bluetooth identity does not block ordinary playback. Try
-selecting a readable output in system controls. Some older Android versions cannot
-identify the selected output when several devices are connected. A changed device
-identity or Bluetooth profile may need fresh approval.
-
-When any session-only credentials are loaded, capture/mirroring restrictions apply
-across the app, including ordinary document browsing. iOS hides content when the
-OS reports active capture and pauses audio. Supported capture protection does not
-prevent still screenshots or filming the device with another camera. Actual iPhone
-Mirroring and physical Bluetooth checks remain pending; see the
-[privacy and validation limits](../../development/architecture/audio-playback.md).
+During detected capture, iOS hides content and pauses audio when session-only
+protection is active. See [privacy and validation limits](../../development/architecture/audio-playback.md).

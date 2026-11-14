@@ -1,288 +1,39 @@
 # Comics mobile workflows
 
-In **Settings → Books & Comics**, **Comic cover on outer display** saves a
-separate, off-by-default choice for iPhone Duo. It uses the comic's first page
-as the cover. See [outer display requirements and battery impact](../../books/user_mobile/reading.md#book-cover-on-iphone-duo).
+**Settings → Books & Comics → Comic cover on outer display** uses the first comic page on iPhone Duo. See [outer display requirements and battery impact](../../books/user_mobile/reading.md#book-cover-on-iphone-duo).
 
-On Android, **Appearance → Volume buttons turn pages** enables volume down for
-next page and volume up for previous page. It is off by default and saved
-separately for books and comics. Tap **Apply and return** to save. Each press
-turns one page; holding a button does not repeat. Volume control resumes outside
-the reading view, including its Appearance screen. The setting also applies to
-remote and encrypted readers.
+On Android, choose **Appearance → Volume buttons turn pages → Apply and return**. Volume down advances and volume up goes back. This off-by-default setting is separate from EPUB.
 
 ## Mobile development builds
 
-The native iOS/Android app reads CBZ/ZIP comics containing PNG, JPEG or static
-WebP pages, including protected imports and LocalCrypt copies. Comic controls
-provide page progress and page selection; EPUB chapter and bookmark controls
-belong to the separate Books reader. Comics have a smaller processing-tool scope
-than the desktop app. See the [mobile guide](../../../user_mobile/user_mobile.md)
-for imports, limits and current validation status.
+iOS and Android read CBZ/ZIP with PNG, JPEG or static WebP pages. Each page is limited to 8 MiB, 8192 pixels per axis and 16 megapixels. See the [mobile guide](../../../user_mobile/user_mobile.md) for validation. Compression, CBR conversion and collection organization are desktop tools.
 
 ## Native mobile library
 
-To inspect retained imports, open **Settings → Reset → Clear cached documents**. The page shows the file count, total archive/reading-record size and
-per-import sizes, including closed imports. **Clear redundant copies…** removes verified duplicates and their reading records
-after confirmation. Originals, editing drafts, changed copies and imports without
-a verified original are kept. Local comics now open directly from their source
-folder; opening one does not create a private import. Closing a comic in Open documents only closes the reader. Imported
-copies are private app data on iOS and do not appear in Files.
+Browse configured Local or unlocked LocalCrypt libraries in **Books & Comics**. Local comics open from their source. Use **Import…** for standalone copies, including AES and ZipCrypto. Enter the comic ZIP password at **Unlock comic**. See [imports and password retries](../../books/user_mobile/library.md#books-and-comics).
 
-On iOS and Android, **Books & Comics** lists library folders configured by
-`remoteConfig.ini` in Local and unlocked LocalCrypt copies, using the same
-`[LogisticsComics] libraries` names as desktop. Tap a library folder to browse its
-contents. Imported books/comics appear in their own section beneath configured library folders.
+Tap the page for controls. Use **Comic pages…** or the footer slider to jump to a page. Use the separate buttons above the image for neighboring comics. Manga reverses reading order. **Close comic** keeps the file. **Show in folder** reveals its location when available, and **… → Info…** shows the current path.
 
-**Books & Comics → Import…** accepts standalone
-password-protected AES/ZipCrypto CBZ/ZIP comics. Unlock with the comic’s ZIP password;
-rclone credentials are unnecessary. See the [mobile reading guide](../../books/user_mobile/library.md#books-and-comics)
-for password retries and supported page formats. There is no separate comic
-relock action; configured INI archive passwords continue to unlock folder reads.
-Rclone crypt credential locking is a separate connection operation.
+Use **Appearance → Comic page layout** for Single, Automatic or Two pages. Automatic uses a spread in wide panes. Landscape and ComicInfo DoublePage pages display alone. **Split wide pages in portrait** shows wide art as two overlapping halves, in reading order, with source-page numbers and a **1/2** or **2/2** badge. Use **Fit comic page** to resume swipes after panning. See [comic gestures](gestures.md) for the magnifier and boundary swipes.
 
-Mobile Local and LocalCrypt comics use the same fit/zoom/swipe and reading-mode
-controls, with Previous/Next available when controls are visible. Comics do not
-show a chapter/browser hamburger button. Use **Reader actions → Comic pages…**
-to jump to a page, or **Show in folder** to browse the comic’s source when available. LocalCrypt
-readers expose page navigation without bookmark controls. Readers opened from Files return to the
-same folder through Back, including after visiting reader tools.
-
-Mobile imports, provider-backed readers and ordinary browser covers ignore macOS
-resource-fork image entries and use the same natural page order. Unsupported
-image formats fail explicitly instead of silently disappearing from the comic.
-Each decoded page is limited to 8 MiB, 8192 pixels per axis and 16 megapixels;
-animated WebP is rejected. These are per-page limits, rather than a 256 MiB
-whole-archive limit for ordinary imports.
-
-Choose **Appearance → Comic page layout** in an imported reader, or **Appearance…**
-in a provider reader, for Single, Automatic or Two pages. Portrait page
-pairs respect manga visual order; landscape and ComicInfo DoublePage pages remain
-single. Automatic is the default and follows the reading area orientation.
-Two pages pairs adjacent portrait or square pages; a final unpaired page appears
-alone. While sharing a comic to an external display, both the phone and TV
-temporarily use two pages, including on a portrait phone, and show a page wider
-than tall whole on its own. Disconnecting restores the saved layout and wide-page
-setting immediately; sharing never saves these overrides. ComicInfo `Manga=YesAndRightToLeft` places the
-earlier page on the right; left-to-right comics place it on the left.
-Comic appearance shows page layout and the portrait wide-page switch. EPUB font, spacing, text width, margins
-and theme controls do not appear in comics, and applying comic layout leaves
-those preferences unchanged. Comic menus omit read-aloud, chapter search and
-bookmarks; **Comic pages…** in an imported reader opens the page selector.
-Imported, Local, LocalCrypt and remote comics use the same menu names and order,
-page selector and appearance form. Read-only remote previews omit metadata
-editing. Previous/Next comic use `|≪` / `≫|` buttons above the image when controls
-are visible, separate from the page arrows and slider below. File buttons disable
-when unavailable and hide in fullscreen. Switching comics preserves the controls'
-visibility. Neither file switching nor All documents appears in the overflow menu.
-**Close comic** closes the reader without deleting a saved copy.
-**… → Info…** shows only the opened comic's path: the saved file path for an
-import, `remote:path` for a remote preview, or the logical LocalCrypt location
-for a folder-backed encrypted file. Imported copies show their current stored
-path; their original import location is not reconstructed.
-**Appearance → Split wide pages in portrait** is on by default, including
-when an older preferences file has no value for this setting. Except while sharing
-to an external display, a landscape source image in a taller-than-wide reading
-area is displayed as two overlapping views when this setting is enabled.
-Next/swipe moves from the first half to the second, then to the next source page;
-Previous reverses this order and enters a preceding wide page at its second half.
-Left-to-right comics start on the left; right-to-left manga starts on the right.
-Both halves include the central 8% of the original image so centre details remain
-visible. The page status adds **1/2** or **2/2**; page counts and the scrubber still
-refer to original archive pages. Imported comics remember the half when reopened;
-provider readers retain it within their session. Pinch zoom and panning work on
-the displayed half, with swipes turning only at fit size. Landscape and square
-reading areas show the complete wide image. Turn the switch off to view complete
-wide pages in portrait as well. The setting is separate from Single/Automatic/Two
-pages and applies to imported, Local, LocalCrypt and remote comics.
-
-Paired pages touch with no added gutter on phones, iPad landscape, TV output and
-an unfolded Duo. An active reserved hinge region remains clear while folding.
-At a beginning/end boundary, an animated finger demonstrates the physical
-next-page swipe: right to left normally, left to right for manga. Reduced motion
-and E Ink mode show a static finger with start/end labels. A separate bottom hint
-offers only the corresponding available volume; it names the actual gesture,
-which reverses at the beginning. Repeat that boundary swipe within 2.5 seconds to
-open the offered volume. Missing or unresolved neighbors have no volume hint.
-A failed open leaves the current comic usable. Folder-backed readers choose CBZ/ZIP files alphabetically by filename in the
-current folder (case-insensitive, so Volume 10 precedes Volume 2). Legacy imported
-readers use their original folder when it is available.
-Hints appear on the internal screen only and clear on navigation or privacy cover.
-
-Previous/Next and swipes advance past the displayed spread, or through each half
-of a split wide page. Imported and provider
-readers share small chevrons, a slim slider with a round thumb, and a compact
-page-count badge in one footer row when reading controls are visible;
-drag and release it to jump directly to a page. Manga places Next on the left and
-Previous on the right, with slider progress running from right to left.
-Automatic layouts reevaluate when the viewport changes. Single and Two-page
-views also refit to the available width after rotation. Resizing waits while a
-spread is zoomed; fitting it allows the pending layout update.
-
-In fullscreen, hold the page to open the magnifying bubble; release to dismiss
-it. Its zoom setting is shared with PDF readers. See [Comic gestures on mobile](gestures.md)
-for moving the bubble, changing zoom with a second finger and switching to
-ordinary pinch zoom.
-
-Two-page spreads use one continuous zoom/pan surface. Pinch to zoom both pages
-together, then drag across the join to inspect either page. Page proportions and
-manga order are preserved. **Fit comic page** returns the whole spread to fit size.
-Swipes turn pages only at fit size; while zoomed, dragging pans the spread.
-Rotating while zoomed retains the current spread until you fit it. A failed page
-decode or spread composition keeps the displayed spread and its zoom. Private
-spreads stay in memory and are cleared on suspend/close; returning starts fitted.
-After unlocking a session-only reader, a page released during background memory
-cleanup reloads at the current page with fullscreen preserved. If reloading fails,
-reading controls return with the error so you can navigate or close the comic.
-
-Imported reader menus include First/Last page and Previous/Next comic. The page
-selector also supports direct jumps. The top previous/next-file arrows stay visible and grey out at the folder
-boundaries; they are separate from page navigation in the footer. On iOS they
-blend into the header, while Close and More use native round glass controls.
-The Duo header centres in the system status band and still moves back to native
-navigation when Dynamic Island activity leaves too little room. Standalone
-imports without an available source folder have no sibling-folder route.
-
-Ordinary imported comics now have **Edit metadata…**. In the catalogue, select
-imported comic rows and choose **Edit selected comics metadata…** for a batch.
-Only checked fields are written; checking an empty field explicitly clears it.
-Mixed fields are kept unless checked. All selections are validated before writing.
-Successful files stay saved if another file fails. **Cancel after current comic**
-finishes the current verified save and leaves remaining items untouched. Failures
-and unprocessed files are counted, and form values remain available for retry.
-
-Metadata updates preserve page bytes and the external import source. Standalone
-password-protected imports remain readable, but metadata rewriting needs a native
-archive writer and is not enabled. Provider-backed encrypted metadata editing
-retains its existing ciphertext transaction. Mobile compression, CBR conversion,
-organization and provider-wide catalogue indexing remain outstanding. Imported
-catalogue suggestions and recursive LocalCrypt batches are described below.
-
+To inspect retained imports, open **Settings → Reset → Clear cached documents**. **Clear redundant copies…** removes verified duplicate copies and their reading records after confirmation. Changed copies, drafts and originals are kept.
 
 ### Mobile collection search and folder batches
 
-The imported catalogue searches filenames and indexed metadata, including title,
-author, tags, series and publisher. Indexing runs in the background and the status
-shows how many imports have been checked. Every ordinary import is eligible; the
-former first-200 limit has been removed. Metadata fields contribute their first
-4,096 characters. The catalogue shows 50 results at a time; use **Previous results**
-and **Next results** to browse, or search across the entire indexed collection.
-Selections remain checked when changing pages or searching.
+Use **Edit metadata…** in an ordinary imported reader. Successful saves preserve page images and the external import source. Standalone encrypted imports support reading and have no metadata writer.
 
-The disposable index is stored locally, reuses unchanged archive revisions across
-launches and updates after metadata saves. **Refresh** retries unreadable entries,
-updates changed imports and removes deleted imports. Interrupted scans retain
-completed work and continue on the next refresh. Filename search remains available
-while metadata is loading. Protected imports do not contribute metadata or
-suggestions, even if their archive password was remembered elsewhere. Private
-provider documents never enter this ordinary-import index.
+For Local or unlocked LocalCrypt folders, choose **Files → Actions → Edit comics in this folder…**. Check only intended fields, then **Apply selected fields**. An empty checked field clears it. The scan includes descendants up to 200 comics, 10,000 entries and 16 folder levels. Changed or unsupported archives fail preflight. **Cancel after current comic** keeps completed saves and leaves remaining files untouched. Inspect results and reopen the batch if revisions cannot refresh.
 
-Imported single-comic and batch metadata forms offer existing author/tag/publisher
-and other supported suggestions. Choosing a suggestion is an explicit edit; opening
-a form does not change mixed values or select fields for publication. List-field
-suggestions append without duplicates. Only checked batch fields are written.
-
-In **Files → Actions**, choose **Edit comics in this folder…** for an ordinary local
-folder. The selected folder (or current folder when no folder is selected) includes
-nested CBZ/ZIP comics. Review the form and check fields before **Apply selected
-fields**. Scans are bounded to 200 comics, 10,000 entries and 16 folder levels.
-All selected files and patches are checked before the first write; changed or
-unsupported archives stop preflight. After writing starts, files publish
-independently. **Cancel after current comic** leaves completed saves in place and
-remaining files untouched. Errors before publication keep the original contents;
-already published saves are not rolled back. Reopen the batch if a saved revision
-cannot be refreshed. Repeated Apply
-is blocked while a batch is running. Page/resource bytes remain unchanged.
-
-The same action works in an unlocked **LocalCrypt** managed folder. It reads one
-archive at a time and retains only metadata snapshots, bounded to 8 MiB in total.
-Saves use verified ciphertext staging; page/resource bytes remain unchanged, and
-the cloud original is not changed until a separate Push. Inner password-protected
-archives use the folder's configured archive password when available. A wrong or
-missing password stops batch preparation before any file is written.
-
-Private batch forms have no recovery file. Leaving the form, backgrounding the app,
-memory cleanup or replacing/locking credentials closes the batch and clears fields
-and suggestions. Reopen the folder to continue. Closing also cancels pending work
-before publication; an already published save remains saved. Other windows must be
-closed before opening a private batch. Private suggestions are drawn only from the
-current batch and are never added to the ordinary imported index.
-
-Encrypted standalone imports still require a native archive writer. Private remote
-trees must first have a managed LocalCrypt copy; this action does not recursively
-rewrite a live remote tree. Unapplied forms are memory-only.
-
-On iPhone Duo, opening a comic keeps its current page as the right-hand page
-when an active vertical interior division is available. Closing returns to that same
-anchor page. Advancing inside updates the anchor; a layout change alone never
-advances it. Manga retains its reading order while keeping the anchor physically
-on the right. This applies to imported and Local/LocalCrypt/remote comics.
-
-Partially folding leaves the system-reported vertical fold and its interaction
-margins clear between paired pages. A lone page, including wide artwork, uses
-the full available canvas and can span a vertical fold. With a horizontal fold,
-a single page fits above the fold while the page controls remain below it. Flat
-interior layouts follow the saved page-layout preference. A wide page's selected
-half survives a layout round trip back to a narrow viewport. Ordinary zoomed
-resizing waits until fit size; a change of fold region can reflow immediately.
+Unlocked LocalCrypt needs the configured inner password for protected archives. Saves update ciphertext locally. Push separately to update the remote. Closing, backgrounding or locking clears draft fields and suggestions. Already published edits remain saved.
 
 ### iOS edge-to-edge reading
 
-With controls visible, comics use a canvas without an added outer margin. Page
-arrows, the slider and page count share one bottom row. On iPad, the title uses
-the available navigation-bar width and only shortens when the filename does not
-fit between the controls. Pages keep their original proportions when fitted.
-
-When iOS places controls along the side, a decorative extension of the current
-page artwork can fill the space behind them. The fitted page and its controls
-remain unobstructed. The extension is disabled with Reduce Transparency and
-removed when the private reader is concealed or suspended.
-
-Fullscreen comics hide the system status indicators as well as app navigation.
-The image canvas uses the full window, including the former status-indicator strip.
-On a partially folded Duo, paired pages fit on either side of the reserved
-vertical fold; a lone page uses the full canvas. A horizontal fold keeps the
-page above it. Available space accounts for safe areas and fold margins. Source aspect ratios and built-in page borders remain unchanged.
-Tap the page to restore controls and normal safe areas. Android retains its immersive
-system-bar behavior. Ordinary and private comics share this presentation.
+Tap the fullscreen page to restore controls. An active Duo fold keeps the divider clear between paired pages or places the picture above a horizontal fold. **Reduce Transparency** disables the artwork behind side controls.
 
 ## Reading on a TV
 
-Connect AirPlay Screen Mirroring on iPhone or iPad. You can browse Logistics
-on the mirrored display before opening a comic. In the reader, the TV shows
-the current page or spread fitted against black, without reader controls.
-Turn pages on the phone or tablet; TV output follows the same two-page spread
-or complete wide page, with no added gap between paired pages. A small **Casting to TV** badge stays visible on the
-internal screen even in fullscreen reading, above the home indicator. It clears
-when you leave the comic, disconnect the display, or privacy protection blocks
-output. The phone may remain in
-portrait while the TV uses its own landscape display dimensions. Leaving the
-reader returns the display to system mirroring when privacy allows it.
-Backgrounding the app clears the dedicated external picture. After updating from
-a version that only mirrored the app, stop Screen Mirroring and reconnect once
-so iOS can create the dedicated display session.
-
-Android system casting mirrors the fullscreen reader. If Android exposes the
-connected TV as a presentation display, Logistics instead shows a dedicated
-picture-only viewer there. Start casting through Android's system controls;
-Logistics does not provide a Google Cast device picker or receiver integration.
-
-TV output stays black whenever session-only credentials or retained protected
-views create an existing screen-privacy gate, even for a local comic and even
-after unlocking. Saved credentials alone do not enable that protection. Close
-protected views and clear session-only credentials to release it.
+Use AirPlay Screen Mirroring on iOS or Android system casting. A dedicated output shows only the picture when the system supplies a presentation display. While sharing, comic readers temporarily use paired portrait pages and complete wide pages. Disconnect to restore the saved layout. Active session-only credentials or retained protected views blank output even for an ordinary comic. Close protected views and clear session-only credentials to release the gate.
 
 ## Returning after sleep
 
-If Android releases reader memory while the device sleeps, the visible imported
-comic or EPUB reloads at its saved page or passage when you return. Reading mode
-or visible controls are preserved. Closed documents and readers on other screens
-stay closed or inactive. Password-protected documents retain their usual unlock
-requirements; session-only content is revealed only after its session password.
-
-The progress badge names the source pages currently visible: for example
-**69 & 70 / 250**. A wide page divided into portrait slides shows
-**69 1/2 / 250**, then **69 2/2 / 250**. The saved page remains the source page;
-rotating or changing layout does not turn slide halves into extra comic pages.
-JPEG, WebP and PNG orientation metadata is applied before spread sizing and
-splitting, including mirrored orientations.
+When Android releases memory, the visible comic reloads at its current page. A private session requires unlocking first. If loading fails, controls return so you can navigate or close.

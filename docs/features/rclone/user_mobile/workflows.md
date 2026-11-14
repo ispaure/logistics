@@ -1,181 +1,60 @@
 # Rclone mobile workflows
 
-Workspace naming uses **Local → Rclone Copies** and **Cloud → Rclone Remotes**.
-Both ordinary and encrypted copies belong under Rclone Copies; encrypted remotes
-belong under Rclone Remotes. Destination pickers label encrypted local copies
-`<foldername> - Encrypted Copy`; regular folders keep their names without a
-storage suffix. **Locked** / **Unlocked** describes access, not whether files are
-encrypted on disk. `LocalCrypt` remains the technical name in paths and settings.
-
-
 ## Android and iOS prototype
 
-The independent mobile app can import the same TXT-in-ZIP credential format into
-an in-memory embedded rclone session, browse supported remotes and preview supported files directly. Managed Local and LocalCrypt folders support repeatable Pull and reviewed
-Push with progress while ordinary writing or reading continues. Transfer details
-show the transfer's **From** and **To** folders during and after the transfer,
-alongside a numeric percentage of known work and transferred/known totals in
-megabytes (MB) on both platforms. Main tabs show a filled sync button alongside existing controls (Home actions,
-Files source tabs, Documents search, Chat header, and the first Settings category),
-without reserving a separate row. The button has a
-progress ring at the top right (beside the Home unlock key). Tap it to reopen
-transfer details. Document viewers have no transfer headers or sync controls.
-Progress uses bytes when available, or completed/known file counts otherwise;
-unknown totals show activity without a percentage. Totals can grow as rclone
-discovers files. Live progress stays below 100% until completion is verified,
-and reopening details keeps the current percentage. Both use rclone
-Sync: files at the destination can be replaced or deleted, with no retained
-backup or rollback. Mobile runs one transfer at a time with no queue; existing
-Local and LocalCrypt copies remain browsable and readable during folder transfers,
-including Documents and configured library shortcuts. Empty-folder changes
-participate in the mobile review and its final recheck.
-Progress displays the latest reported totals, without queuing older updates
-ahead of browsing when native rendering is busy.
-While a transfer runs in the foreground, Logistics prevents automatic screen
-sleep and restores the prior sleep setting after completion, failure or Cancel.
-This does not prevent manual locking or keep the app running indefinitely after
-switching to another app; credential locking and platform background limits still
-apply.
-Transfer details include **Back** and stay in the tab from which they were opened;
-leaving the screen keeps the transfer running. Switching tabs dismisses transfer
-details, so returning to a tab never reopens them automatically. The progress screen
-shows the current phase, percentage, copied files, MB and **Removal attempts**.
-The removal row shows separate file and folder counts, including reported zeros.
-rclone counts an attempt before the storage provider finishes the removal.
-Tap the source-to-destination strip for exact endpoints. **Transfer details**
-expands discovery, comparison, elapsed-time and retry counters. The **Scan →
-Transfer → Verify** indicator distinguishes discovery, copying and final checks.
-Unknown totals show activity without inventing a percentage. Completion is shown
-only after verification; failures and cancellations preserve completed changes.
-**Continue browsing** returns to the originating screen while the transfer stays
-active. **Stop transfer** asks for confirmation before requesting cancellation. Cloud previews requiring
-the connection show a dialog while transfers are running, including when opened
-from Recent or an open document. Local reader menus remain available.
+In **Workspaces**, choose a mapped folder’s **••• → Pull** to refresh its
+on-device copy or **Push** to update the remote. Both use rclone Sync.
+Destination files and empty folders can be replaced or deleted without a backup.
+One transfer runs at a time. Existing local copies stay available for browsing.
 
-If the formatted transfer screen stops responding, it tries one fresh display.
-If that also fails, a simplified native view keeps progress, **Stop transfer**,
-**Continue browsing** and reviewed confirmation available. Display recovery does
-not restart a transfer or approve changes. Credential locking clears either view.
-Mobile does not offer mounts. See the [mobile transfer guide](../../../user_mobile/folder_hub/folder_hub.md#workspaces-and-local--localcrypt-sync)
-for connection scopes, encrypted storage, cancellation and credential persistence.
+Tap the sync progress ring on a main tab to reopen details. **Scan → Transfer →
+Verify** shows the phase. The endpoint strip shows **From** and **To** paths.
+Percentages use known bytes or file counts. Removal counts describe attempts.
+Completion appears after verification. **Continue browsing** keeps the job
+active. **Stop transfer** asks before cancellation. Completed changes remain
+after a failure or stop. See [mobile sync](../../../user_mobile/folder_hub/folder_hub.md#workspaces-and-local--localcrypt-sync).
 
 ### Review file changes
 
-Before a Push or Pull starts, the review groups **New files**, **Updated files**,
-**Delete from destination** and any **Local cleanup**. The action tabs filter the
-list; the search icon opens path search. Counts describe the entire comparison,
-even while filtering or paging. Unchanged files are hidden. At most 30 changes
-are rendered per page, without limiting the comparison itself.
-
-On iPhone, tap a file for its full path, action and affected source/destination.
-On a wide iPad pane, the selected file appears in an inspector beside the list.
-The source-to-destination strip opens the exact transfer paths. File sizes are
-not invented when a comparison supplies only actions and paths.
-
-**Push N changes** or **Pull N changes** asks for confirmation, then checks a
-completed comparison again before starting. Changed results need another
-confirmation. During an incomplete comparison, **Skip preview and start**
-stops the comparison and starts the sync once the comparison has stopped. Replacements
-and deletions have no backup or undo. Back cancels a review without starting a
-transfer. Leaving progress keeps the running transfer active.
+Check **New files**, **Updated files**, **Delete from destination** and any
+**Local cleanup**. Use search and pages to inspect paths. Choose **Push N
+changes** or **Pull N changes** and confirm. A changed comparison needs another
+confirmation. **Skip preview and start** begins sync without waiting for the
+comparison to finish. Back cancels review before sync starts.
 
 ### Mobile folder navigation
 
-An entry's three-dot button offers its remote commands in place using the host's
-native popup or action sheet. Open folder/preview acts on the selected entry;
-**Download locally…** opens a destination picker for the selected file or folder.
-Choose Local, Received Files, another folder within Logistics, or an unlocked
-LocalCrypt. Choose or create the destination folder, keep or change the item's
-name, then choose **Download here**. An ordinary destination requires confirmation
-because its decrypted copy remains readable after the connection locks.
-
-The download runs a Pull through the embedded rclone engine, including SMB/network
-shares and crypt remotes. Only the selected file or folder is downloaded; a file
-selection never pulls its parent folder. LocalCrypt destinations receive encrypted
-names and contents directly. Existing destination names are rejected rather than
-overwritten, and unrelated local files and the remote source are preserved.
-Transfer details provide progress and cancellation. This is one selected-item pull;
-it does not add a recurring workspace mapping. Reopen the remote menu to pull it
-again under a new name or choose a fresh destination.
-
-Archive-capable files also offer **Archive password…**. Only choosing the password
-command (or encountering an encrypted archive) opens the password form.
-
-Cloud folders open in **Cloud File Browser**. Open documents and Recent display
-cloud or device icons and a connection padlock beside filenames. Recent keeps up
-to ten eligible files. For password-protected session-only credential ZIPs, open
-and recent filenames and paths are saved in an AES-256 ZIP protected with the same
-credential ZIP password. Enter that password to unlock the credential and restore
-its entries; files load only when selected. No file contents, unsaved edits or
-passwords are stored in the cache. Forgetting credentials also removes these
-caches, including other windows' copies. An unencrypted credential ZIP has no
-required password and does not enable this cache.
-
-In the mobile Workspaces, tapping a folder opens its preferred available copy.
-The adjacent **•••** action button keeps explicit Browse Local/LocalCrypt/Remote,
-Pull and Push choices together. Mapped copies show Pull and Push direction.
-Delete local folder is separated and styled as destructive, and retains its
-confirmation. Transfer notifications use larger touch targets and an accessible
-dismiss label. Credential, Pull and Push terminology is retained; encrypted local copies use the Encrypted Copy caption.
+Use **••• → Download locally…** on a remote file or folder. Choose **On My Phone / On My Tablet**, an available local copy or an unlocked
+LocalCrypt location. Choose the destination folder and name, then **Download here**. Confirm when choosing a
+decrypted destination. Existing names are refused. The action downloads only
+that selection and creates no recurring mapping. LocalCrypt writes encrypted
+names and bytes. Use transfer details to follow or cancel the download.
 
 ### Android collection drive
 
-Android and iOS both offer **Settings → Workspaces → Show Legacy** for Legacy
-folder and credential visibility. Android additionally offers **File storage…**:
-choose one drive for both `<drive>/Logistics/Local` and
-`<drive>/Logistics/LocalCrypt`. On Android 11 and newer, All files access is required
-for public SD-card folders. Android 7–10 instead offers Logistics' app-owned
-folder on each mounted drive, with no storage permission required; Android removes
-those app-owned folders on uninstall or clearing app data. Keep a separate backup.
-Downloads are copied and verified before switching, with the
-source retained as a recovery backup. Credentials and transfer associations stay
-internal. A missing card stops collection operations without an internal fallback.
-See the [mobile storage guide](../../../user_mobile/settings/settings.md#file-storage)
-for migration, restart and existing-destination behavior.
+Choose **Settings → Workspaces → File storage…** for both Local and LocalCrypt.
+Android 11+ needs All files access for public SD-card storage. Android 7–10 uses
+app-owned folders, which Android removes on uninstall or clearing app data.
+Migration verifies the new copy and retains the source as a backup. If the
+selected drive is missing, collection operations stop. See [mobile storage](../../../user_mobile/settings/settings.md#file-storage).
 
 ### Unlock from Home
 
-**Unlock** beside **Your workspace** opens a credential chooser and ZIP password
-field for retained credential ZIPs that are present on disk and not already
-loaded. Unlocking uses the existing session-only import and returns to Home;
-the password is cleared after each attempt and when changing the selection.
-Show Legacy applies to this chooser and button availability. Home displays only
-the generic Unlock action until you open the chooser.
+**Unlock** beside **Your workspace** lets you choose a retained ZIP and enter
+its password for this session. **Show Legacy** controls Legacy entries.
 
 ### Side-by-side mobile credential packages
 
-Choose **Import credential ZIP…**, then select the file. Unencrypted packages
-continue automatically; encrypted packages open a separate password panel.
-Choose **Session-Only** or **Persistent** when asked how to keep the credentials.
-A wrong password keeps the selected ZIP ready for another attempt without
-reopening the file picker. Back or Cancel clears the pending import and password.
-Successful imports return to Credential Packages with the new package listed.
-
-Android and iOS can keep several ZIP packages loaded together. Each import's
-**Save credentials on this device** choice applies to that package: saved
-packages persist in the encrypted private vault; session-only packages remain
-active in memory without entering that vault. Workspaces exposes their separate
-credential groups, and Connections shows their loading modes. Duplicate remote
-names receive package qualifiers and preserve their original account identities.
-Reloading saved credentials keeps active session packages. See the
-[mobile package guide](../../../user_mobile/navigation/panels.md#multiple-credential-packages-on-android-and-ios).
-
-Forgetting a package preserves downloaded Local and LocalCrypt files. A replacement
-ZIP can have a different filename or ZIP password. Ordinary Local files remain
-readable. To browse an encrypted copy, load the original cipher configuration.
-If its remote was renamed, Logistics can use a unique matching cipher to open
-the on-device files. Push and Pull still require the original destination account.
-A package alias can change without creating a second copy. Changing the ZIP
-password leaves the file encryption keys unchanged.
+Set storage independently per ZIP. See [multiple packages](connections.md#multiple-credential-packages-on-android-and-ios)
+and the [mobile package guide](../../../user_mobile/navigation/panels.md#multiple-credential-packages-on-android-and-ios).
+Forgetting a package preserves its downloaded files. A replacement ZIP can
+have a different name or password. Reopening LocalCrypt requires the original
+cipher, while Push/Pull also require the original destination account.
 
 ### Mobile Workspaces source tabs
 
-On Android and iOS, Workspaces opens on **Local**. In **Cloud**, the credential
-picker below the **Rclone Remotes** tab starts at **All**. Choose a package to filter its
-folders and their downloaded Local/LocalCrypt copies. **Local → Rclone Copies**
-has its own picker. Returning to Cloud selects All again. Directly added SMB/Mac
-connections and their copies appear under Home Server; SMB remotes imported
-from a credential ZIP remain under Cloud with that package. On iOS, Local browses
-files directly in `Logisticks` and subfolders beside the managed `Local` folder.
-
-Cancelling a sync stops that transfer or its comparison. It does not cancel an independent local file operation. Changes already published remain in place.
+Find online folders under **Cloud → Rclone Remotes**, and managed offline copies
+under **Local → Rclone Copies**. Select **All** or a credential package.
+Direct SMB shares appear under **Home Server**. SMB imported from a ZIP appears
+under its package in Cloud. **Encrypted Copy** identifies LocalCrypt storage.
+**Locked** and **Unlocked** describe current access.
