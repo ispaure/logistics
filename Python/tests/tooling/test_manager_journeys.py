@@ -119,6 +119,69 @@ class JourneyAdapterTests(unittest.TestCase):
             self.project.make_journey('deliver', [], ['android-devices'], revision='HEAD',
                 run_overrides={'devices.android': '["serial-1"]', 'devices.android_variant': 'release'})
 
+    def test_mixed_signing_locks_both_recipe_workspaces_through_execution(self):
+        from build_manager.locking import workspace_lock
+        from logistics_build.manager_devices import make_plan
+
+        targets = [dict(id=mode, name=mode, android_signing=dict(mode=mode, certificate=cert * 64))
+                   for mode, cert in (('debug', 'a'), ('beta', 'b'))]
+        source = dict(self.source, effective_settings=dict(values=self.values))
+        context = PlanningContext(str(self.root), 'HEAD', json.dumps(source))
+
+        def capture_snapshot(root, destination, revision, **kwargs):
+            (destination / 'mobile_build').mkdir(parents=True, exist_ok=True)
+
+        with patch('logistics_build.build_snapshots.materialize', side_effect=capture_snapshot), \
+                patch('logistics_build.manager_devices.selected_devices', return_value=targets):
+            direct = make_plan(self.project, 'android', targets, context, 'HEAD')
+            journey = self.project.make_journey('deliver', [], ['android-devices'], revision='HEAD',
+                run_overrides={'devices.android': '["debug", "beta"]'})
+        validate_plan(journey)
+
+        for name, plan in (('direct', direct), ('journey', journey)):
+            with self.subTest(plan=name):
+                workspaces = [Path(phase.environment['LOGISTICS_DEPLOY_WORKSPACE'])
+                              for phase in plan.phases if phase.effect == 'build']
+                self.assertEqual(len(workspaces), 2)
+                primary, secondary = (path / 'operation.lock' for path in workspaces)
+                deploy = self.project.mobile / '.deploy-workspaces/deploy.lock'
+                expected = {str(deploy), str(secondary)}
+                if name == 'journey':
+                    expected.add(str(primary))
+                self.assertEqual(set(plan.resource_locks), expected)
+
+                marker = self.root / (name + '-ran')
+                probe = Phase('probe', (sys.executable, '-c',
+                    'from pathlib import Path; import sys; Path(sys.argv[1]).touch()', str(marker)),
+                    str(self.root), effect='inspect')
+                executable = replace(plan, phases=(probe,), journey={}, effect='inspect')
+                runner = Executor(resource_directory=self.root / 'slots', evidence_directory=self.root / 'evidence')
+                for index, lock in enumerate((primary, secondary)):
+                    with workspace_lock(lock):
+                        blocked = runner.run(executable, self.root / f'{name}-blocked-{index}')
+                    self.assertEqual(blocked['status'], 'failed')
+                    self.assertIn('Another operation owns this workspace', blocked['error'])
+                    self.assertFalse(marker.exists())
+
+                # Inspect the locks from a separate thread while a phase is
+                # running, using the same API as retention and other runs.
+                observed = []
+                launch = runner.run_phase
+
+                def observe(*args, **kwargs):
+                    for lock in (primary, secondary, deploy):
+                        with self.assertRaisesRegex(RuntimeError, 'Another operation owns this workspace'):
+                            with workspace_lock(lock):
+                                self.fail(f'Execution released {lock} too early')
+                        observed.append(lock)
+                    return launch(*args, **kwargs)
+
+                with patch.object(runner, 'run_phase', side_effect=observe):
+                    completed = runner.run(executable, self.root / (name + '-completed'))
+                self.assertEqual(completed['status'], 'passed', completed.get('error'))
+                self.assertTrue(marker.is_file())
+                self.assertEqual(observed, [primary, secondary, deploy])
+
     def test_release_device_reuses_one_preparation_regardless_of_destination_order(self):
         def device_plan(project, target, recipients, context, revision, *, shared):
             prepare = Phase('prepare-device-app', (sys.executable, '-c', 'pass'), str(self.root), effect='build', kind='build')

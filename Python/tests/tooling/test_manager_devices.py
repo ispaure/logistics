@@ -3,6 +3,7 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+from dataclasses import replace
 import json
 import os
 import plistlib
@@ -72,7 +73,7 @@ class ManagerDeviceTests(unittest.TestCase):
             devices.save_android_signing(self.root, 'other', 'debug', 'a' * 64)
 
     def test_mixed_saved_signers_get_distinct_reviewed_packages_including_release_journey(self):
-        from build_manager import Phase
+        from build_manager import Phase, Plan
         project = LogisticsProject(self.root)
         source = dict(fingerprint='source', dirty=False,
             run_overrides={'devices.android_signing': 'beta'},
@@ -96,6 +97,19 @@ class ManagerDeviceTests(unittest.TestCase):
                     self.assertEqual(recipes['debug']['targets'], [targets[1]])
                     self.assertEqual(recipes['beta']['targets'], [targets[0]])
                     self.assertNotEqual(recipes['debug']['workspace'], recipes['beta']['workspace'])
+                    primary = recipes['beta']['workspace']
+                    secondary = str(Path(recipes['debug']['workspace']) / 'operation.lock')
+                    deploy_lock = str(project.mobile / '.deploy-workspaces/deploy.lock')
+                    self.assertEqual(plan.workspace, primary)
+                    self.assertEqual(plan.resource_locks, (deploy_lock, secondary))
+                    saved = self.root / 'legacy-plan.json'
+                    legacy = replace(plan, resource_locks=(deploy_lock,))
+                    legacy.save(saved)
+                    restored = Plan.load(saved)
+                    self.assertEqual(restored.identity, legacy.identity)
+                    self.assertEqual(tuple(restored.resource_locks), (deploy_lock,))
+                    self.assertEqual(restored.workspace, primary)
+                    self.assertEqual([p.argv for p in restored.phases], [p.argv for p in plan.phases])
                     for recipe in recipes.values():
                         self.assertEqual(Path(recipe['workspace']).parent,
                                          project.private / 'workspaces/devices/android')
