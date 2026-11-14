@@ -42,8 +42,9 @@ but had no implementation to migrate.
 ## Source ownership and platform boundary
 
 - `Python/features/aviation_tools/__init__.py` registers the lazy desktop page.
-- `ui/page.py` owns the seven calculator forms, their result/error presentation,
-  retained modeless dialogs and read-only `DatasetBrowser`.
+- `ui/page.py` owns the seven calculator forms, result and error presentation,
+  and the retained modeless tool windows. **Aircraft / Airports** opens the
+  read-only `DatasetBrowser` in `ui/dataset_browser.py`.
 - `mathUtils/flightUtils.py` owns coordinate validation, course normalization,
   distance, wind and airspeed formulas; `weatherUtils.py` owns the temperature helpers.
 - `plane/planeUtils.py` selects registrations/models from the bundled directories.
