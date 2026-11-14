@@ -121,14 +121,14 @@ class RotationLayoutReadinessTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaises(AssertionError) as caught:
                 await self.settle(app)
         self.assertEqual(caught.exception.args[0]['view_width'],750)
-        self.assertEqual(self.elapsed, rotation_checks.CONTROL_SETTLE_TIMEOUT)
+        self.assertEqual(self.elapsed, rotation_checks.INVENTORY_LAYOUT_TIMEOUT)
         self.assertEqual(len(self.diagnostics['samples']), 4)
         self.assertEqual(self.diagnostics['samples'][-1]['geometry']['view_width'], 750)
 
     async def test_controls_and_body_share_one_budget_instead_of_two(self):
         app,_=self.fixture()
         async def slow_layout(delay):
-            await self.advance(1.9)
+            await self.advance(rotation_checks.INVENTORY_LAYOUT_TIMEOUT - .1)
         self.sleep.side_effect = slow_layout
         with self.native_geometry(), \
                 patch.object(rotation_checks,'assert_visible_controls',side_effect=[AssertionError('control morph'),4]) as controls:
@@ -190,14 +190,14 @@ class RotationLayoutReadinessTests(unittest.IsolatedAsyncioTestCase):
                 patch.object(rotation_checks, 'safe_geometry', side_effect=lambda app: {'view_width': 402 + self.elapsed}):
             with self.assertRaisesRegex(AssertionError, 'did not stabilize'):
                 await self.settle()
-        self.assertEqual(self.elapsed, rotation_checks.CONTROL_SETTLE_TIMEOUT)
+        self.assertEqual(self.elapsed, rotation_checks.INVENTORY_LAYOUT_TIMEOUT)
         self.assertEqual(len(self.diagnostics['samples']), 4)
         self.assertEqual([row['reason'] for row in self.diagnostics['samples']], ['Geometry changed'] * 4)
 
     async def test_final_sample_after_deadline_cannot_pass(self):
         def geometry(app):
             if self.acknowledged.call_count == 4:
-                self.elapsed = rotation_checks.CONTROL_SETTLE_TIMEOUT + .1
+                self.elapsed = rotation_checks.INVENTORY_LAYOUT_TIMEOUT + .1
             return {'view_width': 402}
         with patch.object(rotation_checks, 'assert_visible_controls', return_value=4), \
                 patch.object(rotation_checks, 'safe_geometry', side_effect=geometry):
