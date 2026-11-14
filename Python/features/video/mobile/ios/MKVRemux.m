@@ -151,6 +151,12 @@ static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     _source->interrupt_callback = (AVIOInterruptCB){LGMKVInterrupt, &_reader};
     const AVInputFormat *matroska = av_find_input_format("matroska");
     if (!matroska || avformat_open_input(&_source, NULL, matroska, NULL) < 0) return nil;
+    // Matroska's container header may omit color and cadence carried in HEVC's
+    // parameter sets. Resolve those before advertising an HLS variant: Apple
+    // rejects an HDR stream labelled SDR, and HDR variants require FRAME-RATE.
+    _source->probesize = 4 * 1024 * 1024;
+    _source->max_analyze_duration = AV_TIME_BASE;
+    if (avformat_find_stream_info(_source, NULL) < 0) return nil;
     _video = av_find_best_stream(_source, AVMEDIA_TYPE_VIDEO, -1, -1, NULL, 0);
     if (_video < 0 || _source->duration <= 0 || _source->duration > INT64_C(12) * 3600 * AV_TIME_BASE) return nil;
     AVStream *video = _source->streams[_video];
@@ -216,6 +222,10 @@ static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     [boundaries addObject:@(av_rescale_q(_duration, video->time_base, (AVRational){1, 1000}))];
     NSMutableDictionary *videoInfo = [LGMKVCodecInfo(video->codecpar) mutableCopy];
     [videoInfo addEntriesFromDictionary:@{@"width": @(video->codecpar->width), @"height": @(video->codecpar->height)}];
+    AVRational frameRate = video->avg_frame_rate;
+    if (frameRate.num <= 0 || frameRate.den <= 0) frameRate = video->r_frame_rate;
+    if (frameRate.num <= 0 || frameRate.den <= 0) return nil;
+    videoInfo[@"frameRate"] = @(av_q2d(frameRate));
     if (video->codecpar->color_trc == AVCOL_TRC_SMPTE2084) videoInfo[@"range"] = @"PQ";
     else if (video->codecpar->color_trc == AVCOL_TRC_ARIB_STD_B67) videoInfo[@"range"] = @"HLG";
     _renditions = @{@"audio": audio, @"text": text, @"video": videoInfo,

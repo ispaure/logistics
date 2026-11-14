@@ -48,11 +48,11 @@
 @property(nonatomic) NSTimeInterval airPlayRouteDeadline;
 @property(nonatomic) int64_t airPlaySeekTarget, airPlayStartPosition;
 @property(nonatomic) NSTimeInterval airPlayConnectionDeadline;
+@property(nonatomic) NSTimeInterval airPlaySeekDeadline;
 @property(nonatomic) NSUInteger airPlaySeekGeneration;
 @property(nonatomic, copy) BOOL (^airPlayAllowed)(void);
 @property(nonatomic, strong) AVPlayerViewController *airPlayController;
 @property(nonatomic, strong) AVRoutePickerView *airPlayPicker;
-@property(nonatomic, strong) UILabel *airPlayLabel;
 @property(nonatomic, strong) AVPlayer *airPlayPlayer;
 @property(nonatomic, copy) BOOL (^allowed)(BOOL external);
 @property(nonatomic, copy) BOOL (^requestPlay)(void);
@@ -124,6 +124,7 @@
 @property(nonatomic) BOOL rateChangePending;
 @property(nonatomic) BOOL audioSuppressed;
 @property(nonatomic) BOOL resumeMuted;
+@property(nonatomic) BOOL localAudioNeedsRefresh;
 @property(nonatomic) BOOL holdsIdleTimer;
 @property(nonatomic) BOOL surfaceVisible;
 @property(nonatomic, strong) CXCallObserver *callObserver;
@@ -905,10 +906,9 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
         [self setControlsShown:YES];
         return;
     }
-    if (!self.audioSuppressed) {
-        self.resumeMuted = self.player.audio.isMuted;
-        self.audioSuppressed = YES;
-    }
+    // VLC can report an unavailable audio output as muted before the input
+    // opens. Keep user intent separate from that transient decoder state.
+    self.audioSuppressed = YES;
     self.player.audio.muted = YES; // Silence the decoder before updating the paused UI.
     self.rateChangePending = NO;
     [self logHDRTransition:@"pause-request"];
@@ -1023,6 +1023,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     if (self.startMilliseconds >= 0 && self.player.isPlaying) {
         self.player.time = [VLCTime timeWithNumber:@(self.startMilliseconds)];
         self.resumeSeekSubmitted = YES;
+        self.localAudioNeedsRefresh = NO;
     }
     self.lastPlaybackProgress = self.lastFrameProgress = NSProcessInfo.processInfo.systemUptime;
     [self updatePlayButton];
@@ -1096,6 +1097,8 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     NSUInteger reason = [notification.userInfo[AVAudioSessionRouteChangeReasonKey] unsignedIntegerValue];
     AVAudioSessionRouteDescription *previous = notification.userInfo[AVAudioSessionRouteChangePreviousRouteKey];
     dispatch_async(dispatch_get_main_queue(), ^{
+        for (AVAudioSessionPortDescription *port in previous.outputs)
+            if ([port.portType isEqualToString:AVAudioSessionPortAirPlay]) self.localAudioNeedsRefresh = YES;
         if (self.airPlayAvailable && ([self hasAirPlay] || self.airPlayPreparing ||
             [self hasAirPlayAudioRoute] || self.airPlayResumeLocal || self.airPlayRouteDeadline > 0)) {
             if (reason != AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory) {
@@ -1201,6 +1204,15 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
         return;
     }
     [self updateAirPlayRoute];
+    if (self.localAudioNeedsRefresh && self.playRequested && self.player.isPlaying &&
+        self.player.isSeekable && [self canPlay:NO]) {
+        // A route return can leave queued audio attached to the former output.
+        // Flush it at the held position even when the clocks already agree.
+        int64_t position = [self positionMilliseconds];
+        self.player.time = [VLCTime timeWithNumber:@(position)];
+        self.player.audio.muted = self.resumeMuted;
+        self.localAudioNeedsRefresh = NO;
+    }
     if (self.externalVideoHost && ![self permitsExternalDisplay]) [self revokeExternalVideo];
     // Keep the resume target visible until the decoder acknowledges that seek.
     // The acknowledgement window measures wall time even at faster playback.
@@ -1247,8 +1259,9 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     int64_t duration = [self durationMilliseconds];
     if (!self.seek.tracking && duration > 0) self.seek.value = (float)position / duration;
     self.seek.hidden = NO;
-    self.seek.enabled = duration > 0 && ([self hasAirPlay] ?
-        self.airPlayPlayer.currentItem.status == AVPlayerItemStatusReadyToPlay : self.player.isSeekable);
+    // AVKit can load a large movie after its duration is already known to VLC.
+    // Accept the new target now and submit it when the item becomes ready.
+    self.seek.enabled = duration > 0 && ([self hasAirPlay] || self.player.isSeekable);
     NSString *(^time)(int64_t) = ^NSString *(int64_t value) {
         int64_t seconds = MAX(0, value / 1000);
         return [NSString stringWithFormat:@"%lld:%02lld:%02lld", seconds / 3600, seconds / 60 % 60, seconds % 60];
@@ -1286,6 +1299,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
             self.hasPlayed = YES;
             [self applyPlaybackOptions];
             if (self.manualResumeRequired || ![self canPlay:NO]) { [self pause]; return; }
+            self.player.audio.muted = self.resumeMuted;
             if (self.startMilliseconds >= 0) {
                 int64_t seekTolerance = (int64_t)(1500 * MAX(1.f, fabsf(self.player.rate)));
                 if (llabs(self.player.time.value.longLongValue - self.startMilliseconds) >= seekTolerance)

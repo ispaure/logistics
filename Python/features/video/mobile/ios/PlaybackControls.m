@@ -268,10 +268,9 @@
         [self showStatus:self.resumeMuted ? @"Muted" : @"Sound on"];
         return;
     }
-    BOOL muted = self.audioSuppressed ? self.resumeMuted : self.player.audio.muted;
-    if (self.audioSuppressed) self.resumeMuted = !muted;
-    else self.player.audio.muted = !muted;
-    [self showStatus:muted ? @"Sound on" : @"Muted"];
+    self.resumeMuted = !self.resumeMuted;
+    if (!self.audioSuppressed) self.player.audio.muted = self.resumeMuted;
+    [self showStatus:self.resumeMuted ? @"Muted" : @"Sound on"];
 }
 - (void)toggleControlLock:(id)sender {
     if (![self canPlay:NO]) return;

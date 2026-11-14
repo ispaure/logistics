@@ -59,6 +59,8 @@ Mirroring disconnected and select Apple TV in the player's AirPlay picker.
 | Pause with the Siri Remote, then change speed or mute on the Duo | Playback remains paused. Play resumes at the chosen supported speed and mute state. |
 | Seek from either device and change fit/fill | The shared timeline follows the seek and the TV picture uses the chosen sizing. |
 | Choose iPhone in the same AirPlay picker while playing, paused and muted | VLC receives the current position and intent after the audio route returns; muted playback stays muted. |
+| Open a movie and pause/resume before its audio output is ready; return from TV to iPhone and press Play | Sound resumes without a manual seek, route toggle or app restart unless deliberately muted. |
+| Resume a 4K HDR MKV at a saved position, then scrub while the TV loads | The handoff starts, the requested target remains visible, and playback reaches that target. A stalled load or seek reports failure and preserves the position for local playback. |
 
 Check forced subtitle and accessibility preferences on the receiver separately
 from manual selection. SDK and host playlist tests do not establish these

@@ -3,7 +3,7 @@ from base64 import b64decode
 from bisect import bisect_left, bisect_right
 from html import escape, unescape
 import json
-from math import ceil
+from math import ceil, isfinite
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler
 from re import fullmatch
@@ -107,7 +107,11 @@ def master_playlist(audio, subtitles, default_audio, bandwidth, video):
     width, height = video['width'], video['height']
     if width <= 0 or height <= 0:
         raise ValueError('The MKV video dimensions could not be prepared for AirPlay.')
+    frame_rate = video['frameRate']
+    if not isfinite(frame_rate) or frame_rate <= 0:
+        raise ValueError('The MKV frame rate could not be prepared for AirPlay.')
     attributes = f'BANDWIDTH={bandwidth},CODECS="{",".join(codecs)}",RESOLUTION={width}x{height},AUDIO="audio"'
+    attributes += f',FRAME-RATE={frame_rate:.3f}'
     if video.get('range') in {'PQ', 'HLG'}:
         attributes += f',VIDEO-RANGE={video["range"]}'
     if subtitles:

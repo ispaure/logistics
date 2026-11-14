@@ -918,7 +918,7 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
             'text-8': dict(id=8, name='Invalid"\nmetadata', language='en"\n#EXT-X-ENDLIST'),
         }
         video = dict(codec='hevc', configuration=b64encode(bytes.fromhex('010220000000b0000000000099')).decode('ascii'),
-                     width=3840, height=2160, range='PQ')
+                     width=3840, height=2160, range='PQ', frameRate=24000 / 1001)
         master = master_playlist(audio, subtitles, 2, 40_000_000, video).decode('utf-8')
         rows = master.splitlines()
         self.assertEqual(sum(row.startswith('#EXT-X-MEDIA:') for row in rows), 8)
@@ -941,6 +941,10 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
         self.assertIn('CODECS="hvc1.2.4.L153.B0,mp4a.40.2,ec-3,ac-3"', variant)
         self.assertIn('RESOLUTION=3840x2160', variant)
         self.assertIn('VIDEO-RANGE=PQ', variant)
+        self.assertIn('FRAME-RATE=23.976', variant)
+        for rate in (0, -1, float('inf'), float('nan')):
+            with self.subTest(rate=rate), self.assertRaisesRegex(ValueError, 'frame rate'):
+                master_playlist(audio, subtitles, 2, 40_000_000, {**video, 'frameRate': rate})
         self.assertIn('AUDIO="audio"', variant)
         self.assertIn('SUBTITLES="text"', variant)
 
@@ -956,7 +960,7 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
         import json
         engine = SimpleNamespace(
             renditionsJSON=lambda: json.dumps(dict(boundaries=[0, 6000, 12000, 18000],
-                video=dict(codec='h264', configuration='AWQAKA==', width=1920, height=1080),
+                video=dict(codec='h264', configuration='AWQAKA==', width=1920, height=1080, frameRate=24),
                 defaultAudio=1, audio=[dict(id=1, name='Main', language='eng', channels=6, codec='ac3'),
                                        dict(id=2, name='Commentary', language='eng', channels=2, codec='opus')],
                 text=[dict(id=3, name='Spanish', language='spa')])),
