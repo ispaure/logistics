@@ -1,69 +1,68 @@
-# File Tools Feature
+# File Tools development
 
-For workflows, settings and troubleshooting, see the [user guide](../user/user.md).
+File Tools adds path diagnostics and reviewed bytecode cleanup to the desktop
+File Browser. See the [user guide](../user/user.md) for the two workflows.
 
-Developer notes. See the [user guide](../user/user.md) for controls and setup,
-and [UI architecture](../../../development/features.md) for shared contribution conventions.
+## Try a scan summary change
 
-Provides small filesystem maintenance and diagnostic tools for Logistics.
+On Qt desktop, open **File Browser** and right-click a disposable folder
+containing a file such as `note-é.txt`. Choose **List Weird Characters…**
+and click **Scan files**. The dialog lists the path, matched sequence and
+Unicode code points. Enable **File Tools** in **Settings → Features** if the
+action is missing.
 
-## Responsibilities
+Try changing `Found` to `Matched` in the summary built by
+`WeirdCharactersDialog._show_results` in
+`Python/features/file_tools/ui/dialogs.py`. Update the summary assertion in
+`test_scan_window_keeps_results_and_unicode_visible`, then run this from the
+repository root using the [desktop environment](../../../development/getting-started.md).
 
-- Find files whose paths contain configured problematic Unicode characters.
-- Delete Python bytecode (`.pyc`) files from a selected directory.
+```sh
+python3 dev.py test desktop --exact-file Python/tests/files/test_file_tools.py
+```
 
-## Structure
+Expect the synthetic scan to leave the dialog open with one result, the
+`U+00E9` code point and a summary beginning with `Matched 1`. The fixture
+file remains present. The same test file checks the folder menu and feature
+toggle, reviewed deletion, and cancellation.
 
-- `filesystem.py` contains filesystem diagnostics and maintenance operations.
-- `ui/dialogs.py` owns background scans/cleanup and persistent results tables.
-- `ui_contributions.py` declares folder-only File Browser selection actions.
-- `register()` supplies a unified feature declaration with no Debug actions.
+## Registration and path matching
 
-## Weird Character Detection
+`Python/features/file_tools/__init__.py:register` loads the feature declaration
+from `ui_contributions.py`. Both actions require a folder selection and pass
+the selected roots to their dialogs. The contribution refreshes the browser
+when the dialog returns. See the shared
+[browser extension contract](../../../development/file-browser.md).
 
-The weird-character diagnostic preserves the character set used by the original Logistics tool.
-
-Some entries appear visually identical because they use different Unicode representations, such as precomposed and combining-character forms.
-
-The operation is read-only. The results window displays paths, matched character
-sequences and their Unicode code points. Scanning does not follow directory links.
-
-## PYC Cleanup
-
-The PYC cleanup operation deletes `.pyc` files from the selected directory.
-
-When recursive mode is enabled, matching regular files in subdirectories are also
-deleted. File links are preserved and directory links are not traversed. Multiple
-selected roots are deduplicated. Cleanup records per-file success/failure and
-unprocessed paths on cancellation; it continues after an individual failure.
-
-This operation should be tested against disposable or regenerable data when its behavior is changed.
+`filesystem.py:scan_weird_characters` matches the original Logistics
+`WEIRD_CHARACTERS` set anywhere in the full path, including parent-folder
+names. The set includes precomposed and combining representations of some
+characters. The scan matches literal sequences and reports code points so
+readers can distinguish visually identical names. It reads paths without
+following directory links.
 
 ## Reviewed deletion boundary
 
-The dialog calls `scan_pyc_files` to capture a read-only candidate snapshot, then
-passes that snapshot to `cleanup_pyc_files` only after confirmation (default No).
-Changing roots or recursion invalidates the preview. Both scan and cleanup call
-`services.folders.safety.require_safe_folder`, using `Python/maintenance.ini`.
-The policy resolves paths, rejects protected roots and descendants, and rejects
-recursive ancestors of protected roots. Cleanup rechecks each file's device,
-inode, size, nanosecond modification time and mode, its root membership, and
-whether any parent has become a symlink before unlinking it. This is a pre-delete
-identity check, not a filesystem lock against concurrent changes.
+`DeletePycDialog` calls `scan_pyc_files` to capture a read-only snapshot
+of regular bytecode files. It passes that snapshot to `cleanup_pyc_files`
+after explicit confirmation, with **No** as the default. Changing roots or
+recursion invalidates the preview. Preserve this handoff when editing the dialog.
+The older `delete_pyc_files` helper uses a separate immediate-delete path.
 
-The older `delete_pyc_files` helper is not the dialog's reviewed-delete entry
-point; maintain the scan/confirmation/snapshot handoff when changing the UI.
-The diagnostic matches configured sequences anywhere in the full path, including
-parent-folder names; it is not a general Unicode validity checker or renamer.
+Both scan and cleanup call `services.folders.safety.require_safe_folder`.
+The policy in `Python/maintenance.ini` rejects protected roots and descendants
+and rejects recursive scans of their ancestors. Scans deduplicate paths and
+skip links. Before unlinking, cleanup rechecks scope, symlink parents and the
+file's device, inode, size, nanosecond modification time and mode. A file added
+after preview stays outside the snapshot. The identity check catches changes
+observed before deletion. Concurrent changes can still race the unlink.
+
+Cleanup continues after an individual failure and reports completed, failed
+and unprocessed paths. Cancellation takes effect between files. Completed
+deletions stay deleted. Rescan after correcting a failure or changing the scope.
 
 ## Platform and validation scope
 
-Registration supplies desktop browser actions only; there is no mobile adapter
-or entry in `Python/services/mobile_features.py`. See
-[mobile availability](../user_mobile/user_mobile.md).
-
-`Python/tests/files/test_file_tools.py` covers composed/combining matches, parent
-paths, reviewed candidates, changed/new files, links, partial failures,
-cancellation, confirmation, persistent results and feature toggling. These tests
-were read during this documentation audit, not executed: runtime/Qt acceptance
-remains outside the source and static checks permitted by the release quiet hold.
+File Tools supplies desktop browser actions. See
+[mobile availability](../user_mobile/user_mobile.md) for Android and iOS.
+Use disposable files for cleanup tests, including for link and race scenarios.
