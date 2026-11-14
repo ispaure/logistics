@@ -22,6 +22,12 @@ page history, search, speech lifetime and compact/wide layouts. The full desktop
 The full packaged-startup profile checks the staged payload and offline Help
 history in an isolated process.
 
+For a desktop click-through, open **File Browser → Help → File Browser Guide**.
+Select **Logistics documentation** in the tree, then follow **Developing
+Logistics → Setup → your first contribution**. Press **Back** to return through
+Setup, Developing Logistics, the wiki home and the File Browser guide. The
+highlighted tree row should follow the article. **Forward** opens the wiki home.
+
 ## Native layout
 
 Mobile Help keeps Back/Forward and speech in the article command row. Android

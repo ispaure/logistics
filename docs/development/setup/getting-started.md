@@ -26,9 +26,11 @@ in a normal local Terminal with access to `/usr/sbin/sysctl -n kern.bootsessionu
 
 Run your checkout launcher. On macOS open `LaunchLogistics_MAC.command`, on
 Windows open `LaunchLogistics_WIN.bat`, and on Linux run
-`bash LaunchLogistics_LINUX_UV.sh`. The first window shows the destination rail
-and launcher cards. Open a disposable text file in File Browser, then switch
-to Documents to find its tab. [Desktop guide](../../user/user.md)
+`bash LaunchLogistics_LINUX_UV.sh`. Choose **File Browser** on the launch screen
+and open a folder containing a disposable `.txt` file. Double-click the file.
+Switch back to **File Browser**, then choose the file under **Open documents**
+on the rail. Expect the same tab and text. If the file opens externally, enable
+Text Editor in **Settings → Features**. [Desktop guide](../../user/user.md)
 
 ## 3. Find one owner and its tests
 
