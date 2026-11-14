@@ -212,8 +212,8 @@ def make_journey(project, intent, *, revision='working-tree', pattern='', build_
             shared = None
             if target in release_devices:
                 shared = next((p for p in preparations[target] if p.id.endswith('.build-release-archive')), preparations[target][-1])
-            plan = (device_plan(project, target, device_targets[target], context, revision, shared=shared) if shared else
-                    device_plan(project, target, device_targets[target], context, revision))
+            plan = device_plan(project, target, device_targets[target], context, revision,
+                               shared=shared, skip_tests=not targets)
             retain(plan)
             branch = _namespace(plan, target + '.devices', (*required_gates, *((shared.id,) if shared else ())))
             phases.extend(branch)
