@@ -5,7 +5,7 @@ import toga
 
 from features.notebooks.notebook import Notebook
 from features.rclone.localcrypt.mobile.resources import CryptFiles
-from mobile_build.tests.support.app import create_app
+from mobile_build.tests.support.app import create_app, create_document_app
 from mobile_build.tests.support.localcrypt import CreationClient
 
 
@@ -15,20 +15,14 @@ def _canvas(resource=None, **kwargs):
     return view
 
 
-def _dispose_notebook_views(app):
-    for panel in tuple(getattr(app, '_notebook_views', {}).values()):
-        panel.dispose()
-
-
 def create_storage_notebook_app(case):
     """Use a synthetic canvas and a writable localcrypt provider."""
     # Register the canvas first so it stays patched during panel and app cleanup.
     case.enterContext(patch('services.documents.mobile_views.document_webview', side_effect=_canvas))
-    app = create_app(case)
-    case.addCleanup(_dispose_notebook_views, app)
-    app.show_home()
+    app = create_document_app(case)
     client = app.cloud_client = CreationClient()
     provider = CryptFiles(app.storage_root / 'LocalCryptFolders', client, 'Secret')
+    case.addCleanup(provider.close)
     return app, client, provider
 
 

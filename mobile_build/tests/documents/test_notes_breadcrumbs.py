@@ -11,7 +11,7 @@ from travertino.size import at_least
 
 from commonUtils.testing.stages import TestStage
 from features.notes_library.mobile.breadcrumbs import BreadcrumbScroll
-from mobile_build.tests.documents import test_obsidian as fixtures
+from mobile_build.tests.support import notes as fixtures
 
 TEST_STAGE = TestStage.REGRESSION
 
@@ -36,8 +36,7 @@ class Scheduler:
 
 
 class BreadcrumbTests(unittest.TestCase):
-    setUp = fixtures.ObsidianTests.setUp
-    tearDown = fixtures.ObsidianTests.tearDown
+    setUp = fixtures.set_up_vault
 
     def scroll(self):
         return BreadcrumbScroll(content=toga.Box(), horizontal=True, vertical=False,

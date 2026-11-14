@@ -1,12 +1,9 @@
 """Owned picker state, cancellation and stale worker publication boundaries."""
 
-from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
-from pathlib import Path
-from tempfile import TemporaryDirectory
 from threading import Event
 from types import SimpleNamespace
 import unittest
@@ -15,7 +12,7 @@ from unittest.mock import AsyncMock, Mock, patch
 import toga
 
 from commonUtils.runtime.resources.local import LocalFiles
-from mobile.app import LogisticsMobile
+from mobile_build.tests.support.app import create_document_app
 
 
 class SyntheticPrivateFiles(LocalFiles):
@@ -24,18 +21,10 @@ class SyntheticPrivateFiles(LocalFiles):
 
 class EditorPickerTests(unittest.TestCase):
     def setUp(self):
-        self.directory = TemporaryDirectory()
-        LogisticsMobile.storage_root = Path(self.directory.name).resolve()
-        self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.app.show_cloud(present=False)
+        self.app = create_document_app(self)
+        self.root = self.app.storage_root
+        self.app.prepare_cloud()
         self.app.loop.run_until_complete(self.app.show_editor_open())
-
-    def tearDown(self):
-        self.app.active_host = True
-        self.app.main_window.close()
-        close_loop(self.app.loop)
-        LogisticsMobile.storage_root = None
-        self.directory.cleanup()
 
     async def wait_for_worker(self, started):
         for _ in range(200):
@@ -50,7 +39,7 @@ class EditorPickerTests(unittest.TestCase):
         self.assertNotIn('editor_browser', vars(app))
         self.assertNotIn('save_as_data', vars(app))
         self.assertIs(app.editor_browser, picker.editor_browser)
-        provider = LocalFiles(Path(self.directory.name))
+        provider = LocalFiles(self.root)
         app.editor_storage_roots = {'Associated provider': provider}
         self.assertIs(picker.editor_provider('Associated provider'), provider)
         app.save_as_data = b'unsaved'
@@ -553,7 +542,7 @@ class EditorPickerTests(unittest.TestCase):
 
     async def open_provider_save_as(self, *, private=True, gate=None):
         from services.documents.provider_documents import ProviderDocuments
-        root = Path(self.directory.name) / ('private-source' if private else 'ordinary-source')
+        root = self.root / ('private-source' if private else 'ordinary-source')
         root.mkdir()
         source = root / 'source.txt'
         source.write_bytes(b'original')
@@ -665,7 +654,7 @@ class EditorPickerTests(unittest.TestCase):
         from services.documents.storage import DocumentResource
 
         async def exercise():
-            root = Path(self.directory.name) / 'private-notebook'
+            root = self.root / 'private-notebook'
             root.mkdir()
             notebook = Notebook.new('Synthetic notebook')
             name = notebook.name + '.rmdoc'
@@ -700,7 +689,7 @@ class EditorPickerTests(unittest.TestCase):
     def test_save_as_cancel_restores_managed_origin_even_with_old_provider_active(self):
         from features.text_editor.resources import LocalTextCopies
         app = self.app
-        saved = Path(self.directory.name) / 'earlier.txt'
+        saved = self.root / 'earlier.txt'
         saved.write_text('Earlier saved file')
         app.loop.run_until_complete(app.open_crypt(copies=LocalTextCopies(LocalFiles(saved.parent)), key=saved.name, edit=True))
         previous = app.provider_sessions().active

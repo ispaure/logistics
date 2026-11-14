@@ -11,7 +11,7 @@ from mobile.documents import DocumentStore
 from commonUtils.runtime.resources.local import LocalFiles
 from features.text_editor.resources import LocalTextCopies
 import test_document_navigation as navigation
-import test_obsidian as notes
+from mobile_build.tests.support import notes as fixtures
 
 TEST_STAGE = TestStage.REGRESSION
 
@@ -141,9 +141,8 @@ class FileDiscardTests(unittest.TestCase):
 
 
 class LibraryDiscardTests(unittest.TestCase):
-    setUp = notes.ObsidianTests.setUp
-    tearDown = notes.ObsidianTests.tearDown
-    run_async = notes.ObsidianTests.run_async
+    setUp = fixtures.set_up_vault
+    run_async = fixtures.run_async
 
     def test_notes_library_discard_reopens_saved_text_and_code(self):
         from mobile.obsidian import open_vault

@@ -7,14 +7,13 @@ import asyncio
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 import unittest
-import mobile_build.tests.documents.test_obsidian as fixtures
+from mobile_build.tests.support import notes as fixtures
 from mobile.obsidian import offer_vault, open_vault
 
 
 class NotesLibraryModeTests(unittest.TestCase):
-    setUp = fixtures.ObsidianTests.setUp
-    tearDown = fixtures.ObsidianTests.tearDown
-    run_async = fixtures.ObsidianTests.run_async
+    setUp = fixtures.set_up_vault
+    run_async = fixtures.run_async
 
     def test_search_unopened_folders_with_keywords_and_phrases(self):
         nested = self.vault / 'Projects'

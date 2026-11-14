@@ -9,7 +9,7 @@ from unittest.mock import patch
 
 import toga
 from mobile_build.tests.editing.test_markdown_speech import Engine
-import mobile_build.tests.documents.test_obsidian as test_obsidian
+from mobile_build.tests.support import notes as fixtures
 import unittest
 
 
@@ -37,9 +37,8 @@ class SpeechOverlayTests(unittest.TestCase):
             self.assertEqual(panel.session.text, '')
         self.run_async(exercise())
 
-    setUp = test_obsidian.ObsidianTests.setUp
-    tearDown = test_obsidian.ObsidianTests.tearDown
-    run_async = test_obsidian.ObsidianTests.run_async
+    setUp = fixtures.set_up_vault
+    run_async = fixtures.run_async
 
     def test_old_source_success_or_error_cannot_publish_into_refreshed_session(self):
         from features.books.mobile.speech_view import ReadAloudPanel

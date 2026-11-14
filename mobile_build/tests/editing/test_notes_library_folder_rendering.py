@@ -7,15 +7,14 @@ from unittest.mock import patch
 from commonUtils.testing.stages import TestStage
 from mobile import appearance
 from mobile.obsidian import open_vault
-from mobile_build.tests.documents import test_obsidian as fixtures
+from mobile_build.tests.support import notes as fixtures
 
 TEST_STAGE = TestStage.REGRESSION
 
 
 class FolderRenderingTests(unittest.TestCase):
-    setUp = fixtures.ObsidianTests.setUp
-    tearDown = fixtures.ObsidianTests.tearDown
-    run_async = fixtures.ObsidianTests.run_async
+    setUp = fixtures.set_up_vault
+    run_async = fixtures.run_async
 
     async def library(self):
         folder = self.vault / 'Many'

@@ -12,7 +12,7 @@ from travertino.layout import Viewport
 from mobile.action_menu import NativeMenu
 from mobile.browser_ui import FolderLocationHeader
 from mobile.control_icons import icon_button
-from mobile_build.tests.documents import test_obsidian as obsidian_tests
+from mobile_build.tests.support import notes as fixtures
 
 
 class AndroidPopupTests(TestCase):
@@ -46,8 +46,7 @@ class AndroidPopupTests(TestCase):
 
 
 class AndroidFolderTitleTests(TestCase):
-    setUp = obsidian_tests.ObsidianTests.setUp
-    tearDown = obsidian_tests.ObsidianTests.tearDown
+    setUp = fixtures.set_up_vault
 
     def test_fresh_reader_drawer_accepts_automatic_button_widths(self):
         parent = toga.Button('Parent folder', style=toga.style.Pack(height=48))
