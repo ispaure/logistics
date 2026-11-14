@@ -2,6 +2,7 @@
 
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
+from mobile_build.tests.support import notes as fixtures
 
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
@@ -151,12 +152,7 @@ class SpeechMediaTests(unittest.TestCase):
 
 
 class SpeechPrivacyIntegrationTests(unittest.TestCase):
-    def setUp(self):
-        import mobile_build.tests.documents.test_obsidian as test_obsidian
-        test_obsidian.ObsidianTests.setUp(self)
-    def tearDown(self):
-        import mobile_build.tests.documents.test_obsidian as test_obsidian
-        test_obsidian.ObsidianTests.tearDown(self)
+    setUp = fixtures.set_up_vault
 
     def test_private_markdown_background_opt_in_trim_and_revocation(self):
         import json

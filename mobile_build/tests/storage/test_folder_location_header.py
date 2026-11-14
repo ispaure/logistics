@@ -9,13 +9,12 @@ import unittest
 import toga
 from mobile.browser_ui import FolderLocationHeader
 from mobile.control_icons import icon_button
-from mobile_build.tests.documents import test_obsidian as obsidian_tests
+from mobile_build.tests.support import notes as fixtures
 
 
 class FolderLocationTests(unittest.TestCase):
-    setUp = obsidian_tests.ObsidianTests.setUp
-    tearDown = obsidian_tests.ObsidianTests.tearDown
-    run_async = obsidian_tests.ObsidianTests.run_async
+    setUp = fixtures.set_up_vault
+    run_async = fixtures.run_async
 
     def test_header_hold_follows_current_local_and_remote_folder(self):
         from types import SimpleNamespace as NS

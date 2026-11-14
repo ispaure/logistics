@@ -5,14 +5,13 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 from unittest.mock import AsyncMock, Mock, patch
 import unittest
-import mobile_build.tests.documents.test_obsidian as fixtures
+from mobile_build.tests.support import notes as fixtures
 from mobile.obsidian import open_vault
 
 
 class MarkdownLibraryWorkflowTests(unittest.TestCase):
-    setUp = fixtures.ObsidianTests.setUp
-    tearDown = fixtures.ObsidianTests.tearDown
-    run_async = fixtures.ObsidianTests.run_async
+    setUp = fixtures.set_up_vault
+    run_async = fixtures.run_async
 
     def test_formatted_preview_failure_uses_popup_and_keeps_source_mode(self):
         async def exercise():

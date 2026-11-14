@@ -10,7 +10,7 @@ import unittest
 from threading import Event
 from unittest.mock import patch
 
-import mobile_build.tests.documents.test_obsidian as fixtures
+from mobile_build.tests.support import notes as fixtures
 from mobile.favourites import catalog, resource_reference
 from mobile.obsidian import open_vault
 from mobile.workspace import Session
@@ -19,8 +19,7 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class MobileRenameReferenceTests(unittest.TestCase):
-    setUp = fixtures.ObsidianTests.setUp
-    tearDown = fixtures.ObsidianTests.tearDown
+    setUp = fixtures.set_up_vault
 
     def test_cancel_after_notes_rename_commit_retires_worker_and_updates_references(self):
         app = self.app

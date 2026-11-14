@@ -1,12 +1,9 @@
 """Vault detection, rooted Markdown browsing and revoked private reads."""
 
-from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
-from pathlib import Path
-from tempfile import TemporaryDirectory
 from threading import Event
 from types import SimpleNamespace
 import unittest
@@ -15,7 +12,7 @@ from toga_dummy.utils import EventLog
 
 from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.runtime.resources.selection import ResourceSelection
-from mobile.app import LogisticsMobile
+from mobile_build.tests.support import notes as fixtures
 from mobile.browser_ui import FileBrowser
 from mobile.obsidian import VaultBrowser, vault_root, open_vault
 
@@ -265,45 +262,8 @@ class ObsidianTests(unittest.TestCase):
                 owner.host = original_host
         self.run_async(exercise())
 
-    def setUp(self):
-        import toga
-        factory = patch('services.documents.mobile_views.document_webview',
-                        side_effect=lambda resource=None, inline_video=False, **options: toga.WebView(**options))
-        factory.start()
-        self.addCleanup(factory.stop)
-        self.temporary = TemporaryDirectory()
-        self.root = Path(self.temporary.name)
-        LogisticsMobile.storage_root = self.root / 'app'
-        self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.app.main_window._impl.dialog_responses['ErrorDialog'] = [None] * 10
-        self.vault = self.root / 'Vault'
-        (self.vault / '.obsidian').mkdir(parents=True)
-        (self.vault / '.obsidian/private.md').write_text('# Configuration')
-        (self.vault / 'Projects').mkdir()
-        (self.vault / 'Projects/Plan.MD').write_text('# Plan\n\n**Nested note**')
-        (self.vault / 'Home.md').write_text('# Home\n\n[Plan](Projects/Plan.MD)')
-        (self.vault / 'attachment.txt').write_text('Not a note')
-        self.provider = LocalFiles(self.root)
-
-    def tearDown(self):
-        owner = getattr(self.app, 'vault_browser', None)
-        if owner:
-            owner.dispose()
-        self.app.main_window.close()
-        async def drain_workers():
-            pending = asyncio.all_tasks() - {asyncio.current_task()}
-            for task in pending:
-                task.cancel()
-            await asyncio.gather(*pending, return_exceptions=True)
-            await self.app.loop.shutdown_asyncgens()
-            await self.app.loop.shutdown_default_executor()
-        self.app.loop.run_until_complete(drain_workers())
-        close_loop(self.app.loop)
-        LogisticsMobile.storage_root = None
-        self.temporary.cleanup()
-
-    def run_async(self, awaitable):
-        return self.app.loop.run_until_complete(awaitable)
+    setUp = fixtures.set_up_vault
+    run_async = fixtures.run_async
 
     def test_detection_requires_local_directory_marker_and_current_root(self):
         rows = self.provider.list('Vault')

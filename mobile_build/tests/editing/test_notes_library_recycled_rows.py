@@ -10,15 +10,14 @@ from mobile.composition import presentation
 from mobile.obsidian import open_vault
 from mobile.recycled_file_list import RecycledFileList
 from features.notes_library.mobile.tree_rows import NativeTreeRows
-from mobile_build.tests.documents import test_obsidian as fixtures
+from mobile_build.tests.support import notes as fixtures
 
 TEST_STAGE = TestStage.REGRESSION
 
 
 class RecycledNotesRowsTests(unittest.TestCase):
-    setUp = fixtures.ObsidianTests.setUp
-    tearDown = fixtures.ObsidianTests.tearDown
-    run_async = fixtures.ObsidianTests.run_async
+    setUp = fixtures.set_up_vault
+    run_async = fixtures.run_async
 
     async def library(self, count=40):
         folder = self.vault / 'Many'

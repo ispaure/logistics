@@ -6,7 +6,7 @@ from itertools import count
 from threading import Event
 import unittest
 from unittest.mock import AsyncMock, patch
-import mobile_build.tests.documents.test_obsidian as fixtures
+from mobile_build.tests.support import notes as fixtures
 from mobile.obsidian import open_vault
 from features.notes_library import library_files
 
@@ -946,9 +946,8 @@ class NotesLibraryPanelTests(unittest.TestCase):
 
         self.run_async(exercise())
 
-    setUp = fixtures.ObsidianTests.setUp
-    tearDown = fixtures.ObsidianTests.tearDown
-    run_async = fixtures.ObsidianTests.run_async
+    setUp = fixtures.set_up_vault
+    run_async = fixtures.run_async
 
     def test_modal_drawers_have_no_close_button_or_storage_footer(self):
         async def exercise():

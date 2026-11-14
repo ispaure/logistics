@@ -15,16 +15,15 @@ from commonUtils.runtime.operations import OperationCancelled
 from features.notes_library.notes import NotesLibrary, vault_root
 from features.notes_library.notes_links import connections
 from mobile.obsidian import open_vault
-import mobile_build.tests.documents.test_obsidian as fixtures
+from mobile_build.tests.support import notes as fixtures
 
 TEST_STAGE = TestStage.REGRESSION
 NODE = os.environ.get('LOGISTICS_NODE') or shutil.which('node')
 
 
 class NotesDrawerTests(unittest.TestCase):
-    setUp = fixtures.ObsidianTests.setUp
-    tearDown = fixtures.ObsidianTests.tearDown
-    run_async = fixtures.ObsidianTests.run_async
+    setUp = fixtures.set_up_vault
+    run_async = fixtures.run_async
 
     def test_swipes_open_empty_library_and_duplicate_links_requests_do_not_toggle(self):
         async def exercise():

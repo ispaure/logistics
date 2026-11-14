@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import patch
 
 from commonUtils.testing.stages import TestStage
-import mobile_build.tests.documents.test_obsidian as test_obsidian
+from mobile_build.tests.support import notes as fixtures
 from mobile.obsidian import open_vault
 
 TEST_STAGE = TestStage.REGRESSION
@@ -33,9 +33,8 @@ class Engine:
 
 
 class MarkdownSpeechTests(unittest.TestCase):
-    setUp = test_obsidian.ObsidianTests.setUp
-    tearDown = test_obsidian.ObsidianTests.tearDown
-    run_async = test_obsidian.ObsidianTests.run_async
+    setUp = fixtures.set_up_vault
+    run_async = fixtures.run_async
 
     def test_source_failure_is_visible_and_word_highlights_are_cleared(self):
         import toga

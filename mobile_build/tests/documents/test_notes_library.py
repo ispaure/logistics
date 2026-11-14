@@ -11,7 +11,7 @@ import os
 import unittest
 import shutil
 from unittest.mock import patch
-import mobile_build.tests.documents.test_obsidian as test_obsidian
+from mobile_build.tests.support import notes as fixtures
 from commonUtils.runtime.resources.local import LocalFiles
 from mobile.notes_actions import RemoteNotes, offer_notes
 from features.notes_library.notes import NotesLibrary
@@ -41,9 +41,8 @@ class Client:
 
 
 class NotesLibraryTests(unittest.TestCase):
-    setUp = test_obsidian.ObsidianTests.setUp
-    tearDown = test_obsidian.ObsidianTests.tearDown
-    run_async = test_obsidian.ObsidianTests.run_async
+    setUp = fixtures.set_up_vault
+    run_async = fixtures.run_async
 
     def test_recent_library_close_returns_to_home_or_documents(self):
         from mobile.obsidian import open_vault
@@ -783,6 +782,8 @@ class NotesLibraryTests(unittest.TestCase):
             owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
             self.assertTrue(await owner.open_note('Vault/Drawing.rmdoc'))
             editor = owner.embedded
+            # The dummy canvas does not complete JS responses by itself.
+            editor.panel.web.evaluate_javascript = AsyncMock(return_value=None)
             editor.panel.editor.apply({'op': 'add-page'})
             self.assertTrue(editor.dirty)
             with patch.object(editor.panel.document.resource, 'save', side_effect=OSError('Disk full')):
@@ -795,6 +796,7 @@ class NotesLibraryTests(unittest.TestCase):
 
             self.assertTrue(await owner.open_note('Vault/Drawing.rmdoc'))
             editor = owner.embedded
+            editor.panel.web.evaluate_javascript = AsyncMock(return_value=None)
             with patch.object(editor, 'save', new_callable=AsyncMock) as save, patch.object(owner, 'close') as close:
                 await owner.save_and_close_notebook()
                 save.assert_not_awaited()
