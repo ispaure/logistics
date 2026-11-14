@@ -12,6 +12,8 @@ library:'<rect x="3" y="4" width="7" height="16" rx="1.5"/><path d="M14 4h5l3 15
 save:'<path d="M5 3h12l4 4v14H3V3h2Zm2 0v7h10V3M7 21v-7h10v7"/>',
 export:'<path d="M12 15V3m-4 4 4-4 4 4M4 14v6h16v-6"/>',
 more:'<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
+eye:'<path d="M2 12s4-6 10-6 10 6 10 6-4 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/>',
+eyeOff:'<path d="M3 3l18 18M9 6.5a10 10 0 0 1 3-.5c6 0 10 6 10 6a17 17 0 0 1-2.5 2.7M6 8C3.5 9.7 2 12 2 12s4 6 10 6a10 10 0 0 0 4.4-1"/>',
 layers:'<path d="m12 3 10 5-10 5L2 8l10-5ZM2 12l10 5 10-5M2 16l10 5 10-5"/>',
 panel:'<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16m3-11v6"/>',
 prev:'<path d="m14 6-6 6 6 6"/>',next:'<path d="m10 6 6 6-6 6"/>',plus:'<path d="M12 5v14M5 12h14"/>'};

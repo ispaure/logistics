@@ -10,6 +10,24 @@ from features.notebooks.previews import BATCH, BATCH_POINTS, POINTS, page_previe
 
 
 class PagePreviewTests(unittest.TestCase):
+    def test_round_trip_ink_beyond_nominal_page_is_visible_in_editor_and_overview(self):
+        from features.notebooks.editor import Editor
+        from features.notebooks.ink import HEIGHT, MAX_NOTEBOOK_HEIGHT
+
+        book = Notebook.new()
+        book.page(0).add([[605, 2034, .5], [788, 2198, .5]], page_height=2300)
+        book.add_page()
+        book = Notebook.read(book.to_bytes())
+        before = book.to_bytes()
+        editor = Editor(book)
+        self.assertGreater(editor.state()['height'], 2198)
+        self.assertEqual(page_previews(book, 0)[0]['height'], editor.state()['height'])
+        self.assertEqual(page_previews(book, 0)[1]['height'], HEIGHT)
+        self.assertEqual(book.to_bytes(), before)
+
+        book.page(0).strokes[0].points[0][1] = 1e30
+        self.assertEqual(editor.state()['height'], MAX_NOTEBOOK_HEIGHT)
+
     def test_visible_ink_and_fixed_ranges_do_not_change_page_order_or_bytes(self):
         book = Notebook.new('Overview')
         ink = book.page(0)

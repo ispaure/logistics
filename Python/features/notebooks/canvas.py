@@ -20,10 +20,10 @@ def editor_html(state, bridge, *, console_bridge=False, desktop=False, mobile=Fa
     if desktop:
         style += '\n' + asset('desktop.css')
         chrome = asset('desktop.html')
-        presentation = ICON_SCRIPT + '\n' + asset('desktop.js')
+        presentation = asset('desktop.js')
     elif mobile:
         style += '\n' + asset('mobile.css')
-        presentation = ICON_SCRIPT + '\n' + asset('mobile.js')
+        presentation = asset('mobile.js')
     style += '\n' + asset('theme.css') + '\n' + DROPDOWN_CSS + '\n' + stylesheet
     presentation = DROPDOWN_SCRIPT + '\n' + presentation
     setup = """'use strict';
@@ -40,7 +40,7 @@ const canvasPixelLimit=__CANVAS_PIXEL_LIMIT__;
     # not multiply all three without bound. Desktop gets a larger screen budget;
     # neither budget changes native ink geometry or exported document quality.
     setup = setup.replace('__CANVAS_PIXEL_LIMIT__', str((8 if mobile else 16) * 1024 * 1024))
-    engine = setup + '\n'.join(asset(name) for name in (
+    engine = setup + ICON_SCRIPT + '\n' + '\n'.join(asset(name) for name in (
         'drawing.js', 'queue.js', 'viewport.js', 'palm.js', 'input.js', 'zoom.js', 'images.js', 'selection.js', 'links.js', 'touch_navigation.js', 'boot.js'))
     engine = engine.replace('__MAX_COMMAND__', str(MAX_COMMAND)).replace(
         '__SEND_COMMAND__', 'console.info(command)' if console_bridge else 'location.href=command')

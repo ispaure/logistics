@@ -148,7 +148,7 @@ button{-webkit-appearance:none;appearance:none}
 #mobileSheet[data-panel=brush] .swatch svg.color-disc{width:min(26px,100%)}
 .notebook-mobile #restoreTools,.notebook-mobile .capture-tools{right:calc(var(--notebook-rail-right) + 8px)}
 .notebook-mobile #zoomControls,.notebook-mobile #pageNavigationFeedback{
-  --notebook-feedback-bottom:max(10px,env(safe-area-inset-bottom),calc(var(--notebook-home-bottom) + 4px));
+  --notebook-feedback-bottom:max(6px,env(safe-area-inset-bottom),calc(var(--notebook-home-bottom) + 4px));
   bottom:var(--notebook-feedback-bottom)
 }
 .notebook-mobile:not(.tools-hidden):has(#zoomControls:not([hidden])) #pageNavigationFeedback{

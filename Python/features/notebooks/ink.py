@@ -16,6 +16,15 @@ from .brushes import TOOLS, COLORS, WIDTHS, native_color, native_scale, stroke_p
 WIDTH, HEIGHT = 1404, 1872
 MAX_POINTS = 100_000
 MAX_PAGE_POINTS = 1_000_000
+MAX_NOTEBOOK_HEIGHT = HEIGHT * 8
+
+
+def notebook_ink_height(ink):
+    """Fit imported ink below the nominal page while bounding the canvas."""
+    from math import ceil
+    bottom = max((y + max(0, width) / 2 + 2 for stroke in ink.strokes
+                  for _, y, _, width in stroke.points), default=HEIGHT)
+    return max(HEIGHT, ceil(min(MAX_NOTEBOOK_HEIGHT, bottom)))
 
 
 def encode(blocks):

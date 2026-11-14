@@ -52,3 +52,14 @@ body.tools-hidden .zoom-controls{display:none}
 #pageNavigationFeedback span{padding-block:5px}
 #undoPageJump{display:inline-flex;align-items:center;gap:5px;min-height:44px;padding:5px 8px;pointer-events:auto}
 #undoPageJump svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+
+.layer-rows{display:grid;gap:4px;margin:6px 0 12px}
+.layer-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px}
+.layer-row button{display:flex;align-items:center;margin:0;width:auto;min-height:30px}
+.layer-row .layer-choice{text-align:left;overflow-wrap:anywhere}
+.layer-row .layer-choice[aria-pressed=true]{color:var(--text);border-color:var(--accent);font-weight:bold}
+.layer-row .layer-choice[aria-pressed=true]::after{content:'✓';margin-inline-start:auto;padding-inline-start:8px}
+.layer-row .layer-eye{justify-content:center;min-width:32px;padding:4px}
+.layer-eye svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.notebook-mobile .layer-row button{min-height:44px}
+.notebook-mobile .layer-row .layer-eye{min-width:44px}

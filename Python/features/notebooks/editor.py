@@ -3,7 +3,7 @@ from collections import OrderedDict
 from copy import copy, deepcopy
 
 from .protocol import validate_action, RecoveryIncomplete
-from .ink import WIDTH, HEIGHT, TOOLS, COLORS
+from .ink import WIDTH, HEIGHT, TOOLS, COLORS, notebook_ink_height
 from .brushes import BRUSHES, EXPANDED_BRUSHES, EXPANDED_INK_SCALE, PALETTE, HIGHLIGHTS, HIGHLIGHT_IDS, NATIVE_HIGHLIGHTS, SHADERS, WIDTHS
 
 
@@ -174,6 +174,8 @@ class Editor:
 
     def page_height(self):
         bounds = self.pdf_bounds()
+        if self.notebook.content.get('fileType') == 'notebook':
+            return notebook_ink_height(self.notebook.page(self.index))
         return max(HEIGHT, bounds['height']) if bounds else HEIGHT
 
     def canvas_left(self):

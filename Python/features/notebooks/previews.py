@@ -1,6 +1,6 @@
 """Bounded scene data for the shared WebView brush renderer."""
 from .images import image_data, image_source
-from .ink import WIDTH, HEIGHT
+from .ink import WIDTH, HEIGHT, notebook_ink_height
 from .templates import available, background, settings
 
 BATCH = 16
@@ -38,6 +38,8 @@ def page_previews(book, start, *, pdf_bounds=None, pdf_artwork=None):
         bounds = pdf_bounds(index) if pdf_bounds else None
         left = min(0, bounds['x']) if bounds else 0
         height = max(HEIGHT, bounds['height']) if bounds else HEIGHT
+        if book.content.get('fileType') == 'notebook':
+            height = notebook_ink_height(ink)
         for stroke in strokes:
             points = stroke.points
             if total > POINTS and len(points) > 2:

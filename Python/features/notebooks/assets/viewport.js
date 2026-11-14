@@ -73,6 +73,49 @@ function paperBounds() {
   return {x: left, y: 0, width: right - left, height: Math.min(state.height, bottom)}
 }
 
+function renderLayerRows() {
+  const rows = $('layerRows'), activeLayer = $('layer');
+  if (!rows) return;
+  const focused = document.activeElement;
+  const previous = new Map([...rows.children].map(row => [row.dataset.layer, row]));
+  const visibilityLocked = !!(state.read_only || state.warning || state.password_required);
+  for (const [key, name, visible] of state.layers) {
+    let row = previous.get(key);
+    if (!row) {
+      row = document.createElement('div');
+      row.className = 'layer-row';
+      row.dataset.layer = key;
+      for (const className of ['layer-choice', 'layer-eye']) {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = className;
+        row.append(button);
+      }
+      rows.append(row);
+    }
+    previous.delete(key);
+    const [choose, eye] = row.children;
+    const selected = activeLayer.value === key;
+    choose.textContent = name;
+    choose.setAttribute('aria-pressed', String(selected));
+    choose.disabled = !visible;
+    choose.onclick = () => {
+      activeLayer.value = key;
+      renderLayerRows();
+    };
+    eye.innerHTML = icon(visible ? glyphs.eye : glyphs.eyeOff);
+    eye.title = (visible ? 'Hide ' : 'Show ') + name;
+    eye.setAttribute('aria-label', eye.title);
+    eye.disabled = visibilityLocked;
+    eye.onclick = () => {
+      if (!queue.some(action => action.op === 'layer-visible' && action.layer === key))
+        send({op: 'layer-visible', layer: key, visible: !visible});
+    };
+  }
+  for (const row of previous.values()) row.remove();
+  if (focused?.isConnected && rows.contains(focused) && !focused.disabled) focused.focus();
+}
+
 function render() {
   if (typeof imageRender === 'function') imageRender();
   templateControls();
@@ -110,10 +153,10 @@ function render() {
   $('redo').disabled = !state.redo;
   $('prev').disabled = !state.index;
   $('next').disabled = state.index + 1 === state.count;
-  options('layerVisibility', state.layers.map(x => [(x[2] ? 'Visible: ' : 'Hidden: ') + x[1], x[0]]));
   options('tool', Object.entries(state.tools));
   brushOptions();
   options('layer', state.layers.filter(x => x[2]).map(x => [x[1], x[0]]));
+  renderLayerRows();
   $('prev').onclick = () => send({
     op: 'page',
     index: state.index - 1

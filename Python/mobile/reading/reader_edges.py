@@ -58,7 +58,7 @@ def clear_notebook_rail(web):
         web._notebook_rail_binding = None
 
 
-def notebook_canvas_edges(view, container, edge, home):
+def notebook_canvas_edges(view, container, edge, window):
     """Extend live paper behind the side rail and blur only the rail area."""
     web = getattr(view, '_notebook_canvas', None)
     if web is None or web.parent is not view:
@@ -76,7 +76,12 @@ def notebook_canvas_edges(view, container, edge, home):
     changed = (web.style.margin_left, web.style.margin_right) != (-left, -right)
     if changed:
         web.style.margin_left, web.style.margin_right = -left, -right
-    view._notebook_viewport_insets = (left, right, home)
+    canvas = web._impl.native
+    frame = canvas.convertRect(canvas.bounds, toView=window)
+    safe_bottom = float(window.bounds.size.height - window.safeAreaInsets.bottom)
+    canvas_bottom = float(frame.origin.y + frame.size.height)
+    home_clearance = remaining_clearance(canvas_bottom, safe_bottom)
+    view._notebook_viewport_insets = (left, right, home_clearance)
     return changed
 
 
@@ -185,7 +190,7 @@ def compact_apple_reader(container, *, notebook=None):
     notebook = getattr(view, '_notebook_canvas', None) is not None
     if notebook:
         extension = home
-        changed = notebook_canvas_edges(view, container, edge, home) or changed
+        changed = notebook_canvas_edges(view, container, edge, window) or changed
     bottom = max(0, original_bottom - extension) if 0 < original_bottom <= home else original_bottom
     if container.bottom_inset != bottom:
         container.bottom_inset = bottom
