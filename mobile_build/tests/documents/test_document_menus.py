@@ -162,7 +162,7 @@ class DocumentMenuTests(TestCase):
                 self.assertIn('Show in folder', self.labels(owner.reader_actions))
                 self.assertTrue(await show_in_folder(app, owner.session))
                 drawer = app.adaptive.browser('files')
-                self.assertEqual(Path(drawer.provider.root), path.parent)
+                self.assertTrue(Path(drawer.provider.root).samefile(path.parent))
                 await drawer.browser.close()
                 path.unlink()
                 owner.reader_actions.refresh()

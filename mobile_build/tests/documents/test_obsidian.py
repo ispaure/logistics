@@ -78,31 +78,61 @@ class ObsidianTests(unittest.TestCase):
             self.assertEqual(owner.path, 'Vault/Home.md')
         self.run_async(exercise())
 
-    def test_embedded_open_and_page_turn_failures_use_popup(self):
+    def test_embedded_pdf_open_failure_uses_popup_and_retains_note(self):
         from features.notes_library.mobile.file_preview import LibraryFilePreview
+        from mobile_build.tests.support.pdf import PDF, native_pdf
         from unittest.mock import AsyncMock
+
+        (self.vault / 'attachment.pdf').write_bytes(PDF)
+
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
             self.assertTrue(await owner.open_note('Vault/Home.md'))
-            with patch.object(self.app.main_window, 'dialog', new=AsyncMock()) as dialog:
-                self.assertFalse(await owner.open_embedded('Vault/attachment.txt',
-                    AsyncMock(side_effect=ValueError('Preview limit'))))
+            with patch('features.pdf.document.PDFDocument.open', native_pdf), \
+                    patch('features.pdf.document.PDFDocument.page', side_effect=ValueError('Preview limit')), \
+                    patch.object(self.app.main_window, 'dialog', new=AsyncMock()) as dialog:
+                self.assertFalse(await owner.open_embedded('Vault/attachment.pdf', LibraryFilePreview.open))
                 dialog.assert_awaited_once()
+                message = EventLog.performed_actions(dialog.call_args.args[0], 'create ErrorDialog')[0]['message']
+                self.assertEqual(message, 'Preview limit')
             self.assertEqual(owner.notice.text, '')
             self.assertEqual(owner.path, 'Vault/Home.md')
-            preview = SimpleNamespace(path='test.pdf', count=2, page=lambda index: 'oversized', close=lambda: None)
-            surface = LibraryFilePreview(owner, preview, '<p>First page</p>')
-            try:
-                with patch.object(surface, 'publish', side_effect=ValueError('Preview limit')), \
-                        patch.object(self.app.main_window, 'dialog', new=AsyncMock()) as dialog:
-                    await surface.turn(1)
-                    dialog.assert_awaited_once()
-                self.assertEqual(surface.index, 0)
-                self.assertFalse(surface.busy)
-                self.assertTrue(surface.following.enabled)
-                self.assertEqual(owner.notice.text, '')
-            finally:
-                surface.dispose()
+            self.assertIn(owner.web, owner.article.children)
+            self.assertFalse(owner.page_loading.active)
+        self.run_async(exercise())
+
+    def test_embedded_pdf_jump_publishes_failed_page_inline(self):
+        from features.notes_library.mobile.file_preview import LibraryFilePreview
+        from mobile_build.tests.support.pdf import PDF, native_pdf
+        from unittest.mock import AsyncMock
+
+        (self.vault / 'attachment.pdf').write_bytes(PDF)
+
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            with patch('features.pdf.document.PDFDocument.open', native_pdf):
+                self.assertTrue(await owner.open_embedded('Vault/attachment.pdf', LibraryFilePreview.open))
+            surface = owner.embedded
+            scroll = surface.pdf
+            self.assertEqual(surface.label.text, 'Page 1 of 3')
+            self.assertFalse(surface.previous.enabled)
+            scroll.location = {'zoom': 1.25}
+            with patch('features.pdf.document.PDFDocument.page', side_effect=ValueError('Cannot render')) as render, \
+                    patch.object(self.app.main_window, 'dialog', new=AsyncMock()) as dialog:
+                await surface.turn(1)
+                render.assert_not_called()
+                self.assertEqual(scroll.pending, (1, {'zoom': 1.25}))
+                state = dict(page=1, offset=0, zoom=1.25, x=.5, wanted=[0, 1], missing=[1],
+                             action=None, revision=scroll.revision)
+                with patch.object(scroll, 'js', new=AsyncMock(side_effect=[True, state, True])) as script:
+                    await scroll.update()
+                render.assert_called_once_with(1)
+                self.assertIn('window.pdf.put(...[1, "", [],', script.await_args.args[0])
+                dialog.assert_not_awaited()
+            self.assertEqual(surface.label.text, 'Page 2 of 3')
+            self.assertTrue(surface.previous.enabled)
+            self.assertTrue(surface.following.enabled)
+            self.assertEqual(owner.notice.text, '')
         self.run_async(exercise())
 
     def test_private_note_render_can_expand_beyond_source_limit(self):
