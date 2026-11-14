@@ -32,6 +32,7 @@ def tar_stream(entries):
 
 
 class RemarkableSSHTests(unittest.TestCase):
+    @unittest.skipUnless(os.name == 'posix', 'The tablet sidecar script uses a POSIX shell and symlinks.')
     def test_exact_sidecars_do_not_enumerate_unselected_documents(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
