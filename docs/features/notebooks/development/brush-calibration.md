@@ -2,9 +2,9 @@
 
 ## Try a brush change
 
-In a disposable RMDOC, compare Medium Fineliner strokes before and after changing tool 17 in `brushes.py` from 3.5 to 3.75 page units. Update the Medium value in `test_constant_native_widths_and_highlighter_single_size` and `test_measured_thickness_scales_are_written_once`. Run the [focused regression](development.md#make-a-small-brush-change) and restore the measured width after the exercise. For raster changes see [Canvas rendering](#app-graphite-appearance).
+Open a disposable RMDOC through the [desktop chooser](development.md#make-a-small-brush-change). Compare Medium Fineliner strokes before and after changing tool 17 in `brushes.py` from 3.5 to 3.75 page units. Update the Medium value in `test_constant_native_widths_and_highlighter_single_size` and `test_measured_thickness_scales_are_written_once`. Run the [focused regression](development.md#make-a-small-brush-change) and restore the measured width after the exercise. For raster changes see [Canvas rendering](#app-graphite-appearance).
 
-`ink.py` and `assets/drawing.js` use the same catalog for saved and preview widths. Calculate dynamics once and round to the nearest quarter unit, minimum 0.25. Expanded PDF scenes use a derived catalog. Render imported widths directly, including zero. Thickness scale and pressure are already reflected in those point widths.
+`ink.py` and `assets/drawing.js` use the same catalog for saved and preview widths. Calculate dynamics once and round to the nearest quarter unit, minimum 0.25. Expanded PDF scenes use a derived catalog. Render imported widths directly, including zero. Keep the separate stored thickness field alongside the point widths. Rendering uses the widths directly.
 
 ## Measured widths and colors
 

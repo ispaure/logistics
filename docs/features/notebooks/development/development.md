@@ -4,7 +4,15 @@ Open or create editable RMDOC on desktop, Android or iOS. See the [desktop guide
 
 ## Make a small brush change
 
-In desktop **New / Open Document → Notebook (.rmdoc)**, create a disposable notebook and draw a Medium Fineliner stroke. Try 3.75 instead of 3.5 for Medium in `Python/features/notebooks/brushes.py:BRUSHES[17]`. Update the width and thickness expectations in the [brush walkthrough](brush-calibration.md#try-a-brush-change). Relaunch, draw again and reopen the save. The old and new strokes should retain their respective widths. From the checkout root:
+On desktop choose **Logistics → New / Open Document… → Notebook (.rmdoc) →
+New**. In **First page template**, choose Blank, then **Create notebook**.
+Save the disposable RMDOC, reopen it with **Open…** in the same chooser, and
+draw a short Medium Fineliner stroke.
+
+Try 3.75 in place of 3.5 in `Python/features/notebooks/brushes.py:BRUSHES[17]`.
+Update the two test expectations in the [brush walkthrough](brush-calibration.md#try-a-brush-change).
+Relaunch, draw again, then save and reopen. The old and new strokes should
+retain their respective widths. From the checkout root:
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/notebooks/test_brush_calibration.py
