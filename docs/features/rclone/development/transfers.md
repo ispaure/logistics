@@ -1,246 +1,50 @@
 # Transfer planning, review and execution
 
-On desktop, select a configured remote in **Workspaces → Cloud**, open its
-actions and choose **Pull**. The rclone contribution in
-`Python/features/rclone/ui_contributions.py:_get_actions` chooses the Pull
-route. `actions.py` hands the request to `transfers/workflow.py:sync_transfer` with
-review enabled.
-On mobile, the corresponding review starts in
-`transfers/mobile/review_ui.py`.
-
-Interactive Push/Pull uses `TransferService.review` then `execute`. Programmatic
-callers use `run` explicitly. Both use the captured platform plan and mandatory
-execution preflight. Credential loading and persistence are described in
-[credential lifetime](credentials.md).
-
-`Scripts/architecture.json` explicitly includes `transfers/service.py`,
-`review.py` and `presentation.py` in the portable contract. The existing static
-architecture and blocked-import checks reject presentation dependencies in these
-shared owners, including deferred imports. Desktop `progress.py` remains a Qt
-process adapter; it is not part of that portable contract.
+Desktop **Workspaces → Cloud → Pull** follows `ui_contributions.py:_get_actions` through `actions.py` to `transfers/workflow.py:sync_transfer`. Mobile starts in `transfers/mobile/review_ui.py`.
 
 ## Follow a transfer
 
-1. Desktop `transfers/workflow.py` captures a `DesktopTransferRequest`; native
-   `transfers/mobile/review_ui.py` captures a `NativeTransferRequest`.
-2. The platform `build_plan` captures credentials, options and destination. Native
-   plans copy the proposal into a validated immutable `CopyMapping` so later edits
-   to a caller's dictionary cannot redirect an approved transfer.
-3. `ReviewSession` starts the read-only comparison. Full approval runs a fresh
-   comparison; changed results require another decision. Explicit incomplete
-   approval cancels comparison and waits for retirement before execution.
-4. `TransferService.execute` consumes one approval, checks its binding and invokes
-   the plan. Reusing approval, including after preflight failure, requires review.
-5. The platform preflight validates paths, connection identity and ciphertext as
-   applicable. Engine execution retains access/cancellation checks until retirement.
-   Cancellation preserves changes already completed at the destination.
-
-The review's `valid` binding includes mapping/record state. Its execution `active`
-binding tracks access lifetime without rejecting legitimate record saves by the
-transfer itself. Do not merge these checks.
+1. Build a platform plan with captured credentials, mapping and options. Mobile validates an immutable `CopyMapping`.
+2. Interactive `TransferService.review` compares read-only. Full approval compares again and asks again if changed. Incomplete approval cancels and retires comparison before execution.
+3. `execute` consumes approval once, checks the binding and runs mandatory platform preflight. Programmatic `run` also preflights. Retrying an interactive execution requires fresh review.
+4. Keep review validity (mapping/record state) separate from execution access (credential lifetime). Cancellation keeps committed writes.
 
 ## Review and progress presentation
 
-`transfers/presentation.py` owns bounded review projections and progress display
-models. The desktop Qt review has a paged file table, path disclosure and selected
-file inspector. Mobile uses `transfers/mobile/surface.py` with the feature-owned,
-fully offline `transfers/assets/surface.*` surface. Compact panes show grouped
-rows and a file-detail sheet; wide panes add a side inspector. Comparison supplies
-real actions and paths, so the review does not invent sizes or modification dates.
+Portable `transfers/{service,review,presentation}.py` own review and bounded display models. Desktop uses Qt. Mobile `transfers/mobile/surface.py` uses offline `assets/surface.*`, escaped paths, private WebViews, token/command/revision checks and 30 rows per page. Approve only a rendered current snapshot. Retire scans on close and redact private progress on revocation.
 
-The mobile surface bounds JavaScript responses to eight seconds and checks
-visible renderer progress against a 15-second deadline. It replaces an
-unresponsive WebView once, invalidates the retired bridge token, and then uses
-`native_fallback.py` if rendering still fails. The native presentation consumes
-the same bounded model and dispatches through the existing review, revision,
-confirmation and credential checks; it never restarts engine work. Hidden
-surfaces do not trigger recovery. The native acceptance suite injects unanswered
-renderer callbacks to verify progress controls, stale approvals and lock clearing
-without requiring an intermittent OS fault.
-
-`ReviewScan` caches immutable snapshots until comparison data/state changes.
-Review counts/filtering are recomputed only for a new snapshot or filter, and
-only 30 entries cross the UI bridge per page. Complete approval requires both a
-rendered complete snapshot and a current session; a new comparison still checks
-for changes before execution. A removed review route cancels its scan and waits
-for retirement. A late confirmation cannot revive the route or approve a cancelled
-session.
-
-Mobile WebViews use the existing private, nonpersistent native adapter. The CSP
-blocks external resources and navigation; paths are escaped as text. An
-instance-specific command token, command allowlist, bounded arguments and rendered
-revision checks reject foreign or stale approval messages. Revocation, retirement
-and host disposal clear private content and detach callbacks. Progress retained
-after credential revocation is redacted, including file paths.
-
-The native review driver waits for the current model revision to reach the
-WebView, then clicks its rendered approval or early-review button. Cancellation
-uses the platform Back control; review has no progress-background button.
-It preserves native confirmation, bounded fresh-review retries and comparison
-retirement checks; widget-child positions are not part of the driver contract.
-
-Progress has explicit discovery, transfer, verification, complete, failed,
-conflicted and cancelled states. Unknown totals do not produce percentages, and
-verification is separate from successful completion. The Go bridge publishes at
-most three active file records; Python validates names/counters before display.
-`coalesced_progress` leaves a full second between normal UI deliveries and retains
-the final worker snapshot for terminal publication. Visible HTML updates preserve
-unchanged DOM nodes; hidden progress panes retain data without native redraws.
-Continue browsing preserves the transfer, while Stop asks for confirmation and
-binds cancellation to the same transfer epoch.
-
-The `rclone-transfer` native probe captures setup, both review directions, file
-details, filtering, paging, rotation and progress states using synthetic data.
-It verifies bounded rows, escaped filenames, confirmation bounds, larger text,
-suppressed offscreen updates and stable progress DOM nodes. Run through the owned
-disposable device helper:
-
-```sh
-mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools ios --probe rclone-transfer --family 'iPhone 17e' --output test-results/rclone-iphone
-mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools ios --probe rclone-transfer --family iPad --output test-results/rclone-ipad
-mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools android --probe rclone-transfer --output test-results/rclone-android
-```
-
-Evidence remains outside the wiki. Helpers remove the QA app and disposable
-simulator/emulator after saving reports. These synthetic presentation checks do
-not replace real engine/credential tests or prove performance on a physical Boox.
+Replace a stalled visible WebView once, then use `native_fallback.py` with the same action guards and running worker. Coalesce ordinary progress, retain terminal snapshots, and show verification separately from completion. Unknown totals stay indeterminate. Browsing retains jobs; Stop binds confirmation to the active epoch.
 
 ## Native owners
 
-| Responsibility | Owner under `transfers/mobile/` |
+| Change | Owner under `transfers/mobile/` |
 | --- | --- |
-| Mapping schema, identity validation and named outcomes | `models.py` |
-| Bounded JSON restore, schema-3 compatibility, atomic schema-4 saves and record comparison | `records.py:CopyRecords` |
-| Resolve Pull/Push proposals without mutation | `planning.py:CopyPlanner` |
-| Locking, destination admission, ciphertext preflight, save/execute/verify ordering and deletion | `jobs.py:MirrorJobs` |
-| Native request, progress polling and monitor retirement | `transport.py:sync_copy` |
-| Capture immutable request, comparison and execution binding | `plan.py` |
-| Review controls and polling | `review_ui.py:TransferReviewDialog` |
-| Review navigation/controller effects | `review_ui.py:MobileReviewPresentation` |
-| Writer admission, worker retirement and progress delivery | `execution.py:TransferExecution` |
+| Schema and outcomes | `models.py`, `records.py` |
+| Mapping and plan admission | `planning.py`, `plan.py` |
+| Writer locks, preflight and save/verify order | `jobs.py:MirrorJobs` |
+| Bridge polling and presentation lifecycle | `transport.py`, `execution.py`, `review_ui.py` |
 
-Review dialog callbacks are retired when the dialog closes. A late confirmation
-cannot rebind cancellation or revive controls, and navigation failure still releases
-the controller's busy/cancellation fields after comparison retirement.
-
-`MirrorJobs` remains the compatibility API for mapping dictionaries. `CopyMapping`
-validates the exact persisted field set; no saved-data schema changes are needed.
-Saving checks the same 16-copy limit as restoration and requires each in-memory
-record key to match its mapping identifier. Invalid catalogues are rejected before
-publication, preserving the last readable record file.
-Its connection `identity` binds the remote configuration/account; `cipher_identity`
-binds crypt paths to cipher settings. `prefix` is the remote subtree (encoded for
-ciphertext copies), while `target` is the local display/folder name.
-
-`PullResult` and `CreatedCopy` name existing tuple fields while retaining tuple
-compatibility. Reviewed plans produce `TransferOutcome`; presentation also accepts
-legacy programmatic counts and tuples through a validating conversion. Invalid
-counts, mismatched directions and malformed outcomes cannot publish success.
-Completion messages are prepared before publishing the success flag, so a failed
-formatter cannot leave a failed result marked complete.
-A legacy or named conflict result remains incomplete: it cannot show 100%, mark
-verified success or trigger the successful-transfer notification timeout.
+Read schema 3 and atomically save schema 4. Validate the record key, mapping, connection identity and distinct cipher identity; retain the old catalogue on invalid state. Keep dictionary and tuple compatibility for programmatic clients. Validate legacy outcomes before converting to `TransferOutcome`; conflicts stay incomplete.
 
 ## Find desktop transfer controls
 
-`transfers/ui/progress.py:open_transfer_progress` owns the rclone window title,
-source/destination context, deletion/removal rows and captured access guard.
-`transfers/progress.py:RcloneProgressParser` maps rclone statistics to the existing
-shared `ProcessUpdate`; this remains a desktop adapter, not a portable model.
-commonUtils' `ui/tasks/process_progress.py` owns the reusable progress bar,
-statistics, active-file table, log disclosure and Cancel/Close control. Its runner
-owns process execution and completion; only a successful exit means complete.
+Start at `transfers/ui/progress.py:open_transfer_progress` for title, context and removals. `transfers/progress.py:RcloneProgressParser` converts stats to shared `ProcessUpdate`. commonUtils `ui/tasks/process_progress.py` owns bars, file rows, logs and Cancel/Close; the runner reports the exit result. `desktop/folder_actions.py:FolderActionsPage` owns tabs and docking. Setup and review live in `transfers/ui/`.
 
-The desktop shell registers `desktop/folder_actions.py:FolderActionsPage` through
-commonUtils' process host in `desktop/main_window.py`. It owns Workspace actions
-tabs, docking, completion notices and shutdown coordination. Standalone launches
-use the same shared window. Push setup, storage choice, settings and review remain
-in `transfers/ui/{push_dialog,pull_dialog,push_settings,review}.py`; the mobile
-surface and `transfers/assets/` keep their existing feature-owned paths.
-
-The old `transfers.sync._watch_transfer` and
-`transfers.progress.add_removal_statistics` entry points delegate to
-`transfers.ui.progress.watch_transfer` and `add_removal_statistics`, respectively.
-Their arguments and connections are unchanged. Each compatibility hook has a
-migration example and emits a visible `FutureWarning` at the caller; Python's
-default warning filter suppresses repeats from the same call site. New code uses
-the `transfers.ui.progress` entry points directly.
-
-## Desktop launch contract
-
-`transfers/sync.py:rclone_sync` preserves the existing preview/bool interface.
-It performs push preflight before `_run_sync`. Desktop explicit incomplete
-approval passes `TransferContext.skip_localcrypt_integrity` through the captured
-adapter to bypass full crypt authentication/cleanup while retaining structural
-checks. Normal and programmatic requests default to full validation. That compatibility boundary converts
-`_execute_sync`'s named `SyncOutcome` back to the historical result shape.
-
-`transfers/launch.py:LaunchMode` makes preview, synchronous wait, integrated GUI and
-terminal execution explicit after normalization of legacy flags. `SyncState.STARTED`
-means a GUI/terminal launch was accepted; only `SUCCEEDED` means execution completed
-successfully. The integrated window owns the eventual exit result. A private
-session launched without a usable GUI runs synchronously to keep secrets out of
-terminal command strings and the global environment.
-
-`transfer_concurrency` names the existing source-path convention: paths containing
-`-VM`, including parent directories, use one transfer; other paths use ten. The limit is derived from the source path.
+Old `transfers.sync._watch_transfer` and `transfers.progress.add_removal_statistics` delegate with `FutureWarning`. Use `transfers.ui.progress` for new calls. `rclone_sync` preserves legacy results. `launch.py:LaunchMode` distinguishes preview, wait, GUI and terminal. Only `SUCCEEDED` means completed; private sessions without GUI run synchronously to protect secrets.
 
 ## Python–Go boundary
 
-`mobile/bridge_protocol.py` declares action names, envelope validation, request
-limits, typed mirror-info/progress wrappers and validation for common result shapes.
-`CloudClient` frees each non-null native response before validating its result.
-Malformed progress, identities and file counts are rejected at the boundary.
-
-`mobile_build/rclone_bridge/protocol_contract.json` is the shared synthetic fixture.
-Its `request_limits` rows assert encoded JSON byte limits on both sides. Native
-`mirror_review` uses zero to mean no native decoding cap; Python retains its 2 MiB
-cap. The crypt-write limits also differ intentionally: Python permits 45 MiB while
-native decoding permits base64 of 32 MiB plus 64 KiB overhead. Image requests permit
-24 MiB and general requests 2 MiB. The fixture makes these differences explicit.
-
-Go `protocol.go` owns decoding/admission and response envelopes; `requests.go`
-routes requests into domain owners. Cancellation and credential publication retain
-the process-wide operation scopes in `operation_scope.go`.
+`mobile/bridge_protocol.py` validates wire envelopes, sizes and outcomes; `CloudClient` frees native replies before validation. Go `protocol.go` handles admission, `requests.go` dispatches and `operation_scope.go` owns cancellation/publication. Keep intentional Python/native size differences in `mobile_build/rclone_bridge/protocol_contract.json`.
 
 ## Mobile transfer appearance
 
-`transfers/assets/surface.css` owns the WebView's action, status and overlay
-colors. Edit each light/dark pair at the top of the stylesheet to update both
-`light-dark()` and the older-browser fallback. E Ink has its own overrides.
-Base window, surface, text and border roles come from
-`services.appearance_palette.css_variables()` through `mobile/surface.py`.
-The stylesheet also owns typography, font scaling, spacing and responsive rules.
-Desktop process-window colors belong to commonUtils.
-
-For a defaults-only change, compare rendered setup, review, progress and overlays
-in light, dark and E Ink modes at compact and wide sizes, including enlarged text.
-Forcing the `@supports` fallback in a modern browser checks cascade behavior
-with that browser's CSS engine. Older embedded engines require their own
-runtime checks. Keep raw comparison evidence under ignored `test-results/`.
+Edit light/dark defaults and older-engine fallback pairs in `transfers/assets/surface.css`; E Ink has overrides. `transfers/mobile/surface.py` injects palette roles through `services.appearance_palette.css_variables()`. CSS owns typography, scaling and spacing. Check setup, review and progress at compact/wide widths and enlarged text. Use `rclone-transfer` for native checks.
 
 ## Mobile sync shortcut layout
 
-`mobile/transfer_status.py` mounts a 48-point/dp tinted button in existing root
-rows: Home's introduction, Files' source selector, Documents search, Chat's
-header and the first Settings category. Home wraps its introduction around both
-Unlock and Sync; Chat reserves the mounted shortcut's width before fitting its
-title. Settings refits its category when the shortcut appears or disappears and
-excludes the icon from generic text-button fitting. Files source labels can wrap
-within their existing touch targets. Nested readers keep the shortcut hidden.
-
-The `sync_status_probe` native probe captures all five destinations in portrait
-and landscape, including synthetic locked credentials on Home, every Files
-source, and wide Settings detail panels. It checks the actual native shortcut
-size and screen bounds, taps through to transfers, and verifies that reader
-navigation stops the progress animation. Use `document_storage_tools` with
-`--probe sync-status`; its disposable Android profile is 320 dp wide. Use
-`--family 'iPhone 17e'` for the compact iPhone or `--family iPad` for split panes. Raw screenshots and reports
-belong under ignored `test-results/`.
+`mobile/transfer_status.py` mounts the 48-point/dp root shortcut. Nested readers hide it. Use `document_storage_tools --probe sync-status` for bounds, rotation and reader animation retirement. [Mobile commands](../../../development/build-release/mobile-launchers.md)
 
 ## Checks for a change
-
-Run the file for the layer you changed from the repository root:
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/resources/test_transfer_adapters.py
@@ -248,11 +52,4 @@ python3 dev.py test mobile --exact-file mobile_build/tests/transfers/test_mirror
 python3 dev.py test mobile --exact-file mobile_build/tests/tooling/test_bridge_protocol.py
 ```
 
-The desktop adapter cases cover captured options, credential revocation and the
-difference between full and incomplete approval. The mobile mirror cases cover
-changed records, crypt preflight, review and partial transfers. Mobile Pull can
-replace the file behind an open document while preserving its unsaved draft.
-The editor detects the changed revision on a later save and keeps the draft on
-conflict. Push still requires the existing save-or-close preflight.
-The protocol cases verify wire bounds and validation. The Go tests and the
-native presentation probes cover the corresponding bridge and runtime behavior.
+Expect captured-option, revocation, incomplete-approval and wire-validation checks. Mobile Pull can replace an open file while retaining its draft; later save detects conflict. Push requires save or close. Use Go fixtures for engine behavior and the managed native probes for rendering.

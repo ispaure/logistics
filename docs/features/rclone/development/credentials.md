@@ -1,276 +1,32 @@
 # Credential loading and lifetime
 
-Change the credential picker, loading, lock or erasure here. The shared
-`CredentialService` in `Python/features/rclone/service.py` owns admission.
-`desktop_credentials.py:DesktopCredentials` and `mobile/credentials.py` own
-platform publication. Follow the visible [desktop import](#desktop-credential-import-and-unlock-presentation)
-or [mobile import](#mobile-credential-import) before changing storage.
+`service.py:CredentialService` owns admission. `desktop_credentials.py:DesktopCredentials` and `mobile/credentials.py` own publication.
 
 ## Desktop credential import and unlock presentation
 
-`credentials.import_credential_package` reads a bounded (1 MiB) ZIP without
-extracting it and atomically publishes a copy in the active package directory.
-`credentials.get_credential_package_directories` selects that directory. The
-importer validates the suffix and ZIP container, preserves the original, and
-rejects replacement of a different same-named package, including publication
-races. Reimporting identical bytes is idempotent. An absent discovery root
-produces an empty list. The importer creates the directory on first import.
-
-`ui.page.RclonePage` exposes **Import credential ZIP…** and **Refresh**
-alongside the list. Import uses its
-existing cancellable OperationProgress owner, selects the copied package and keeps
-the user on the credential page. Unlock and password Return both open
-`ui.credential_unlock.CredentialUnlockDialog`, whose parallel session/persistent
-choices precede the existing credential service. Cancel performs no publication.
-Existing saved-config presence is disclosed; session-only does not remove it.
-
-For Pull storage choice and review, see the [LocalCrypt guide](localcrypt.md#initial-pull-storage-choice)
-and the [transfer guide](transfers.md).
-
-## Desktop discovery and loading
-
-Desktop package discovery selects Marc's existing Dropbox
-`Software/GIT/logistics/Credentials/rclone` folder when available, otherwise the
-configured local credential folder. It never combines the two lists. Imports
-and the displayed import folder use that same selection. Config and session keys
-retain their existing ZIP-basename identity.
-
-In Desktop Settings → rclone → **Credential packages**, edit the package list,
-**Selected Credential Package**, **Loaded remotes** and **Manage credentials…**
-in `ui/credential_panels.py`. The `Credential packages` settings contribution
-constructs `ui/page.py:RclonePage`, which owns signals and worker lifetime.
-
-Desktop Settings discovers credential packages with a cancellable
-`OperationProgress` worker, including optional-root selection and recursive
-scanning. It retains the previous rows, selection and password until a successful
-scan is ready. Scan failures and cancellation keep the previous list available
-for retry. Row replacement blocks selection signals only within a scoped guard;
-closing during discovery requests cancellation and waits for worker retirement.
-Imports refresh through the same worker and select the imported ZIP on success.
-`test_credential_import_ui` covers failed refresh, retry, event-loop responsiveness
-and rejection of cancelled late results.
-
-With **Persistent — save on this device** selected, unlocking `Credentials/rclone/Personal.zip`
-creates `~/.config/rclone/Personal.conf` without changing the ZIP. With **Session only** selected,
-credentials remain in a process-local session identified by a virtual `.session`
-path; no plaintext config or extracted TXT is written. Forgetting or replacing a
-parent session also revokes private LocalCrypt reader sessions. Entries are `.txt` files starting with a rclone section
-header such as `[Media]`, followed by configuration lines. Forgetting a selected
-package removes its saved config, session credentials and remembered names; Clear All removes every
-directly contained `.conf`, including a legacy `rclone.conf`. Both preserve the ZIP. See [Forget and lock](#forget-and-lock) for session-only erasure.
-
-All `.conf` files in that directory are sources, including configs without a
-corresponding ZIP. Initialization only creates the config directory; it never
-merges credentials into a global config. The checkout's credentials directory
-may be empty, and Logistics Local folders work without this feature.
-
-Desktop Settings submits `DesktopCredentialLoad` through
-`RcloneService.credentials`. An `OperationProgress` worker prepares the ZIP using
-`session.read_package`. The desktop adapter requires password protection on
-every credential TXT entry and validates them in memory. Persistent loads
-atomically write the config, and session loads publish values on the GUI thread.
-Cancellation before publication preserves existing credentials. A committed disk
-write stays in place. Closing Settings requests cancellation and waits for the
-worker to retire. Completion updates the selected row without
-rescanning cloud-backed credential roots. The legacy programmatic
-`load_remote_from_zip_to_config` helper uses the same service and in-memory
-validation for disk and session loads.
+`credentials.import_credential_package` copies a validated ZIP (1 MiB cap) without extraction, reuses identical bytes and rejects same-name replacements atomically. Discovery/import prefer the configured Dropbox credential root when present, otherwise the local root. `ui/page.py:RclonePage` uses cancellable refresh and preserves rows and selection on failure. `ui/credential_unlock.py` offers session or persistent unlock; existing saved config survives session-only unlock. [Import UI check](development.md#try-a-change-to-credential-import)
 
 ## Prepare and publish credentials
 
-`CredentialService.prepare_load(request, password, context)` returns a one-use,
-service-owned `PreparedCredentials` admission without publishing credentials or
-saved files. `unlock(prepared)` publishes that staged load; `load(...)` combines
-both steps when the platform can run them on one worker. Passwords are separate
-arguments and never appear in requests, admissions or results. Discarding or
-collecting an admission releases staging; consumed or foreign admissions cannot
-publish. The desktop adapter copies settings into the session before clearing
-its staging dictionaries. LocalCrypt backing/password checks happen before
-publication, so invalid crypt settings preserve the old session.
-Desktop preparation captures the bounded ZIP digest and file revision before
-decoding. Publication rejects a replaced package and uses the captured digest for
-the reader-state key, rather than rereading a different archive at publication.
+`prepare_load` validates in memory and returns a service-owned one-use admission. `unlock` publishes it; `load` combines both. Pass passwords separately; keep them out of requests, results and logs. Desktop requires protected credential TXT members and captures ZIP revision/digest plus validated crypt settings. Persistent writes atomically publish per-package `.conf`; session-only uses virtual `.session` paths without plaintext extraction. Desktop publishes sessions on the GUI thread. Revocation, competing publication and cancellation invalidate pending work before commit. Committed credentials survive post-commit cancellation.
 
-The service guards publication with nonblocking admission. A lock, a forget, an
-unlock publication attempt, or saved-vault restore retires other pending loads
-across packages in the service. Existing desktop grants retain package-specific
-revocation. Platform generation and file checks also reject stale loads.
-Cancellation and host validity are checked before publication, including the
-atomic saved-file commit. A completed publication remains committed if a caller
-cancels afterward; cancellation does not roll credentials back. Notification
-failures after publication can likewise leave the new credentials active.
-
-Desktop Workspaces and the standalone unlock prompt prepare on a worker and
-publish on the GUI thread through this same authority. `DesktopCredentials` in
-`desktop_credentials.py` owns publication; `desktop_service.py` only composes it.
-The native equivalent is `mobile/credentials.py`, with `mobile/service.py` limited
-to wiring. A native prepared stage is wrapped without mutating the stage supplied
-by the loading adapter.
-
-## Native publication and retention
-
-Native `mobile/credential_loading.py` captures a bounded ZIP and alias snapshot,
-then delegates atomic import, device-vault restore, or SMB addition to the
-existing `CloudClient`/native authorities. Native ZIP passwords remain necessary
-for retained session ZIPs.
-
-The native bridge's `credential_sets.go:publishCredentialSets()` copies each
-remote's settings map under its originating store's mutex. The published alias
-view therefore owns its maps instead of sharing mutable dictionaries between
-credential sets. Live getters and OAuth token setters still route to the origin
-through its existing generation checks. Connection lifetime belongs to the
-[native backend owner](remote-browsing.md#native-connection-and-archive-errors),
-separately from this credential projection.
-
-`credentials.retain(NativeCredentialRetention(...))` resolves connection identities
-and package aliases through the native adapter, then asks `CredentialPackages` to
-retain only the original password-protected ZIP. Its request carries the selected
-package, storage port, remote names and loaded generation; stale generations or
-foreign stores are refused. Native load results carry the generation captured
-under the publication lock, so retention cannot silently adopt a later load.
-Folder-type metadata repairs use the same entry point
-with `NativeCredentialMetadata`, so they cannot recreate an index after forgetting. `run_credentials` guards host validity and cancellation
-before retention starts. Once storage work starts it finishes before the worker
-retires. Retention leaves loaded credentials and existing access grants unchanged;
-failure is reported separately from successful credential loading. Saving decoded
-credentials remains the `remember` choice on the original load request on both
-platforms. UI hosts resolve private edits, pick documents and present prompts.
+Native `mobile/credential_loading.py` adapts ZIP, vault and SMB admission. Active network/local-reader scopes return `credentials_busy`; retry when idle. Import performs no online I/O. Go `credential_sets.go` copies alias maps while live token updates keep origin-generation checks. Retention stores the original protected ZIP via `NativeCredentialRetention`, validates package identity and captured generation, and reports storage failure independently of successful load. Diagnostics exclude exception text, payload and credential values. [Backend lifetime](remote-browsing.md#native-connection-and-archive-errors)
 
 ## Forget and lock
 
-`credentials.forget(...)` serializes erasure with publication and retires staged
-loads. Desktop accepts one `.conf`/`.session` path; omitting the path removes all
-saved `.conf` files in the configured directory, preserving session-only packages.
-The selected-package action forgets both its saved and session paths. Forgetting
-revokes loaded access even if no saved file exists, removes the saved file even if
-an in-memory session also exists, and preserves the source ZIP and local copies.
-Legacy configuration deletion helpers delegate to this same service.
-
-Native `NativeCredentialForget` supplies a lazy package-store resolver and the
-credential document-cache root. The service clears live credentials and the saved
-vault, retained ZIPs and encrypted document lists. The native publication lock
-covers storage work across clients/scenes, including the vault clear/erase gap.
-Independent cleanup continues after failures, which are reported as potentially
-partial erasures. The package store's forget-only construction skips a damaged
-index and enumerates owned encrypted blobs, including orphaned writes. It keeps
-the index on failed cleanup for retry. Retained metadata updates and successful
-erasure also update already-open package stores for the same root across scenes. Forgetting does not cancel halfway when a
-view closes. Hosts clear presentation preferences and package labels after success;
-read-only retained metadata discovery stays available without unlocking.
-
-Mobile credential workers use `run_credentials`: cancellation keeps the host busy
-until the worker retires and suppresses publication if it has not started yet.
-Navigation/client/host checks prevent stale load results from resuming a different
-view. `credentials.restore()` is the saved-vault entry point; `credentials.lock()`
-continues to retain saved config/ZIP storage. Native locking still affects all
-loaded packages together. The bridge remains the final busy/publication authority
-across scenes and clients.
-
-Run the shared admission and revocation checks from the repository root:
+Lock retires access and keeps saved credentials and ZIPs. Native lock covers all loaded packages. Forget serializes with publication. Desktop selected-package Forget removes both saved and live credentials; Clear All removes directly contained saved configs, including legacy `rclone.conf`, while preserving session-only packages. Preserve source ZIPs and offline copies. Native Forget erases live credentials, vault, retained ZIPs and encrypted lists across scenes. Continue independent cleanup after failures, enumerate owned blobs even with a damaged index, keep the index for retry if cleanup fails, and report partial erasure. Navigation waits for worker retirement.
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/resources/test_credential_service.py
 ```
 
-The native credential, retention and SMB suites cover platform storage. The host native-bridge
-fixture saves/restores and forgets a native vault and retained ZIP using synthetic
-protected keys, loads credentials through the service, and runs the remote/transfer
-slice, locks and reloads them, and verifies that old grants stay revoked.
-These checks do not constitute physical-device validation.
-
-Mobile imports, saved-vault restores and SMB credential additions use a nonblocking
-native credential-publication scope. Active network operations or local readers
-produce `credentials_busy` immediately, preserving credentials and the active
-operation's cancellation handle; callers must retry after stopping that operation.
-The Python scene-publication lock also refuses contention for these actions.
-Credential metadata and package protection run outside the network queue.
-Backend disconnects run after detachment in a background task. Global rclone cache
-eviction, which can also disconnect backends, is deferred until the next explicit
-online filesystem operation. Import itself never opens or validates an online
-filesystem. Unlocking to resume a requested online action may subsequently run it.
-
 ## Remembered desktop session destinations
 
-Successful session credential publication writes `<account>.session.json` beside
-the user rclone configs. The bounded, versioned catalogue contains only schema,
-absolute ZIP path and remote names; passwords, tokens, remote settings and decrypted
-TXT/config bytes are excluded. `desktop_catalog` owns atomic publication, bounded
-validation and deletion. Session lock retains this record; explicit session Forget
-removes it. Failed/cancelled admissions do not create a record. Existing session-only
-packages populate the catalogue on their next successful unlock.
-
-Desktop source discovery merges remembered session destinations with active/saved
-configs and existing copy associations. A saved `.conf` suppresses a duplicate
-inactive session placeholder. Remembered names remain subject to existing remote
-exclusions and the session-scoped Legacy visibility filter. Their `.session`
-contexts and ZIP locations route into `WorkspaceUnlockView`; discovery itself
-neither decodes the ZIP nor contacts the server. The existing admission, close,
-revocation and late-result guards still own successful unlock and browsing.
-
-Cloud's empty Files pane offers + rclone, opening personal rclone credential
-settings and selecting the credential tab. Package paths and credential cleanup
-are collapsed behind separate details/management controls on the loader.
-`test_credential_catalog_desktop.py` verifies a fresh-process restart, persisted
-field allowlist, failed/cancelled publication, Forget and saved-config deduplication.
-`test_folder_sources_ui.py` covers the Cloud setup route, remembered locked names,
-inline password routing and Legacy visibility. Host validation uses offscreen Qt.
-
-## Mobile workflow and presentation
-
-`mobile/credential_workflow.py` defines `CredentialPresentation` and
-`CredentialLoadWorkflow`. The workflow runs the service load, captures its published
-generation, refreshes remote kinds and checks that the client, navigation and
-published generation still match before returning a result. It imports no toolkit.
-
-`CredentialLoadPresentation` in `mobile/credentials_ui.py` adapts the host's current
-binding, private-editor checkpoint, metadata refresh and loaded-package display.
-The UI retains storage prompts, password fields, retained-ZIP selection and navigation.
-Passwords are consumed before dispatch and cleared in the existing finally paths.
-A cancelled worker retains ownership until `run_credentials` has retired it.
-
-Credential failures log the fixed operation name, exception type and function/line
-locations through `diagnostics.report_failure`. Exception text, payloads, locals and
-credential values are excluded from those diagnostic records. Diagnostic sink
-failures cannot replace the original credential error or prevent UI cleanup.
-
-See [transfer handoff](transfers.md) for captured grants and
-[LocalCrypt](localcrypt.md) for private reader lifetime.
-
-A retained-package unlock reflects committed remote publication even if that
-package cannot resume the requested folder connection. A mismatched package does
-not resume the transfer or record a successful association for that request.
+`desktop_catalog` stores schema, ZIP path and remote names in `<account>.session.json`. Lock retains it; Forget removes it. Saved configs suppress duplicate inactive placeholders. Legacy visibility still applies. `WorkspaceUnlockView` resumes the selected route. Check `test_credential_catalog_desktop.py` and `test_folder_sources_ui.py`.
 
 ## Mobile credential import
 
-`mobile/credential_panels.py` builds **Credential Packages**, **Import
-credential ZIP** and **Unlock credential ZIP**. Settings → Workspaces →
-**rclone connections…** and Workspaces → **Connections…** enter through
-`mobile/cloud_ui.py:show_cloud_connections()`. The same module presents the
-`connections`, `import-credentials` and `import-credentials-password` routes.
-`mobile/credentials_ui.py:CredentialWorkflow` owns picker admission, the
-pending ZIP, the storage choice and the import epoch. The visible import
-action opens the system Files picker first. Bounded ZIP metadata selects
-the password route for an encrypted archive. A plain archive goes directly
-to the explicit Session-Only or Persistent save choice. Password retries
-reuse the admitted archive and storage choice.
-
-`Python/mobile/routes.py` tells the workflow to retire import state when an
-import route is removed or its host uninstalls. Retirement advances the epoch,
-drops the pending ZIP and storage choice, and clears the password control.
-In-flight work retains its busy ownership until it settles. The workflow
-checks the import epoch, client, navigation and credential generation before
-accepting a picker or load result. The publication guard reaches the native
-submission boundary. If native publication has already committed, credentials
-remain loaded while the retired view skips late presentation, metadata and
-retention updates.
-
-Existing application and controller entry points forward to the feature
-workflow. No-widget callers can still select and import through the manual API,
-including choosing a ZIP when an import has no pending selection.
-
-### Credential import checks
-
-From the repository root, run the focused mobile host checks:
+`mobile/credential_panels.py` builds the buttons; `cloud_ui.py` presents connection, picker and password routes. `credentials_ui.py:CredentialWorkflow` opens the system picker first. Protected ZIPs take the password route; plain ZIPs go directly to Session-Only/Persistent. Retries reuse the admitted ZIP and choice. Route retirement advances the import epoch and clears pending ZIP, choice and password. Guard callbacks by epoch, client, route and generation through native submission. A stale view skips presentation, metadata and retention after commit. Compatibility callers can import without widgets. A mismatched unlocked package cannot resume a transfer.
 
 ```sh
 python3 dev.py test mobile test_cloud_import_ui.py
@@ -278,10 +34,4 @@ python3 dev.py test mobile test_background_credential_refresh.py
 python3 dev.py test mobile test_workflow_ownership.py
 ```
 
-These cover plain and encrypted selection, retry and storage choice, Back
-and host retirement, pre-commit cancellation, stale post-commit results,
-and compatibility forwarding. For a native check, use a disposable simulator
-or emulator and synthetic ZIPs. Exercise plain and encrypted import, a password
-retry, saved-vault restore, retained-ZIP unlock and forgetting. Open the actual
-system Files picker from rclone connections and use Back or Cancel. Verify the
-picker dismisses and the pending ZIP and password are cleared.
+Expect protected/plain import, retry, stale-result rejection and compatibility forwarding. Use synthetic ZIPs in the disposable native runner to verify actual picker cancellation, password clearing, restore and Forget.
