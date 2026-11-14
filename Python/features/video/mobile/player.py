@@ -28,10 +28,8 @@ class MobileVideo:
         self.progress_workers = set()
         self.last_sample = None
         self.discovery = None
-        self.airplay_path = None
-        self.force_vlc = False
         self.mkv_stream = None
-        self.cancel_remux = Event()
+        self.cancel_remux = None
         self.switching_player = False
         self._release_retirement = None
         self.audio_output = app.audio_output
@@ -95,8 +93,16 @@ class MobileVideo:
         """Revoke playback immediately; retain resources until native teardown ends."""
         if self.retirement is not None:
             return self.retirement
+        # Sample a TV session even when the user dismisses it between watch ticks.
+        from .ios import IOSVideo
+        if isinstance(self.native, IOSVideo) and self.native.airplay_active() and self.allowed():
+            try:
+                self.accept_sample(*self.native.progress_position())
+            except (OSError, ValueError):
+                pass  # Keep the last checkpoint if the source changed as it closed.
         self.closed = True
-        self.cancel_remux.set()
+        if self.cancel_remux is not None:
+            self.cancel_remux.set()
         self.audio_output.unregister(self)
         if self.task is not None:
             self.task.cancel()
@@ -114,12 +120,10 @@ class MobileVideo:
     async def _finish_retirement(self, disposal):
         if disposal is not None:
             await asyncio.shield(disposal)
-        if self.mkv_stream is not None:
-            await asyncio.to_thread(self.mkv_stream.close)
-            self.mkv_stream = None
         if self.discovery is not None:
             await asyncio.shield(self.discovery)
         await self.controls.finish()
+        await self.release_airplay_stream()
         self.native = None
         for worker in tuple(self.progress_workers):
             await drain_worker(worker)
@@ -162,16 +166,6 @@ class MobileVideo:
     def prepare(self):
         position = self.progress.load()
         self.controls.settings = self.controls.store.load()
-        if (not self.content.remote and type(self.app._impl).__module__.startswith('toga_iOS.')
-                and not self.force_vlc):
-            from .ios import airplay_file
-            self.airplay_path = airplay_file(self)
-            if self.airplay_path is not None and self.airplay_path.suffix.lower() == '.mkv':
-                from .mkv import MKVStream
-                try:
-                    self.mkv_stream = MKVStream(self, self.airplay_path, self.cancel_remux)
-                except (OSError, ValueError, NameError):
-                    self.airplay_path = None
         # Remote directory enumeration and optional sidecar stats must not sit
         # in front of the first video request. Keep the retained source until
         # background discovery finishes, including when the viewer closes.
@@ -226,12 +220,8 @@ class MobileVideo:
             from .android import AndroidVideo
             self.native = AndroidVideo(self, position, external, fullscreen=fullscreen)
         elif backend.startswith('toga_iOS.'):
-            from .ios import IOSAirPlayVideo, IOSVideo
-            path = self.airplay_path if self.allowed(external=True) else None
-            if self.mkv_stream is not None and path is None:
-                self.cancel_remux.set()
-            self.native = (IOSAirPlayVideo(self, path, position, stream=self.mkv_stream)
-                           if path is not None else IOSVideo(self, position, external))
+            from .ios import IOSVideo
+            self.native = IOSVideo(self, position, external)
             self.native.present()
         else:
             raise ValueError('Native mobile video playback requires Android or iOS.')
@@ -244,19 +234,65 @@ class MobileVideo:
         self.task = self.app.loop.create_task(self.watch())
         self.app.routes.sync_back()
 
-    async def switch_to_vlc(self):
-        if self.closed or self.switching_player or not self.allowed():
+    async def prepare_airplay(self):
+        from .ios import airplay_file
+        from .mkv import MKVStream
+
+        if self.closed or self.switching_player:
+            return
+        if not self.allowed(external=True):
+            self.native.airplay_preparation_failed('AirPlay is unavailable for this video.')
             return
         self.switching_player = True
+        stream = None
         try:
-            self.native.pause()
-            self.accept_sample(*self.native.progress_position())
-            await open_video(self.app, self.content.provider, self.content.path, force_vlc=True)
-        except (OSError, ValueError) as error:
+            if self.native.airplay_active():
+                return
+            await self.release_airplay_stream()
+            if self.closed:
+                return
+            path = airplay_file(self)
+            if path is None:
+                raise ValueError('AirPlay is unavailable for this video.')
+            if path.suffix.lower() == '.mkv':
+                self.native.status('Preparing AirPlay…')
+                self.cancel_remux = Event()
+                preparation = self.app.loop.create_task(asyncio.to_thread(
+                    MKVStream, self, path, self.cancel_remux))
+                try:
+                    stream = await asyncio.shield(preparation)
+                except asyncio.CancelledError:
+                    self.cancel_remux.set()
+                    await drain_worker(preparation)
+                    if not preparation.cancelled() and preparation.exception() is None:
+                        stream = preparation.result()
+                    raise
+            if self.closed:
+                return
+            if not self.allowed(external=True):
+                raise ValueError('AirPlay is unavailable for this video.')
+            self.content.check()
+            if self.native.start_airplay(path, stream):
+                self.mkv_stream, stream = stream, None
+            else:
+                self.native.airplay_preparation_failed('Choose a TV in AirPlay to start streaming.')
+        except (OSError, ValueError, NameError) as error:
             if not self.closed:
-                self.native.status(str(error))
+                self.native.airplay_preparation_failed(str(error) or 'AirPlay could not prepare this video.')
         finally:
-            self.switching_player = False
+            try:
+                if stream is not None:
+                    await asyncio.to_thread(stream.close)
+            finally:
+                self.cancel_remux = None
+                self.switching_player = False
+
+    async def release_airplay_stream(self):
+        stream, self.mkv_stream = self.mkv_stream, None
+        if stream is not None:
+            worker = self.app.loop.create_task(asyncio.to_thread(stream.close))
+            await drain_worker(worker)
+            worker.result()
 
     def allowed(self, external=False):
         try:
@@ -351,7 +387,7 @@ class MobileVideo:
         await asyncio.shield(self.retire())
 
 
-async def open_video(app, provider, path, *, fullscreen=False, force_vlc=False):
+async def open_video(app, provider, path, *, fullscreen=False):
     if not app.require_feature('video') or not app.checkpoint():
         return False
     previous = getattr(app, 'video_player', None)
@@ -380,15 +416,10 @@ async def open_video(app, provider, path, *, fullscreen=False, force_vlc=False):
         content.close()
         raise
     try:
-        if force_vlc:
-            player.force_vlc = True
         preparation = asyncio.create_task(asyncio.to_thread(player.prepare))
         try:
             position, subtitles = await asyncio.shield(preparation)
         except asyncio.CancelledError:
-            cancel_remux = getattr(player, 'cancel_remux', None)
-            if cancel_remux is not None:
-                cancel_remux.set()
             await drain_worker(preparation)
             raise
         if (not app.active_host or not player.allowed()

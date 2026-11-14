@@ -22,6 +22,10 @@ _Static_assert(LIBAVFORMAT_VERSION_INT == AV_VERSION_INT(63, 1, 100),
 @property(nonatomic, readonly) NSString *playlist;
 - (instancetype)initWithPath:(NSString *)path;
 - (NSData *)segment:(NSUInteger)index;
+- (NSString *)renditionsJSON;
+- (NSData *)fragment:(NSUInteger)index track:(int)track;
+- (NSData *)initializationForTrack:(int)track;
+- (NSString *)textSegment:(NSUInteger)index track:(int)track;
 + (NSString *)streamAddress;
 @end
 
@@ -68,22 +72,22 @@ static void LGMKVFreeIO(AVIOContext **context) {
     avio_context_free(context);
 }
 
-static BOOL LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
+static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     // Matroska AVC/HEVC packets contain length-prefixed NAL units.
     // HEVC CRA/BLA may have leading pictures. Drop samples before the cue PTS.
     int configurationByte = codec->codec_id == AV_CODEC_ID_H264 ? 4 : 21;
-    if (codec->extradata_size <= configurationByte || codec->extradata[0] != 1) return NO;
+    if (codec->extradata_size <= configurationByte || codec->extradata[0] != 1) return -1;
     unsigned width = (codec->extradata[configurationByte] & 3) + 1;
     const uint8_t *cursor = packet->data, *end = cursor + packet->size;
     while (end - cursor > width) {
         uint32_t length = 0;
         for (unsigned i = 0; i < width; i++) length = (length << 8) | *cursor++;
-        if (!length || length > end - cursor) return NO;
+        if (!length || length > end - cursor) return -1;
         unsigned type = codec->codec_id == AV_CODEC_ID_H264 ? cursor[0] & 31 : (cursor[0] >> 1) & 63;
-        if (codec->codec_id == AV_CODEC_ID_H264 ? type == 5 : (type >= 16 && type <= 21)) return YES;
+        if (codec->codec_id == AV_CODEC_ID_H264 ? type == 5 : (type >= 16 && type <= 21)) return (int)type;
         cursor += length;
     }
-    return NO;
+    return -1;
 }
 
 @implementation LGMKVRemux {
@@ -97,6 +101,7 @@ static BOOL LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     NSData *_initialization;
     NSData *_firstFragment;
     NSString *_playlist;
+    NSDictionary *_renditions;
 }
 
 + (NSString *)streamAddress {
@@ -144,15 +149,30 @@ static BOOL LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     if ((video->disposition & AV_DISPOSITION_ATTACHED_PIC) ||
         video->time_base.num <= 0 || video->time_base.den <= 0 ||
         (video->codecpar->codec_id != AV_CODEC_ID_H264 && video->codecpar->codec_id != AV_CODEC_ID_HEVC)) return nil;
+    NSMutableArray *audio = [NSMutableArray array], *text = [NSMutableArray array];
     _audio = -1;
     int opus = -1;
     for (unsigned i = 0; i < _source->nb_streams; i++) {
-        enum AVCodecID codec = _source->streams[i]->codecpar->codec_id;
-        if (codec == AV_CODEC_ID_OPUS && (opus < 0 || (_source->streams[i]->disposition & AV_DISPOSITION_DEFAULT))) opus = i;
-        if (codec == AV_CODEC_ID_AAC || codec == AV_CODEC_ID_AC3 || codec == AV_CODEC_ID_EAC3) {
-            if (_audio < 0) _audio = i;
-            if (_source->streams[i]->disposition & AV_DISPOSITION_DEFAULT) { _audio = i; break; }
-        }
+        AVStream *stream = _source->streams[i];
+        AVCodecParameters *parameters = stream->codecpar;
+        enum AVCodecID codec = parameters->codec_id;
+        BOOL preferred = (stream->disposition & AV_DISPOSITION_DEFAULT) != 0;
+        BOOL copyAudio = codec == AV_CODEC_ID_AAC || codec == AV_CODEC_ID_AC3 || codec == AV_CODEC_ID_EAC3;
+        int channels = parameters->ch_layout.nb_channels;
+        BOOL opusAudio = codec == AV_CODEC_ID_OPUS && (channels == 1 || channels == 2 || channels == 6);
+        if (opusAudio && (opus < 0 || (preferred && !(_source->streams[opus]->disposition & AV_DISPOSITION_DEFAULT))))
+            opus = i;
+        if (copyAudio && (_audio < 0 || (preferred && !(_source->streams[_audio]->disposition & AV_DISPOSITION_DEFAULT))))
+            _audio = i;
+        if (!copyAudio && !opusAudio && codec != AV_CODEC_ID_SUBRIP && codec != AV_CODEC_ID_WEBVTT) continue;
+        const AVDictionaryEntry *language = av_dict_get(stream->metadata, "language", NULL, 0);
+        const AVDictionaryEntry *title = av_dict_get(stream->metadata, "title", NULL, 0);
+        NSString *lang = language ? ([NSString stringWithUTF8String:language->value] ?: @"und") : @"und";
+        NSString *name = title ? ([NSString stringWithUTF8String:title->value] ?: @"") : @"";
+        NSDictionary *track = @{@"id": @(i), @"language": lang, @"name": name,
+            @"channels": @(channels), @"codec": @(avcodec_get_name(codec))};
+        if (copyAudio || opusAudio) [audio addObject:track];
+        else [text addObject:track];
     }
     if (_audio < 0) _audio = opus;
     if (_audio < 0) return nil;
@@ -178,6 +198,11 @@ static BOOL LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     if (!starts.count || starts.firstObject.longLongValue > av_rescale_q(1, (AVRational){1, 1}, video->time_base) ||
         _duration - starts.lastObject.longLongValue > maximum) return nil;
     _starts = [starts copy];
+    NSMutableArray *boundaries = [NSMutableArray arrayWithObject:@0];
+    for (NSUInteger i = 1; i < _starts.count; i++)
+        [boundaries addObject:@(av_rescale_q(_starts[i].longLongValue, video->time_base, (AVRational){1, 1000}))];
+    [boundaries addObject:@(av_rescale_q(_duration, video->time_base, (AVRational){1, 1000}))];
+    _renditions = @{@"audio": audio, @"text": text, @"defaultAudio": @(_audio), @"boundaries": boundaries};
     NSMutableString *entries = [NSMutableString string];
     double longest = 0;
     for (NSUInteger i = 0; i < _starts.count; i++) {
@@ -193,10 +218,16 @@ static BOOL LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     return self;
 }
 
-- (NSData *)mux:(NSUInteger)index {
+// -2 preserves the original muxed output for the baseline validation probe.
+// -1 is video-only. Nonnegative IDs identify an audio-only rendition.
+- (NSData *)mux:(NSUInteger)index track:(int)trackID initialization:(NSData **)initialization {
+    BOOL writeVideo = trackID < 0;
+    BOOL writeAudio = trackID != -1;
+    int audio = trackID >= 0 ? trackID : _audio;
+    int audioOutput = writeVideo ? 1 : 0;
     AVFormatContext *output = NULL;
     AVIOContext *writer = NULL;
-    AVPacket *packet = NULL;
+    AVPacket *packet = NULL, *tail = NULL;
     AVDictionary *options = NULL;
     NSMutableData *data = [NSMutableData data];
     LGMKVIO sink = {.deadline = NSProcessInfo.processInfo.systemUptime + 12, .output = (__bridge void *)data};
@@ -206,8 +237,8 @@ static BOOL LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     int64_t start = _starts[index].longLongValue;
     int64_t end = index + 1 == _starts.count ? _duration : _starts[index + 1].longLongValue;
     int status = 0;
-    int inputTracks[] = {_video, _audio};
-    BOOL convertOpus = _source->streams[_audio]->codecpar->codec_id == AV_CODEC_ID_OPUS;
+    int inputTracks[] = {_video, audio};
+    BOOL convertOpus = writeAudio && _source->streams[audio]->codecpar->codec_id == AV_CODEC_ID_OPUS;
     LGMKVOpus opus = {0};
     _reader.bytes = 0;
     _reader.deadline = sink.deadline;
@@ -223,7 +254,7 @@ static BOOL LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     output->pb = writer;
     output->flags |= AVFMT_FLAG_CUSTOM_IO;
     output->avoid_negative_ts = AVFMT_AVOID_NEG_TS_DISABLED;
-    for (int i = 0; i < 2; i++) {
+    for (int i = writeVideo ? 0 : 1; i < (writeAudio ? 2 : 1); i++) {
         AVStream *in = _source->streams[inputTracks[i]];
         AVStream *out = avformat_new_stream(output, NULL);
         if (!out) goto done;
@@ -243,7 +274,8 @@ static BOOL LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     if (avformat_write_header(output, &options) < 0) goto done;
     avio_flush(writer);
     packet = av_packet_alloc();
-    if (!packet) goto done;
+    tail = av_packet_alloc();
+    if (!packet || !tail) goto done;
     AVRational rate = video->avg_frame_rate;
     if (rate.num <= 0 || rate.den <= 0) rate = video->r_frame_rate;
     if (rate.num <= 0 || rate.den <= 0) goto done;
@@ -251,16 +283,23 @@ static BOOL LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     int64_t frameCount = 0, compositionDelay = av_rescale_q(4, frame, video->time_base);
     int64_t timelineOffset = av_rescale_q(100, (AVRational){1, 1000}, video->time_base);
     BOOL seenNextFragment = NO;
+    int nextSync = -1;
     while ((status = av_read_frame(_source, packet)) >= 0) {
-        int track = packet->stream_index == _video ? 0 : packet->stream_index == _audio ? 1 : -1;
+        int track = packet->stream_index == _video ? 0 : writeAudio && packet->stream_index == audio ? 1 : -1;
         if (track < 0) { av_packet_unref(packet); continue; }
         if (av_packet_get_side_data(packet, AV_PKT_DATA_NEW_EXTRADATA, NULL)) goto done;
         if (packet->pts == AV_NOPTS_VALUE) goto done;
         AVStream *in = _source->streams[packet->stream_index];
         int64_t pts = av_rescale_q(packet->pts, in->time_base, video->time_base);
         if (track == 0 && (packet->flags & AV_PKT_FLAG_KEY) && pts >= end && index + 1 < _starts.count) {
+            if (!seenNextFragment && pts == end) nextSync = LGMKVVideoSync(packet, in->codecpar);
             seenNextFragment = YES;
         }
+        if (track == 0 && !writeVideo) {
+            av_packet_unref(packet);
+            continue;
+        }
+        if (seenNextFragment && !writeAudio) break;
         if (track == 1 && convertOpus) {
             if (opus.cursor >= opus.end && seenNextFragment) break;
             if (opus.cursor < opus.end && !LGOpusPacket(&opus, output, packet, in->time_base, &hasAudio)) goto done;
@@ -275,7 +314,7 @@ static BOOL LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
         }
         if (track == 0) {
             if (!hasVideo && (pts != start || !(packet->flags & AV_PKT_FLAG_KEY) ||
-                !LGMKVVideoSync(packet, in->codecpar))) goto done;
+                LGMKVVideoSync(packet, in->codecpar) < 0)) goto done;
             hasVideo = YES;
             // Cue-based reads can leave initial DTS unset. Carry decode order
             // across fragments using the declared constant frame cadence.
@@ -295,25 +334,40 @@ static BOOL LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
             packet->dts += offset;
             if (packet->dts < 0) goto done;
         }
-        packet->stream_index = track;
-        av_packet_rescale_ts(packet, in->time_base, output->streams[track]->time_base);
-        if (av_interleaved_write_frame(output, packet) < 0) goto done;
+        packet->stream_index = track == 0 ? 0 : audioOutput;
+        av_packet_rescale_ts(packet, in->time_base, output->streams[packet->stream_index]->time_base);
+        if (track == 0) {
+            if (tail->buf && av_interleaved_write_frame(output, tail) < 0) goto done;
+            av_packet_move_ref(tail, packet);
+        } else if (av_interleaved_write_frame(output, packet) < 0) goto done;
     }
-    if (status < 0 && status != AVERROR_EOF) goto done;
-    if (index + 1 < _starts.count &&
-        llabs(av_rescale_q(frameCount, frame, video->time_base) - (end - start)) > 2) goto done;
+    if ((status < 0 && status != AVERROR_EOF) || (writeVideo && !hasVideo)) goto done;
+    if (writeVideo && index + 1 < _starts.count) {
+        int64_t gap = (end - start) - av_rescale_q(frameCount, frame, video->time_base);
+        // An open HEVC GOP may put leading pictures for this interval after
+        // the next CRA in decode order. They require both sides of the
+        // boundary. Hold the last sample through that short gap so each
+        // fragment can start at its cue and keep continuous decode time.
+        BOOL openGOP = video->codecpar->codec_id == AV_CODEC_ID_HEVC && nextSync == 21;
+        if (gap < -2 || (gap > 2 && (!openGOP || gap > compositionDelay))) goto done;
+        AVRational outputClock = output->streams[0]->time_base;
+        tail->duration = av_rescale_q(end + timelineOffset, video->time_base, outputClock) - tail->dts;
+        if (tail->duration <= 0) goto done;
+    }
+    if (writeVideo && av_interleaved_write_frame(output, tail) < 0) goto done;
     if (convertOpus) {
         if (opus.end - opus.cursor > 4800 ||
             !LGOpusFill(&opus, output, NULL, opus.end, &hasAudio) ||
             !LGOpusEncode(&opus, output, NULL, &hasAudio)) goto done;
     }
-    if (hasVideo && hasAudio && av_interleaved_write_frame(output, NULL) >= 0 &&
+    if ((!writeVideo || hasVideo) && (!writeAudio || hasAudio) && av_interleaved_write_frame(output, NULL) >= 0 &&
         av_write_frame(output, NULL) >= 0 && av_write_trailer(output) >= 0) {
         avio_flush(writer);
         success = writer->error >= 0 && data.length > 0;
     }
 done:
     LGOpusClose(&opus);
+    av_packet_free(&tail);
     av_packet_free(&packet);
     av_dict_free(&options);
     avformat_free_context(output);
@@ -324,7 +378,7 @@ done:
         uint32_t size = AV_RB32(bytes + offset);
         if (size < 8 || size > data.length - offset) break;
         if (!memcmp(bytes + offset + 4, "moof", 4)) {
-            if (index == 0) _initialization = [data subdataWithRange:NSMakeRange(0, offset)];
+            if (initialization) *initialization = [data subdataWithRange:NSMakeRange(0, offset)];
             return [data subdataWithRange:NSMakeRange(offset, data.length - offset)];
         }
         offset += size;
@@ -333,7 +387,11 @@ done:
 }
 
 - (NSData *)initialization {
-    if (!_initialization) _firstFragment = [self mux:0];
+    if (!_initialization) {
+        NSData *header = nil;
+        _firstFragment = [self mux:0 track:-2 initialization:&header];
+        _initialization = header;
+    }
     return _initialization;
 }
 - (NSString *)playlist { return _playlist; }
@@ -343,7 +401,69 @@ done:
         _firstFragment = nil;
         return first;
     }
-    return index < _starts.count ? [self mux:index] : nil;
+    return index < _starts.count ? [self mux:index track:-2 initialization:NULL] : nil;
+}
+
+- (NSString *)renditionsJSON {
+    NSData *json = [NSJSONSerialization dataWithJSONObject:_renditions options:0 error:nil];
+    return [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
+}
+
+- (BOOL)includesTrack:(int)track inGroup:(NSString *)group {
+    for (NSDictionary *row in _renditions[group])
+        if ([row[@"id"] intValue] == track) return YES;
+    return NO;
+}
+
+- (NSData *)initializationForTrack:(int)track {
+    if (track != -1 && ![self includesTrack:track inGroup:@"audio"]) return nil;
+    NSData *header = nil;
+    [self mux:0 track:track initialization:&header];
+    return header;
+}
+
+- (NSData *)fragment:(NSUInteger)index track:(int)track {
+    if (index >= _starts.count || (track != -1 && ![self includesTrack:track inGroup:@"audio"])) return nil;
+    return [self mux:index track:track initialization:NULL];
+}
+
+// Matroska stores UTF-8 text in each SubRip/WebVTT block. Read around
+// the requested segment, including preceding cues that still overlap it.
+- (NSString *)textSegment:(NSUInteger)index track:(int)track {
+    if (index >= _starts.count || ![self includesTrack:track inGroup:@"text"]) return nil;
+    AVRational clock = (AVRational){1, 1000};
+    AVRational timeBase = _source->streams[_video]->time_base;
+    NSArray *boundaries = _renditions[@"boundaries"];
+    int64_t start = [boundaries[index] longLongValue], end = [boundaries[index + 1] longLongValue];
+    _reader.bytes = 0;
+    _reader.deadline = NSProcessInfo.processInfo.systemUptime + 12;
+    // The same bound applies to accepted embedded cue lengths.
+    int64_t preroll = av_rescale_q(MAX(0, start - 30000), clock, timeBase);
+    if (av_seek_frame(_source, _video, preroll, AVSEEK_FLAG_BACKWARD) < 0) return nil;
+    AVPacket *packet = av_packet_alloc();
+    if (!packet) return nil;
+    NSMutableArray *cues = [NSMutableArray array];
+    AVStream *stream = _source->streams[track];
+    int status;
+    while ((status = av_read_frame(_source, packet)) >= 0) {
+        if (packet->pts != AV_NOPTS_VALUE && packet->stream_index == _video &&
+            (packet->flags & AV_PKT_FLAG_KEY) && av_rescale_q(packet->pts, timeBase, clock) >= end) break;
+        if (packet->stream_index == track && packet->pts != AV_NOPTS_VALUE &&
+            packet->duration > 0 && packet->size > 0 && packet->size <= 16384) {
+            int64_t first = av_rescale_q(packet->pts, stream->time_base, clock);
+            int64_t length = av_rescale_q(packet->duration, stream->time_base, clock);
+            if (first < end && length > 0 && length <= 30000 && first + length > start) {
+                NSString *text = [[NSString alloc] initWithBytes:packet->data length:packet->size encoding:NSUTF8StringEncoding];
+                if (text.length) [cues addObject:@[@(first), @(first + length), text]];
+            }
+        }
+        av_packet_unref(packet);
+        if (cues.count > 2048) { status = AVERROR_INVALIDDATA; break; }
+    }
+    av_packet_free(&packet);
+    if (status < 0 && status != AVERROR_EOF) return nil;
+    NSData *json = [NSJSONSerialization dataWithJSONObject:cues options:0 error:nil];
+    return [[NSString alloc] initWithData:json encoding:NSUTF8StringEncoding];
 }
 
 - (void)dealloc {

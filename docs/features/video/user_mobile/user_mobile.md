@@ -2,7 +2,7 @@
 
 See [playback tools](controls.md) for speed, picture size, queues, seek undo, preferences and encrypted cloud resume.
 On iPhone and iPad, [Native AirPlay video](controls.md#watching-on-a-tv-with-iphone-or-ipad)
-is an optional player for compatible local files.
+adds a TV button to the Logistics player for compatible local files.
 
 Android and iPad builds and focused emulator/simulator playback checks have
 passed for all eight supported codec/container combinations and LocalCrypt.
