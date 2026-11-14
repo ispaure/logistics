@@ -21,6 +21,8 @@ jobs:
           architecture: x64
           python-version: '3.12.2'
       - name: Install the pinned dependencies
+        env:
+          LOGISTICS_MANAGER_CHECKOUT: ${{ runner.temp }}/build-deployment-manager
         run: |
           python logistics_build/install_build_manager.py --from-pin "${{ runner.temp }}/build-deployment-manager"
           python Python/tests/run_platform_checks.py --install --prepare-only

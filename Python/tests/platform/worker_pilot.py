@@ -52,6 +52,8 @@ def sample(output, index, workers):
     # guest. Its inner tests report to their own files.
     environment = dict(os.environ, QT_QPA_PLATFORM='offscreen',
                        BUILD_MANAGER_TEST_PROGRESS='0', **{PORTABLE_PILOT_ENV: '1'})
+    environment['PYTHONPATH'] = os.pathsep.join((str(ROOT / 'Python'), str(ROOT)))
+    environment['PYTHONUTF8'] = '1'
     environment.pop('TOGA_BACKEND', None)
     started = monotonic()
     with stem.with_suffix('.log').open('wb') as log:
