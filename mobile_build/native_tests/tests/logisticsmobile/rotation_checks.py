@@ -4,12 +4,14 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.EXTENDED
 import asyncio
+from collections import deque
 import json
 from pathlib import Path
 import sys
+from time import monotonic
 
 from commonUtils.testing.rotation import NativeRotation, ORIENTATIONS
-from commonUtils.testing.settings import ROTATION_TIMEOUT
+from commonUtils.testing.settings import POLL_INTERVAL, ROTATION_TIMEOUT
 from commonUtils.testing.waiting import wait_until, wait_for_assertion
 from .settings import ROTATION_SETTLE, IOS_ROTATION_ACK_TIMEOUT, CONTROL_SETTLE_TIMEOUT
 
@@ -71,8 +73,8 @@ def pose_snapshot(app):
 
 
 
-async def rotate(app, orientation, *, settle=ROTATION_SETTLE, timeout=None):
-    from .timings import section, measure
+async def acknowledge_rotation(app, orientation, *, timeout=None, panel=None):
+    from .timings import section
     rotation = NativeRotation(app.main_window,
                               activity=app._impl.native if sys.platform != 'ios' else None)
     def rejected(error):
@@ -93,10 +95,17 @@ async def rotate(app, orientation, *, settle=ROTATION_SETTLE, timeout=None):
         timeout = IOS_ROTATION_ACK_TIMEOUT if sys.platform == 'ios' else ROTATION_TIMEOUT
     with section(app, 'rotation-dispatch', orientation=orientation):
         rotation.request(orientation, on_rejected=rejected)
+    with section(app, 'rotation-acknowledgement', orientation=orientation, panel=panel or ''):
+        await wait_until(acknowledged, timeout=timeout,
+                         message='Native rotation did not complete: ' + orientation)
+    return acknowledged
+
+
+async def rotate(app, orientation, *, settle=ROTATION_SETTLE, timeout=None):
+    """Standalone probes own their post-acknowledgement observation schedule."""
+    from .timings import measure
     try:
-        with section(app, 'rotation-acknowledgement', orientation=orientation):
-            await wait_until(acknowledged, timeout=timeout,
-                             message='Native rotation did not complete: ' + orientation)
+        acknowledged = await acknowledge_rotation(app, orientation, timeout=timeout)
     except AssertionError:
         if sys.platform == 'ios':
             try:
@@ -105,6 +114,8 @@ async def rotate(app, orientation, *, settle=ROTATION_SETTLE, timeout=None):
                 pass  # Keep the original failed deadline if observation fails.
         raise
     await measure(app, 'rotation-post-ack-settle', asyncio.sleep(settle), orientation=orientation)
+    # Keep UIKit's rejection callback alive through the standalone settle.
+    del acknowledged
 
 
 def safe_geometry(app):
@@ -261,16 +272,17 @@ def epub_width_snapshot(app):
     return result
 
 
-async def observe_epub_width_failure(app, *, panel, cycle, orientation):
+async def observe_epub_width_failure(app, *, panel, cycle, orientation, native=None):
     """Failure-only observations; never repair or accept the failed layout."""
     loop = asyncio.get_running_loop()
     started = loop.time()
     report = dict(panel=panel, cycle=cycle, orientation=orientation, samples=[])
-    try:
-        native = rotation_failure_snapshot(app, panel=panel, cycle=cycle, orientation=orientation)
-    except Exception as error:
-        native = dict(schema=1, panel=panel, cycle=cycle, requested_orientation=orientation,
-                      native_observer_error=type(error).__name__)
+    if native is None:
+        try:
+            native = rotation_failure_snapshot(app, panel=panel, cycle=cycle, orientation=orientation)
+        except Exception as error:
+            native = dict(schema=1, panel=panel, cycle=cycle, requested_orientation=orientation,
+                          native_observer_error=type(error).__name__)
     path = Path(app.paths.cache) / 'logistics-native-ui-rotation-failure.json'
     def persist():
         native['reader_width'] = report
@@ -312,11 +324,11 @@ async def observe_epub_width_failure(app, *, panel, cycle, orientation):
         print('LOGISTICS_EPUB_WIDTH_FAILURE=' + json.dumps(native), flush=True)
 
 
-async def capture_epub_width_failure(app, *, panel, cycle, orientation):
+async def capture_epub_width_failure(app, *, panel, cycle, orientation, **details):
     """Observation failures/cancellation must not replace the latched assertion."""
     if sys.platform == 'ios' and panel == 'provider-epub':
         try:
-            await observe_epub_width_failure(app, panel=panel, cycle=cycle, orientation=orientation)
+            await observe_epub_width_failure(app, panel=panel, cycle=cycle, orientation=orientation, **details)
         except BaseException as error:
             print('LOGISTICS_EPUB_WIDTH_OBSERVER_ERROR=' + type(error).__name__, flush=True)
 
@@ -330,9 +342,37 @@ def promoted_controls(widget):
         yield from controls or ()
 
 
-def assert_visible_controls(app):
+def rect_geometry(rect):
+    return (float(rect.origin.x), float(rect.origin.y),
+            float(rect.size.width), float(rect.size.height))
+
+
+def android_control_frames(app, frames):
+    """Observe fixed mounted controls outside scrollable content."""
+    import toga
+    from java import jarray, jint
+    point = jarray(jint)(2)
+    checked = (toga.Button, toga.Selection, toga.TextInput, toga.MultilineTextInput)
+
+    def visit(widget):
+        if isinstance(widget, checked):
+            native = widget._impl.native
+            width, height = native.getWidth(), native.getHeight()
+            if width > 0 and height > 0 and native.isAttachedToWindow() and native.isShown():
+                native.getLocationOnScreen(point)
+                frames.append((id(widget), (int(point[0]), int(point[1]), width, height)))
+        if not isinstance(widget, toga.ScrollContainer):
+            for child in widget.children:
+                visit(child)
+
+    visit(app.body)
+
+
+def assert_visible_controls(app, *, frames=None):
     """Fixed controls must stay inside cutout/Home-indicator safe bounds."""
     if sys.platform != 'ios':
+        if frames is not None:
+            android_control_frames(app, frames)
         return 0
     import toga
     window = app.main_window._impl.native
@@ -359,6 +399,8 @@ def assert_visible_controls(app):
                 from mobile.reading.reader_edges import footer_touch_extension
                 extension = footer_touch_extension(footer_view, float(window.safeAreaInsets.bottom)) if footer_view else 0
                 assert_control_bounds(rect, window, label, bottom_extension=extension)
+                if frames is not None:
+                    frames.append((id(widget), rect_geometry(rect)))
         # Promoted actions retain callbacks outside the Toga content tree.
         for control in promoted_controls(widget):
             visit(control)
@@ -389,6 +431,8 @@ def assert_visible_controls(app):
                 if rect.size.width > 0 and rect.size.height > 0:
                     assert_bar_control_bounds(rect, bar.bounds, label)
                     count += 1
+                    if frames is not None:
+                        frames.append((int(native.ptr.value), rect_geometry(rect)))
             for child in native_value(native.subviews):
                 visit_bar(child)
         visit_bar(bar)
@@ -402,13 +446,118 @@ async def settled_visible_controls(app):
                                     timeout=CONTROL_SETTLE_TIMEOUT)
 
 
-async def settled_rotation_layout(app):
-    """Controls and content must pass together within one animation budget."""
-    def ready():
-        controls = assert_visible_controls(app)
-        safe_geometry(app)
-        return controls
-    return await wait_for_assertion(ready, timeout=CONTROL_SETTLE_TIMEOUT)
+def rotation_native_geometry(app):
+    """Observe attached native geometry and work still pending on this window."""
+    if not app.body.children:
+        return None, 'Content is missing'
+    body = app.body.children[0]._impl.native
+    if sys.platform != 'ios':
+        impl = app.native_host.adapter.impl
+        decor = app._impl.native.getWindow().getDecorView()
+        bar = impl.native_navigationview
+        views = (decor, impl.native_content, body, bar)
+        frames = tuple((view.getLeft(), view.getTop(), view.getWidth(),
+                        view.getHeight(), view.getVisibility()) for view in views)
+        # Toga flattens Boxes. A decorative body can keep its layout-request
+        # flag set after the native content viewport has finished layout.
+        pending = (not body.isAttachedToWindow() or impl.native_content.isLayoutRequested()
+                   or (bar.getVisibility() != 8 and bar.isLayoutRequested()))
+        return frames, 'Android layout pending' if pending else None
+
+    from commonUtils.ui.native.keyboard import native_value
+    window = app.main_window._impl.native
+    if getattr(app, '_pending_host_resize', None) or getattr(app, '_fold_refresh_pending', False):
+        return None, 'iOS resize pending'
+    adapter = app.native_host.adapter
+    navigation = adapter.navigation_for(app.native_host.state.destination)
+    for controller in (native_value(window.rootViewController), navigation):
+        if controller is not None and native_value(controller.transitionCoordinator) is not None:
+            return None, 'UIKit transition active'
+    # Layout bounds can reach their target before an animated parent frame
+    # on screen does. Observe the body and its ancestors up to the main window.
+    def moving(view):
+        layer = native_value(view.layer)
+        presented = native_value(layer.presentationLayer)
+        return presented is not None and any(
+            abs(actual - model) > 1 for actual, model in zip(
+                rect_geometry(presented.frame), rect_geometry(layer.frame)))
+
+    bar = native_value(navigation.navigationBar)
+    if moving(bar):
+        return None, 'UIKit navigation bar moving'
+    view = body
+    while view is not None:
+        if moving(view):
+            return None, 'UIKit presentation frame moving'
+        if view.ptr.value == window.ptr.value:
+            insets = window.safeAreaInsets
+            return dict(pose=pose_snapshot(app), bar=rect_geometry(bar.frame),
+                        insets=tuple(float(getattr(insets, edge)) for edge in
+                                     ('top', 'right', 'bottom', 'left'))), None
+        view = native_value(view.superview)
+    return None, 'Content is detached from the main window'
+
+
+async def settled_rotation_layout(app, acknowledged, diagnostics):
+    """Require four consecutive matching native samples within one deadline."""
+    required = 4
+    started = monotonic()
+    deadline = started + CONTROL_SETTLE_TIMEOUT
+    recent = deque(maxlen=4)
+    previous = None
+    consecutive = 0
+    attempts = 0
+    last_assertion = None
+    while monotonic() < deadline:
+        attempts += 1
+        orientation_ok = acknowledged()
+        signature = None
+        count = None
+        geometry = None
+        reason = 'Orientation no longer acknowledged'
+        last_assertion = None
+        if orientation_ok:
+            native, reason = rotation_native_geometry(app)
+            if reason is None:
+                controls = []
+                try:
+                    count = assert_visible_controls(app, frames=controls)
+                    geometry = safe_geometry(app)
+                except AssertionError as error:
+                    last_assertion = error
+                    reason = 'Content or controls outside safe bounds'
+                else:
+                    signature = (native, geometry, controls)
+                    if signature != previous:
+                        reason = 'Geometry observed' if previous is None else 'Geometry changed'
+                        consecutive = 0
+                    consecutive += 1
+        if signature is None:
+            consecutive = 0
+        now = monotonic()
+        if consecutive == required and now <= deadline:
+            return count
+        if geometry is None and last_assertion is not None and last_assertion.args:
+            detail = last_assertion.args[0]
+            if isinstance(detail, dict):
+                geometry = detail
+        # Keep dimensions and counts only. Assertion details may contain UI labels.
+        recent.append(dict(elapsed_s=round(now - started, 3), reason=reason or 'Geometry matched',
+                           controls=len(controls) if count is not None else None, consecutive=consecutive,
+                           geometry={key: geometry[key] for key in (
+                               'x', 'y', 'view_width', 'view_height', 'left', 'top', 'right',
+                               'bottom', 'safe_left', 'safe_top', 'safe_right', 'safe_bottom')
+                               if geometry is not None and key in geometry}))
+        previous = signature
+        remaining = deadline - now
+        if remaining <= 0:
+            break
+        await asyncio.sleep(min(POLL_INTERVAL, remaining))
+    diagnostics.update(timeout_s=CONTROL_SETTLE_TIMEOUT, required_samples=required,
+                       attempts=attempts, samples=list(recent))
+    if last_assertion is not None:
+        raise last_assertion
+    raise AssertionError('Native rotation layout did not stabilize before its deadline')
 
 
 async def assert_welcome_actions_reachable(app):
@@ -455,7 +604,7 @@ def assert_control_bounds(rect, window, label, *, bottom_extension=0):
     assert rect.origin.y + rect.size.height <= size.height - safe.bottom + bottom_extension + 1, details
 
 
-def rotation_failure_snapshot(app, *, panel, cycle, orientation):
+def rotation_failure_snapshot(app, *, panel, cycle, orientation, readiness=None):
     """Synchronous failure-only observations; never change the failed operation."""
     import time
     import threading
@@ -505,10 +654,17 @@ def rotation_failure_snapshot(app, *, panel, cycle, orientation):
                   privacy={key: bool(getattr(privacy, key, False))
                            for key in ('inactive', 'resume_locked', 'disposed', 'interrupted')},
                   privacy_shield=view(getattr(privacy, 'shield', None)))
+    if readiness is not None:
+        result['readiness'] = readiness
+    return persist_rotation_failure(app, result)
+
+
+def persist_rotation_failure(app, result):
     path = Path(app.paths.cache) / 'logistics-native-ui-rotation-failure.json'
     text = json.dumps(result)
     if len(text.encode()) > 16384:
         raise ValueError('Rotation failure snapshot exceeded its bounded budget')
+    app._native_rotation_failure = result
     temporary = path.with_suffix('.tmp')
     temporary.write_text(text + '\n')
     temporary.replace(path)
@@ -518,16 +674,37 @@ def rotation_failure_snapshot(app, *, panel, cycle, orientation):
 
 async def rotate_panel(app, *, panel, cycle, orientation):
     """Keep original deadline/exception even when the observer itself fails."""
-    from .timings import measure
+    from .timings import measure, section
+    context = dict(panel=panel, orientation=orientation, cycle=cycle)
+    readiness = {}
+    with section(app, 'rotation-request', **context):
+        try:
+            acknowledged = await acknowledge_rotation(app, orientation, panel=panel)
+        except AssertionError:
+            if sys.platform == 'ios':
+                try:
+                    rotation_failure_snapshot(app, **context)
+                except Exception:
+                    pass  # Preserve the acknowledgement failure.
+            raise
     try:
-        await measure(app, 'rotation-request', rotate(app, orientation),
-                      panel=panel, orientation=orientation, cycle=cycle)
+        return await measure(app, 'rotation-post-ack-settle',
+                             settled_rotation_layout(app, acknowledged, readiness), **context)
     except AssertionError:
+        native = None
         try:
             if sys.platform == 'ios':
-                rotation_failure_snapshot(app, panel=panel, cycle=cycle, orientation=orientation)
+                native = rotation_failure_snapshot(app, **context, readiness=readiness)
         except Exception:
             pass
+        if native is None and readiness:
+            native = dict(schema=1, panel=panel, cycle=cycle, requested_orientation=orientation,
+                          readiness=readiness)
+            try:
+                persist_rotation_failure(app, native)
+            except Exception:
+                pass  # Preserve the original readiness failure.
+        await capture_epub_width_failure(app, **context, native=native)
         raise
 
 
@@ -546,13 +723,7 @@ async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
         expected = panel_state(app)
         for cycle in range(cycles):
             for orientation in ('portrait', 'landscape-left', 'portrait', 'landscape-right', 'portrait'):
-                await rotate_panel(app, panel=name, orientation=orientation, cycle=cycle)
-                try:
-                    controls = await measure(app, 'rotation-control-settle', settled_rotation_layout(app),
-                                             panel=name, orientation=orientation, cycle=cycle)
-                except AssertionError:
-                    await capture_epub_width_failure(app, panel=name, cycle=cycle, orientation=orientation)
-                    raise
+                controls = await rotate_panel(app, panel=name, orientation=orientation, cycle=cycle)
                 if name == 'notes-library':
                     await assert_welcome_actions_reachable(app)
                 actual = panel_state(app)
