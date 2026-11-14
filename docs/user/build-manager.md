@@ -323,7 +323,7 @@ Native Cocoa verification covered short-window navigation, actual hosted plan
 review, captured TestFlight notes, automatic naming and seven passing local checks.
 No live dispatch, upload or publication formed part of that verification.
 
-See the [adapter and validation guide](../development/build-manager.md) for developer contracts and platform acceptance.
+See the [adapter and validation guide](../development/build-release/build-manager.md) for developer contracts and platform acceptance.
 
 
 ## Android and iOS can progress independently

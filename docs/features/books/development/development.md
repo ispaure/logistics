@@ -106,7 +106,7 @@ when appearance changed or the native bridge was lost.
 canonical path. Reads and writes are bounded to 128 KiB. An oversized save
 keeps the last checkpoint. The thumbnail worker seeds the spine for legacy
 chapter lookups, so badge drawing needs only bounded state. See the shared
-[reader state contract](../../../development/reader-state.md) for provider
+[reader state contract](../../../development/architecture/reader-state.md) for provider
 checkpoints, credential storage and clearing behavior.
 
 `locations.py:LayoutPages` maps whole-book screen pages to chapters and local
@@ -129,7 +129,7 @@ navigation, pending position writes and width observation.
 `mobile/provider_reader.py` reuses the same bridge with the nonpersistent
 WebView in `mobile/private_view.py`. That view clears content on disposal.
 The host owns provider grants, storage and session lifetimes. Use the
-[shared publication boundary](../../../development/mobile-runtime.md#reader-publication-boundary)
+[shared publication boundary](../../../development/architecture/mobile-runtime.md#reader-publication-boundary)
 when mounting a replacement chapter. Add newly imported portable/mobile
 modules to `Python/features/books/mobile_sources.json`.
 
@@ -197,7 +197,7 @@ basename and the listening timer. Protected sessions use generic metadata.
 Document text stays in the playback owner. Default session-only playback
 requires the foreground. An explicit background-audio preference can retain
 the authorized in-memory passage, subject to credential revocation.
-See [audio playback](../../../development/audio-playback.md) for host policy.
+See [audio playback](../../../development/architecture/audio-playback.md) for host policy.
 `test_epub_continuation.py` and `test_speech_overlay.py` exercise lifecycle and
 recovery with silent engines. The native speech probe checks the real callbacks
 and highlight cleanup. Physical audio and voice availability require devices.

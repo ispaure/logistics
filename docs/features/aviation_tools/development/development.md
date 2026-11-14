@@ -67,7 +67,7 @@ codes raise `ValueError`. The feature ships without a data refresh service.
 The page uses PySide6 and runs in the desktop application. The mobile source
 allowlist in `mobile_build/tools.py` omits this feature. See
 [mobile availability](../user_mobile/user_mobile.md) and the shared
-[feature conventions](../../../development/features.md).
+[feature conventions](../../../development/architecture/features.md).
 
 ## Validation
 

@@ -44,7 +44,7 @@ writable destination, optionally create a folder or edit the name, then tap
 **Move here**. Existing destination files are preserved; moving encrypted files
 to ordinary storage requires confirmation. It does not choose an encrypted destination inside
 the share sheet. Developer iOS builds require the app and extension's matching
-App Group provisioning; see [mobile preparation](../../development/mobile-preparation.md#incoming-files-and-inbox).
+App Group provisioning; see [mobile preparation](../../development/build-release/mobile-preparation.md#incoming-files-and-inbox).
 
 Move and Rename keep open text documents and their unsaved edits. Moving a
 folder also updates its open text documents. The operation moves the saved
@@ -256,4 +256,4 @@ require an exit callback to have occurred.
 External sharing and editing the original provider document are not
 implemented. EPUB/comics use the private library described below. Native picker grants, keyboards and suspension need testing
 on devices before treating this prototype as a supported mobile product. See
-[build and validation instructions](../../development/mobile-launchers.md).
+[build and validation instructions](../../development/build-release/mobile-launchers.md).

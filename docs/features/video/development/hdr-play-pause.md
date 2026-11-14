@@ -1,29 +1,14 @@
-# iOS HDR Play/Pause investigation
+# iOS HDR pause and resume
 
-## Finding and correction
+## Pause presentation
 
-The production Pause action called `holdPausePresentation` before asking VLC to
-pause. That helper placed `snapshotViewAfterScreenUpdates:NO` over the movie;
-Play removed it. Thus paused video was covered by a UIKit snapshot rather than
-continuing to display the original sample-buffer layer. The snapshot had no
-explicit video color metadata or dynamic-range configuration. Changing the HDR
-mode on the underlying video layer did not configure this separate surface.
-This is a verified presentation-path discrepancy, and a candidate explanation
-for the reported brightness change. It does **not** prove that the paused image
-was SDR, that its shadows were accurate, or that Apple's compositor crushed the
-playing image. Bright paused highlights alone cannot establish those facts.
+`PausePresentation.m` keeps the native sample-buffer layer visible while VLC
+pauses. The player retains its clock, explicit pause intent, audio suppression
+and privacy checks. A few queued frames can complete before acknowledgement.
+Other renderer fallbacks use a volatile snapshot. System-managed HDR is the
+iOS 26+ default; Maximum remains available.
 
-`PausePresentation.m` now leaves the native sample-buffer presentation visible
-when that layer exists. VLC acknowledges Pause and holds its own picture; the
-existing clock capture, explicit pause, audio suppression, privacy gates and
-resume logic remain in charge. A few queued frames may finish before Pause is
-acknowledged. Other VLC renderer fallbacks retain their existing snapshot hold.
-There is no brightness compensation, metadata rewrite, decoder switch or new
-renderer. System-managed remains the iOS 26+ default and Maximum remains available.
-Physical visual acceptance is still required; this change fixes the known path
-switch, not a proven defect in Apple's tone mapping.
-
-## Pipeline and version evidence
+## Rendering and version boundary
 
 1. `playback.py` retains ProviderContent and bounded memory ranges. Remote rclone
    crypt and native LocalCrypt provide decoded **file bytes**, not decoded video
@@ -145,49 +130,11 @@ metadata comparison to isolate VLC versus Apple; do not add arbitrary gamma.
 No public bridge API, framework dependency, minimum OS, SDK pin or rendering
 engine changed. Buffer diagnostics require iOS 17.4 and are availability guarded.
 
-## Validation recorded for this change
+## Validation limits
 
-The focused simulator PQ and SDR H.264 transition probes passed in both modes:
-layer identity, pixel format, color attachments and dynamic-range preference
-remained stable across Pause/Resume, with no snapshot overlay. PQ displayed BGRA
-with PQ/BT.2020 tags and SDR displayed `420v`. Simulator headroom was one; these
-results do not establish HDR luminance, hardware HEVC decoding or full-range
-color fidelity. Both disposable simulators were removed. The ordinary chrome
-probe initially failed its auto-hide timing check before transition validation.
-Review found that Playing could precede frame statistics/seek acknowledgement,
-leaving the auto-hide timer unscheduled. The playback tick now revisits timer
-eligibility without resetting an existing deadline.
-
-The 29 mobile video host tests, eight desktop video transport/provider tests
-(including real LocalCrypt ranges) and five documentation hierarchy checks passed.
-The transport test needed loopback socket access outside the restricted sandbox.
-Native syntax/API compilation passed against the cached framework for iPhoneOS
-and simulator. No physical app was installed or replaced for this investigation.
-The physical acceptance matrix above remains outstanding.
-
-Review tightened the transition acceptance checks to reject missing PQ metadata,
-an unapplied HDR mode, stalled resume clocks and incomplete device reports.
-Two probe-tool host tests passed, including rejection of failed, incomplete and
-non-HDR physical reports. The stricter PQ simulator transitions passed in both
-modes. The controller and physical fixture compile against the iPhoneOS SDK.
-The auto-hide rerun reached the later cache-strip check, confirming the timer
-fix; that assertion was updated from obsolete track-edge/gap geometry to the
-current thumb-endpoint alignment and slider containment contract.
-
-The diagnostics helper is explicitly included in the feature's mobile source
-manifest. The mobile packaging regression now checks that all local Objective-C
-implementation imports are present in the staged-source allowlist; compiling
-against the working checkout alone would not catch that omission.
-
-After these review fixes, the full SDR chrome probe passed (240 presentation
-samples), including auto-hide, fade and playback menus. The 29 mobile video
-host tests passed with the expanded packaging assertion. All review-run
-simulators were removed. Physical HDR visual acceptance is still outstanding.
-
-The physical probe's restoration path also survives exceptions/timeouts or an
-interrupt during QA cache cleanup: normal-app installation is attempted in a
-separate `finally` path. Cleanup and restoration errors are retained in the
-cleanup report; cleanup failure does not silently produce a successful run.
-The report distinguishes a requested cache cleanup from confirmed app restoration.
-Mocked lifecycle tests cover successful teardown, cleanup command failures,
-restoration failures and interruption; they do not install or modify a device.
+The transition probe checks layer identity, pixel format, color attachments,
+dynamic range, resumed clock and absence of a snapshot over the sample-buffer
+layer. Simulator results with unit headroom establish transition contracts.
+Measure luminance and verify hardware HEVC and full-range display behavior on
+a supported device. The physical probe attempts normal-app restoration even
+if QA cleanup fails, and reports cleanup and restoration independently.

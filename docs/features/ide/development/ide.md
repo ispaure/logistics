@@ -62,7 +62,7 @@ Shared Workspace containers own project docking and detachment. Internal
 up to three columns. Group moves and merges collapse redundant views while
 preserving the buffer. Project shutdown snapshots layout before dock destruction
 and honors close vetoes across detached containers. See
-[desktop architecture](../../../development/architecture.md) for the shell
+[desktop architecture](../../../development/architecture/architecture.md) for the shell
 close protocol.
 
 ## Find in Files

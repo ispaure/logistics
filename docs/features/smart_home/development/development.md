@@ -41,7 +41,7 @@ rejects a blank address before creating a `phue.Bridge`. See the
 
 The mobile packaging allowlist in `mobile_build/tools.py` omits this feature.
 See [mobile availability](../user_mobile/user_mobile.md) and
-[feature conventions](../../../development/features.md).
+[feature conventions](../../../development/architecture/features.md).
 
 ## Hue command boundary
 

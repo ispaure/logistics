@@ -64,7 +64,7 @@ drops distant DOM nodes and pixels and rejects stale work on a jump or
 retirement. A scroll observation updates controls without seeking or
 recording a jump. The mobile checkpoint restores page, within-page offset
 and zoom, with a fallback for older page-only records. See the
-[reader state contract](../../../development/reader-state.md).
+[reader state contract](../../../development/architecture/reader-state.md).
 
 Mobile paged presentation lives in `mobile/canvas.py`. `PDFNavigation`
 prepares up to two pages before committing their indices. `PDFCanvas`

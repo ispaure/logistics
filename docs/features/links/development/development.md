@@ -76,4 +76,4 @@ unresolved placeholders, HTTP/HTTPS restrictions, a false browser result and
 inline error presentation. Keep browser calls mocked for automated checks.
 When native desktop interaction is needed, separately check the configured
 browser handoff; do not interpret an accepted launch as a reachable service.
-Use the owning workflow in [Testing](../../../development/testing.md).
+Use the owning workflow in [Testing](../../../development/testing/testing.md).

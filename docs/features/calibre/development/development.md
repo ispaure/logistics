@@ -78,4 +78,4 @@ Calibre is optional and desktop-only. The mobile feature registry has no
 Calibre entry. Books owns EPUB parsing, reading and direct metadata editing.
 Calibre export copies existing formats without conversion or database
 synchronization. See the [mobile availability guide](../user_mobile/user_mobile.md)
-and [feature contribution conventions](../../../development/features.md).
+and [feature contribution conventions](../../../development/architecture/features.md).

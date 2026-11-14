@@ -59,7 +59,7 @@ Logistics drops the legacy stamp setting from pending and applied state.
 
 ## Validation limits
 
-Run from the repository root after [desktop setup](../../../development/getting-started.md):
+Run from the repository root after [desktop setup](../../../development/setup/getting-started.md):
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/blender/test_blender_bluehole.py

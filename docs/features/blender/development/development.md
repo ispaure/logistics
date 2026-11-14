@@ -19,7 +19,7 @@ Try changing the question to **Download and install Blender {version} before lau
 `Python/features/blender/ui/page.py` (`BlenderPage._launch`, reached through
 `_launch_card`). Preserve the destination and the decline path. Update the
 expected prompt in `test_first_launch_prompts_installs_and_launches_configuration`.
-Run from the repository root after [desktop setup](../../../development/getting-started.md):
+Run from the repository root after [desktop setup](../../../development/setup/getting-started.md):
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/blender/test_blender_page.py

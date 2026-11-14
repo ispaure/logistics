@@ -23,4 +23,4 @@ across the app, including ordinary document browsing. iOS hides content when the
 OS reports active capture and pauses audio. Supported capture protection does not
 prevent still screenshots or filming the device with another camera. Actual iPhone
 Mirroring and physical Bluetooth checks remain pending; see the
-[privacy and validation limits](../../development/audio-playback.md).
+[privacy and validation limits](../../development/architecture/audio-playback.md).

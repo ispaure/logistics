@@ -28,7 +28,7 @@ Try changing **Open P4 Console** to **Open Perforce Console** in
 `Python/features/perforce/ui_contributions.py` (`_get_actions`). Keep the
 configured port in the label. Update the expected button name in
 `test_console_forwards_arguments_and_keeps_connection_in_interactive_shell`.
-Run from the repository root after [desktop setup](../../../development/getting-started.md):
+Run from the repository root after [desktop setup](../../../development/setup/getting-started.md):
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/integrations/test_perforce.py
@@ -71,5 +71,5 @@ to diagnose connection or readiness failures. The focused tests validate
 arguments and failure propagation using fixtures. Live server connectivity
 and native terminal availability require Linux runtime checks.
 
-See [feature conventions](../../../development/features.md) for the shared
+See [feature conventions](../../../development/architecture/features.md) for the shared
 folder contribution contract.

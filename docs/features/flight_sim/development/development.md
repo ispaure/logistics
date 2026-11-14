@@ -35,7 +35,7 @@ or using a private window preset.
 
 `Python/features/flight_sim/__init__.py` delegates registration to
 `ui_contributions.py`. The feature contributes **Installation** settings and
-three actions to the shared [Debug page](../../../development/extension-points.md#debug).
+three actions to the shared [Debug page](../../../development/architecture/extension-points.md#debug).
 The desktop action host confirms destructive actions before calling them.
 
 `detection.py` reads `[XPlane] installation_path` from layered `config.ini`

@@ -108,7 +108,7 @@ belong to `commonUtils.integrations.wrappers.piexifWrapper`.
 
 ## Compression regression coverage
 
-Run the [images owner selection](../../../development/testing.md#find-the-tests-for-your-change)
+Run the [images owner selection](../../../development/testing/testing.md#find-the-tests-for-your-change)
 with `python3 dev.py test-owner images`. Choose the individual tests under
 `Python/tests/images/` based on the change.
 
@@ -132,7 +132,7 @@ a cancellable worker, publishes pixels after success, retains the provider until
 close and clears pixels on credential revocation. `document.py` owns the
 read-only document and natural same-folder selection.
 
-On Android and iOS, follow the [mobile reader runtime](../../../development/mobile-runtime.md)
+On Android and iOS, follow the [mobile reader runtime](../../../development/architecture/mobile-runtime.md)
 to provider opening and presentation. `mobile/navigation.py` installs previous
 and next actions for the `image` session kind. It serializes navigation,
 checks session tokens and selection after listing asynchronously, and opens a
@@ -144,7 +144,7 @@ failed replacement and provider release.
 and remote reads, replacement failure and Home Server read-only/session-only
 identity using host backends. Update `Python/features/images/mobile_sources.json`
 when adding an imported mobile module. See
-[mobile preparation](../../../development/mobile-preparation.md) for allowlist
+[mobile preparation](../../../development/build-release/mobile-preparation.md) for allowlist
 and packaging checks.
 
 ## Portable image validation

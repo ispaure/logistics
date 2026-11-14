@@ -1,17 +1,4 @@
-# Logistics Video Player brief
-
-## Requested outcome
-
-One in-app video player on desktop, Android and iPad, opening Local, LocalCrypt, remote and crypt cloud resources. The minimum acceptance matrix crosses MP4 and
-Matroska (MKV) with H.264/AVC and H.265/HEVC video, and AAC and Opus audio.
-Container recognition alone is not proof of codec support. Validate decoded
-frames, audible output, seeking and audio/video synchronisation on each target.
-
-Playback controls include play/pause, seeking, elapsed/total time, volume,
-audio-track selection, embedded subtitle selection/off, external SRT subtitles,
-and a readily accessible fullscreen toggle. Remember position per source and
-revision; do not apply an old position to replaced content. Completion resets
-resume to the start. Errors must leave a usable close/retry path.
+# Video storage and playback contracts
 
 ## Storage and privacy contract
 
@@ -36,19 +23,18 @@ requires the existing credential password gate. Unlocking must not autoplay.
 Backgrounding an ordinary movie may continue only through an explicitly selected
 supported floating/cast mode; ordinary inline playback pauses.
 
-## Scope and delivery
+## Remote playback and validation
 
 Local playback and rclone network ranges share the retained-provider transport.
 Both crypt and non-crypt cloud playback are best effort and must not expose
-remote credentials to a decoder or receiver. Historical cloud checks used memory-only resume for
-the current player because remote sources are read-only.
+remote credentials to a decoder or receiver. Remote resume follows the source and credential policy in the [developer guide](development.md#playback-tool-ownership).
 
 Native mobile packaging, codec decoding, subtitle rendering, lock/unlock,
 picture in picture and receiver playback require native acceptance. Host tests
 alone cannot establish those capabilities. Keep the implemented status and
 remaining acceptance work in the [development guide](development.md).
 
-Session-only persisted state now follows the shared [credential-password and clearing policy](../../../development/reader-state.md).
+Session-only persisted state now follows the shared [credential-password and clearing policy](../../../development/architecture/reader-state.md).
 
 ## iOS framing and selection menus
 

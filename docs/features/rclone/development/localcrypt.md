@@ -239,7 +239,7 @@ and ciphertext revision. Its shared `NativeArchiveAccess`
 owner makes close terminal and validates captured inner-password revisions before
 cache publication; a late native result cannot refill a retired source. Native
 crypt operations remain in the provider adapter. See the
-[reader access trace](../../../development/document-storage.md#trace-a-mobile-provider-reader)
+[reader access trace](../../../development/architecture/document-storage.md#trace-a-mobile-provider-reader)
 for the host handoff and the separate remote transport owner.
 
 The embedded bridge implements crypt using rclone's cipher over an allowlisted

@@ -404,7 +404,7 @@ The private browser keeps filtering, locations and resources in memory.
 LocalCrypt filename searches that use cached directory metadata can persist it
 as encrypted records when the credential ZIP key is available. With no ZIP key,
 that cache stays in memory for the unlocked session. Private thumbnails stay
-in memory. See [private reader history](../../../development/reader-state.md)
+in memory. See [private reader history](../../../development/architecture/reader-state.md)
 for the separate position and bookmark settings. Markdown Open
 and Save As use the Local/LocalCrypt picker; temporary-file diagram rendering is disabled;
 images are limited to prefetched local resources inside the copy. Markdown files

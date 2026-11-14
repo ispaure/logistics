@@ -45,7 +45,7 @@ root `CompressionLog.txt`, so use a fresh copy when trying it again.
 Without that setting, the existing collection opens at the root. The
 catalog belongs to the root even when a tab selects a subfolder. The library
 and File Browser share the contribution and browser handlers. Independent
-readers can outlive the library. See [file browser development](../../../development/file-browser.md)
+readers can outlive the library. See [file browser development](../../../development/architecture/file-browser.md)
 for shared activation and selection behavior.
 
 ## Edit ComicInfo fields or suggestions
@@ -135,7 +135,7 @@ spread and half. The imported and provider controllers commit these
 after the prepared view publishes. `mobile/presentation.py` stages
 pixels before replacing the displayed bitmap so the outgoing page can
 animate and decode errors retain the current image and anchor. Follow
-the [host publication contract](../../../development/mobile-runtime.md#reader-publication-boundary).
+the [host publication contract](../../../development/architecture/mobile-runtime.md#reader-publication-boundary).
 
 `comic_split_wide` defaults to true, including for older preferences.
 A landscape source in a portrait viewport can be split in any page

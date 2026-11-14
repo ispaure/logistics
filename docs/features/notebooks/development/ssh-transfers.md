@@ -13,7 +13,7 @@ Expect synthetic folders and documents to retain their identities across refresh
 and reconnect. In `ui/remarkable_destination.py`, configure native Save mode and
 the default suffix before overwrite confirmation. Publish only to the accepted
 local path and check the captured revision before replacing it. See
-[streaming local exports](../../../development/document-storage.md#streaming-local-exports).
+[streaming local exports](../../../development/architecture/document-storage.md#streaming-local-exports).
 
 `remarkable_transfer.prepare_upload` prepares a local candidate, and
 `compare_upload_members` checks a scoped copy against its receipt. Upload and

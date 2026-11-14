@@ -75,7 +75,7 @@ are displayed as text and are not automatically renamed. Links and Smart Home
 prefer their new `_str` keys and still accept their old unsuffixed keys.
 
 You can edit these settings in Logistics without writing code.
-See [configuration development](../development/configuration-and-data.md) for
+See [configuration development](../development/architecture/configuration-and-data.md) for
 schema integration and compatibility details.
 
 ## Managed data paths

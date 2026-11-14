@@ -151,11 +151,31 @@ from mobile.documentation_ui import show_documentation
 owner = show_documentation(app)
 assert owner.path.name == 'user_mobile.md'
 assert owner.catalog.root == Path(mobile.__file__).resolve().parent / 'help/docs'
-owner.follow_link(owner.web, '../features/lm/user_mobile/user_mobile.md')
-assert owner.catalog.root == Path(mobile.__file__).resolve().parent / 'help/docs'
-assert owner.path.name == 'user_mobile.md'
-assert owner.back()
-assert owner.catalog.root == Path(mobile.__file__).resolve().parent / 'help/docs'
+wiki = owner.catalog.root
+route = (
+    ('../features/lm/user_mobile/user_mobile.md', 'features/lm/user_mobile/user_mobile.md'),
+    ('../../../docs.md', 'docs.md'),
+    ('development/development.md', 'development/development.md'),
+    ('setup/setup.md', 'development/setup/setup.md'),
+    ('getting-started.md#1-prepare-your-environment', 'development/setup/getting-started.md'),
+    ('../architecture/code-map.md', 'development/architecture/code-map.md'),
+    ('../development.md', 'development/development.md'),
+    ('../features/notebooks/development/development.md',
+     'features/notebooks/development/development.md'),
+    ('brush-calibration.md#canvas-probe', 'features/notebooks/development/brush-calibration.md'),
+)
+opened = [owner.path]
+for href, path in route:
+    owner.follow_link(owner.web, href)
+    assert owner.catalog.root == wiki
+    assert owner.path == wiki / path, (owner.path, path)
+    opened.append(owner.path)
+for path in reversed(opened[:-1]):
+    assert owner.back()
+    assert owner.path == path
+    assert owner.catalog.root == wiki
+assert not (wiki / 'development/iphone-duo-feedback-plan.md').exists()
+assert not list(wiki.rglob('mobile-evidence'))
 assert not (Path(mobile.__file__).parent / 'help/Python/features/emulation').exists()
 assert not (Path(mobile.__file__).parent / 'help/Python/commonUtils').exists()
 app.main_window.close()

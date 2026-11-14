@@ -50,7 +50,7 @@ Page turns use a short slide within the reading area. The toolbar stays still.
 
 Provider-backed readers can restore a saved page and scroll position. Private credential-backed
 positions use the owning credential ZIP password; passwordless private sessions
-keep positions in memory. See [reader state and history clearing](../../../development/reader-state.md)
+keep positions in memory. See [reader state and history clearing](../../../development/architecture/reader-state.md)
 for restoration, password changes and clearing controls. Search queries and
 snippets are not reading-position checkpoints.
 

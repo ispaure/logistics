@@ -18,7 +18,7 @@ that interpolates the normalized drive. Update the corresponding
 `Write-Host` assertion in `test_ntfs_repair_uses_normalized_configured_drive`.
 
 Run this from the repository root using the
-[desktop environment](../../../development/getting-started.md). The test
+[desktop environment](../../../development/setup/getting-started.md). The test
 supplies a simulated Windows platform and mocks the launcher, so it also runs
 on macOS and Linux.
 
