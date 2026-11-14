@@ -60,6 +60,12 @@ class DockedVideoTests(QtTestCase):
         evidence.mkdir(parents=True, exist_ok=True)
         with scratch() as root:
             window = self.make_player(root)
+            window.refresh_cache()
+            self.assertEqual(window.seek.ranges, ())
+            self.assertFalse(window.cache_label.isVisible())
+            self.assertNotIn('cache', window.seek.toolTip().lower())
+            self.assertEqual(window.video_title.text(), 'speed-with-audio.mkv')
+            self.assertEqual(window.source_label.text(), 'Local file')
             window.toggle_play()
             self.wait_until(lambda: window.have_frame and window.player.position() > 100)
             window.pause_requested()

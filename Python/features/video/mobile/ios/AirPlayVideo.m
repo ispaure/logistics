@@ -214,8 +214,22 @@
                         }]];
                 }
                 NSArray *playable = [AVMediaSelectionGroup playableMediaSelectionOptionsFromArray:group.options ?: @[]];
+                NSUInteger number = 0;
                 for (AVMediaSelectionOption *option in playable) {
-                    NSString *label = [option isEqual:selected] ? [@"✓ " stringByAppendingString:option.displayName] : option.displayName;
+                    number++;
+                    NSString *label = option.displayName;
+                    // MKV rendition names already include compact codec/channel
+                    // details. Other AVKit assets expose language and subtype.
+                    if (!text && [label rangeOfString:@"^#[0-9]+ · " options:NSRegularExpressionSearch].location == NSNotFound) {
+                        NSString *code = option.extendedLanguageTag ?: option.locale.languageCode ?: @"";
+                        NSString *language = code.length && ![code isEqualToString:@"und"] ?
+                            ([NSLocale.currentLocale localizedStringForLanguageCode:code] ?: code) : @"";
+                        uint32_t subtype = [option.mediaSubTypes.firstObject unsignedIntValue];
+                        char fourcc[] = {(char)(subtype >> 24), (char)(subtype >> 16), (char)(subtype >> 8), (char)subtype, 0};
+                        NSString *codec = subtype ? [NSString stringWithUTF8String:fourcc] : @"";
+                        label = LGVideoAudioLabel(number, @[language, label ?: @""], codec, 0, 0);
+                    }
+                    if ([option isEqual:selected]) label = [@"✓ " stringByAppendingString:label];
                     [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:label style:UIAlertActionStyleDefault
                         handler:^(UIAlertAction *action) {
                             if (item == owner.airPlayPlayer.currentItem && !owner.controlsLocked &&
@@ -241,8 +255,13 @@
 
 - (void)airPlayFailed:(NSNotification *)note {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (note.object == self.airPlayPlayer.currentItem)
+        if (note.object == self.airPlayPlayer.currentItem) {
+            NSError *error = note.userInfo[AVPlayerItemFailedToPlayToEndTimeErrorKey];
+            NSError *underlying = error.userInfo[NSUnderlyingErrorKey];
+            NSLog(@"[VideoAirPlay] playback failed domain=%@ code=%ld underlying=%@/%ld",
+                error.domain, (long)error.code, underlying.domain, (long)underlying.code);
             [self finishAirPlayWithMessage:@"AirPlay couldn’t play this video."];
+        }
     });
 }
 

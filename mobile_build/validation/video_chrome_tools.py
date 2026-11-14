@@ -73,7 +73,7 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
             shutil.move(muxed, app / 'fixture.mp4')
         if airplay_controls:
             subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:size=160x90:rate=24000/1001',
-                '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-t', '3', '-c:v', 'libx265',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-t', '19', '-c:v', 'libx265',
                 '-preset', 'ultrafast', '-pix_fmt', 'yuv420p10le', '-g', '48', '-bf', '2',
                 '-x265-params', 'pools=1:frame-threads=1:log-level=error:hdr10=1:colorprim=9:transfer=16:colormatrix=9',
                 '-c:a', 'libopus', '-ac', '6', str(app / 'airplay.mkv')], check=True)

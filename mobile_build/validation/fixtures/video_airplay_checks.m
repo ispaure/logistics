@@ -60,7 +60,8 @@
     v.videoURL = [[NSBundle.mainBundle URLForResource:@"fixture" withExtension:@"mp4"] absoluteString];
     v.startMilliseconds = 0;
     v.knownDuration = 30000;
-    v.subtitleJSON = @"[]"; v.queueJSON = @"[]"; v.optionsJSON = @"{}";
+    v.subtitleJSON = @"[]"; v.queueJSON = @"[]";
+    v.optionsJSON = @"{\"video_title\":\"Catching Fire (2013).mkv\",\"source_label\":\"Local file\",\"source_remote\":false}";
     v.allowed = ^BOOL(BOOL external) { return YES; };
     v.requestPlay = ^BOOL { return YES; };
     v.airPlayAllowed = ^BOOL { return YES; };
@@ -103,12 +104,36 @@
         [self finish:@"Bitstream HDR/cadence metadata or playable rendition headers are missing"]; return NO;
     }
     [self.samples addObject:@{@"event": @"hdr-metadata", @"video": video}];
+    for (NSNumber *index in @[@0, @2, @1, @0, @2, @1]) {
+        if (![remux fragment:index.unsignedIntegerValue track:-1].length ||
+            ![remux fragment:index.unsignedIntegerValue track:[metadata[@"defaultAudio"] intValue]].length) {
+            [self finish:@"A forward/backward MKV video/audio fragment request failed"]; return NO;
+        }
+    }
     return YES;
 }
 - (void)checkReceiver {
     LGVideoRouteProbe *v = self.video;
     [v setControlsShown:YES];
     [v.view layoutIfNeeded];
+    [v showCachedRanges:@"{\"local\":true,\"approximate\":true,\"ranges\":[[0,1]]}"];
+    [v updateTimeline];
+    if (!v.cacheStrip.hidden || v.cacheApproximate || [v.timeLabel.text containsString:@"Cache"] ||
+        ![v.videoTitle.text isEqual:@"Catching Fire (2013).mkv"] || ![v.sourceLabel.text isEqual:@"Local file"] ||
+        !v.sourceIcon.image || v.navigationItem.prompt.length || !v.videoHeader.window) {
+        [self finish:[NSString stringWithFormat:@"Local identity/cache: hidden=%d approximate=%d title=%@ source=%@ window=%@",
+            v.cacheStrip.hidden, v.cacheApproximate, v.videoTitle.text, v.sourceLabel.text, v.videoHeader.window]]; return;
+    }
+    if (![LGVideoAudioLabel(2, @[@"", @"Surround", @""], @"Audio Coding 3 (AC-3)", 6, 48000) isEqual:@"#2 · AC-3 · 6 ch"] ||
+        ![LGVideoAudioLabel(1, @[@"English", @"Commentary", @"commentary"], @"mp4a", 2, 44100)
+            isEqual:@"#1 · English · Commentary · AAC · Stereo · 44.1 kHz"]) {
+        [self finish:@"Audio labels lost useful metadata or repeated generic text"]; return;
+    }
+    NSString *audioLabel = [v trackLabel:v.player.audioTracks.firstObject index:0];
+    if (![[audioLabel stringByReplacingOccurrencesOfString:@"✓ " withString:@""] isEqual:@"#1 · AAC · Mono"]) {
+        [self finish:[@"Live VLC audio metadata missing from label: " stringByAppendingString:audioLabel]]; return;
+    }
+    [self.samples addObject:@{@"event": @"local-chrome", @"cacheHidden": @YES, @"audioLabels": @YES, @"audioLabel": audioLabel}];
     NSArray *buttons = v.transport.arrangedSubviews;
     CGRect route = [v.airPlayPicker convertRect:v.airPlayPicker.bounds toView:v.view];
     CGRect forward = [buttons[2] convertRect:[buttons[2] bounds] toView:v.view];
@@ -131,18 +156,29 @@
     if (player.playCalls != 1 || !v.seek.enabled || !v.playRequested) { [self finish:@"Loading resume blocked playback or timeline"]; return; }
     [v seekAirPlay:18000];
     if (v.airPlaySeekTarget != 18000 || player.seeks.count) { [self finish:@"Loading seek was not queued"]; return; }
+    [v forward:nil]; [v forward:nil];
+    if (v.airPlaySeekTarget != 29999 || player.seeks.count) { [self finish:@"Loading forward skips did not accumulate and clamp"]; return; }
+    [v back:nil];
+    if (v.airPlaySeekTarget != 19999) { [self finish:@"Loading direction change lost the pending position"]; return; }
+    [v seekAirPlay:18000];
     player.fixtureItem.fixtureStatus = AVPlayerItemStatusReadyToPlay;
     [v updateAirPlay];
+    [v forward:nil];
+    if (v.airPlaySeekTarget != 28000) { [self finish:@"Ready forward skip lost the pending position"]; return; }
+    [v forward:nil];
+    if (v.airPlaySeekTarget != 29999) { [self finish:@"Ready forward skip was not bounded by duration"]; return; }
+    [v back:nil];
+    if (v.airPlaySeekTarget != 19999) { [self finish:@"Ready direction change lost the pending position"]; return; }
     [v seekAirPlay:9000];
-    if (player.seeks.count != 2) { [self finish:@"Ready item did not accept updated seek"]; return; }
+    if (player.seeks.count != 5) { [self finish:@"Ready item did not accept updated seek"]; return; }
     ((void (^)(BOOL))player.seeks[0])(NO);
     dispatch_async(dispatch_get_main_queue(), ^{
         if (!v.airPlaySeekPending || v.airPlaySeekTarget != 9000) { [self finish:@"Obsolete completion erased newer seek"]; return; }
-        ((void (^)(BOOL))player.seeks[1])(NO);
+        ((void (^)(BOOL))player.seeks.lastObject)(NO);
         dispatch_async(dispatch_get_main_queue(), ^{
             if (v.airPlaySeekPending || v.airPlaySeekTarget >= 0 || player.playCalls != 2) { [self finish:@"Interrupted seek left receiver stuck"]; return; }
             [v seekAirPlay:15000]; [v pause];
-            ((void (^)(BOOL))player.seeks[2])(YES);
+            ((void (^)(BOOL))player.seeks.lastObject)(YES);
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (player.playCalls != 2 || v.playRequested) { [self finish:@"Seek completion undid explicit Pause"]; return; }
                 [v startAirPlayPlayback]; [v seekAirPlay:17000];
@@ -152,7 +188,8 @@
                     [self finish:@"Seek timeout failed to detach at requested position"]; return;
                 }
                 [self.samples addObject:@{@"event": @"receiver", @"loadingSeek": @YES, @"staleCompletion": @YES,
-                    @"interruptedSeek": @YES, @"pausedSeek": @YES, @"timeout": @YES}];
+                    @"interruptedSeek": @YES, @"pausedSeek": @YES, @"timeout": @YES,
+                    @"forwardSkip": @YES, @"directionChange": @YES, @"endClamp": @YES}];
                 if ([self checkRemuxMetadata]) [self finish:nil];
             });
         });

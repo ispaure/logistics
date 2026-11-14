@@ -827,7 +827,49 @@ public final class VideoPlayer {
         return String.format(java.util.Locale.ROOT, "%d:%02d:%02d", seconds / 3600, seconds / 60 % 60, seconds % 60);
     }
 
+    static String compactCodec(String value) {
+        if (value == null) return "";
+        switch (value.toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9]", "")) {
+            case "a52": case "ac3": case "audiocoding3ac3": return "AC-3";
+            case "eac3": case "a52baudioakaeac3": case "audiocoding3eac3": return "E-AC-3";
+            case "trhd": case "truehd": case "dolbytruehd": return "TrueHD";
+            case "mp4a": case "aac": case "mpegaacaudio": case "mpegaacaudiomp4a": case "mpeg4audioaac": return "AAC";
+            case "dts": case "dtsc": case "dtsaudio": return "DTS";
+            case "flac": return "FLAC";
+            case "opus": return "Opus";
+            default: return value.trim();
+        }
+    }
+
+    static String audioLabel(int number, String[] names, String codec, int channels, int sampleRate) {
+        codec = compactCodec(codec);
+        ArrayList<String> parts = new ArrayList<>();
+        parts.add("#" + number);
+        java.util.HashSet<String> seen = new java.util.HashSet<>(java.util.Arrays.asList(
+            "", "und", "unknown", "undefined", "audio", codec.toLowerCase(java.util.Locale.ROOT)));
+        if (channels > 0) seen.addAll(java.util.Arrays.asList("surround", "stereo", "mono"));
+        for (String raw : names) {
+            String name = raw == null ? "" : raw.trim().replaceAll("\\s+", " ");
+            String key = name.toLowerCase(java.util.Locale.ROOT);
+            if (seen.contains(key) || compactCodec(name).equalsIgnoreCase(codec) || key.matches("(?:audio\\s*)?track\\s*\\d+")) continue;
+            seen.add(key); parts.add(name);
+        }
+        if (!codec.isEmpty()) parts.add(codec);
+        if (channels > 0) parts.add(channels == 1 ? "Mono" : channels == 2 ? "Stereo" : channels + " ch");
+        if (sampleRate > 0 && sampleRate != 48000) parts.add(
+            java.math.BigDecimal.valueOf(sampleRate, 3).stripTrailingZeros().toPlainString() + " kHz");
+        if (parts.size() == 1) parts.add("Audio");
+        return android.text.TextUtils.join(" · ", parts);
+    }
+
     private String trackLabel(MediaPlayer.TrackDescription track, boolean text) {
+        if (!text && track.id < 0) return "Audio off";
+        int number = 0;
+        MediaPlayer.TrackDescription[] audioTracks = player.getAudioTracks();
+        if (!text && audioTracks != null) for (MediaPlayer.TrackDescription candidate : audioTracks) {
+            if (candidate.id >= 0) number++;
+            if (candidate.id == track.id) break;
+        }
         java.util.LinkedHashSet<String> parts = new java.util.LinkedHashSet<>();
         if (track.name != null && !track.name.trim().isEmpty()) parts.add(track.name);
         org.videolan.libvlc.interfaces.IMedia media = player.getMedia();
@@ -837,6 +879,12 @@ public final class VideoPlayer {
                 int type = text ? org.videolan.libvlc.interfaces.IMedia.Track.Type.Text
                                 : org.videolan.libvlc.interfaces.IMedia.Track.Type.Audio;
                 if (info == null || info.id != track.id || info.type != type) continue;
+                if (!text && info instanceof org.videolan.libvlc.interfaces.IMedia.AudioTrack) {
+                    org.videolan.libvlc.interfaces.IMedia.AudioTrack audio = (org.videolan.libvlc.interfaces.IMedia.AudioTrack) info;
+                    String language = info.language == null || "und".equals(info.language) ? "" :
+                        java.util.Locale.forLanguageTag(info.language.replace('_', '-')).getDisplayLanguage();
+                    return audioLabel(number, new String[] {language, track.name, info.description}, info.codec, audio.channels, audio.rate);
+                }
                 if (info.language != null && !info.language.isEmpty() && !"und".equals(info.language)) {
                     java.util.Locale language = java.util.Locale.forLanguageTag(info.language.replace('_', '-'));
                     String name = language.getDisplayLanguage(java.util.Locale.getDefault());
@@ -848,6 +896,7 @@ public final class VideoPlayer {
         } finally {
             if (media != null) media.release();
         }
+        if (!text) return audioLabel(number, new String[] {track.name}, "", 0, 0);
         return parts.isEmpty() ? "Track " + track.id : android.text.TextUtils.join(" · ", parts);
     }
 

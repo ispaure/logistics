@@ -13,8 +13,14 @@ from features.video.transport import VideoTransport
 
 class VideoStreamLatencyTests(unittest.TestCase):
     def test_overlapping_seek_waits_for_a_range_slot(self):
+        from itertools import product
+        for remote, (start, target) in product((False, True), ((0, 2), (2, 0))):
+            with self.subTest(remote=remote, start=start, target=target):
+                self.check_overlapping_seek(remote, start, target)
+
+    def check_overlapping_seek(self, remote, start, target):
         from threading import Event, Thread
-        from urllib.request import urlopen
+        from urllib.request import Request, urlopen
         waiting, complete = Event(), Event()
         class Content:
             path, remote, size = 'movie.avi', False, 4
@@ -22,10 +28,16 @@ class VideoStreamLatencyTests(unittest.TestCase):
             def check_access(self): pass
             @contextmanager
             def open(self): yield BytesIO(b'data')
-        transport = VideoTransport(Content())
+        content = Content()
+        content.remote = remote
+        transport = VideoTransport(content)
+        self.addCleanup(transport.close)
+        with urlopen(Request(transport.url, headers={'Range': f'bytes={start}-{start + 1}'}), timeout=3) as response:
+            self.assertEqual(response.read(), b'data'[start:start + 2])
         failures, result = [], []
         transport.failed = failures.append
-        for _ in range(4):
+        held = 4
+        for _ in range(held):
             self.assertTrue(transport.slots.acquire(False))
         slots = transport.slots
         class ObservedSlots:
@@ -40,7 +52,7 @@ class VideoStreamLatencyTests(unittest.TestCase):
         errors = []
         def request():
             try:
-                with urlopen(transport.url, timeout=3) as response:
+                with urlopen(Request(transport.url, headers={'Range': f'bytes={target}-{target + 1}'}), timeout=3) as response:
                     result.append((response.status, response.read()))
             except Exception as error:
                 errors.append(error)
@@ -50,14 +62,15 @@ class VideoStreamLatencyTests(unittest.TestCase):
         worker.start()
         try:
             self.assertTrue(waiting.wait(2), 'Request never reached the occupied range slots')
-            self.assertFalse(complete.is_set(), 'A normal seek burst was rejected')
+            self.assertFalse(complete.wait(.1), 'A normal seek burst was rejected')
             transport.slots.release()
+            held -= 1
             self.assertTrue(complete.wait(2))
             self.assertEqual(errors, [])
-            self.assertEqual(result, [(200,b'data')])
+            self.assertEqual(result, [(206, b'data'[target:target + 2])])
             self.assertEqual(failures, [])
         finally:
-            for _ in range(3): transport.slots.release()
+            for _ in range(held): transport.slots.release()
             worker.join(3)
             transport.close()
 

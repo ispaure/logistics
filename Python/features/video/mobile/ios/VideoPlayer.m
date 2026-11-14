@@ -12,6 +12,38 @@
 
 #import "ScreenAwake.m"
 
+static NSString *LGVideoCompactCodec(NSString *value) {
+    NSString *key = [[(value ?: @"") lowercaseString] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    NSDictionary *names = @{@"a52": @"AC-3", @"ac3": @"AC-3", @"ac-3": @"AC-3",
+        @"audio coding 3 (ac-3)": @"AC-3", @"eac3": @"E-AC-3", @"e-ac-3": @"E-AC-3",
+        @"a/52 b audio (aka e-ac3)": @"E-AC-3", @"audio coding 3 (e-ac-3)": @"E-AC-3",
+        @"trhd": @"TrueHD", @"truehd": @"TrueHD", @"dolby truehd": @"TrueHD",
+        @"mp4a": @"AAC", @"aac": @"AAC", @"mpeg aac audio": @"AAC", @"mpeg aac audio (mp4a)": @"AAC", @"mpeg-4 audio (aac)": @"AAC",
+        @"dts": @"DTS", @"dts audio (dts )": @"DTS", @"flac": @"FLAC", @"opus": @"Opus"};
+    return names[key] ?: value ?: @"";
+}
+
+static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names, NSString *codec,
+                                 unsigned channels, unsigned sampleRate) {
+    codec = LGVideoCompactCodec(codec);
+    NSMutableArray *parts = [NSMutableArray arrayWithObject:[NSString stringWithFormat:@"#%lu", (unsigned long)number]];
+    NSMutableSet *seen = [NSMutableSet setWithArray:@[@"", @"und", @"unknown", @"undefined", @"audio", codec.lowercaseString]];
+    if (channels) [seen addObjectsFromArray:@[@"surround", @"stereo", @"mono"]];
+    for (NSString *raw in names) {
+        NSString *name = [raw stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        NSString *key = name.lowercaseString;
+        if ([seen containsObject:key] || [LGVideoCompactCodec(name).lowercaseString isEqual:codec.lowercaseString] ||
+            [key rangeOfString:@"^(audio\\s*)?track\\s*[0-9]+$" options:NSRegularExpressionSearch].location != NSNotFound) continue;
+        [seen addObject:key]; [parts addObject:name];
+    }
+    if (codec.length) [parts addObject:codec];
+    if (channels) [parts addObject:channels == 1 ? @"Mono" : channels == 2 ? @"Stereo" :
+        [NSString stringWithFormat:@"%u ch", channels]];
+    if (sampleRate && sampleRate != 48000) [parts addObject:[NSString stringWithFormat:@"%g kHz", sampleRate / 1000.0]];
+    if (parts.count == 1) [parts addObject:@"Audio"];
+    return [parts componentsJoinedByString:@" · "];
+}
+
 // The real navigation container owns adaptive system bar placement. Forward
 // immersive preferences to the video owner instead of drawing a private rail.
 @interface LGVideoNavigationController : UINavigationController
@@ -1393,6 +1425,13 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     [self emitCommand:@"settings" value:[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding]];
 }
 - (NSString *)trackLabel:(VLCMediaPlayerTrack *)track index:(NSUInteger)index {
+    if (track.audio) {
+        NSString *language = track.language.length && ![track.language isEqualToString:@"und"] ?
+            ([NSLocale.currentLocale localizedStringForLanguageCode:track.language] ?: track.language) : @"";
+        NSString *label = LGVideoAudioLabel(index + 1, @[language, track.trackName ?: @"", track.trackDescription ?: @""],
+            [track codecName], track.audio.channelsNumber, track.audio.rate);
+        return track.isSelected ? [@"✓ " stringByAppendingString:label] : label;
+    }
     NSMutableArray *parts = [NSMutableArray array];
     if (track.trackName.length) [parts addObject:track.trackName];
     if (track.language.length && ![track.language isEqualToString:@"und"]) {
@@ -1575,7 +1614,9 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     // Remove the movie before releasing its source. Leave the empty AVPlayer
     // available for another explicit AirPlay request in this window.
     self.retired = YES;
-    [self detachAirPlayKeepingRoute:YES];
+    // A closed video must not leave the window's reusable AVPlayer opted into
+    // external playback while browsing or opening a protected document.
+    [self detachAirPlayKeepingRoute:NO];
     self.airPlayAllowed = nil;
     self.rateChangePending = NO;
     [self clearPausePresentation];

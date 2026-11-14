@@ -109,6 +109,7 @@ class VLCPlayer(qt.QObject):
         self._software_subtitles = False
         self._source_size = None
         self._languages = {}
+        self._audio_info = {}
         self._font_scale = 1.0
         self._opened = False
         self.presentation_current = False
@@ -230,6 +231,7 @@ class VLCPlayer(qt.QObject):
         self._displayed = 0
         self._source_size = None
         self._languages = {}
+        self._audio_info = {}
         self.videoSink().setImage(qt.QImage())
         if not url.isEmpty():
             self.media = self.instance.media_new_location(url.toString())
@@ -352,6 +354,22 @@ class VLCPlayer(qt.QObject):
     def audioTracks(self):
         return self.metadata(self._tracks[0], self.vlc.TrackType.audio)
 
+    def audioTrackLabels(self):
+        from features.video.tracks import audio_label
+        result = []
+        for index, (identity, name) in enumerate(self._tracks[0]):
+            if identity < 0:
+                result.append('Audio off')
+                continue
+            info = self._audio_info.get(identity, {})
+            language = self._languages.get((self.vlc.TrackType.audio.value, identity), '')
+            if language and language != 'und':
+                language = qt.QLocale.languageToString(qt.QLocale(language).language())
+            result.append(audio_label(sum(row[0] >= 0 for row in self._tracks[0][:index + 1]),
+                title=name.decode('utf-8', 'replace') if isinstance(name, bytes) else str(name),
+                language=language, **info))
+        return result
+
     def subtitleTracks(self):
         return self.metadata(self.subtitle_rows(), self.vlc.TrackType(2))  # libvlc_track_text
 
@@ -383,6 +401,12 @@ class VLCPlayer(qt.QObject):
                 track = table[index].contents
                 if track.language:
                     self._languages[(track.type, track.id)] = track.language.decode('utf-8', 'replace')
+                if track.type == self.vlc.TrackType.audio.value and track.payload:
+                    audio = ctypes.cast(track.payload, ctypes.POINTER(self.vlc.AudioTrack)).contents
+                    self._audio_info[track.id] = dict(
+                        codec=track.codec.to_bytes(4, 'little').decode('ascii', 'replace').strip('\x00 '),
+                        description=track.description.decode('utf-8', 'replace') if track.description else '',
+                        channels=audio.channels, sample_rate=audio.rate)
                 if track.type == 1 and track.payload and track.id == active_video:
                     info = ctypes.cast(track.payload, ctypes.POINTER(self.vlc.VideoTrack)).contents
                     width, height = info.width, info.height

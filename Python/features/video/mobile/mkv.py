@@ -3,15 +3,18 @@ from base64 import b64decode
 from bisect import bisect_left, bisect_right
 from html import escape, unescape
 import json
+import logging
 from math import ceil, isfinite
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler
 from re import fullmatch
 from secrets import token_urlsafe
 from threading import BoundedSemaphore, Event, Lock, Thread
+from time import monotonic
 
 from features.video.subtitles import MAX_SUBTITLE, Subtitles
 from features.video.transport import VideoHTTPServer, byte_range
+from features.video.tracks import audio_label
 
 
 PLAYLIST_MIME = 'application/vnd.apple.mpegurl'
@@ -30,7 +33,15 @@ def playlist(boundaries, extension, *, initialization=False):
     return ('\n'.join([*lines, '#EXT-X-ENDLIST']) + '\n').encode('ascii')
 
 
-def rendition_name(track, number):
+def rendition_name(track, number, *, audio=False, default=False):
+    if audio:
+        # Opus is converted to AAC for AirPlay; describe what the TV receives.
+        name = audio_label(track.get('number', number), title=track['name'], language=track.get('languageName', track['language']),
+            codec='aac' if track['codec'] == 'opus' else track['codec'],
+            channels=track.get('channels', 0), sample_rate=track.get('sampleRate', 0), default=default,
+            roles=[label for key, label in (('commentary', 'Commentary'), ('visualImpaired', 'Audio description'))
+                   if track.get(key)])
+        return ''.join(c for c in name[:192] if c.isprintable() and c not in '"\\')
     name = track['name'] or track['language']
     if name == 'und':
         name = 'Track'
@@ -101,7 +112,7 @@ def master_playlist(audio, subtitles, default_audio, bandwidth, video):
                 flags += f',CHARACTERISTICS="{key[2]}"'
             if kind == 'AUDIO' and track['channels'] > 0:
                 flags += f',CHANNELS="{track["channels"]}"'
-            lines.append(f'#EXT-X-MEDIA:TYPE={kind},GROUP-ID="{group}",NAME="{rendition_name(track, number)}",'
+            lines.append(f'#EXT-X-MEDIA:TYPE={kind},GROUP-ID="{group}",NAME="{rendition_name(track, number, audio=kind == "AUDIO", default=default)}",'
                          f'{flags},URI="{route}/index.m3u8"')
     codecs = list(dict.fromkeys([codec_string(video), *(codec_string(track) for track in audio.values())]))
     width, height = video['width'], video['height']
@@ -199,9 +210,18 @@ class MKVStream:
                 if not self.path.startswith(stream.route) or not stream.allowed():
                     self.send_error(404)
                     return
-                if not stream.slots.acquire(blocking=False):
-                    self.send_error(503)
-                    return
+                # A receiver seek can request an uncached fragment in either
+                # direction while abandoned responses still occupy all four slots.
+                # Let those responses unwind instead of failing the HLS item.
+                deadline = monotonic() + 10
+                while not stream.slots.acquire(timeout=.05):
+                    if not stream.allowed():
+                        self.send_error(404)
+                        return
+                    if monotonic() >= deadline:
+                        logging.getLogger(__name__).warning('AirPlay MKV request slots stayed busy for ten seconds.')
+                        self.send_error(503)
+                        return
                 try:
                     data, mime = stream.resource(self.path[len(stream.route):])
                     if data is None or not stream.allowed():
@@ -316,7 +336,10 @@ class MKVStream:
             previous = self.cached.get(key[0])
             if previous is None or previous[0] != key:
                 media = self.remux.fragment(index, track=track)
-                if media is None or not self.allowed():
+                if not self.allowed():
+                    return None, None
+                if media is None:
+                    logging.getLogger(__name__).warning('AirPlay MKV fragment unavailable: index=%d track=%d', index, track)
                     return None, None
                 self.cached[key[0]] = previous = key, py_from_ns(media)
             return previous[1], 'video/iso.segment' if track < 0 else 'audio/mp4'

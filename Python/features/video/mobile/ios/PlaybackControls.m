@@ -434,27 +434,25 @@
     if (![self canPlay:NO]) return;
     NSDictionary *value = [NSJSONSerialization JSONObjectWithData:[json dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
     if (![value isKindOfClass:NSDictionary.class]) return;
-    self.cacheApproximate = [value[@"approximate"] boolValue];
+    BOOL local = [value[@"local"] boolValue] || ![[self playbackOptions][@"source_remote"] boolValue];
+    self.cacheApproximate = !local && [value[@"approximate"] boolValue];
     LGVideoCachedRanges *strip = (LGVideoCachedRanges *)self.cacheStrip;
     id suppliedRanges = value[@"ranges"];
-    strip.ranges = [value[@"local"] boolValue] ? @[@[@0,@1]] : ([suppliedRanges isKindOfClass:NSArray.class] ? suppliedRanges : @[]);
+    strip.hidden = local;
+    strip.ranges = !local && [suppliedRanges isKindOfClass:NSArray.class] ? suppliedRanges : @[];
     strip.accessibilityLabel = [value[@"approximate"] boolValue] ? @"Approximate cached file ranges" : @"Timestamp indexed cached ranges";
     [strip setNeedsDisplay];
 }
 - (void)showInFolder:(id)sender { [self emitCommand:@"showInFolder" value:@""]; }
 - (void)favouriteFile:(id)sender { [self emitCommand:@"favourite" value:@""]; }
-- (NSString *)compactVideoIdentity {
-    if (!self.sourceLabel.text.length) return self.videoTitle.text;
-    if (!self.videoTitle.text.length) return self.sourceLabel.text;
-    return [NSString stringWithFormat:@"%@ · %@", self.sourceLabel.text, self.videoTitle.text];
-}
 - (void)updateVideoHeader {
     NSDictionary *options = [self playbackOptions];
     self.videoTitle.text = options[@"video_title"] ?: @"";
     self.sourceLabel.text = options[@"source_label"] ?: @"";
     self.sourceIcon.image = [UIImage systemImageNamed:[options[@"source_remote"] boolValue] ? @"cloud" : @"internaldrive"];
     self.sourceIcon.accessibilityLabel = self.sourceLabel.text;
-    if (self.navigationItem.prompt) self.navigationItem.prompt = [self compactVideoIdentity];
+    self.cacheStrip.hidden = ![options[@"source_remote"] boolValue];
+    if (self.cacheStrip.hidden) self.cacheApproximate = NO;
 }
 - (void)showVideoLocation:(UILongPressGestureRecognizer *)gesture {
     if (gesture.state == UIGestureRecognizerStateBegan) [self presentVideoLocation];
@@ -520,6 +518,7 @@
     strip.isAccessibilityElement = YES;
     strip.accessibilityLabel = @"Approximate cached byte ranges; variable bitrate can shift time mapping";
     self.cacheStrip = strip;
+    strip.hidden = ![[self playbackOptions][@"source_remote"] boolValue];
     [self.seek insertSubview:strip atIndex:0];
 
     self.unlockButton = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -554,13 +553,9 @@
     self.cacheStrip.frame = CGRectMake(left, y, MAX(0, right-left), 4);
     [self.seek sendSubviewToBack:self.cacheStrip];
     [self.cacheStrip setNeedsDisplay];
-    BOOL compact = !self.tabletop && (self.view.safeAreaLayoutGuide.layoutFrame.size.width < 500 ||
-        self.traitCollection.verticalSizeClass == UIUserInterfaceSizeClassCompact);
-    // UIKit owns the prompt above the Playback group and adjusts its position
-    // with the system bar. Keep the bottom overlay available to the timeline.
-    NSString *prompt = compact ? [self compactVideoIdentity] : nil;
-    if (![prompt isEqualToString:self.navigationItem.prompt] && (prompt || self.navigationItem.prompt))
-        self.navigationItem.prompt = prompt;
+    // Keep the same two-line identity on compact devices: title, then source
+    // icon and label. A prompt flattens these into an ambiguous single line.
+    self.navigationItem.prompt = nil;
     if (self.portraitTabletop) return;
     if (self.tabletop) {
         // Keep the upper display for video. Identity belongs with the controls
@@ -582,12 +577,26 @@
         self.videoHeader.frame = CGRectMake(0, 0, 320, 48);
     }
     UINavigationBar *bar = self.navigationController.navigationBar;
+    BOOL compact = self.view.safeAreaLayoutGuide.layoutFrame.size.width < 500 ||
+        self.traitCollection.verticalSizeClass == UIUserInterfaceSizeClassCompact;
     if (compact) {
-        if (self.navigationItem.titleView == self.videoHeader) self.navigationItem.titleView = nil;
+        // The compact system bar can omit a custom title entirely when its
+        // controls collapse into overflow. Give the two-line identity its own
+        // top row, following the safe area rather than flattening it to a prompt.
+        self.navigationItem.titleView = nil;
+        if (self.videoHeader.superview != self.view) {
+            [self.videoHeader removeFromSuperview];
+            [self.view addSubview:self.videoHeader];
+        }
+        self.videoHeader.translatesAutoresizingMaskIntoConstraints = YES;
+        CGRect safe = self.view.safeAreaLayoutGuide.layoutFrame;
+        CGFloat width = MAX(44, MIN(360, safe.size.width - 24));
+        self.videoHeader.frame = CGRectMake(CGRectGetMidX(safe) - width / 2, CGRectGetMinY(safe) + 6, width, 48);
         return;
     }
     if (self.navigationItem.titleView != self.videoHeader) {
         [self.videoHeader removeFromSuperview];
+        self.videoHeader.frame = CGRectMake(0, 0, 320, 48);
         self.navigationItem.titleView = self.videoHeader;
     }
     if (bar.bounds.size.height > bar.bounds.size.width && self.videoHeader.superview && self.view.window) {
