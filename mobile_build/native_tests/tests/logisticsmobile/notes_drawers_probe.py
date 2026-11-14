@@ -211,7 +211,12 @@ class NotesDrawersProbe(NotesInteractionChecks, LogisticsMobile):
                 await self.check_empty_swipes(owner, report)
             if type(self._impl).__module__.startswith('toga_iOS.'):
                 header = owner.view._document_title_header
-                assert list(header.children) == [owner.menu, header._title_content, owner.links_button]
+                from mobile.ios_toolbar import vertical_edge
+                controller = self.native_host.adapter.content_controller(owner.destination)
+                controls = [owner.menu, header._title_content, owner.links_button]
+                if not vertical_edge(controller):
+                    controls.insert(0, owner.close_button)
+                assert list(header.children) == controls
                 assert float(header._title_content._impl.native.bounds.size.width) > 0
                 # Toga flattens Box children into its native layout container;
                 # measure screen positions rather than native parentage.

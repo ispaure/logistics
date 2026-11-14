@@ -95,22 +95,33 @@ class NotesInteractionChecks:
                 await self.wait_for(lambda: source in row_paths(owner),
                     f'Missing published {storage} row {source}; notice={owner.notice.text}')
                 menu = await native_row_control(owner, source, 'actions')
+                # Recycled Notes rows reserve 44 points/dp for the accessory.
+                width = 44 if getattr(owner.rows, 'recycled', False) else 48
                 if self.apple_probe:
-                    assert abs(float(menu.bounds.size.width) - 48) < .1, menu.bounds
+                    assert abs(float(menu.bounds.size.width) - width) < .1, menu.bounds
                 else:
                     density = menu.getResources().getDisplayMetrics().density
-                    assert menu.getWidth() == round(48 * density), menu.getWidth()
+                    assert menu.getWidth() == round(width * density), menu.getWidth()
                 before = owner.path
                 choices = []
                 async def choose(dialog):
                     choices.extend(value for _, value, _ in dialog.choices)
                     return 'copy'
                 with patch.object(owner.view.window, 'dialog', new=choose):
-                    # Both edges lie outside the visible dots. Hit the real native
-                    # hierarchy, so filename overlap or parent clipping fails here.
+                    # Hit both edges of the native accessory outside the visible
+                    # dots. The tap must reach actions without opening the file.
                     await self.touch_native(menu, fraction=.05 if number == 1 else .95)
-                    await self.wait_for(lambda: getattr(owner, 'file_action_view', None) is not None, 'Menu edge did not open Copy')
-                assert 'copy' in choices
+                    await self.wait_for(
+                        lambda: owner.sidebar.action_overlay is not None or getattr(owner, 'file_action_view', None) is not None,
+                        'Menu edge did not open file actions')
+                    if owner.sidebar.action_overlay is not None:
+                        content = owner.sidebar.action_overlay.panel.content
+                        action = next(child for child in content.children
+                                      if isinstance(child, toga.Button) and child.text == 'Copy…')
+                        await self.touch_native(action._impl.native)
+                    else:
+                        assert 'copy' in choices
+                    await self.wait_for(lambda: getattr(owner, 'file_action_view', None) is not None, 'Copy form did not open')
                 assert owner.path == before, 'Menu tap opened the adjacent filename'
                 form = owner.file_action_view
                 field = next(child for child in form.children if isinstance(child, toga.TextInput))
