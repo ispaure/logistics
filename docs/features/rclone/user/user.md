@@ -1,592 +1,161 @@
 # Connect and transfer remote folders
 
-Workspace naming uses **Local → Rclone Copies** and **Cloud → Rclone Remotes**.
-Both ordinary and encrypted copies belong under Rclone Copies; encrypted remotes
-belong under Rclone Remotes. Destination pickers label encrypted local copies
-`<foldername> - Encrypted Copy`; regular folders keep their names without a
-storage suffix. **Locked** / **Unlocked** describes access, not whether files are
-encrypted on disk. `LocalCrypt` remains the technical name in paths and settings.
-
-
-Load private credential packages, then push or pull folders using the chosen
-remote config. FUSE is optional and only needed for mounting.
+Use **Workspaces → Cloud → Rclone Remotes** to browse online folders. Use
+**Local → Rclone Copies** to open downloaded folders. Copies can be readable
+Local files or encrypted LocalCrypt files. **Locked** and **Unlocked** describe
+whether the matching credentials are available.
 
 ## Set up credentials
 
-1. In an empty **Workspaces → Cloud** view, choose **+ rclone** to open credential
-   setup. You can also open **Settings → rclone → Credential packages** and choose **Import credential ZIP…**.
-   Select a `.zip` file. Logistics copies it into the configured credentials folder
-   (normally `Credentials/rclone/`, or Marc's existing Dropbox credential folder), refreshes the list and selects it. The original
-   ZIP is kept. **Refresh list** also finds packages added outside Logistics.
-   Scanning runs in the background. If it fails or is cancelled, the previous
-   package list remains available; retry **Refresh list** when the folder is accessible.
-2. Enter the selected ZIP's password and choose **Unlock…**. The popup compares
-   **Session-Only** and **Persistent credential storage** side by side.
-3. Return to **Workspaces → Cloud** (or **Home Server** for network shares),
-   choose the credential and select a remote. Unlocking does not navigate away
-   from Settings or contact a server.
-4. Use **Pull** to download to this device. Review the destination and file changes
-   before starting. A local folder with exactly the same name is associated with
-   the remote entry.
+1. Open **Settings → rclone → Credential packages** or choose **+ rclone** in
+   Workspaces. Choose **Import credential ZIP…** and select your package.
+   Import keeps the original. If a different package already uses the same
+   name, rename the incoming ZIP.
+2. Enter its password and choose **Unlock…**. Choose an access mode.
+3. Return to **Workspaces → Cloud** or **Home Server**, and choose the credential
+   and remote. Unlocking only loads credentials. Opening the remote is the
+   first network check.
 
-**Persistent credential storage** writes a same-named rclone config, such as
-`~/.config/rclone/Personal.conf`, so its remotes remain available after restart.
-The saved config is not protected by the credential ZIP password. **Forget Credentials**
-removes saved access while keeping the ZIP.
+**Session-Only** unlocks the package in memory. The ZIP location and remote
+names can be remembered for the next unlock. **Persistent credential storage**
+writes a reusable rclone configuration, such as ~/.config/rclone/Personal.conf.
+That file contains credentials outside the ZIP's password protection. Mobile
+uses a separate device-protected vault. Detached FUSE mounts require saved
+configurations.
 
-Credential ZIPs contain TXT entries with a remote section header as their first
-line and the remote's rclone settings below it. Every TXT entry must be encrypted
-with the package password; plain or mixed encrypted/plain packages are rejected
-by both desktop unlock options. Packages must be supplied separately;
-Logistics does not create account credentials for you. Import accepts ZIPs up to
-1 MiB and never overwrites a different same-named package; rename the incoming ZIP
-if its name is already used. Import does not extract or unlock the ZIP.
-
-In **Settings → rclone → Credential Packages**, choose **Session-Only** in the Unlock popup to use a package only for this
-Logistics session. Pressing Enter in the password field opens the same choice.
-Cancelling the popup does not unlock or save credentials. The ZIP is decrypted
-directly in memory, with no extracted
-TXT or `.conf` file. Its remotes appear in **Workspaces → Cloud** (or **Home Server**
-for network-share packages), including remotes with no local copy. Session-only
-does not mean local-only. Workspaces shows the package with a **(session)** label. Push,
-Pull and previews pass its settings to each rclone child in a private environment,
-with a memory-only config and no secret command arguments. Existing saved configs
-remain unchanged: choosing Session-Only does not delete an existing saved config.
-Unlocked credentials disappear when Logistics exits or you lock them. Remote
-names and the ZIP location are remembered in a small account catalogue; passwords,
-tokens and remote settings are not saved. Cloud and Home Server keep these known
-remotes visible while locked, including remotes with no local copy. Open one and
-enter its ZIP password to unlock it for this session without a storage-choice
-popup. Settings still offers the storage choice. Local folder names alone do not
-create Cloud destinations. **Forget Credentials**
-removes remembered names as well; local contents are kept.
-
-The selected package reports **Locked**, **Session-Only** or **Persistent save**.
-Its remote section is titled **Loaded remotes**.
-
-**Package details** expands the ZIP/config locations. **Manage credentials…**
-expands the cleanup controls; both stay out of the main unlock flow.
-The cleanup controls appear in order: **Clear All Saved Configs**, **Forget
-Credentials**, then **Lock All Session Credentials**. The first deletes saved
-rclone `.conf` files; **Forget Credentials** removes both saved and session
-credentials and remembered remote names for the selected package and keeps its ZIP. Detached FUSE mounts
-currently require saved configs.
-
-Short-lived desktop CLI processes do not return refreshed OAuth tokens to Logistics.
-Logistics remote views and transfers use private credential snapshots, including
-when opened from a saved `.conf`; refreshed tokens are not written back to that
-file. A provider that rotates refresh tokens may require a renewed credential
-package. Saved configs contain credentials, and rclone's obscured passwords are
-not secure encryption. Mobile's
-saved option instead uses its device-protected encrypted vault.
-
-The **INI files** tab holds feature configuration, including software download
-settings. Switching tabs retains unsaved INI edits and credential-panel state.
-Use **User Guide** to return to these instructions.
-
-Credential loading works offline. ZIP decoding and saved-config writing run in the
-background, so the window stays responsive. **Cancel** stops loading before
-publication; a config write that has already completed remains loaded. Loading
-does not test whether the remote server or account is reachable. If the ZIP is in
-a cloud file provider, make it available locally before loading it offline.
+Credential ZIPs can be up to 1 MiB. Each TXT entry must be encrypted with the
+package password and start with the remote's rclone section header. A crypt
+remote also needs its backing remote. **Refresh list** finds packages added
+outside the app. Make a cloud-hosted ZIP available offline before importing it
+without a network connection.
 
 ## Transfer files
 
-Use the selected folder's **Push…** or **Pull** action. Review the direction and
-available options before starting: the operation changes files at its destination.
-Pull means **Cloud → this device**. A regular **Local** copy contains readable,
-decrypted files that remain accessible after credentials lock or Logistics exits.
-When creating a copy from a session-unlocked crypt remote, choose **Encrypted Copy**
-(recommended) to keep names and contents encrypted on disk, or **Regular Local copy**
-for readable files. Both stay on disk; LocalCrypt needs the matching credentials
-to read it. Saved-config pulls use regular Local storage. Pulling an existing
-LocalCrypt workspace updates that encrypted copy. The transfer review is the
-approval step; choosing a storage type alone does not start a download.
-If several credentials define the same remote name, choose the intended credential;
-its label does not change the local sync path. Mount paths are separated by config.
+From a selected workspace, choose **Pull** to download or **Push…** to upload.
+Check the source, destination and listed changes. For a new session-only crypt
+pull, **Encrypted Copy** keeps encrypted filenames and bytes on disk.
+**Regular Local copy** produces readable files that remain accessible after
+credentials lock. An existing copy keeps its saved location and storage type.
 
-Desktop and mobile Sync preserve empty source folders where the destination
-backend supports directories.
-
-Sync inventories, comparison reviews and their generated-file cleanup plans
-have no fixed entry limit on desktop or mobile. Local safety checks still scan
-the full folder and can be cancelled.
-
-GUI Push/Pull opens a retained **Workspace actions** job with live transfer statistics,
-command output, operation state and retry attempt. Results stay available after completion.
-Success requires a normal exit with code zero; failures show the exit code and
-recent output. rclone retains its own retry policy, and a successful retry reports
-which attempt succeeded. **Cancel** stops the process; completed destination changes
-remain. Closing Logistics cancels active integrated transfers and waits for them
-to stop. A started job is not yet a successful transfer; check its final result.
+Follow progress and the final outcome in **Workspace actions**. A transfer can
+retry after a recoverable error. **Cancel** stops further work and leaves changes
+already written. Closing Logistics cancels integrated transfers and waits for
+them to stop.
 
 | Location | Default path |
 | --- | --- |
-| Local copy | `~/Server/Local/<folder>` |
-| Optional mount | `~/Server/NetworkMount/<config-id>/<remote>` |
-
-Before an rclone command, a missing or mismatched executable offers a verified
-download. Declining, cancelling or a download failure stops that command.
-Windows/macOS/Linux x86_64 and ARM64 builds are pinned. Downloads do not start just
-because you browse folders. Transfers have their own execution model; the download
-Cancel button does not cancel a later transfer.
+| Local copy | ~/Server/Local/<folder> |
+| Optional mount | ~/Server/NetworkMount/<config-id>/<remote> |
 
 ## Remove a loaded config
 
-Removing a loaded credential deletes its generated config, leaving the ZIP package
-available to load again. **Clear All .conf Files** removes every config directly in
-the rclone config directory, including configs created outside Logistics.
-
-For mounted browsing, see [FUSE](../../fuse/user/user.md). For local software
-and credential paths, see [application setup](../../../user/configuration.md).
+Open **Manage credentials…** for the selected package. **Forget Credentials**
+removes its saved and session access and remembered remotes while keeping the
+ZIP and local files. **Lock All Session Credentials** retires session access.
+**Clear All Saved Configs** also affects saved configurations outside Logistics
+in the configured rclone directory. Use it only to clear that whole directory's
+rclone configs.
 
 ## More help
 
-See [Using Logistics](../../../user/user.md) for navigation and settings.
-
-
-Marc’s existing Dropbox credential folder (`Software/GIT/logistics/Credentials/rclone`)
-is used instead of the local credential folder when present. Only that folder's
-packages are listed, and imports use the same folder. Otherwise Logistics uses
-the configured local credential folder. Hover a package to see its location.
+See [Using Logistics](../../../user/user.md) for navigation,
+[Configuration](../../../user/configuration.md) for storage locations, and
+[FUSE](../../fuse/user/user.md) for mounts.
 
 ## Choose a rclone download version
 
-In **Settings → rclone**, the configuration tabs list supported platforms. Each
-contains the version, download URL, ZIP member, local destination and verification
-hashes. If you change releases, update these values together. One hash verifies
-the ZIP; the other verifies its executable. Saving does not download anything or
-replace a running tool. See [download settings](download-versions.md#rclone-download-versions)
-for the field details.
-
-Sync progress opens in **Workspace actions** on the left rail. Each job has its own
-tab with transfer statistics and logs. **Transfer statistics** shows file deletion
-attempts and folder removal attempts separately from file transfers. rclone counts
-an attempt before the storage provider finishes the removal. Dry runs label these
-counters as planned changes. Completed and failed jobs remain available until you
-close them. A red badge marks results you haven't viewed. Completion
-and errors also use system notifications when the platform supports them, unless
-you are already viewing that job in the focused window. Notifications still
-appear when another job or feature is selected, another app has focus, or the
-job's window is minimized.
-Closing a running job cancels it and waits for its process to stop.
+Use the platform configuration in **Settings → rclone** to choose the required
+version. Before a command that needs a missing or mismatched executable,
+Logistics offers a verified download for the configured platform. Cancelling
+that download stops the command. See [rclone download versions](download-versions.md)
+for the platform settings.
 
 ## Choose the sync scope
 
-Push and Pull use **sync**, not an additive copy. Files missing from the source can
-be deleted at the destination; changed files can be replaced. Logistics provides
-no undo for these transfers. Keep independent backups of destination-only files.
+**Sync makes the destination match the selected source.** It can replace
+existing files and delete destination files missing from the source.
+Check the folder and direction in the review. A changed review requires fresh
+confirmation. Use **Proceed without full review…** only when you accept the
+risk of unseen replacements and deletions.
 
-| Choice | Source → destination | Consequence |
-| --- | --- | --- |
-| Entire local folder | Managed local folder → remote root | Remote contents become a mirror of the local folder |
-| Specific folder | Chosen folder → `remote:<folder-name>` | Only that destination subtree is synchronized; siblings are outside its scope |
-| Pull | Remote root → managed local folder | Local destination-only files can be removed; the app asks for confirmation |
-
-**Track renames**, offered for entire-folder Push, asks rclone to detect renames
-instead of transferring matching content again. Specific-folder Push offers a
-positive bandwidth limit in MB/s; blank means unlimited. Review the displayed
-source and destination before pressing **PUSH**. Both Push and Pull then scan a
-detailed review of file additions, replacements and deletions using rclone's own
-dry-run comparison. Review does not write destination files or create a new local
-copy. Confirming a complete review checks for changes again before starting; if
-the comparison changed, inspect the new results and confirm again. Comparison
-scans use rclone’s normal retries on both desktop and mobile. Each attempt
-replaces the previous attempt’s results; an exhausted or cancelled comparison
-remains incomplete. Cancel and **Skip preview and start** remain available
-while waiting for a retry.
-
-The desktop review opens in **Workspace actions**, where sync progress also
-appears. It displays a change table with **Change**, **File** and **Folder**
-columns, plus total counts for additions, replacements, deletions and local
-cleanup. A side inspector explains the selected action and exact affected paths.
-Large reviews page through 30 changes at a time without limiting the comparison. Filter by action or search a path to find affected files; hover a row
-for its full path. Unchanged files stay out of the list. Local cleanup removes
-local generated files before Push and is distinguished from destination deletion.
-
-Empty source folders are preserved when the destination backend supports them.
-Both desktop and mobile review list directory changes with a trailing `/`,
-including nested empty folders and decrypted crypt folder labels. The final
-change check tracks directory membership and type without treating directory
-timestamp changes as new transfer work.
-
-During an incomplete comparison, **Skip preview and start** requests the sync
-directly. It waits for the comparison to stop before launching the transfer.
-Additional replacements and deletions may occur. Credential and destination
-checks still apply. On desktop, this choice also skips the full LocalCrypt
-integrity scan and generated-file cleanup; it starts Push after the comparison
-stops and structural checks pass. Mobile retains its LocalCrypt integrity checks.
-**Cancel** closes the review without starting a transfer. An incomplete or failed comparison never starts one by itself.
-
-Ordinary sync follows source file links (`--copy-links`), so linked content can be included.
-Unassociated local folders match accounts by remote name. A folder pulled with
-temporary credentials remembers its matching ZIP; a different ZIP cannot claim
-that same local folder name.
-
-For a session-loaded crypt remote, choosing **Encrypted Copy** after **Pull** mirrors the backing
-remote's ciphertext into `~/Library/Application Support/Logistics/LocalCrypt` on
-macOS (the Logistics per-user preferences folder on Windows/Linux). **Push** sends that copy back to the
-matching backing remote and subpath without encrypting it again. Both operations
-are explicit mirrors; editing a local document does not upload it.
-
-The encrypted copy's root folder may itself be a symbolic link or Windows
-junction, including when `LocalCrypt` is relocated. Entries **inside** the
-copy cannot be symbolic links, junctions or hard-linked files. Transfers and
-private browsing reject these entries with an error naming the offending path.
-A missing or invalid credential mapping blocks Push rather than guessing a remote.
+Manage exclusions and bandwidth before reviewing. A Push exclusion keeps
+matching destination files. Start another review if you change the scope or
+options. Empty source folders are retained where the destination supports
+directories. The sync does not create a backup.
 
 ## Browse remote files directly
 
-On desktop choose **File Browser → File → Open Remote…**, or select a remote on
-Workspaces to browse it in the Files pane. In File Browser, each remote opens in
-its own tab, labelled with its account and remote name. Navigation stays within that remote. Duplicate tabs retain the
-account and current directory; tabs use the existing workspace docking.
-In Workspaces, selecting a locked associated remote prompts for its credential
-ZIP password in Files. File Browser’s Open Remote chooser lists loaded accounts.
+Choose **File Browser → File → Open Remote…**, or select the remote in
+Workspaces. Search filters the current folder. Previews are read-only and stay
+in memory. Text, Markdown and INI have a 1 MiB limit. PNG, JPEG and WebP have a
+16 MiB limit. EPUB and CBZ/ZIP use bounded reads. Use an offline copy for an
+unsupported format or a file above the limit.
 
-Desktop connection failures show recovery guidance for recognized authorization,
-missing backing remote, folder access, rate limit and network errors. A crypt
-remote's credential ZIP must also contain its referenced backing remotes. If
-Google Drive rejects authorization, renew the underlying Drive remote's
-authorization, update the ZIP, then lock and unlock the account with that ZIP.
-Unknown failures show rclone's exit status. Raw provider logs are not displayed.
+A comic's ZIP password is separate from the remote password. Logistics checks
+the nearest remoteConfig.ini with a LogisticsZIP section up to the remote root.
+An empty section stops inheritance. Enter the archive password when prompted.
 
-Remote browsing is read-only. Search filters the current folder; it does not scan
-subfolders. Listings, thumbnails and directly opened contents stay in memory,
-without filesystem indexing or persistent preview caches.
-Small text/Markdown/INI files open read-only (up to 1 MiB); PNG/JPEG/WebP images
-use up to 16 MiB. EPUB and CBZ/ZIP comics read archive members on demand, with
-bounded buffers. Inner archive passwords are separate from crypt credentials.
-On mobile, CBZ/ZIP comics first cache the complete archive in RAM, then read
-pages from that session snapshot without further network requests. The limits
-are 128 MiB per comic and 256 MiB across windows. Download progress shows bytes
-and percentage. Closing the comic or retiring its credentials releases the cache;
-it is never written to disk. Larger comics need a managed local copy. Reopen to
-load a newer online version. Mobile remote listings do not fetch thumbnails.
-For a protected comic, Logistics looks for `remoteConfig.ini` beside the archive
-and then in parent folders up to the remote root. The nearest `[LogisticsZIP]`
-section supplies `archive_password`. An empty or omitted key in that section
-stops inheritance. If no password is found or it is rejected, Logistics asks
-for the comic's ZIP password. On mobile, the file/folder **•••** page also offers **Open preview**/**Open folder** for that item,
-with an optional inner ZIP password for archives. File-opening progress and
-failures appear above the browser listing.
-Other formats and content exceeding the direct-reader limits show a dialog asking
-you to download a local copy and open it. External applications require an
-explicit local copy. Remote readers cannot save text or metadata back to storage and show no Save,
-Save As or metadata-edit controls.
+For an ordinary local copy, right-click a file or folder and choose **Download
+locally…**. Select the destination folder and a new item name. An encrypted
+remote asks you to confirm that the new copy will be readable after locking.
+Use **Pull** for a managed copy. Opening a preview alone saves no local copy.
 
-On desktop, right-click a file or folder in **Workspaces → Cloud → Files** and
-choose **Download locally…**. Pick a local folder, then keep or change the item
-name. Follow progress or cancel in the **Pull** view in **Workspace actions**.
-In a standalone File Browser, progress can open in its own window.
-The download runs once and requires a new destination name. For a crypt
-remote, confirm that the readable copy will remain accessible after locking.
-Use **Pull** from Workspaces for a managed offline copy.
-On mobile, a file or folder's **••• → Download locally…** menu also supports
-unlocked LocalCrypt destinations.
-See the [mobile workflow](../user_mobile/workflows.md#mobile-folder-navigation).
-Opening a preview alone never creates an offline copy. Session-only credentials do not create a persistent
-remote document; locking or replacing credentials retires its open readers.
-
-On mobile, open a remote from Workspaces or **Remote files**, then tap a supported
-file to read it directly. Current-folder filtering and the manual-local-copy
-dialog apply on mobile too. Failed navigation retains the previous listing and
-selection while credentials remain current; credential changes clear stale views.
-Reader menus expose only commands available for the current file type. No remote editing, uploading, renaming, deletion or
-moving is available in the remote browser.
+If authorization fails, renew the underlying account, replace the ZIP and
+reopen the remote. Include the backing remote for a crypt connection.
 
 ## Android and iOS prototype
 
-See [Rclone mobile workflows](../user_mobile/workflows.md#android-and-ios-prototype).
+See [rclone mobile workflows](../user_mobile/workflows.md).
 
 ## Read and edit a LocalCrypt copy on desktop
 
-In rclone Settings, **Lock Package** ends the selected package's unlocked session;
-**Lock All Session Credentials** ends every unlocked session. Locking keeps the
-credential ZIP, saved config and encrypted copies. Existing dependent views retire;
-reopening a saved config can establish new access from its retained credentials.
-**Forget Credentials** removes both saved and session credentials for the selected
-package while preserving its original ZIP and encrypted copies. **Clear All Saved Configs**
-removes saved `.conf` files, including the default `rclone.conf`; session-only
-packages remain loaded. If cleanup reports a partial failure, retry the action.
-Unsaved private edits must be saved or explicitly discarded before a requested
-lock. Cancel keeps the session unlocked. Closing a browser alone leaves its open
-readers and other browsers available.
-
-**Creating a LocalCrypt copy requires credentials loaded with Load for Session**,
-including both the crypt remote and its backing remote. LocalCrypt describes the
-encrypted copy on disk; session-only describes how its credentials are held.
-The encrypted copy remains after the credentials lock or Logistics exits.
-
-For a session-loaded crypt remote with no existing copy, tap **Pull**. A popup
-strongly recommends **Encrypted Copy** and lets you choose the storage type before
-reviewing the transfer:
-
-| Popup choice | Destination | Contents on disk |
-| --- | --- | --- |
-| Regular Local copy | `Server/Local/<remote>` | Ordinary decrypted files |
-| Encrypted Copy (recommended) | Logistics application support folder, `LocalCrypt/<remote-name>` | Original ciphertext |
-
-Once a copy exists, **Pull** refreshes the selected kind: Local stays decrypted,
-LocalCrypt stays encrypted. If both exist, select the appropriate entry first;
-the account row prefers Local and the separate LocalCrypt entry selects ciphertext.
-The popup appears only when the local storage type has not been set. Remotes
-using saved credentials and non-crypt remotes pull to Local without this choice.
-Pull uses sync and can replace destination files or delete destination-only files.
-
-**Pull to Local** with temporary credentials also saves a small connection record
-under the Logistics application support folder's `Connections/Local`. It contains the credential ZIP's location and
-remote name. After credentials lock or Logistics restarts, Workspaces still shows
-that Local copy under its account; **Push…** and **Pull** request the matching ZIP's
-password. Keep that ZIP at its recorded location. Previously pulled folders acquire
-this association the next time you Pull with their temporary credentials.
-
-Existing `Server/LocalCrypt` copies and `Server/.local-connections` records relocate
-to these application support locations when first discovered. Decrypted Local files
-stay in `Server/Local`. If both an old and new storage directory exist, Logistics
-preserves both and reports the conflict rather than replacing either copy.
-
-A loaded account can show folders that exist only remotely. After its credentials
-are locked, the remembered package keeps its known Cloud destinations (Home Server
-for network-share packages). Existing Local and LocalCrypt copies remain in Local.
-Copies of the same remote share one Cloud entry under their credential ZIP. Unlock
-it in Files with the ZIP password; actions appear after unlocking.
-On desktop, the compact unlock form identifies the selected workspace. While
-Files is locked, the Actions pane collapses so the folder list has more room;
-it returns automatically after unlocking or selecting another browsable folder.
-Ordinary Local files remain browsable when only their remote actions need an
-unlock, so those credentials are requested in Actions instead.
-Unassociated rclone Local folders remain in Local; load their matching credential
-package in Settings to add Cloud destinations. Connection records without a folder
-do not create entries.
-
-Choose **Load for Session**, unlock the ZIP containing both the crypt
-remote and its direct backing remote, then use **Pull** and choose **Encrypted Copy**. Open its
-LocalCrypt folder to browse decrypted names. Supported documents are text (`.txt`), Markdown (`.md`, `.markdown`), EPUB books
-and comic ZIP/CBZ files. EPUB and comic metadata are editable from the context
-menu or reader. Other file types stay unopened in this private browser. This workflow needs no mounted filesystem.
-
-Names are displayed decrypted. Use **New folder**, or right-click an item for
-**Rename**, **Delete** and **Move to**. Move can target another folder in the same
-LocalCrypt, another unlocked LocalCrypt, or an ordinary Local folder. The toolbar's
-**Move file/folder into this folder** imports local files and folders, encrypting
-them before removing the source. Moving out creates decrypted destination files.
-Empty folders and inner ZIP passwords are preserved. Cloud files change only when
-you separately Push or Pull.
-
-Private folder navigation reads the selected folder rather than rescanning the
-entire copy. Comic and EPUB reads share a bounded memory cache, and unchanged tile
-thumbnails survive folder navigation. File changes invalidate cached reads;
-closing the last browser or reader releases its cache. Decrypted cache data stays
-in memory.
-
-Private Markdown opens in preview. **Edit** switches to formatted/source editing;
-holding Alt/Option while opening starts editing directly.
-
-Private Markdown **Save As** uses the same Local/LocalCrypt destination choice and
-switches the editor to the newly saved file. The original remains unchanged.
-Save As and moves reject existing destination names; rename or remove the conflict
-first. Delete is permanent and asks for confirmation. Cross-storage moves verify
-the destination before deleting the source; cancellation or a later deletion
-failure can leave both copies or remaining source entries. Refresh both folders
-before retrying. Open documents whose original was moved must be reopened or saved
-with Save As; a stale save cannot recreate the old path.
-
-Markdown can be edited and saved locally. **Edit comic metadata…** and
-**Edit EPUB metadata…** update metadata in the encrypted local archive. Pages,
-chapters, covers and unrelated metadata are preserved. Inner ZIP passwords remain
-in effect; rewritten encrypted archives use AES-256 with the same password.
-For an EPUB, the password comes from inherited `remoteConfig.ini` or a session-only
-prompt. No plaintext temporary file or backup is created for LocalCrypt metadata
-saves. Conflicts, failed verification and cancellation preserve the original.
-An inner ZIP password is separate from the credential-package password; the reader
-can find it in an ancestor `remoteConfig.ini` or ask for it. Saves stage ciphertext
-and reject stale originals. Cancel before publication preserves the original;
-a cancellation after a completed replacement cannot undo that save. Use **Push**
-explicitly to upload local changes, and review its resolved backing destination.
-
-The private browser keeps filtering, locations and resources in memory.
-LocalCrypt filename searches that use cached directory metadata can persist it
-as encrypted records when the credential ZIP key is available. With no ZIP key,
-that cache stays in memory for the unlocked session. Private thumbnails stay
-in memory. See [private reader history](../../../development/architecture/reader-state.md)
-for the separate position and bookmark settings. Markdown Open
-and Save As use the Local/LocalCrypt picker; temporary-file diagram rendering is disabled;
-images are limited to prefetched local resources inside the copy. Markdown files
-are limited to 8 MiB, folder listings to 10,000 entries, and prefetched Markdown
-images to a combined 32 MiB. Comic members have separate bounded reading limits.
-
-Closing the browser does not invalidate documents that are still open. Closing
-the last owner removes its private reader credentials. **Forget Selected
-Credentials** and **Lock All Session Credentials** also revoke dependent reader
-credentials. Unlock the matching ZIP and reopen documents to resume I/O. Already
-visible text/images may remain in memory until their windows close. Session-only
-storage does not promise secure erasure of process memory.
-
-Do not move or rename the credential ZIP without planning to recreate its local
-mapping: the absolute ZIP path participates in the copy's identity. Missing or
-invalid mappings block Push, including a LocalCrypt directory selected through an
-ordinary folder's **Specific folder** option.
-
-If a move saves the verified destination but cannot finish removing the source,
-the error says so. Keep the destination and refresh both locations before deciding
-what remains to delete; do not repeat the entire move. A partial deletion can leave
-some source entries. Save verification failures preserve the original and your draft.
-
-Ordinary desktop editors and raw file-browser operations cannot modify the
-LocalCrypt backing directory directly, including through a symlink or an operation
-on a containing folder. Editor Open and Save As now offer one browser: choose
-Local files or a LocalCrypt location, then navigate decoded folders and names.
-Selecting LocalCrypt applies name and content encryption together. Saving out to
-Local files explicitly creates plaintext. Private text/Markdown drafts stay in
-memory, including after export; Save As preserves the original and requires a
-new destination name.
-
+Open an encrypted copy under **Workspaces → Local → Rclone Copies** and unlock
+with the matching credential package. A private File Browser tab shows decoded
+names. Open the file with a supported Logistics reader or editor. Save an edit
+back to the copy and run a separate reviewed Push when you want it online.
+Use the destination picker deliberately when saving elsewhere. A readable
+export is an ordinary file.
 
 ### Push checks and generated junk
 
-Before a LocalCrypt push, Logistics removes raw and encrypted `.DS_Store`, `Thumbs.db`,
-`ehthumbs.db` and `ehthumbs_vista.db` files (case-insensitive) throughout that copy.
-Only independent regular files with these exact raw or decoded names are eligible.
-Raw locally generated files are removed directly. Encrypted files are recognized
-by their decoded names, authenticated, and deleted through the crypt provider.
-Links and folders are never automatically removed. Corrupted encrypted junk
-still blocks the push and is preserved for inspection. A normal ciphertext sync
-also removes the deleted encrypted junk from its destination. Nothing else is deleted by this cleanup, including files matching your
-custom exclusion patterns. Dry runs do not perform cleanup.
-
-The Push review lists these local removals as **Cleanup**, and lists any resulting
-remote removal as **Delete**. Unchanged encrypted junk is therefore shown as a
-planned deletion, rather than hidden among matching files. Cancelling review
-preserves both copies. Encrypted junk must still pass authentication before removal.
-
-Unless you chose **Skip preview and start** on desktop, the
-cancellable check then validates every stored name and fully decrypts and
-authenticates every file in memory. Plaintext with an encrypted-looking filename,
-unknown names, corrupt ciphertext and files that change during checking refuse
-the push. This reads the whole copy before transfer, so large copies take time.
-Repair or move unexpected files explicitly; changing an exclusion cannot bypass
-validation on the normal path. Skipping the desktop review also skips this
-validation, so corrupt or unexpected files are not detected before upload. The
-app does not create decrypted temporary files for this check.
-
-**Settings → rclone → Push exclusions** controls one [rclone exclusion pattern](https://rclone.org/filtering/)
-per line. Defaults skip common Finder/Explorer junk and AppleDouble sidecars.
-Desktop Push skips matching source files and deletes matching files inside the
-selected destination. Its dry-run review lists those destination deletions. Patterns
-match the names passed to rclone: ordinary pushes use normal names; ciphertext
-mirror pushes use encrypted stored names. They do not match decoded names in a
-LocalCrypt mirror. Exclusions do not authorize local deletion.
-
-
-The Local files destination may be rooted at your drive; moves still work when
-LocalCrypt lives elsewhere on that same drive. Actual source/destination overlap
-is refused. After Markdown Save As, document links follow the new storage location.
-
-
-New LocalCrypt pulls use the remote's exact name, for example
-`~/Library/Application Support/Logistics/LocalCrypt/Legacy-ComicRack` on macOS. Credential associations are kept in hidden
-`.connections` records. If another credential package already owns that folder
-name (including a difference only in letter case), Pull refuses to mix the copies;
-rename the remote to a distinct folder name before pulling. Existing untracked
-folders also block Pull. Old hashed-layout mappings are no longer loaded. Their
-records and ciphertext are preserved; they are not automatically migrated, deleted or adopted by a new
-mapping. An unsupported record for the same account blocks creating a replacement
-mapping until it is explicitly resolved.
-Remote names must be valid portable folder names.
-
-
-Navigating into a mapped LocalCrypt copy from Logistics' regular File Browser now
-opens its decoded browser tab automatically, reusing an existing tab for that copy.
-Unlock the matching credential ZIP if prompted. The ordinary tab stays at its
-previous location; encrypted contents are not listed there. Unmapped LocalCrypt
-folders show an error instead of opening as ordinary files. Finder and other
-external file browsers still show ciphertext names.
-
-Workspaces shows a loaded credential's encrypted copy once. If both decrypted Local
-and LocalCrypt copies exist, both remain selectable with ordinary copy names and
-**Encrypted Copy** descriptions. Hover an entry to see its complete source and path.
-
-Private desktop browser tabs, text and Markdown editors, comic readers and metadata windows begin their titles with **🕵️ Private -**. The private browser shares the regular browser’s list, tile and column views, icon-size controls, navigation and folder breadcrumbs. Comic/EPUB covers and image thumbnails are generated on demand and kept only in memory. **Move into this folder…** groups file and folder imports in one toolbar menu. Open/Save As keeps the storage picker at the top and uses the same navigation style, without a side preview or storage maps.
-
-Select a file in the private browser to see **File Information** and supported
-**Comic Metadata** or **Book Metadata** in the right Preview panel. Column view
-places these details in its final column. Preview can be toggled in list/tile view.
-Images show a bounded preview and their width and height.
-Two thumbnails load concurrently; larger archive ranges and scaled JPEG decoding
-reduce repeated reads. Preview and thumbnail data remain in memory.
-
-Credential unlocks for browsing, Push and Pull validate before closing the prompt.
-A wrong password shows an error in that same prompt, clears the password field
-and leaves it focused for another try. Enter submits once; Cancel abandons the
-unlock without creating an empty private browser. Password-protected file opens
-and metadata edits use the same retry behavior for inner archive passwords.
-
-Workspaces keeps **Pull** and **Push...** available for LocalCrypt entries. Select the workspace to open its private browser in the Files pane. Tools that require ordinary local files (such as Calibre or Obsidian detection) are excluded from private copies.
+Review LocalCrypt Push before writing. It can list cleanup of generated
+metadata files and the related remote deletions. Custom exclusions do not
+authorize local cleanup. If corrupted ciphertext blocks Push, preserve the
+file and resolve the problem before retrying.
 
 ### Session privacy
 
-Desktop **Session-Only** keeps decoded credentials in the running application.
-It does not expire when you navigate away or put the computer to sleep. Forgetting
-or replacing the credential session revokes open private providers, clears their
-caches and hides their document/browser/metadata windows. Reopen after unlocking;
-old windows cannot resume under a new unlock. Cached stream reads also check the
-session. This is not secure erasure of process memory.
-
-Forgetting or replacing a desktop session also requests cancellation of its active
-transfers, comparison previews and LocalCrypt commands. Re-unlocking cannot resume
-those old jobs. Pending LocalCrypt command output is rejected after revocation;
-destination changes already completed by a transfer remain.
-
-On Android and iOS, loading session-only credentials immediately enables screen
-privacy. Leaving the app locks access; returning requires the session password
-while private edits remain in memory. Protection ends only after both credentials
-and associated private views are cleared. Passwordless sessions require a temporary
-lock password. See the [mobile privacy guide](../../../user_mobile/navigation/panels.md#localcrypt-session-and-screen-privacy)
-for capture behavior and platform limits.
-
-Session mode does not remove credentials previously saved with **Save**, or your
-original credential ZIP. LocalCrypt honors rclone filename settings: use standard
-filename encryption and enable directory-name encryption to conceal stored names.
-Remote names, package paths, ciphertext sizes and timestamps remain visible.
-Desktop process inspection can expose rclone's decrypted path arguments and key
-bearing environment. Thumbnails and private reading state stay in memory; explicit
-Save As/Move to Local, exports and clipboard copies can expose plaintext.
-
+Private thumbnails, preview data and unlocked credentials stay in memory.
+Locking or replacing credentials retires the open private views. Save or
+discard private drafts before locking. Keeping an encrypted copy on disk
+still requires the matching credentials to reopen it.
 
 ### Mobile folder navigation
 
-See [Rclone mobile workflows](../user_mobile/workflows.md#mobile-folder-navigation).
+See [Workspaces on mobile](../../../user_mobile/folder_hub/folder_hub.md).
 
 ### Android collection drive
 
-See [Rclone mobile workflows](../user_mobile/workflows.md#android-collection-drive).
+See [File storage](../../../user_mobile/settings/settings.md#file-storage).
 
 ### Side-by-side mobile credential packages
 
-See [Rclone mobile workflows](../user_mobile/workflows.md#side-by-side-mobile-credential-packages).
+See [Multiple credential packages](../user_mobile/connections.md#multiple-credential-packages-on-android-and-ios).
 
 ### Mobile Workspaces source tabs
 
-See [Rclone mobile workflows](../user_mobile/workflows.md#mobile-workspaces-source-tabs).
-
-
-- [Choose rclone download versions](download-versions.md)
+See [mobile sources and copy handling](../../../user_mobile/folder_hub/folder_hub.md).
 
 ## LocalCrypt filename search
 
-Search waits until you stop typing for 0.4 seconds, then searches the current
-folder and every subfolder. Results include relative paths to distinguish equal
-filenames. Desktop LocalCrypt uses one recursive listing per search. Search
-reports listing errors instead of silently treating a partial scan as complete.
+Open an unlocked LocalCrypt browser and use its filename search. The matching
+names stay within the private session.
 
 ## Change a loaded credential ZIP password
 
 In **Settings → Features → rclone**, select the loaded package and choose
-**Change ZIP password…** beside Unlock/Lock. Enter the new password twice. Saved
-configurations may also ask for the current ZIP password. Unsaved private edits
-must be resolved first. Logistics verifies the new encrypted ZIP in memory before
-replacing the original, republishes the loaded credentials and migrates matching
-protected reader history, favourites and desktop Recent. The password change
-retains credential members and contents. If history cannot migrate, its original
-ciphertext is kept; the status explains that it still needs the previous password.
+**Change ZIP password…**. Resolve unsaved private edits, enter the new password
+twice and supply the current password when requested. Logistics verifies the
+new ZIP before replacing the old one and migrates matching protected history.
+If history cannot migrate, its original encrypted records are kept and the
+status tells you it still needs the previous password.

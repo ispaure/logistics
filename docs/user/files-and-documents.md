@@ -1,521 +1,135 @@
 # Files and documents in Logistics
 
-Workspace naming uses **Local → Rclone Copies** and **Cloud → Rclone Remotes**.
-Both ordinary and encrypted copies belong under Rclone Copies; encrypted remotes
-belong under Rclone Remotes. Destination pickers label encrypted local copies
-`<foldername> - Encrypted Copy`; regular folders keep their names without a
-storage suffix. **Locked** / **Unlocked** describes access, not whether files are
-encrypted on disk. `LocalCrypt` remains the technical name in paths and settings.
+Use **File Browser** for files anywhere on your computer and **Workspaces** for
+configured folders, remote accounts and managed copies. On the landing page,
+**Read & edit** offers **Open…** and, for supported formats, **New**.
 
-
-Logistics starts with a launch chooser. **Features** on the left lists File Browser,
-Workspaces, Bulk Rename and enabled features with their own navigation buttons.
-Favourites appear above recent files in the right third. Workspace choices open
-with the sidebar by default. **Appearance & shared controls → Menus → Launch with
-sidebar** can switch launch-page choices to focused workspaces without it.
-Disabled features are absent. Use Settings to enable them, and their cards appear
-without restarting the app. Settings, Documents and Debug use their existing
-navigation controls rather than launch cards.
-
-On Windows, the launch terminal minimizes once the chooser is displayed. You can
-restore it from the taskbar to inspect startup output.
-
-**Read & edit** appears below Favourites and Recent on the right, with its tools
-always visible in one column. The section always includes Markdown Editor. Enabled
-features add their registered document tools, such as Text Editor, EPUB Reader, Comic Reader,
-Image Viewer and Archives. **Open…** picks a file; **New** appears where creation is supported.
-Cancelling keeps the chooser visible. Opened documents use the shared workspace.
-
-Document windows show a storage row beneath the title, using the file browser's
-icons and source/state labels. Read-only documents include **(Read-Only)**.
-Session-only document titles keep **(🕵️ Session-Only)** without the remote name;
-the source remains visible in the storage row.
-
-The launch page gives feature choices two-thirds of the available content width
-and the right column one-third, up to a total of 1200 pixels. Narrow windows
-stack the right column below the feature choices. Feature cards use two columns
-when each card has at least 340 pixels of width; otherwise they use one column.
-Read & edit cards remain one per row. All four section headings use the same
-large title style, aligned at the top rather than vertically centering the page.
-A 48-pixel gap separates the columns. Release information and any update button
-keep their own space above the scrollable launch content.
-The separate New / Open Document chooser uses up to three cards per row,
-reducing its columns in narrower windows. Cards settle before the first paint.
-Workspace and document cards highlight on hover; clickable workspace cards and New/Open buttons also
-show a hand cursor. Long lists
-scroll vertically with the scrollbar or mouse wheel. The New / Open Document
-chooser is a utility tab and is omitted from the document list and document counts.
-
-In a single-tool view, a small, opaque settings icon floats above the content at
-the bottom-left. Click it to show **Settings**, **Return to tool** (or **Return to
-documents**), **Open Documents**, **Landing Page**, and **Open full hub with
-sidebar**. The sidebar's Settings icon opens the same menu. Actions for the current
-page or launch mode are hidden. **Landing Page** returns to the initial chooser.
-Settings reset messages stay above the category panel without taking its available
-height. Bottom status lines across tools use the same compact, greyed-out style
-as File Browser. Long messages are shortened on screen; hover to read the complete
-message. The chooser also offers this icon, so
-you can enable a tool that is absent from the chooser. Switching modes reuses your existing pages
-and workspaces. Each new app launch shows the chooser again.
-
-The window header also keeps a **Logistics** menu in every context. **Go to Tool**
-lists current destinations; **New / Open Document…** opens a chooser tab with
-cards for the enabled document types. Empty document workspaces also show these
-cards. Click **+** or use the new-tab shortcut to show the chooser in that same
-workspace, including detached windows. **New** appears only for formats that
-support creation; **Open…** opens a file picker. Cancelling keeps the chooser open;
-a successful open replaces the chooser tab with your document. Settings, tool settings, launch modes and installed guides are grouped
-there. The active tool's menus appear alongside it, including File Browser's
-File, Edit, View, Navigate, Index and Help commands. On macOS these use the native menu bar;
-Windows and Linux show them in the window header without a second embedded bar.
-**F11** toggles the main window's fullscreen mode from any tool, including after
-switching away from a book or comic. **Logistics → Full screen / Exit full screen**
-provides the same command. A previously maximized window returns to maximized.
-On keyboards that assign a system function to F11, use Fn+F11 or the menu.
-File Browser's **File → Selected Items** exposes the same eligible commands and
-feature contributions as right-clicking the current selection.
-
-File Browser starts at your home folder. Use it for arbitrary paths;
-**Workspaces** brings configured local folders and remote integrations together.
-
-On desktop, right-click an ordinary local `.db`, `.db3`, `.sqlite` or `.sqlite3`
-file and choose **Inspect SQLite…** to inspect its schema, filter and sort
-100-row pages. It opens read-only. **Enable editing** offers typed row edits,
-inserts and deletions for supported primary-key tables; **Save changes** commits
-the whole staged batch. Failed or cancelled saves preserve the database and keep
-the staged changes available. The [shared SQLite guide](../../Python/commonUtils/docs/user/sqlite_browser/sqlite_browser.md)
-describes controls, constraints and stale-data recovery. Existing double-click
-actions are unchanged. Managed index/job databases stay read-only; network,
-encrypted, remote, archive and native-provider resources have no SQLite editor.
-The native mobile browser does not expose this desktop action.
-
-Choose **Local**, **Cloud** or **Home Server**, then a workspace in the compact left
-tree. Local has **Dropbox**, **Rclone Copies** and **On This Computer** source tabs; Rclone Copies is selected
-initially and includes ordinary Local and encrypted LocalCrypt copies. Local →
-Rclone Copies and Cloud → Rclone Remotes have a **Credential** filter, initially **All**.
-Home Server has no credential filter and displays **Pending Implementation**;
-see the source grouping below before relying on that destination.
-Right-click a folder under **Local**, including an rclone local copy, and choose
-**Reveal in Finder**, **Reveal in Explorer**, or **Reveal in Linux File Explorer**
-to show its on-disk folder in your desktop file manager.
-Changing a source tab or credential filter leaves the Files pane at **Select a folder** until you choose
-one. Refresh preserves an explicitly selected folder; removing or hiding that
-folder returns to the placeholder without opening another one. Locked workspaces
-show their credential ZIP password form directly in Files. Enter the password and
-choose **Unlock** to browse; errors stay in the form. Selecting another folder
-cancels the attempt. Use the refresh icon in the folder-list panel below the source dropdown
-to reload folders while preserving your selection.
-When Cloud has no visible folders, **+ rclone** opens credential setup. Unlock
-a credential package in Settings to load its remotes. Remembered names and local
-copy associations do not create Cloud destinations after credentials lock or are
-forgotten; local folders remain available under Local.
-Workspace names starting with **Legacy-** are hidden by default across all three
-sources. The Rclone Copies and Cloud credential dropdowns also hide credential
-names starting with **Legacy**. Both checks ignore case. Use
-**Settings → Workspaces → Show Legacy (session only)** to reveal these names.
-The choice survives refreshes and source changes, and resets to off on the next launch.
-Its files open in the **Files** pane on the right. Below the folder list,
-**Info** shows general workspace details and **Actions** contains feature tools.
-Actions is selected by default. The Files pane starts with its file/folder information panel off;
-use its preview button to show it. Refresh keeps the current browser and your
-preview choice. Actions always target the workspace selected on the left; navigating
-into a subfolder or selecting files in Files does not change the Push/Pull target.
-The Actions heading identifies that target; Info shows its paths and availability.
-The panes resize and cannot be moved or undocked by default. Opened documents
-continue through the normal reader/editor document hosts. **Workspace actions** retains running
-operations and their results.
-The **Documents** menu lists open editors/readers. Switching destinations keeps
-those documents alive. Feature-specific actions appear only for eligible selections.
-Open document titles show the filename including its extension, without the folder
-path. Documents inside a workspace also show their storage in their tab title,
-for example **guide.pdf [Local: Books]** or
-**guide.pdf [Remote: Books (🕵️ Session-Only)]**. LocalCrypt documents use **Local**
-with the same session-only marker: the encrypted copy is local, while its opened
-contents stay private for the session. These titles also appear in detached windows
-and the Documents menu. Saving under another name or workspace updates the title;
-unsaved changes keep their asterisk.
-
-File browsers show a storage row directly below the folder navigation, with a
-folder, cloud or lock icon and labels such as **Local · Books**,
-**Cloud · Unlocked · Books · 🕵️ Session-Only**, or
-**Local · Unlocked · Books · 🕵️ Session-Only** for a LocalCrypt copy.
-**Unlocked** identifies encrypted storage being accessed through an unlocked
-provider. Ordinary cloud folders use the cloud icon without an unlock label.
-Network-share packages use **Home Server** instead of **Cloud**.
-**Session-Only** describes the private opened view; it does not mean the original
-file disappears when Logistics closes. The breadcrumbs above this row retain
-the folder path. Navigating updates the storage row to match the current location.
-The compact left sidebar keeps full-size destination icons with narrow side margins
-and 40-pixel vertical steps, fitting more destinations in the available height.
-File Browser and Workspaces use the full page width. Indexing and folder-source
-loading appear in compact bottom notice rows, leaving more room for files and
-folders. Hover over a shortened indexing notice to read its full text; use
-**Index details…** when shown to inspect unfinished folders and scan errors.
-
-The desktop File Browser's size maps default to **Size on disk (allocated space)**.
-Use **Measure** above the chart to switch to **Size (file contents)**. The chart and
-ranked list share that choice, using both measures from the saved index.
+Choose **Logistics → New / Open Document…** or use **+** in a document workspace
+to open another file there. Cancelling keeps the chooser open. **Logistics →
+Go to Tool** switches tools while keeping open documents available. Use the house
+icon to return to the landing page and **F11** to toggle fullscreen.
 
 ## Browse, search and inspect storage
 
-Open a folder, select a file to preview it, or double-click it to use the matching
-reader/editor. Right-click for operations supplied by enabled features. ZIP/TAR
-opens Archives, CBZ opens Comics, EPUB opens Books, Markdown opens its reader/editor,
-and recognized ordinary text opens Text Editor when enabled.
+Select a file to preview it, double-click to open it, or right-click for actions.
+ZIP/TAR opens Archives, CBZ opens Comics, EPUB opens Books, and Markdown opens
+in reading mode. Available actions depend on enabled features.
 
-Search uses saved directory metadata, so a new or partly indexed tree can have
-incomplete results. Storage charts have the same limitation; logical file sizes
-are not the same as allocated disk space. Use **Refresh index** when you need a
-deeper scan and allow it to finish before interpreting totals. A large tree costs
-more scan time and cache storage than the visited-folder default.
+Search and size charts use saved folder metadata. If results are incomplete,
+run **Refresh index** and wait for it to finish. Explicit refresh checks the
+whole subtree. Use **Index details…** for scan errors and **Measure** on the
+size chart to switch between allocated disk space and file contents.
+**Settings → File indexing** controls automatic scan depth and refreshes.
 
-**Settings → File indexing** controls automatic refresh. Saved results can appear
-before a refresh finishes. Disabling automatic scanning does not remove files;
-use explicit refresh when you want current metadata. Shared controls and the
-individual scan settings are documented in the
-[commonUtils browser guide](https://github.com/ispaure/commonUtils/blob/main/docs/user/file_browser/file_browser.md)
-and [index reference](https://github.com/ispaure/commonUtils/blob/main/docs/development/reference/filesystem/index/index.md).
-Logistics adds feature actions and document routing to that browser.
-
-The Logistics indexing settings apply on the next index request after **Save**:
-
-| Setting | Workflow effect |
-| --- | --- |
-| Build an index when opening an unindexed folder | Starts automatic creation when no saved data exists; off still permits explicit refresh, revisit checks and notifications |
-| Include subfolders in automatic scans | Adds deeper metadata and sizes; off leaves subtree search/totals partial. Explicit Refresh index always checks the subtree |
-| Recheck saved indexes on first use | Reconciles saved data once per session; requires automatic indexing on open |
-| Recheck the current folder when reopened | Checks an idle index on reopening, even with scan-on-open off; depth follows the subfolder choice |
-| Update after filesystem notifications | Reconciles watched locations after changes; does not continuously scan the entire tree |
-| Run index jobs at background priority | Gives other work priority without changing scan scope |
-
+For an ordinary local SQLite database, choose **Inspect SQLite…**. It opens
+read-only. Supported primary-key tables allow staged edits through
+**Enable editing → Save changes**. A failed save keeps the database and pending
+edits. Managed databases stay read-only. See the
+[SQLite guide](../../Python/commonUtils/docs/user/sqlite_browser/sqlite_browser.md).
 
 ## Remote tabs
 
-Choose **File → Open Remote…** to browse a loaded rclone account, or select
-a remote on Workspaces to browse it in the Files pane. These tabs have their own read-only actions,
-current-folder search and memory-only previews. Supported files open directly.
-Right-click a remote file or folder and choose **Download locally…** to save it
-to a local folder of your choice. Use managed Pull workflows for offline Local
-or LocalCrypt folders.
-See the [rclone guide](../features/rclone/user/user.md#browse-remote-files-directly)
-for limits, destinations and credential handling.
+Use **File → Open Remote…** or open a loaded remote in **Workspaces**. Remote
+tabs offer read-only previews and current-folder search. Right-click a file or
+folder and choose **Download locally…** to save a readable copy, with confirmation
+for encrypted remotes. Use a managed **Pull** for a linked Local or LocalCrypt
+copy. See [remote browsing and download limits](../features/rclone/user/user.md#browse-remote-files-directly).
 
 ## Indexing across application instances
 
-You can launch Logistics more than once. Instances share a queue for directory
-indexing, so compatible requests follow the same work and only one index writer
-runs at a time. Open browsers update their progress, search data and folder sizes
-as saved results become available, including work started in another instance.
-
-Closing a browser or turning off its **Background indexing** subscription detaches
-that view; it does not cancel a submitted shared job. Other instances can finish
-that work even without a browser open at the original folder. Closing or crashing
-the indexing owner lets another instance resume saved folder checkpoints. If every
-instance closes, unfinished requests resume at the next launch. The interrupted
-folder may be scanned again; completed checkpoints are retained and validated.
-
-Explicit refreshes and filesystem notifications received during a scan run in a
-subsequent pass so those changes are not lost. Unreadable/unstable folders can still
-leave partial results; use **Index details…** and explicit refresh to retry. This
-recovery applies to indexing, not copying, moving, compression or transfers.
+Open instances share indexing jobs. Closing a browser stops its live updates
+while the job can continue in another instance or resume on the next launch.
+Use **Index details…** and refresh to retry unreadable folders. Copying,
+moving and transfers have separate recovery rules.
 
 ## Organize files
 
-Use the selection's copy, cut, paste, rename or removal actions. Existing paste
-destinations are preserved on collisions. Use [Bulk Rename](../features/bulk_rename/user/user.md)
-for a previewed filename transformation across many items.
-
-Trash/Recycle Bin asks for confirmation; if the location cannot use Trash, files
-stay in place. Permanent deletion is a separate consequential choice with no
-Logistics Undo. Specialized image, comic, archive and cleanup actions have their
-own preservation rules: read the owning guide before applying a batch.
+Right-click a selection for copy, cut, paste, rename or removal. A paste keeps an
+existing item if the name collides. Use [Bulk Rename](../features/bulk_rename/user/user.md)
+to preview a batch rename. Trash or Recycle Bin requires confirmation. If the
+location cannot use Trash, the originals stay in place. Permanent deletion has
+no Undo.
 
 ## Work in several panes
 
-On macOS, the menu bar follows the current destination and focused document pane,
-including detached windows. Switching back to a destination without document
-menus restores the host's menus automatically.
-Docked Markdown and Text Editor tabs refresh the visible macOS menu bar when
-selected; opening or clicking the menu bar is not required.
-
-Browser tabs let several folders remain open. Drag a tab to an edge to split,
-to another pane to combine, or outside the workspace to detach. Double-click a
-floating tab header to bring it back. The same shared workspace supports documents.
-**Documents → Bring back** returns a detached document. Closing a floating window
-closes its panes and checks their save/work state.
-
-Documents survive switching destinations and closing their originating browser.
-That does not imply that every browser tab or reader window is restored after
-restarting the app. Text Editor has its own documented checkpoint recovery;
-Books saves reading positions separately. Save changes according to each editor.
-
-## Read and edit Markdown
-
-Open a Markdown file from File Browser for rendered reading by default. Hold
-Alt/Option while opening, or use the Markdown Editor launcher, to start editing
-in Formatted or Source mode. Use **Source** for syntax the formatted editor cannot preserve;
-formatted edits can normalize unsupported constructs. Saving is explicit, and
-external disk changes block overwriting. Use **Save As** to keep a separate version.
-In Formatted mode, click link labels to navigate. Syntax markers appear when the
-caret touches an element or a selection overlaps it; hovering keeps them hidden.
-
-Feature **User Guide** buttons open read-only help. Built-in feature guides open
-at their user landing page in this root documentation wiki, with its folder tree
-available for navigation. Compatibility help folders are a fallback for packages
-without a root-wiki guide.
-Alt/Option while opening help
-opts into editing; it can change the documentation file on disk if saved. Local
-links navigate within the guide viewer, while web links open a browser. For shared
-formatting, properties, search and read-aloud controls, use the
-[commonUtils Markdown guide](https://github.com/ispaure/commonUtils/blob/main/docs/user/markdown/markdown.md).
-For plain-source editing, choose [Text Editor](../features/text_editor/user/user.md).
-[Obsidian](../features/obsidian/user/user.md) launches vaults in the external app.
-
-## Find a configured integration
-
-Choose a source and folder on **Workspaces**. Sources occupy the upper left,
-with Info and Actions tabs below them and Files filling the right side. The left
-column starts at roughly one fifth of the available width, leaving more room for files. Drag
-the dividers to give the hierarchy or details more room. Actions opens by default;
-switch to Info for the selected workspace’s local and remote availability and paths.
-Local folders normally live under
-`~/Server/Local`. **Local** includes all available local copies, including detected
-Dropbox account folders and rclone-linked Local and LocalCrypt copies. On desktop,
-choose **Dropbox**, **Rclone Copies** or **On This Computer** in the Local source tabs. Rclone Copies also
-has a credential filter, initially **All**, like Cloud. Cloud keeps its single
-**rclone** source tab visible even without loaded credentials. Refresh and **+**
-appear beside the credential filter only in Local → Rclone Copies and Cloud → Rclone Remotes;
-**+** opens rclone credentials in Settings. Home Server has no credential dropdown and
-shows an italic **Pending Implementation** notice.
-**Cloud**
-contains remotes from loaded rclone credentials, including **Load for Session**,
-and browses them online even when no local copy exists. Session-only credentials
-can also create LocalCrypt copies from crypt remotes; those encrypted copies
-remain on disk after the credentials lock. Cloud lists only remotes declared by
-loaded credentials. Local mappings and remembered remote names do not create
-Cloud placeholders; unlock the package in Settings to reconnect. Forgetting a
-package removes all its remotes while keeping local contents.
-A folder can appear in both Local and Cloud while its credentials are loaded;
-each tab opens its corresponding storage. **Home Server** contains loaded
-rclone sources from the `Network shares` or `Session network shares`
-credential package, matching mobile's explicit package grouping. Other rclone
-sources remain in Cloud; protocols alone do not determine the category.
-
-Regular folders use the same blue as unlocked folders. Centered solid padlocks
-with an outward-opening shackle for unlocked folders match mobile.
-Blue open-lock and orange closed-lock folder glyphs distinguish
-unlocked and locked credential-backed locations. LocalCrypt opens through the credential
-unlock flow and private browser. An unavailable location shows a browsing status;
-it does not silently fall back to another copy. Switching source tabs refreshes folder
-sources in the background while keeping the cached list available; returning to
-Workspaces also refreshes them. The source list does not refresh continuously. Use
-**Refresh folders** to retry a failed discovery or reload the current source
-after adding folders or configs. A failed refresh keeps the last displayed list
-and reports the error in the bottom notice row.
-Actions load only after any required credential password succeeds. While a
-workspace is locked, Actions shows an unlock notice. A decrypted Local copy remains
-browsable and offers its credential unlock in Actions.
-A Calibre library, Minecraft server or other integration must meet its feature's
-detection rules before its actions appear. Discovery itself does not start servers
-or mount remotes.
-
-If an action is absent, check feature enablement, source/credential selection and
-the expected folder configuration. Enabling a feature also enables required
-features; disabling a required feature is refused until its dependents are disabled.
-Choices persist. Existing documents/jobs can finish after disabling their feature.
-
-[All feature guides](user.md) · [Configuration](configuration.md)
+Drag a tab to a pane edge to split, onto another pane to combine, or outside
+the workspace to detach. Double-click the detached tab header to bring it back,
+or use **Documents → Bring back**. Closing a window checks for unsaved edits.
 
 ### Tab headers and detached creation
 
-The normal File Browser keeps its header even with one tab. Detached browser and
-Document windows may hide a single header, retaining + at the upper right; + adds
-to that same window. Multiple tabs restore their headers and share the available
-width. The last normal browser tab still cannot close or detach.
+Use **+** in a detached window to open another tab there. A window with only one
+tab may hide its header. The last main File Browser tab stays in place.
+
+## Read and edit Markdown
+
+Open Markdown to read it. Hold **Alt/Option** while opening, or use the
+**Markdown Editor** launcher, to edit. Use **Source** for syntax that Formatted
+mode may normalize. Save explicitly. If the file changed outside Logistics,
+use **Save As** to preserve both versions. See [Text Editor](../features/text_editor/user/user.md)
+for plain-text editing and [Obsidian](../features/obsidian/user/user.md) for external vaults.
+
+## Find a configured integration
+
+In **Workspaces**, select a source and folder. **Local** offers **Dropbox**,
+**Rclone Copies** and **On This Computer**. **Cloud** offers **Rclone Remotes**
+from loaded credentials. **Home Server** groups packages named **Network shares**
+or **Session network shares** and can show **Pending Implementation**.
+
+Use **Credential** to narrow copies or remotes. If a remote is missing, use
+**+ rclone** to open credential settings or unlock its package. **Refresh
+folders** reloads the source. **Settings → Workspaces → Show Legacy (session
+only)** reveals hidden legacy names until the next launch.
+
+Selecting a folder fills **Files**. **Info** shows its locations and availability.
+**Actions** contains workspace commands. Push and Pull target the workspace
+named there, even when Files shows a subfolder. Right-click a local folder to
+reveal it in your system file manager.
+
+**Locked** and **Unlocked** describe access. **Session-Only** describes the
+private open view. An ordinary copy stays readable after locking. An encrypted
+LocalCrypt copy still needs the matching credentials. Enter its password in
+the Files pane to browse.
 
 ## Central settings
 
-Open **Logistics Settings** from the navigation rail or a tool's settings action.
-Mouse-wheel gestures scroll the page without changing numeric fields, dropdowns,
-date/time fields, sliders or dials under the pointer, even when focused. Edit with
-typing, keyboard arrows or clicks; open dropdown lists still scroll their choices.
-Settings opens in **Personal Settings**. Its feature-settings list includes only
-enabled features; the **Features** page lists installed features so you can enable
-or disable them. Hidden feature editors retain pending edits until you close or reset them. **Default Software Configuration** is
-available only when the current user's home folder is named `marca`.
-For **Features**, choose **Default Software Configuration** to change which tools
-are enabled by default in shipped releases, or **Personal Settings** to change your
-own selection. The file path above the feature controls identifies the file being
-edited and updates when you switch scope. Feature toggles save immediately;
-default changes affect future launches, while personal changes apply immediately.
-Each feature card includes a short description. The **Personal overrides** heading
-and **Inherited / Override** indicators show the source of each feature choice.
-Toggling a feature saves only its explicit personal choice, including when you
-toggle it back to the current software default. Untouched features remain inherited
-and follow future default changes. **↶** removes that feature's personal choice;
-**Use software defaults** removes all feature overrides. Enabling a feature also
-saves enabled choices for dependencies that had to be turned on. Toggles keep the current
-scroll position and keyboard focus.
+Open **Logistics Settings** from the rail or floating Settings button. Use
+**Features** if a tool is missing. **Appearance & shared controls → Menus →
+Launch with sidebar** controls the next landing-page selection. Use **Open full
+hub with sidebar** to restore the rail from a focused workspace.
 
-In **Personal Settings**, the upper-right **Reset All Personal Settings…** button
-is available from every category. Its confirmation applies to **all categories**,
-including feature choices, appearance, editor options, indexing and other personal
-configuration overrides. It also discards unsaved personal configuration edits;
-unsaved software-default edits are retained. Settings panels reload and feature
-navigation/appearance update immediately. Open editor, reader and Git views reload
-preferences automatically; launcher settings apply on the next launch.
+Under **Styling**, separate font roles cover the interface, browser, reading and
+code. Preview changes and use **Save Settings**. **↶** removes an override.
+**Reset All Personal Settings…** resets personal categories and discards pending
+personal configuration edits. It keeps documents, accounts, reading progress
+and Blender presets.
 
-This resets only personal configuration. Separate migration metadata prevents old
-preferences from being imported again. Documents, accounts, IDE workspaces, reading
-progress, installed software and Blender presets are kept. A failed reset restores
-the previous configuration where possible; if recovery fails, the error identifies
-the retained recovery folder. A refresh failure after a successful reset asks you
-to restart Logistics to finish applying the defaults.
-
-The settings category list stays just wide enough for its labels, with a small
-padding allowance. It adapts to the interface font; wider windows give the extra
-space to the selected settings panel.
-
-The top-left selector applies to every category: **Default Software Configuration**
-edits repository INIs shipped in future releases; **Personal Settings** edits
-AppData overrides. Fields indicate inheritance. Click **↶** to remove an override,
-then **Save Settings**. A software-mode reset reverts an unsaved field. Pending
-changes remain when switching modes; closing asks Save/Discard/Cancel.
-
-**Appearance & shared controls → Styling** controls the accent, dark tint and
-interface, browser, reading and code font roles. Each font name in the dropdown
-is shown in its own typeface for a preview while browsing, including the selected
-field. Samples underneath preview pending font and size changes before saving.
-All four font sizes allow 7–24 pt. The code font list is limited to monospace fonts with equal character widths.
-Font sizes use a common 96-DPI reference, so the same setting gives comparable
-text and control proportions on macOS, Windows and Linux. macOS text is larger
-than in earlier builds at the same setting. Retina and display scaling still
-follow the operating system. Preview sizes and editor zoom use that same scale;
-your saved size values are preserved.
-Defaults are 10 for interface/browser/reading and 8 for code, keeping the previous
-macOS text proportions on every platform. Personal font-size overrides still apply.
-On Windows, moving a normal window between displays with different scaling
-preserves its logical width and height if the native transition changes them.
-Intentional resize gestures and maximized/fullscreen windows retain normal sizing.
-On Windows, font lists exclude legacy bitmap/vector families such as Terminal
-and Fixedsys. Unsupported typed choices show an error on Save and use a safe
-preview; existing unsupported saved choices fall back automatically.
-The interface font covers settings navigation and application menus. The file
-browser font covers text within browser panels: file lists and headers, tiles,
-folder columns, storage labels, paths, search controls and file details.
-EPUB and Markdown share reading fonts; IDE, Text Editor, Git hunks and Markdown
-code share the code font. Tool
-options are in **Feature settings**. Reading positions, account data and recovery
-records remain personal data, outside software defaults. The path above each
-editor shows exactly which INI will change.
-
-The launch page has a maximum content width of 1200 pixels; the separate
-New / Open Document chooser keeps its maximum width of 880 pixels. Cards retain
-their compact 88-pixel minimum height, grow to fit wrapped text, and share the
-tallest height within each tool or document group. They recalculate after font
-and width changes.
-
-The upper right of the launch page shows a subdued grey release tag, short commit
-and commit time in your local timezone. Hover over it for the full commit and
-original timestamp. Releases include this
-information automatically, including ZIP installations without Git. A checkout
-shows its exact tag or branch and marks tracked local changes as **modified**.
-
-New/Open document choices use the same 88-pixel base card height and horizontal
-presentation as launch choices, with compact New/Open actions on the right.
-
-Opening an app or document from the launch screen keeps the sidebar by default.
-Under **Settings → Appearance & shared controls → Menus**, **Launch with sidebar**
-controls this behavior beside **macOS native**. Turn it off to open focused app
-workspaces without the sidebar; the floating settings button remains available.
-The setting applies on the next launch-page selection. Opening the full hub always
-shows the sidebar.
-
-The house icon at the top of the left toolbar returns to the landing page.
-Open tools and documents remain available when you choose a workspace again.
-
-The Bulk Rename (A→B) rail button uses the accent color while Bulk Rename is the
-active destination, matching the other destination buttons.
-
-Logistics checks for updates by default. In **Settings → Configuration**, choose
-**configFile.ini**; **Updates** sits alongside the other configuration section tabs.
-The Updates controls
-let you disable checks or select **main**, **beta** or **alpha** (main by default).
-These are published release channels: main uses stable releases, beta and alpha
-use tags with those suffixes. Unpublished branch commits are not offered.
-
-When a newer eligible release exists, **Update Logistics** appears at the upper
-right of the landing (welcome) page below the version, using your accent color. The offer is shown
-only on that page. Clicking it prepares the update, follows the normal close/save
-flow, installs after Logistics exits, and restarts through the platform launcher.
-Offline checks stay quiet. A failed preparation leaves Logistics open. Software,
-Credentials, .env files, ignored files and personal AppData remain protected.
-Local changes or file collisions stop an update rather than overwrite your work.
-
-Extracted releases need the installed-file manifest included in newly packaged
-releases. Older ZIP installations need a fresh release extraction first. Git
-checkouts must have clean tracked files and initialized submodules at their pins;
-a successful update checks out the release commit and dependencies detached.
-Blue Hole separately checks its selected GitHub branch on each Blender launch.
-
-
-Opening or expanding a LocalCrypt copy in File Browser automatically opens its
-private tab with resolved names. In Workspaces, that private browser replaces the
-middle Files pane. The ordinary tab stays available at its previous
-location. Workspaces lists each encrypted copy once; separate Local and LocalCrypt
-copies have distinct labels, with full source details available on hover.
-
-Private File Browser tabs and their detached windows begin with **🕵️ Private -**. Their navigation, list, tile and column views share the regular browser’s presentation. Selecting a file shows File Information and supported comic/book metadata in the right Preview panel, or in the final column. Private views omit storage maps; thumbnails stay in memory. Editor Open/Save As omits Preview and retains its Local/LocalCrypt storage picker at the top.
-
-Workspaces shows backend-aware tools for private LocalCrypt copies, including rclone Pull and Push. Ordinary local-folder detection does not run against their ciphertext paths.
-
-EPUB Reader and Comic Reader **Open** buttons in New Document, and their reader File menus, use the shared Local/LocalCrypt picker with format-specific filters. Cancelling leaves the current document or chooser in place. Private selections open separate readers with **🕵️ Private -** titles.
+Use **Configuration → configFile.ini → Updates** to choose a published release
+channel. **Update Logistics** appears on the landing page when a release is
+offered. It follows the normal close/save flow and restarts after installation.
+Local changes or collisions stop the update. Older extracted releases may need
+a fresh extraction. Git checkouts need clean tracked files and initialized
+submodules. See [Configuration](configuration.md).
 
 ## Documentation browsing
 
-Settings guide buttons open an inline documentation sidebar beside the Markdown
-reader. Expand folders, select a page, or search by file names/titles or page text.
-Folders with a same-named Markdown file open that page when selected. A heading
-at the start of the body, after optional YAML properties and blank lines, supplies
-its navigation label. Editing-enabled Markdown windows
-also support this directory view; changing pages uses the existing unsaved-change
-prompt.
-
-Documentation links resolve relative paths such as `../folder/page.md` and
-extensionless Markdown pages. Links to local text/code files (including `.py`
-and `.txt`) open Text Editor separately, keeping documentation history intact.
-
-In desktop reading mode, hover a local Markdown/text/code link to see a short
-source snippet in a preview window. Moving off the link closes it immediately.
-This does not open the file or change your reading history. Editing mode does
-not show hover previews. Missing, binary and external web links have no preview.
+Feature **User Guide** buttons open read-only Help. Expand folders, select a
+page, or search names, titles and text. Relative Markdown links stay in the
+viewer. Web links open your browser. Local code links open Text Editor. Hold
+**Alt/Option** only when you intend to edit the guide.
 
 ## Notes Library
 
-Select **Notes Library** below Documents in the sidebar, then **Open Library** to
-choose a local folder or unlocked LocalCrypt copy. Explicit opens accept folders
-without a library marker. A marked local workspace also offers **Open as Notes
-Library** in its Actions panel. Libraries open in the separate Notes Library
-destination, with outer library tabs and inner document tabs/split groups.
-Cloud-only libraries must be downloaded or synced first; individual remote
-Markdown files still open in the read-only viewer.
-
-Existing Markdown notes start in reading mode; choose **Edit Markdown** for
-Formatted or Source editing. Save writes to the selected local copy. Resolve
-unsaved changes before navigating or closing. Search, daily notes, file management
-and link panels are described in the [Notes Library guide](../features/notes_library/user/user.md).
-Private content becomes unavailable when its credentials retire; save or discard
-private drafts before locking them. Push and Pull are separate reviewed transfers.
+Choose **Notes Library → Open Library** and select a local folder or unlocked
+LocalCrypt copy. A marked workspace also offers **Open as Notes Library**.
+Download or sync cloud-only libraries first. Use **Edit Markdown** to change a
+note. Save or discard private drafts before locking credentials.
+See the [Notes Library guide](../features/notes_library/user/user.md).
 
 ## Favourite files
 
-Use **… → Favourite file** on an open document's storage row. Favourites appear
-on the landing page. Adding the same file again updates its opening method;
-adding it inside Notes Library makes the favourite reopen that library and note.
-Use the × beside a favourite to remove it. Session-Only favourites stay encrypted
-with the credential ZIP password and appear after that credential is unlocked.
-
-The landing page also lists the ten most recently opened files below Favourites.
-Recent entries use the same viewer context and credential protections. **Settings
-→ Reader history → Clear all recent files** clears this list without removing
-favourites or document files.
+On a document's storage row, choose **… → Favourite file**. Adding it from
+Notes Library remembers the library and note. Use **×** on the landing page to
+remove a favourite. Session-only favourites appear after unlocking their
+credentials. **Settings → Reader history → Clear all recent files** clears the
+recent list and keeps favourites and files.
