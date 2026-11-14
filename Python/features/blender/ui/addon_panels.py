@@ -56,6 +56,8 @@ def build_addon_selection(page, controls, manage_layout):
     bluehole_form.addRow('Deluxe', page.bluehole_deluxe)
     page.bluehole_form = bluehole_form
     page.bluehole_source.currentTextChanged.connect(page._show_bluehole_source)
+    page.bluehole_source.currentTextChanged.connect(page._save_bluehole_source)
+    page.bluehole_checkout.editingFinished.connect(page._save_bluehole_source)
     page._show_bluehole_source()
     page.bluehole_installed = qt.QLabel('Not installed')
     page.bluehole_installed.setTextInteractionFlags(qt.Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -108,14 +110,17 @@ class PresetAddonPresentation:
         path = qt.QFileDialog.getExistingDirectory(self, 'Choose Blue Hole Checkout', self.bluehole_checkout.text())
         if path:
             self.bluehole_checkout.setText(path)
+            self._save_bluehole_source()
 
     def _project_bluehole_choice(self, state, found):
         """Show requested channel settings beside the separately recorded installation."""
         config = state.get('bluehole', bluehole.DEFAULT)
         config = bluehole.validate(config)
         self.bluehole_enabled.setChecked(config['enabled'])
-        self.bluehole_source.setCurrentText('Local' if config.get('source') == 'local' else 'GitHub')
-        self.bluehole_checkout.setText(config.get('path', ''))
+        with qt.QSignalBlocker(self.bluehole_source), qt.QSignalBlocker(self.bluehole_checkout):
+            self.bluehole_source.setCurrentText('Local' if config.get('source') == 'local' else 'GitHub')
+            self.bluehole_checkout.setText(config.get('path', ''))
+        self._show_bluehole_source()
         self.bluehole_branch.setCurrentText(config['branch'])
         runtime_deluxe = self.release is not None and bluehole.uses_runtime_deluxe(self.release)
         self.bluehole_form.setRowVisible(self.bluehole_deluxe, not runtime_deluxe)

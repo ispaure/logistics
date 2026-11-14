@@ -208,7 +208,9 @@ update stops launch and preserves the existing preset files/preferences. Network
 failures can use the installed-copy fallback described below.
 
 To test unpublished changes, choose **Source → Local → Browse…**, select the
-Blue Hole Git checkout or worktree root, and click **Save Addon Selection**.
+Blue Hole Git checkout or worktree root. The preset remembers the source and
+checkout as you change them. Use **Save Addon Selection** to save changes to
+which add-ons are enabled.
 Logistics links the preset's Blue Hole add-on to that checkout, using a
 symbolic link on macOS and Linux or a junction on Windows. The checkout's
 current branch and uncommitted changes are available when you launch Blender.
