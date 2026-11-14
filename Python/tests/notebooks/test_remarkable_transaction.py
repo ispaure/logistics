@@ -57,6 +57,11 @@ elif name == 'sync':
     pass
 elif name == 'timeout':
     sys.exit(subprocess.run(args[1:]).returncode)
+elif name == 'head':
+    # This firmware's BusyBox head does not include byte-count support.
+    if '-c' in args:
+        sys.exit(2)
+    sys.exit(subprocess.run(['/usr/bin/head', *args]).returncode)
 elif name == 'mv':
     publication = args[-1] == os.environ['LQA_TARGET']
     point = os.environ.get('LQA_KILL_AT') if publication else ''
@@ -81,7 +86,7 @@ class MetadataTransactionTests(unittest.TestCase):
         self.transactions.mkdir(mode=0o700)
         self.bin = self.root / 'bin'
         self.bin.mkdir()
-        for name in ('systemctl', 'systemd-run', 'sha256sum', 'stat', 'sync', 'timeout', 'mv'):
+        for name in ('systemctl', 'systemd-run', 'sha256sum', 'stat', 'sync', 'timeout', 'mv', 'head'):
             executable = self.bin / name
             executable.write_text('#!' + sys.executable + '\n' + UTILITIES)
             executable.chmod(0o700)
@@ -139,6 +144,9 @@ class MetadataTransactionTests(unittest.TestCase):
         result = self.run_command(self.transaction.inspect_command)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn(b'outcome=committed', result.stdout)
+        (self.stage / 'outcome').write_text('unexpected receipt\n')
+        self.assertNotEqual(self.run_command(self.transaction.inspect_command).returncode, 0)
+        (self.stage / 'outcome').write_text('committed\n')
         result = self.run_command(self.transaction.cleanup_command)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse(self.stage.exists())
