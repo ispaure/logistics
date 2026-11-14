@@ -29,20 +29,27 @@ class SchedulingTests(unittest.TestCase):
                      inventory=lambda stage=stage: [dict(case='Case.test_case', stage=stage.value)]))
                     for i, stage in enumerate(levels)]
             report = TimingReport(root / 'report.json', root, 'test*.py', True)
-            intervals, active, maximum = {}, set(), [0]
+            intervals, active, sequence, maximum = {}, set(), [], [0]
             lock = Lock()
             barrier = Barrier(2)
+            second_finished = Event()
+
             def execute(index, cancelled):
                 with lock:
                     active.add(index)
                     maximum[0] = max(maximum[0], len(active))
-                    intervals[index] = [monotonic()]
+                    intervals[index] = [len(sequence)]
+                    sequence.append(index)
                 if index < 2:
                     barrier.wait(timeout=2)
-                sleep(.06 if index == 0 else .02)
+                if index == 0 and not second_finished.wait(timeout=2):
+                    raise AssertionError("The second worker did not finish")
                 with lock:
                     active.remove(index)
-                    intervals[index].append(monotonic())
+                    intervals[index].append(len(sequence))
+                    sequence.append(index)
+                if index == 1:
+                    second_finished.set()
                 stage = levels[index].value
                 outcome = 'failed' if index in fail else 'passed'
                 return int(index in fail), dict(coverage_complete=True, not_run=[],
