@@ -122,6 +122,30 @@ disposable synthetic documents:
 Until those results exist, no firmware profile grants upload or organize
 capabilities. Do not promote a synthetic filesystem test into device acceptance.
 
+## Scoped reads and local metadata plans
+
+`remarkable_ssh.read_sidecars` reads raw metadata and optional content for an
+explicit bounded set of native IDs without listing the library. It rejects
+missing metadata, duplicate or foreign members, links and oversized records.
+These records are revision inputs; reading them while Xochitl is active does not
+make them an atomic snapshot.
+
+`ssh_connection` owns one authenticated POSIX OpenSSH master for a bounded batch.
+It uses the existing host verification and askpass path, retires its private
+control socket on exit, and prevents clients from falling back to another login
+when the master disappears. `ssh_stream` can reuse that connection and stream
+immutable input concurrently with output. Cancellation terminates owned client
+processes. The existing standalone read/retrieve route remains available.
+
+`remarkable_mutations.plan_metadata_change` prepares rename, move, trash and
+explicit-destination restore from raw metadata. It preserves unknown fields,
+advances the native modification timestamp, and guards the target and consumed
+ancestor records by SHA-256. Missing, malformed, deleted or cyclic ancestry
+blocks the plan. The display snapshot's repaired hierarchy is never write
+authority. Exact no-ops retain the original bytes and timestamp.
+`verify_metadata_revisions` rejects stale records. Neither helper writes to a
+device or qualifies writer exclusion, publication, restart or native acceptance.
+
 On November 13, 2026, a disposable USB import on user-reported firmware 3.29.1.0
 returned HTTP 201, but the user saw only its two PDF backgrounds. The native
 re-export confirmed that the embedded PDF remained byte-identical while both
@@ -149,5 +173,16 @@ PNG resource and PDF byte after native pen edits, saving and USB re-export on
 user-reported firmware 3.29.1.0. Host regression coverage checks anchor age,
 dependencies, arrangement and preservation. This bounded result does not qualify
 every scene type or tablet mutation. Folder creation and cleanup of the disposable
-test items into Trash were user-confirmed; rename, moves between folders and
-restoration checks remain outstanding.
+test items into Trash were user-confirmed.
+
+The user then restored one disposable notebook and both empty folders. Exact-ID
+USB re-exports verified native rename, movement into the first folder and then
+the second, trash, and a user-directed restore to My files. Rename changed only
+the name and modification time; movement, trash and restore changed only parent
+and modification time. All content members remained byte-identical. This does
+not establish an automatic restore destination. A subsequent scoped SSH read
+confirmed the two collection records have no content sidecar, all three records
+are at root, and Xochitl/rm-sync are active. The model is still unidentified.
+These checks establish observed native UI semantics on user-reported 3.29.1.0;
+direct SSH publication, recovery and the remaining integrated controls remain
+unqualified.
