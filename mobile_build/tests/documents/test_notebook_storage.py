@@ -32,6 +32,9 @@ class NotebookStorageTests(unittest.TestCase):
     def select_missing_collection(self):
         import json
         from services.documents.locations import CONFIG
+        # These cases cover notebook storage with the drive absent. The Notes
+        # hub otherwise launches an independent discovery against that drive.
+        self.app.set_feature_enabled('notes_library', False, refresh=False)
         volume = self.root / 'Removed SD card'
         (self.app.private_root / CONFIG).write_text(json.dumps(
             dict(volume=str(volume), token='a' * 32)))

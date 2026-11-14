@@ -154,9 +154,14 @@ class SpeechMediaTests(unittest.TestCase):
 class SpeechPrivacyIntegrationTests(unittest.TestCase):
     setUp = fixtures.set_up_vault
 
+    def javascript_result(self, value):
+        result = self.app.loop.create_future()
+        result.set_result(value)
+        return result
+
     def test_private_markdown_background_opt_in_trim_and_revocation(self):
         import json
-        from unittest.mock import AsyncMock, patch
+        from unittest.mock import patch
         from commonUtils.runtime.resources.local import LocalFiles
         from features.text_editor.resources import LocalTextCopies
         from mobile_build.tests.editing.test_markdown_speech import Engine as SpeechEngine
@@ -174,7 +179,8 @@ class SpeechPrivacyIntegrationTests(unittest.TestCase):
                 owner.markdown_speech.show()
                 panel = owner.markdown_speech.panel
                 await panel.ready_task
-                with patch.object(owner.crypt_preview, 'evaluate_javascript', AsyncMock(return_value=json.dumps('Private words. '*100))):
+                with patch.object(owner.crypt_preview, 'evaluate_javascript',
+                                  side_effect=lambda script: self.javascript_result(json.dumps('Private words. '*100))):
                     await panel.play()
                     self.assertIsNone(panel.playback.media)
                     self.app.screen_privacy.conceal()
@@ -201,7 +207,7 @@ class SpeechPrivacyIntegrationTests(unittest.TestCase):
 
     def test_late_dom_read_cannot_start_session_speech_after_lock(self):
         import json
-        from unittest.mock import AsyncMock, patch
+        from unittest.mock import patch
         from mobile_build.tests.editing.test_markdown_speech import Engine as SpeechEngine
         from mobile.markdown_speech import MarkdownSpeech
         import toga
@@ -213,8 +219,7 @@ class SpeechPrivacyIntegrationTests(unittest.TestCase):
                 speech.show();panel = speech.panel
                 await panel.ready_task
                 pending = self.app.loop.create_future()
-                async def delayed(*args): return await pending
-                with patch.object(web, 'evaluate_javascript', AsyncMock(side_effect=delayed)):
+                with patch.object(web, 'evaluate_javascript', return_value=pending):
                     task = self.app.loop.create_task(panel.play())
                     await asyncio.sleep(0)
                     gate.lock();self.app.screen_privacy.inactive = True
