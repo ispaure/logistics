@@ -145,7 +145,13 @@ and separate AAC, AC-3 or E-AC-3 audio renditions. Mono, stereo or 5.1 Opus
 tracks convert to AAC-LC. A master playlist exposes audio renditions and
 plain-text WebVTT derived from embedded SubRip or WebVTT and ordinary local
 SRT or WebVTT sidecars. Audio and subtitle menus select the AVPlayer media
-options while on TV. Each fragment starts a fresh
+options while on TV and read the current selection when reopened, including
+changes initiated by the receiver. The master declares the output codecs,
+video dimensions and available HDR range, and retains language, forced subtitle,
+SDH and audio-description roles for native receiver menus. Commentary remains
+manually selectable. Host tests cover these declarations and bounded HTTP
+requests; actual Apple TV menu presentation and selection need receiver acceptance.
+Each fragment starts a fresh
 decoder and encoder, using audio preroll and a shared AAC sample grid so
 fragments can be generated out of order. The HEVC bitstream and color signaling
 stay with the video. `MKVRemux.m` uses FFmpeg 9.0 headers

@@ -1,4 +1,5 @@
 """Session-scoped HLS access to the iOS Matroska stream-copy adapter."""
+from base64 import b64decode
 from bisect import bisect_left, bisect_right
 from html import escape, unescape
 import json
@@ -37,21 +38,78 @@ def rendition_name(track, number):
     return f'{name or "Track"} ({number})'
 
 
-def master_playlist(audio, subtitles, default_audio, bandwidth):
+def codec_string(track):
+    """RFC 6381 identifiers for the formats produced by the native remuxer."""
+    codec = track['codec']
+    if codec in {'ac3', 'eac3', 'opus'}:
+        return {'ac3': 'ac-3', 'eac3': 'ec-3', 'opus': 'mp4a.40.2'}[codec]
+    config = b64decode(track.get('configuration', ''), validate=True)
+    if codec == 'h264' and len(config) >= 4 and config[0] == 1:
+        return 'avc1.' + config[1:4].hex().upper()
+    if codec == 'hevc' and len(config) >= 13 and config[0] == 1:
+        space = ('', 'A', 'B', 'C')[config[1] >> 6]
+        profile = config[1] & 31
+        compatibility = int(f'{int.from_bytes(config[2:6]):032b}'[::-1], 2)
+        tier = 'H' if config[1] & 32 else 'L'
+        constraints = ''.join(f'.{byte:02X}' for byte in config[6:12].rstrip(b'\0'))
+        return f'hvc1.{space}{profile}.{compatibility:X}.{tier}{config[12]}{constraints}'
+    if codec == 'aac' and len(config) >= 2:
+        object_type = config[0] >> 3
+        if object_type == 31:
+            object_type = 32 + ((config[0] & 7) << 3) + (config[1] >> 5)
+        if object_type:
+            return f'mp4a.40.{object_type}'
+    raise ValueError('The MKV codec configuration could not be prepared for AirPlay.')
+
+
+def rendition_language(track):
+    language = track['language']
+    return language if fullmatch(r'[a-zA-Z]{2,8}(-[a-zA-Z0-9]{1,8})*', language) else 'und'
+
+
+def rendition_characteristics(track, subtitles):
+    if subtitles and track.get('hearingImpaired'):
+        return 'public.accessibility.transcribes-spoken-dialog,public.accessibility.describes-music-and-sound'
+    if not subtitles and track.get('visualImpaired'):
+        return 'public.accessibility.describes-video'
+    return ''
+
+
+def master_playlist(audio, subtitles, default_audio, bandwidth, video):
     lines = ['#EXTM3U', '#EXT-X-VERSION:7']
     for kind, group, renditions in (('AUDIO', 'audio', audio), ('SUBTITLES', 'text', subtitles)):
+        def selection_key(track):
+            return (rendition_language(track).lower(), bool(track.get('forced')) if kind == 'SUBTITLES' else False,
+                    rendition_characteristics(track, kind == 'SUBTITLES'))
+
+        # Alternatives with the same language and role stay explicitly selectable
+        # without letting automatic language matching pick a commentary at random.
+        automatic = {selection_key(track) for track in renditions.values()
+                     if kind == 'AUDIO' and track['id'] == default_audio}
         for number, (route, track) in enumerate(renditions.items(), 1):
             default = kind == 'AUDIO' and track['id'] == default_audio
-            flags = f'DEFAULT={"YES" if default else "NO"},AUTOSELECT={"YES" if default else "NO"}'
+            key = selection_key(track)
+            autoselect = default or key[1] or bool(key[2]) or (key not in automatic and not track.get('commentary') and
+                                     (key[0] != 'und' or key[1] or key[2]))
+            if autoselect:
+                automatic.add(key)
+            flags = f'DEFAULT={"YES" if default else "NO"},AUTOSELECT={"YES" if autoselect else "NO"}'
             if kind == 'SUBTITLES':
-                flags += ',FORCED=NO'
-            if fullmatch(r'[a-zA-Z]{2,8}(-[a-zA-Z0-9]{1,8})*', track['language']):
-                flags += f',LANGUAGE="{track["language"]}"'
+                flags += f',FORCED={"YES" if track.get("forced") else "NO"}'
+            flags += f',LANGUAGE="{rendition_language(track)}"'
+            if key[2]:
+                flags += f',CHARACTERISTICS="{key[2]}"'
             if kind == 'AUDIO' and track['channels'] > 0:
                 flags += f',CHANNELS="{track["channels"]}"'
             lines.append(f'#EXT-X-MEDIA:TYPE={kind},GROUP-ID="{group}",NAME="{rendition_name(track, number)}",'
                          f'{flags},URI="{route}/index.m3u8"')
-    attributes = f'BANDWIDTH={bandwidth},AUDIO="audio"'
+    codecs = list(dict.fromkeys([codec_string(video), *(codec_string(track) for track in audio.values())]))
+    width, height = video['width'], video['height']
+    if width <= 0 or height <= 0:
+        raise ValueError('The MKV video dimensions could not be prepared for AirPlay.')
+    attributes = f'BANDWIDTH={bandwidth},CODECS="{",".join(codecs)}",RESOLUTION={width}x{height},AUDIO="audio"'
+    if video.get('range') in {'PQ', 'HLG'}:
+        attributes += f',VIDEO-RANGE={video["range"]}'
     if subtitles:
         attributes += ',SUBTITLES="text"'
     lines.extend((f'#EXT-X-STREAM-INF:{attributes}', 'video/index.m3u8'))
@@ -113,7 +171,8 @@ class MKVStream:
         # A single video variant. Use a generous estimate when the MKV has no
         # per-track peak bitrate metadata.
         average = owner.content.size * 8000 // max(1, self.boundaries[-1])
-        self.playlist = master_playlist(self.audio, self.subtitles, default_audio, max(2_000_000, 3 * average))
+        self.playlist = master_playlist(self.audio, self.subtitles, default_audio,
+                                        max(2_000_000, 3 * average), metadata['video'])
         self.media_playlist = playlist(self.boundaries, 'm4s', initialization=True)
         self.subtitle_playlist = playlist(self.boundaries, 'vtt')
         stream = self

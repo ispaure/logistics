@@ -45,6 +45,25 @@ app-wide. Supported capture signals conceal native video and pause audio.
 Check ordinary browsing again after the last session clears.
 [Audio policy](../../../development/architecture/audio-playback.md)
 
+## Apple TV playback controls
+
+Use a local MKV with two distinct supported audio tracks, ordinary text subtitles,
+forced subtitles and an SDH track. Enable **Native AirPlay video**, keep Screen
+Mirroring disconnected and select Apple TV in the player's AirPlay picker.
+
+| Do this | Expect this |
+| --- | --- |
+| Open the TV's audio and subtitle menus with the Siri Remote | Compatible languages and text tracks appear with distinct names; PGS is absent. |
+| Select a different audio track or subtitle on the TV, then reopen the Duo's track menu | The TV plays the selected track and the Duo marks the current Apple player selection. |
+| Change a track or turn subtitles off on the Duo | The receiver changes its output without reopening the video or resetting the timeline. |
+| Pause with the Siri Remote, then change speed or mute on the Duo | Playback remains paused. Play resumes at the chosen supported speed and mute state. |
+| Seek from either device and change fit/fill | The shared timeline follows the seek and the TV picture uses the chosen sizing. |
+| Choose iPhone in the same AirPlay picker while playing, paused and muted | VLC receives the current position and intent after the audio route returns; muted playback stays muted. |
+
+Check forced subtitle and accessibility preferences on the receiver separately
+from manual selection. SDK and host playlist tests do not establish these
+receiver behaviors.
+
 ## Evidence and cleanup
 
 Save `Library/Caches/video-hardware-result.json` and actual visible/audible

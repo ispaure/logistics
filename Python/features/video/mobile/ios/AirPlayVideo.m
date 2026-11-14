@@ -192,6 +192,7 @@
 }
 
 - (void)showAirPlayTracks:(id)sender subtitles:(BOOL)text {
+    if (self.controlsLocked || ![self allowsAirPlay] || ![self canPlay:NO]) return;
     AVPlayerItem *item = self.airPlayPlayer.currentItem;
     if (item.status != AVPlayerItemStatusReadyToPlay) {
         [self showStatus:@"AirPlay is loading tracks. Try again in a moment."];
@@ -205,28 +206,30 @@
             dispatch_async(dispatch_get_main_queue(), ^{
                 LGVideoController *controller = owner;
                 if (!controller || item != controller.airPlayPlayer.currentItem ||
-                    ![controller allowsAirPlay] || ![controller canPlay:NO] ||
-                    controller.presentedViewController) return;
+                    controller.controlsLocked || ![controller allowsAirPlay] || ![controller canPlay:NO]) return;
                 UIAlertController *menu = [controller menu:text ? @"TV subtitles" : @"TV audio tracks" sender:sender];
                 AVMediaSelectionOption *selected = group ? [item.currentMediaSelection selectedMediaOptionInMediaSelectionGroup:group] : nil;
                 if (text && group.allowsEmptySelection) {
                     NSString *label = selected ? @"Subtitles off" : @"✓ Subtitles off";
                     [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:label style:UIAlertActionStyleDefault
                         handler:^(UIAlertAction *action) {
-                            if (item == owner.airPlayPlayer.currentItem && [owner allowsAirPlay])
+                            if (item == owner.airPlayPlayer.currentItem && !owner.controlsLocked &&
+                                [owner allowsAirPlay] && [owner canPlay:NO])
                                 [item selectMediaOption:nil inMediaSelectionGroup:group];
                         }]];
                 }
-                for (AVMediaSelectionOption *option in [AVMediaSelectionGroup playableMediaSelectionOptionsFromArray:group.options ?: @[]]) {
+                NSArray *playable = [AVMediaSelectionGroup playableMediaSelectionOptionsFromArray:group.options ?: @[]];
+                for (AVMediaSelectionOption *option in playable) {
                     NSString *label = [option isEqual:selected] ? [@"✓ " stringByAppendingString:option.displayName] : option.displayName;
                     [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:label style:UIAlertActionStyleDefault
                         handler:^(UIAlertAction *action) {
-                            if (item == owner.airPlayPlayer.currentItem && [owner allowsAirPlay])
+                            if (item == owner.airPlayPlayer.currentItem && !owner.controlsLocked &&
+                                [owner allowsAirPlay] && [owner canPlay:NO])
                                 [item selectMediaOption:option inMediaSelectionGroup:group];
                         }]];
                 }
-                if (!group.options.count) menu.message = error ? @"AirPlay couldn’t load the tracks." :
-                    (text ? @"No compatible text subtitles are available for this video." : @"This video has one audio track.");
+                if (!playable.count) menu.message = error ? @"AirPlay couldn’t load the tracks." :
+                    (text ? @"No compatible text subtitles are available for this video." : @"No alternate compatible audio tracks are available.");
                 [controller presentPlaybackDialog:menu];
             });
         }];
@@ -271,6 +274,7 @@
         self.airPlayConnectionDeadline = 0;
         if (!self.airPlayWasExternal) {
             self.airPlayWasExternal = YES;
+            [self applyAirPlayPlaybackOptions];
             if (self.airPlaySeekTarget < 0 &&
                 llabs([self airPlayTime:player.currentTime] - self.airPlayStartPosition) > 250)
                 [self seekAirPlay:self.airPlayStartPosition];

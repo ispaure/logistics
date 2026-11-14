@@ -91,9 +91,17 @@ video, including HDR metadata, and offers compatible AAC, AC-3, E-AC-3 and
 mono, stereo or 5.1 Opus audio. Opus converts to AAC. TrueHD/Atmos files can
 use an alternate AC-3 track if present. While on TV, use **Audio tracks** and
 **Subtitles** in Logistics to choose the tracks the receiver can play.
+The same choices are advertised to Apple TV's playback controls, so they can
+also be selected with the Siri Remote where the receiver exposes those menus.
+The Duo's track menus read the current Apple player selection when reopened.
 Embedded SubRip and WebVTT and discovered local SRT and WebVTT sidecars are
 available as TV text subtitles. Image-based PGS subtitles remain available
 during local playback. Session-only protection blocks AirPlay.
+
+Speed, mute and fit/fill controls target the Apple player during AirPlay.
+Changing speed while paused keeps the video paused. Mute remains in effect
+when returning to the phone. Subtitle appearance and HDR output use the TV's
+settings; the phone's audio and subtitle delay settings apply to local playback.
 
 The playlist covers the full movie, so a timeline jump requests the fragment
 around the new position. A jump may pause briefly while Logistics reads from
