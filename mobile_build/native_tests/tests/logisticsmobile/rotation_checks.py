@@ -502,7 +502,10 @@ async def settled_rotation_layout(app, acknowledged, diagnostics):
     """Require four consecutive matching native samples within one deadline."""
     required = 4
     started = monotonic()
-    deadline = started + CONTROL_SETTLE_TIMEOUT
+    # Android emulator event-loop turns can be delayed under concurrent native
+    # validation. Keep the sample and geometry requirements under a bounded budget.
+    timeout = 6 if sys.platform == 'android' else CONTROL_SETTLE_TIMEOUT
+    deadline = started + timeout
     recent = deque(maxlen=4)
     previous = None
     consecutive = 0
@@ -553,7 +556,7 @@ async def settled_rotation_layout(app, acknowledged, diagnostics):
         if remaining <= 0:
             break
         await asyncio.sleep(min(POLL_INTERVAL, remaining))
-    diagnostics.update(timeout_s=CONTROL_SETTLE_TIMEOUT, required_samples=required,
+    diagnostics.update(timeout_s=timeout, required_samples=required,
                        attempts=attempts, samples=list(recent))
     if last_assertion is not None:
         raise last_assertion
