@@ -1,12 +1,13 @@
-"""Opt-in scheduling for reviewed macOS offscreen file-stage processes."""
+"""Schedule reviewed test files in isolated, owned processes."""
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from contextlib import contextmanager
 import os
 from pathlib import Path
+import shutil
 import signal
 import subprocess
 import sys
-from threading import Event
+from threading import Event, Thread
 from time import monotonic
 from unittest.mock import patch
 
@@ -116,10 +117,27 @@ QT_GROUPS = {
 QT_FILES = frozenset(directory + '/' + name for directory, names in QT_GROUPS.items() for name in names)
 
 
+PORTABLE_PILOT_ENV = 'LOGISTICS_PORTABLE_TEST_WORKER_PILOT'
+PORTABLE_DIRECTORY = 'Python/commonUtils/tests/runtime'
+PORTABLE_FILES = (
+    'test_batch.py', 'test_browsing.py', 'test_choices.py', 'test_file_locking.py',
+    'test_line_redaction.py', 'test_migrations.py', 'test_persistence.py',
+    'test_private_publication.py', 'test_protected_keys.py', 'test_session_store.py',
+    'test_sse_framing.py', 'test_streams.py', 'test_transfer_phases.py',
+)
+
+PORTABLE_PATHS = frozenset(f'{PORTABLE_DIRECTORY}/{name}' for name in PORTABLE_FILES)
+
+
+def portable_pilot_enabled():
+    return sys.platform in ('linux', 'win32') and os.environ.get(PORTABLE_PILOT_ENV) == '1'
+
+
 def require_parallel_environment(workers=2):
-    if (sys.platform != 'darwin' or os.environ.get('QT_QPA_PLATFORM') != 'offscreen'
+    if ((sys.platform != 'darwin' and not portable_pilot_enabled())
+            or os.environ.get('QT_QPA_PLATFORM') != 'offscreen'
             or os.environ.get('TOGA_BACKEND')):
-        raise ValueError('Parallel test workers currently require macOS and QT_QPA_PLATFORM=offscreen.')
+        raise ValueError('Parallel tests require the macOS offscreen pool or the explicit Windows/Fedora portable pilot.')
     if os.environ.get('BUILD_MANAGER_TEST_PROGRESS') == '1':
         reserved = os.environ.get(RESERVATION_ENV, '')
         if not reserved.isdecimal() or not workers <= int(reserved) <= 8:
@@ -137,7 +155,11 @@ def eligible(path):
         name = path.resolve().relative_to(ROOT).as_posix()
     except ValueError:
         return False
-    return name in QT_FILES and not os.environ.get('TOGA_BACKEND')
+    if os.environ.get('TOGA_BACKEND'):
+        return False
+    if portable_pilot_enabled():
+        return name in PORTABLE_PATHS
+    return name in QT_FILES
 
 
 @contextmanager
@@ -170,7 +192,13 @@ def cooperate():
 def child(command, environment, timeout, cancelled):
     """Own the entire child process group, including after its leader exits."""
     from build_manager.executor import stop_process
-    process = subprocess.Popen(command, env=environment, start_new_session=True)
+    if os.name == 'nt':
+        from build_manager.windows_process import WindowsProcess
+        process = WindowsProcess(command, cwd=Path.cwd(), env=environment)
+        output = Thread(target=shutil.copyfileobj, args=(process.stdout, sys.stdout.buffer), daemon=True)
+        output.start()
+    else:
+        process = subprocess.Popen(command, env=environment, start_new_session=True)
     deadline = monotonic() + timeout
     try:
         while True:
@@ -191,7 +219,18 @@ def child(command, environment, timeout, cancelled):
             except subprocess.TimeoutExpired:
                 pass
     finally:
-        stop_process(process, grace=.25)
+        if os.name == 'nt':
+            try:
+                process.kill_tree()
+                process.wait_tree()
+            finally:
+                process.close()
+                output.join(timeout=5)
+                if output.is_alive():
+                    raise RuntimeError('Owned Windows test output did not close.')
+                process.stdout.close()
+        else:
+            stop_process(process, grace=.25)
 
 
 def schedule(plan, execute, report, directory, *, workers, mode, fail_fast, cancelled):
