@@ -226,6 +226,12 @@ and launching an existing installation without provisioning or a prompt.
 
 `BlenderSettings` places Presets first and nests the existing release editors under Versions Definitions, preserving
 scope/override contracts. Personal scope adds Presets, a management-mode BlenderPage.
+For **Addons**, **Installed files** and **Blue Hole** in Presets, edit
+`ui/addon_panels.py`. It builds the controls and renders the current preset's
+rows. `ui/layout.py` places the panels in the workspace, and `ui/page.py` owns
+refresh, save and launch actions. The separate **Addon Library** tab uses
+`addons/ui/page.py:AddonLibraryPage`.
+
 The navigation page retains launch cards and Settings shortcuts. Both surfaces share
 `get_manager()` for launched-process ownership. Card shortcuts pass their version
 and name to the retained settings panel. The page checks that the preset selection
