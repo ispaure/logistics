@@ -68,6 +68,10 @@ def relocated_title(title, before, after, *, names=None):
     return new if title == old else title
 
 
+def _is_credential_identity(identity):
+    return len(identity) == 64 and all(char in '0123456789abcdef' for char in identity)
+
+
 class CredentialBuckets:
     """App-owned settings buckets using the reader-state credential ZIP cipher."""
     def __init__(self, root, field):
@@ -75,12 +79,26 @@ class CredentialBuckets:
 
     def path(self, cipher=None):
         identity = cipher.identity if cipher is not None else 'local'
-        if identity != 'local' and (len(identity) != 64 or any(c not in '0123456789abcdef' for c in identity)):
+        if identity != 'local' and not _is_credential_identity(identity):
             raise ValueError('Invalid credential identity.')
-        path = self.root / (identity + ('.zip' if cipher is not None else '.json'))
+        return self._unlinked_path(identity + ('.zip' if cipher is not None else '.json'))
+
+    def _unlinked_path(self, name):
+        path = self.root / name
         if self.root.is_symlink() or path.is_symlink():
             raise ValueError('Document lists cannot be linked.')
         return path
+
+    def protected_identities(self):
+        if self.root.is_symlink():
+            raise ValueError('Document lists cannot be linked.')
+        return tuple(path.stem for path in self.root.glob('*.zip')
+                     if _is_credential_identity(path.stem) and not path.is_symlink() and path.is_file())
+
+    def delete_protected(self, identity):
+        if not _is_credential_identity(identity):
+            raise ValueError('Invalid credential identity.')
+        self._unlinked_path(identity + '.zip').unlink()
 
     def read(self, cipher=None):
         identity = cipher.identity if cipher is not None else None

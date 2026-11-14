@@ -279,9 +279,11 @@ def notes_host(app):
         return PlaylistStore(app.private_root, app=app).for_library(library)
 
     def playlist_speech(owner, catalog, changed):
-        from features.notes_library.mobile.playlist_speech import PlaylistSpeech
+        from features.books.mobile.speech_view import ReadAloudPanel
+        from features.notes_library.mobile.playlist_speech import PlaylistSpeech, playlist_panel_type
         from ..markdown_speech import clear_view, highlight_view, prepare_view, stop_markdown_speech
         return PlaylistSpeech(owner, catalog, changed, app=app,
+                              panel_type=playlist_panel_type(ReadAloudPanel),
                               stop_markdown_speech=lambda: stop_markdown_speech(app),
                               prepare_view=prepare_view, highlight_view=highlight_view, clear_view=clear_view)
 
