@@ -879,6 +879,71 @@ class VideoPresentationReadinessTests(unittest.IsolatedAsyncioTestCase):
 
 
 class IOSPresentationPrivacyTests(unittest.TestCase):
+    def test_airplay_codec_identifiers_match_the_remuxed_formats(self):
+        from base64 import b64encode
+        from features.video.mobile.mkv import codec_string
+
+        # AVCDecoderConfigurationRecord, HEVCDecoderConfigurationRecord and
+        # AudioSpecificConfig headers; Opus is sent as AAC-LC, never as Opus.
+        cases = [
+            ('h264', '01640028', 'avc1.640028'),
+            ('hevc', '010220000000b0000000000099', 'hvc1.2.4.L153.B0'),
+            ('hevc', '01616000000090000100000078', 'hvc1.A1.6.H120.90.00.01'),
+            ('aac', '1190', 'mp4a.40.2'),
+            ('aac', '2b92', 'mp4a.40.5'),
+            ('ac3', '', 'ac-3'), ('eac3', '', 'ec-3'), ('opus', '', 'mp4a.40.2'),
+        ]
+        for codec, header, expected in cases:
+            with self.subTest(codec=codec, header=header):
+                self.assertEqual(codec_string(dict(codec=codec,
+                    configuration=b64encode(bytes.fromhex(header)).decode('ascii'))), expected)
+        for codec, header in [('h264', b'\x01'), ('hevc', b'\x01\x02'), ('aac', b'')]:
+            with self.subTest(invalid=codec), self.assertRaises(ValueError):
+                codec_string(dict(codec=codec, configuration=b64encode(header).decode('ascii')))
+
+    def test_airplay_master_advertises_receiver_track_roles_and_codecs(self):
+        from base64 import b64encode
+        from features.video.mobile.mkv import master_playlist
+
+        audio = {
+            'audio-1': dict(id=1, name='Commentary', language='en', channels=2, codec='opus', commentary=True),
+            'audio-2': dict(id=2, name='Main', language='en', channels=6, codec='eac3'),
+            'audio-3': dict(id=3, name='French', language='fr', channels=6, codec='ac3'),
+            'audio-4': dict(id=4, name='Description', language='en', channels=2, codec='opus', visualImpaired=True),
+        }
+        subtitles = {
+            'text-5': dict(id=5, name='English', language='en'),
+            'text-6': dict(id=6, name='Forced', language='en', forced=True),
+            'text-7': dict(id=7, name='SDH', language='en', hearingImpaired=True),
+            'text-8': dict(id=8, name='Invalid"\nmetadata', language='en"\n#EXT-X-ENDLIST'),
+        }
+        video = dict(codec='hevc', configuration=b64encode(bytes.fromhex('010220000000b0000000000099')).decode('ascii'),
+                     width=3840, height=2160, range='PQ')
+        master = master_playlist(audio, subtitles, 2, 40_000_000, video).decode('utf-8')
+        rows = master.splitlines()
+        self.assertEqual(sum(row.startswith('#EXT-X-MEDIA:') for row in rows), 8)
+        main = next(row for row in rows if 'URI="audio-2/' in row)
+        self.assertIn('DEFAULT=YES,AUTOSELECT=YES', main)
+        commentary = next(row for row in rows if 'URI="audio-1/' in row)
+        self.assertIn('DEFAULT=NO,AUTOSELECT=NO', commentary)
+        french = next(row for row in rows if 'URI="audio-3/' in row)
+        self.assertIn('AUTOSELECT=YES,LANGUAGE="fr"', french)
+        description = next(row for row in rows if 'URI="audio-4/' in row)
+        self.assertIn('CHARACTERISTICS="public.accessibility.describes-video"', description)
+        forced = next(row for row in rows if 'URI="text-6/' in row)
+        self.assertIn('AUTOSELECT=YES,FORCED=YES,LANGUAGE="en"', forced)
+        sdh = next(row for row in rows if 'URI="text-7/' in row)
+        self.assertIn('CHARACTERISTICS="public.accessibility.transcribes-spoken-dialog,public.accessibility.describes-music-and-sound"', sdh)
+        unknown = next(row for row in rows if 'URI="text-8/' in row)
+        self.assertIn('LANGUAGE="und"', unknown)
+        self.assertNotIn('#EXT-X-ENDLIST', master)
+        variant = next(row for row in rows if row.startswith('#EXT-X-STREAM-INF:'))
+        self.assertIn('CODECS="hvc1.2.4.L153.B0,mp4a.40.2,ec-3,ac-3"', variant)
+        self.assertIn('RESOLUTION=3840x2160', variant)
+        self.assertIn('VIDEO-RANGE=PQ', variant)
+        self.assertIn('AUDIO="audio"', variant)
+        self.assertIn('SUBTITLES="text"', variant)
+
     def test_mkv_hls_range_and_revocation(self):
         from contextlib import nullcontext
         from urllib.error import HTTPError
@@ -891,8 +956,9 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
         import json
         engine = SimpleNamespace(
             renditionsJSON=lambda: json.dumps(dict(boundaries=[0, 6000, 12000, 18000],
-                defaultAudio=1, audio=[dict(id=1, name='Main', language='eng', channels=6),
-                                       dict(id=2, name='Commentary', language='eng', channels=2)],
+                video=dict(codec='h264', configuration='AWQAKA==', width=1920, height=1080),
+                defaultAudio=1, audio=[dict(id=1, name='Main', language='eng', channels=6, codec='ac3'),
+                                       dict(id=2, name='Commentary', language='eng', channels=2, codec='opus')],
                 text=[dict(id=3, name='Spanish', language='spa')])),
             initializationForTrack=Mock(return_value=SimpleNamespace(payload=b'init')),
             fragment=Mock(return_value=SimpleNamespace(payload=b'abcdef')),

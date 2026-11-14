@@ -67,6 +67,8 @@
 @property(nonatomic, strong) UITapGestureRecognizer *menuOutsideTap;
 @property(nonatomic, strong) UIStackView *controls;
 @property(nonatomic, strong) UIScrollView *controlsScroll;
+@property(nonatomic, strong) UIVisualEffectView *controlsBackdrop;
+@property(nonatomic, strong) UIVisualEffect *controlsMaterial;
 @property(nonatomic, strong) UIActivityIndicatorView *bufferSpinner;
 @property(nonatomic, strong) UILabel *bufferLabel;
 @property(nonatomic, strong) UIStackView *bufferOverlay;
@@ -245,6 +247,24 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     self.controlsScroll.translatesAutoresizingMaskIntoConstraints = NO;
     [self.view addSubview:self.controlsScroll];
     [self.controlsScroll addSubview:self.controls];
+    if (@available(iOS 26.0, *)) {
+        self.controlsMaterial = [UIGlassEffect effectWithStyle:UIGlassEffectStyleRegular];
+    } else {
+        self.controlsMaterial = [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemThinMaterialDark];
+    }
+    // Keep the effect behind the scroll view at full alpha while controls fade.
+    self.controlsBackdrop = [[UIVisualEffectView alloc] initWithEffect:self.controlsMaterial];
+    self.controlsBackdrop.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
+    self.controlsBackdrop.userInteractionEnabled = NO;
+    self.controlsBackdrop.translatesAutoresizingMaskIntoConstraints = NO;
+    if (@available(iOS 26.0, *)) {
+        self.controlsBackdrop.cornerConfiguration =
+            [UICornerConfiguration configurationWithUniformRadius:[UICornerRadius fixedRadius:20]];
+    } else {
+        self.controlsBackdrop.layer.cornerRadius = 20;
+        self.controlsBackdrop.clipsToBounds = YES;
+    }
+    [self.view insertSubview:self.controlsBackdrop belowSubview:self.controlsScroll];
     self.message = [[UILabel alloc] init];
     self.message.textColor = UIColor.whiteColor;
     self.message.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
@@ -391,6 +411,10 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
         self.movieCenterY, self.movieWidth, self.movieHeight,
         self.controlsLeading, self.controlsTrailing, self.controlsBottom, self.controlsTop,
         naturalHeight,
+        [self.controlsBackdrop.leadingAnchor constraintEqualToAnchor:self.controlsScroll.leadingAnchor],
+        [self.controlsBackdrop.trailingAnchor constraintEqualToAnchor:self.controlsScroll.trailingAnchor],
+        [self.controlsBackdrop.topAnchor constraintEqualToAnchor:self.controlsScroll.topAnchor],
+        [self.controlsBackdrop.bottomAnchor constraintEqualToAnchor:self.controlsScroll.bottomAnchor],
         self.bufferCenterX, self.bufferCenterY,
         [self.controls.leadingAnchor constraintEqualToAnchor:self.controlsScroll.contentLayoutGuide.leadingAnchor],
         [self.controls.trailingAnchor constraintEqualToAnchor:self.controlsScroll.contentLayoutGuide.trailingAnchor],
@@ -488,6 +512,9 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     [UIView animateWithDuration:immediate ? 0 : .2 delay:0
         options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
         animations:^{
+            BOOL showBackdrop = shown && !self.tabletop;
+            if ((self.controlsBackdrop.effect != nil) != showBackdrop)
+                self.controlsBackdrop.effect = showBackdrop ? self.controlsMaterial : nil;
             self.controlsScroll.alpha = shown ? 1 : 0;
             self.videoHeader.alpha = shown ? 1 : 0;
             bar.alpha = hideBar ? 0 : 1;
@@ -744,7 +771,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     self.portraitDeckHeight.active = portrait;
     self.portraitDeckHeight.constant = MAX(44, available.size.height - 16);
     [self layoutPortraitDeck];
-    self.controlsScroll.backgroundColor = [UIColor colorWithWhite:.08 alpha:tabletop ? 1 : .94];
+    self.controlsScroll.backgroundColor = tabletop ? [UIColor colorWithWhite:.08 alpha:1] : UIColor.clearColor;
     self.controlsScroll.layer.cornerRadius = portrait ? 0 : 20;
     if (poseChanged) [self setControlsShown:YES];
     // In laptop posture the upper panel owns the movie and the lower panel

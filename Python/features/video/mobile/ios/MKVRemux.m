@@ -31,6 +31,14 @@ _Static_assert(LIBAVFORMAT_VERSION_INT == AV_VERSION_INT(63, 1, 100),
 
 static const NSUInteger LGMKVMaxFragment = 128 * 1024 * 1024;
 
+static NSDictionary *LGMKVCodecInfo(AVCodecParameters *parameters) {
+    // RFC 6381 needs only the configuration record's header, not its SPS/PPS.
+    NSUInteger length = parameters->extradata ? MIN(MAX(0, parameters->extradata_size), 32) : 0;
+    NSData *configuration = [NSData dataWithBytes:parameters->extradata length:length];
+    return @{@"codec": @(avcodec_get_name(parameters->codec_id)),
+        @"configuration": [configuration base64EncodedStringWithOptions:0]};
+}
+
 typedef struct {
     int fd;
     int64_t bytes, size;
@@ -169,8 +177,12 @@ static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
         const AVDictionaryEntry *title = av_dict_get(stream->metadata, "title", NULL, 0);
         NSString *lang = language ? ([NSString stringWithUTF8String:language->value] ?: @"und") : @"und";
         NSString *name = title ? ([NSString stringWithUTF8String:title->value] ?: @"") : @"";
-        NSDictionary *track = @{@"id": @(i), @"language": lang, @"name": name,
-            @"channels": @(channels), @"codec": @(avcodec_get_name(codec))};
+        NSMutableDictionary *track = [LGMKVCodecInfo(parameters) mutableCopy];
+        [track addEntriesFromDictionary:@{@"id": @(i), @"language": lang, @"name": name,
+            @"channels": @(channels), @"forced": @((stream->disposition & AV_DISPOSITION_FORCED) != 0),
+            @"hearingImpaired": @((stream->disposition & AV_DISPOSITION_HEARING_IMPAIRED) != 0),
+            @"visualImpaired": @((stream->disposition & AV_DISPOSITION_VISUAL_IMPAIRED) != 0),
+            @"commentary": @((stream->disposition & AV_DISPOSITION_COMMENT) != 0)}];
         if (copyAudio || opusAudio) [audio addObject:track];
         else [text addObject:track];
     }
@@ -202,7 +214,12 @@ static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     for (NSUInteger i = 1; i < _starts.count; i++)
         [boundaries addObject:@(av_rescale_q(_starts[i].longLongValue, video->time_base, (AVRational){1, 1000}))];
     [boundaries addObject:@(av_rescale_q(_duration, video->time_base, (AVRational){1, 1000}))];
-    _renditions = @{@"audio": audio, @"text": text, @"defaultAudio": @(_audio), @"boundaries": boundaries};
+    NSMutableDictionary *videoInfo = [LGMKVCodecInfo(video->codecpar) mutableCopy];
+    [videoInfo addEntriesFromDictionary:@{@"width": @(video->codecpar->width), @"height": @(video->codecpar->height)}];
+    if (video->codecpar->color_trc == AVCOL_TRC_SMPTE2084) videoInfo[@"range"] = @"PQ";
+    else if (video->codecpar->color_trc == AVCOL_TRC_ARIB_STD_B67) videoInfo[@"range"] = @"HLG";
+    _renditions = @{@"audio": audio, @"text": text, @"video": videoInfo,
+        @"defaultAudio": @(_audio), @"boundaries": boundaries};
     NSMutableString *entries = [NSMutableString string];
     double longest = 0;
     for (NSUInteger i = 0; i < _starts.count; i++) {

@@ -40,7 +40,10 @@
         !player.currentItem.canPlaySlowForward) rate = 1.f;
     if (@available(iOS 16.0, *)) player.defaultRate = rate;
     player.currentItem.audioTimePitchAlgorithm = AVAudioTimePitchAlgorithmTimeDomain;
-    // Pause and a pending seek suppress output independently of the user's
+    UIButtonConfiguration *speed = self.portraitSpeedButton.configuration;
+    speed.title = [NSString stringWithFormat:@"%g×", rate];
+    self.portraitSpeedButton.configuration = speed;
+    // Route transitions and a pending seek suppress output independently of the user's
     // mute preference, which also survives the handoff back to VLC.
     player.muted = !player.externalPlaybackActive || self.airPlaySeekTarget >= 0 || self.resumeMuted;
     // A settings refresh must not undo a pause from the TV before the next
@@ -221,6 +224,7 @@
     else [self.player setCropRatioWithNumerator:0 denominator:0];
 }
 - (void)setting:(NSString *)key value:(id)value {
+    if (self.controlsLocked || ![self canPlay:NO]) return;
     NSMutableDictionary *options = [[self playbackOptions] mutableCopy]; options[key] = value;
     NSData *data = [NSJSONSerialization dataWithJSONObject:options options:0 error:nil];
     self.optionsJSON = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
