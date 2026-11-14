@@ -27,9 +27,9 @@ def desktop_checks(system, results, root=None):
     checks.extend([
         ('compression-parity', ['Python/tests/compare_comic_zip_versions.py', '--output-dir', str(Path(results) / 'parity')], 600),
     ])
-    # Full Windows and macOS runs reached their overall deadline late in
-    # the extended fixtures. Leave headroom without extending individual files.
-    minimum = {'Windows': 2700, 'Darwin': 2400}.get(system, 0)
+    # Windows reached 45 minutes in the final extended fixtures on hosted CI.
+    # Give the full suite an hour while keeping the individual file limits.
+    minimum = {'Windows': 3600, 'Darwin': 2400}.get(system, 0)
     checks = [(name, argv, max(timeout, minimum) if name == 'logistics' else timeout)
               for name, argv, timeout in checks]
     return checks

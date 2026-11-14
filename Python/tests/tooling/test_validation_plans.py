@@ -39,7 +39,7 @@ class ValidationPlanTests(unittest.TestCase):
         self.assertEqual([(name, command) for name, command, _ in windows_full],
                          [(name, command) for name, command, _ in posix])
         self.assertEqual([timeout for _, _, timeout in windows_full],
-                         [120, 1800, 1800, 1800, 2700, 600])
+                         [120, 1800, 1800, 1800, 3600, 600])
         self.assertEqual({name for (name, _, timeout), (_, _, previous) in zip(windows_full, posix)
                           if timeout != previous}, {'logistics'})
         from tests.runner_settings import ISOLATED_FILE_TIMEOUT
@@ -67,13 +67,13 @@ class ValidationPlanTests(unittest.TestCase):
                     self.assertNotIn('example.smoke', commands)
 
     def test_windows_full_suite_floor_never_shortens_larger_declared_budget(self):
-        suites = [dict(id='logistics', directory='Python/tests', timeout=3000,
+        suites = [dict(id='logistics', directory='Python/tests', timeout=3900,
                        smoke_args=['--profile', 'smoke', '--mode', 'fast'])]
         with patch('build_manager.test_manifest.discover', return_value=suites):
             checks = desktop_checks('Windows', Path('reports'))
         budgets = {name: timeout for name, _, timeout in checks}
-        self.assertEqual(budgets['logistics'], 3000)
-        self.assertEqual(budgets['logistics.smoke'], 3000)
+        self.assertEqual(budgets['logistics'], 3900)
+        self.assertEqual(budgets['logistics.smoke'], 3900)
         self.assertNotIn('manager-contracts', budgets)
 
     def test_full_logistics_gates_keep_consumer_contracts_without_implicit_sdk_self_tests(self):
