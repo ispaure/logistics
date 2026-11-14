@@ -18,7 +18,8 @@ from features.aviation_tools.location import locationUtils
 from features.aviation_tools.plane import planeUtils
 from features.aviation_tools.mathUtils import flightUtils
 from features.aviation_tools.resources import DATA_DIR
-from features.aviation_tools.ui.page import AviationToolsPage, Calculator, DatasetBrowser
+from features.aviation_tools.ui.dataset_browser import DatasetBrowser
+from features.aviation_tools.ui.page import AviationToolsPage, Calculator
 from desktop import main_window
 
 
@@ -90,6 +91,12 @@ class AviationToolsTests(QtTestCase):
         self.assertIn('outside', calibration.result.text())
         with self.assertRaises(ValueError):
             flightUtils.magnetic_course(30, flightUtils.MagneticDeviation(10, 'invalid'))
+
+    def test_legacy_dataset_browser_import_returns_the_same_widget_class(self):
+        with self.assertWarnsRegex(
+                FutureWarning, r'features\.aviation_tools\.ui\.dataset_browser\.DatasetBrowser'):
+            from features.aviation_tools.ui.page import DatasetBrowser as LegacyDatasetBrowser
+        self.assertIs(LegacyDatasetBrowser, DatasetBrowser)
 
     def test_datasets_load_from_any_working_directory_and_are_browsable(self):
         with TemporaryDirectory() as directory:
