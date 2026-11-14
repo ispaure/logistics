@@ -1,37 +1,49 @@
-# Plex Feature
+# Develop Plex integration
 
-For workflows, settings and troubleshooting, see the [user guide](../user/user.md).
+Plex backs up and restores Plex Media Server application data and
+compares movies and episodes across two database copies. See the
+[user guide](../user/user.md) for the server workflows.
 
-Developer notes. See the [user guide](../user/user.md) for controls and setup,
-and [UI architecture](../../../development/features.md) for shared contribution conventions.
+## Try a database summary change
 
-Provides Plex integration for Logistics.
+On desktop, enable **Plex** and its required **rclone** feature in **Settings →
+Features**. Launch Logistics from a terminal so you can see the report. Open
+**Debug → Plex - Compare Databases…** and select two copies of the same Plex
+library database. Expect matching counts for movies with a GUID and episodes
+with a complete identity. For a synthetic input, use the four-table SQLite
+schema in `PlexDatabaseTests.setUp()` in the test file below. The fixture has one
+matchable movie, one matchable episode and an orphan episode.
 
-## Responsibilities
+`Python/features/plex/ui_contributions.py` connects this Debug action to
+`database.test_script()`. For a small experiment, change the summary heading
+`Metadata Item Matches` to `Matched items` in `diff_media_type()` in
+`Python/features/plex/database.py`. Relaunch and repeat the comparison. The
+terminal should show the new label for both media types with the same counts.
+To check it without opening the app, add a test that captures stdout while
+calling `database.test_script(self.path, self.path)` on the existing fixture
+and checks the new heading and both sets of results. Run from the repository
+root with the desktop environment installed.
 
-- Detect folders with a matching `-PMSDATA` rclone remote.
-- Back up and restore Plex Media Server application data.
-- Support Windows split 7-Zip packages and macOS/Linux ZIP packages.
-- Compare selected Plex database copies through Debug.
+```sh
+python3 dev.py test desktop --exact-file Python/tests/integrations/test_plex.py
+```
 
-## Structure
+Expect one movie match and one episode match from that fixture, with the
+orphan in both unmatched episode lists. The existing tests cover read-only
+SQLite access and duplicate matching as well as package and dialog behavior
+with temporary folders and mocked external commands.
 
-- `detection.py` detects Plex PMS support and platform data locations.
-- `folders.py` resolves local and mounted `-PMSDATA` helper folders using
-  configuration path lookup that leaves unrelated software/credential directories
-  untouched. Folder object construction does not initialize those resources.
-- `actions.py` exposes package/restore actions and optional user-facing error messages.
-- `packages.py` stages archive creation and extraction before replacing existing data.
-- `database.py` reads SQLite databases in read-only mode and resolves media/episode relationships.
-- `comparison.py` matches GUIDs or episode identities without losing duplicate entries.
-- `ui_contributions.py` contributes Manage PMS to matching folders and the database test to Debug.
+## Find the Manage PMS workflow
 
-## Detection and dependency
-
-A local folder receives Manage PMS when a matching `<folder>-PMSDATA` rclone remote
-exists. Plex requires rclone for backup/restore synchronization. The feature owns
-packaging/restoring and database comparison; shared transfer/mount mechanisms remain
-in rclone/FUSE. No startup initialization is required.
+In desktop **Workspaces**, choose a local entry with the rclone credential
+source that contains a matching `<folder>-PMSDATA` remote. In
+`ui_contributions.py`, `_has_manage_pms()` checks the platform and selected
+credential context, then passes the remote names to `detection.py`.
+`_open_manage_pms()` lazily opens `ui/manage_pms_dialog.py`
+(`PlexManagePMSDialog`). `folders.py` resolves the local and mounted package
+folders without provisioning unrelated resources. `actions.py` connects the
+dialog to `packages.py` for archive work. For transfer review and execution,
+see [rclone transfers](../../rclone/development/transfers.md).
 
 ## Package and restore behavior
 
@@ -98,29 +110,33 @@ to use a custom location, including a not-yet-created restore destination.
 
 ## Database comparison
 
-Debug's **Plex - Compare Databases...** asks for two database copies instead of
-assuming personal paths. Movies match by nonempty GUID; episodes match by series
-GUID (or normalized series title when no GUID exists), season and episode index.
-Missing parents/indices remain unmatched. Duplicate entries match at most once,
-and optional hash checking requires a nonempty shared media hash. Ambiguous
-duplicate pairs are reassigned when needed to maximize compatible matches. Deleted entries
-are excluded from comparison; media parts are attached by metadata ID.
+`database.py` reads SQLite in read-only mode and attaches media parts by
+metadata ID. Missing optional columns become `None`; missing structural
+columns raise an explicit error. Deleted items are excluded. Empty duration
+totals are zero and nonempty totals retain fractional days. Photo filtering and
+comparison of types other than movies and episodes raise explicit errors.
 
-Absent optional database columns are returned as `None`; missing structural
-columns raise an explicit error. Empty duration totals are zero and nonempty
-totals retain fractional days. Photo filtering and comparison of other media
-types remain explicitly unsupported instead of returning misleading empty results.
+`comparison.py` matches movies by nonempty GUID and episodes by series GUID
+or normalized series title, plus season and episode index. Missing parents or
+indices leave episodes unmatched. Each duplicate can match at most once.
+The optional hash check requires a nonempty shared media hash and can reassign
+ambiguous pairs to match more compatible duplicates.
 
 ## Validation
 
-`Python/tests/integrations/test_plex.py` uses temporary SQLite databases and package folders,
-with external commands mocked. It covers extraction failures, traversal, failed
-replacement/rollback, missing metadata, duplicate matching and dialog startup.
-It does not operate on an installed Plex server.
+The focused Plex test above also covers extraction failures, traversal and
+failed directory replacement. To change publication or recovery behavior, also
+run the synthetic journal and promotion-failure suite.
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/integrations/test_plex_publication.py
+```
+
+It exercises retries, conflicts, no-overwrite moves and cleanup after a
+committed package. Check native registry and 7-Zip behavior and Linux service
+ownership on their respective installations.
 
 ## Desktop and mobile ownership
 
-The feature registers desktop folder workflows through `ui_contributions.py`
-and opens its Qt dialog lazily. It has no feature-owned `mobile_sources.json`
-or mobile management adapter. Do not expose the desktop dialog as an implemented
-Android/iOS workflow. See the [mobile support boundary](../user_mobile/user_mobile.md).
+Both Manage PMS and database comparison run in desktop Qt. See the
+[mobile support boundary](../user_mobile/user_mobile.md).

@@ -1,116 +1,115 @@
-# YouTube Downloader Feature
+# Develop YouTube Downloader
 
-For workflows, settings and troubleshooting, see the [user guide](../user/user.md).
+YouTube Downloader reads local channel or playlist settings and uses yt-dlp to
+download episodes into season folders. The optional rclone integration syncs
+seasons and configuration. See the [user guide](../user/user.md) for setup.
 
-Developer notes. See the [user guide](../user/user.md) for controls and setup,
-and [UI architecture](../../../development/features.md) for shared contribution conventions.
+## Try an output filename change
 
-Provides configured YouTube channel/playlist downloads for Logistics.
+On desktop, enable **YouTube Downloader** in **Settings → Features**. Create a
+disposable folder with these two files, then select the local folder in
+**Workspaces → YouTube Downloader…**. The dialog should show the configuration
+directory. Leave **Download All Channels** idle when using the synthetic URL.
 
-## Responsibilities
-
-- Detect local folders containing YouTube Downloader configuration.
-- Update and run yt-dlp for configured channels/playlists.
-- Contribute the YouTube Downloader workflow to matching Folder entries.
-- Optionally synchronize downloaded Season folders and downloader configuration through rclone.
-
-## Dependencies
-
-The feature has no hard feature dependencies.
-
-It declares:
-
-`FEATURE_OPTIONAL_DEPENDENCIES = ('rclone',)`
-
-Without rclone, downloading still works. The remote sync controls are disabled.
-
-With rclone available, the workflow additionally supports:
-
-- Push Local Season Folders
-- Push Local Config
-- Pull Remote Config
-
-## Configuration and Runtime
-
-The local folder's `remoteConfig.ini` needs:
+`remoteConfig.ini`
 
 ```ini
 [Youtube-Download]
 config_sub_path = DownloaderConfig
 ```
 
-That subdirectory contains download `.ini` files with a `[Youtube-DL]` section and `channel_name`, `download_url`, `season_number`, and `additional_params` values. Downloads go into sibling channel directories organized as `Season <number>`. Completion lists live in the config directory's `CompleteLists/` folder.
+`DownloaderConfig/channel.ini`
 
-## Structure
+```ini
+[Youtube-DL]
+channel_name = Example Channel
+download_url = https://example.test/watch?v=one&list=two
+season_number = 1
+additional_params = --match-filter "duration > 20"
+```
 
-- `detection.py` resolves normalized, relative config paths within a local folder.
-- `settings.py` reads and validates INI settings and builds yt-dlp argument lists.
-- `downloader.py` runs updates/downloads and reports their process status.
-- `sync.py` holds optional rclone operations; the existing downloader imports remain available.
-- `ui/dialog.py` presents downloads and optional remote synchronization.
+**Download All Channels** calls `YouTubeDownloaderDialog._download_all()` in
+`Python/features/youtube_downloader/ui/dialog.py`. Follow `downloader.download_all()`
+and `download()` to `download_arguments()` in
+`Python/features/youtube_downloader/settings.py`. For a small experiment, change
+the title limit in the `-o` template from `%(title).50s` to `%(title).40s`. Add an
+assertion for the shorter template in
+`test_arguments_preserve_quotes_ampersands_and_template_percent` and run from
+the repository root with the desktop environment installed.
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/integrations/test_youtube_downloader.py
+```
+
+Expect the shorter title template, the complete URL as one argument after `--`
+and `duration > 20` as a single filter value. The tests mock process execution
+and transfers, so this check needs neither FFmpeg nor network access.
+
+## Find or change folder detection
+
+`ui_contributions.py` offers the desktop action when a Workspaces entry has a
+local folder and `detection.has_config()` resolves a configured relative path.
+`detection.py` normalizes separators, rejects absolute paths and parent
+traversal, and verifies that links stay inside the local root. Detection checks
+the configuration path, while `downloader.download_all()` checks that the
+directory exists before launching work. If the action is missing, start with
+the local entry, feature setting and `[Youtube-Download]` section. If a batch
+fails immediately, check the directory and its per-channel INIs.
+
+## Configuration and Runtime
+
+`settings.DownloadSettings.read()` accepts UTF-8 with an optional BOM. It
+requires a portable single folder name, a nonnegative integer season and an
+HTTP or HTTPS URL. `additional_params` is optional and uses shell-style
+quoting on every platform. For Windows paths in options, use quoted forward
+slashes such as `--cookies "C:/My Files/cookies.txt"`. These are trusted yt-dlp
+options and can invoke behavior yt-dlp itself supports. Logistics runs argument
+lists without a shell. INI interpolation is disabled so percent-encoded URLs
+and output templates work.
+
+Output goes under a sibling channel directory in `Season <number>`. Resolved
+channel destinations must stay inside the download root. Numbering continues
+after the highest parsed episode for that season. When there are no parsed
+episodes, the legacy fallback counts MP4 files with ` - s` in their basename.
+Directories and metadata sidecars do not count. Season prefixes have at least
+two digits. Completion lists under `CompleteLists/` are yt-dlp download
+archives. The download and archive directories are created before launch.
 
 ## Platform support and execution
 
-Windows, macOS and Linux first look for FFmpeg on PATH. Windows/macOS fall back
-to `Software/ffmpeg_win/ffmpeg.exe` or `Software/ffmpeg_macos/ffmpeg`; Linux needs
-FFmpeg on PATH. Missing FFmpeg is reported before launching a download.
-Bundled-path lookup resolves resource paths without creating Software or unrelated
-credential directories; locating an executable does not provision resources.
+`settings.find_ffmpeg()` checks PATH first. Windows and macOS also look in
+`Software/ffmpeg_win/ffmpeg.exe` and `Software/ffmpeg_macos/ffmpeg`,
+respectively, without provisioning resource directories. Linux requires FFmpeg
+on PATH. A missing executable fails before launch.
 
-Commands use argument lists, without a shell or platform-specific separators.
-The URL remains one argument, including query parameters. INI interpolation is
-disabled so percent-encoded URLs and output templates work. `additional_params`
-uses shell-style quoting on all platforms, but is never executed as shell code.
-For Windows paths in these options, use quoted forward-slash paths, such as
-`--cookies "C:/My Files/cookies.txt"`. These are trusted yt-dlp options and can
-change yt-dlp behavior, including its own supported execution options.
+`downloader.download_all()` scans case-insensitive `.ini` extensions, continues
+after individual failures and reports whether all commands succeeded.
+`--ignore-errors` allows yt-dlp to return success despite missing individual
+playlist items. Cancel or close requests termination of the process tree.
+Closing waits for worker completion and yt-dlp's resumable partial downloads
+remain available. Keep UI updates on the Qt side of `OperationProgress`.
+`test_youtube_worker_ui.py` checks the background dialog behavior.
 
-Channel names must be a single portable folder name; seasons are nonnegative
-integers. URLs must use HTTP or HTTPS. Config sub-paths cannot escape the local
-folder, and redirected channel paths cannot escape the download root. Archive
-and download directories are created before launch. Numbering continues after the highest parsed episode number in the current
-season, so deleted files do not cause number reuse. Legacy unnumbered MP4 files
-use a count fallback; metadata sidecars and directories are excluded. Seasons
-use at least two digits (`s01`, `s10`). Season sync includes only `Season <digits>` folders.
-
-Batch processing validates the directory before downloading, handles `.ini`
-extensions case-insensitively, continues after individual failures and returns
-whether all commands succeeded. Normal batches never update installed packages. Each command's nonzero exit is reported. `--ignore-errors` remains a
-default yt-dlp option, so successful exit does not guarantee every playlist item
-was downloaded.
-
-The launcher installs a pinned yt-dlp dependency. The separate **Update yt-dlp**
-action uses uv (or pip as a fallback), with a three-minute timeout. A later locked
-launcher sync restores the project pin. Downloads, updates and season transfers
-run through `OperationProgress` and the shared shell-free `run_command` API.
-Closing or cancelling stops the process tree and waits for worker completion;
-callbacks must not access Qt widgets. GUI failures remain visible in the dialog.
-
-## Validation
-
-`Python/tests/integrations/test_youtube_downloader.py` covers settings, argument boundaries,
-paths, Linux/system FFmpeg and bundled Windows fallback, failed commands and batch
-behavior. Processes are mocked: tests do not download videos, update packages or
-transfer remote files.
+The locked launcher installs pinned yt-dlp. **Update yt-dlp** is a separate
+action using uv or pip with a three-minute timeout. A later locked launcher sync
+restores the pin.
 
 ## Sync compatibility exports
 
-`downloader.py` explicitly re-exports `push_seasons`, `push_config` and
-`pull_config` from `sync.py`. The feature dialog calls those names through the
-downloader module; they retain the same callable objects and signatures. An
-unused-import report inside `downloader.py` is not evidence these commands can be
-removed. Transfer preparation and review remain in their existing owners.
+The dialog's optional sync controls require an available rclone integration and
+remote context. `downloader.py` re-exports `push_seasons`, `push_config` and
+`pull_config` from `sync.py`; the dialog calls these public names.
+[The rclone transfer owner](../../rclone/development/transfers.md) owns review
+and transfer execution.
 
-`sync.py:push_seasons` requires `SyncState.SUCCEEDED` for waiting transfers.
-Reviewed transfers also accept `STARTED`, which only confirms launch. Rejected
-outcomes stop later seasons without undoing earlier transfers. Configuration
-push and pull derive both operands from the same captured directory.
-`Python/tests/integrations/test_youtube_downloader.py` checks outcome handling
-and consistent operands with mocked transfers.
+`sync.push_seasons()` selects only `Season <digits>` directories. Waiting
+transfers require `SyncState.SUCCEEDED`. Reviewed transfers also accept
+`STARTED`, which confirms launch. A rejected outcome stops later seasons while
+earlier transfers keep their results. Config push and pull derive both operands
+from the same captured configuration directory. The focused tests above mock
+these outcomes and verify operand consistency.
 
 ## Desktop and mobile ownership
 
-The feature registers desktop folder workflows through `ui_contributions.py`
-and opens its Qt dialog lazily. It has no feature-owned `mobile_sources.json`
-or mobile management adapter. Do not expose the desktop dialog as an implemented
-Android/iOS workflow. See the [mobile support boundary](../user_mobile/user_mobile.md).
+The Workspaces action lazily opens a Qt dialog. See the
+[mobile support boundary](../user_mobile/user_mobile.md) for platform availability.
