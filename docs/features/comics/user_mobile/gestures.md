@@ -1,43 +1,7 @@
 # Comic gestures on mobile
 
-In fullscreen comics on iOS and Android, hold a thumb on the page for about
-400 ms to show a magnifying bubble. The bubble enlarges the page beneath
-its center and grows larger on tablet screens. The bubble sits close
-to the thumb with a slight overlap. Keep holding and drag to move
-the bubble. Near a screen edge, keep dragging toward the edge to inspect the
-outermost pixels even after the bubble stops moving. Release to dismiss. The page stays still while the bubble is open.
-Keep holding the page and tap **+** at the upper left or **−** at the upper right of the magnifier
-with another finger. Zoom ranges from **150% to 300%** in 10 percentage
-point steps. The default is **190%**. Changes save immediately and are shared
-with PDF readers, other open readers, and the next app launch. The same value
-is available in **Settings → Books & Comics → Comic & PDF magnifier zoom**.
-A second finger away from the buttons cancels the bubble for ordinary page pinch zoom. The bubble is disabled
-when reading controls are visible and is cleared on page changes or leaving the
-reader. It works on single pages and spreads, including Local/LocalCrypt comics.
+In fullscreen, hold the page for about 400 ms to show the magnifier. Drag to inspect and release to dismiss. Keep holding and tap **+** or **−** with another finger. Zoom ranges from 150% to 300% in 10-point steps and starts at 190%. Changes save under **Settings → Books & Comics → Comic & PDF magnifier zoom**. A second finger away from the buttons switches to pinch zoom.
 
-Comic pages use native pinch zoom and panning on iOS and Android. Fit page resets
-zoom; swipe left for the next page and right for the previous page at fit size.
-Manga reverses those directions. A swipe past either boundary briefly shows a
-finger demonstrating the next-page gesture: **right to left** for ordinary comics,
-**left to right** for right-to-left manga. A separate bottom line offers the
-previous volume at the beginning or the next volume at the end, only when that
-neighbor is available. Follow that line's physical direction and repeat the
-boundary swipe within 2.5 seconds to open the offered volume; otherwise the cue
-clears. Pending, failed and missing neighbors have no volume instruction. If a
-neighbor disappears before opening, a recoverable message leaves the comic open.
-The finger makes two short strokes. Reduced motion, disabled Android animations
-and E Ink mode use a static finger with labeled start/end positions. The cue lets
-page touches pass through and clears on page movement, leaving or closing the
-reader, and background/privacy cover.
-Folder-backed volumes come from the current folder, in case-insensitive alphabetical filename order.
-No adjacent file means the current comic stays open. Page changes slide horizontally in the reading direction, including manga
-and spreads, with controls visible or hidden. Reduced motion on iOS, disabled
-Android animations and E Ink mode suppress the slide. While zoomed, dragging
-pans the page and does not change pages. On iOS, reader swipes take priority
-over the navigation swipe back; use Back or the destination tabs to leave. Private comic pages
-use the same presentation. Private content stays within its credential session; saved positions use credential-password encryption when available.
+Pinch and drag to zoom and pan. **Fit comic page** restores swipe paging. Swipe left for next in ordinary comics, or right for next in manga. At a boundary, repeat the offered volume swipe within 2.5 seconds to open an available neighbor. Failed opens keep the current comic. Use Back or destination tabs to leave the reader.
 
-Page slides are enabled by default. **High contrast / E Ink** and system motion
-settings can suppress them. Single pages, two-page spreads and turns between the
-two halves of a wide page follow the same policy. Changing layout or restoring a
-position does not start a page-turn animation.
+**High Contrast / E Ink** and system reduced motion disable page slides. Private positions encrypt with the credential ZIP password when available.

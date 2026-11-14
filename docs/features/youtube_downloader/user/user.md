@@ -31,9 +31,8 @@ pinned by Logistics.
 2. Open **YouTube Downloader…**.
 3. Start the intended download operation and review process output and failures.
 
-Files are stored in sibling channel folders under `Season <number>`. Completion
-lists are kept in `CompleteLists/` beneath the settings directory. Numbering
-continues from the highest existing parsed episode number.
+Files go into sibling channel folders under `Season <number>`. The settings
+directory's `CompleteLists/` records completed downloads.
 
 Downloads and season transfers run in the background. **Cancel** stops the running
 process tree and leaves yt-dlp’s resumable partial downloads in place. Closing the
@@ -63,8 +62,5 @@ history lists prevent repeated completed downloads. They are state files, not
 copies of the media. Remote season/config transfers use sync and can remove
 extra destination files; review the selected credential and destination first.
 
-GUI Push and Pull actions show a detailed rclone review before transferring,
-including additions, replacements and deletions. You can explicitly proceed
-without the full review while a comparison is still running. Confirmation does
-not bypass required credential or encrypted-file checks. Season-folder Pushes
-review each destination separately.
+Before using remote transfers, check the destination and proposed deletions in
+the [rclone review](../../rclone/user/user.md#choose-the-sync-scope).

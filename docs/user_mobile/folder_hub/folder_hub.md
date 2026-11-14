@@ -52,9 +52,10 @@ Logistics does not create a backup of these changes.
 
 Before the transfer starts, check **From**, **To**, and the list of additions,
 replacements and deletions. Changed comparison results require another review.
-**Proceed without full review…** skips the completed comparison and still
-requires confirmation, credentials and destination checks. Cancel before
-confirmation to leave the destination unchanged.
+**Skip preview and start** can begin the transfer while the comparison is
+incomplete. Credentials and destination checks still apply. Skipping can
+replace or delete more files than the preview lists. Cancel before starting
+to leave the destination unchanged.
 
 For a first pull from a session-only encrypted remote, choose a readable
 **Local** copy or an **Encrypted Copy**. Encrypted copies retain the original

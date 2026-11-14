@@ -1,140 +1,15 @@
 # Mobile Video Player
 
-See [playback tools](controls.md) for speed, picture size, queues, seek undo, preferences and encrypted cloud resume.
-On iPhone and iPad, [Native AirPlay video](controls.md#watching-on-a-tv-with-iphone-or-ipad)
-adds a TV button to the Logistics player for compatible local files.
+Enable **Video Player**, then open a video from Local, unlocked LocalCrypt or Cloud. MP4, MKV, AVI, MOV, M4V, WebM, MPEG, TS/M2TS, WMV and OGV are accepted containers. Playback depends on the codecs in the file. Videos open directly and can be reopened from Recent. When access and audio allow, opening starts playback.
 
-Android and iPad builds and focused emulator/simulator playback checks have
-passed for all eight supported codec/container combinations and LocalCrypt.
-Physical-device acceptance remains pending for casting, picture in picture,
-audio/video quality and lock timing during those modes.
+Tap for controls. Use Play/Pause, ten-second skips and the timeline. **Chapters** jumps to an embedded chapter without resuming a paused video. **Audio tracks** and **Subtitles** choose embedded tracks or matching sidecars. Use matching stems, such as `Movie.mkv`, `Movie.srt` and `Movie.en.srt`. Up to 32 sidecars of 8 MiB each are supported. See [playback tools](controls.md) for exact time, speed, sizing and touch controls.
 
-Enable **Video Player** in Features, then open an MP4, MKV, AVI, MOV, M4V, WebM, MPEG, TS/M2TS, WMV or OGV video in Local, unlocked
-LocalCrypt or the remote/crypt Cloud browser. The native player opens
-in its own screen with Play/Pause, a seek bar, elapsed/total time, ten-second skips,
-audio/subtitle selection and a close button. Opened videos also appear in Home
-and Documents **Recent** lists. Opening a video, including from Recent, starts playback automatically when audio is permitted.
-Local and saved-credential sources use ordinary recent references; session-only
-sources use the existing credential-password encrypted recent list and appear
-only while those credentials are loaded. Videos are not restored as open documents
-or started automatically at app launch. Playback and utility buttons have
-screen-reader labels. On Android, iPhone and iPad, the timeline sits above the
-Play/Pause and ten-second skip icons in a bottom panel. On iOS, UIKit places
-utility buttons in the side or horizontal navigation bar for the current window.
-The iOS filename occupies the native title area alongside playback controls,
-with centered storage details beneath it and a glass background on iOS 26 or newer.
-In narrow or short iOS windows, the source and filename share a compact line
-above the video. Open **Playback → Document location…** for
-the full path.
-The green cached-range strip follows the seek track's endpoints directly beneath it.
-The movie stays centered in the full player surface when controls appear or hide.
-On a partially folded Duo with a horizontal hinge, the movie stays above the
-hinge and the controls stay below it. In portrait laptop posture, the lower
-panel uses its full height: the filename and source sit beside an **X** that
-closes the player, followed by the timeline, large ten-second skip and Play/Pause
-controls, and a glass toolbar for Speed, Fit/Fill, Audio, Subtitles, Chapters and
-Playback. **Go to time** remains available inside Playback. Settings lists and
-text-entry dialogs open within the lower panel; long lists scroll there. Turning
-out of portrait or unfolding dismisses an open lower-panel settings list and
-restores the corresponding ordinary layout. The existing landscape laptop deck
-retains its quick actions. The upper panel hides system status indicators while
-the laptop deck is visible. The split follows the system's reserved hinge region;
-physical-pose acceptance is separate from injected layout checks.
+On iOS, the fullscreen deck fades after three seconds while playing. On Android, choose **Fullscreen** or **Exit fullscreen**. With an active horizontal Duo fold, the picture sits above the hinge and controls below it. Tap **Fill view** to crop or **Fit view** to restore the whole picture.
 
-On iOS, picture sizing defaults to **Fit**, preserving the whole image. Tap
-**Fill view** to crop the edges and fill the player, then **Fit view** to return.
-This single toggle replaces the Picture menu and separate fullscreen button;
-there is no Original size option. Picture size is not repeated in the Playback menu. Selection popups, including
-Playback, Audio, Subtitles and Chapters, close when you tap outside them and have
-no Cancel row. Text-entry prompts still have explicit Apply/Cancel controls.
+**More playback options → Picture in picture** or **Cast…** is available for ordinary Local and saved-credential LocalCrypt when policy allows. Use [Native AirPlay video](controls.md#watching-on-a-tv-with-iphone-or-ipad) for compatible local files on iPhone or iPad. Session-only credentials block external playback and can conceal even ordinary video. Unlock with the credential password or an authorized trusted Wi-Fi resume, then press Play.
 
-**Chapters** lists embedded chapter names and start times when the file provides
-them. Selecting a chapter seeks without resuming a paused movie. AVI files often
-have no embedded chapters; the player does not manufacture chapter boundaries.
+Backgrounding pauses inline playback. Audio interruptions and loss of an audio output pause playback. Press Play after returning. Visible playback keeps the display awake, including while buffering. Pause or close to release it.
 
-On Android, choose **Fullscreen** to hide the system bars. Swipe from a system
-edge to reveal them temporarily. On iOS, playback
-starts fullscreen with controls visible, then hides them during playback. Tap the video to
-bring the controls back; tap again to hide them. While playing, revealed controls
-hide again after three seconds. Pausing, finishing or encountering an error shows
-the controls. On Android, choose **Exit fullscreen** to keep them visible.
-The movie preserves its aspect ratio in both Fit and Fill.
-Automatic hiding is disabled with VoiceOver or Android touch exploration.
+Cloud startup and seeking may buffer or fail. Press Play to retry from the held position. Reopen a changed file or make a Local/LocalCrypt copy for persistent problems. Remote cache is limited to 128 MiB in memory per movie. Cloud resume is encrypted and there is no plaintext movie cache.
 
-When a cloud read exhausts playable data, playback holds its last rendered
-position while more data is fetched. Slow background prefetch alone does not
-pause the video.
-It resumes when data is ready unless you pressed Pause, left the app, or lost
-audio/credential permission.
-
-While playback is requested visibly on the device, including during buffering,
-the player keeps the display awake.
-Pausing, finishing, closing or hiding playback releases that request so normal
-screen timeout can resume. Casting and picture-in-picture do not keep the main
-display awake. The three-second controls timer only hides controls.
-On iOS, the Video accessibility element also offers **Show video controls**.
-Use device volume buttons. Separate **Audio tracks** and **Subtitles** buttons list embedded tracks and matching external sidecars. Track names and languages appear when provided by the file; subtitles can be switched off. Put UTF-8 SRT files beside the movie,
-using the same stem, for example `Movie.mkv`, `Movie.srt` and `Movie.en.srt`.
-The VLC adapters also admit matching ASS/SSA and WebVTT sidecars. At most 32
-sidecars are admitted, each limited to 8 MiB. Subtitles stay in provider streams.
-
-For ordinary Local files and mobile LocalCrypt with saved credentials, the
-**More playback options** menu offers **Picture in picture** and **Cast…**. Casting uses VLC's discovered
-receivers (Chromecast). This menu belongs to the VLC player. iOS defaults
-to classic PiP. **Playback → Subtitle PiP (reopen video)** selects subtitle
-composition on iOS 17.4 or later; reopen the video to apply the choice. Receiver discovery
-may take a few seconds: reopen Cast to refresh the list. Both actions recheck
-credential policy. They are unavailable with session-only credentials.
-
-Inline playback pauses on backgrounding. Android screen-off notifications pause
-playback even in picture in picture or when casting. The iPad adapter pauses on
-protected-data loss and pauses inline playback when the app resigns active;
-lock timing during background PiP/casting still needs physical-device validation.
-Session-only content is hidden behind the existing credential resume gate.
-This also protects an ordinary video while any session-only credential is loaded.
-A newly loaded session retires a player that was previously allowed external
-playback. Casting and picture in picture remain unavailable while that protection
-is in use. Restoring the surface never starts playback automatically.
-
-Returning to session-only video requires its credential password unless the
-existing optional trusted Wi-Fi setting authorizes resume. Video, subtitles and
-audio remain concealed while the fresh Wi-Fi decision is pending. An unavailable
-or failed lookup keeps the password challenge. A later background transition
-invalidates an earlier authorization attempt.
-
-Incoming calls and audio-session/focus interruptions pause every video, including
-ordinary playback. Removing wired headphones or losing a Bluetooth audio output
-also pauses it. Ending a call, regaining audio focus or reconnecting a headset
-does not resume playback: press Play again. Duplicate system and application
-pause notifications do not toggle playback. The paused decoder remains muted
-until explicit Play; a stopped decoder has no active audio output. Resume records use
-the same encrypted LocalCrypt sidecar as desktop; unlocking the source remains
-necessary before reading its saved position.
-
-Buffering shows a quiet spinning indicator after both playback time and frame counters stop progressing for three seconds. Batched frame statistics alone do not trigger it while time advances. During a network wait, six seconds without rendered-frame progress also detects a frozen picture whose clock is still advancing. Background prefetch and decoder percentages do not show a waiting message while video is playing. Play/Pause reflects your requested state immediately. Startup and seeking use a three-second VLC network cache; sustained playback still requires sufficient throughput.
-
-AVI is a container: its video and audio codecs determine whether it can play. The existing VLC engines retain hardware decoding where supported and software fallback for other codecs. Codec availability and energy use depend on the platform and file.
-
-Cloud playback is best effort: startup and seeking may buffer or fail with slow
-networks, provider quotas or limited range support. A connection or decoder failure
-shows a retry message instead of an endless spinner; press Play to retry from the
-held position. A changed video must be closed and reopened. For persistent issues,
-manually make a Local/LocalCrypt copy. Cloud checkpoints are encrypted and can survive closing; no plaintext movie or cloud resume sidecar is saved. Remote and crypt playback passed focused Android, iPad and iPhone
-emulator/simulator checks using synthetic HTTPS remotes. Live-cloud throughput
-and physical-device behavior still require separate acceptance. See the [implementation and remaining acceptance work](../development/development.md).
-
-
-Remote playback retains up to 128 MiB in memory per open video so recent backward
-seeks can reuse downloaded data. This is roughly one minute at 18 Mbit/s; higher
-bitrates or long jumps may need more buffering. Closing the player clears this
-cache. It does not create a decrypted file on disk.
-
-Saved video duration keeps the resume timestamp and seek bar aligned while the
-movie opens. Older checkpoints without a duration show the timestamp with an
-loading-duration label and a visible disabled seek bar until the decoder knows the duration.
-Remote folder/subtitle discovery runs after opening playback, so directory
-listing latency does not delay the first video request.
-
-The timeline and loading indicator remain visible until playback produces frames.
-On iOS, indexed MKV videos use their cue table to resume directly; metadata and
-keyframe reads are still necessary, so network startup is not instantaneous.
+Emulator and simulator playback checks passed for the covered codec combinations and LocalCrypt. Physical casting, PiP, audio/video quality, fold behavior and lock timing remain under validation. See [implementation and acceptance](../development/development.md).

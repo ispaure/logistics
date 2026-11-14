@@ -1,339 +1,114 @@
 # Blender installations and presets
 
-This manager is available on desktop; see [mobile availability](../user_mobile/user_mobile.md).
-
-Open **Blender** from the navigation rail. If it is hidden, enable Blender under
-**Settings → Features**. Logistics ships only the manager and its release catalog;
-Blender is downloaded on the first launch of a configuration that needs it.
-
-The main page shows one launch card per Blender version and preference preset.
-Click a card to launch that configuration. If Blender is missing, confirm its
-version and destination; Logistics installs it before launching.
-**Configure Blender…** and each card's **Manage** button open the feature's Settings.
-
-Under **Settings → Blender**, **Presets** appears first. The second tab,
-**Versions Definitions**, is admin configuration for the catalog of Blender versions
-available to install, including their platform packages and download metadata.
-In **Personal Settings**, **Presets** creates and manages configurations, selects
-addons and provides **Add Addon…** for the selected preset only. The third tab,
-**Addon Library**, browses shared versions. Version/preset editing
-is kept off the main launch page. Manage opens the selected card's preset.
+Enable **Blender** in **Settings → Features**, then open it on the desktop
+navigation rail. Each card launches a Blender version with its own preference
+preset. **Manage** opens that preset in Settings. See
+[mobile availability](../user_mobile/user_mobile.md).
 
 ## Install a version
 
-Click a configuration card or **Launch Blender** in Manage. If that version is
-missing, confirm the download and destination. Logistics installs it and then
-launches the selected preset automatically. Cancelling or a failed installation
-does not launch Blender. Installed versions launch without a download prompt.
-Logistics verifies the official package against its pinned SHA-256 before
-extracting it. Progress and cancellation are shown at the bottom of the page. Successful
-installation deletes the downloaded package; failure or cancellation discards
-temporary staging. Existing installation folders are never silently overwritten.
+Click a launch card. For a missing installation, confirm the package and
+destination. Logistics verifies the pinned SHA-256 before extracting, then
+launches the preset. Failed or cancelled installs clear temporary staging.
 
-The bundled catalog defines Blender **4.5.1** and **5.2.2**; it is a pinned
-installation catalog. Windows x64/ARM64 and macOS Apple Silicon have both
-versions; Intel Macs have 4.5.1. Linux x64 has both versions. The catalog has no
-Linux ARM64 entry and no Intel Mac entry for 5.2.2. The manager shows only
-packages for your OS/architecture. Blender's own OS and hardware requirements
-still apply; a matching package does not guarantee compatibility with older systems.
-
-Release metadata is editable under **Settings → Blender**. Select the exact
-**Blender version** from the dropdown, then choose a platform tab across the top.
-The panel shows only that platform's download URL, SHA-256,
-package format, extracted bundle and executable path. **Save Settings** saves edits
-for the selected version; switching versions/platforms keeps unsaved edits.
-
-Each version has its own catalog file, such as `config-4.5.1.ini` or
-`config-5.2.2.ini` in `Python/features/blender`. The filename fixes the version;
-platform section names identify the builds. To add a version, add a matching
-`config-<major.minor.patch>.ini` with its official package metadata. The manager
-does not silently replace installed releases.
-
-The global Settings scope selects **Personal Settings** or **Default Software
-Configuration**. Personal edits save only explicit fields in the matching per-version
-personal INI; inherited fields follow software defaults. A matching explicit value
-remains an override until **↶** removes it and **Save Settings** commits the reset.
-Download URL, hash, format, bundle and executable must describe the same package;
-invalid metadata is rejected on Save. Existing personal fields from the old combined
-catalog migrate once to the matching version/platform; the old file is retained.
-Existing per-version choices take precedence. Migration failures preserve the old
-file and retry on a later launch. Switching scopes retains each scope's pending edits.
+The bundled catalog offers **4.5.1**, **5.2.2** and **5.3.0** on Windows
+x64/ARM64, Apple Silicon and Linux x64. Intel Macs have **4.5.1**. Blender’s own hardware and OS requirements
+apply. In **Settings → Blender → Versions Definitions**, choose a version and
+platform to edit its URL, SHA-256, format, bundle and executable. All five must
+describe the same package. To clear a personal override, use **↶** and
+then **Save Settings**. New software definitions use `config-<major.minor.patch>.ini`
+under `Python/features/blender`.
 
 ## Create and launch presets
 
-Open **Settings → Blender → Presets**. The list on the left shows all presets
-with their Blender versions. Select one to configure its details on the right.
-Click **+**, choose the Blender version and enter the preset name beneath it in
-the same dialog, then launch from its card or **Launch Blender**.
-Right-click a preset to rename, duplicate, copy it to another version, or delete it.
-Deletion still asks for confirmation and keeps the shared addon library intact. Each preset has
-independent `config`, `scripts`, `extensions` and `datafiles` folders. Blender's
-`userpref.blend` and `startup.blend` belong in `config`; legacy addons belong in
-`scripts/addons`, and scripts/keymap presets belong under `scripts/presets`.
-Modern extensions retain Blender's repository/extension folder layout.
+In **Settings → Blender → Presets**, click **+**, select a version and name it.
+Launch from its card or **Launch Blender**. Presets have independent `config`,
+`scripts`, `extensions` and `datafiles` directories. Use
+**More… → Open Preset Folder** to access `config/userpref.blend`, legacy
+`scripts/addons` or other preset files.
 
-Blender receives the selected resource paths in its process environment. Normal
-Blender preferences outside Logistics are not selected by this launcher. Launching
-Blender directly outside Logistics does not automatically use these presets.
-
-The **More…** menu in Manage contains these maintenance actions:
-
-- **Duplicate Preset** makes an independent copy within the selected version.
-- **Copy to Another Version** copies to another configured release after an explicit
-  confirmation. Check addon and preference compatibility in the destination Blender.
-- **Rename Preset** changes its folder name without rewriting preferences inside it.
-- **Open Preset Folder** opens its files in your system file manager.
-- **Delete Preset** permanently deletes that preset, preferences and addons after
-  confirmation. There is no Undo; back up important presets before deletion.
-
-Copying preserves file contents and symlinks. Blender preferences may contain
-absolute paths to assets, repositories or scripts: duplicating/renaming a preset
-does not rewrite those references. Close Blender before copying, renaming or
-deleting its preset. Logistics blocks these operations for instances it launched
-while they are running; it cannot track Blender instances started elsewhere.
+Close Blender before duplicating, copying to another version, renaming or
+deleting a preset. Copies include its private addon ZIPs, preserve symlinks and
+keep absolute paths stored inside preferences. Deleting permanently removes
+that preset and its private files. Use Logistics to launch with its resources.
 
 ## Shared and preset-provided addons
 
-Each preset resolves addons from two sources:
+- **Shared** ZIPs are discovered recursively under
+  `Software/Blender_Addons_Library` by default.
+- **Preset provided** ZIPs come from **Presets → Add Addon…** and are private
+  to the selected preset. Available legacy imports already selected by a preset
+  appear as **User provided (legacy)**.
 
-- **Shared:** the read-only studio/maintainer ZIP collection, defaulting to
-  `Software/Blender_Addons_Library`. ZIPs are discovered recursively; no manifest
-  needs manual maintenance.
-- **Preset provided:** ZIPs imported with **Settings → Blender → Presets → Add
-  Addon…**. Choose a preset first. These ZIPs belong only to that preset and are
-  stored in its `addon-library/<identity>/<version>[--date]/addon.zip` folder.
+Select addons, then **Save Addon Selection**. On launch, Logistics applies the
+newest declared-compatible release, preferring the preset’s ZIP at equal
+identity/version. Legacy `bl_info` and modern `blender_manifest.toml` metadata
+must identify one addon and its compatibility. Minimum versions are inclusive,
+extension maxima exclusive. Unsafe, ambiguous or conflicting ZIPs are rejected.
+Matched legacy/extension packages share a selection, but Blender preference
+migration depends on the addon.
 
-The newest declared-compatible release across both sources wins. For matching
-identity/version, the preset's own package overrides the shared copy. Importing
-an older version does not hide a newer compatible shared version. The shared
-collection remains untouched. Duplicating or copying a preset includes its ZIPs;
-deleting the preset deletes its private ZIP library too. Unchecking an addon
-keeps the imported ZIP available for later selection in that preset.
+Close Blender before applying changes. Deselecting removes managed addon files
+on the next launch and keeps the ZIP. Move conflicting unmanaged module files
+manually. Versions that change replace package files, so back up important data
+stored inside them. Managed addons activate alphabetically in interactive
+Blender and can run their own startup code.
 
-Imports read metadata without running addon code. They do not automatically
-select the addon; check it in the preset's addon list and save the selection.
-Legacy add-on regex escape warnings are not printed during metadata inspection.
-Invalid metadata is still rejected; the add-on's source is left unchanged.
-
-Older imports from the previous per-user library remain available to presets
-that already selected their identity, labelled **User provided (legacy)**.
-They are retained on disk and are not newly offered to unrelated presets.
-
-Legacy module names and extension manifest IDs identify packages. Logistics
-groups a legacy addon with its extension when both the module and display name
-match after ignoring capitalization, spaces, underscores and hyphens. It also
-recognizes the documented Zen UV migration. A display-name match alone or an
-ambiguous match keeps the packages separate. Exact reimports are harmless;
-conflicting contents for one identity/version/date are rejected.
-
-Select a matched addon once. A newer compatible extension replaces the managed
-legacy package on the next launch. If the extension requires a newer Blender
-version or another platform, Logistics can use the compatible legacy ZIP.
-Keep both ZIPs in the library if you support Blender versions that need both
-formats. Blender stores preferences under each package's own module, so whether
-settings carry over depends on the addon's migration support.
-
-Metadata is read without importing addon code. Legacy packages use the literal
-`bl_info` dictionary in `__init__.py` (or a single root Python file); its `version`
-is the addon release and `blender` is the minimum Blender version. Modern
-extensions use `blender_manifest.toml`, including `version`, `blender_version_min`,
-optional exclusive `blender_version_max`, and optional `platforms`.
-
-The manager chooses the numerically newest addon release whose declared Blender
-version range and platform match the configuration. A minimum is inclusive; an
-extension maximum is exclusive. Missing requirements appear as unknown in the
-library and are not automatically eligible for selection. Declared compatibility
-cannot guarantee that an addon works. ZIPs must contain exactly one identifiable
-addon; unsafe paths, symbolic links, duplicate paths and oversized packages are
-rejected. Unknown versions or metadata constructed by executing Python are rejected.
-
-Open **Settings → Blender → Presets** (or a card's **Manage** shortcut), select
-addons under **Addons**, then click **Save Addon Selection**. This saves the choices
-without installing or launching Blender. The next launch copies the resolved
-releases into that preset and saves their enabled preference entries in background
-Blender. Addons activate in the interactive Blender process so GPU/UI-dependent
-addons can initialize normally.
-Close Blender before saving or applying changes. Deselecting an addon disables
-and removes its library-managed files from that preset; the source ZIP stays in the shared folder or the preset's ZIP library.
-Existing addons installed outside the library are preserved; conflicting module
-paths must be moved manually before the library can manage that addon.
-
-Selected addons are activated automatically in case-insensitive alphabetical order
-by their displayed names, using their module names to break ties. The launcher passes
-an ordered `--addons` argument and runs a startup script that disables/re-enables
-only the managed addons in that order without removing their preference objects.
-Blender's ordinary saved/default addons may initialize earlier; the controlled
-activation step orders the managed selection and leaves unrelated addons alone.
-This can call managed addon startup code again. The interactive startup step does not save preferences. Launch preparation applies
-the saved selection and saves its enabled preferences in background Blender without
-importing selected or previously saved addons. Factory startup and a controlled
-preference reload keep GPU/UI-dependent addons out of this preparation process. Interactive activation failures are recorded in
-`blender-launch-*.log` in the preset folder; use **Open Preset Folder** from More
-to read them. Preparation failures retain a complete `blender-addons-error-*.log`
-there and show its path with the error. Logs can be deleted when no longer needed.
-
-Launch cards resolve saved selections again, so a newly imported compatible release
-is used on the next launch. If a selection no longer has a compatible release,
-launch reports the problem; deselect it in Manage. Importing a ZIP alone does not
-change existing presets. Copies to another Blender version retain selections and
-resolve them for that destination on launch. The manager rolls back preset files
-and saved preferences when preparation fails or is cancelled. An addon that fails
-only during interactive activation remains selected; read the launch log and
-deselect or update it before launching again. Addon startup
-code can run during enabling and launch; effects outside the preset cannot be undone.
-Blender instances started outside Logistics cannot be tracked; close them yourself.
-
-Private download credentials are planned for `Credentials/blender_addons`, but
-credential manifests, private downloads and access management are not implemented.
-Use local ZIP imports for now.
+Failed or cancelled preparation restores preset files and preferences. Use
+`blender-addons-error-*.log` for preparation failures or
+`blender-launch-*.log` for activation failures. Deselect or update a failed addon
+before relaunching. If no compatible ZIP remains, deselect it in Manage.
 
 ## Blue Hole
 
-Blue Hole is a dedicated optional configuration above the normal addon list in
-**Presets**; it is omitted from the regular library list. **Enable Blue Hole** is
-on by default. With **Source → GitHub**, choose **main**, **beta** or **alpha**,
-then save the selection before launching. For Blender 5.2.2 and newer, enable Deluxe in Blender under
-**Blue Hole → Updates & Deluxe → Enable Deluxe Keymaps**. Blender keeps that
-choice for the same preset once preferences are saved. Use **Save Preferences**
-if Blender's **Auto-Save Preferences** is disabled.
+Under **Presets**, **Enable Blue Hole** defaults to on. With **Source → GitHub**,
+select **main**, **beta** or **alpha** and save. Launch resolves the newest
+compatible Blender baseline (for example `blender-4.5.1/main`), checks its head
+and downloads that exact commit if needed. An incompatible update stops launch.
+On network failure, an already installed compatible copy can launch with a
+warning showing its actual commit. Deluxe changes wait for a successful online
+update. First installs need internet access.
 
-Each launch with the GitHub source resolves the channel’s compatible versioned
-branch and checks its GitHub head. The
-manager downloads that exact commit only when it is not already cached, using the
-public `ispaure/BlueHole` repository. Branch snapshots have their own commit cache,
-so two commits declaring the same addon version still remain distinct. Declared
-Blender compatibility is checked before applying the snapshot. No GitHub access
-or download happens merely by viewing the page or creating a preset. An invalid or incompatible
-update stops launch and preserves the existing preset files/preferences. Network
-failures can use the installed-copy fallback described below.
+For unpublished work, use **Source → Local → Browse…** and select the Blue Hole
+checkout or worktree. macOS/Linux use symlinks and Windows uses a junction.
+Close Blender before switching branches. **Apply Changes** can write
+`keymaps/deluxe-defaults.json` in the linked checkout. Switching to GitHub
+replaces the link on launch. A GitHub update replaces the installed keymap catalog.
 
-To test unpublished changes, choose **Source → Local → Browse…**, select the
-Blue Hole Git checkout or worktree root. The preset remembers the source and
-checkout as you change them. Use **Save Addon Selection** to save changes to
-which add-ons are enabled.
-Logistics links the preset's Blue Hole add-on to that checkout, using a
-symbolic link on macOS and Linux or a junction on Windows. The checkout's
-current branch and uncommitted changes are available when you launch Blender.
-Close Blender before switching branches. In Blue Hole versions that edit the
-bundled keymap catalog, **Apply Changes** updates the checkout's
-`keymaps/deluxe-defaults.json`. Switching the source to **GitHub** replaces
-the link with the downloaded add-on at the next launch. GitHub mode edits its
-installed copy, which a Blue Hole update replaces with the shipped catalog.
+On Blender **5.2.2 and newer**, use **Blue Hole → Updates & Deluxe → Enable
+Deluxe Keymaps** and save preferences. Back up and review existing Deluxe
+keymaps before switching to the built-in **Blender** preset.
+On older versions, **Deluxe: Yes** replaces preset preferences and installs
+`BH_Keymaps.py` when the payload changes. The prior preferences are retained as
+`config/userpref.before-bluehole-deluxe.blend`. Turning Deluxe off stops applying
+that payload.
 
-For Blender 5.2.2 and newer, Logistics installs Blue Hole and preserves the
-preset's existing settings. If the old Deluxe preset is active, use Blue Hole's
-backup action and review the existing keymaps before switching to the built-in
-**Blender** preset and enabling runtime Deluxe.
-
-On older Blender versions, **Deluxe: Yes** copies
-`overlays/deluxe/payload/userpref.blend` into the preset's config
-and `payload/keyconfig/BH_Keymaps.py` into its scripts/presets/keyconfig folder,
-before applying addon selections. It replaces that preset's preferences; an existing
-file is retained as `config/userpref.before-bluehole-deluxe.blend`. The payload is
-stamped once, then again only if its contents change, preserving artist changes
-between launches. No stops further stamping; it does not undo preferences/keymaps
-already applied. Disable Blue Hole to omit it entirely. Existing presets without
-an explicit Blue Hole choice inherit enabled/main/No on their next launch.
+Disabling Blue Hole preserves custom environments under `addon-data/bluehole`.
+Re-enabling restores them. Updates refresh `envFiles/default`.
 
 ## Inspect installed addons
 
-Manage's **Installed files** tab lists legacy files and extension manifests without
-importing them. Saved enabled state initially reads **Unknown**.
-**More… → Refresh Addons** starts Blender in background/offline mode to inspect
-saved preferences. It lists addon name, version, type, enabled state, source and
-location. Sources are **Preset**, **Bundled** and **External**; the latter two
-appear after Blender inspection. **More… → Open Addon Folder** opens the selected
-row. Save changes in Blender before refreshing. Inspection does not save or change
-preferences, but enabled addons may run their startup code. Failures fall back to
-filesystem rows with unknown enabled state.
+**Installed files** reads addon files without running them. **More… → Refresh
+Addons** reads saved enabled state through background Blender and can run addon
+startup code. Save preferences before refreshing. Use **Open Addon Folder** to
+inspect the selected row. Failed inspection leaves enabled state unknown.
 
 ## Storage and removal
 
-Everything is under the per-user Logistics directory:
+Files live under `%APPDATA%/Logistics` on Windows,
+`~/Library/Application Support/Logistics` on macOS or `$XDG_CONFIG_HOME/logistics`
+on Linux (normally `~/.config/logistics`). Installations use
+`software/blender/<exact-version>` and presets use
+`preferences/blender/<exact-version>/<preset>`.
 
-| OS | Logistics root |
-| --- | --- |
-| Windows | `%APPDATA%/Logistics` (home-directory fallback if APPDATA is unavailable) |
-| macOS | `~/Library/Application Support/Logistics` |
-| Linux | `$XDG_CONFIG_HOME/logistics` or `~/.config/logistics` |
-
-Installations use `software/blender/<exact-version>`. Presets use
-`preferences/blender/<exact-version>/<preset>`. These paths are independent of
-the older global software/resource directory settings. **More… → Open Installation Folder**
-opens the selected installed application.
-
-**More… → Remove Installation** deletes only a complete Logistics-managed installation
-after confirmation; presets and their addons remain available for reinstallation.
-Close Blender instances using it first. An incomplete/unrecognized folder is kept
-for manual inspection rather than deleted automatically. If a previous process
-crashed and left a `.version.lock` folder beside an installation, first ensure no
-Logistics installation/removal is running, then remove that empty lock folder and retry.
-
-macOS installations mount the downloaded DMG read-only, copy `Blender.app` while
-preserving its metadata, then detach the mounted volume. Cancellation during a
-native mount/copy waits for that bounded operation to finish before cleanup.
-Removal/deletion finish their filesystem operation once begun; partial removal
-after a filesystem error may require manual cleanup. Downloads need internet
-access and enough disk space for the package, staging and extracted application.
+Close Blender, then choose **More… → Remove Installation** to remove a complete
+managed installation while keeping its presets. A stale `.version.lock` folder
+can be removed after checking that no installation or removal is running.
 
 ## Available packages and installed addons
 
-**Settings → Blender → Addon Library** is the third tab, after Presets and
-Versions Definitions. It browses shared packages, with one collapsed row per addon; expand it to see its
-ZIP packages newest first,
-including package dates, compatibility limits and original ZIP names. The shared
-folder defaults to `Software/Blender_Addons_Library`; you can distribute that
-folder and change `Resources.blender_addons_path` to its location.
-
-In **Settings → Blender → Presets → Addons**, compare **Installed** with **Latest
-compatible**. **Type** shows Legacy addon or Extension for the compatible
-package. Hover over **Installed** to see the installed package type and path.
-Status indicates Up to date, Update available, Installation pending,
-Removal pending, incompatible packages, or missing files/library entries. Saving
-selection records what the next launch should apply. **Installed files** also
-shows addons placed directly in the preset, including those outside the library.
-The **Library** column says **Shared** for the supplied ZIP folder or **Preset
-provided** for a ZIP imported into this preset. Imported packages do not appear
-in the shared library tab or in other presets.
-
-Keep future ZIPs inside the same addon folder. Filenames can include both the
-addon version and date, for example `Anytree_2.1.3_2026_10_12.zip`. Logistics reads
-version and compatibility from the ZIP, choosing the newest compatible declared
-version; dated revisions distinguish packages that retain the same version.
-`library-inventory.json` is a packaging snapshot, not the application index;
-you do not need to edit it when adding ZIPs. Refresh the library tab to rescan it.
-Unknown compatibility is not automatically selected. The package date alone does
-not establish compatibility. Python caches are not needed in shared ZIPs.
-
-Blue Hole's **Currently installed** row shows its GitHub branch, short commit
-and version, or Local checkout and version. Hover to see the full commit or
-checkout path. The source and branch fields describe the next launch. Updating Blue Hole
-refreshes `envFiles/default` and preserves the artist's other envFiles folders.
-Non-addon backup data in `_support` is retained for manual use and not installed
-as an addon.
-
-Launching leaves unchanged addon packages in place, preserving files they created inside their folders. Changed versions still replace package files; keep important addon-local data backed up before a version update.
-
-Disabling Blue Hole keeps your custom environments in the preset’s separate `addon-data/bluehole` folder. Re-enabling restores them; default remains supplied by Blue Hole. Copying a preset includes this data, and deleting the preset removes it.
-
-Broken or conflicting ZIPs are skipped and listed as warnings in the library and preset views. Healthy packages stay available. If a preset cannot refresh, saving its addon choices is blocked until a successful refresh.
-
-Installation uses a verified private copy of each package it replaces. If a ZIP changes during a sync before it can be copied, installation stops safely and asks you to refresh and try again.
-
-If GitHub checking or downloading fails, Logistics can launch with the already
-installed, compatible Blue Hole copy and shows its actual branch and commit in a
-warning. Your selected branch remains requested for the next launch. Deluxe
-changes wait until an online update succeeds. First-time installation still needs
-internet access.
-
-Blue Hole's Main/Beta/Alpha selection follows the Blender version being launched.
-For example, when both families exist remotely, Blender **4.5.1** selects
-`blender-4.5.1/main`, `/beta` or `/alpha`, while **5.2.2** selects the matching
-`blender-5.2.2` channel.
-The installed row shows the full resolved branch and commit. Selection uses the
-newest available baseline at or below that Blender version, so older Blender
-versions do not receive branches intended for newer baselines.
-
-Branch availability is checked remotely at launch. Declared addon compatibility
-and a successful download do not establish runtime acceptance of themes, Deluxe
-keymaps or operators in Blender 5.2.2; that acceptance remains incomplete.
+In **Addon Library**, expand shared entries to inspect ZIP dates and compatibility.
+Set `Resources.blender_addons_path` to use a different shared folder. In a preset’s
+**Addons** list, compare **Installed** with **Latest compatible** and check the
+**Library** column for its source. Refresh after replacing ZIPs. **Currently
+installed** shows Blue Hole’s resolved branch and commit or Local checkout.

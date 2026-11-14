@@ -1,259 +1,64 @@
 # Document workflows
 
-When creating, saving a copy, or renaming a file, edit only the base name. The
-extension stays visible in grey inside the filename field and cannot be edited.
-For a new document, choose its format to change the extension. Folder names stay
-fully editable, including dots.
-
-
 ## File actions and long names
 
-In a file browser list, touch and hold a file or folder, or tap its **⋯** button,
-to open the same actions on iOS and Android. The full name wraps above the actions;
-the compact list may shorten it with an ellipsis in the middle. Hold the name
-in the actions menu to reveal the full path. For remote and unlocked LocalCrypt
-files, this shows the connection name and decoded folder and file names. Tap an action to
-continue, or **Cancel** to return to browsing. Holding an item does not delete it.
+Hold a file or folder, or tap its **•••**, to see its full name and actions.
+Hold the name in that menu to see the full path. When naming a new document,
+choose its format to set the extension. Folder names can include dots.
 
 ## Receive files from another app
 
-On iPhone or iPad, choose **Share → Logisticks**, wait for the receiving result,
-then tap **Done**. Open Logisticks and browse **Workspaces → Local → On My Phone**
-or **On My Tablet**.
-In Apple's Files app these files are directly inside **On My iPhone/iPad → Logisticks**.
-The share extension saves attachments while the main app is closed. The main app
-publishes complete handoffs when opened.
+1. On iOS, choose **Share → Logisticks**, wait for the result, and tap **Done**.
+   Open Logisticks and find the copy in **Workspaces → Local → On My Phone**
+   or **On My Tablet**. Apple Files shows it under **On My iPhone/iPad →
+   Logisticks**.
+2. On Android, share to **Logisticks**, wait for the result, and tap **Open
+   Logisticks**. On a selected collection drive, files go to
+   `<drive>/Logistics/Files`. If the drive is unavailable, completed handoffs
+   wait in app storage.
 
-On Android, share one or more files to **Logisticks**, wait for the result, then
-tap **Open Logisticks**. The same view opens the ordinary files
-directory. With a selected collection drive, this is `<drive>/Logistics/Files`.
-With app internal storage selected, it is inside app storage. Completed handoffs
-wait in app storage while a selected drive is unavailable.
+Sharing leaves the originals in the sending app. Duplicate names get numbered
+suffixes. Cancel keeps files already received. Retry attachments that report an
+error. Received files start in ordinary unencrypted storage.
 
-The upgrade moves existing **Received Files** contents into this location.
-If a name is already taken, the moved item gets a numbered suffix. The app
-retains the original system-owned iOS Inbox.
-
-Files are copied; the originals stay in the sending app. Existing received files
-are preserved and duplicate names receive a numbered suffix. Unsupported or
-unreadable attachments show a failure result; share those files again. Cancel
-stops remaining work and retains files already received. This first receiving
-flow lands in ordinary, unencrypted storage. Use the app's file actions to
-organize files afterward. Select a received file and choose **Move…**, browse a
-writable destination, optionally create a folder or edit the name, then tap
-**Move here**. Existing destination files are preserved; moving encrypted files
-to ordinary storage requires confirmation. It does not choose an encrypted destination inside
-the share sheet. Developer iOS builds require the app and extension's matching
-App Group provisioning; see [mobile preparation](../../development/build-release/mobile-preparation.md#incoming-files-and-inbox).
-
-Move and Rename keep open text documents and their unsaved edits. Moving a
-folder also updates its open text documents. The operation moves the saved
-file; your next **Save** writes the draft at the new location. A conflict or an
-external change preserves your draft and reports the problem. Close an affected
-non-text/read-only reader, or a document open in another window, before moving
-it. Changing between plain text and Markdown by renaming also requires closing
-the document first. If a move finishes but its editor cannot reopen the result,
-keep the draft and use **Save As** after inspecting the destination.
+Choose **••• → Move…**, pick a writable folder, then tap **Move here**.
+Moving an encrypted file into ordinary storage requires confirmation.
+Moving or renaming an open text file keeps its draft, and the next **Save**
+writes to the new path. Moving a folder also updates its open text files.
+A conflict or external change preserves the draft. Close affected readers or documents open in another
+window before moving them. Close a text file before renaming it to or from
+Markdown. If reopening fails after a move, inspect the destination and use
+**Save As** to preserve the draft.
 
 ## Document workflow
 
-**New Document** opens a naming form. Choose a format and enter the file name;
-only formats with enabled features appear. The keyboard stays closed until you
-tap the name field.
-Compact phone layouts use **Text**, **Markdown** and **reMarkable Notebook** tabs,
-with the selected format highlighted. The tabs stay above the name field while
-typing; switching format keeps the keyboard open and retains the name and folder.
-Wide Duo and tablet layouts keep the format cards. While typing in limited
-space there, the cards collapse to the selected format and **Change**. Change
-dismisses the keyboard and restores the cards without losing the draft.
-
-On compact screens, **Next** opens the location browser. On wider screens, the
-name and location panes appear together and the browser loads immediately.
-The **Choose a folder** pane keeps the normal mobile file browser. Choose a
-writable location, optionally use **+ New folder**, and select **Create here**.
-Creating a folder enters it immediately; repeat for nested folders, or use the
-parent path links to create sibling folders. The document stays pending while
-you organize folders. The destination summary shows the final filename and whether
-the storage is encrypted. Returning to the name or resizing retains the draft
-and destination; nothing is published until creation is confirmed.
-
-The app opens on **Home**, a landing page with Open/New actions and five recent
-files. **See all in Documents** opens the full document workspace. The house icon is the first native destination, before
-**Workspaces**, **Documents**, **Chat** and **Settings**. **Workspaces** separates ordinary Local files, Cloud and Home Server into source tabs, with available copies grouped under their owning source.
-If folder discovery fails while credentials change, Workspaces shows an error
-with **Refresh**, **Browse local files** and **Connections…**. Retry there after
-the connection is ready; restarting the app is unnecessary.
-Tap a folder to browse its preferred available copy directly. The **•••** button
-beside a folder opens its Browse Local/LocalCrypt/Remote, Pull, Push and management
-actions. The main Browse action is prominent; Delete local folder is separated
-and uses destructive styling. Pull/Push direction is shown for mapped copies.
-Deletion still requires confirmation, and Push retains its existing review. Local browsing uses app-managed files rather than
-the entire device filesystem. **New document** asks for a name and file type. Tap **Choose location**, select
-**On My Phone** (**On My Tablet** on tablets), an individual rclone copy, or
-another writable location, then tap **Create here**.
-A retained credential ZIP can unlock its LocalCrypt copy from the picker. New files
-are created in that browsable location. Cloud remains read-only; use reviewed
-Push for changes. Cancel before creation creates nothing. The
-[document guide](documents.md) owns the current creation controls and navigation.
-**Open file** from Home or Documents opens a browser. Use the folder arrow to go
-up; at the root, Back returns to the hub. Android Back first clears search or
-retraces visited folders, then returns to the hub.
-Books and comics are available through Workspaces or Documents’ **Open Books & Comics library**;
-Chat has its own bottom navigation button between Documents and Settings. Native tab
-controls adapt to the Apple layout; Android uses bottom navigation in compact
-windows and a rail at 600 dp or wider. Switching destinations retains each
-screen. **Workspaces** returns to the folder list and **All documents** returns
-from the editor to the Documents hub.
-
-Back returns through screens within the current destination. It does not switch
-tabs or close a document. iOS uses its native navigation stack and Back control;
-Android uses the lifecycle-owned AndroidX Back dispatcher. At a destination root,
-Android yields Back to the system. Existing save/checkpoint failures block a
-Back action that would leave the screen.
-
-The Documents hamburger lists configured Comics Library folders. Documents lists
-open, recent and other saved documents; Home provides Open/New actions.
-
-Choose a document from **All open** in Documents or **Recent** on its main page,
-or use **Actions → New document**. Edit its name in the name field and
-its contents in the text area. For a document created in a chosen folder, **Save**
-writes edits to that file; LocalCrypt saves stay encrypted.
-Text, source files and Markdown share the native source editor. Markdown can
-show a live formatted preview while you edit. See [Text and Markdown](documents.md#text-and-markdown).
-
-History retains ten recent files. Home shows up to five, including open files;
-**Currently open** identifies an existing session and selecting it resumes that
-session without reloading its file. Documents lists open files once in **All open**,
-with the active one first and a Close button beside each. Its **Recent** section
-shows closed entries. **Saved documents** includes other saved text and Markdown
-files, including files older than Recent. Search filters these three lists by name.
-Recent hides closed local file references whose files are missing or deleted.
-If a file disappears after its row was displayed, opening it explains that it
-may have been moved or deleted; open it again from its current folder.
-Missing references remain in history so reconnecting storage can restore them.
-Cloud and locked encrypted references remain available to retry after connecting
-or unlocking; their presence does not confirm the source file still exists.
-An already open document can retain its in-memory content after source deletion.
-Imported text and retained book/comic copies are separate documents on the device:
-deleting the original does not delete these copies. Book/comic rows in Recent
-show **Saved copy on device**. Use **Settings → Reset → Clear cached documents** to review old imported copies.
-Clearing removes only imports whose bytes match a verified, available original;
-it preserves unsaved drafts, changed copies and copies whose original is missing.
-This includes imported text/Markdown as well as EPUB and CBZ/ZIP. Book/comic
-progress and bookmarks attached to a cleared import are removed. Ordinary local
-opens now use the original file directly; text edits remain unsaved until Save.
-Use **Document actions → Delete document…** to remove an app-stored text document.
-Reopening a file from Home or Recent shows a small activity bar and an
-**Opening file…** status below the current view. Cloud files show
-**Opening cloud file…** while credentials are checked and any required download
-finishes. The indicator clears when opening finishes, fails or is cancelled.
-Home and document lists show names and useful status badges without a separate
-file-type subheader. **Unsaved changes** and **Draft** badges mark pending edits. **Recovered draft**
-marks edits restored from recovery; saving clears these badges.
-
-Each open text/Markdown document owns its editor and draft. **New**, opening a
-stored document, and successful imports add it to **Documents → All open**;
-opening the same stored identity again activates it. Documents with the same name
-remain separate. Switch using All open or Recent. Closing a document keeps
-its stored data; the ten most recent eligible files can be reopened from Recent. Disk, cloud and
-padlock icons beside names in Open and Recent show each source and
-connection lock state. Local files and files using saved credentials retain ordinary history entries.
-Password-protected session-only credential ZIPs instead protect their open and
-recent entries in a separate AES-256 ZIP with the same password. Unlocking the
-matching credential restores those list entries; selecting one loads its file on
-demand. The cache contains no document contents or unsaved edits. Forgetting the
-credential deletes its encrypted lists in every window.
-**Close** removes an item from that list without deleting its stored document.
-To remove an app-stored text or Markdown document completely, open its three-dot
-**Document actions** menu and choose **Delete document…**. This is also available
-in Markdown preview. Confirm the warning to remove its saved content, recovery
-copy and Recent entry, including any unsaved changes. Cancel keeps the document.
-Other app windows must be closed first.
-Closing an edited document opens a native popup with **Save**, **Quit without
-saving**, and **Cancel**. Save writes the changes and closes the document;
-Cancel keeps the exact screen and edits. Quit without saving discards edits
-without deleting the saved file. Discard resets recovery to the current saved
-file without overwriting external changes or recreating a deleted file.
-A failed save or conflict keeps the document open; use **Save a copy** to preserve
-both versions. The same choices apply to private documents and metadata edits.
-The document's three-dot menu omits New, Open from Files, Import and Close;
-use Home to create/open files and the document's **×** to close it.
-**Delete document…** is red and opens a native destructive confirmation with
-**Delete** and **Cancel**.
-**Close saved documents on restart** is enabled
-by default in Settings. On restart, saved text and reader sessions leave All open,
-except the last active document when **Restore last document** is enabled;
-stored files and reading progress remain available. Unsaved text,
-conflicts and unreadable recovery entries stay in the open list. Turn this setting
-off to retain all ordinary open items at the next launch. There is a maximum of
-32 open items. An empty workspace stays empty until you create or open a file.
-**Restore last document** opens and displays the last active ordinary text document,
-EPUB or comic at startup, with its saved reading position. Turning it off starts
-on Home and prevents automatic EPUB/comic reopening.
-You can still explicitly reopen those readers from Open with their saved
-progress. Session-only documents, including documents loaded using session-only
-credentials, are excluded from automatic restoration. Native cursor/selection and scroll offsets are recorded for text views.
-Opening an item from the open/stored list also resumes its Edit or Preview mode.
-Back to the editor selects Edit for that document.
-If a restored item is unavailable, **Try again** retries it and **Remove from
-open documents** removes only its open entry. Stored files are preserved.
-
-On regular-width Apple layouts, native split navigation keeps the document list
-beside its detail view. Android shows both at 640 dp or wider and uses the
-compact route stack below that threshold. Layout changes retain the same editor
-and session. The editor keeps its name, text, status, Save and Preview visible;
-**Actions** opens a native Apple button menu or Android popup for New, Import,
-Open from Files, Save a copy, Save As, Export and Close.
-
-**Save As** uses the file browser: select a storage location, tap folders to
-navigate, and use Back or search to find the destination. The filename and
-**Save here** action stay below the list. **New folder** creates and opens a
-folder without changing the filename. Tapping an existing file copies its name
-without saving; a search result also selects its containing folder. Saving to an existing filename asks for confirmation before
-replacement; cancelling preserves the draft and destination screen. If that file
-changes while confirmation is open, replacement fails and preserves its contents.
-For a bare name such as `Notes`, Save As keeps the source extension (`Notes.md`
-for a Markdown source); a draft without a supported extension uses `.txt`.
-The resolved filename appears above the destination. An explicit supported
-extension is kept; invalid names or unsupported extensions keep the draft open
-for correction. Local files are plaintext; LocalCrypt destinations remain encrypted.
-
-When the keyboard leaves little room, the picker focuses on the filename and
-completion controls. The chosen destination remains in the form, and errors can
-be scrolled into view. Dismissing the keyboard restores the same folder listing.
-
-**Preview** renders common Markdown offline: tables, headings, nested bulleted
-and numbered lists, quotes, bold/italic/strikethrough text, rules, line breaks and
-inline/fenced code. Wide tables and code blocks scroll horizontally inside the
-page. Raw HTML is escaped, links are inert, and scripts/images/network resources
-are blocked. Documentation additionally supports local page links and heading anchors.
-Rendered HTML is limited to 2 MiB. **Back to editor** returns to the same draft.
-
-**Export…** opens a destination picker and exports the current draft as a copy,
-retaining its encoding and line endings. It does not save over the original
-imported document or mark the private draft saved. Android uses a new document
-request; iOS uses an export-copy picker. Cancelling preserves the document.
-
-**Import…** opens Android's document-provider picker or iOS's document picker.
-Logistics reads the selected document into a private copy. Editing or saving that
-copy does not change the source file. Imports are limited to 1 MiB of text;
-unsupported/binary data and unavailable permissions produce an error. Files with
-UTF-8 or recognized Unicode byte-order marks retain their encoding and original
-line-ending style when saved.
-
-Draft contents and valid name changes are checkpointed during editing. Reopening
-the app restores saved documents and available unsaved drafts. A malformed
-recovery record is preserved and reported. If a private stored file changed or
-disappeared while a draft existed, normal saving refuses to overwrite it.
-**Save a copy** preserves the recovered text as another private document.
-
-The prototype's controls have 44-point layout targets and use native
-platform text fields, selection and keyboard behavior. The draft is also
-checkpointed when the main window loses focus and during a normal exit. These
-hooks supplement checkpoints made while editing; forced termination does not
-require an exit callback to have occurred.
-
-External sharing and editing the original provider document are not
-implemented. EPUB/comics use the private library described below. Native picker grants, keyboards and suspension need testing
-on devices before treating this prototype as a supported mobile product. See
-[build and validation instructions](../../development/build-release/mobile-launchers.md).
+- **Create.** From Home or Documents, choose **New document**, pick a format,
+  and name it. Tap **Next** on a narrow screen or use the folder
+  pane on a wide screen. Choose a writable folder, create a subfolder if
+  needed, and tap **Create here**. Resizing or going back to the name keeps the
+  chosen folder. [Documents and readers](documents.md) lists supported locations.
+- **Open.** Use **Open document** from Home or Documents. The folder arrow goes up
+  a level. Android Back dismisses search or retraces folders before returning
+  to the overview. **Documents → Open** lists active sessions. **Recent** lists
+  closed sessions. If an old reference fails, open the file from its current
+  folder, reconnect the remote, or unlock its credential.
+- **Save.** Folder-backed files save to their original path. Use **Save As**,
+  pick a writable folder, enter the name, then tap **Save here**. Choose an
+  existing file to reuse its name. Confirm replacement when asked. If the
+  destination changed during confirmation, review it before retrying. Save
+  ordinary copies to Local and encrypted copies to LocalCrypt.
+- **Copy through a provider.** **Import…** makes a private copy from the system
+  picker. Text imports are limited to 1 MiB. UTF-8 and supported Unicode BOM
+  encodings retain their line endings. **Export…** sends a copy of the current
+  draft through the system picker. Save the document itself separately.
+- **Close.** Tap **×**. If prompted, choose **Save**, **Quit without saving**,
+  or **Cancel**. A failed save keeps the draft open. If there is a conflict,
+  use **Save a copy** to preserve both versions.
+- **Delete.** Choose **Document actions → Delete document…** for an app-stored
+  document. Confirm to remove its saved file, recovery copy, and Recent entry.
+  Close other app windows first.
+- **Recover.** Draft edits are checkpointed during editing. If a restored item
+  is unavailable, choose **Try again** or **Remove from open documents** to
+  remove only its session entry. The default **Close saved documents on restart**
+  keeps unsaved drafts and conflicts. Enable **Restore last document** to
+  reopen the last eligible ordinary file. Session-only items need an unlock.

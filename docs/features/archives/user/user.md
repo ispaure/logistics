@@ -1,153 +1,58 @@
 # Archive manager
 
-On desktop, browse, preview, create and extract archives without unpacking them
-just to inspect their contents. Open **Documents → Archives**, or open a supported
-archive from File Browser. Enable **Archives** in Settings to use its launch and editing actions.
+Enable **Archives** in Settings, then open **Documents → Archives** or an archive from File Browser.
 
 ## Explore an archive
 
-Choose **Open archive…**, paste a path and press Enter, or drop an archive onto
-the workspace. Browse the folder tree or double-click a folder in the contents
-list. **Search all entries** searches the entire archive, including subfolders.
-The table shows sizes, packed sizes, compression savings, dates and encryption.
-Click column headers to sort; sizes sort numerically.
-
-Select a file to see its details. **Preview file** (or double-click a file) displays images or reads
-UTF-8 text without extracting or launching it. Text previews are limited to 256 KiB. Image previews show the first frame, bounded
-to 16 MiB and 25 megapixels, and generate a thumbnail up to 1000 pixels.
-Binary files can be extracted and opened in another application.
+Use **Open archive…** or drop an archive. Browse folders and use **Search all entries** to include descendants. Double-click a file or use **Preview file** for UTF-8 text up to 256 KiB or first-frame images up to 16 MiB and 25 megapixels.
 
 ## From the file browser
 
-Double-click a ZIP or supported TAR archive in **File Browser**, a standalone
-browser or the Debug browser to open the manager. Selecting a ZIP or TAR also
-shows an **Archive Contents** information tab, including encrypted archive
-headers without asking for a password.
-
-Right-click a supported archive for **Archives → Open archive manager…** or
-**Extract archive…**. Select files and folders for **Create archive…** or the
-configured-password **Create encrypted ZIP…** action. CBZ double-clicks keep
-opening the comic reader; use its explicit Archives actions to manage or extract
-comic contents. These actions also appear in the Comics library.
-
-Each archive opens as a retained document, hosted by the application's document
-workspace when available or in a standalone window. Reopening an already open
-archive reveals it. Multiple archives can remain open. Detached documents retain
-their session and toolbar; **Bring back** reattaches them. Successful workspace
-operations refresh the originating browser.
-Disabling Archives removes its actions and activation; existing windows and jobs
-can finish. Passive archive information remains a shared file-browser capability.
+Double-click ZIP or TAR to open the manager. Use **Archives → Open archive manager…** for CBZ, whose default reader is Comics. The context menu also offers extraction and creation. **Archive Contents** shows ZIP and TAR headers, including encrypted entry names.
 
 ## Create and edit
 
-**Create archive…** opens a source basket: add files and folders, choose a format
-and destination, then create. Dropping ordinary files or folders opens the same
-basket. ZIP compression offers Store, Fast, Balanced and Maximum. Enable
-**Protect ZIP with an AES-256 password** for private file contents; entry names
-remain visible. This workspace asks you to choose and confirm the new password.
-The existing **Create encrypted ZIP…** browser action still uses configured
-passwords as described below.
+Use **Create archive…** to add sources, choose a format and destination. Enable **Protect ZIP with an AES-256 password** to encrypt contents. Entry names stay visible.
 
-**Edit ZIP → Add files… / Add folder…** adds entries at the archive root.
-**Remove selected entries…** removes files or whole folder subtrees after a
-confirmation. Editing rebuilds and verifies the ZIP before saving. Added names
-cannot silently replace existing entries. Mixed encrypted/plain ZIPs cannot be
-edited. Other ZIP edits preserve the existing protection policy. Edits replace
-the archive after verification and have no Undo or automatic backup: keep a copy
-before removing entries you may need again. TAR archives are browsable
-and extractable; edit controls are available for ZIP and CBZ.
+Use **Edit ZIP → Add files… / Add folder…** to add at the root, or **Remove selected entries…** to remove whole selected subtrees. Editing replaces the verified archive and has no Undo or automatic backup. Keep a copy before editing. Mixed encrypted/plain ZIPs cannot be edited.
 
 ## Extract and check
 
-**Extract all…** or **Extract selected…** asks for a parent location and a new
-folder name. Selected folders include their descendants. Extraction preserves
-paths, empty directories, file timestamps and Unix executable bits. The manager
-stages the complete selection before publishing it; it never overwrites an
-existing destination folder. It rejects unsafe paths, symbolic links, special
-TAR entries and colliding names.
+**Extract all…** or **Extract selected…** stages files in a new folder. Existing destinations, unsafe paths, links and colliding names are refused. **Test integrity** checks ZIP CRCs or AES authentication and TAR readability.
 
-**Test integrity** reads every entry. ZIP checks CRCs or AES authentication;
-TAR is checked for readable payloads and valid paths, but has no per-entry checksum.
-Encrypted ZIPs use the existing configured/session password service and ask for
-a password when necessary. Entered passwords are not written to configuration.
-On desktop, an incorrect password keeps the same prompt open with an inline error,
-an empty password field and focus ready for another attempt. Enter submits once.
-
-Long jobs run in the background with progress and cancellation. Cancelling
-creation, extraction or editing discards staged output. Closing Logistics asks
-workers to stop and waits for them to finish before destroying the page.
-
-| Format | Browse / extract / test | Create | Add / remove |
+| Format | Browse, extract and test | Create | Edit |
 | --- | --- | --- | --- |
-| ZIP, AES ZIP, CBZ | Yes | ZIP, including AES | Yes |
-| TAR, TAR.gz / TGZ, TAR.xz / TXZ | Yes | Yes | No |
-| TAR.bz2 / TBZ2 | Yes | No | No |
-| 7z, RAR, split archives | Not currently supported | No | No |
+| ZIP, AES ZIP, CBZ | Yes | ZIP | Yes |
+| TAR, TGZ, TXZ | Yes | Yes | |
+| TBZ2 | Yes | | |
+| 7z, RAR, split | | | |
 
 ## Keyboard shortcuts
 
-| Shortcut | Action |
-| --- | --- |
-| Ctrl+O | Open archive |
-| Ctrl+N | Create archive |
-| Ctrl+F | Search |
-| Alt+Up | Parent folder |
-| F5 | Reload archive |
+**Ctrl+O** opens, **Ctrl+N** creates, **Ctrl+F** searches, **Alt+Up** moves up and **F5** reloads.
 
 ## Create an encrypted ZIP from the file browser
 
-Create a separate password-protected ZIP from selected files or folders. Your
-original files stay in place.
-
 ### Create a ZIP from a selection
 
-1. Open your source folder in **File Browser**.
-2. Select the files or folders to include. Right-click a selection and choose
-   **Archives → Create encrypted ZIP…**.
-3. Choose the output name and location, outside the selected folders.
-4. Use the configured password, or enter and confirm a password when asked.
-5. Start creation. The dialog checks the sources, writes the ZIP and verifies it
-   before publishing the finished file.
-
-| Selection | Suggested output | Contents |
-| --- | --- | --- |
-| One file | The file's name with `.zip` | The original file |
-| One folder | The folder's name with `.zip` | The folder and its contents |
-| Several items | `Selection.zip` | All selected items, with overlaps removed |
-
-Existing output files are never overwritten. A selected CBZ is packaged as a file
-inside the ZIP; its pages are not compressed or changed.
+Select files or folders, then choose **Archives → Create encrypted ZIP…**. Choose a new destination outside the source folders and use the configured password or enter and confirm one. Logistics verifies the ZIP before publishing it. Existing destinations are refused.
 
 ## Passwords
 
-To reuse a password, put this in `remoteConfig.ini` beside a file or inside a
-selected folder (or an ancestor):
+To reuse a password, add this section to the nearest applicable `remoteConfig.ini`.
 
 ```ini
 [LogisticsZIP]
 archive_password = your-password
 ```
 
-The nearest `[LogisticsZIP]` section wins. An empty or missing `archive_password`
-in that section stops inheritance; a `[DEFAULT]` value does not supply it.
-Keep real passwords private: the INI stores them as plain text. An entered password
-is not saved automatically. Different configured passwords require separate ZIPs.
-ZIP member names are visible without a password; reading file contents requires
-an application that supports WinZip AES.
+An empty or missing key in the nearest section stops inheritance. The INI stores plain text passwords. Entered passwords stay in session memory. Different configured passwords require separate ZIPs. Recipients need WinZip AES support.
 
 ## Cancel or recover
 
-**Cancel ZIP creation**, Escape or closing requests cancellation. The dialog waits
-for the worker to stop, discards incomplete output and leaves sources intact.
-A completed ZIP remains successful if cancellation arrives after publication.
-If an operation is already running, finish or cancel it before starting another.
-An invalid archive path leaves the current archive open and shows an error.
-If creation fails, read the dialog's explanation, check the output location,
-permissions and available disk space, then retry.
-
-For encrypting CBZ contents in place, use the [Comics guide](../../comics/user/user.md).
+Cancel to discard staged output. If creation fails, check the reported error, space and permissions before retrying. For in-place CBZ encryption, see [Comics](../../comics/user/user.md).
 
 ## More help
 
-See [Using Logistics](../../../user/user.md) for navigation and settings, and
-[Archives on mobile](../user_mobile/user_mobile.md) for the mobile boundary.
+- [Using Logistics](../../../user/user.md)
+- [Archives on mobile](../user_mobile/user_mobile.md)

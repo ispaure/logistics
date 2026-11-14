@@ -1,21 +1,12 @@
 # Media tools
 
-Enable **Media Tools** under **Settings → Features** to use these tools.
-
-- [Video Player](video-player.md) is now a separate feature for local and cloud playback.
-- [Mobile video controls and validation status](../user_mobile/user_mobile.md).
+Enable **Media Tools** under **Settings → Features**. For playback, see [Video Player](video-player.md).
 
 ## Rename MKA chapters from a CSV
 
-Rename chapter audio files in one folder using their chapter titles from a CSV.
-
 ## Prepare the folder
 
-This rename dialog is available on desktop; see the [mobile boundary](../user_mobile/user_mobile.md).
-
-Keep exactly one CSV alongside top-level files named like `Chapter_01.mka`.
-The CSV has no header row. Row 1 describes chapter 1, row 2 describes chapter 2,
-and so on. Put the chapter number in the first column and chapter name in the second:
+Keep one headerless CSV beside files such as `Chapter_01.mka`. Row 1 is chapter 1. Give each matching row a chapter number and title.
 
 ```text
 1,Introduction
@@ -24,26 +15,12 @@ and so on. Put the chapter number in the first column and chapter name in the se
 
 ## Rename
 
-1. Choose **Debug → Rename MKA from CSV…**.
-2. Select the chapter folder.
-3. Choose **Review names** and check the current/new name table.
-4. Choose **Apply reviewed names** and read the result.
+Choose **Debug → Rename MKA from CSV…**, select the folder, choose **Review names**, then **Apply reviewed names**. Fix missing titles, invalid filename characters or collisions before retrying.
 
-For example, `Chapter_01.mka` with the first example row becomes
-`1 - Introduction.mka`. Double quotes are removed from titles and surrounding
-whitespace is trimmed; other invalid filename characters cause validation to fail.
-
-Every MKA must have a matching valid row and a nonempty title. Existing destination
-names stop the plan. All planned names are validated before renaming starts; the
-action modifies filenames, not audio contents. Keep a copy if you need the original
-names. If validation fails, correct the CSV or filenames and retry.
+Keep a copy if you need the original names. There is no Undo after success. If rollback fails after cancellation or error, keep staged files and recover them using the reported paths.
 
 ## More help
 
-See [Using Logistics](../../../user/user.md) for navigation and settings.
-
-The rename engine attempts rollback after cancellation or a handled error. If
-another process blocks recovery, the result shows staged and original paths;
-keep staged files and recover them from those reported locations. The dialog
-has no retained Undo action after success. See [Bulk Rename](../../bulk_rename/user/user.md)
-for general filename transformations instead of CSV chapter naming.
+- [Using Logistics](../../../user/user.md)
+- [Media Tools on mobile](../user_mobile/user_mobile.md)
+- [Bulk Rename](../../bulk_rename/user/user.md)

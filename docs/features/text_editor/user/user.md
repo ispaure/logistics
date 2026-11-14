@@ -1,237 +1,61 @@
 # Using Text Editor
 
-Use **Documents → Text Editor** to create or open a text document, or right-click
-a text file in File Browser and choose **Open in Text Editor**. Scripts, configuration and ordinary text open
-there on double-click. Markdown keeps its existing reader; the right-click action
-opens its source in Text Editor. Extensionless and unknown files are recognized
-by a bounded content check rather than a restrictive extension list.
+Open **Documents → Text Editor** or choose **Open in Text Editor** from File Browser. Use the context action to open Markdown source.
 
 ## Documents and saving
 
-Use File → New/Open to create document panes. Each file uses the same tabs as
-other readers; there is no second tab bar inside the editor. Drag a document tab
-to detach it or split the view; its X or Ctrl/Cmd+W closes only that document.
-Reopening a file selects its existing pane. A star marks unsaved changes; closing
-offers Save, Discard or Cancel. Save keeps the original location; Save As selects
-a new one.
+**Save** keeps the current location. **Save As** creates a separate copy. Closing a modified document offers Save, Discard or Cancel. **Save All** writes sequentially. Failed saves retain the buffer. If a file changes on disk, **Reload** discards edits after confirmation. **Keep Buffer** retains your changes. Use **Save As** to keep both versions or review **Merge…**.
 
-Save All saves open text documents in sequence. Close All closes text document
-panes, stopping if you cancel an unsaved-changes prompt. Reload from Disk asks before
-discarding edits. A disk-change banner offers Reload or Keep Buffer. Keeping the
-buffer does not overwrite the external version: choose Save As to preserve it.
-Failed saves keep the buffer and explain the problem. Read-only files can be
-edited for Save As, but their original permissions are never changed for you.
-
-UTF-8 and Unicode BOMs are detected automatically. When decoding fails, select
-the original encoding, such as Windows-1252. Likely binary files require explicit
-approval or **Force Open as Text**. Forced opening does not make a binary format
-safe to edit. Files above 16 MiB are refused, and files over 1 MiB use simpler
-presentation. Ordinary saves preserve encoding, endings and final-newline behavior.
+Files are limited to 16 MiB. UTF-8 and BOMs are detected automatically. Choose the original encoding if decoding fails. Ordinary saves preserve encoding and line endings. **Force Open as Text** requires care with binary files.
 
 ## Editing and search
 
-File/Edit menus use the platform's conventional shortcuts for open/save,
-undo/redo, clipboard and selection. Other useful commands:
-
 | Command | Shortcut |
 | --- | --- |
-| Find / Replace | Ctrl/Cmd+F / Ctrl/Cmd+H |
+| Find / Replace | Ctrl/⌘+F / Ctrl/⌘+H |
 | Next / previous match | F3 / Shift+F3 |
-| Go to line and column | Ctrl/Cmd+G, then `line:column` |
-| Duplicate line or selection | Ctrl/Cmd+D |
-| Delete line | Ctrl/Cmd+Shift+K |
+| Go to line and column | Ctrl/⌘+G, then `line:column` |
+| Duplicate line or selection | Ctrl/⌘+D |
+| Delete line | Ctrl/⌘+Shift+K |
 | Move selected lines | Alt+Up / Alt+Down |
-| Toggle line comment | Ctrl/Cmd+/ for supported languages |
+| Toggle line comment | Ctrl/⌘+/ |
 | Indent / unindent | Tab / Shift+Tab |
-| Code size | Logistics Settings; Ctrl/Cmd+wheel where supported |
 
-Search stays in a nonmodal panel. It supports case, whole words, regex, wrapping
-and a captured selection scope. Select a region before checking **In selection**.
-Regex replacements accept `\1`, `\g<name>`, `$1` and `${name}`, plus `\n`/`\t`.
-Replace All is one undo step. Close the panel with Escape. Search is limited to
-the active document; Find in Files is not included.
+Search the current document by case, whole word, regex or captured selection. Regex replacements accept `\1`, `\g<name>`, `$1`, `${name}`, `\n` and `\t`. Replace All is one undo step.
 
 ## Appearance and preferences
 
-The status bar shows position, line count, selection size, encoding, endings,
-indentation and syntax. Click Encoding or Line Endings to convert on the next
-save; conversions are explicit. Click Indentation to open the central editor
-defaults for tabs/spaces and width, or Syntax to choose this document’s language
-manually. **Automatic** follows the filename and initial source line; the status
-bar also shows the detected language. Manual choices survive Save As and reload;
-choose Automatic to resume detection. **Plain Text** disables highlighting.
-Language choices do not change the source or mark the document as edited.
+Use the status bar for Encoding, Line Endings, Indentation or Syntax. Choose a language manually or use Automatic. **View → Logistics Settings…** opens [preferences](preferences.md).
 
-**View → Logistics Settings…** opens the central Settings window. Wrapping,
-line numbers, whitespace, automatic indentation and bracket/quote pairing are
-under **Feature settings → Text Editor → Options**. Font family and size are under
-**Appearance & shared controls → Styling**. Choose software defaults to edit the
-repository INI, or personal settings for persistent AppData overrides. **↶** on
-any personal field restores inheritance; click **Save Settings** to apply it.
-
-Saved options apply to both split views and keep the document’s chosen syntax
-language. Whitespace marks can be enabled or disabled without editing text.
-
-Code text defaults to 9 points. Text Editor, IDE, Git hunks and Markdown code
-blocks share both the family and size. Ctrl/Cmd+wheel changes the personal shared
-code size (7–24 pt at a common 96-DPI reference). The same saved size now gives
-comparable text proportions on macOS, Windows and Linux; zoom preserves that
-saved scale. Line-number gutters resize with the font.
-The gutter also fits the current line-number digit count and only reserves
-folding-control space when foldable blocks exist, keeping short files compact.
-Legacy Cache/TextEditor font
-preferences migrate once; recent files and recovery remain in that cache, while
-systemic settings and window geometry use the persistent personal editor INI.
-
-Text Editor windows and hosted document tabs use the file's regular type icon.
-Workspace tabs close with a neutral × on the right, matching IDE file tabs.
-
-In the main app, Text Editor opens in **Open documents**. Drag its tab outside
-the window to detach it; **Bring back** returns it without losing edits.
-
-Disabling Text Editor removes its browser actions but retains its open
-buffers. Re-enable it to return to those documents. Browser windows do not own
-editor buffers. Application closure still checks modified documents. Open sessions are checkpointed privately while you work and restored when you next
-open Text Editor. Recovery includes unsaved Untitled buffers, edits, encoding and
-line-ending choices, cursor/selection and scroll positions, and both document views.
-It does not restore the outer workspace's dock arrangement or detached-window positions.
-Application shutdown waits for a durable checkpoint and retains editor buffers;
-closing an individual document still asks Save/Discard/Cancel. If checkpointing
-fails, ordinary save prompts remain in effect. Recovery never writes your original
-files. Disk changes since a checkpoint retain normal conflict protection.
-
-**File → Keep Session and Close Editors** also suspends standalone editors.
-**Restore Editor Session…** lets you select an older checkpoint; sessions held by
-another running instance cannot be restored. Checkpoints live in private
-Cache/TextEditor/sessions files, with a 64 MiB total and 100-document limit.
-Checkpoints run about one second after changes; a crash can lose changes made
-since the last completed checkpoint. Corrupt checkpoints are retained for inspection.
-
+**File → Keep Session and Close Editors** checkpoints buffers without writing originals. **Restore Editor Session…** opens an older available checkpoint. Recovery covers unsaved files and both views, up to 64 MiB and 100 documents. A crash can lose changes since the last checkpoint. Disk conflicts still apply. Private LocalCrypt buffers have no ordinary recovery.
 
 ## Text transformations and structured text
 
-**Edit → Text Transformations** offers sorting, duplicate removal, trailing-space
-trimming, case conversion, tab/space conversion, and numbered lines. Line commands
-operate on complete selected lines, or the whole document without a selection.
-Case commands use the selection or current word. Conversion to tabs affects leading
-spaces only. Each transformation is one undo step.
-
-**Tools → Format JSON/XML** formats the selection, or the document without a
-selection. **Validate JSON/XML** reports syntax errors without changing text.
-JSON formatting preserves numeric tokens and duplicate keys. XML formatting
-preserves comments but refuses DTD/entity declarations, mixed content, CDATA,
-and xml:space="preserve" content; mixed content and CDATA can still be validated.
-Formatting/validation is limited to 1 MiB of text.
+**Edit → Text Transformations** sorts, deduplicates, trims, converts case or tabs/spaces, and inserts line numbers. Line commands use selected lines or the whole document. **Tools → Format JSON/XML** and **Validate JSON/XML** act on the selection or document, up to 1 MiB. XML formatting refuses DTDs, mixed content and CDATA.
 
 ## Multiple cursors and rectangular selection
 
-Use **Edit → Add Next Occurrence** (Ctrl/Cmd+Alt+D) to select the current word and
-add matching occurrences. Alt-click adds a cursor; Alt+Shift-drag makes a rectangular
-selection. **Rectangular Selection from Selection** converts an existing selection
-into a column selection. Short lines clamp at their end; virtual columns are not
-inserted. There is a limit of 1,000 cursors.
-
-Typing, deletion, Enter/Tab, optional pairing, copy/cut/paste and simple input-method
-commits work across cursors. A paste containing exactly one line per cursor fills
-those cursors individually; other text is pasted at every cursor. Escape clears
-extra cursors before dismissing search. Unsupported navigation/commands return to
-one cursor, and edits through another view clear stale extra cursors.
+**Edit → Add Next Occurrence** (**Ctrl/⌘+Alt+D**) selects matching occurrences. **Alt-click** adds a cursor. **Alt+Shift-drag** selects a rectangle. Escape clears extra cursors. With one clipboard line per cursor, Paste fills them individually.
 
 ## Folding and two views
 
-**View → Code Folding** toggles the current region or folds/unfolds all regions.
-Click a gutter +/− marker to fold a region. Folding uses indentation for Python/YAML,
-tags for XML/HTML, and lexical delimiters for other highlighted languages; it is
-structural rather than a language parser. Folding is disabled above 256 KiB or
-10,000 lines. Search and Go to Line reveal hidden destinations; editing expands
-folds before refreshing the regions. **Indentation Guides** can be toggled in View.
-
-**View → Document Views** splits one document side by side or above/below. Both
-views share text, undo history, folding and save state, with independent navigation.
-Commands and search follow the focused view. **Single View** removes the extra view.
+Use **View → Code Folding** or the gutter markers. Folding is limited to 256 KiB and 10,000 lines. **View → Document Views** splits one file. Text and undo are shared, and navigation follows the focused view.
 
 ## Comparing and discovering commands
 
-**Compare → Compare with Disk / Another File** opens a read-only side-by-side view
-and a unified diff. Previous/Next visits changes. **Use Left Change** copies the
-selected disk/file change into your buffer in one undo step; it never saves the
-file. The comparison refreshes after each applied change. Applying changes is blocked if the
-buffer changed after comparison. The disk-change banner also offers Compare.
-Comparison is limited to 1 MiB and 5,000 lines per side.
-
-**View → Find Command…** (Ctrl/Cmd+Shift+P) searches editor commands and displays
-shortcuts. **Configure Shortcuts…** saves bindings globally for editor panes,
-rejects conflicting bindings and offers Restore Defaults. Clear a binding in the
-shortcut field to remove it. Shortcut choices are saved separately from normal
-editor preferences.
+**Compare → Compare with Disk / Another File** compares up to 1 MiB and 5,000 lines per side. **Use Left Change** applies an edit to the buffer for review and saving. **View → Find Command…** (**Ctrl/⌘+Shift+P**) shows commands and shortcuts. **Configure Shortcuts…** changes bindings or restores defaults.
 
 ### Merge changes from disk
 
-When another application edits an open file, choose **Merge…** in the notice or
-**Compare → Merge Disk Changes…**. The editor buffer is on the left, the disk file
-on the right, and the result in the center. Apply non-conflicting changes, then
-choose either side for conflicts or edit the result and mark that change resolved.
-Use Undo/Redo to revise choices. Apply puts the result in your buffer; save when
-ready. If the buffer or disk changes during review, reopen the merge.
-
-PHP/HTML and Laravel `.blade.php` highlighting are shared with IDE. Python `.pyi`
-stubs use Python highlighting. Blade directives and single-line interpolations are
-supported; multiline Blade template expressions have limited highlighting.
-Syntax accents match IDE and the shared source previews: muted orange keywords
-in dark mode, blue keywords in light mode, green strings, blue numbers, purple
-built-ins and italic gray comments. Module paths and function names stay neutral.
-The existing plain text and background colors are preserved.
-
-The editing surface uses the full document area with compact outer spacing.
-File/edit/search commands remain in the application menus, and disk-change
-controls appear only when needed. Documents owns the outer tab and detached +.
+Choose **Merge…** or **Compare → Merge Disk Changes…**. Apply non-conflicting changes, choose a side or edit and resolve each conflict, then Apply and save. Reopen the merge if the buffer or disk changes while reviewing.
 
 ## Change markers
 
-The gutter to the left of line numbers shows additions in green, replacements in
-blue and deleted-line boundaries in red. Hover over the gutter for its baseline.
-An edited block with fewer lines also shows a red boundary for the removed lines;
-extra lines in a replacement block are green.
-When Git is available, markers compare the live buffer (including unsaved edits)
-with the file's index. Repository registration and an enabled Git page are not
-required. Index/branch changes refresh within a few seconds. Otherwise the baseline
-is the last saved file; markers then disappear after saving. Documents/baselines
-over 250,000 characters omit markers. Existing explicit save and private recovery
-checkpoint behavior is unchanged; this editor does not automatically write files.
-
-Click a marker to review its baseline and current lines. **Revert change in buffer**
-is a single undoable edit and does not save this editor's file. For Git-backed
-changes, save first and use **Preview Git hunk to stage**, then **Stage displayed
-Git hunk**. The displayed patch is authoritative: Git may include nearby changes
-in the same hunk. Staging changes only the index and rejects a stale patch.
-Untracked files, conflicts, renames and conversion-filter files require Git's
-file-level workflows. Reopen a review after its buffer or baseline changes.
+Gutter marks compare the buffer with Git's index when available, or the last saved version. Click to inspect or **Revert change in buffer**. To stage a Git change, save first and use **Preview Git hunk to stage → Stage displayed Git hunk**. Review the whole patch, which can include nearby edits. Reopen stale reviews.
 
 ## LocalCrypt Open and Save As
 
-Open and Save As use one browser with Local files and configured LocalCrypt
-locations. Inside LocalCrypt, folders and filenames are decoded automatically.
-Unlock the matching credentials when asked. The location label distinguishes
-an encrypted destination from a plaintext local export. Save As requires a new
-filename and preserves the original.
-
-LocalCrypt text opens in a session-only editor with Open, Save and Save As.
-Its drafts and recent paths are not stored for recovery; save or discard changes
-before closing. The private text editor is a simpler editing surface than the
-ordinary editor. Markdown uses the private Markdown editor with its preview.
-Desktop private text opening is limited to 16 MiB; private Markdown opening is
-limited to 8 MiB.
-
-Saving an ordinary draft into LocalCrypt removes it from active editor recovery
-and hands it to a session-only editor. If saving or reopening fails, the draft
-remains available. This does not erase plaintext files or backups created before
-you selected LocalCrypt. Raw ciphertext directories remain unavailable through
-ordinary filesystem operations; choosing the LocalCrypt location performs both
-name and content encryption.
-
-Session-only text editor tabs and windows begin with **🕵️ Private -**, followed by the filename. The prefix stays visible after editing or Save As, including export to Local storage, because the draft remains session-only.
-
-- [Text Editor preferences](preferences.md)
+Choose an unlocked LocalCrypt location in the shared picker. Private text is limited to 16 MiB and Markdown to 8 MiB. Private drafts and recent paths stay out of ordinary recovery. Save before closing. A failed save keeps the draft. Export to Local creates plaintext. Moving an ordinary draft into LocalCrypt does not erase older plaintext copies or backups.
 
 ## Notes Library and Documentation Library
 
@@ -239,29 +63,16 @@ See [Notes Library](../../notes_library/user/user.md#notes-library-and-documenta
 
 ## Embedded source files in Notes Library
 
-See [Notes Library](../../notes_library/user/user.md#embedded-source-files-in-notes-library).
+See [source files](../../notes_library/user/user.md#embedded-source-files-in-notes-library).
 
 ## JSON data views in Notes Library
 
-See [Notes Library](../../notes_library/user/user.md#json-data-views-in-notes-library).
+See [data views](../../notes_library/user/user.md#json-data-views-in-notes-library).
 
 ## Markdown images
 
-PNG, JPEG, WebP and GIF images work with standard Markdown references and Obsidian
-embeds such as `![[images/photo #1.png|400]]`. Width hints are optional;
-`|400x200` requests both dimensions. Images shrink to fit the document panel,
-including after resizing, and following text keeps normal paragraph spacing.
-LocalCrypt resources and Notes Library images load through their selected provider.
-
-In a Notes Library, resolution tries the note's folder, the library root, then
-`Attachments`, `Assets` and `Images` (including lowercase variants) for a bare
-filename. Explicit `./` and `../` paths stay relative to the note. Images remain
-inside the selected library; no recursive attachment scan is performed.
-
-The Notes Library sidebar's **…** selection control opens Move / rename, Copy and
-Delete for the selected file or folder. Right-clicking an entry opens the same
-menu, including entries in search results. Folder operations include their contents.
+Use Markdown links or Obsidian embeds such as `![[images/photo #1.png|400]]`. Use `|400x200` to set both dimensions. Notes Library searches the note folder, library root and standard attachment folders. Explicit relative paths stay within the provider root.
 
 ## Notes Library document groups
 
-See [Notes Library](../../notes_library/user/user.md#notes-library-document-groups).
+See [document groups](../../notes_library/user/user.md#notes-library-document-groups).

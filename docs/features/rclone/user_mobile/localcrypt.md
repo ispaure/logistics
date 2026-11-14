@@ -2,304 +2,101 @@
 
 ## LocalCrypt encrypted offline reading
 
-Mobile can browse an rclone crypt remote whose direct backing remote is supported
-and included in the same credential ZIP. Import/unlock the package in **Remote
-files**. Under **Choose remote · tap the name below**, tap the currently displayed
-remote name to open the picker and select your crypt remote, then tap
-**Browse folder** to see decrypted names. The hint below the picker identifies
-available crypt remotes and confirms when a crypt is selected. If it reports
-no crypt remote, the loaded ZIP must include both the crypt configuration and
-its backing remote configuration; choosing only the backing Dropbox/Drive/etc.
-remote does not apply crypt decryption.
-For a new offline folder, tap **Pull** in Workspaces. A session-only crypt
-remote opens a popup strongly recommending an encrypted copy: choose **Yes** to keep
-the existing ciphertext or **No** for a regular Local copy. Regular Local files
-remain decrypted and readable after credentials lock or the app exits. Both kinds
-of copy persist on disk. You can cancel in the transfer review before any pull.
-Remotes using saved credentials and non-crypt remotes pull to Local without this
-choice. An existing copy keeps its storage type on subsequent pulls. Existing individual encrypted copies remain readable with matching
-credentials; the remote browser no longer creates them.
+Import a ZIP containing both a crypt remote and its supported direct backing
+remote. Select the crypt remote under **Choose remote** and tap **Browse folder**
+to see decrypted names.
 
-Opening a locked LocalCrypt copy from Workspaces asks for its retained credential
-ZIP password, including immediately after startup. A wrong password keeps the
-prompt open; unlocking resumes the selected folder automatically. Home’s unlock
-button remains available too.
+For a managed offline copy, choose **Pull…** in Workspaces. For a new
+session-only crypt copy, choose **Yes** to keep ciphertext or **No** for a
+decrypted Local copy. Both persist on disk. New copies from saved credentials
+and non-crypt remotes pull to Local. Later pulls retain the copy’s storage type.
+Tap a locked encrypted copy and enter its retained ZIP password. Once unlocked,
+you can read offline with matching credentials.
 
-The browser title shows the current folder name. LocalCrypt copies identify
-**On-device · Unlocked · Encrypted Copy** underneath; credentials loaded for this
-session show **Unlocked (Session Only)**. On iOS, swipe a long description
-horizontally to read it in full. Android and iOS both use this single header;
-there is no extra “On this device / LocalCrypt” source strip. Choose another
-workspace to change sources.
+In Workspaces, open **On My Phone** or **On My Tablet** for ordinary files,
+or **Rclone Copies** for your encrypted copy. Search includes subfolders and reports
+unreadable paths. The filename index can be cached encrypted under the ZIP
+password. Without that password, the index stays in memory.
 
-Remote browsing and unlocked copies show decrypted names. **Manage local files
-and folders** opens a local browser with **Local files** and existing
-`<foldername> - Encrypted Copy` destinations. **List** and **Tiles** show filenames and generic file/folder
-icons. Browsing reads basic filesystem information and decrypts LocalCrypt names;
-it does not open file contents, load covers or parse comic/EPUB metadata. Open a
-file to read it and load its reader metadata.
+For moves, choose the destination storage and enter a relative path including
+the final name. Create the parent folder first. Moving into LocalCrypt encrypts
+names and contents according to the remote settings. Moving to Local makes
+decrypted files. Moves and Save As refuse occupied names. Cross-storage moves
+verify the new copy before deleting the source. If cleanup stops, inspect both
+locations before retrying cleanup. Confirm permanent deletions carefully.
 
-LocalCrypt filename searches can reuse directory metadata while the copy is
-unlocked. With the credential ZIP key, the cache is saved as encrypted records
-and revalidated against the ciphertext directory before use. Without a ZIP key,
-the cache stays in memory and is cleared when the credential session ends.
-The cache contains names, types and file metadata. File contents are read
-through the provider when needed.
-The storage picker and **Parent folder** are visible directly in the local browser.
-Changing storage opens its root. Navigation supports tapping folder entries, **Parent folder** and **Back** through
-successful folder/storage visits. **Search** opens a full-width field and searches this folder and its subfolders
-in the background after you stop typing for 0.4 seconds. Search visits the full
-subtree and reports unreadable folders as incomplete results; sorting supports
-natural name order, size and modified time in either
-direction, with folders first. A failed folder load preserves the previous
-listing and history. Searching reads folder listings, without reading file contents. Closing search
-restores the current folder listing. Use **Inner
-archive password** when opening a protected comic or EPUB that needs its own
-password. File-name browsing and moves do not need this
-inner password. Browse a folder, then create a folder, rename, delete
-or move the selected item. For a move, select the destination storage and enter a
-relative path including the final file/folder name; its parent folder must exist.
-Moving into LocalCrypt encrypts the content and names according to the remote's
-settings; moving out creates decrypted Local files. Inner ZIP passwords remain
-unchanged. These actions affect the selected local collection storage, not cloud originals or
-arbitrary folders owned by another app.
+Open Markdown to preview, then **Edit Markdown** or **Source** for exact syntax.
+**Open** and **Save As** use the storage picker. Save As keeps the original file
+and switches future saves after reopening the new file. If a completed save
+cannot reopen, your draft remains available. Inspect the saved destination
+before retrying. Export or save to Local only when you want a plaintext copy.
 
-To organize an older offline encrypted copy, select it on the Remote files screen,
-open the manager and choose **Use selected offline encrypted copy**. Choose a
-private download similarly with **Use selected private download**. Existing copies
-are preserved until their transfer succeeds. Managed crypt files can be read and
-edited directly, including their comic/EPUB metadata.
+For a protected EPUB or comic, enter the inner archive password on opening.
+Use **Edit metadata… → Save encrypted metadata** to update its fields. Saves
+preserve archive contents, unrelated metadata and inner passwords and verify
+the replacement before publishing it. A failed validation keeps the original
+and your draft. Text saves preserve encoding, BOM and line endings. Upload
+separately through a reviewed **Push**.
 
-Markdown preview offers **••• → Find in this page…** with highlighted matches,
-a count and Previous/Next arrows above the page. **Done** clears page marks;
-closing or locking the private reader clears the retained search query.
-
-Markdown opened from the file browser starts in preview. **Edit Markdown** uses
-one formatted editing surface, with **Source** for exact syntax. **Open** from
-inside the editor starts editing directly. No source/preview split is added.
-
-Text/Markdown editors offer **Open** and **Save As** through one storage browser
-for app-managed Local files and unlocked LocalCrypt folders. Choose storage, browse
-a folder and select a decoded filename, or enter a new name for Save As. Use
-**Browse folder** after changing storage or typing a folder. Folder taps, **Back**,
-search and sorting use the same shared browser controls as the file manager. There is no separate
-decryption action. Drafts opened this way stay in memory, including local exports.
-Saving an ordinary document into LocalCrypt removes its active recovery draft;
-previously saved plaintext originals are preserved.
-A successful Save As preserves the original and switches subsequent saves to the
-new file. Save As and moves refuse existing destination names. Deletion is
-permanent and asks for confirmation. Cross-storage moves verify the destination
-before deleting the source; interrupted cleanup can leave both copies or remaining
-source entries. Refresh and inspect them before retrying. Transfers stream their
-contents; text editing and saves retain the 1 MiB buffer limit.
-
-Choose **Refresh encrypted copies**, select a copy and **Read encrypted copy**.
-Once downloaded, reading works offline while the matching credentials are loaded.
-After restarting, reload saved credentials or import the same package again.
-Copies with unavailable credentials are shown as locked. Forgetting credentials
-preserves ciphertext copies, closes the private reader and removes its displayed
-content. **Close private reader** releases the reader's in-memory content.
-
-The private reader/editor is separate from Documents and the book library. It
-supports text/Markdown editing, EPUB chapter text, and PNG/JPEG/WebP comic pages in
-CBZ/ZIP archives. For a password-protected archive inside LocalCrypt, enter its
-password in **Inner ZIP password (if needed)** before opening. Both AES and
-traditional ZIP passwords are supported; the password is not saved. Choose a
-page/chapter, then **Read selected page**.
-
-Edit text or Markdown and choose **Save encrypted copy** to replace the encrypted
-local file. Encoding, BOM and line endings are preserved. Saving does not upload
-anything. Failed saves retain your edits. **Close private reader**, credential
-changes and app exit keep unsaved edits open until you save or choose **Discard
-changes and close**. **Return to private reader/editor** resumes an open editor.
-Unsaved edits remain in memory and cannot survive an app crash or forced exit.
-
-The private reader creates no document recovery file, reading-position record,
-saved bookmark record, plaintext export or thumbnail cache. Its tools offer
-**Bookmark** and a bookmark selector for comics and EPUBs. These bookmarks remain
-in memory while switching documents and are cleared when the session closes.
-Markdown is edited as source text, with an offline preview. Folder transfers use
-the Workspaces actions described below.
-
-For a LocalCrypt comic or EPUB, choose **Edit metadata…** in the private reader,
-change the fields and choose **Save encrypted metadata**. EPUB fields include title,
-authors, language, publisher, tags and description; authors and tags use one value
-per line. Comic fields use ComicInfo metadata, including title, series, number,
-credits and tags. PageCount is preserved rather than manually changed.
-
-Saving preserves pages, chapters, covers and unrelated metadata. Inner ZIP
-passwords remain in effect, and are kept only for the open reader session. Existing
-untouched archive entries are copied intact; rewritten protected metadata uses
-AES-256 with the same password. No plaintext backup or metadata recovery file is
-created. Conflicts, incorrect passwords, cancellation and failed verification keep
-the original encrypted copy. Failed saves keep your edits in the form. **Back to
-reader** keeps the form draft; **Discard changes and close** explicitly discards it.
-
-Encrypted managed transfers, moves, reads and metadata rewrites have no fixed whole-file
-size cap. Archive headers and individual members are read as needed; metadata
-verification streams every member. Text editing is limited to 1 MiB, archive
-member reads to 16 MiB, and comic pages to
-8 MiB and 16 megapixels. Damaged ciphertext and mismatched crypt settings fail
-without producing a plaintext file. The app does not promise secure erasure of
-RAM or change the device's normal app-data backup policy. A saved credential vault
-protects keys/settings separately from these rclone-encrypted document copies.
-
-If a move saves the verified destination but source cleanup stops, the message
-identifies that partial result. Refresh both locations before retrying cleanup;
-do not repeat the entire move. A save completed just before cancellation still
-counts as saved. If its new revision cannot be read, reopen the saved file before
-continuing to edit; the current draft remains available.
-
-Save As keeps the original draft until the saved destination has been reopened
-successfully. If reopening fails after a verified save, the message says the file
-was saved and retains your draft. Inspect that destination before retrying Save As
-with the same name.
-
-Cancelling an Open/Save As operation prevents a late result from opening a file
-over the screen you selected meanwhile. A background call may need time to stop.
-Locking private content cancels pending picker work; a file published just before
-cancellation can still exist at the destination, so inspect it before retrying.
-
-
-Save As keeps the original reader and draft until the new editor has been built
-and displayed. A failure to construct or show it does not discard the original
-buffer; the destination may already have been saved, so inspect it before retrying.
-
-If another operation changes a newly saved destination before it is reopened,
-Save As keeps your original draft and reports the saved-but-not-reopened state.
-Inspect the destination before retrying; it is not silently overwritten.
-
-
-Library items also appear in Documents' open list. Opening an already open book
-returns to its existing session. Each book owns its reader; switching books
-releases the inactive decoder and rendered content, and reopening resumes stored
-reading progress. Closing removes the open session and keeps the imported book.
-Password-unlocked comics are excluded from workspace restoration.
-
+Text editing is limited to 1 MiB, archive members to 16 MiB and comic pages to
+8 MiB and 16 megapixels. File transfers and verified metadata saves stream data.
 
 ### Open provider and private documents
 
-Files opened from local or LocalCrypt folders now have separate entries in
-**Documents → Open documents**. Up to four provider items may remain open,
-including independent text edits and metadata forms. Opening the same resource
-returns to its existing item. Browsing folders or switching destinations keeps
-these edits in memory. Ordinary imported documents remain independently open.
+**Documents → Open documents** holds up to four Local, LocalCrypt or remote
+provider items with a shared 32 MiB retained-input limit. Open the same resource
+to resume its existing session. **X (Close document)** or Android Back in the
+main reader releases a slot. Save or explicitly discard private edits before
+closing, changing credentials or mutating the file. Failed saves retain drafts.
 
-Private Close offers **Save**, **Quit without saving**, and **Cancel**.
-Failed saves retain the item and its edits. Credential reload, replacement and
-forget check all unsaved provider items before clearing any of them. Save or
-explicitly discard private work before a file mutation or credential change.
-
-Provider items are session-only: their titles, paths, content and positions are
-excluded from workspace recovery. Reopen/unlock them after process termination.
-The four-item and 32 MiB retained-input limits reject a new item without evicting
-existing drafts. Local, LocalCrypt and remote provider files share these limits.
-An on-screen explanation tells you when a limit prevents opening. Close an item
-in **Documents → Open documents**, saving any edits you want to keep, and retry.
-**X (Close document)** returns to the originating folder and releases the slot;
-Android Back does the same from the main reader. Unsaved edits prompt before
-closing. Page and EPUB passage positions remain in memory for reopening during
-the app session, until private readers are locked or the app restarts.
-A file exceeding the memory
-budget by itself cannot be opened by closing other items.
-Inactive comic images and archive caches are released and
-recreated on activation. Saving local text updates its local file; LocalCrypt
-continues to save encrypted bytes through the existing verified transaction.
-
+Provider document titles, paths, drafts, bookmarks and positions stay in memory.
+Reopen after restart. Forgetting credentials preserves ciphertext, but you
+must reload matching crypt settings to unlock it.
 
 ### SMB and Mac shared folders
 
-Open **Settings → Workspaces → SMB shares…**, or tap **Add share…** in
-Workspaces’s **Home Server** tab. SMB setup has its own page, separate from
-rclone credential ZIP settings.
-Give each server a unique connection name, enter its IP address or hostname,
-username and password, and choose **Connect & browse shares**. Enter only the
-server in the Server field, without `smb://` or a shared-folder path. The default
-port is 445; expand **Advanced options** to change Domain or Port. For guest
-access, turn on **Connect as guest**. This hides the account fields and clears
-the entered password. Turn it off to sign in with your server account.
-**Need help connecting?** expands the network and Mac setup guidance.
+Open **Settings → Workspaces → SMB shares…**, or **Home Server → Add share…**.
+Enter a unique name, server hostname/IP (without `smb://` or share path), and
+account credentials, or select **Connect as guest**. The default port is 445.
+Change domain or port under **Advanced options**. Choose **Connect & browse shares**.
 
-You can add multiple servers. Adding one preserves existing connections and rejects
-names already in use. **Save credentials on this device** defaults to on: usernames
-and passwords are stored in the existing encrypted credential vault, protected by
-Android Keystore or iOS Keychain, and restored when Workspaces initializes. Turn it off
-for a session-only connection; this leaves previously saved credentials unchanged.
-Saved and session-only servers can remain loaded together.
-Reloading saved credentials preserves temporary connections;
-loading a credential ZIP adds or replaces only its own package context.
+**Save credentials on this device** defaults on and uses the device vault.
+Turn it off for a temporary connection. Previously saved credentials remain.
+On a Mac, enable **File Sharing** using SMB and grant the account access to the
+folders. Connect from the same network or a reachable VPN. Try the IP if the
+hostname fails. Open a share and choose **Pull…** for a managed copy. A network
+or login failure keeps the connection available for retry.
 
-On a Mac, enable **File Sharing**, enable sharing using **SMB**, and allow the
-account used here to access the desired shared folders. Connect from the same
-network or a VPN that reaches the server. If a hostname cannot be resolved, use
-the server's IP address. Legacy AFP shares are not supported.
-
-The browser first lists the server's shares. Open a share, then the folder you
-want, and use **Pull…** in its folder actions to create a managed offline copy.
-Existing Pull progress, cancellation and refresh rules apply. A network/login
-failure keeps the added connection;
-retry browsing after fixing network access. **Forget saved credentials** removes
-the saved connection set for all servers, as it does for credential ZIPs.
-
-SMB remotes can also be loaded from existing credential ZIPs. Use rclone's `smb`
-configuration with `host`, `user`, `pass`, `domain`, and `port`; `pass` in a ZIP
-must already be rclone-obscured. The direct form accepts your ordinary password.
-Physical-device SMB transfers still require validation with an actual server.
+For SMB in a ZIP, rclone accepts `host`, `user`, `pass`, `domain` and
+`port`. The ZIP’s `pass` must be rclone-obscured. The direct form accepts
+your ordinary password.
 
 ### Managed folder pulls
 
-Use **Pull…** from Workspaces for reviewed Local or LocalCrypt sync. The older
-snapshot-style repeatable-pull workflow has been removed. Existing downloaded
-folders remain on the device; they can still be browsed as local files. Sync can
-replace or delete destination files after confirmation, without a retained backup.
-Pull downloads missing local files and recreates missing destination folders for
-both Local and LocalCrypt, including when you choose **Proceed without full
-review…**. That choice skips the full comparison; it still checks storage access
-and unsafe filesystem links before downloading.
+Use **Pull…** from Workspaces to create or refresh a mapped copy. Sync can
+replace or delete destination files without a backup. **Skip preview and
+start** still checks storage access and unsafe filesystem links.
 
 ### LocalCrypt session and screen privacy
 
-A session lasts for the running app process. Privacy protection starts as soon
-as session-only credentials load, before any document is opened. A configured
-crypt, saved credentials or a selected ZIP alone does not activate it. Protection
-continues until both those credentials and all associated private views are cleared.
-Navigating between tabs does not lock the session. Leaving the app or locking
-the device covers it immediately; returning shows a lock screen until you enter
-the session's ZIP or connection password. Private edits remain in memory behind
-the lock. Private views with a separate archive password may require that password
-as well. Passwordless sessions first ask you to set a temporary lock password.
-On iOS, the lock form stays inside the safe area, clear of the status bar, notch
-and home indicator in portrait and landscape.
-These lock passwords and their verification data are never saved to disk.
-Closing/replacing credentials retires private readers; cached plaintext reads
-check the credential generation shared by all windows. Private thumbnails, names,
-reading positions and drafts do not enter document history or recovery files.
-This does not promise secure erasure of RAM or protection on a compromised device.
+Session-only credentials activate screen protection. Leaving the app or locking
+the device covers private views. Enter the ZIP, connection or temporary session
+password to return. Private edits stay in memory. A protected archive can ask
+for its own password again. Lock passwords are never saved.
 
-On iOS, windows with loaded session-only credentials or associated private views
-are covered while inactive before app-switcher snapshots. Fresh launches and
-saved credentials alone do not activate the black privacy screen. Loaded private
-session content is also covered during detected recording/mirroring. Stop capture
-to use the session or its lock screen. External comic displays stay blank while
-any session-only credentials or protected views remain loaded, including after
-unlock. Without those privacy gates, an ordinary visible comic can fill the TV;
-external displays never create a separate workspace or frozen Home view. iOS does not provide
-a supported general switch to prevent still screenshots; screenshot detection
-happens after capture. On Android, secure windows block ordinary screenshots and
-nonsecure capture while session-only credentials or associated private views remain loaded. Native device
-behavior can vary; these controls do not block an external camera.
+Android secure windows block ordinary screenshots and nonsecure capture. iOS
+covers inactive views and detected recording or mirroring, but still screenshots
+can capture visible content. External comic displays stay blank during private
+sessions. These controls depend on the device.
 
-LocalCrypt follows the credential package's filename settings. Names remain
-readable if filename or directory-name encryption was disabled; ciphertext sizes,
-counts and timestamps and connection/remote labels are not secret. **Pull to Local**, Move/Save As to Local, exports and clipboard copies intentionally
-produce plaintext. Session-only imports leave an older saved credential vault
-unchanged; use **Forget saved credentials** to remove it and older retained ZIPs.
+LocalCrypt follows the remote’s filename encryption settings. Names can remain
+readable if name encryption is disabled. File counts, ciphertext sizes,
+timestamps and connection labels remain visible. Pull, move or Save As to
+Local, exports and clipboard copies produce plaintext.
 
 ## Create and edit notebooks
 
 Choose **Notebook (.rmdoc)** in New document and select an unlocked LocalCrypt
-folder, or open an existing notebook from its file browser. Save keeps the file
-encrypted. Save As uses the shared destination picker; exporting or choosing
-ordinary storage asks before creating a decrypted copy. Unsaved private notebook
-edits remain in memory, so save or discard them before closing or locking.
-See [Notebooks on mobile](../../notebooks/user_mobile/user_mobile.md).
+folder, or open an existing notebook there. Save keeps it encrypted. Exporting
+or choosing Local asks before making a decrypted copy. Save or discard private
+edits before closing or locking. See [Notebooks on mobile](../../notebooks/user_mobile/user_mobile.md).

@@ -1,64 +1,23 @@
 # PDF Reader
 
-Open a local `.pdf` from the file browser, or choose **PDF Reader** from the
-launch chooser. Its Open picker also supports unlocked LocalCrypt locations.
-Remote and LocalCrypt browsers open PDFs through the same reader.
+Open a PDF from a local, remote or unlocked LocalCrypt browser. Scroll, use the page arrows or enter a page number in **Page**. **F11** toggles fullscreen.
 
-Choose **⋯ → Duplicate as .rmdoc to annotate** to create an editable notebook
-beside the PDF, with the same base name and embedded PDF pages as backgrounds.
-The PDF remains unchanged. If that `.rmdoc` already exists, an error appears
-and the existing file is preserved. The file browser's selected-PDF actions
-also offer this command. Creation requires a writable folder and supports
-up to 1,000 pages within the notebook's archive limits.
+To annotate, choose **⋯ → Duplicate as .rmdoc to annotate**. This requires a writable folder and creates a sibling notebook for PDFs up to 1,000 pages within archive limits. Existing files are preserved. Open the copy in [Notebooks](../../notebooks/user/user.md).
 
-Scroll with the wheel or trackpad. You can stop with the bottom of one page
-and the top of the next in view. The page indicator follows the scroll
-position. Use **Page** to jump to a page by number, or use **Previous page** and
-**Next page**.
-
-PDFs are read-only. Files up to 32 MiB are loaded into memory, including remote
-and decrypted LocalCrypt documents; no plaintext PDF cache or library import is
-created. Close the reader to release the document. Private windows become
-unavailable when their credentials are revoked. Password-protected or damaged
-PDFs report an opening error; PDF password entry is not supported.
+PDFs are read-only and limited to 32 MiB. Decrypted bytes stay in memory until close or credential revocation. Encrypted PDFs require decryption elsewhere before opening.
 
 ## Search
 
-Enter text in **Find in PDF** and submit it or choose **Next match**. Search
-ignores case, treats repeated whitespace as a single space, and searches literal
-text across the whole document. Queries are limited to 256 characters; regular
-expressions are not supported. Next match and Previous match wrap
-around the results and jump to the matching page. A result count and text snippet
-identify each match, including multiple matches on the same page. Clear the
-query to clear results. On desktop, Ctrl+F (Command+F on macOS) focuses search.
-
-Search works with local, remote and LocalCrypt PDFs and creates no persistent
-text index. Search text and results clear when the reader closes or its private
-session is revoked. Scanned pages require an existing searchable text layer;
-OCR is not included. Results are capped at 1,000 (shown with a `+` when there are
-more); documents with more than 8 MiB of extracted text report a search limit.
-
-Use **Find in PDF** or the standard Find shortcut to reveal search. The search
-panel starts collapsed. Page arrows, the numeric page selector and the full-screen
-button stay in the compact reader toolbar; F11 toggles full screen.
+Use **Find in PDF** or **Ctrl+F** (**⌘F** on macOS). Search matches literal text without case and requires a text layer. **Next match** and **Previous match** wrap. The limits are 256 characters per query, 1,000 results and 8 MiB of extracted text.
 
 ## Page-turn motion
 
-Page turns use a short slide within the reading area. The toolbar stays still.
+Page turns slide within the reading area.
 
 ## Reading position and platform differences
 
-Provider-backed readers can restore a saved page and scroll position. Private credential-backed
-positions use the owning credential ZIP password; passwordless private sessions
-keep positions in memory. See [reader state and history clearing](../../../development/architecture/reader-state.md)
-for restoration, password changes and clearing controls. Search queries and
-snippets are not reading-position checkpoints.
-
-The [mobile guide](../user_mobile/user_mobile.md) covers embedded contents and
-the hold magnifier. To edit ink, open the duplicated `.rmdoc` in
-[Notebooks](../../notebooks/user/user.md); the original PDF remains read-only.
-
+Provider-backed locations can restore page and scroll position. Credential-backed positions are encrypted and passwordless private positions stay in memory. See [reader state and history clearing](../../../development/architecture/reader-state.md) and the [mobile guide](../user_mobile/user_mobile.md).
 
 ## Internal page links
 
-Click an internal PDF link to open its destination page. **Undo page jump** stays available for three seconds to return to the page you left.
+Follow an internal link, then use **Undo page jump** within three seconds to return.

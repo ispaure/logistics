@@ -1,61 +1,30 @@
 # Back up and restore Plex server data
 
-This workflow uses the desktop application. See the [mobile support boundary](../user_mobile/user_mobile.md).
-
-Manage PMS is offered on **Workspaces** when a local folder has a matching
-`<folder>-PMSDATA` rclone remote. Load credentials using [rclone](../../rclone/user/user.md).
+Select the local folder and the credential owning its matching **-PMSDATA**
+rclone remote in **Workspaces**. Choose **Manage PMS…**. See
+[rclone setup](../../rclone/user/user.md) and [mobile availability](../user_mobile/user_mobile.md).
 
 ## Back up
 
-1. Stop Plex Media Server.
-2. Select the paired folder and open **Manage PMS…**.
-3. Package the current server data locally.
-4. Push the completed package to the paired remote if desired.
-
-If packaging reports a recovery folder, keep it until the previous package has
-been recovered or the newly published package has been checked. Ordinary packaging
-failures restore the previous files automatically. A conflicting edit, missing
-backup or interrupted recovery leaves the journal and remaining files in place;
-resolve that condition before retrying recovery. See the
-[package recovery contract](../development/development.md#package-and-restore-behavior)
-for the explicit recovery procedure.
+Stop Plex Media Server, then package its data locally. Preserve earlier
+packages before replacing them. If you Push, check the
+[sync direction and deletions](../../rclone/user/user.md#choose-the-sync-scope).
+Keep any reported recovery folder until the package is verified or
+[recovery](../development/development.md#package-and-restore-behavior) finishes.
 
 ## Restore
 
-1. Stop Plex Media Server and keep a backup of the existing installation.
-2. Pull the desired package locally if needed.
-3. Unpack it through Manage PMS.
-4. Check the restored server before removing any recovery copy.
-
-| Platform | Package |
-| --- | --- |
-| Windows | Split 7-Zip archive plus registry settings; supplied 7-Zip required |
-| macOS | ZIP plus server preferences plist |
-| Linux | ZIP; filesystem permissions and service ownership may need attention |
-
-Restore retains previous data beside the restored directory as
-`Plex Media Server.previous-<id>`. Staging and that copy need extra disk space.
-Preferences/registry changes and data replacement are separate operations, so a
-failure may leave a partial update. Packaging a running server cannot guarantee a
-consistent database backup.
+Stop Plex, keep a backup, Pull the intended package if needed and unpack it in
+**Manage PMS…**. Windows needs the supplied 7-Zip for split archives. macOS
+packages include preferences, and Linux restores may need ownership or
+permissions corrected. Verify Plex before deleting the previous data copy.
+Preference or registry changes can succeed separately from data replacement.
 
 ## Compare database copies
 
-**Debug → Plex - Compare Databases…** asks for two database files and compares
-supported movie/episode records. Use database copies; this tool does not restore
-a live server or synchronize the libraries.
+Use **Debug → Plex - Compare Databases…** to compare two copies. It compares
+supported movie and episode records.
 
 ## More help
 
-See [Using Logistics](../../../user/user.md) for navigation and settings.
-
-Select the rclone credential source that owns the paired remote. A same-named
-local source without that credential context does not offer Manage PMS. Package
-creation can replace a previous package in its output location; retain copies
-of backups you want to keep. Pull/Push uses rclone sync semantics, including
-possible destination deletions; see [transfer scope](../../rclone/user/user.md#choose-the-sync-scope).
-
-GUI Push and Pull actions show a detailed rclone review before transferring,
-including additions, replacements and deletions. You can explicitly proceed
-without the full review while a comparison is still running. Confirmation does
-not bypass required credential or encrypted-file checks.
+See [Using Logistics](../../../user/user.md).

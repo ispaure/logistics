@@ -1,63 +1,13 @@
 # Playback tools
 
-Use **Playback** for exact time entry, **Start over** and control locking.
-**Speed** and **Picture** have their own icon buttons and settings panes. Speeds range from 0.5× to 2× with pitch compensation when the decoder supports
-it. **Fit** preserves the complete image, **Fill** crops the edges to fill the
-available area, and **Original size** uses the video's native size and can clip
-large pictures. Fit is the default. These preferences survive reopening.
+- **Playback → Go to time** accepts seconds, `MM:SS` or `HH:MM:SS`, including fractions. Press **G** to open it. A seek of at least ten seconds offers **Undo seek** for eight seconds (**Ctrl+Z**). Seek and Undo preserve Play/Pause. **Start over** clears the held position.
+- **Playback → Lock controls** guards against accidental input. Use **Unlock** or Escape to restore it.
+- **Speed** runs from 0.5× to 2×. **Picture** offers Fit, Fill (cropped), and Original size. The green cache strip maps remote bytes to time approximately.
+- **Current folder** lists videos in natural filename order. **P/N** selects previous/next. **Play next automatically** advances within the folder at natural completion and requires source access.
+- **Audio** and **Subtitles** choose embedded tracks or UTF-8 SRT, VTT, ASS or SSA files from the provider picker. Set language codes, subtitle size, delay or audio offset. Positive delay means later. Private subtitles must share the video's storage. Qt compatibility is limited to external SRT/VTT captions.
 
-**Go to time** accepts seconds, `MM:SS` or `HH:MM:SS`, including fractional seconds.
-A seek of ten seconds or more exposes **Undo seek** for eight seconds. Seeking
-and undo preserve the current Play/Pause choice. **G** opens time entry;
-**Ctrl+Z** undoes a recent seek.
-
-**Current folder** lists videos in natural filename order: episode 2 comes before
-episode 10. Choose a video or use **Previous** / **Next** (**P** / **N**).
-**Play next automatically** is off by default. It advances at natural completion,
-within the current folder and source; it cannot bypass credential authorization.
-Folder listings run on a worker and may take time on cloud storage.
-
-**Audio** and **Subtitles** accept preferred language codes such as `fr` and
-`en`; blank uses the decoder default. Load UTF-8 SRT, VTT, ASS or SSA through the
-provider picker, or select a discovered matching sidecar. Subtitle size, subtitle
-delay and audio sync offset are adjustable; a positive delay means later.
-Font/language changes may reopen the decoder at the held position and briefly
-buffer. Font-size changes require stopping casting first. Embedded ASS styling
-may constrain overrides. The retained Qt compatibility decoder offers external
-SRT/VTT text captions and their size/delay; it does not expose embedded adjustments
-or audio offset.
-
-The green timeline strip shows locally available ranges. For remote videos its
-byte-to-time mapping is **approximate**, especially with variable bitrate files;
-it is not a guarantee of a particular number of playable seconds. Hover over the
-slider for the explanation. The existing memory budget remains in effect.
-
-Session-only cloud and LocalCrypt progress uses the credential ZIP password,
-through the shared [reader-state policy](../../../user/reader-history.md). Changing
-the ZIP password preserves old checkpoints for explicit previous-password migration.
-Opening resumes automatically; use **Start over** to restart. Replacing the source
-invalidates its old checkpoint. There is no decrypted movie cache on disk.
-
-See [mobile playback tools](../user_mobile/controls.md) for touch and fold controls.
-
-
-Videos opened as files from Notes Library use the full platform Video Player,
-including resume and ordinary autoplay. Markdown video embeds in Notes Library
-and standalone Markdown files keep simple inline Play/Pause and seeking controls.
-Each newly created embed starts paused at zero and does not load full-player
-resume state. Page rendering does not autoplay embedded media.
+Notes Library videos opened as files use the full player. Inline Markdown clips start paused at zero.
 
 ## Remembered playback choices
 
-Speed, picture size (Fit/Fill), embedded audio and subtitle selection (including
-Subtitles off), and playback preferences are saved per video alongside its
-position. Reaching the end resets the position to the start and keeps these
-choices. A missing saved track falls back to the available tracks.
-
-Local files use a bounded content fingerprint (size plus samples from the start,
-middle and end), so renaming or moving the file keeps its state. Identical samples
-share state; this is not a full-file integrity hash. Cloud/server sources retain
-their resource identity and revision without extra fingerprint downloads.
-LocalCrypt state stays encrypted; session-only credential state uses the existing
-credential-password reader store, with no plaintext preference fallback on save.
-Selected subtitle files from the same storage source are restored when still available, including matching sidecars in a moved folder. Subtitles chosen from a different desktop storage source need to be attached again.
+Per-video position, speed, picture and track choices restore on reopen. Finishing returns to the start. Local renames can preserve state. Changed sources invalidate old positions. LocalCrypt and session-only checkpoints follow the [private reader policy](../../../user/reader-history.md). See [mobile playback tools](../user_mobile/controls.md).
