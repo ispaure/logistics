@@ -13,6 +13,7 @@ function checkNativePointerContract(bundle) {
       }}
     }
     const viewport={...target(),clientWidth:400,clientHeight:700,scrollLeft:11,scrollTop:23};
+    const paperWrap={classList:{remove(){}}};
     const finger={checked:false}, canvas={...target(),style:{},setPointerCapture(){},
       getBoundingClientRect:()=>({left:0,top:0,width:400,height:700})};
     const document={...target(),hidden:false,elementFromPoint:()=>canvas};
@@ -31,7 +32,7 @@ function checkNativePointerContract(bundle) {
     };
     const context={console,Map,Set,Math,JSON,PointerEvent,canvas,document,
       window:target(),zoomViewport:viewport,innerWidth:400,innerHeight:700,
-      performance:{now:()=>now},$:id=>id==='finger'?finger:viewport,
+      performance:{now:()=>now},$:id=>({finger,viewport,paperWrap})[id],
       state:{width:1404,height:1872,layers:[['L','Ink',true]],strokes:[],native_pen:true},
       active:null,pan:null,mode:'ink',points:[],selected:new Set(),start:null,last:null,
       pendingInk:null,inkSettings:null,continuousInk:false,frameBatchedInk:false,
@@ -56,7 +57,8 @@ function checkNativePointerContract(bundle) {
   if(bundle.legacy)assert.throws(()=>old.run(bundle.legacy),/Explicit finger drawing failed/,
     'The compiled-70b fixture must reproduce the exact observed failure');
   const corrected=scene(),original=corrected.snapshot();
-  assert.equal(JSON.parse(corrected.run(bundle.begin)).release_grace_blocked,true);
+  const initial=JSON.parse(corrected.run(bundle.begin));
+  assert.equal(initial.release_grace_blocked,true,initial.stack);
   const grace=corrected.run('penReleaseGrace');
   corrected.advance(grace-1);assert.equal(JSON.parse(corrected.run(bundle.ready)).blocked,true);
   corrected.advance(2);assert.equal(JSON.parse(corrected.run(bundle.ready)).blocked,false);
