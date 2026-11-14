@@ -1,947 +1,122 @@
 # Logistics build manager integration
 
-For setup, settings and running builds, see the [user guide](../../user/build-manager.md).
-This guide owns Logistics adapter policy, implementation and validation.
+Use the [operator guide](../../user/build-manager.md) for installation and plan review. Logistics pins the external SDK in `build-manager-dependency.json`. [Install the pin in each tooling environment](../../user/build-manager.md#external-manager-installation-adapter-api-1). Its `logistics_build/build_project.py` adapter owns app source, suites, backends, signing and release policy. The SDK owns execution, locks, transports, artifact verification and review UI. See [ownership](build-deployment-audit.md).
 
 ## Dedicated test-machine settings
 
-The manager supplies a checkout-specific private profile in its Application Support
-configuration directory. Logistics reads the old checkout-local profile until the
-first Save, which preserves those values in the new profile without rewriting the
-legacy file. Later manager saves use the private profile as the authority.
-Explicit `LOGISTICS_MANAGER_PROFILE` overrides remain supported by command-line tools.
-
-When Fedora or Windows is empty, the manager bridge resolves its dedicated machine
-from the manager checkout's ownership receipt and current Parallels registration.
-It verifies the bundle location without starting a VM or running guest commands.
-Explicit saved selectors take precedence; Save records detected UUIDs in the private
-profile. Missing or conflicting ownership leaves the field editable; setup and OS
-readiness remain separate steps in Setup → Test machines.
-
-Fedora defaults to direct guest testing. The advanced `container-on-ubuntu` mode
-still requires a separately authorized Ubuntu test host and rootless Podman. Its
-host field appears only in that mode; switching modes preserves stored values.
+The manager uses a private profile per checkout. First Save copies legacy local values into it. CLI tools honor `LOGISTICS_MANAGER_PROFILE`. Explicit machine selectors win. For empty Fedora/Windows selectors the bridge verifies the manager's ownership receipt and Parallels registration without starting the VM. Save records the detected UUID. Resolve missing/conflicting ownership in Setup → Test machines.
 
 ## Implemented operations and extension points
 
-Local mobile validation, build and tester-preparation plans inspect required host
-tools before host regressions or native preparation. Native app builds require pinned Briefcase, pip, Go and the verified pure langdetect wheel;
-interpreter-only runtime plans require pip. Failures name normal mobile setup or
-explicit project tooling repair for native prerequisites. Inspection never installs tools, downloads a Go
-toolchain or enables telemetry. Desktop, host-only and GitHub plans do not gain
-a local Go prerequisite. Existing source-structure and cleanup dependencies remain.
-Explicit Debug-device recipes assembled separately by the device owner are outside
-this early gate. Retained artifact exports likewise gain no Go requirement here.
+| Operation | Contract |
+| --- | --- |
+| Local checks | Selected backend required. Native app plans inspect pinned Briefcase, pip, Go and the verified langdetect wheel before build/test work. Interpreter-only plans require pip. Inspection reports repairs. |
+| Build only | Android development APK or iOS simulator app without test or install phases. |
+| Prepare and deliver | Source-bound validation, signed artifact and reviewed destination. Mobile branches may progress independently, with per-destination gates and all selected desktop checks retained. |
+| GitHub validation | Verify published source, record accepted dispatch, then observe that exact run. Resume observation after transport failure. Reconcile ambiguous dispatch before another write. |
+| GitHub release | Publish shared source before project source and a new immutable tag, or tag an exact already-published commit. Observe the gated workflow. |
 
-The manager integrates the existing physical-device, TestFlight and Firebase
-commands. Local TestFlight/Firebase preparation captures verified artifact
-metadata and stops before upload. GitHub operations validate a published branch
-or tag against the reviewed commit, record the dispatched run ID, and supervise
-that exact run. A release operation pushes shared source before the application
-and an unused channel tag, then waits for the existing gated release workflow.
-An existing tag is never moved. These capabilities do not grant permission to
-publish a project; the operator still chooses and confirms the operation.
-
-Hosted validation records accepted dispatch in an external-effect phase, then
-observes that immutable run receipt in a required test phase. A failed remote
-check is a failed test; a transient observation error can be resumed against the
-same run ID without another dispatch. The observer verifies repository, source,
-workflow, ref and platform/input binding before waiting or cancelling that run.
-Acceptance without a recorded run ID remains uncertain and requires review;
-it is never automatically posted again. Delivery gates still require successful
-observation. The legacy `github` command retains its combined dispatch/wait behavior.
-Previously saved plans keep their captured commands and uncertainty history;
-prepare a new plan to use the separated phases.
-
-Combined delivery plans give ready mobile validation, preparation and delivery
-phases scheduling priority over desktop work. Each tester upload keeps its own
-platform validation and prepared-artifact prerequisites; every selected desktop
-validation gate remains in the plan. Prepared uploads still require artifact and
-destination review before execution.
-
-Local macOS, Fedora and Windows commands use the project-owned desktop
-plans. Sequential iOS and accelerated local Android backends are implemented and
-have complete local acceptance evidence. Windows is implemented; its complete declared plan requires a guest account
-with normal-user symbolic-link capability, and missing capability remains a
-reported failure. An unavailable
-backend fails planning; the manager never silently substitutes hosted validation.
-Hosted desktop selection supplies the requested platform input. Normal release
-calls continue to require the complete desktop matrix.
-
-Local Android and iOS **Build** operations compile development artifacts without
-installing or delivering them. iOS uses the existing simulator build/cache backend.
-This is separate from disabling tests in a delivery journey, which still performs
-the selected build and delivery steps.
-
-## Reusable boundary
-
-The external manager's `build_manager` package contains generic plan/result
-contracts, subprocess execution, workspace locking, cancellation, output filtering,
-profiles, monotonic local
-reservations, the GitHub transport and optional Qt presentation. It imports no
-Logistics application, feature tree, app identity or personal configuration.
-`logistics_build/build_project.py`, `logistics_build/build_snapshots.py`,
-`logistics_build/validation_plans.py` and `mobile_build/deployment/manager_settings.py`
-supply Logistics source layout, suites, provider policy and settings.
-
-A project adapter supplies `description`, `operations`, `platforms`,
-`interpreter`, `runner_directory`, `results_directory`, `backend_options(target)`
-and `make_plan(operation, target, backend, **choices)`. Settings use
-`settings_view()`, `save_settings(values)` and `verification_plan()`; an optional
-`set_app_version(value)` supports an explicit tracked-source edit. The synthetic
-second-project tests run a different root/name and harmless real command through
-both the executor and Qt UI without cloud credentials.
-
-The manager has been extracted into a separate repository. Logistics pins its
-revision in `build-manager-dependency.json` and retains the adapters, functional
-suites and workflows. Install it explicitly in each tooling environment; see
-[external manager installation](../../user/build-manager.md#external-manager-installation-adapter-api-1).
+The [journey adapter](build-manager-journeys.md) builds dependency graphs. The descriptor declares optional adapter actions. Generic SDK APIs belong in the manager wiki. Projects declare structured plans, backends and optional settings or verification actions through `build_manager.adapter_sdk`.
 
 ## Plan, result and source contracts
 
-This page covers Logistics adapter policy. The manager's wiki covers its engine
-and operator workflows.
+Schema 1 binds source, backend, workspace and effects to ordered phases with structured argv, cwd, timeouts, environment overrides, dependencies and cleanup flags. Treat plans as trusted executable configuration. Inherit provider secrets through protected references/environment. Run a reviewed plan with `python -m build_manager PLAN.json --output NEW_DIRECTORY`; effects also require `--confirm`.
 
-`Plan` schema 1 records project, operation, source identity, backend, workspace,
-effect and ordered phases. A `Phase` carries structured argv, cwd, timeout,
-environment overrides, prior dependencies, required/cleanup flags and expected
-artifact reports. Plans are trusted executable local configuration, like scripts;
-profiles and incoming documents are never interpreted as plans automatically.
-Secret environment values are inherited through the existing provider mechanisms;
-putting a declared secret value into a serialized phase environment is rejected.
-The CLI is `python -m build_manager PLAN.json --output NEW_DIRECTORY`;
-side-effecting plans also require `--confirm`.
+The executor publishes atomic `result.json`, redacted logs and artifact hashes. Failed dependencies skip consumers. Required skips and timeouts fail the result. Independent diagnostics and owned cleanup can still run. Older saved plans retain their original commands and approval requirements.
 
-The executor writes an atomic `result.json`, per-phase redacted logs and captured
-artifact reports with SHA-256. Results include exact source, plan hash, UTC times,
-elapsed seconds, exit status and queued/running/passed/failed/cancelled states.
-Failed dependencies skip their consumers; independent diagnostics and owned
-cleanup can still run. Required skips and timeouts fail the result. Cancellation
-stops current processes and prevents the next phase from starting. POSIX process
-groups are terminated; Windows uses child-tree termination and requires its
-backend's real guest acceptance before claiming equivalent cleanup.
-
-Source snapshots contain local Git history and the selected shared base revision.
-Working development snapshots copy tracked/nonignored edits, additions, deletions,
-executable modes and internal relative links from both Logistics and commonUtils.
-The source identity records commonUtils' base commit, dirty state and content
-fingerprint as well as the combined fingerprint. Neither checkout needs a commit
-or push for local validation and Debug development builds. Ignored credentials,
-device configuration, external feature links and checkout-root `tmp/` outputs are
-excluded. Working capture and guest transfer reject root `tmp/` entries in the
-Git index. Capture and transfer also reject root `tmp/` in retained Logistics
-Git history because guest archives include Git metadata. Nested source paths
-named `tmp` remain eligible. Source changes
-during capture or mismatched copied bytes reject preparation; later source edits
-cannot mutate an existing snapshot. Cached snapshots must still match their recorded
-content fingerprint, including the shared tree. Signed tester and Release-device
-preparation also use these captured current files, with full native/runtime release
-gates bound to the exact snapshot fingerprint. GitHub publication still requires
-committed source and a clean checkout. Selecting a committed
-revision excludes both repositories' local edits and uses the recorded shared pin.
-Native/runtime development evidence must match the exact capture fingerprint.
-Staging verifies the
-snapshot bytes before embedding that fingerprint. Protected inputs are linked from
-their existing locations only for that selected build, never copied into Git.
+`build_snapshots.py` captures either a committed revision with its commonUtils gitlink, or current files in both trees including nonignored additions, deletions and executable modes. Capture records both identities and rechecks content before reuse. Private settings, SDKs, external links and root `tmp/` outputs stay outside the capture. A root `tmp/` entry in the index or retained Git history blocks guest transfer. Local Debug and signed mobile preparation can capture edits. Signed preparation binds native/runtime proof to the exact capture. GitHub publication requires committed clean source. Staging embeds and verifies the capture fingerprint.
 
 ## Validation and local outputs
 
-Generic contracts are in the external manager checkout's `Python/tests/`; Logistics
-integration contracts are in `Python/tests/tooling` and `mobile_build/tests/tooling`.
-The tests exercise
-real harmless subprocesses and Qt-to-CLI execution, failure, timeout, cancellation,
-workspace conflicts, source privacy, allocation and controlled provider transport.
-They do not substitute for the local platform backends' native acceptance.
-`python dev.py lint` covers Logistics-owned source. Full Logistics desktop plans
-keep the complete `Python/tests` inventory, including the adapter, journey,
-Executor, artifact review, retained delivery and tooling-bootstrap integration
-contracts in `Python/tests/tooling`. Mobile host plans also keep the complete
-`mobile_build/tests` inventory. Exact dependency-pin and source verification
-remain required.
-
-The manager's complete generic self-test suite belongs to SDK qualification,
-including its standalone GUI fixtures. Run `python -m build_manager.contracts`
-explicitly with the SDK's owning interpreter when qualifying SDK changes; it is
-not an implicit Logistics release phase. This separates test ownership without
-turning an SDK failure into a pass or removing Logistics integration coverage.
-Older prepared runs retain their original required phases and results.
-
-Counters and source workspaces stay under ignored
-`mobile_build/.tools/build-manager/`. The standalone manager supplies its private
-checkout-specific profile; direct tools default to the legacy profile there unless
-`LOGISTICS_MANAGER_PROFILE` selects another file. Result plans/logs/reports stay under ignored
-`test-results/build-manager/`. Keep keys and personal configuration out of source
-and captured artifacts. Existing in-place deployment guards and final upload
-confirmation remain in the owning deployment helpers.
+Integration contracts live in `Python/tests/tooling/` and `mobile_build/tests/tooling/`. Full scopes retain both owners' complete inventories as applicable. Qualify SDK changes separately with `python -m build_manager.contracts` in the SDK environment. See [platform checks](../testing/platform-checks.md) for native acceptance. Store plans and receipts under ignored `test-results/build-manager/`. Snapshots and counters use `mobile_build/.tools/build-manager/`. Keep signing material and personal settings private.
 
 ## Local macOS acceptance
 
-Select macOS and This Mac. Planning verifies the configured interpreter and records
-its Python, OS, architecture and package versions before copying source. The
-setup phase loads native Qt and provisions/verifies the pinned rclone executable;
-full local runs require the genuine LocalCrypt fixtures rather than silently
-skipping them. The remaining phases are the canonical shared/app regressions,
-full historical compression parity and release-tooling tests.
-Source-plan preparation and environment setup are timed separately from tests.
-
-The GitHub option dispatches the macOS selector in the platform-check workflow.
-Normal pushes, pull requests and release calls still default to the complete
-matrix; selecting one platform does not change release prerequisites. A local
-Apple Silicon run is labelled arm64 with its actual OS and toolchain, rather than
-claiming equivalence to other hosted hardware. Use the existing locked desktop
-environment (`python dev.py setup desktop`) and repair missing prerequisites
-reported by the manager; it never falls back to a different interpreter/backend.
+Select macOS → This Mac. Use the locked desktop environment (`python dev.py setup desktop`). Preflight records Python, OS and architecture, loads Qt and verifies pinned rclone and genuine LocalCrypt fixtures. The plan runs shared/app checks, compression parity and release tooling. GitHub's macOS-only selector supports diagnosis. Release requires the complete desktop matrix.
 
 ## Parallels Linux backend
 
-Fedora is the only required Linux test distribution. Set `vm.fedora` to an
-existing authorized Fedora guest name or UUID. The complete Fedora suite satisfies
-the Linux validation gate for coordinated delivery; Ubuntu has no separate test
-run. Retired `vm.linux` and `vm.linux_scope` profile values are ignored and removed
-on the next settings save. The Fedora container backend remains available through
-its explicitly configured host. Windows guest execution is a separate backend
-and is not inferred from a Linux result.
+Select authorized Fedora by name or UUID in `vm.fedora`. Fedora is the Linux release gate. The guest needs Parallels Tools, Git, venv support and native Qt/WebEngine libraries from `Python/tests/platform/fedora.Containerfile`, including NSS, NSPR, GTK3 and Fedora 44's `minizip-ng-compat`. Provide these through dedicated guest setup and preserve the normal-user browser sandbox. Cold preparation can download public tools.
 
-The reusable `build_manager.parallels` transport discovers guests, starts only a
-selected stopped guest, transports an explicit source allowlist over guest tools,
-verifies its SHA-256, retrieves reports and removes only token-marked workspaces.
-It does not add shared folders or execute against the live host tree. The adapter
-includes local Git histories and the exact shared checkout for compression parity;
-ignored keys/configuration/builds are excluded. Guest commands preserve literal
-argument boundaries across Parallels' Linux shell parser. A harmless second-project
-fixture verifies actual transfer, normal-user execution, retrieval and cancellation,
-including an owned grandchild in a separate process group.
-
-The guest needs working Parallels Tools, Python 3 with venv support, Git and the
-native Qt/WebEngine libraries. Ubuntu additionally needed `libsnappy1v5` and
-`libminizip1` beyond the standard headless Qt packages.
-Fedora 44 requires `minizip-ng-compat` for Qt's `libminizip.so.1` ABI;
-the standalone minizip package is insufficient. The preflight reports missing
-native libraries before launching the test phase. The runner prepares Python
-3.12.2 and locked dependencies in its owned guest workspace, then runs the canonical
-platform checks and release-tooling suite. First preparation downloads public
-runtime/packages; local execution is not a promise of a fully air-gapped cold setup.
-Focused filename patterns use the same locked preparation followed by the selected
-contracts. Preparation-only success is explicitly not test-suite success.
-
-Tests run under the existing normal guest account, with browser sandbox protections
-retained. Results record actual distribution, aarch64/x86 architecture, original VM
-state, transfer/setup/test times, exact source and retrieved phase reports. An ARM
-VM result does not establish x86-64 hosted parity. Failed/skipped required phases
-cannot become a pass. Cancellation stops only the recorded owned process tree;
-completed evidence is retrieved before owned workspace removal. If retrieval or
-cleanup cannot finish, the remaining workspace/error is reported for recovery.
-`vm.shutdown_after_run` defaults to false; enabling it stops only a guest started
-from a stopped state by that run. The Fedora and Windows adapters attempt
-shutdown after guest-dependent evidence and cleanup, including when setup fails
-after start. The attempt records the shutdown command outcome and observed
-power state. If the stop command times out, the adapter polls read-only
-inventory for the same UUID while the phase still holds its VM slot. It starts
-reads for up to 60 seconds after the timeout. The final read can take up to
-30 more seconds. The receipt preserves the command timeout and records whether
-the VM was later observed stopped. The adapter issues one stop command.
-A failed shutdown command or an unverified final stopped state fails the phase.
-A guest that was already running or resumed from suspended stays running.
-VM creation, resets, resource changes, disk passphrases and account sign-in
-are outside this runner.
-
-A guest waiting at an encrypted-disk boot prompt remains unavailable until its
-owner unlocks it directly. Missing required guest coverage keeps Linux acceptance
-incomplete; installed guest tools or a passing Ubuntu run do not prove Fedora.
-
-## Parallels Windows backend
-
-Select an existing normal-user Windows test guest explicitly. The adapter uses
-owned source copies and portable, hash-verified Git/uv archives from
-`logistics_build/build_manager_tools.json`; it never changes global PATH, login policy,
-Developer Mode or signing settings. `vm.windows_prepared_reference` may point to
-an ignored report from standalone preparation to reuse that guest's public tools
-and interpreter. When the runner prepares tools for a single test attempt, it
-removes their downloads, interpreter, environment and caches after retrieving
-the evidence. Ownership records and transport markers remain for reconciliation.
-Preparation alone is not validation. The current catalog targets Windows ARM64
-with Python 3.12.2 AMD64 under x64 emulation; results identify both architectures
-and do not claim native ARM Python or equivalence to hosted x64 hardware.
-
-The complete plan runs native Windows startup, shared/application regressions,
-compression parity and release-tooling checks.
-An explicit `shared:test_filename.py` focused pattern selects shared contracts;
-ordinary filename patterns select application contracts. Source transfer retains
-Git history and verifies its digest; reports retain actual process exit codes.
-PowerShell receives structured data over stdin rather than interpolated shell
-commands or an oversized command-line payload. Logs preserve UTF-8/CRLF content.
-Windows phases use owned Job Objects assigned before their suspended child runs,
-so timeout/cancellation also closes descendants after the parent exits. The UI
-uses an owned cancellation marker instead of relying on console window messages.
-
-The first real Windows ARM/emulated-Python full run passed native startup,
-compression and manager contracts, but required symlink fixtures failed with
-WinError 1314 under the selected normal user's current capability. The adapter
-keeps these failures visible; it does not elevate tests or disable OS protection.
-A separate timestamp fixture now uses a controlled clock, permission preservation
-compares the actual supported initial mode, and Firebase's local advisory lock is
-portable. Focused actual Windows corrections and literal Unicode/space argument,
-orphan-child, lock, timeout and cancellation checks passed. Full Windows acceptance
-remains blocked until all required fixtures can run under an approved environment.
-Reports are retrieved before only the token-marked source/test workspaces are
-removed; public portable tools may remain cached. Failed retrieval preserves the
-owned path with a recovery error rather than deleting its evidence.
+The manager transfers a hashed allowlist and runs under the selected normal account. Collect reports before token-checked cleanup. Resolve encrypted-disk boot prompts in the guest. `vm.shutdown_after_run` defaults off. When enabled, the adapter stops only a VM this run started from stopped and records the command outcome and observed state. Preserve a failed or ambiguous attempt and [reconcile owned guest work](build-manager-journeys.md#retried-guest-validation). Idempotent staging/reads and owned cleanup may retry known transport errors. Test execution needs a new reviewed attempt.
 
 ### Explicit Fedora container mode
 
-`vm.fedora_mode=container-on-ubuntu` with an explicit
-`vm.fedora_container_host` selects rootless Podman in that existing Ubuntu guest;
-it is an alternative to the default separate Fedora guest, never an automatic
-fallback. The normal guest account needs rootless Podman/user namespace support.
-The current definition is `Python/tests/platform/fedora.Containerfile`;
-`test-environments.json` selects the Fedora image (currently Fedora 44).
-The adapter hashes the definition, prepares/reuses the matching labelled image,
-records the actual image ID/architecture, then executes by that immutable ID.
-It records Fedora's own OS release separately from the Ubuntu host kernel.
-Cold image preparation uses public package downloads; normal cached tests run
-locally, but cold setup is not claimed to be air-gapped.
+Set `vm.fedora_mode=container-on-ubuntu` and `vm.fedora_container_host` to an authorized Ubuntu guest with normal-user rootless Podman. The adapter hashes the Containerfile, selects the configured Fedora image, runs by immutable image ID and removes the labelled run container. Fedora version and CPU architecture are evidence inputs.
 
-A historical Fedora 43 aarch64/Python 3.12.2 container run passed the same shared,
-application, compression and manager plan plus release-tooling tests. Together
-with the historical Ubuntu run, this records the earlier ARM VM environment;
-it does not establish current Fedora 44 acceptance. Fedora is the only current
-Linux desktop gate, and Ubuntu is container infrastructure.
-Container tests run as the normal UID with default Podman security and the browser
-sandbox enabled; no privileged/unconfined flags, kernel protection changes or
-root Qt fallback are used. Actual second-project container success and cancellation
-also passed. Cleanup verifies the unique ownership label before removing that
-run's container, retrieves evidence, and removes only the owned guest workspace.
-Public image/package caches remain reusable. One transient Parallels transport
-failure was retained before the isolated successful lifetime proof; failed
-transports remain failures and are never converted to successful test evidence.
+## Parallels Windows backend
+
+Select the dedicated Windows guest. **Test machines → Allow Windows filesystem tests…** enables the required normal-user symlink capability. WinError 1314 blocks full acceptance. Validate with the entire suite after the symlink probe. Current Windows ARM coverage uses x64 Python under emulation. The portable Git/uv catalog is `logistics_build/build_manager_tools.json`. An explicit `vm.windows_prepared_reference` can reuse verified tools. The backend collects logs before removing owned workspaces and records actual process exits. Use the [setup reconciliation command](build-manager-journeys.md#retried-guest-validation) for incomplete attempts.
+
+## Local guest setup with unpublished manager pins
+
+Set `tools.manager_checkout` to an explicitly reviewed local checkout containing the exact manager pin and its pinned commonUtils. Transfer selects committed objects without resetting the branch. Clear an obsolete selector to use published-pin installation. A verified owned tooling cache can restore missing objects locally from the installed exact SDK. Unrecognized or dirty caches require tooling repair. After dependency sync the guest reinstalls the transferred SDK. Hosted desktop setup likewise verifies and reinstalls the exact `LOGISTICS_MANAGER_CHECKOUT` after sync.
+
+### Testing uncommitted manager changes locally
+
+For local validation choose **Current local manager edits (tests only)** or pass `--run-value testing.manager_source=working-tree-local`. The base manager and shared pin must still match. Transfer verifies the exact public-tree fingerprint at capture, transfer and guest install. Use the results as local development evidence.
 
 ## Sequential local iOS validation
 
-For Test/iOS select **This Mac — iOS Simulators**. Inspect the selected Xcode/SDK,
-ordinary iPhone and required Duo runtime/model before launch; optional iPad is
-last in the sequence and requires independent-window proof. A missing Duo is an
-error, never a request to use another ordinary phone. Device names/UDIDs in local
-settings identify templates only. Each operation creates new ownership-labelled
-simulators and deletes only those UUIDs after collecting their separate reports;
-existing simulator data, physical devices and TestFlight are separate operations.
-
-The app is built in test mode once for the exact source/toolchain/configuration.
-Reuse checks its embedded staged manifest, test entry point and complete bundle
-content/permissions digest. Local dirty source requires an exact curated manifest;
-the clean-source hosted verifier remains strict. Every selected device runs the
-canonical 33 native cases and all 260 rotation audits; Duo and selected iPad retain
-their additional native contracts. Reports include build, simulator startup,
-per-section native timings and owned teardown. The UI distinguishes phase elapsed
-time from total elapsed time and streams local case/section checkpoints.
-Cancellation stops active work, prevents later devices from starting, and still
-runs ownership-checked cleanup. Failed devices retain diagnostics and do not
-prevent independent selected devices from collecting useful failure evidence.
-
-Actual M3 Max acceptance completed all three devices in order in 1,259.9 seconds:
-47.7 seconds build, iPhone 400.4, Duo 400.0 and iPad 411.6, with all strict cases,
-rotations and selected independent windows passing. These execution timings use
-prepared tools and exclude source-plan inspection/copy time. Matching warm bundle
-verification reused the identical binary in 1.49 seconds, without another native
-suite or installation. A cancelled diagnostic run also proved that remaining
-devices stayed unstarted and its owned simulator was removed. Local validation
-found a new replacement-confirmation fixture mismatch and a real review-display
-race; the corrected native flows passed on all three families. Raw proof remains
-in ignored result directories. No hosted job or distribution is implied.
+Choose **This Mac — iOS Simulators**. Install the configured SDK and iPhone/Duo runtimes; full delivery and multi-platform validation also require iPad independent-window proof. A standalone run may select iPad. The backend builds one test app per verified source/toolchain and runs separate disposable iPhone, Duo and optional iPad simulators in order. Each keeps its full inventory, rotations and family-specific checks. Cleanup deletes only the run's leased UUIDs. Retained bundle reuse verifies the staged manifest, test entry and full content/permissions digest.
 
 ## Local Android native and runtime validation
 
-For Test/Android select **This Mac — Android Emulator** on Apple Silicon. Settings
-select an explicit complete SDK, Java17 JDK, ARM64 system-image package and device
-profile. The backend requires hardware acceleration and creates a disposable,
-uniquely named AVD under its owned workspace; existing AVDs and physical devices
-are never selected as substitutes. Readiness records actual ABI/API/build and
-image revision. Commands validate the emulator serial against its ownership name
-before device actions. Cleanup removes that AVD's synthetic state, retaining logs
-and the completed lease, and preserves the user's main app and device data.
+On Apple Silicon choose **This Mac — Android Emulator**. Configure the complete SDK, Java 17, explicit ARM64 image and model. The backend requires acceleration, verifies AVD ownership against its serial, records actual ABI/API and retires the disposable AVD. The APK verifier checks exact source, toolchain, test payload and hash. Runtime uses a separate pinned CPython 3.14.7 cross-build and staged manifest. Every declared runtime case must pass with zero skips. Prepare public SDK/NDK/image/compiler dependencies before disconnected work.
 
-The displayed plan separates native APK build, pinned runtime preparation,
-emulator readiness, native functional/UI/rotation verification, CPython runtime
-verification and always-run cleanup. Native APK reuse requires the exact source,
-SDK/JDK/configuration and verified test payload/hash. Normal application APKs and
-mismatched payloads cannot be reused. Validation retains an exact test APK in its
-owned device workspace and checks the native runner against those bytes. Later
-Release Gradle cleans can remove compiler outputs without invalidating the
-original and copied validation artifacts required for upload review. The native suite retains all33cases and
-260rotation audits. Its fullscreen geometry includes both system-bar and camera
-cutout safe insets, with the original strict centering and two-pixel bounds.
+`test-environments.json` is the tracked source of runner labels, Python, iOS runtime families and Android API/model/ABI. Edit it in **Test environments (local and GitHub)**. Private machine paths and signing stay in the profile. Local ARM64 and hosted x86_64 Android results carry their actual identities. A changed toolchain invalidates affected evidence.
 
-The separate runtime uses CPython revision
-`823f0323ee6ec1402088b73bce1a38473cac36dc` (3.14.7), archive-verified upstream source,
-a Mac host build and `aarch64-linux-android` cross-build. Upstream supports the
-macOS build and connected-emulator test path; the manager does not copy hosted
-Linux/x86 software-rendering arguments. Runtime reports require every declared
-58test, zero failures/errors/skips, actual Android identity and the exact staged
-manifest. Explicit local fingerprints are labelled local evidence; default hosted
-verification still requires clean source and rejects local-mode reports.
+## Guided manager suites and tester acceptance
 
-Prepare public SDK/image/NDK/Gradle/Python dependencies before disconnected use.
-First preparation downloads them; local execution is not a claim of an air-gapped
-cold installation. Source/build caches remain ignored. No signing credentials,
-TestFlight/Firebase upload or physical installation follows a successful test.
+`build-tests.json` owns suite roots and predecessors. The descriptor declares selectables such as `portable.contracts`, `desktop.ui`, platform `.native`, `.runtime`, `.incoming` and `release.acceptance`. See [suite file responsibilities](../testing/adding-tests.md#decide-which-files-to-update). Host patterns intersect named host suites. Native/release suites reject focused patterns. Named selection is local. `python3 dev.py test-map` distinguishes discovered files, declared sources/drivers and registered case IDs.
 
-Actual M3 Max acceptance used Google API36 ARM64 image revision7 with Pixel9
-hardware profile and Hypervisor.Framework. The complete plan passed in1,034.25s:
-native build40.4s, reused runtime-tools verification1.0s, readiness23.2s,
-native950.2s, runtime18.8s and cleanup0.6s. All33native/260rotation audits and all58
-runtime tests passed. The earlier CI profile measured32.7min native runtime on
-x86 software rendering; source, ABI, API and hardware differ, so these observations
-are not an isolated optimization or portable speedup claim. Matching warm APK
-verification reused its identical hash in0.135s without another complete suite.
-A focused real native-launch cancellation stopped after the first checkpoint,
-skipped remaining work and removed only the owned emulator. The reusable focused
-driver is `mobile_build/validation/local_manager_probe.py`; its output is explicitly
-cancellation evidence, never full-suite acceptance.
+Reviewed tester delivery requires tooling, desktop UI, mobile host, full native and actual runtime acceptance before signed preparation. Verify source and dependency IDs, platform, case inventory, device families and teardown. `ios.runtime` uses a separate disposable iPhone testbed without Duo/iPad UI checks. Runtime adapters delegate compiler/setup to the pinned SDK and retain Logistics pins and gate verification in `mobile_runtime_tools.json`. Incoming-file suites use the actual system menus and disposable sender/receiver apps. See [incoming files](mobile-preparation.md#incoming-files-and-inbox).
 
-## Project policy after manager extraction
+`python -m logistics_build.test_structure --check` validates the captured structure before tests. Declared smoke phases run fresh before broad regression. A verified exact-input host receipt can satisfy the later phase. See [execution stages](../testing/testing.md#execution-stages-and-failure-policy). A focused native diagnostic can use `mobile_build.validation.document_storage_tools` with `--probe native-suite`.
 
-Use the [current ownership map](build-deployment-audit.md) when adding a backend,
-provider or project. Logistics build adapters live in `logistics_build/`;
-`Scripts/` retains machine `.bat` files and contributor tools. Generic execution,
-review/results, transports, artifact handling and retention mechanisms have one
-implementation in the external manager. Project builders retain their application
-payload, source/privacy rules, signing and acceptance inventory.
+## Independent mobile validation and shared resources
 
-Native build/runtime commands use `build_manager.native_commands`. Exact pinned
-manager/dependency transfer uses `build_manager.dependency_sources`, with the
-Logistics pin and `build_retention.scratch()` supplied by `guest_manager.py`.
-Source snapshots, project artifact reports and main-app identity/data protection
-remain project policy. Generic manager API details belong in its own developer
-wiki; do not reintroduce those implementations or parallel operator guides here.
+Android and iOS branches share host mobile-build capacity (one by default) and serialize runtime work under `mobile-runtime.lock`. Native/device, workspace, keychain and provider resources remain scoped. Cleanup can run as soon as its branch is eligible. Prepare a fresh plan to pick up graph changes.
+
+Debug development-device plans may select zero test platforms. Release-device preparation requires its target's acceptance. Explicit recipients still require package, signature, hardware and hash checks. Android `devices.android_connections` maps selected saved hardware IDs to explicit ADB serials for one run, preserving stored endpoints and hardware verification. Resolve uncertain installs through reviewed recovery.
 
 ## Automatic storage retention
 
-The Logistics adapter runs retention before preparing a manager plan. Direct
-TestFlight archive/export/upload/distribution commands and Firebase builds also
-apply the same provider-build policy, including when called without the UI or
-inside a source snapshot. Read-only TestFlight `plan` does not prune outputs.
+`logistics_build/build_retention.py` defines project ownership. Plan preparation, TestFlight mutations and Firebase builds apply retention. A read-only TestFlight plan only inspects.
 
-- Provider histories keep the three highest-numbered build directories
-  and every directory used within the last 24 hours.
-- Manager source snapshots keep the three most recently used snapshots and every
-  snapshot used within five days, subject to a 24 GiB allocation budget.
-  Above that budget, older snapshots can expire sooner after a one-hour grace
-  period. Snapshot reuse refreshes its age. Execution holds a snapshot resource
-  lock; pruning skips a leased snapshot.
-- Explicitly enrolled legacy build outputs keep the three most recently used
-  directories plus everything used within five days. Enrollment refreshes age.
-- A `.keep` file anywhere inside a tree pins that enclosing build or snapshot.
-  Pin a prepared artifact before keeping its path for long-term upload/retry use.
-- Recipe-identified device-build workspaces share a newest-three count and a
-  12 GiB budget per platform across the legacy
-  `mobile_build/.tools/build-manager/workspaces/devices/` root and
-  `tmp/build/mobile/`. Workspaces used within one day are kept unless the
-  budget requires earlier cleanup after a one-hour grace period. Operation
-  locks, paused-workflow holds and pins protect workspaces at either root.
-  The storage view lists both locations for cleanup. Saved selections and
-  recipes still identify the workspace at its original path.
-  New single-signing Android Debug plans that capture their own source and
-  prepare their own package use `tmp/build/mobile/android/`.
-  Standalone iOS Build plans use `tmp/build/mobile/ios/` when their captured
-  runner supports an explicit workspace. The simulator app and DerivedData
-  stay inside the recipe directory and retire with it under the iOS workspace
-  policy. Older commands still build in their source snapshot.
-- New probe compiler caches live under `tmp/cache/compiler/`. Marked legacy
-  caches under `mobile_build/.tools/build-manager/compiler-caches/` remain in place
-  and share one 12 GiB soft budget with the new caches and eligible snapshot and
-  device compiler intermediates. The cache policy uses a one-day age limit and
-  one-hour grace period. The storage view can select marked entries at either
-  location for cleanup.
-- On macOS, Xcode DerivedData is identified using `info.plist`'s `WorkspacePath`
-  under this checkout's generated build folders. Cache display names alone do
-  not establish ownership. The system `/tmp` alias and its resolved path identify
-  the same checkout, snapshot lock and active build. Retain the three newest
-  eligible caches plus caches accessed within one day, subject to a 12 GiB budget. Access within one hour,
-  an open Xcode GUI, matching build processes, snapshot locks and pins protect
-  caches. Failed process inspection skips Xcode cleanup with a diagnostic.
-- Budgets are soft: newest entries, pins, durable workflow holds and active locks
-  always win. Measurement skips links; pressure eviction selects oldest first.
-- Shared SDKs, signing keys, profiles, monotonic counters, existing simulators,
-  persistent deployment workspaces and unclassified evidence are outside this sweep.
-  Xcode's shared module caches, archives and DeviceSupport are also preserved.
+| Owned group | Automatic retention |
+| --- | --- |
+| Numbered provider builds | Three newest plus one day |
+| Source snapshots | Three newest plus five days, 24 GiB soft budget |
+| Device recipes | Three newest plus one day, 12 GiB per platform across both workspace roots |
+| Compiler caches | 12 GiB shared budget, one day, one-hour grace |
+| Metadata-identified Xcode DerivedData | Three newest plus one day, 12 GiB, one-hour access protection |
+| Enrolled legacy build outputs | Three newest plus five days |
 
-Run `python -m logistics_build.build_retention` from the repository root for a JSON preview;
-add `--apply` to remove expired owned outputs. Pruning respects active build locks,
-skips symbolic links and reports filesystem errors. Old saved plans can refer to
-expired snapshots: prepare a fresh plan before running them. Retention preserves
-recent failures within the age/budget policy; protected entries can exceed a budget.
-The numeric families deliberately exclude unclassified historical backup names.
+Budget pressure can retire oldest eligible entries after the grace period. Active leases and `.keep` pins win. Durable workflow holds protect their source/artifacts; independent compiler caches require a pin or active lock. Xcode ownership uses `info.plist` WorkspacePath and active process checks. Shared SDKs, signing keys, counters, main app/data, personal simulators and unclassified evidence stay protected.
 
-For an older named directory directly under `mobile_build/build/`, first review
-its contents and save useful reports, recordings, source backups and recovery
-material under `test-results/`. Then explicitly enroll only disposable output:
+New independent Android Debug and supported iOS Build recipes use `tmp/build/mobile/<platform>/`. Older and mixed-signing recipes can use `mobile_build/.tools/build-manager/workspaces/devices/`; old iOS runners can build in snapshots. Known compiler caches also use `tmp/cache/compiler/` and marked legacy roots. Keep artifact references with their actual workspace. Replan expired inputs.
+
+From the repository root:
 
 ```sh
-python -m logistics_build.build_retention --enroll-output old-disposable-probe
 python -m logistics_build.build_retention
 python -m logistics_build.build_retention --apply
 ```
 
-Enrollment writes `.manager-build-output` and starts a five-day review window;
-it never prunes in the same command. Unknown directories are never enrolled by
-name pattern or swept automatically. Provider roots, canonical build directories,
-missing paths and links are rejected. Producers reusing an enrolled directory
-must hold `build_manager.retention.lease(path)` for the whole operation; the lease
-refreshes its age. Use `.keep` for retained recovery material. SDKs, deployment
-workspaces, logs, credentials and general test evidence remain outside this policy.
-
-For a one-off probe, use `logistics_build.build_retention.scratch(root)` as a context
-manager, or run a command in a disposable working directory:
+Save recovery material first. Explicitly enroll reviewed disposable directories directly under `mobile_build/build/` with `--enroll-output old-disposable-probe`. Enrollment marks the path and starts a five-day window. Producers hold `build_manager.retention.lease(path)`. Temporary probes use `scratch(root)` or:
 
 ```sh
 python -m logistics_build.build_retention --scratch /absolute/path/to/python /absolute/path/to/probe.py --output '{workspace}'
 ```
 
-New scratch runs are created under ignored `tmp/runs/scratch/` and removed on
-normal exit or failure. Save required evidence outside the run before it exits.
-Existing marked runs under `test-results/build-scratch/` retain their original
-paths for saved receipts and recovery. Preview and cleanup recognize both roots
-and keep the newest marked run in each. Older marked runs become eligible after
-one day, with active leases, `.keep` pins and retained workflow holds protected.
-A force-killed command leaves its marked workspace for a later retention pass.
-
-## Guided manager suites and tester acceptance
-
-For adding a file, suite or native case, use the
-[file-responsibility table](../testing/adding-tests.md#decide-which-files-to-update).
-`build-tests.json` supplies execution roots/prerequisites; descriptor `test_suites`
-supplies selectable choices. The adapter connects those choices to phases,
-optional file previews and declared JUnit artifacts. These are separate steps.
-
-`python3 dev.py test-map` keeps schema 1 and the legacy `file_count`/`test_files`
-fields for matching `test*.py` files. `source_count`/`source_files` instead follow
-the declared source roots and patterns; host `standalone_files` identify declared
-drivers outside that filename family. `case_count`/`case_ids` come from explicit
-native/runtime registries. Unenumerated external layers have no invented case
-total. iOS and Android can share source files: source/support counts and runnable
-case counts must not be added as interchangeable coverage.
-
-The descriptor now declares `portable.contracts` (tooling contracts under
-`Python/tests/tooling`), `desktop.ui` (application/UI checks under
-`Python/tests/application`), `android.native`, `android.runtime`, `ios.native`,
-`ios.runtime`, `android.incoming`, `ios.incoming` and `release.acceptance`. These map existing owners into contracts, UI, native
-and acceptance groups without moving their fixtures or imports. Full Test retains
-its canonical suite inventory. A named host suite intersects its filename pattern;
-native and release suites reject focused patterns. Named selection on hosted/VM
-backends is explicitly unsupported rather than silently broadened.
-
-The incoming-file suites build a disposable receiver with the normal app entry
-point and native receivers, plus a separate source app. Each suite creates a
-fresh sender and receiver pair for the phone, cleans it up, then repeats on the
-tablet. Transport copies synthetic fixtures only into the source app; the
-system Sharesheet or Files Open With menu performs delivery into Logistics.
-These local suites use the current **On My Phone / On My Tablet** route and
-retain byte, filename, lifecycle and cleanup receipts under ignored test
-results. See [incoming-file validation](mobile-preparation.md#incoming-files-and-inbox)
-for the platform boundaries. They do not replace the canonical native/runtime
-inventories or release acceptance.
-
-The isolated regression runner accepts `--junit PATH` alongside its JSON timing
-report. It retains measured cases, failure messages, skips, subtest/fixture errors
-and failed/crashed module gates. Native reports expose their canonical case IDs;
-when the native runner supplies no per-case duration, the manager displays an
-unknown duration rather than dividing total time or reporting an invented value.
-Whole-command parity checks remain explicitly single integration gates.
-Regression fixtures discard inherited manager profile and account-default inputs.
-Their temporary settings cannot read or overwrite the operator profile used to
-launch the plan; each fixture supplies its own settings and destinations.
-
-Reviewed Firebase/TestFlight workflows now run full tooling contracts, desktop UI,
-mobile-host contracts, the complete native inventory and runtime acceptance before signing/preparation and the separately approved upload.
-The gate checks source/dependency IDs, case inventories, actual runtime platform,
-required iPhone/Duo/iPad release families, and owned simulator cleanup. Standalone
-iPad coverage remains optional; reviewed TestFlight delivery always requires it. Missing,
-failed or skipped native/runtime coverage blocks the prepared delivery. The
-local iOS backend builds pinned CPython 3.14.7 and runs the complete core inventory
-in a separate owned disposable simulator. `ios.native` selects the native UI
-families; `ios.runtime` selects only the interpreter preparation, core tests and
-cleanup, requiring an iPhone fixture rather than the Duo/iPad inventory. Full Test
-and reviewed TestFlight delivery include both. Generated runtime receipts take
-precedence over the legacy `LOGISTICS_IOS_RUNTIME_EVIDENCE` fallback; host reports
-cannot satisfy the gate.
-
-For full native UI reproduction in an isolated QA application, the existing
-`mobile_build.validation.document_storage_tools` runner accepts
-`--probe native-suite` on iOS and Android. It invokes the unchanged native suite,
-uses its normal 30-minute iOS/40-minute Android budgets, retains timing/failure
-diagnostics and removes its owned app and device. The iOS runner prints progress
-from completed case checkpoints. A timed-out WebView render also records native
-attachment, loading and ancestor visibility state; these diagnostics do not retry
-the render or change its acceptance deadline.
-
-CPython runtime preparation delegates through the preserved
-`logistics_build/mobile_runtime.py`, `logistics_build/ios_runtime.py` and `logistics_build/ios_testbed.py`
-entry points to the pinned manager's `cpython_mobile` and `cpython_testbed`.
-Logistics selects the CPython revision/archive digest, wheel pins, OpenSSL
-configure arguments, Android library and iOS framework paths, native ARM host
-requirement and iOS 15 minimum in `logistics_build/mobile_runtime_tools.json` and its
-adapters. Payload assembly, dependency requirements, `mobile.smoke` arguments,
-manifest/case/platform verification and owned simulator cleanup remain here.
-The manager performs verified downloads, upstream-source checks, compiler setup,
-prepared-cache validation, offline wheel installation and testbed cloning/setup.
-
-Existing cache roots, `mobile-runtime.lock`, `manager-wheels`,
-`prepared-manager.json` and `prepared-manager-ios.json` are retained. No cache
-migration or automatic rebuild of changed receipts is performed. Android reuse
-also checks the receipt's recorded archive digest, version and target; iOS reuse
-continues to require the selected toolchain and framework digest. Prepared
-artifacts do not establish test acceptance. Portable fixtures cover cold/reused
-preparation, corrupt downloads/caches, compiler cancellation/environment
-restoration, testbed adaptation and owned cleanup. This extraction was not a
-new native Android/iOS runtime acceptance run.
-
-`logistics_build/ios_testbed.py` adapts only the generated upstream test app: it adds a
-real window-scene delegate and configuration, and raises the fixture's deployment
-minimum to iOS 15 for current Xcode SDKs. The pinned CPython source, interpreter
-and XCTest/core test inventory are preserved. The same adapter runs in the hosted
-iOS runtime workflow. Local execution retains raw Xcode output and normalized
-system-log output, verifying the exact staged-source digest, native platform,
-complete case count, zero skips and successful owned cleanup. The report records
-toolchain, dependency/framework checksums and both project and manager clone
-adapter identities. The hosted workflow explicitly installs the exact manager
-pin before invoking the preserved standalone testbed script.
-Existing Prepare-only operations continue to produce development
-preparation without implying native release acceptance.
-
-These changes use `build_manager.reporting` from the companion manager UI change.
-Local editable installations can validate the integration now. The committed dependency
-pin selects the reviewed manager implementation containing that module. Its manager
-and commonUtils commits must be made available remotely before hosted or fresh
-pinned setup can consume it; local pinning does not push, dispatch or upload. Changing the descriptor requires
-renewed manager trust. Portable regression checks do not establish native mobile
-or live provider acceptance.
-
-## Local guest setup with unpublished manager pins
-
-Set **tools.manager_checkout** to an explicitly reviewed local manager checkout
-when its pinned commit is not yet available remotely. Linux and Windows guest
-backends verify the selected commit is present in that checkout and its real commonUtils
-submodule against the
-project's declared manager pin. They transfer committed Git sources only into the
-owned guest workspace; ignored/private checkout files are excluded. No sibling
-checkout discovery, push or hosted dispatch is needed. Leaving the setting empty
-retains explicit remote pin installation.
-
-The Linux transport stages its own supervision helper outside project source.
-Guest dependency synchronization reinstalls the exact staged manager afterward,
-so the project lock cannot silently remove the external engine. Windows manager
-sources are scoped to the operation and removed with collected test work; reusable
-prepared interpreter/tools remain in their separately owned preparation workspace.
-Native Windows results record both OS architecture and Python platform: x64 Python
-on a Windows ARM guest is emulated x64 coverage, not a physical Windows x64 receipt.
-
-Each platform check now runs through the manager's own process-tree supervisor,
-retaining a streamed per-check log and result under the run's results directory.
-Timeouts retire the owned descendants, including Windows interpreter redirectors,
-instead of killing only the immediate process and waiting on inherited pipes.
-Windows shared/app budgets allow 30 minutes each for the declared cold x64-on-ARM
-run; the required check inventory is unchanged. Guest phases give cooperative
-remote cancellation time to collect evidence and retire owned work.
-
-A checkout may have advanced beyond the declared pin: transfer selects the exact
-recorded commit from that explicit repository without resetting its branch or
-including later edits. Guest installation still requires the transferred HEAD
-and commonUtils revision to match the pin exactly.
-
-## Dedicated guest prerequisites
-
-Windows shared/application filesystem suites create real symbolic links. In the
-manager's Test machines dialog, select Windows and explicitly approve **Allow
-Windows filesystem tests…** for the dedicated guest. Its initialization policy
-is retained outside the VM bundle and reapplied when that bundle is recreated.
-A normal-user symlink probe establishes this capability; the complete platform
-suite must still pass. Existing personal or held guests must not be substituted.
-
-The Fedora desktop suite also needs the OS libraries declared by the project's
-`Python/tests/platform/fedora.Containerfile`, including NSS, NSPR and GTK3 for
-Qt WebEngine. Provision those project prerequisites through the authorized
-dedicated-guest setup channel; do not grant the normal test account passwordless
-sudo or disable browser sandboxing. The manager's generic readiness check alone
-does not establish project dependency readiness. Fedora 44 ARM64 is labelled as
-such, independently of historical Fedora 43 container or Ubuntu receipts.
-
-Parallels may return error 255 before establishing a guest session. Retain the
-failed attempt and confirm its owned workspace state before retrying. Tests are
-never automatically replayed after an ambiguous transport failure. Explicitly
-idempotent Linux manager staging, plan writes, evidence reads and owned cleanup
-retry known session-admission/lost-job-handle failures at most three times.
-Windows owned cleanup retries only its known lost-job-handle error. Ownership is
-checked on every attempt; source creation, test execution and publication are
-never covered by this retry policy.
-
-Linux plan files also travel as ASCII stdin payloads, rather than embedding
-source/settings JSON in Parallels command arguments. The owned write checks the
-workspace token, rejects destination symlinks and assigns the normal test account.
-This avoids misleading session errors when a legitimate plan exceeds Parallels'
-command-line limit.
-
-## Hosted desktop manager bootstrap
-
-The desktop workflow supplies `LOGISTICS_MANAGER_CHECKOUT` for its explicitly
-cloned, exact-pin manager. The Fedora container creates its own exact-pin checkout
-and supplies the same reference. After the locked dependency sync, the platform
-runner verifies and reinstalls this manager into the selected interpreter before
-starting checks. Dependency sync removes packages outside the project lock; an
-installation performed only before sync does not satisfy this requirement.
-
-
-## Independent mobile validation and shared resources
-
-Android device journeys accept the declared per-run field
-`devices.android_connections`, a JSON object mapping selected hardware IDs to
-explicit ADB serials. `logistics_build.manager_devices` validates and captures the mapping
-in the hash-bound recipe without changing saved metadata or discovering devices.
-Installation retains the existing hardware-identity check for mapped transports.
-This supports USB deployment when a saved wireless endpoint has expired. Portable
-device contracts cover malformed values, unselected recipients and saved-setting
-preservation; actual emulator and device acceptance remain separate evidence.
-
-Android and iOS journey validation branches are independently eligible within the
-manager worker limit. The adapter no longer inserts a cross-platform admission
-phase or reserves a generic whole-run mobile-device session. It retains its
-per-step host mobile-build, project workspace, Android SDK/device workspace,
-signing-keychain and provider destination requirements. Shared build capacity is
-one slot by default; independent checks can proceed while another branch builds.
-Within-platform dependencies, including iPhone/Duo/iPad cleanup order, remain
-unchanged. A platform failure still blocks only destinations requiring that gate.
-
-The manager runs scoped cleanup as soon as its own prerequisites finish; unrelated
-platform work does not delay it. Whole-workflow cleanup retains its broader owned
-process retirement boundary. Resource contention is shown explicitly as Waiting
-for shared resource with the resource name, declared capacity and competing step
-requirements in the selected subtask details.
-
-Portable adapter fixtures run the actual generated dependency graph with harmless
-commands. They prove independent mobile contract steps overlap and the shared
-build steps do not overlap. Eighteen journey contracts and eleven adapter
-contracts pass with the project's isolated mobile interpreter and the current
-manager source. Test-generated settings are isolated from real checkout profiles.
-These checks do not establish simultaneous native hardware acceptance; no VM,
-physical device, signing, upload or hosted dispatch is started by these fixtures.
-
-Existing inspected/saved plans keep their original dependency graph. Restart the
-manager after updating and inspect a fresh plan to use independent branches.
-
-## Shared primitive consolidation
-
-The local consolidation delegates advisory locks, explicit private atomic writes
-and line-oriented diagnostic filtering to commonUtils through manager adapters.
-Logistics snapshot file hashing and Firebase APK reporting use bounded shared
-SHA-256 reads; source fingerprint bytes and artifact digest formats are unchanged.
-The manager's CPython preparation uses shared verified downloads and bounded
-file/member hashing, retaining its cache paths, pins and corrupt-cache rejection.
-JUnit report publication and local build-number reservations also use shared
-atomic byte writes; reservation locking and remote uniqueness remain
-manager/provider responsibilities. Local manager test manifests hash files with
-bounded reads while retaining their existing fingerprint format.
-
-Project policy, manager orchestration and platform-specific process ownership stay
-with their current owners. Shared API contracts are documented in commonUtils.
-The adopted versions are recorded by the `Python/commonUtils` gitlink and
-`build-manager-dependency.json`. Use the normal project tooling update to install
-the declared manager revision; working-tree changes alone do not update either pin.
-Portable/offscreen tests cover the consolidation; Windows sharing/locking branches
-use synthetic fixtures and do not establish new native device or Windows acceptance.
-
-## Explicit device-only runs
-
-Android/iOS development-device destinations permit zero selected test platforms
-for Debug build/install. Selecting tests retains their dependency gates. Release
-device packages still require their native target's acceptance. The private saved
-`Boox Deployment (excl. Testing)` preset keeps the same selected hardware, Debug
-variant, existing Beta signing and verified USB/paired Wi-Fi fallback as its
-testing counterpart; device metadata is not checked into Git.
-
-Fresh device plans install on explicitly selected recipients without a separate
-per-install approval prompt. The executor still verifies captured artifact hashes
-and records operation intent, and the adapter checks hardware, package and signing
-compatibility before an in-place update. Unknown attempts are never blindly
-replayed. Older captured plans keep their original approval requirement. Provider
-uploads and GitHub publication retain artifact-specific review.
-
-iOS and Android runtime preparation and tests share the project runtime resource,
-matching their common `mobile-runtime.lock`. Combined runs queue these phases
-instead of failing with workspace contention; native UI tests retain their own
-platform resources.
-
-Host-suite reuse fingerprints the captured tracked inputs, selected command, final
-settings/environment and the actual test interpreter's OS, architecture, executable
-digest and installed package versions. Input probes run before receipt lookup;
-changed or unavailable input evidence causes fresh execution without certifying the
-old key. Reused XML/JSON evidence is retained with its original run provenance.
-The commonUtils, portable, desktop-UI and mobile-host phases on the same configured
-Mac use one complete host environment so identical checks can share results. Native
-platform/device acceptance is not classified as a portable host-suite equivalent.
-
-## Hosted release evidence
-
-The source-release workflow checks authenticated GitHub Actions records for
-complete successful platform/native/runtime workflow families at the exact source
-commit. Evidence must come from this repository's push or dispatch, include every
-required job, and be at most 24 hours old. Missing, skipped, failed, stale or
-unavailable proof runs that family afresh. The retained evidence artifact links
-the accepted run IDs and source. Packaging/reproducibility checks and publication
-remain required. The selector consumes completed GitHub workflow records.
-
-Hosted Android runtime collection belongs to `logistics_build/android_runtime_hosted.py`.
-It reads the app-private receipt from its owned emulator with a 1 MiB limit and
-retains it on the host as `android-receipt.json`. It verifies the staged manifest,
-runtime identity, expected cases and
-absence of skips. Raw receipts remain diagnostic evidence on failure. Canonical
-`android-result.json` and `android-result.receipt.log` are published only after
-owned emulator teardown, final diagnostic handling and scratch retirement succeed.
-Once the emulator session starts, the primary failure survives secondary
-collection/cleanup errors. Session-entry failure handling remains with the pinned
-SDK session; an entry failure followed by cleanup failure can still mask the
-entry error. Logcat remains best effort and can record an error marker.
-`test_android_runtime_hosted.py` uses
-host fixtures for these failure paths and does not certify hosted adb transport
-or native behavior. Local runtime results remain a separate acceptance scope.
-
-## Shared test environment settings
-
-Project settings → **Test environments (local and GitHub)** edits the tracked
-`test-environments.json` file. Save changes locally; this does not commit, push,
-install SDKs, create machines or dispatch a workflow. Machine paths, signing and
-credentials remain in the private project profile. Existing Android image/model
-rows show the derived values; edit their shared fields in Test environments.
-
-The current profile selects macOS26 (`macos-26`), Windows11 ARM
-(`windows-11-arm`, with x64 Python matching the local Windows bridge), and
-Fedora44 on ARM. GitHub's Ubuntu24.04 ARM job hosts the one Fedora desktop
-container; it does not run a second Ubuntu desktop suite. Desktop/build Python
-is 3.12.2. Native iOS uses the 27.1 SDK series with explicit ordinary iPhone/iPad
-27.0 and Duo27.1 runtimes. Missing or different versions fail before acceptance;
-there is no automatic substitution of another family or runtime.
-
-Android native tests share API36 and the `pixel_9` hardware profile. The local
-accelerated emulator uses ARM64, while the hosted Linux/KVM emulator uses x86_64.
-Both ABIs and runner labels are visible settings. The hosted CPython runtime's
-managed emulator is configured from the same API and Google APIs image family;
-its upstream testbed hardware fixture remains separate from native app geometry
-acceptance. Native and core-runtime suites remain required. CPython source and
-its verified build recipe remain pinned in `mobile_runtime_tools.json`.
-
-A numbered runner label pins an OS family, not the provider's exact patch image.
-The actual OS, architecture, interpreter, dependencies and SDK are still recorded
-in evidence. Existing receipt matching remains conservative: these settings do
-not authorize reusing results across differing toolchains. Environment changes
-participate in input identities and therefore invalidate affected reusable proof.
-GitHub reads the committed file through `test-environment.yml`; private GUI
-profiles are never copied to GitHub. The release evidence selector follows stable
-platform job names, so changing a runner label does not silently break reuse.
-
-
-## Test structure preflight and smoke gates
-
-`build-tests.json` declares `test_structure.command` and its configured interpreter.
-The external manager's test-manifest protocol runs that project-owned checker as
-`test-structure` before tests; Logistics uses
-`python -m logistics_build.test_structure --check`. The checker validates the
-captured checkout's `test-structure.json` roots and enum declarations without
-importing tests. A malformed source blocks test execution with its path and reason.
-The manager's protocol is documented in its own `docs/development/test-manifests.md`;
-shared enum/validator APIs are documented in commonUtils' own testing reference.
-
-Each suite opts into a `<suite>.smoke` phase through `smoke_args`. All selected
-smoke phases precede broad regression phases, preserving shared-library prerequisite
-order. The standard desktop platform plan runs the full smoke stage first and then
-selects regression and extended cases. Both parts are required, and each reports
-its own results. Smoke runs fresh. A matching receipt can satisfy the later phase
-for its exact inputs and arguments. Developer full runs and separately selected
-suites keep their existing stage selection. Manager dependencies leave downstream
-phases unrun after a failed gate. Independent diagnostics and always-run cleanup
-can still complete. Local direct runners default to diagnostic mode. With
-`--mode fast`, smoke gates later work. `--fail-fast` stops at the first failure.
-See [testing](../testing/testing.md#execution-stages-and-failure-policy) for profiles and reports.
-
-Logistics adds this checker to native preparation/testing plans too, before builds
-or device preparation that lead to tests. Desktop environment bootstrap may run
-first to provide the configured interpreter. Remote guests use their captured
-platform runner's preflight; hosted workflows validate checked-out sources. These
-checks inspect test structure, not SDK availability or native correctness.
-
-The manager protocol change and commonUtils enum must be available in the versions
-used by consumers. Publish those dependency commits and update the pinned manager
-and submodule references together when publishing this refactor; local editable
-checkouts do not update a CI dependency pin automatically.
-
-Validation-only multi-platform journeys keep ordinary iPhone, Duo and iPad native
-coverage, as delivery journeys do. The shared Fedora version must match the
-dedicated guest; the current guest is Fedora44. A mismatch stops before guest
-setup and remains a failed attempt rather than silently using another version.
-
-### Testing uncommitted manager changes locally
-
-For a validation-only journey, select **Manager source for local tests → Current
-local manager edits (tests only)**, or pass
-`--run-value testing.manager_source=working-tree-local` to the CLI. This captures
-the owning manager checkout's public source, tests and documentation at an exact
-content identity. Tracked changes and new files under declared public source
-roots are transferred; arbitrary untracked root files and private caches are not.
-The captured identity is checked before transfer, after copying, and in the
-guest before installation. Changed or tampered inputs stop the attempt.
-
-The manager's base commit and its own commonUtils dependency must still match the
-project's committed pin. Default transfers remain strict committed-source
-transfers. Working manager source cannot authorize delivery or GitHub execution;
-its results are local development evidence and do not update any release pin.
-
-
-## Shared manager integration APIs
-
-The adapter reads operation/backend choices from build-project.json through
-build_manager.adapter_sdk. VM plan submission, evidence collection/conditional
-cleanup and Windows pinned-tool preparation use build_manager.guest_workload.
-Logistics retains source membership, container/platform setup, dependency pins,
-application gates and storage policy. The descriptor explicitly lists optional
-adapter actions so the manager can expose supported storage and verification UI.
-
-The declared manager revision supplies `adapter_sdk` and `guest_workload`.
-An explicit local manager used for candidate compatibility tests must still match
-the reviewed dependency contract before adoption. Portable contract results do
-not establish hosted dispatch or native VM acceptance.
+Copy needed evidence to ignored `test-results/` before exit. New marked scratch runs live in `tmp/runs/scratch/`; marked legacy runs keep their original paths. Use explicit path/token or UUID adoption for legacy probes and simulators.
 
 ### Project-owned native prerequisite setup
 
-After `python3 dev.py setup desktop` and `python3 dev.py setup mobile`, use
-**Project tooling → Update project tooling…** or
-`python -m build_manager.cli tooling --project NAME --update --confirm`.
-Besides repairing the declared manager SDK, this explicit action prepares Go
-1.26.9 and a Python 3 compatible, pure langdetect 1.0.9 wheel when this checkout
-has a mobile environment on a supported macOS, Linux or Windows x86-64/ARM64
-host. SDK readiness and native readiness remain distinct in the status message;
-SDK readiness alone does not mean Xcode, Java or Android SDKs are configured.
-Desktop-only or unsupported hosts do not download native prerequisites.
+After `python3 dev.py setup desktop` and `python3 dev.py setup mobile`, choose **Project tooling → Update project tooling…** or run `python -m build_manager.cli tooling --project NAME --update --confirm`. On supported hosts this prepares verified Go 1.26.9 and the pure langdetect 1.0.9 wheel from `native_tooling.json`. Xcode/SDK, Java and signing have separate setup. Preserve an exact existing Go selection. Move conflicting Go or unverified legacy wheel contents aside under the guarded tooling lock before repair. Use [tooling readiness and repair](../../user/build-manager.md#project-tooling-readiness-and-repair) for environment recovery.
 
-The tracked native-tool manifest pins official archive/source URLs, byte counts
-and SHA-256 digests. Downloads, extraction and offline wheel construction use
-the owning retention scratch context. The wheel builder uses the mobile
-interpreter's locked setuptools/wheel, without dependency installation or build
-isolation. Verified tools are published atomically to the existing project tool
-paths. The installed Go SDK and wheel receipt are persistent prerequisites,
-not disposable compiler caches; this action retains no historical SDK versions
-or downloaded archives. Scratch is removed on normal completion and remains
-eligible for the existing owned-scratch cleanup after interruption.
-
-An exact existing Go selection, including a read-only external reference, is
-preserved. Conflicting Go selectors and unverified nonempty wheel directories
-are never replaced: preserve their contents and move them aside before retrying.
-The existing environment/workflow exclusion and unfinished-mutation recovery
-policy also covers this action. Readiness and local build admission only inspect
-selected versions and wheel integrity; they never install tools. Runtime-only
-validation does not require the app wheel or Go. Xcode, Android SDK and signing
-configuration retain their existing separate setup requirements.
-
-For a legacy manually prepared `release-wheels` folder, preserve it before the
-first repair; its unrecorded bytes are not silently adopted as verified output.
-The following existing guarded sync action moves the whole folder into ignored
-evidence without deleting it. Run from the project root, using
-`mobile_build/.venv/Scripts/python.exe` instead of `bin/python` on Windows:
+To preserve a legacy unverified wheel folder, run the guarded move from the root. On Windows change the child interpreter to `mobile_build/.venv/Scripts/python.exe`. Then rerun the tooling update.
 
 ```sh
 python3 -m logistics_build.tooling_bootstrap sync --venv mobile_build/.venv -- \
@@ -960,107 +135,18 @@ print("Preserved legacy wheels:", target)
 '
 ```
 
-An active workflow blocks the move. Enrolled checkouts restore their tooling
-before this guarded action returns; otherwise run the normal explicit tooling
-update afterward. Keep the preserved folder until its contents are no longer
-needed. No corresponding Go migration runs automatically: an existing exact Go
-reference remains intact, and a conflicting selection requires deliberate
-preservation before replacement.
+## Hosted release evidence
 
-On Windows the helper validates the held project lock and a bounded, nonlinked
-root/nonce launch capability, rather than assuming the venv redirector's parent
-PID is the manager. This capability is not a durable mutation ledger or a
-replacement for the manager's Windows process ownership. The existing limitation
-for abrupt standalone Windows parent termination remains; no restart safety is
-claimed by the capability record.
+Hosted reuse requires authenticated successful workflow families for the exact source, all mandatory jobs and at most 24 hours of age. Unavailable, stale or incomplete proof triggers fresh required checks. Packaging and publication still run. [Signed local coverage](build-tooling.md#signed-local-coverage-in-hosted-releases) is a separate input-bound mechanism.
 
 ### Reusing automatic hosted validation
 
-With verified-result reuse enabled, normal GitHub validation can adopt one
-matching automatic branch-push run instead of dispatching a duplicate. Intake
-requires the exact repository and head repository, workflow ID/path, commit,
-branch and a creation time within 24 hours. The selected target must be covered
-by reviewed full-scope push defaults; unsupported inputs and changed workflow
-contracts stop adoption with an explicit fresh-run choice. Workflow edits require deliberate updates
-to the tracked push-contract digest and its regression check.
-
-The immutable intake receipt identifies its **existing-run** origin, remote URL,
-creation time and run attempt. Observation rechecks those facts on every SDK
-poll and requires every job in the shared release coverage policy to succeed;
-a top-level green status or a partial target run is insufficient. A matching
-failed automatic run remains a failed validation gate. Explicitly disabling
-reuse requests a fresh dispatch; observation errors never dispatch another run.
-Multiple eligible automatic runs require inspection or that explicit fresh-run
-choice rather than an arbitrary selection.
-
-Automatic runs are shared evidence. Cancelling or timing out a local observer
-leaves them running and retains their saved identity. Original manager-dispatched
-runs retain their existing receipt, resume and cancellation behavior. This
-coalescing does not remove any selected platform validation or delivery review.
-
-
-### Explicit guest SDK source readiness
-
-Before VM setup or start, explicit manager sources must contain the selected
-project's exact manager and commonUtils commits. Read-only lookup of an existing
-guest in the inventory happens first; an unavailable guest does not materialize
-a source snapshot or repair the SDK cache. For an existing project-owned tooling cache
-with matching ownership proof, the adapter can refill missing Git objects from the
-actual installed, verified project-pinned SDK checkout. This is a bounded local
-file-protocol transfer: it does not fetch from a remote, change HEADs, reset source,
-install an environment or rewrite the selected profile. A successful repair is
-recorded in the platform plan's `guest_source_readiness` source field and an
-`objects-restored` diagnostic. Source readiness is checked again before transfer.
-
-Arbitrary developer checkouts, dirty caches, linked/external Git metadata and
-working-tree-local overlays are never automatically repaired. Removed or
-unrecognized cache trees fail with the declared revision, selected checkout and
-setup guidance. Clear an obsolete explicit source to use the ordinary published-pin
-guest installation, or update tooling through its owner. These checks preserve
-normal Git object and ownership boundaries; they do not guarantee remote network
-availability or repair unrelated guest prerequisites.
+With reuse enabled, one unambiguous branch-push run can satisfy matching validation. Verify repository/head repository, workflow contract, branch, commit, target coverage, creation time and exact attempt. Observe the immutable receipt. A matching failed run fails its gate; an ambiguous match needs review or explicit fresh dispatch. Cancelling an observer leaves an adopted shared run active.
 
 ## Retained source-publication recovery
 
-New GitHub Release plans include a stable reviewed publication owner and an atomic
-operation receipt. Before changing a branch or tag, the adapter checks that the
-selected manager provides the exact-attempt and bounded recovery APIs. A missing
-API stops the new path before any external effect; the older basic release path
-remains available with its original existing-tag rejection.
+New plans journal tag/write intent against the reviewed owner, repository, tag object, commit and gitlink. Resume an existing tag only with that exact receipt. Reconcile legacy or foreign attempts manually. Review the existing ZIP's digest and source/dependency manifests. Metadata repair changes reviewed title/body while preserving draft/prerelease state and assets.
 
-The receipt binds the repository, tag, source commit, commonUtils gitlink and
-reviewed owner. Tag creation and push intent are saved before those writes. An
-existing tag can resume only with matching ownership proof and the exact original
-tag object/source; the adapter never moves an existing tag. Older unjournaled
-operations and a different tag at the same commit require explicit manual
-reconciliation, rather than adoption into a new plan.
+Completion requires valid assets and exact-attempt `evidence`, `package` and `publish` success with terminal visible jobs. The reviewed workflow hash binds this witness. Default hosted validation stays on; a reviewed `testing.github_validation=off` run records its immutable bypass and publishes without hosted test credit.
 
-On resume, the adapter checks any existing public ZIP against its digest and
-source/dependency manifests before attempting recovery. Reviewed notes come from
-the selected source commit through the publisher's shared policy. Metadata repair
-changes only the title and body, then verifies that release ID, draft/prerelease
-state and asset identities remain unchanged. An in-progress draft or missing ZIP
-is observed without creating another release, uploading another asset or publishing
-the draft.
-
-A valid ZIP alone does not pass a release. Completion also requires exact-attempt
-job evidence for successful `evidence`, `package` and `publish` jobs, with every
-visible job terminal and no failed jobs. This project-specific witness is bound
-to the reviewed release workflow's hash: `package` depends on the selected fresh
-or independently verified reused gates, and `publish` depends on `package`.
-An explicitly reviewed `testing.github_validation=off` release instead records
-its owned immutable tag bypass; this source-publication result does not claim
-that hosted tests passed. The default remains `on`, and Full local workflow
-gates are unchanged. Changing that DAG requires reviewing and updating the witness. A stale queued
-aggregate can therefore be reported honestly alongside proven terminal publication,
-without treating a partially populated job list as success.
-
-One automatic failed-jobs rerun is permitted only for a proven artifact-service
-finalization failure: the exact artifact step, successful preceding steps and
-bounded provider log evidence must agree. A cancelled or timed-out job alone is
-insufficient, and product-test failures are never automatically retried. Rerun
-intent is persisted before the single POST. An ambiguous response is reconciled
-using GET requests for that exact next attempt; resume never repeats an unknown
-POST. Observation timeout/cancellation retains the operation for later observation
-and does not cancel or dispatch another hosted workflow. Previous plans, results
-and tester-delivery receipts remain unchanged.
+One failed-jobs rerun is allowed for a proven artifact-service finalization failure with bounded logs and successful prior steps. Save intent before the POST. Reconcile ambiguous responses by GET for the exact attempt. Observation can resume from its receipt after cancellation or timeout.
