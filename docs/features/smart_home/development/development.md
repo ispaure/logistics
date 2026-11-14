@@ -1,80 +1,96 @@
 # Smart Home implementation
 
-See the [desktop guide](../user/user.md) for setup and commands and
-[mobile availability](../user_mobile/user_mobile.md) for platform scope.
+Smart Home sends Philips Hue group commands from desktop Logistics and provides
+standalone scripts for Tautulli playback events.
+
+## Try a color preset change
+
+1. Enable **Smart Home** in desktop **Settings → Features** if needed. Open
+   **Smart Home** and locate **Kitchen → Red**. The page starts with a Kitchen
+   control before any discovery. Leave the button unpressed for this exercise
+   and send the command through the mocked bridge in the test.
+2. In `Python/features/smart_home/ui/page.py`, follow
+   `SmartHomePage._create_room_group()` to `_set_room()`. The Red button sends
+   `State=True` and `Color='Red'` for the named group. In
+   `Python/features/smart_home/philips_hue/api.py`, try changing
+   `COLOR_PRESETS['Red']` from `(0, 254)` to `(0, 230)`.
+3. In `Python/tests/integrations/test_smart_home.py`, change the expected
+   `sat` value in `test_combined_properties_use_one_validated_group` to
+   `230`. That fixture also supplies brightness explicitly to exercise the
+   combined API. The desktop Red button sends power and color only.
+
+Run from the repository root with the desktop environment set up:
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/integrations/test_smart_home.py
+```
+
+Expect four passing tests, including exactly one call for mock group 1 with
+`{'on': True, 'bri': 254, 'hue': 0, 'sat': 230}`. Restore the original preset
+and assertion after the exercise unless you intend to change the shipped color.
 
 ## Ownership and registration
 
-`Python/features/smart_home/__init__.py` declares the feature and delegates to
-`ui_contributions.py`. Its `Feature` contributes Configuration settings and a
-lazy desktop `PageContribution` with ID `smart_home`, order 30 and navigation icon
-`smart_home`. `ui/page.py` owns the Qt page and fixed initial room names.
-`configuration.py` reads effective settings for the feature's `config.ini`:
-`[PhilipsHue] / bridge_address_str`, falling back to `bridge_address`.
-The API strips whitespace and rejects an empty address before creating a bridge.
+`Python/features/smart_home/__init__.py` delegates to `ui_contributions.py`,
+which contributes **Configuration** settings and a desktop page created on
+demand. `configuration.py` reads effective `[PhilipsHue]` settings from
+`config.ini`. It prefers `bridge_address_str` and falls back to the older
+`bridge_address` key when the new key is absent. The API strips whitespace and
+rejects a blank address before creating a `phue.Bridge`. See the
+[desktop guide](../user/user.md#set-up-the-bridge) for setup and pairing.
 
-There is no mobile adapter or `mobile_sources.json` for this feature, and
-`mobile_build/tools.py` excludes it from `SOURCE_OWNERS`. Desktop registration
-must not be interpreted as Android/iOS support.
+The mobile packaging allowlist in `mobile_build/tools.py` omits this feature.
+See [mobile availability](../user_mobile/user_mobile.md) and
+[feature conventions](../../../development/features.md).
 
 ## Hue command boundary
 
-`philips_hue/api.py` uses `phue.Bridge` with the configured address. Pairing is an
-explicit `connect_bridge()` operation. `get_rooms()` returns sorted unique group
-names whose IDs are positive decimal values; it does not filter groups by type.
-Commands resolve an exact name to exactly one positive numeric group ID.
-Duplicate or absent names raise `ValueError` without calling `set_group`.
+**Connect Bridge** calls `connect_bridge()` explicitly. **Find rooms** calls
+`get_rooms()` for sorted unique names of groups with positive decimal IDs,
+regardless of Hue group type. Commands require an exact name matching one group
+with a positive numeric ID. Missing or ambiguous names raise `ValueError`
+before `set_group()`. If discovery lists a name that a command rejects,
+check for duplicate group names on the bridge.
 
-`_group_properties()` validates the requested changes before bridge acquisition:
+`_group_properties()` validates the request before acquiring the bridge.
+State is Boolean. Brightness is an integer from 0 to 254. Hue (0 to 65535)
+and saturation (0 to 254) must be supplied together as integers. A valid named
+color overrides numeric hue and saturation once those inputs pass validation.
+Supply at least one supported property.
 
-- State must be a Boolean.
-- Brightness is an integer from 0 through 254.
-- Hue and saturation must be supplied together, as integers in 0–65535 and 0–254.
-- Color must name a preset in `COLOR_PRESETS`; a preset replaces supplied hue/saturation.
-- At least one supported property must be requested.
-
-The public combined command resolves the group and makes one `set_group` call.
-Hue error entries in its response raise `RuntimeError`; network/library errors
-propagate to the caller. Separate state/brightness/color helpers each make their
-own call. This is command submission, without live state polling or rollback.
+The combined command sends one `set_group()` call. A Hue error entry becomes
+a `RuntimeError`. Network and library errors propagate to the UI, which displays
+them below the controls. Check the address, connectivity, authorization and
+exact group name before retrying. The page submits commands without live state
+polling or rollback.
 
 ## Desktop lifetime
 
-`SmartHomePage` uses `OperationProgress` for bridge calls. `_run()` ignores a new
-request while busy and disables room, connect and discovery controls until
-completion. `_finished()` restores them and replaces room controls only when a
-successful result is a tuple. An empty tuple yields an explicit no-rooms message.
-`prepare_close()` requests cancellation and returns false while busy; the task
-checks cancellation before entering the callback. It cannot interrupt or reverse
-a bridge operation already underway. Completion emits `idle`.
+`SmartHomePage._run()` uses `OperationProgress` to run bridge calls off the GUI
+thread. It ignores new requests while busy and disables the room, connect and
+discovery controls until `_finished()` restores them. A successful tuple result
+replaces the room controls. An empty tuple displays **No rooms found on this
+bridge.**
+
+If the page is closing while busy, `prepare_close()` requests cancellation and
+returns false. The worker checks cancellation before calling the bridge.
+A request already in progress runs to completion, then the page emits `idle`.
 
 ## External automation
 
-The three `tautulli/plex_*_living_room.py` modules execute at import/run time and
-each send state, brightness and color as separate operations to Living Room.
-Play and pause use brightness 20, stop uses 254; all use hue 10000 and saturation
-150 and turn power on. They do not inspect event arguments, retain a previous
-scene, subscribe to Plex events or run a listener inside Logistics. Tautulli owns
-invocation and the Python environment/import path.
+The three `tautulli/plex_*_living_room.py` scripts execute at import or run
+time. Each sends three successive calls to turn on Living Room, set brightness
+(20 for play/pause, 254 for stop), and set hue 10000 and saturation 150. A
+later failure can leave the earlier calls applied. Tautulli owns event routing
+and supplies the Python environment with `Python/` on the import path. See
+[Tautulli setup](../user/user.md#tautulli-automation).
 
 ## Validation scope
 
-`Python/tests/integrations/test_smart_home.py` contains mocked bridge regression
-contracts for missing-room safety, a combined single call, invalid-value rejection
-before bridge access and Hue response errors. The implementation also rejects
-ambiguous group names, but this file does not directly test that case.
-
-`Python/tests/application/test_integration_workers.py` checks that Hue work runs
-off the GUI thread, closing waits while busy, controls recover and errors display.
-`Python/tests/application/test_ini_settings.py` covers feature configuration
-location. These tests do not establish real bridge pairing, physical bulb state
-or Tautulli event delivery.
-
-This documentation audit used source/test inspection and static Markdown/link
-checks only under the release quiet hold. No tests, Qt sessions, builds or device
-runs were launched. Real Hue/network and Tautulli acceptance remains unverified
-by this audit; mobile acceptance does not apply to the absent mobile feature.
-
-Follow [feature conventions](../../../development/features.md) when extending
-registration. Keep device/service integrations in this feature, configuration in
-its owner, and presentation in `ui/`; document reusable shared APIs in commonUtils.
+The mocked bridge tests cover missing-room refusal, single-call submission,
+invalid-value refusal before bridge access and reported Hue errors.
+`Python/tests/application/test_integration_workers.py` covers the Qt worker,
+close deferral, error display and control recovery.
+`Python/tests/application/test_ini_settings.py` covers both address keys.
+Pairing, physical bulb state and event delivery through Tautulli require
+separate live checks.
