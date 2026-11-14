@@ -19,6 +19,8 @@ Expect synthetic folders and documents to keep their UUID identities across refr
 
 The experimental transaction uses an owned private directory, exclusive lease, revision checks under stopped Xochitl/rm-sync, a preserved original and atomic same-filesystem rename. A detached systemd job handles publication and bounded restart. Keep the token before submission. Reconcile unexpected stages or changed destinations before retrying. Require terminal job, service-restoration receipt and expected owned files before cleanup. Retain recovery files and lease on failed restart. See [Xochitl storage guidance](https://developer.remarkable.com/documentation/xochitl).
 
+New transactions record the kernel boot ID before submission. Publication and recovery refuse a changed or unknown boot without service actions. Inspection reports boot continuity and the unit's `LoadState`; an absent transient unit is not proof of completion. Reconcile retained evidence after a reboot instead of replaying recovery. Cleanup rejects any outstanding lease or nonregular member before reading receipts or removing files. These host-tested guards do not qualify the restart procedure on a tablet.
+
 Before enabling native mutations, qualify fresh IDs and asset publication for upload/copy, real collection identities and ancestry for create/move, and trash/restore semantics on owned synthetic content. Separately exercise conflicts, disconnects, restart/index visibility and recovery on the exact hardware and firmware. Use native USB import, pen edit, re-export and member comparison for package acceptance. [Official transfer instructions](https://support.remarkable.com/articles/Knowledge/importing-and-exporting-files)
 
 ## Evidence and exact device work needed
@@ -29,3 +31,11 @@ Before enabling native mutations, qualify fresh IDs and asset publication for up
 - **Cleanup and current status.** Owned inactive transaction files and the stale lease were removed after preserving evidence. Service start times and restart counts stayed unchanged during cleanup. Restart/recovery remains unresolved. Keep the browser read-only and direct-write qualification halted. Synthetic corpus rehearsal is complete. Personal-corpus acquisition and end-to-end acceptance are pending.
 
 Host coverage includes `test_remarkable_transfer.py`, `test_remarkable_mutations.py` and `test_remarkable_transaction.py` under `Python/tests/notebooks/`.
+
+## Remaining acceptance
+
+1. **Native macOS save dialog:** one user-operated session with synthetic local files must cover Replace, decline then Cancel, and a new name without the suffix. Verify one replacement confirmation, preserved bytes on decline and the final `.rmdoc` destination. This requires no tablet or SSH login; mocked picker and checked-publication tests already cover the backend.
+2. **Read-only corpus:** use the existing stable-ID enumeration/export contract with the corpus owner in a separately authorized session. Preserve the completed USB fixtures and native organization receipts; do not repeat those manual exercises.
+3. **Two-way browser:** resolve the unqualified restart/index-refresh contract before another live write trial. Selected-folder upload, fresh-ID copies, folder creation/recursive operations and their collision/recovery UI remain incomplete. Complete their synthetic checks first, then propose a bounded device qualification for the exact hardware/firmware. The new recovery guards do not authorize resuming the halted batch.
+
+No tablet interaction is required to close the completed temporary-file cleanup. Restoring or renaming the disposable notebook in Trash is optional housekeeping, not a prerequisite for read-only retrieval.

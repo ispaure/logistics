@@ -18,7 +18,8 @@ from .remarkable_ssh import MAX_SIDECAR, UUID
 
 STORE_PATH = '/home/root/.local/share/remarkable/xochitl'
 TRANSACTION_ROOT = '/home/root/.local/share/logistics-remarkable-transactions'
-FILES = ('payload.tar', 'before', 'after', 'apply.sh', 'restart.sh', 'lease-token',
+BOOT_ID_PATH = '/proc/sys/kernel/random/boot_id'
+FILES = ('payload.tar', 'before', 'after', 'apply.sh', 'restart.sh', 'lease-token', 'boot-id',
          'manifest.json', 'original', 'publish', 'outcome', 'outcome.tmp',
          'restart-needed', 'service-state', 'service-state.tmp')
 
@@ -37,7 +38,8 @@ class MetadataTransaction:
 
 def _check_file(path, digest):
     path = quote(str(path))
-    return f'''[ -f {path} ] && [ ! -L {path} ]
+    # set -e does not exit when the left side of an && list fails.
+    return f'''[ -f {path} ] && [ ! -L {path} ] || exit 1
 actual=$(sha256sum {path})
 [ "${{actual%% *}}" = '{digest}' ]
 '''
@@ -49,7 +51,8 @@ def prepare_metadata_transaction(change: MetadataChange) -> MetadataTransaction:
     Metadata alone is atomically replaced. Before/after hashes allow recovery to
     distinguish unchanged, committed and conflicting states without overwriting
     an unexpected edit. An owned lease survives client/unit interruption and is
-    released only after services are restored. Recovery never guesses ownership.
+    released only after services are restored. A changed or unknown boot refuses
+    publication and recovery; an inactive transient unit is not proof of safety.
     """
     if not isinstance(change, MetadataChange) or not UUID.fullmatch(change.identity):
         raise ValueError('Choose a native metadata change.')
@@ -79,9 +82,33 @@ stage={quote(str(directory))}
 root={quote(str(root))}
 target={quote(str(target))}
 token='{token}'
+read_current_boot() {{
+    current_boot=''
+    IFS= read -r current_boot < {quote(BOOT_ID_PATH)} || return 1
+    case "$current_boot" in
+        ????????-????-????-????-????????????) ;;
+        *) return 1 ;;
+    esac
+    case "$current_boot" in *[!0-9a-f-]*) return 1 ;; esac
+}}
+boot_status() {{
+    [ -f "$stage/boot-id" ] && [ ! -L "$stage/boot-id" ] || return 1
+    recorded_boot=''
+    IFS= read -r recorded_boot < "$stage/boot-id" || return 1
+    [ -n "$recorded_boot" ] || return 1
+    read_current_boot || return 1
+    if [ "$recorded_boot" = "$current_boot" ]; then echo same; else echo changed; fi
+}}
+require_same_boot() {{
+    [ "$(boot_status)" = same ] || {{
+        echo 'Transaction boot changed or is unknown; retain evidence for reconciliation.' >&2
+        exit 1
+    }}
+}}
 '''
     apply = prefix + f'''
-[ ! -e "$root/active" ] && [ ! -L "$root/active" ]
+require_same_boot
+[ ! -e "$root/active" ] && [ ! -L "$root/active" ] || exit 1
 ln "$stage/lease-token" "$root/active"
 [ "$(cat "$root/active")" = "$token" ]
 for service in xochitl rm-sync; do
@@ -111,6 +138,8 @@ sync
 # A failed lease acquisition must never restart another operation's services.
 [ -f "$root/active" ] && [ ! -L "$root/active" ] || exit 0
 [ "$(cat "$root/active")" = "$token" ] || exit 0
+# An old lease must not restart services belonging to a later boot.
+require_same_boot
 outcome=conflict
 if [ -f "$target" ] && [ ! -L "$target" ]; then
     if actual=$(sha256sum "$target"); then
@@ -134,7 +163,7 @@ mv "$stage/service-state.tmp" "$stage/service-state"
 sync
 rm "$root/active"
 '''
-    manifest = dict(version=1, token=token, identity=change.identity, operation=change.operation,
+    manifest = dict(version=2, token=token, identity=change.identity, operation=change.operation,
                     before_sha256=before_hash, after_sha256=after_hash, guards=guards)
     members = {'before': change.before, 'after': change.after, 'apply.sh': apply.encode(),
                'restart.sh': restart.encode(), 'lease-token': (token + '\n').encode(),
@@ -150,21 +179,26 @@ rm "$root/active"
     # Exclusive mkdir and a private root prevent a repeated attempt from
     # replacing an earlier receipt. A failed upload leaves an inspectable stage.
     launch = prefix + '''
+read_current_boot
 if [ ! -e "$root" ]; then mkdir -m 700 "$root"; fi
-[ -d "$root" ] && [ ! -L "$root" ]
-[ "$(stat -c %u "$root")" = 0 ] && [ "$(stat -c %a "$root")" = 700 ]
+[ -d "$root" ] && [ ! -L "$root" ] || exit 1
+[ "$(stat -c %u "$root")" = 0 ] && [ "$(stat -c %a "$root")" = 700 ] || exit 1
 mkdir -m 700 "$stage"
+printf '%s\\n' "$current_boot" > "$stage/boot-id"
 cat > "$stage/payload.tar"
 '''
     launch += _check_file(directory / 'payload.tar', sha256(payload).hexdigest())
     launch += 'tar -xf "$stage/payload.tar" -C "$stage" ' + ' '.join(members) + '\n'
     launch += _check_file(directory / 'apply.sh', sha256(members['apply.sh']).hexdigest())
     launch += _check_file(directory / 'restart.sh', sha256(members['restart.sh']).hexdigest())
-    launch += f'''systemd-run --quiet --unit={unit} --property=Type=exec \\
+    launch += f'''require_same_boot
+sync
+systemd-run --quiet --unit={unit} --property=Type=exec \\
     --property=RuntimeMaxSec=90 --property=TimeoutStopSec=60 \\
     --property='ExecStopPost=/bin/sh {directory}/restart.sh' /bin/sh "$stage/apply.sh"
 '''
-    inspect = prefix + f'''systemctl show {unit} --property=ActiveState --property=SubState --property=Result || :
+    inspect = prefix + f'''systemctl show {unit} --property=LoadState --property=ActiveState --property=SubState --property=Result || :
+if boot=$(boot_status); then printf 'boot=%s\\n' "$boot"; else printf 'boot=unknown\\n'; fi
 for name in outcome service-state; do
     if [ -f "$stage/$name" ] && [ ! -L "$stage/$name" ]; then
         value=''
@@ -184,7 +218,8 @@ else
     printf 'lease=foreign\\n'
 fi
 '''
-    recovery = prefix + f'''state=$(systemctl is-active {unit} || :)
+    recovery = prefix + f'''require_same_boot
+state=$(systemctl is-active {unit} || :)
 case "$state" in inactive|failed|unknown) ;; *) exit 1 ;; esac
 '''
     recovery += _check_file(directory / 'restart.sh', sha256(members['restart.sh']).hexdigest())
@@ -195,17 +230,18 @@ case "$state" in inactive|failed|unknown) ;; *) exit 1 ;; esac
 case "$state" in inactive|failed|unknown) ;; *) exit 1 ;; esac
 state=$(systemctl is-active {unit}-recovery || :)
 case "$state" in inactive|failed|unknown) ;; *) exit 1 ;; esac
-[ ! -e "$root/active" ] && [ ! -L "$root/active" ]
-[ -d "$stage" ] && [ ! -L "$stage" ]
+[ ! -e "$root/active" ] && [ ! -L "$root/active" ] || exit 1
+[ -d "$stage" ] && [ ! -L "$stage" ] || exit 1
 '''
     cleanup += _check_file(directory / 'manifest.json', sha256(members['manifest.json']).hexdigest())
-    cleanup += '''[ "$(cat "$stage/service-state")" = restored ]
-case "$(cat "$stage/outcome")" in committed|unchanged) ;; *) exit 1 ;; esac
-for file in "$stage"/* "$stage"/.[!.]* "$stage"/..?*; do
+    cleanup += '''for file in "$stage"/* "$stage"/.[!.]* "$stage"/..?*; do
     [ -e "$file" ] || [ -L "$file" ] || continue
-    [ -f "$file" ] && [ ! -L "$file" ]
+    [ -f "$file" ] && [ ! -L "$file" ] || exit 1
     case "${file##*/}" in
 '''
     cleanup += '        ' + '|'.join(FILES) + ') ;;\n        *) exit 1 ;;\n    esac\ndone\n'
+    cleanup += '''[ "$(cat "$stage/service-state")" = restored ]
+case "$(cat "$stage/outcome")" in committed|unchanged) ;; *) exit 1 ;; esac
+'''
     cleanup += 'rm -f ' + ' '.join('"$stage/' + name + '"' for name in FILES) + '\nrmdir "$stage"\n'
     return MetadataTransaction(token, str(directory), unit, payload, launch, inspect, recovery, cleanup)
