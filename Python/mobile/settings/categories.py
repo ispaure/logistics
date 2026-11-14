@@ -126,14 +126,18 @@ class SettingsCategories:
     def reset(self):
         app = self.app
         box = self.category('Reset')
+        box.add(SettingsLabel('Reader history', style=Pack(font_weight='bold', margin_top=16)))
         from .reader_history import controls as history_controls
         history_controls(app, box)
         from .playlists import controls as playlist_controls
         playlist_controls(app, box)
+        box.add(SettingsLabel('Cached documents', style=Pack(font_weight='bold', margin_top=16)))
         box.add(page_button('Clear cached documents', on_press=app.show_saved_files,
                             style=Pack(height=48)))
+        box.add(SettingsLabel('Review local copies of imported documents and remove unneeded copies. Original source files are kept.'))
+        box.add(SettingsLabel('All app data', style=Pack(font_weight='bold', margin_top=16)))
         box.add(page_button('Erase all app data…', destructive=True, on_press=app.show_app_reset, style=Pack(height=48)))
-        box.add(SettingsLabel('Delete private files, local app data, settings and metadata. Review the full scope before confirming.'))
+        box.add(SettingsLabel('Permanently delete local app files, drafts, settings, history and saved credentials. Review the full scope before confirming.'))
         return box
 
 

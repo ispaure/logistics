@@ -149,11 +149,21 @@ locked**. Protected speech can finish prepared notes while locked. Unlock to
 read the next protected note. Closing the document or replacing credentials
 stops its playback.
 
-### Delete playlists
+## Reset and cleanup
 
-Use **Reset → Delete a playlist**, choose it and confirm. **Clear locked
-playlists** removes unreadable encrypted playlist records. Both keep source
-notes.
+**Settings → Reset** separates cleanup into four groups. Each action has a short
+description beneath it explaining what it removes and keeps:
+
+- **Reader history** clears saved reading/video positions or recent-file lists
+  separately. Files are kept. See [reader history](../../user/reader-history.md).
+- **Notes Library playlists** offers **Delete a playlist…** for a chosen playlist
+  and its saved playback position. Unlock protected storage to list its playlists.
+  **Clear locked playlists…** removes records whose credentials are locked or
+  unreadable. Both keep source notes; clearing locked records keeps readable playlists.
+- **Cached documents** opens a review of imported document copies. Original
+  source files are kept when copies are removed.
+- **All app data** opens the full erasure scope and confirmation. This includes
+  local app files, drafts, settings, history and saved credentials.
 
 ## Audio playback
 

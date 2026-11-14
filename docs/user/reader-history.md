@@ -30,3 +30,11 @@ Older LocalCrypt video positions are migrated or retired when that source is nex
 unlocked. Clearing positions while it is locked prevents those old positions from
 returning; cleanup of the old encrypted sidecar happens on next access. These
 controls clear application history, not filesystem backups or external snapshots.
+
+## Notes Library playlists
+
+The same Settings pages include **Notes Library playlists**. **Delete a playlist…**
+removes a chosen playlist and its saved playback position after confirmation.
+Unlock protected storage to see its playlists. **Clear locked playlists…** removes
+encrypted playlist records whose credentials are locked or unreadable, while
+keeping currently readable playlists. Both actions keep source notes.

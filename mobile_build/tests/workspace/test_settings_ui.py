@@ -36,7 +36,7 @@ class SettingsUITests(unittest.TestCase):
             catalog.add(record.id, source.name)
             box = toga.Box()
             controls(app, box)
-            _, delete, clear = box.children
+            delete, clear = (child for child in box.children if isinstance(child, toga.Button))
 
             with patch.object(app.main_window, 'dialog', new=AsyncMock(side_effect=(record.id, False))):
                 app.loop.run_until_complete(delete.on_press())
