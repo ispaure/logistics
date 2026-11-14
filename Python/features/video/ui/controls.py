@@ -39,6 +39,7 @@ class PlaybackTools:
         self.tools_menu = None
         self.seek.setToolTip(
             "Green strip: approximate cached byte ranges. Variable bitrate may shift the time mapping."
+            if self.content.remote else "Seek to a position in the video."
         )
         self.cache_timer = qt.QTimer(self)
         self.cache_timer.setInterval(1000)
@@ -67,7 +68,7 @@ class PlaybackTools:
             return
         try:
             value = self.content.buffered_ranges()
-            self.seek.ranges = value["ranges"] if not value["local"] else [(0, 1)]
+            self.seek.ranges = value["ranges"] if not value["local"] else ()
             self.seek.update()
         except (OSError, ValueError):
             self.seek.ranges = ()

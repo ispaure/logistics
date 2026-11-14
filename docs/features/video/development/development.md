@@ -112,7 +112,10 @@ audio route starts preparation. The controller confirms external video with
 AVPlayer and keeps the same deck and timeline. On route loss or playback
 failure, the picker stays available. VLC waits for the audio route to return
 before resuming. Revocation disables external playback and detaches the item.
-A window reuses its empty AVPlayer for successive requests.
+A window reuses its empty AVPlayer for successive requests, disabling external
+playback when the video controller retires. Startup does not opt into long-form
+automatic route suggestions; iOS's Automatically AirPlay preference owns those
+system notifications, including ones shown while browsing protected media.
 
 Playback starts the receiver handoff while a saved-position seek is pending;
 output stays muted until the seek completes. Loading keeps the known-duration
@@ -179,6 +182,14 @@ rejects unsupported streams and codec configuration changes. The HLS server
 binds the Wi-Fi interface for receiver access and serves only the current
 unpredictable capability URL. It keeps fragments in memory and rechecks
 the source revision and external playback policy during each response.
+Up to four responses hold request slots. A seek that overlaps older responses
+waits up to ten seconds for a slot, rechecking access while it waits. Host
+regressions cover uncached forward/backward video and audio requests, revocation
+during that wait and the busy deadline; they do not establish physical receiver
+behavior. Native fixtures also cover rapid forward skips, direction changes and
+end-of-file clamping while the receiver loads or has a pending seek.
+Failure diagnostics record fragment indices and track IDs or native error
+domains/codes, without logging source filenames or capability URLs.
 Closing the player stops the server and releases its file descriptor.
 Selecting the phone in the same picker returns to
 VLC within the same presentation. At open HEVC GOP boundaries, a fragment can

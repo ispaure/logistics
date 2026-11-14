@@ -212,6 +212,15 @@ class ColourPlayer(qt.QObject):
     def audioTracks(self):
         return self.metadata('audio')
 
+    def audioTrackLabels(self):
+        from features.video.tracks import audio_label
+        return [audio_label(index + 1, title=row.get('title', ''),
+                    language=qt.QLocale.languageToString(qt.QLocale(row['lang']).language())
+                        if row.get('lang') not in (None, '', 'und') else '',
+                    codec=row.get('codec', ''), channels=row.get('demux-channel-count', 0),
+                    sample_rate=row.get('demux-samplerate', 0), default=row.get('default', False))
+                for index, row in enumerate(self.track_rows('audio'))]
+
     def subtitleTracks(self):
         return self.metadata('sub')
 

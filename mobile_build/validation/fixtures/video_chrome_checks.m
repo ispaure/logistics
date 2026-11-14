@@ -457,9 +457,8 @@
                 [self finish:@"Video transport icon or touch target is missing from the controls"]; return;
             }
         }
-        BOOL compactIdentity = !v.tabletop && [v.navigationItem.prompt containsString:v.videoTitle.text ?: @""];
-        if (!compactIdentity && ((v.navigationItem.titleView != v.videoHeader && v.videoHeader.superview != v.view && v.videoHeader.superview != v.controls && v.videoHeader.superview != v.portraitHeader) || !v.videoHeader.window ||
-            v.videoHeader.bounds.size.width < 44 || v.videoTitle.textAlignment != (v.portraitTabletop ? NSTextAlignmentLeft : NSTextAlignmentCenter))) {
+        if (v.navigationItem.prompt.length || (v.navigationItem.titleView != v.videoHeader && v.videoHeader.superview != v.view && v.videoHeader.superview != v.controls && v.videoHeader.superview != v.portraitHeader) || !v.videoHeader.window ||
+            v.videoHeader.bounds.size.width < 44 || v.videoTitle.textAlignment != (v.portraitTabletop ? NSTextAlignmentLeft : NSTextAlignmentCenter)) {
             [self finish:@"Video identity is not centered in the native title area"]; return;
         }
         [v showCachedRanges:@"{\"ranges\":[[0,0.3],[0.5,0.65],[0.8,1]]}"];
@@ -505,7 +504,7 @@
         CGRect filename = [v.videoTitle convertRect:v.videoTitle.bounds toView:self.window];
         UIView *source = v.sourceLabel.superview;
         CGRect details = [source convertRect:source.bounds toView:self.window];
-        if (!compactIdentity && !v.portraitTabletop && fabs(CGRectGetMidX(filename) - CGRectGetMidX(details)) > .5) {
+        if (!v.portraitTabletop && fabs(CGRectGetMidX(filename) - CGRectGetMidX(details)) > .5) {
             [self finish:@"Storage details are not centered beneath the filename"]; return;
         }
         [self.samples addObject:@{@"titleFrame": NSStringFromCGRect(title),

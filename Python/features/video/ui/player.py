@@ -247,8 +247,9 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
                 (QMediaMetaData.Key.Title, QMediaMetaData.Key.Language) if track.stringValue(key))
             return ' · '.join(parts) or f'Track {index + 1}'
         self.audio_tracks.clear()
+        audio_labels = self.player.audioTrackLabels() if hasattr(self.player, 'audioTrackLabels') else []
         for index, track in enumerate(self.player.audioTracks()):
-            self.audio_tracks.addItem(label(track, index), index)
+            self.audio_tracks.addItem(audio_labels[index] if index < len(audio_labels) else label(track, index), index)
         self.audio_tracks.setCurrentIndex(self.player.activeAudioTrack())
         self.subtitle_tracks.clear()
         self.subtitle_tracks.addItem('Subtitles off', -1)

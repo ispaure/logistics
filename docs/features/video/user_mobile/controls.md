@@ -15,3 +15,10 @@ On iOS 17.4 or later, turn on **Playback → Subtitle PiP (reopen video)** and r
 3. Select **iPhone** in the route picker to continue on device, including after a connection or seek failure.
 
 Compatible MKV streams use H.264/HEVC and compatible AAC, AC-3, E-AC-3 or Opus audio. Opus converts to AAC. Choose supported tracks in **Audio tracks** and **Subtitles**. SRT and WebVTT can display on TV, with PGS available for local playback. The TV controls subtitle appearance and HDR. Session-only protection blocks AirPlay.
+
+iOS controls automatic AirPlay suggestions. To stop those suggestions while
+keeping manual selection available, choose **Settings → General → AirPlay &
+Continuity → Automatically AirPlay → Never** in the system Settings app.
+See [Apple's AirPlay settings](https://support.apple.com/en-ca/102661).
+Logistics does not request automatic route selection when opening the app or
+session-only video, and protected video never creates a native AirPlay item.

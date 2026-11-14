@@ -28,6 +28,7 @@ final class PlaybackControls {
     PlaybackControls(VideoPlayer owner, View tapSurface) {
         this.owner = owner;
         cache = new CacheStrip();
+        cache.setVisibility(View.GONE);
         owner.controls.addView(cache, owner.controls.indexOfChild(owner.seek) + 1,
             new android.widget.LinearLayout.LayoutParams(-1, owner.dp(3)));
         unlock = new Button(owner.activity); unlock.setText("Unlock controls");
@@ -87,6 +88,8 @@ final class PlaybackControls {
                 || updated.optDouble("subtitle_scale", 1) != settings.optDouble("subtitle_scale", 1);
             settings = updated; queue = new JSONArray(rows);
             owner.setVideoHeader(settings.optString("video_title"), settings.optString("video_path"), settings.optString("source_label"), settings.optBoolean("source_remote"));
+            cache.setVisibility(settings.optBoolean("source_remote") ? View.VISIBLE : View.GONE);
+            if (!settings.optBoolean("source_remote")) cacheApproximate = false;
             if (reload) owner.reloadPlaybackOptions();
             apply();
         } catch (Exception error) { owner.status("Invalid playback preferences."); }
@@ -214,7 +217,15 @@ final class PlaybackControls {
     }
     void mute() { owner.toggleMute(); }
     void cached(String json) {
-        try { JSONObject value = new JSONObject(json); cacheApproximate = value.optBoolean("approximate", true); cache.ranges = value.optBoolean("local") ? new JSONArray("[[0,1]]") : value.optJSONArray("ranges"); cache.setContentDescription(cacheApproximate ? "Approximate cached file ranges" : "Timestamp indexed cached ranges"); cache.invalidate(); }
+        try {
+            JSONObject value = new JSONObject(json);
+            boolean local = value.optBoolean("local") || !settings.optBoolean("source_remote");
+            cacheApproximate = !local && value.optBoolean("approximate", true);
+            cache.setVisibility(local ? View.GONE : View.VISIBLE);
+            cache.ranges = local ? null : value.optJSONArray("ranges");
+            cache.setContentDescription(cacheApproximate ? "Approximate cached file ranges" : "Timestamp indexed cached ranges");
+            cache.invalidate();
+        }
         catch (Exception ignored) { cache.ranges = null; cache.invalidate(); }
     }
     private final class CacheStrip extends View {

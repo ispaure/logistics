@@ -166,10 +166,12 @@ static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     NSMutableArray *audio = [NSMutableArray array], *text = [NSMutableArray array];
     _audio = -1;
     int opus = -1;
+    NSUInteger audioNumber = 0;
     for (unsigned i = 0; i < _source->nb_streams; i++) {
         AVStream *stream = _source->streams[i];
         AVCodecParameters *parameters = stream->codecpar;
         enum AVCodecID codec = parameters->codec_id;
+        if (parameters->codec_type == AVMEDIA_TYPE_AUDIO) audioNumber++;
         BOOL preferred = (stream->disposition & AV_DISPOSITION_DEFAULT) != 0;
         BOOL copyAudio = codec == AV_CODEC_ID_AAC || codec == AV_CODEC_ID_AC3 || codec == AV_CODEC_ID_EAC3;
         int channels = parameters->ch_layout.nb_channels;
@@ -185,6 +187,9 @@ static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
         NSString *name = title ? ([NSString stringWithUTF8String:title->value] ?: @"") : @"";
         NSMutableDictionary *track = [LGMKVCodecInfo(parameters) mutableCopy];
         [track addEntriesFromDictionary:@{@"id": @(i), @"language": lang, @"name": name,
+            @"number": @(parameters->codec_type == AVMEDIA_TYPE_AUDIO ? audioNumber : text.count + 1),
+            @"languageName": [lang isEqualToString:@"und"] ? @"" : ([NSLocale.currentLocale localizedStringForLanguageCode:lang] ?: lang),
+            @"sampleRate": @(parameters->sample_rate),
             @"channels": @(channels), @"forced": @((stream->disposition & AV_DISPOSITION_FORCED) != 0),
             @"hearingImpaired": @((stream->disposition & AV_DISPOSITION_HEARING_IMPAIRED) != 0),
             @"visualImpaired": @((stream->disposition & AV_DISPOSITION_VISUAL_IMPAIRED) != 0),

@@ -4,6 +4,7 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
+from contextlib import contextmanager
 from pathlib import Path
 import plistlib
 from tempfile import TemporaryDirectory
@@ -879,6 +880,27 @@ class VideoPresentationReadinessTests(unittest.IsolatedAsyncioTestCase):
 
 
 class IOSPresentationPrivacyTests(unittest.TestCase):
+    def test_audio_labels_keep_identity_without_repeating_generic_metadata(self):
+        from features.video.tracks import audio_label
+
+        self.assertEqual(audio_label(2, title='Surround', codec='Audio Coding 3 (AC-3)',
+            channels=6, sample_rate=48000), '#2 · AC-3 · 6 ch')
+        self.assertEqual(audio_label(1, language='English', title='Director commentary',
+            description='Director commentary', codec='mp4a', channels=2, sample_rate=44100,
+            default=True), '#1 · English · Director commentary · AAC · Stereo · 44.1 kHz · Default')
+        self.assertEqual(audio_label(3, title='English', language='English', codec='truehd',
+            channels=8), '#3 · English · TrueHD · 8 ch')
+        self.assertEqual(audio_label(4, title='Track 4', language='und'), '#4 · Audio')
+        self.assertEqual(audio_label(5, title='Original theatrical mix'), '#5 · Original theatrical mix')
+
+    def test_airplay_track_number_survives_unsupported_audio_filtering(self):
+        from features.video.mobile.mkv import rendition_name
+
+        # TrueHD is the first local audio stream; its supported AC-3 alternate
+        # keeps #2 even when it is the first track offered by AirPlay.
+        track = dict(number=2, name='Surround', language='und', codec='ac3', channels=6)
+        self.assertEqual(rendition_name(track, 1, audio=True), '#2 · AC-3 · 6 ch')
+
     def test_airplay_codec_identifiers_match_the_remuxed_formats(self):
         from base64 import b64encode
         from features.video.mobile.mkv import codec_string
@@ -924,8 +946,10 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
         self.assertEqual(sum(row.startswith('#EXT-X-MEDIA:') for row in rows), 8)
         main = next(row for row in rows if 'URI="audio-2/' in row)
         self.assertIn('DEFAULT=YES,AUTOSELECT=YES', main)
+        self.assertIn('NAME="#2 · en · Main · E-AC-3 · 6 ch · Default"', main)
         commentary = next(row for row in rows if 'URI="audio-1/' in row)
         self.assertIn('DEFAULT=NO,AUTOSELECT=NO', commentary)
+        self.assertIn('NAME="#1 · en · Commentary · AAC · Stereo"', commentary)
         french = next(row for row in rows if 'URI="audio-3/' in row)
         self.assertIn('AUTOSELECT=YES,LANGUAGE="fr"', french)
         description = next(row for row in rows if 'URI="audio-4/' in row)
@@ -948,10 +972,9 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
         self.assertIn('AUDIO="audio"', variant)
         self.assertIn('SUBTITLES="text"', variant)
 
-    def test_mkv_hls_range_and_revocation(self):
+    @contextmanager
+    def mkv_stream(self):
         from contextlib import nullcontext
-        from urllib.error import HTTPError
-        from urllib.request import Request, urlopen
         from threading import Event
         from features.video.mobile.mkv import MKVStream
 
@@ -982,38 +1005,130 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
             cancelled = Event()
             stream = MKVStream(owner, Path('/movie.mkv'), cancelled)
             try:
-                with urlopen(stream.url, timeout=2) as response:
-                    master = response.read()
-                    self.assertIn(b'URI="audio-2/index.m3u8"', master)
-                    self.assertIn(b'URI="text-3/index.m3u8"', master)
-                for group in ('video', 'audio-2', 'text-3'):
-                    uri = stream.url.replace('video.m3u8', group + '/index.m3u8')
-                    with urlopen(uri, timeout=2) as response:
-                        self.assertEqual(response.read().count(b'#EXTINF:6.000,'), 3)
-                subtitle = stream.url.replace('video.m3u8', 'text-3/segment-2.vtt')
-                with urlopen(subtitle, timeout=2) as response:
-                    self.assertIn(b'00:00:11.900 --> 00:00:12.500\nHello &amp; goodbye', response.read())
-                alternate_audio = stream.url.replace('video.m3u8', 'audio-2/segment-1.m4s')
-                with urlopen(alternate_audio, timeout=2) as response:
-                    self.assertEqual(response.read(), b'abcdef')
-                fragment = stream.url.replace('video.m3u8', 'video/segment-2.m4s')
-                request = Request(fragment, headers={'Range': 'bytes=2-4'})
-                with urlopen(request, timeout=2) as response:
-                    self.assertEqual(response.status, 206)
-                    self.assertEqual(response.read(), b'cde')
-                with urlopen(Request(fragment, method='HEAD'), timeout=2) as response:
-                    self.assertEqual(response.headers['Content-Length'], '6')
-                self.assertEqual(engine.fragment.call_args_list, [unittest.mock.call(1, track=2), unittest.mock.call(2, track=-1)])
-                with self.assertRaises(HTTPError) as unrouted:
-                    urlopen(fragment.replace(stream.route, '/unknown/'), timeout=2)
-                self.assertEqual(unrouted.exception.code, 404)
-                allowed.return_value = False
-                with self.assertRaises(HTTPError) as revoked:
-                    urlopen(fragment, timeout=2)
-                self.assertEqual(revoked.exception.code, 404)
-                self.assertEqual(engine.fragment.call_args_list, [unittest.mock.call(1, track=2), unittest.mock.call(2, track=-1)])
+                yield stream, engine, allowed
             finally:
                 stream.close()
+
+    def test_mkv_hls_range_and_revocation(self):
+        from urllib.error import HTTPError
+        from urllib.request import Request, urlopen
+
+        with self.mkv_stream() as (stream, engine, allowed):
+            with urlopen(stream.url, timeout=2) as response:
+                master = response.read()
+                self.assertIn(b'URI="audio-2/index.m3u8"', master)
+                self.assertIn(b'URI="text-3/index.m3u8"', master)
+            for group in ('video', 'audio-2', 'text-3'):
+                uri = stream.url.replace('video.m3u8', group + '/index.m3u8')
+                with urlopen(uri, timeout=2) as response:
+                    self.assertEqual(response.read().count(b'#EXTINF:6.000,'), 3)
+            subtitle = stream.url.replace('video.m3u8', 'text-3/segment-2.vtt')
+            with urlopen(subtitle, timeout=2) as response:
+                self.assertIn(b'00:00:11.900 --> 00:00:12.500\nHello &amp; goodbye', response.read())
+            alternate_audio = stream.url.replace('video.m3u8', 'audio-2/segment-1.m4s')
+            with urlopen(alternate_audio, timeout=2) as response:
+                self.assertEqual(response.read(), b'abcdef')
+            fragment = stream.url.replace('video.m3u8', 'video/segment-2.m4s')
+            request = Request(fragment, headers={'Range': 'bytes=2-4'})
+            with urlopen(request, timeout=2) as response:
+                self.assertEqual(response.status, 206)
+                self.assertEqual(response.read(), b'cde')
+            with urlopen(Request(fragment, method='HEAD'), timeout=2) as response:
+                self.assertEqual(response.headers['Content-Length'], '6')
+            self.assertEqual(engine.fragment.call_args_list, [unittest.mock.call(1, track=2), unittest.mock.call(2, track=-1)])
+            with self.assertRaises(HTTPError) as unrouted:
+                urlopen(fragment.replace(stream.route, '/unknown/'), timeout=2)
+            self.assertEqual(unrouted.exception.code, 404)
+            allowed.return_value = False
+            with self.assertRaises(HTTPError) as revoked:
+                urlopen(fragment, timeout=2)
+            self.assertEqual(revoked.exception.code, 404)
+            self.assertEqual(engine.fragment.call_args_list, [unittest.mock.call(1, track=2), unittest.mock.call(2, track=-1)])
+
+    def test_mkv_bidirectional_seek_waits_for_old_requests_and_rechecks_access(self):
+        from itertools import product
+        from threading import Event, Thread
+        from urllib.error import HTTPError
+        from urllib.request import urlopen
+
+        for (start, target), (route, track), revoke in product(
+                ((2, 0), (0, 2)), (('video', -1), ('audio-2', 2)), (False, True)):
+            with self.subTest(start=start, target=target, route=route, revoke=revoke), self.mkv_stream() as (stream, engine, allowed):
+                # Seek to an uncached earlier/later video or audio fragment
+                # while the four previous responses are still unwinding.
+                stream.resource(f'{route}/segment-{start}.m4s')
+                engine.fragment.reset_mock()
+                held = 4
+                for _ in range(held):
+                    self.assertTrue(stream.slots.acquire(False))
+                slots = stream.slots
+                waiting, complete = Event(), Event()
+                results, errors = [], []
+
+                class ObservedSlots:
+                    def acquire(self, *args, **kwargs):
+                        acquired = slots.acquire(*args, **kwargs)
+                        if not acquired:
+                            waiting.set()
+                        return acquired
+
+                    def release(self):
+                        slots.release()
+
+                stream.slots = ObservedSlots()
+
+                def request():
+                    try:
+                        url = stream.url.replace('video.m3u8', f'{route}/segment-{target}.m4s')
+                        with urlopen(url, timeout=3) as response:
+                            results.append((response.status, response.read()))
+                    except Exception as error:
+                        errors.append(error)
+                    finally:
+                        complete.set()
+
+                worker = Thread(target=request)
+                worker.start()
+                try:
+                    self.assertTrue(waiting.wait(2), 'Seek did not reach the occupied slots')
+                    self.assertFalse(complete.wait(.1), 'Seek was rejected during an ordinary request burst')
+                    if revoke:
+                        allowed.return_value = False
+                    else:
+                        slots.release()
+                        held -= 1
+                    self.assertTrue(complete.wait(2), 'Waiting seek did not finish')
+                    if revoke:
+                        self.assertEqual(results, [])
+                        self.assertEqual(len(errors), 1)
+                        self.assertIsInstance(errors[0], HTTPError)
+                        self.assertEqual(errors[0].code, 404)
+                        engine.fragment.assert_not_called()
+                    else:
+                        self.assertEqual(errors, [])
+                        self.assertEqual(results, [(200, b'abcdef')])
+                        engine.fragment.assert_called_once_with(target, track=track)
+                finally:
+                    for _ in range(held):
+                        slots.release()
+                    worker.join(3)
+
+    def test_mkv_busy_receiver_wait_is_bounded(self):
+        from urllib.error import HTTPError
+        from urllib.request import urlopen
+
+        with self.mkv_stream() as (stream, engine, _):
+            for _ in range(4):
+                self.assertTrue(stream.slots.acquire(False))
+            try:
+                with patch('features.video.mobile.mkv.monotonic', side_effect=[0, 11]):
+                    with self.assertRaises(HTTPError) as busy:
+                        urlopen(stream.url.replace('video.m3u8', 'video/segment-0.m4s'), timeout=2)
+                self.assertEqual(busy.exception.code, 503)
+                engine.fragment.assert_not_called()
+            finally:
+                for _ in range(4):
+                    stream.slots.release()
 
     def test_native_airplay_only_opens_admitted_ordinary_local_files(self):
         from commonUtils.runtime.resources.local import LocalFiles

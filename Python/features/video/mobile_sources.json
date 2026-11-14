@@ -5,6 +5,7 @@
     "playback.py",
     "subtitles.py",
     "transport.py",
+    "tracks.py",
     "mobile/__init__.py",
     "mobile/player.py",
     "mobile/android.py",
