@@ -32,6 +32,55 @@ def tar_stream(entries):
 
 
 class RemarkableSSHTests(unittest.TestCase):
+    def test_exact_sidecars_do_not_enumerate_unselected_documents(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            expected = {DOC + '.metadata': b'{"type":"DocumentType"}', DOC + '.content': b'{}',
+                        FOLDER + '.metadata': b'{"type":"CollectionType"}'}
+            for name, data in expected.items():
+                (root / name).write_bytes(data)
+            (root / (PAGE + '.metadata')).write_bytes(b'private unselected record')
+
+            @contextmanager
+            def stream(host, command, cancelled, *, port, connection):
+                self.assertEqual((host, port, connection), ('synthetic.invalid', 2222, 'owned session'))
+                result = subprocess.run(['/bin/sh', '-c', command], cwd=root, capture_output=True,
+                                        check=True, timeout=5, env=dict(os.environ, COPYFILE_DISABLE='1'))
+                with BufferedReader(BytesIO(result.stdout)) as data:
+                    yield data
+
+            with patch.object(remarkable_ssh, 'ssh_stream', stream):
+                self.assertEqual(remarkable_ssh.read_sidecars('synthetic.invalid', [DOC, FOLDER],
+                                 port=2222, connection='owned session'), expected)
+                (root / (DOC + '.metadata')).unlink()
+                (root / (DOC + '.metadata')).symlink_to(root / (PAGE + '.metadata'))
+                with self.assertRaises(subprocess.CalledProcessError):
+                    remarkable_ssh.read_sidecars('synthetic.invalid', [DOC], port=2222, connection='owned session')
+
+    def test_scoped_response_rejects_missing_foreign_duplicate_and_nonfile_records(self):
+        for entries in ({}, {PAGE + '.metadata': b'{}'}, [(DOC + '.metadata', b'{}')] * 2,
+                        {DOC + '.metadata': b'x' * 101}):
+            @contextmanager
+            def stream(*_, **__):
+                with tar_stream(entries) as data:
+                    yield data
+            with self.subTest(entries=entries), patch.object(remarkable_ssh, 'ssh_stream', stream), \
+                    patch.object(remarkable_ssh, 'MAX_SIDECAR', 100), self.assertRaises(ValueError):
+                remarkable_ssh.read_sidecars('synthetic.invalid', [DOC])
+        with patch.object(remarkable_ssh, 'ssh_stream') as stream:
+            for identities in ([], [DOC, DOC], ['../escape'], [DOC] * 257, [None], [{}]):
+                with self.assertRaises(ValueError):
+                    remarkable_ssh.read_sidecars('synthetic.invalid', identities)
+            stream.assert_not_called()
+
+        @contextmanager
+        def oversized(*_, **__):
+            with tar_stream({DOC + '.metadata': b'{}', DOC + '.content': b'{}'}) as data:
+                yield data
+        with patch.object(remarkable_ssh, 'ssh_stream', oversized), \
+                patch.object(remarkable_ssh, 'MAX_SCOPED_SIDECARS', 3), self.assertRaises(ValueError):
+            remarkable_ssh.read_sidecars('synthetic.invalid', [DOC])
+
     @unittest.skipUnless(os.name == 'posix', 'The tablet enumeration script uses a POSIX shell.')
     def test_nonfile_first_glob_does_not_hide_later_files_or_read_nested_data(self):
         with TemporaryDirectory() as directory:
