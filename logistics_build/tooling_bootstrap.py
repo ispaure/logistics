@@ -452,7 +452,8 @@ def file_lock(path, *, create=False):
 def operation_locks(root):
     # Existing lock files alone are harmless. Probe actual advisory ownership.
     for base in (private(root) / 'workspaces', private(root) / 'snapshots',
-                 Path(root) / 'test-results', Path(root) / 'tmp/runs/scratch',
+                 Path(root) / 'test-results', Path(root) / 'tmp/test-results',
+                 Path(root) / 'tmp/runs/scratch',
                  Path(root) / DEVICE_WORKSPACES):
         if owned_path(root, base) and base.is_dir():
             for path in base.rglob('*.lock'):

@@ -348,6 +348,21 @@ class ToolingBootstrapTests(TestCase):
             pass
 
     @skipUnless(os.name == 'posix', 'POSIX tooling mutation guard')
+    def test_saved_run_supervisor_locks_block_tooling_mutation_at_both_roots(self):
+        from build_manager.locking import workspace_lock
+
+        for base in ('test-results/build-manager', 'tmp/test-results/build-manager'):
+            run = self.root / base / 'run'
+            run.mkdir(parents=True)
+            lock = run / 'supervisor.lock'
+            with self.subTest(root=base), workspace_lock(lock):
+                self.assertIn(lock, set(tooling.operation_locks(self.root)))
+                with self.assertRaises(tooling.ActiveWorkflowError), tooling.mutation_guard(self.root):
+                    self.fail('Tooling mutation entered while a saved run was active')
+            with tooling.mutation_guard(self.root):
+                pass
+
+    @skipUnless(os.name == 'posix', 'POSIX tooling mutation guard')
     def test_device_workspace_locks_block_tooling_mutation_at_both_roots(self):
         from build_manager.locking import operation_lock_path, workspace_lock
         from logistics_build.device_workspace_paths import DEVICE_WORKSPACES, LEGACY_DEVICE_WORKSPACES
