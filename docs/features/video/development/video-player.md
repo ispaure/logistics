@@ -2,134 +2,48 @@
 
 ## Storage and privacy contract
 
-Use retained resource providers and seekable, bounded reads. Never materialise
-a decrypted LocalCrypt movie or subtitle in a temporary file, export it to an
-external player. URLs, credentials and private playback positions stay out of
-ordinary workspace/history storage. Session-only reopen references and titles use
-the existing credential-password encrypted recent list; ordinary recent references
-require a matching explicitly saved connection. Revalidate credential grants and source revisions
-while streaming. Closing or revoking access retires the decoder and transport.
+Keep video and subtitles under retained provider access with bounded ranges.
+LocalCrypt stays encrypted at rest, including resume state. Ordinary local
+resume can use app-private storage. Read-only sources report when state is
+process-only. Check source revision and credential scope during streaming.
+Revocation retires the decoder and transport. See the
+[shared reader-state contract](../../../development/architecture/reader-state.md).
 
-Ordinary local resume records may use app-private storage. LocalCrypt resume
-records must pass through the encrypted provider; ciphertext is durable while
-decryption still requires its credentials. Read-only storage may retain progress
-only for the current process and must report that persistence is unavailable.
+Session-only access denies external display, Cast, PiP and desktop pop-out.
+Enforce the policy in native actions and admission. Lock pauses and conceals
+output. Unlock restores controls without autoplay. Ordinary background
+playback requires an explicitly selected supported external mode. Remote
+credentials stay with the provider and never appear in decoder URLs.
+[Resume ownership](development.md#playback-tool-ownership)
 
-Session-only credentials prohibit casting, external displays, picture in picture
-and desktop floating windows. Enforce this in actions and transport admission,
-including after credential changes, rather than only hiding controls. A mobile
-lock pauses every movie, including floating/cast playback. Session-only resume
-requires the existing credential password gate. Unlocking must not autoplay.
-Backgrounding an ordinary movie may continue only through an explicitly selected
-supported floating/cast mode; ordinary inline playback pauses.
+## Per-video settings
 
-## Remote playback and validation
-
-Local playback and rclone network ranges share the retained-provider transport.
-Both crypt and non-crypt cloud playback are best effort and must not expose
-remote credentials to a decoder or receiver. Remote resume follows the source and credential policy in the [developer guide](development.md#playback-tool-ownership).
-
-Native mobile packaging, codec decoding, subtitle rendering, lock/unlock,
-picture in picture and receiver playback require native acceptance. Host tests
-alone cannot establish those capabilities. Keep the implemented status and
-remaining acceptance work in the [development guide](development.md).
-
-Session-only persisted state now follows the shared [credential-password and clearing policy](../../../development/architecture/reader-state.md).
-
-## iOS framing and selection menus
-
-Framing changes refresh the drawable layout immediately. The native
-`AVSampleBufferDisplayLayer` uses aspect-fill gravity for Fill and aspect-fit
-otherwise; VLC crop/scale settings still serve the decoder output. New rendering
-layers and layout changes reapply the native gravity. The Picture icon owns the
-framing selector in both the normal navigation toolbar and folded control deck,
-without a duplicate Playback menu entry.
-
-Selection menus use backdrop dismissal, including compact scrollable alerts on
-Duo. The backdrop gesture excludes touches inside the menu; text-entry prompts
-retain Apply/Cancel. The native chrome probe checks Fit/Fill geometry and gravity,
-menu presentation without Cancel actions, inside/outside gesture filtering, and
-backdrop dismissal. Landscape coverage also checks that the filename stays
-visible above the timeline when the navigation bar has limited room.
-
-## Per-video resume preferences
-
-`VideoSettingsStore` writes validated `PlaybackSettings` into `VideoProgress`,
-sharing its lock, history generation and encryption boundary. Completed playback
-stores position zero while retaining settings. Legacy global preferences seed
-videos without a saved record; new choices do not write that global file.
-Local identity uses at most three 64 KiB decoded reads plus size; remote identity
-remains resource/revision based. Existing path records are read as a migration
-fallback before the first fingerprint checkpoint. Embedded track selections are
-backend track IDs on Android and ordered track indices on iOS/desktop.
-
-Regression coverage checks local moves across provider roots, completion,
-replacement invalidation, encrypted LocalCrypt settings, and mobile lifetimes.
-SDK compile checks validate adapter interfaces, not native playback acceptance.
+`VideoSettingsStore` writes validated settings with progress under one lock.
+Local fingerprints use size and up to three 64 KiB reads. Remote keys bind
+resource/revision. Older path records can seed a checkpoint. Completion zeros
+position and retains settings. Android embedded tracks use backend IDs.
+iOS/desktop use ordered track indices.
 
 ## Mobile PiP controls and captions
 
-Mobile never creates an Undo seek button or menu item. Android registers
-package-local immutable PendingIntents for ten-second back/forward and Play/Pause,
-updates their state only when it changes, and unregisters its receiver on disposal.
-VLC's subtitle surface stays attached through the PiP transition.
-Selecting an Android subtitle track refreshes the current seekable position so
-turning captions back on redraws the active cue immediately. The existing seek
-path preserves play/pause intent and enforces access and control-lock policy.
+Android sends immutable package-local ten-second back/forward and play/pause
+actions. Keep the subtitle surface attached and refresh the current seek when
+reenabling a cue. Retire the receiver on disposal. iOS delegates bounded seeks
+through the same lock/access policy as on-screen controls. On iOS 17.4+ the
+captioned path composites VLC's video and subtitle planes at up to 30 fps,
+720 pixels on the longest side and three volatile buffers. HDR uses tagged
+10-bit samples. Lock or stop retires the timer and buffers. Earlier iOS uses
+video-only VLC PiP. [Upstream Apple sample-buffer output](https://github.com/videolan/vlc/blob/master/modules/video_output/apple/VLCSampleBufferDisplay.m)
 
-`python -m mobile_build.validation.video_android_pip_tools --output <evidence>`
-compiles the production Java player into an isolated native QA app and uses a
-manager-owned disposable emulator. It sends the actual submitted PiP
-RemoteAction PendingIntents, checks both ten-second seek directions while paused
-and playing, compares rendered subtitle cues and off/on pixels, and retires the
-player, QA package and emulator. Pixel capture rejects Android's app-icon
-transition overlay. The optional `--software-decode` fixture setting avoids
-virtual MediaCodec stalls; it does not validate hardware decoding or HDR, the
-full application package, or physical-device button taps.
-
-iOS PiP delegate seeks use the bounded 64-bit on-screen seek path, including its
-paused-position bookkeeping. Every system request completes, including a no-op at
-a boundary, and seeking eligibility respects the control lock and access policy.
-The native `video_chrome_tools --pip-controls` probe checks forward/backward,
-start-boundary completion and control locking with real UIKit/VLC. It does not
-establish system PiP-window rendering or physical-device button interaction.
-
-On iOS 17.4 and later, `CaptionPictureInPicture.m` supplies AVKit with a
-composited sample containing the decoded video and VLC's rendered subtitle
-planes. It descends through VLC's shared drawable wrapper to exclude video
-without excluding captions. A drawable-only adapter prevents VLC's automatic
-PiP controller from replacing this captioned stream when the app backgrounds.
-Caption parsing, track selection, styling and timing continue to belong to VLC.
-
-The compositor uses volatile pixel buffers, at most 30 frames per second and
-720 pixels on the longest side, with a three-buffer allocation limit. HDR input
-uses a tagged 10-bit output and converts the subtitle plane into that color
-space; SDR output is tagged for its actual sRGB conversion. Stop, lock and
-retirement discard the timer, layer contents and pixel pool. Earlier iOS
-versions retain VLC's original video-only PiP path because displayed-buffer
-readback requires iOS 17.4.
-
-`video_chrome_tools --pip-subtitles` tests actual active PiP with external SRT
-captions, background frame/clock progress, subtitles off/on, paused forward seek,
-backward cue restoration and retirement. `--embedded-subtitles --hdr` selects a
-muxed subtitle track and checks the enqueued 10-bit format and PQ attachment.
-The disposable iPad simulator supports system PiP; iPhone Simulator reports it
-unsupported. Simulator rendering does not establish physical HDR headroom or
-physical-device button interaction. The upstream
-[Apple sample-buffer output](https://github.com/videolan/vlc/blob/master/modules/video_output/apple/VLCSampleBufferDisplay.m)
-explains why its separate subtitle plane needs composition.
+Run the module `mobile_build.validation.video_android_pip_tools --output PATH`
+for real Android action dispatch and caption pixels on an owned emulator. Use
+`video_chrome_tools --pip-controls` for iOS seek/lock checks and
+`--pip-subtitles` for system PiP on a supported simulator. Add
+`--embedded-subtitles --hdr` for 10-bit PQ checks. Physical display, sound and
+touch remain separate.
 
 ## Desktop plugin lifetime
 
-The video runtime retains one idle LibVLC core until process exit. Each player
-and subtitle-scale replacement still gets its own configured instance; the core
-holds no media, providers or credentials. This prevents LibVLC from unloading its
-plugin bank after each player closes and scanning every plugin on the next open.
-Decoder/player disposal still releases streams and native player resources.
-
-A full 13-codec run exposed repeated plugin discovery during instance creation,
-rather than a decoder deadlock. Retaining the idle core reduced that matrix from
-about 292 seconds to 8–19 seconds on the validation Mac, without raising the
-runner's 300-second file limit. The complete parity file passed in 197 seconds.
-Speed checks wait for the post-seek decoded clock to settle before sampling;
-their rate tolerance is unchanged. Absolute timings depend on host load.
+Keep one idle LibVLC core until process exit to avoid scanning the plugin bank
+on each open. Configured players still release native resources, providers and
+credentials at close.
