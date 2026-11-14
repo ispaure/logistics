@@ -92,11 +92,11 @@ See [mobile usage](docs/user_mobile/user_mobile.md) for supported workflows,
 storage choices, format limits and validation status.
 
 For local builds, paired-device installation, Firebase and TestFlight distribution,
-start with the [mobile build and release handbook](docs/development/mobile-handbook.md).
+start with the [mobile build and release handbook](docs/development/build-release/mobile-handbook.md).
 Use the standalone [Build Deployment Manager](docs/user/build-manager.md) for
 checks, build-only artifacts and delivery. Logistics provides its project adapter
 in `logistics_build/`; there is no separate deployment launcher.
-The guided flow supports [combined platform validation and reviewed GitHub/Firebase/TestFlight delivery](docs/development/build-manager-journeys.md).
+The guided flow supports [combined platform validation and reviewed GitHub/Firebase/TestFlight delivery](docs/development/build-release/build-manager-journeys.md).
 
 | Tool | Use it to… |
 | --- | --- |
@@ -139,11 +139,11 @@ Application source lives under `Python/`: `desktop/` hosts the desktop app,
 `mobile/` hosts the mobile app, and `features/` contains the tools they use.
 Project build policy and manager adapters live in `logistics_build/`; native
 packaging and deployment helpers live in `mobile_build/`. See the
-[code map](docs/development/code-map.md) for ownership and native compatibility.
-The [screen and panel map](docs/development/ui-architecture.md) locates named
+[code map](docs/development/architecture/code-map.md) for ownership and native compatibility.
+The [screen and panel map](docs/development/architecture/ui-architecture.md) locates named
 settings such as **Settings → Appearance** and explains where to add a panel.
 
-For contributors, start with [your first contribution](docs/development/getting-started.md).
+For contributors, start with [your first contribution](docs/development/setup/getting-started.md).
 `python3 dev.py doctor` checks the local environment; `dev.py setup desktop` and
 `dev.py setup mobile` prepare separate host environments. Use `py` on Windows.
 
@@ -153,7 +153,7 @@ development hierarchies. Feature manuals live under `docs/features/<owner>/`.
 - [User guide](docs/user/user.md): using the app and its tools.
 - [Configuration](docs/user/configuration.md): paths, settings and optional integrations.
 - [Development](docs/development/development.md): project structure, extension guides and testing.
-- [Publishing releases](docs/development/releasing.md): package checks and release troubleshooting.
+- [Publishing releases](docs/development/build-release/releasing.md): package checks and release troubleshooting.
 
 Use the [developer index](docs/development/development.md) to find contracts and
 code owners after the first-contribution walkthrough. `python3 dev.py --help`
@@ -169,5 +169,5 @@ Logistics is available under the [MIT License](LICENSE.md).
 Logistics can update itself from published main, beta or alpha releases through
 **Update Logistics** in the hub. Checks are on by default; choose a channel or
 turn them off in **Settings → Configuration → Updates**. Updates preserve private
-software, credentials and ignored files. See [release packaging](docs/development/releasing.md)
+software, credentials and ignored files. See [release packaging](docs/development/build-release/releasing.md)
 for supported installation manifests and channel tags.

@@ -356,7 +356,7 @@ stop; Logistics does not silently download into internal storage. Reinsert the
 same card or restore permission. iOS uses its file-sharing Local folder; drive selection is Android-only.
 
 Developers can update Logistics on a paired iPhone over Wi-Fi using the
-[local deployment workflow](../../development/mobile-launchers.md#build-and-deploy-to-a-paired-iphone-over-wi-fi).
+[local deployment workflow](../../development/build-release/mobile-launchers.md#build-and-deploy-to-a-paired-iphone-over-wi-fi).
 Its launcher builds, installs in place and opens the app while retaining its
 bundle and signing identity. Keep the iPhone unlocked on the same Wi-Fi as the
 Mac. Do not uninstall Logistics to fix deployment errors: uninstalling removes
