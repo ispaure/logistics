@@ -156,12 +156,8 @@ class PlaylistStore:
         return readable
 
     def _locked(self, ciphers):
-        if self.root.is_symlink():
-            raise ValueError('Linked playlist settings are unavailable.')
         unlocked = self._readable(ciphers)
-        return tuple(path for path in self.root.glob('*.zip')
-                     if len(path.stem) == 64 and all(char in '0123456789abcdef' for char in path.stem)
-                     and not path.is_symlink() and path.is_file() and path.stem not in unlocked)
+        return tuple(identity for identity in self.buckets.protected_identities() if identity not in unlocked)
 
     def locked_count(self, *, ciphers=()):
         with _lock:
@@ -170,8 +166,8 @@ class PlaylistStore:
     def clear_locked(self, *, ciphers=()):
         with self.transaction():
             locked = self._locked(ciphers)
-            for path in locked:
-                path.unlink()
+            for identity in locked:
+                self.buckets.delete_protected(identity)
         if locked:
             with _lock:
                 callbacks = {callback for (root, _), listeners in _listeners.items()

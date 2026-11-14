@@ -11,11 +11,12 @@ from unittest.mock import Mock, patch
 import toga
 from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.testing.stages import TestStage
-from features.notes_library.mobile.playlist_speech import PlaylistSpeech
+from features.notes_library.mobile.playlist_speech import PlaylistSpeech, playlist_panel_type
 from features.notes_library.notes import NotesLibrary
 from features.notes_library.playlists import PlaylistStore
 from features.books.mobile.media_controls import SpeechPlayback, enforce_privacy
 from features.books.mobile.speech_host import SpeechPresentation
+from features.books.mobile.speech_view import ReadAloudPanel
 from mobile.markdown_speech import clear_view, highlight_view, prepare_view, stop_markdown_speech
 from mobile.preferences import Preferences
 from mobile_build.tests.editing.test_markdown_speech import Engine
@@ -50,6 +51,7 @@ class PlaylistSpeechTests(unittest.TestCase):
                     (root / path).write_text(source)
                     record = catalog.add(record.id, path)
                 speech = PlaylistSpeech(owner, catalog, lambda: None, app=app,
+                                        panel_type=playlist_panel_type(ReadAloudPanel),
                                         stop_markdown_speech=lambda: stop_markdown_speech(app),
                                         prepare_view=prepare_view, highlight_view=highlight_view, clear_view=clear_view)
                 try:

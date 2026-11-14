@@ -4,70 +4,73 @@ import asyncio
 from uuid import uuid4
 
 from commonUtils.runtime.operations import OperationCancelled
-from features.books.mobile.speech_view import ReadAloudPanel
 from services.access_policy import speech_allowed
 
 from ..playlist_queue import MAX_PREPARED, NeedsUnlock, PlaylistQueue, prepare_passage
 
 
-class PlaylistPanel(ReadAloudPanel):
-    def __init__(self, owner, app):
-        self.playlist = owner
-        self.private_metadata = owner.catalog.private
-        super().__init__(loop=app.loop, source=None, on_range=owner.follow, close=owner.close, app=app,
-                         valid=owner.valid, seek=owner.skip,
-                         document_title=owner.document_title)
-        self.session.on_exhausted = owner.exhausted
+def playlist_panel_type(read_aloud_panel):
+    class PlaylistPanel(read_aloud_panel):
+        def __init__(self, owner, app):
+            self.playlist = owner
+            self.private_metadata = owner.catalog.private
+            super().__init__(loop=app.loop, source=None, on_range=owner.follow, close=owner.close, app=app,
+                             valid=owner.valid, seek=owner.skip,
+                             document_title=owner.document_title)
+            self.session.on_exhausted = owner.exhausted
 
-    def allows_background(self):
-        return self.playlist.allows_media()
+        def allows_background(self):
+            return self.playlist.allows_media()
 
-    def playback_allowed(self):
-        return self.playlist.playback_allowed()
+        def playback_allowed(self):
+            return self.playlist.playback_allowed()
 
-    def enforce_playlist_access(self):
-        self.playlist.enforce_access()
+        def enforce_playlist_access(self):
+            self.playlist.enforce_access()
 
-    async def play(self, widget=None, **kwargs):
-        await self.playlist.start()
+        async def play(self, widget=None, **kwargs):
+            await self.playlist.start()
 
-    def pause_playback(self, *args, **kwargs):
-        transition = self.playlist.in_transition
-        self.playlist.invalidate_work()
-        super().pause_playback(*args, **kwargs)
-        if transition and self.playlist.waiting is None:
-            self.playlist.waiting = transition
-        self.playlist.flush()
+        def pause_playback(self, *args, **kwargs):
+            transition = self.playlist.in_transition
+            self.playlist.invalidate_work()
+            super().pause_playback(*args, **kwargs)
+            if transition and self.playlist.waiting is None:
+                self.playlist.waiting = transition
+            self.playlist.flush()
 
-    def resume_playback(self, *, explicit=True):
-        if self.playlist.waiting is not None:
-            if self.playlist.can_read() and (self.playback is None or
-                    (self.playback.request_start() if explicit else self.playback.can_start())):
-                self.playlist.continue_waiting()
-            return
-        super().resume_playback(explicit=explicit)
-        self.playlist.warm()
+        def resume_playback(self, *, explicit=True):
+            if self.playlist.waiting is not None:
+                if self.playlist.can_read() and (self.playback is None or
+                        (self.playback.request_start() if explicit else self.playback.can_start())):
+                    self.playlist.continue_waiting()
+                return
+            super().resume_playback(explicit=explicit)
+            self.playlist.warm()
 
-    def stop_playback(self, *args, **kwargs):
-        self.playlist.invalidate_work()
-        self.playlist.waiting = None
-        self.playlist.flush()
-        super().stop_playback(*args, **kwargs)
+        def stop_playback(self, *args, **kwargs):
+            self.playlist.invalidate_work()
+            self.playlist.waiting = None
+            self.playlist.flush()
+            super().stop_playback(*args, **kwargs)
 
-    def timer_expired(self):
-        self.pause_playback()
-        self.set_status('Timer finished · Play to start a new timer.')
+        def timer_expired(self):
+            self.pause_playback()
+            self.set_status('Timer finished · Play to start a new timer.')
 
-    def state(self, state, message):
-        super().state(state, message)
-        if getattr(self.playlist, 'panel', None) is self:
-            self.playlist.state_changed(state)
+        def state(self, state, message):
+            super().state(state, message)
+            if getattr(self.playlist, 'panel', None) is self:
+                self.playlist.state_changed(state)
+
+    return PlaylistPanel
 
 
 class PlaylistSpeech:
-    def __init__(self, owner, catalog, changed, *, app, stop_markdown_speech,
+    def __init__(self, owner, catalog, changed, *, app, panel_type, stop_markdown_speech,
                  prepare_view, highlight_view, clear_view):
         self.owner, self.catalog, self.changed, self.app = owner, catalog, changed, app
+        self.panel_type = panel_type
         self.stop_markdown_speech = stop_markdown_speech
         self.prepare_view = prepare_view
         self.highlight_view = highlight_view
@@ -177,7 +180,7 @@ class PlaylistSpeech:
             return
         self._retire_panel()
         self.stop_markdown_speech()
-        self.panel = PlaylistPanel(self, self.app)
+        self.panel = self.panel_type(self, self.app)
         self.panel.show_over(self.owner.view, anchor=anchor)
         self.schedule(self.select(playlist_id, entry_id))
 
