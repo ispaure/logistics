@@ -159,11 +159,13 @@ A host test can check dispatch, retention and assets; use the
 [platform suites](../testing/platform-checks.md) for native focus, scaling,
 touch, Back and WebView behavior.
 
-For Notes, `mobile/notes_{drawers,gestures,motion}.py` currently combines
-Notes pane behavior with native window, fold and privacy integration behind
-the injected `NotesHost` factory. When extending that area, place Notes-only
-pane behavior with the feature and keep window, fold and privacy capabilities
-at the host boundary.
+Notes owns Files and Links in `features/notes_library/mobile/drawers.py`,
+with native swipe binding in `drawer_gestures.py` and animation in
+`drawer_motion.py`. `mobile/composition/presentation.py:notes_drawer_host`
+supplies the current window, fold geometry, appearance, overlays, scroll
+clearance and privacy gate. The native reader host applies bottom clearance
+through a view callback. See the [Notes lifecycle](../../features/notes_library/development/development.md#files-and-links-drawers)
+for the open, Back and disposal paths.
 
 ## Desktop Folder Hub requests
 

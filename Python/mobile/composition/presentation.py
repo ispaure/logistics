@@ -190,6 +190,27 @@ def speech_presentation(app):
     )
 
 
+def notes_drawer_host(app):
+    from features.notes_library.mobile.drawers import DrawerHost
+    from ..appearance import surface
+    from ..fold_layout import division
+    from ..scroll_edges import sync_bottom
+    from ..speech_overlay import SpeechOverlay
+
+    def opening_blocked():
+        privacy = getattr(app, 'screen_privacy', None)
+        return privacy is not None and privacy.sensitive() and (
+            privacy.inactive or privacy.interrupted or privacy.captured or privacy.resume_locked)
+
+    return DrawerHost(
+        loop=app.loop,
+        window=lambda: app.main_window._impl.native,
+        division=lambda view: division(app, view),
+        overlay=lambda panel, owner, **options: SpeechOverlay(panel, owner, app, **options),
+        surface=surface, sync_bottom=sync_bottom, opening_blocked=opening_blocked,
+        eink=lambda: app.preferences.values.get('android_eink') == 'true')
+
+
 def notes_host(app):
     from ..audio_output import for_app
     from features.notes_library.mobile.library_panels import ENTRY_ICON_SIZE, FILENAME_SIZE, PATH_SIZE
@@ -201,7 +222,6 @@ def notes_host(app):
     from ..markdown_speech import MarkdownSpeech
     from ..action_menu import FeatureCommands
     from .. import obsidian
-    from ..notes_drawers import NotesDrawers
     from ..folder_hub_style import source_tab
     from ..appearance import accessible_name
 
@@ -300,7 +320,7 @@ def notes_host(app):
         open_timing=open_timing if timing_marker.is_file() else None,
         document_editor=lambda library, path: notes_editor(app, library, path),
         confirm=confirm, choose_type=choose_type,
-        drawers=lambda files, article, links: NotesDrawers(files, article, links, app=app),
+        drawer_host=notes_drawer_host(app),
         storage=lambda provider: NotesDocumentAccess(provider,
             client=lambda: getattr(app, 'cloud_client', None), active=lambda: app.active_host,
             privacy_gate=lambda: getattr(app.cloud_client, 'session_privacy', None),

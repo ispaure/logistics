@@ -49,8 +49,9 @@ class ScrollEdgesTests(TestCase):
             self.assertEqual(native.contentInsetAdjustmentBehavior, 2)
 
     def test_expanded_notes_drawer_preserves_last_row_clearance_and_resets_when_closed(self):
-        from mobile.notes_drawers import NotesDrawers
+        from features.notes_library.mobile.drawers import NotesDrawers
         drawer = NotesDrawers.__new__(NotesDrawers)
+        drawer.host = NS(sync_bottom=sync_bottom)
         impl = type('AppleBox', (), {'__module__': 'toga_iOS.widgets.box'})()
         drawer.sidebar = NS(_impl=impl, style=Pack())
         native = NS(contentInset=insets(), verticalScrollIndicatorInsets=insets())

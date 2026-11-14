@@ -24,6 +24,8 @@ from commonUtils.search.providers import SearchResult
 from commonUtils.ui.native.adaptive import allocated_width
 from commonUtils.ui.native.appearance import accessible_name
 
+from .drawers import DrawerHost, NotesDrawers
+
 
 @dataclass(frozen=True)
 class NotesHost:
@@ -52,7 +54,7 @@ class NotesHost:
     breadcrumb_separator: Callable
     highlight_entry: Callable
     preview: Callable
-    drawers: Callable
+    drawer_host: DrawerHost
     tab_style: Callable
     folder_browser: Callable
     document_editor: Callable = None
@@ -169,7 +171,7 @@ class VaultBrowser(LibraryPanels):
         ], style=Pack(direction=COLUMN, flex=1, margin=12))
         self.links_generation = 0
         self.links_refresh_task = None
-        self.sidebar = host.drawers(self.tree, self.article, self.links)
+        self.sidebar = NotesDrawers(self.tree, self.article, self.links, host=host.drawer_host)
         self.sidebar.document_web = self.web
         # The Markdown WebView decides which swipes belong to its tables.
         # A native recognizer cannot distinguish a table pan from a pane swipe.
@@ -296,7 +298,7 @@ class VaultBrowser(LibraryPanels):
         if host.apple:
             self.view._document_title_controls = (self.menu, self.links_button)
             self.view._document_title_parent = self.article
-            self.view._notes_drawers = self.sidebar
+            self.view._reader_bottom_extension = self.sidebar.extend_files_bottom
         self.view._native_reader_buttons = self.native_note_buttons
         self.sidebar.on_change = self.refresh_chrome
         welcome_body = toga.Box(style=Pack(direction=COLUMN, flex=1, margin=24,
