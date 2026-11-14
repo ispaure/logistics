@@ -1,149 +1,55 @@
-# Session video hardware acceptance
+# Video hardware acceptance
 
-Use a fresh QA build to verify video privacy, interruptions and receiver behavior
-with disposable media. Rebuild the native adapters when they change.
-
-The reusable in-app entry point is
+Use a current, separately signed QA app with synthetic media and no main-app
+group access. The probe entry is
 `mobile_build/native_tests/tests/logisticsmobile/video_hardware_probe.py:main`.
-A native QA launcher runs:
+Supply `video-fixtures/hardware.mp4` and the synthetic LocalCrypt fixture.
+Verify device Python and VLC frameworks, signatures and a working video screen
+before testing. Use the owning Build Manager and a leased scratch workspace.
 
-```python
-from tests.logisticsmobile.video_hardware_probe import main
-main().main_loop()
-```
-
-The automated companion is
-`mobile_build/validation/video_privacy_tools.py`. It accepts `--context remote`,
-`--context crypt` or `--context localcrypt` to keep simulator batches small.
-Read its current command-line help and use a freshly built matching native app.
-Its injected network/route events supplement physical tests; they do not replace
-them. The portable contracts are in
-`mobile_build/tests/native/test_video_player.py`,
-`mobile_build/tests/workspace/test_screen_privacy.py` and
-`Python/tests/readers/test_desktop_video_privacy.py`.
-
-## Prepare from current source
-
-Use the project build and deployment owners, a leased scratch workspace and an
-authorized physical test device.
-
-Build a separate QA bundle, with no main-app group access and app-private synthetic
-storage. Preserve the installed Logistics app and its data. Stage the current
-probe and synthetic video fixtures with the current native decoder adapters.
-Generate a sufficiently long video through the existing `video_fixtures` helpers
-and FFmpeg rather than retaining a movie or app build between sessions. The probe
-expects `video-fixtures/hardware.mp4` and the existing synthetic LocalCrypt fixture.
-
-Keep framework-copy phases when removing app-extension embedding from an isolated
-QA target. Verify the device Python and VLC frameworks are present and every
-embedded Python wrapper/framework has a valid device signature before installing.
-Verify the app reaches the video screen before asking the user for hardware
-interactions. Use only existing authorized signing material; do not change account
-or device-security settings to get a test to pass.
-
-Real trusted-network recognition needs the appropriate Wi-Fi-information
-entitlement and foreground permissions. The wildcard profile used during initial
-preparation lacked that entitlement. If this is still true, report real trusted
-Wi-Fi acceptance as pending and test the enabled-but-unavailable fail-closed path;
-do not label a synthetic SSID as physical trusted-network acceptance.
+`mobile_build.validation.video_privacy_tools` supports `--context remote`,
+`crypt` or `localcrypt` for injected checks. Physical accepted-route and Wi-Fi
+checks require working native signals and the required Wi-Fi entitlement.
+If identity is unavailable, verify the password challenge and record that scope.
 
 ## Physical matrix
 
-Test ordinary local video, session-only LocalCrypt, and available remote/crypt
-sources. Use synthetic test sources and no personal cloud credentials. Test normal
-and session-only policies separately, and test permitted PiP/casting modes only
-for the normal policy when a receiver is available.
+Use test videos with audible tracks. Exercise ordinary local, session-only
+LocalCrypt and synthetic remote/crypt sources. Use **Done** to advance the
+hardware probe from ordinary to session-only playback.
 
-| Action | Required observation |
+| Do this | Expect this |
 | --- | --- |
-| Switch apps and return; lock/sleep and wake | Session video, subtitles and audio stay concealed until required authentication succeeds. No flash in the app switcher or during resume. |
-| Cancel or enter a wrong password | Video remains hidden and audio silent. Correct authentication restores controls without autoplay. |
-| Trusted Wi-Fi disabled | Password required on session resume. |
-| Trusted Wi-Fi enabled, trusted association | Stay hidden/silent while a fresh association check is pending. After authorization, restore controls and remain paused. |
-| Untrusted, disconnected, unavailable or failed Wi-Fi lookup | Keep the password challenge. |
-| Rebackground during Wi-Fi/password verification | Reject stale success; remain concealed until the latest transition is authorized. |
-| Incoming call: ringing, decline, answer and end | Pause all video policies, including compact banners and iPad relayed calls where available. Never resume automatically. |
-| System pause before an app interruption callback; duplicate callbacks | Stay paused. No toggle, new seek, audible burst or second disruptive transition. |
-| Unplug wired headphones; disconnect Bluetooth audio | Pause, without speaker fallback audio. Reconnection stays paused until explicit Play. |
-| Session-only casting/PiP/pop-out and system external routes | Controls and native actions refuse external playback. Screen capture/output protections remain enforced. |
-| Explicit lock, Forget, credential replacement; mix saved and session accounts | Retire affected decoder/transport access. An ordinary player must not bypass a session gate or retain external playback permission. |
+| Switch apps; lock/sleep; wake; cancel or enter a wrong password | Session video, captions and audio stay concealed. Successful authentication restores paused controls. |
+| Change trusted Wi-Fi, then rebackground during lookup | Fresh trusted association can restore paused controls. Unknown, stale, offline or untrusted results retain the challenge. |
+| Ring, decline, answer and end calls; repeat after system Pause | Video stays paused without an audible burst or surprise seek. |
+| Unplug headphones or disconnect Bluetooth | Pause before speaker fallback. Reconnection requires Play. |
+| Request Cast, PiP, external display or pop-out with session-only access | The guarded action refuses external playback. |
+| Lock, Forget or replace credentials during playback | Affected output and provider access retire. Saved accounts cannot bypass another session's restriction. |
 
-On the hardware probe, **Done** advances from ordinary video to session-only video.
-Use the synthetic resume password defined by the current probe; do not substitute
-or retain a personal password. Its Wi-Fi phase must reflect the current code and
-available signing capabilities. Adapt the probe alongside future implementation
-changes rather than replaying old instructions against a different build.
+## Bluetooth and mirroring
+
+Use `tests.logisticsmobile.audio_hardware_probe:main` on iPhone and Android
+for video and speech. Reconnect an unapproved headset during protected
+speaker playback and listen on both outputs. Decline, retry and approve from
+**Settings → Privacy & Security → Protected audio outputs**. Protected route
+changes pause. Approval requires a separate Play. Verify the approval persists
+after restart and removing it during playback takes effect. In ordinary
+playback, unapproved outputs need no approval. Calls and actual output loss
+still pause.
+
+Start iPhone Mirroring before and after loading a session. Repeat in an
+ordinary document while the session stays loaded, with multiple windows,
+and while a password or Wi-Fi decision is pending. The restriction is
+app-wide. Supported capture signals conceal native video and pause audio.
+Check ordinary browsing again after the last session clears.
+[Audio policy](../../../development/architecture/audio-playback.md)
 
 ## Evidence and cleanup
 
-Collect the QA app's `Library/Caches/video-hardware-result.json` and the user's
-observations about flashes and audible output. Native player-state sampling alone
-cannot prove that physical speakers emitted no brief sound. Keep raw records,
-recordings and concise results under ignored `test-results/`, not in the wiki.
-Distinguish actual calls/route changes from injected notifications and physical
-sleep from simulator display-power commands.
-
-After evidence collection, uninstall only the temporary QA bundle and verify it is
-gone. Remove the task's temporary native apps, APKs and build copies; retain the
-reusable probe, this guide and concise validation evidence. Do not keep a build
-for the next test session: prepare a new one from the then-current code.
-
-## All-audio Bluetooth and mirroring extension
-
-The video launcher now opens the real Settings → Privacy & Security category between
-ordinary and session-only video phases. It includes native synthetic read-aloud,
-real selected-output monitoring and a Continue QA button. Test both video and
-speech with a Bluetooth device connected before Play; add/decline/cancel approval,
-switch approved/unapproved devices, remove approval while playing, reconnect and
-restart the QA app to verify persistence. Under session-only or retained
-protection, every selected-output change pauses and approval never resumes.
-With no protection, verify that unapproved or unidentified Bluetooth outputs
-play without approval prompts, output selection changes do not require an extra
-Play, and removing approval does not affect ordinary audio. In both modes,
-actual output loss and calls must still pause without automatic resume. Use a fresh QA build on both iOS and Android. The separate entry point
-`tests.logisticsmobile.audio_hardware_probe:main` runs the all-audio Settings phase
-without the iOS-only physical video/call launcher.
-
-### Reconnect during protected playback
-
-Repeat on an iPhone with paired AirPods and on Android with a paired Bluetooth
-headset. Use synthetic video and speech with audible content. Record the OS
-version, headset model, committed app source and timestamps for route selection,
-player pause and any audible output from the headset or speaker.
-
-1. Remove the saved approval. Disconnect the headset, start protected video on
-   the built-in speaker, then reconnect the headset. Verify the OS selects it.
-   Check for a pause, and listen for any audio on either output during and after
-   the switch.
-2. Decline the approval, press Play again and verify that the dialog returns
-   above the video controls. Close the video, open a second video and try
-   read-aloud. Verify both controls remain usable and both withhold audio
-   while approval is outstanding. Approve via **Settings → Privacy & Security →
-   Protected audio outputs → Approve current output…** and verify that a
-   separate Play action is required.
-3. Remove the approval and relaunch with the headset selected. Retry from Play
-   and Settings. If the route appears as unavailable or its identity is
-   unreadable, verify silence, select an identifiable output, and press Play
-   again. Repeat the reconnect with active read-aloud and with ordinary playback.
-
-For iPhone Mirroring, test ordinary documents before loading credentials, then
-load a session while mirroring is active. Stop mirroring from the Mac if the app
-is shielded. Also start mirroring with a session already loaded, repeat with an
-ordinary document while another session remains loaded, and clear the last
-session before checking ordinary browsing again. Repeat for multiple app windows,
-recording/AirPlay and pending Wi-Fi/password decisions. The expected restriction
-is app-wide whenever any session-only credentials remain loaded. A supported
-scene-capture signal must conceal native video as well as documents and pause
-all app audio. Do not mark actual iPhone Mirroring as passed from an injected
-capture trait or screenshot.
-
-When Wi-Fi identity is unavailable the launcher now runs an explicit enabled-but-
-unavailable password phase instead of skipping that case. Add the existing
-remote/crypt companion driver contexts to physical acceptance when authorized.
-Combine calls, route transitions and approval prompts; stale decisions must not
-approve a replacement output or start audio. Observe real sound as well as logged
-player state; a state log cannot prove absence of a brief acoustic leak.
-
-Read [audio policy ownership and OS limits](../../../development/architecture/audio-playback.md)
-when updating the probes. These new physical phases remain pending until the user
-is ready; no earlier video-only counts certify them.
+Save `Library/Caches/video-hardware-result.json` and actual visible/audible
+observations under ignored test results. Record app identity, OS, receiver or
+headset, and real versus injected events. Listen for brief audio during route
+transitions. Uninstall the owned QA app after collecting evidence and confirm
+removal. Preserve the main app and its data. The [developer guide](development.md)
+covers AirPlay receiver and HDR checks.
