@@ -4,6 +4,8 @@ import asyncio
 import toga
 from toga.style import Pack
 
+from .forms import SettingsLabel
+
 
 def controls(app, box):
     async def clear(positions):
@@ -41,12 +43,15 @@ def controls(app, box):
     async def recent(widget, **kwargs):
         await clear(False)
 
-    for title, handler in (
-        ("Clear all saved positions…", positions),
-        ("Clear all recent files…", recent),
+    for title, handler, description in (
+        ("Clear all saved positions…", positions,
+         "Reset saved reading and video positions across all sources. Files, bookmarks and recent-file lists are kept."),
+        ("Clear all recent files…", recent,
+         "Clear recent-file lists and old reopen references, including locked sources. Files and saved positions are kept."),
     ):
         button = toga.Button(title, on_press=handler, style=Pack(height=48))
-        box.add(button)
+        button._settings_destructive = True
+        box.add(button, SettingsLabel(description))
 
 
 def migration_controls(app, box):

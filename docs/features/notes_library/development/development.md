@@ -72,3 +72,10 @@ keep their own gestures, and no private overlays while locked. Use the
 `dataview.py` discovers top-level fences and brokers bounded read-only requests. `dataview_script.py` implements an independent API subset in a disposable worker without network or writes. Trust defaults on. Generated content stays outside source/save baselines. Navigation retires workers. `test_text_editor_dataview.py` checks Chromium execution and source preservation. [Supported script surface](../user/user.md#json-data-views-in-notes-library)
 
 `playlists.py` scopes stable entry IDs and positions to provider identity and library root. Credential-bound buckets are encrypted, with session memory for providers without a persistent key. Preserve unreadable buckets for recovery. Remove/repair stops an active entry. Locked continuation uses bounded prepared passages, a generic title and zero provider reads. Unlock and press Play to resume after exhaustion. `test_playlist_speech.py` checks locked seeking.
+
+Desktop `desktop/settings/playlists.py` and mobile `mobile/settings/playlists.py`
+use the same store for confirmed deletion across libraries and clearing locked
+records. Both refresh unlocked credentials before deleting and keep source notes.
+`test_notes_library_settings.py` covers cancellation, duplicate names, session-only
+queues and credentials changing during confirmation; `test_settings_ui.py` covers
+the mobile actions and privacy dismissal.

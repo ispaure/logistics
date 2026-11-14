@@ -23,6 +23,8 @@ class ReaderHistoryPanel(qt.QWidget):
         migrate_button = qt.QPushButton("Migrate protected reader history…")
         migrate_button.clicked.connect(self.migrate)
         layout.addWidget(migrate_button)
+        from .playlists import PlaylistSettingsPanel
+        layout.addWidget(PlaylistSettingsPanel(self))
         layout.addStretch()
 
     def clear(self, positions):

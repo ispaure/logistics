@@ -19,6 +19,11 @@ In writable libraries, use **New folder**, **F2** to rename, or right-click for 
 
 In **Playlist → New playlist**, name the queue and use **Add Markdown**, or choose **Add to playlist** from a note. Drag entries or use **Move up/down**. Use **Repair reference** for a missing note. **Read aloud** resumes this queue's saved place, and **Play selected** starts another entry. Time skips cross entries. Removing entries or deleting the playlist keeps source notes. **This session** queues stay in memory.
 
+To clean up playlists across libraries, open **Settings → Reader history → Notes Library playlists**.
+**Delete a playlist…** lets you choose a playlist and confirm its removal, including its saved position.
+Unlock protected storage to include its playlists. **Clear locked playlists…** removes encrypted playlist
+records whose credentials are locked or unreadable. Both actions keep source notes.
+
 For external vault launching, see [Obsidian desktop integration](../../obsidian/user/user.md).
 
 ## Embedded source files in Notes Library

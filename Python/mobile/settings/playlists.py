@@ -94,8 +94,13 @@ def controls(app, box):
         finally:
             widget.enabled = True
 
-    box.add(SettingsLabel('Notes Library playlists', style=Pack(font_weight='bold')))
-    for label, handler in (('Delete a playlist…', delete), ('Clear locked playlists…', clear)):
+    box.add(SettingsLabel('Notes Library playlists', style=Pack(font_weight='bold', margin_top=16)))
+    for label, handler, description in (
+        ('Delete a playlist…', delete,
+         'Choose a playlist to delete along with its saved playback position. Source notes are kept. Unlock protected storage to list its playlists.'),
+        ('Clear locked playlists…', clear,
+         'Delete playlist records whose credentials are locked or unreadable. Source notes and currently readable playlists are kept.'),
+    ):
         button = toga.Button(label, on_press=handler, style=Pack(height=48))
         button._settings_destructive = True
-        box.add(button)
+        box.add(button, SettingsLabel(description))
