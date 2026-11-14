@@ -4,7 +4,7 @@
 
 Settings opens a category list (feature-related categories appear when their
 features are enabled; **Camera** appears only on supported devices): **App**, **Features**, **Read aloud**, **Markdown**, **Text**,
-**EPUB**, **Books & Comics**, **LM Chat**, **Workspaces**, **Privacy & Security**, **Reset**, **Help**, and **About**.
+**EPUB**, **Books & Comics**, **Video** (iPhone and iPad), **LM Chat**, **Workspaces**, **Privacy & Security**, **Reset**, **Help**, and **About**.
 Both platforms include **Appearance** for Accent color and Seasonal snow; Android also offers
 High contrast / E Ink there. On a phone, tap
 one category to see its options and use Back to return to the list.
@@ -57,6 +57,12 @@ on Android too; Burst camera is available only on supported devices.
 **Settings → Help → Mobile documentation** always opens the built-in Markdown
 guide, even with every feature off. Its pages, links, search and history stay
 available independently of Text Editor.
+
+## Video
+
+On iPhone and iPad, turn on **Native AirPlay video** for compatible local files.
+The switch defaults off and applies the next time you open a video. See
+[watching on a TV](../../features/video/user_mobile/controls.md#watching-on-a-tv-with-iphone-or-ipad).
 
 ## Document restoration
 

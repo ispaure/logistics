@@ -187,6 +187,7 @@
     "settings/speech.py",
     "settings/titles.py",
     "settings/trusted_wifi.py",
+    "settings/video.py",
     "smoke.py",
     "snow.py",
     "speech_overlay.py",

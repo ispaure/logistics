@@ -1494,6 +1494,8 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 #import "PausePresentation.m"
 
 #import "CaptionPictureInPicture.m"
+#import "AirPlayVideo.m"
+#import "MKVRemux.m"
 
 @implementation LGCaptionVideoDrawable
 - (void)addSubview:(UIView *)view { [self.owner addSubview:view]; }

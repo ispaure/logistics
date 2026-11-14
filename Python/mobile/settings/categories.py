@@ -83,6 +83,10 @@ class SettingsCategories:
         from .epub import epub
         return epub(self.app)
 
+    def video(self):
+        from .video import video
+        return video(self.app)
+
 
     def camera(self):
         app = self.app
@@ -155,6 +159,7 @@ class Category:
     camera_required: bool = False
     icon: str = 'preferences'
     required_features: tuple[str, ...] = ()
+    ios_only: bool = False
 
 
 CATEGORIES = (
@@ -169,6 +174,7 @@ CATEGORIES = (
              icon='edit', required_features=('text_editor', 'notes_library')),
     Category('EPUB', 'epub', icon='books', required_features=('books',)),
     Category('Books & Comics', 'books', icon='books', required_features=('comics', 'pdf')),
+    Category('Video', 'video', icon='play', required_features=('video',), ios_only=True),
     Category('LM Chat', 'chat', icon='chat', required_features=('lm',)),
     Category('Workspaces', 'workspaces', icon='folder'),
     Category('Privacy & Security', 'privacy', icon='storage_crypt'),
@@ -186,7 +192,8 @@ def settings_sections(app):
     owner = SettingsCategories(app)
     from .reader_cover import available as cover_available
     return {entry.title: lambda entry=entry: getattr(owner, entry.factory)(*entry.arguments)
-            for entry in CATEGORIES if (not entry.camera_required or available(app))
+            for entry in CATEGORIES if (not entry.ios_only or type(app._impl).__module__.startswith('toga_iOS.'))
+            and (not entry.camera_required or available(app))
             and (not entry.required_features or any(enabled(app.preferences, name)
                  for name in entry.required_features)
                  or (entry.factory == 'books' and enabled(app.preferences, 'books') and cover_available(app)))}

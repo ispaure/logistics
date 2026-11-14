@@ -127,7 +127,7 @@ The guided flow supports [combined platform validation and reviewed GitHub/Fireb
 | [Aviation Tools](docs/features/aviation_tools/user/user.md) | Flight calculators and aircraft/airport reference data |
 | [Flight Simulator](docs/features/flight_sim/user/user.md) | Manage X-Plane settings and window presets |
 | [Media](docs/features/media/user/user.md) | Rename audio chapters from a CSV |
-| [Video Player](docs/features/video/video.md) | Local/LocalCrypt MP4, MKV, AVI and other common video containers, best-effort remote/crypt streaming, subtitles, audio tracks and dedicated iOS display output |
+| [Video Player](docs/features/video/video.md) | Local/LocalCrypt MP4, MKV, AVI and other common video containers, best-effort remote/crypt streaming, subtitles, audio tracks and optional native AirPlay on iPhone and iPad |
 | [File Tools](docs/features/file_tools/user/user.md) | Check filenames and remove Python bytecode files |
 | [System Tools](docs/features/system_tools/user/user.md) | Run platform-specific maintenance tools |
 

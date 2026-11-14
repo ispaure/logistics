@@ -380,6 +380,77 @@ paused and playing, and mirroring or document output on exit. Exercise
 session-only credentials and retained protected content at entry and during
 playback. Keep the logs and TV evidence in the ignored test-results directory.
 
+### Native AirPlay video
+
+The iOS-only `native_video_airplay` mobile preference defaults off. On open,
+`IOSAirPlayVideo` admits ordinary local MP4, MOV and M4V sources with an
+external-playback grant and a guarded physical file path. The retained source
+still owns revision checks and the shared resume checkpoint. AVPlayer reads the
+file URL directly and AVPlayerViewController supplies the route picker and
+system remote controls. Revocation detaches the current item and disables
+external playback. Protected, encrypted, provider-decoded and cloud content
+use the existing VLC path. Selecting the player on each open lets the user
+switch back after a format or receiver failure.
+
+An iPad simulator smoke test verified local H.264/AAC and HEVC/AAC playback
+from a saved seek position, pause and teardown, with external playback enabled.
+On physical Apple TV, test H.264/AAC and HEVC/AAC separately. Confirm the
+receiver shows the movie with Screen Mirroring disconnected, exercise Siri
+Remote Play/Pause and seeking, and check the output refresh rate with a 24 fps
+fixture and Match Frame Rate enabled. Check saved position when switching back
+to VLC and verify TV output stops when the app enters session-only protection.
+Local playback and SDK compilation cannot establish receiver compatibility.
+
+#### MKV stream copy
+
+The host validation driver exercises H.264/AAC and HEVC/AAC MKVs with 24 fps
+video, B-frames and closed GOPs. It stream-copies both tracks into fragmented
+MP4 HLS and checks that the compressed stream hashes match. It decodes each
+fragment with only its initialization segment and verifies decode timestamp
+continuity. A separate input-seek check starts near 12.5 seconds and compares
+the resulting video packets with the third HLS fragment. The host stream-copy
+driver rejects Opus because it exercises the copy path only.
+
+```sh
+PYTHONPATH=Python:. mobile_build/.venv/bin/python -m mobile_build.validation.video_airplay_remux --output test-results/mkv-remux.json
+```
+
+The driver uses host FFmpeg and ffprobe with synthetic media. Only the JSON
+report survives the build manager's scratch lease.
+
+On iOS, the same preference enables indexed local MKV with H.264 or HEVC
+and one AAC, AC-3 or E-AC-3 track. If none are present, the adapter can
+convert mono, stereo or 5.1 Opus to AAC-LC. Each fragment starts a fresh
+decoder and encoder, using audio preroll and a shared AAC sample grid so
+fragments can be generated out of order. The HEVC bitstream and color signaling
+stay with the video. `MKVRemux.m` uses FFmpeg 9.0 headers
+against the symbols in pinned VLCKit. It reads Matroska cues, validates the
+random-access sample at each requested boundary, and stream-copies that range
+into fragmented MP4. It bounds input I/O, fragment size and request time and
+rejects unsupported streams and codec configuration changes. The HLS server
+binds the Wi-Fi interface for receiver access and serves only the current
+unpredictable capability URL. It keeps fragments in memory and rechecks
+the source revision and external playback policy during each response.
+Closing the player stops the server and releases its file descriptor.
+Admission failure selects VLC. **Use VLC** reopens the current file at the
+shared checkpoint without changing the preference.
+
+An iPhone simulator probe linked the pinned VLCKit binary, requested
+fragments out of order and decoded each fragment independently. Compressed
+stream hashes matched for AVC/AAC, HEVC/AAC, HEVC/AC-3 and HEVC/E-AC-3,
+and AVPlayer loaded the generated HEVC/AAC stream over HTTP and resumed
+from a saved 12.5-second seek. An HEVC Main 10 fixture retained its compressed
+video, PQ transfer and BT.2020 primaries while its six-channel Opus audio
+converted to six-channel AAC. AVPlayer resumed that stream at 12.5 seconds
+and continued playing after a backward seek to 2.4 seconds.
+
+Physical acceptance includes Dolby audio selection, HDR color and timing,
+Apple TV retrieval of the playlist and segments, forward and backward remote
+seeks, handoff to VLC and revocation during streaming. Test the fallback
+when the receiver cannot access the phone over Wi-Fi. TrueHD/Atmos uses a
+supported alternate track if available. Dolby Digital Plus Atmos and receiver
+output have separate hardware acceptance.
+
 ## Cloud range playback
 
 Remote browsers dispatch MP4/MKV directly to this feature on desktop and mobile.

@@ -80,6 +80,30 @@ to return to classic PiP. Changing this preference leaves active playback intact
 
 ## Watching on a TV with iPhone or iPad
 
+Turn on **Settings → Video → Native AirPlay video**, then open an ordinary local
+MP4, MOV or M4V and choose your Apple TV from the AirPlay controls in Apple’s
+player. Compatible local MKVs can use the same picker over Wi-Fi. The MKV
+path copies H.264 or H.265 (HEVC) video, including its HDR metadata, and one
+AAC, AC-3 or E-AC-3 track into streaming fragments as needed. If those audio
+tracks are unavailable, it can convert mono, stereo or 5.1 Opus to AAC.
+For TrueHD/Atmos files with an AC-3 track, Apple’s player uses the AC-3 track.
+Receiver support can vary.
+Apple’s player provides
+the playback controls and supported embedded tracks. The switch is off by
+default and its value is saved on the device. Turn it off and reopen the video
+to use VLC for every file, or tap **Use VLC** in Apple’s player for the
+current file. Unsupported MKVs, encrypted and cloud files open in VLC.
+VLC provides MKV subtitle tracks, additional audio tracks and subtitle sidecars.
+Session-only protection blocks AirPlay.
+
+Use the iPhone timeline to jump to another part of the movie. The playlist
+covers the full movie and the player requests the fragment around the new
+position. A jump may pause briefly while Logistics reads from the nearest
+keyframe. Apple’s player handles remote transport commands during AirPlay,
+with Siri Remote behavior subject to physical receiver testing.
+
+With VLC, use the steps below for screen output.
+
 Connect through AirPlay Screen Mirroring before or during playback. When iOS
 provides a dedicated display, the TV shows the video and its selected subtitles
 against black, fitted to the TV’s own bounds. Play, pause and seek on the phone
