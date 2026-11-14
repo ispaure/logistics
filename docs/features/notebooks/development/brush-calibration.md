@@ -137,7 +137,9 @@ Expect matching Python and JavaScript widths, direct imported widths,
 distinct brushes, grayscale isolation and matching live/completed raster
 output in desktop and both mobile scheduling presentations. Inspect the
 contact sheets and probe results in the output folder. This exercises real
-Qt WebEngine with synthetic input. For native Boox math, the notebook test
+Qt WebEngine with synthetic input. If a headless GPU context fails, retry with
+`QT_QPA_PLATFORM=offscreen` and
+`QTWEBENGINE_CHROMIUM_FLAGS="--disable-gpu --disable-accelerated-2d-canvas"`. For native Boox math, the notebook test
 utility `boox_ballpoint_parity.py --output ...` covers 256 pressure levels
 at each of three widths with portable Java and a TouchHelper stub. Managed
 Android package checks additionally exercise the compiled curve, SDK class

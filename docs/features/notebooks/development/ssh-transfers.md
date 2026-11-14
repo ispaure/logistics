@@ -1,10 +1,23 @@
 # reMarkable upload preparation and mutation qualification
 
-The SSH browser is read-only. `remarkable_transfer.prepare_upload` prepares a
-local archive candidate, and `compare_upload_members` checks a scoped copy
-against its receipt. Neither function opens a connection, writes a file, changes
-a native ID, chooses a tablet folder or publishes metadata. Upload and tablet
-organize controls remain unavailable until the device contract is qualified.
+Start at **Debug → Notebooks → Retrieve RMDOC from reMarkable Tablet…** on
+desktop. `remarkable_ssh.list_snapshot` builds the read-only tree from native
+UUID metadata. `export_document` streams an opaque-member-preserving RMDOC.
+Use the desktop host fixtures to change the browser without a tablet:
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/notebooks/test_remarkable_retrieval.py
+```
+
+Expect synthetic folders and documents to retain their identities across refresh
+and reconnect. In `ui/remarkable_destination.py`, configure native Save mode and
+the default suffix before overwrite confirmation. Publish only to the accepted
+local path and check the captured revision before replacing it. See
+[streaming local exports](../../../development/document-storage.md#streaming-local-exports).
+
+`remarkable_transfer.prepare_upload` prepares a local candidate, and
+`compare_upload_members` checks a scoped copy against its receipt. Upload and
+tablet organize controls remain unavailable while device qualification is open.
 
 ## Local candidate contract
 

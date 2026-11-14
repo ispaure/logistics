@@ -7,6 +7,16 @@ apply. Only strokes on visible layers whose complete segments and painted
 diameters fit inside the polygon are selected. Testing endpoints alone is
 insufficient for concave polygons.
 
+For an editor or codec change, from the repository root run:
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/notebooks/test_stroke_selection.py
+```
+
+Expect selected geometry, clipboard position, native fields and Undo/Redo to
+survive save and recovery. For on-screen hit testing and overlays, change
+`assets/selection.js` and use the Canvas probe below.
+
 The selection has one dashed bounding box, four square uniform-scale handles and
 a circular rotation handle above its top edge. Dragging inside moves it. Rotation
 integrates wrapped angular deltas, so a given tangential movement is finer farther
@@ -63,25 +73,14 @@ count fixture processes one million dense interior samples against 2,048 edges
 with 1,000,040 counted work units and one exact edge test. These are complexity
 checks, rather than measured device latency.
 
-On November 4, 2026, `selection_canvas_probe.py` passed on macOS Qt WebEngine
-against Logistics `cce65617`, commonUtils `888872d1` and build SDK `0f9285bb`.
-The desktop (1,200 pixels), phone (390 pixels) and tablet/iOS-style frame-batched
-presentation (760 pixels) passed synthetic DOM finger/pen/mouse gestures,
-full-stroke containment, uniform scale, rotation, cancellation, actual Python
-Editor acknowledgements, original-position Copy/Cut/Paste and native save/reopen.
-A corner tap on a half-unit dot emitted no edit. Tiny-dot and clipboard routing
-also have failing-control V8 regressions.
+Run the Qt WebEngine probe with the desktop interpreter on macOS or Linux:
 
-All six compositor-fenced light/dark screenshots were inspected. Selection
-outlines, square corners, rotation circles and Copy/Cut/Delete were visible;
-Paste remained clear of the zoom dock, desktop footer and selection actions.
-Geometry guards check that clearance and menu stacking in every presentation.
-The complete controller finished in 20.59 seconds, with no claim of exclusive
-benchmark conditions. Its private source, full SDK/submodule, Qt environment,
-profiles, storage/cache and manager scratch workspace were removed, and its
-owned process group had no remaining processes.
+```sh
+PYTHONPATH=Python:. .venv/bin/python Python/tests/notebooks/selection_canvas_probe.py --output test-results/notebook-selection
+```
 
-These are Qt WebEngine presentation checks, including mobile HTML, rather than
-native Android WebView or iOS WKWebView acceptance. Synthetic events use a
-capture-identity stub; physical pointer capture, pen latency, native mobile
-touch behavior and reMarkable interoperability remain separate hardware gates.
+Expect synthetic mouse, finger and pen input to select fully enclosed strokes,
+transform and cancel, and copy and paste through the real Python editor bridge.
+Inspect the selection handles, clearance and clipboard controls in the light and
+dark outputs. For platform event delivery and physical pen behavior, use
+[hardware acceptance](hardware-acceptance.md).

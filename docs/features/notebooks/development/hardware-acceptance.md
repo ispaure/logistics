@@ -1,8 +1,8 @@
 # Notebook hardware acceptance
 
-These are procedures, not a record of passing acceptance. Pending source-bound native
-template/fence checks and Linux latency acceptance are listed in the
-[implementation guide](development.md#current-implementation-and-acceptance-boundary).
+Use disposable synthetic notebooks to check physical pen input and native ink
+interoperability. The [implementation guide](development.md#current-implementation-and-acceptance-boundary)
+tracks pending native and latency checks.
 
 ## Prepare disposable notebooks
 
@@ -10,7 +10,7 @@ Run the focused acceptance generator from the repository root with the project
 interpreter and `PYTHONPATH=Python:.`:
 
 ```sh
-.venv/bin/python Python/tests/notebooks/notebook_acceptance_probe.py \
+PYTHONPATH=Python:. .venv/bin/python Python/tests/notebooks/notebook_acceptance_probe.py \
   --output test-results/rmdoc-handoff
 ```
 

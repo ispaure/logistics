@@ -5,6 +5,16 @@ The goal is to remove redundant input without imposing a fixed sampling rate,
 forcing every stroke to the same point count, or replacing handwriting with a
 smoothed curve. Opening or saving existing ink does not run this reduction.
 
+To adjust the sampler, edit `Python/features/notebooks/sampling.py`. From the
+repository root, run:
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/notebooks/test_stroke_sampling.py
+```
+
+Expect the independent reconstruction checks to pass for both positional
+parameterizations, including protected stationary dynamics and codec rounding.
+
 ## Reference and scope
 
 The completed Paper Pro worksheet contains 1,585 active strokes and 29,237
@@ -71,16 +81,11 @@ translation, partial erasing, recovery and unsupported future objects.
 Workflow tests exercise the actual editor, native codec and portable exporter;
 point-count or raw-byte reductions are distinguished from compressed ZIP size.
 
-The November 4, 2026 copy-only worksheet audit retained 28,776 of 29,237 points
-(461 removed, 1.58%) within all independent reconstruction bounds. All twelve
-original scene roundtrips remained byte-identical. This is an audit of the
-reducer on copied native rows; the application does not simplify imported ink.
-The focused sampler, native preservation, editor workflow and staged-payload
-checks passed 34 tests and 88 subtests. The isolated payload check imports only
-staged modules and renders editor HTML, including the palm/viewport dependencies;
-it does not certify native SDK integration or physical pen behavior.
+A copy-only worksheet comparison retained 28,776 of 29,237 points within all
+independent reconstruction bounds. Ordinary import/save preserved all twelve
+original scene streams. See [brush calibration](brush-calibration.md#measured-widths-and-colors)
+for the sample and firmware provenance.
 
 `measure_sampling.py` emits aggregate worksheet statistics and can evaluate a
 candidate on copies without modifying the input archive. Keep private source
-files and derived evidence under ignored test results. This is an original
-application reduction policy, rather than a reproduction of tablet firmware.
+files and derived evidence under ignored test results.
