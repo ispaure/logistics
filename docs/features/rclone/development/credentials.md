@@ -230,8 +230,11 @@ not resume the transfer or record a successful association for that request.
 
 ## Mobile credential import
 
-`mobile/cloud_ui.py` builds the import form and presents the
-`import-credentials` and `import-credentials-password` Settings routes.
+`mobile/credential_panels.py` builds **Credential Packages**, **Import
+credential ZIP** and **Unlock credential ZIP**. Settings → Workspaces →
+**rclone connections…** and Workspaces → **Connections…** enter through
+`mobile/cloud_ui.py:show_cloud_connections()`. The same module presents the
+`connections`, `import-credentials` and `import-credentials-password` routes.
 `mobile/credentials_ui.py:CredentialWorkflow` owns picker admission, the
 pending ZIP, the storage choice and the import epoch. The visible import
 action opens the system Files picker first. Bounded ZIP metadata selects
