@@ -27,8 +27,14 @@ class CanvasHeaderTests(unittest.TestCase):
                 '--header-only', '--output', str(output)]
         env = dict(os.environ, QT_QPA_PLATFORM='offscreen',
                    QTWEBENGINE_CHROMIUM_FLAGS='--disable-gpu', QT_QUICK_BACKEND='software')
+        if sys.platform == 'linux':
+            # The hosted Fedora container has a small shared-memory mount.
+            env['QTWEBENGINE_CHROMIUM_FLAGS'] += ' --disable-dev-shm-usage'
         if sys.platform == 'linux' and (display := shutil.which('xvfb-run')):
             args = [display, '-a', '--server-args=-screen 0 1440x1000x24', *args]
             env.update(QT_QPA_PLATFORM='xcb', QT_OPENGL='software')
-        result = subprocess.run(args, capture_output=True, text=True, timeout=120, env=env)
+        try:
+            result = subprocess.run(args, capture_output=True, text=True, timeout=120, env=env)
+        except subprocess.TimeoutExpired as error:
+            self.fail(f'Notebook header probe timed out.\nstdout: {error.stdout!r}\nstderr: {error.stderr!r}')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
