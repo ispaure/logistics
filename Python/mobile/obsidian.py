@@ -80,7 +80,7 @@ def remember_note(app, owner):
                 '.cbz': 'comic', '.cbr': 'comic', '.rmdoc': 'notebook'}.get(suffix, 'text')
         session = Session('', 'file-reference', history.reference_id(source), kind, title=title)
         session.source, session.opened_at = source, time_ns()
-        session.history_opener = dict(kind='notes', root=str((owner.provider.root / owner.root).resolve())
+        session.history_opener = dict(kind='notes', root=str(owner.provider.root / owner.root)
                                      if source['type'] == 'local' else owner.root)
         history.validate_reference(dict(provider='file-reference', resource=session.resource,
                                         kind=session.kind, title=title, source=source,

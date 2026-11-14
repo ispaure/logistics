@@ -747,7 +747,7 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertTrue(await reopen(self.app, row))
             restored = self.app.vault_browser
             self.assertEqual(restored.path, 'Home.md')
-            self.assertEqual(restored.provider.root, self.vault.resolve())
+            self.assertTrue(restored.provider.root.samefile(self.vault))
             restored.close()
         self.run_async(exercise())
 
