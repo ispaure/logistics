@@ -1,81 +1,75 @@
 # Perforce Feature
 
-For workflows, settings and troubleshooting, see the [user guide](../user/user.md).
+Start a configured local P4D server and open a console from **Workspaces**.
+The action callbacks run on Linux desktop. Other desktop platforms show
+disabled buttons for eligible folders. See the [user guide](../user/user.md)
+for configuration and [mobile availability](../user_mobile/user_mobile.md)
+for the platform boundary.
 
-See [feature conventions](../../../development/features.md) for shared contribution contracts.
+## Try a console label change
 
-Offers a Launch P4D action for configured local folders. Launching is supported only on Linux; the action is disabled on other platforms.
-
-## Configuration
-
-Place `remoteConfig.ini` in the local folder:
+Enable **Perforce Server** in **Settings → Features**. Create a disposable
+folder under your configured local workspace root (by default
+`~/Server/Local`) and give it this `remoteConfig.ini`:
 
 ```ini
 [Perforce]
 p4d_path = p4d
 data_path = data
-port = 1666
+port = 27182
 ```
 
-Relative paths resolve from the selected folder, which is the working directory;
-absolute paths are accepted. All three settings must be present for the folder to receive the Perforce section. Supply the P4D executable and server data separately.
+In **Workspaces → Local → On This Computer**, select the folder and look for
+**Open P4 Console (Port: 27182)** under **Actions → Perforce**. The console
+button also requires an executable `p4` in the folder or on PATH to be enabled
+on Linux. Inspect the label without starting a server.
 
-The button reads `server.id` from the configured data directory and displays its trimmed, uppercase contents with the port, for example `Launch P4D MY-SERVER (Port: 1666)`. If `server.id` is missing, empty, or unreadable, the button displays `Launch P4D (Port: 1666)`.
+Try changing **Open P4 Console** to **Open Perforce Console** in
+`Python/features/perforce/ui_contributions.py` (`_get_actions`). Keep the
+configured port in the label. Update the expected button name in
+`test_console_forwards_arguments_and_keeps_connection_in_interactive_shell`.
+Run from the repository root after [desktop setup](../../../development/getting-started.md):
 
-The action resolves the executable and data paths, then launches
-`<resolved-p4d-path> -C1 -r <resolved-data-path> -p <port>` in a new terminal.
-`shlex.join` preserves argument boundaries, including spaces in either path. It does not provide provisioning, stop controls, or health monitoring.
+```sh
+python3 dev.py test desktop --exact-file Python/tests/integrations/test_perforce.py
+```
 
-`Open P4 Console` opens an interactive Bash terminal in the server folder on Linux. Place the executable `p4` client alongside `remoteConfig.ini`, or install it on your system PATH. The button is disabled when no client is found. Start the server before issuing commands.
+Expect four passes on a POSIX host. The console test mocks Linux and the terminal
+launch, then runs a stub client in Bash and checks the button label and explicit
+server arguments. The Bash and executable-permission cases skip on non-POSIX
+hosts. On relaunch, the selected folder should show the revised button label.
 
-The console defines a shell function supplying the client path and configured server
-address (numeric ports become `localhost:<port>`). Preserve interactive password
-prompts and explicit port selection, which prevents a P4 config file from redirecting
-commands to a different server. Console command examples belong to the user guide.
+## Configuration
 
-## Structure
-
-- `detection.py`: reads folder settings.
-- `actions.py`: Linux launch implementation.
-- `ui_contributions.py`: Folders action and platform availability.
-
-No startup initialization or rclone dependency is required.
+`detection.py` reads the three settings from the selected folder.
+Relative paths resolve from that folder, which is also the working directory.
+Absolute paths are accepted. Supply the P4D executable and its data separately.
+The optional `server.id` is read as UTF-8 with an optional BOM, trimmed and
+uppercased for display. Missing, blank or unreadable IDs leave the name out of
+the button. An executable local `p4` takes precedence over `shutil.which('p4')`.
+A non-executable local file falls back to PATH.
 
 ## Availability and lifecycle
 
-`_is_available` requires a local `FolderEntry` and the three configuration keys;
-remote-only entries do not receive this contribution. Contribution availability
-does not validate client permissions, data-directory readiness or a running server. Both action
-callbacks independently reject non-Linux execution. In `detection.py`, client
-discovery prefers a local `p4` only if it is a regular executable file.
-Otherwise it tries `shutil.which('p4')`. `test_perforce.py` covers fallback
-when the local file lacks execute permission.
+`Python/features/perforce/__init__.py:register` publishes a
+`FolderFeatureContribution` from `ui_contributions.py`.
+`_is_available` checks for a local `FolderEntry` and the three configuration
+keys. File permissions, data readiness and server health are separate runtime
+concerns. The action callbacks independently enforce the Linux gate.
 
-The terminal wrapper returning anything except `False` is treated as launch
-success. The feature does not own or await the resulting server process, perform
-login, or manage server storage. Interactive console commands use an exported
-Bash function with an explicit `-p` argument and `P4PORT`; numeric ports are
-qualified with `localhost:`. No password is collected by Logistics.
+`actions.py:launch_server` launches
+`<resolved-p4d-path> -C1 -r <resolved-data-path> -p <port>` in a new terminal.
+Keep argument boundaries with `shlex.join`. `open_console` opens interactive
+Bash with `P4PORT` and an exported `p4` function that supplies explicit `-p`
+on each call. Numeric ports become `localhost:<port>`. Explicit addresses
+pass through. Bash owns interactive password prompts.
 
-`services/mobile_features.py` has no Perforce entry and `mobile_build/tools.py`
-does not package this feature as a source owner. There is no Android/iOS folder
-action or console adapter; see [mobile availability](../user_mobile/user_mobile.md).
-Reusable Perforce wrapper APIs belong in commonUtils' own documentation; this
-guide covers the Logistics folder integration only.
+The shared terminal wrapper indicates launch success unless it returns
+`False`. Server startup, readiness, login and shutdown belong to the
+terminal or normal Perforce tools. Use the terminal output and `p4 info`
+to diagnose connection or readiness failures. The focused tests validate
+arguments and failure propagation using fixtures. Live server connectivity
+and native terminal availability require Linux runtime checks.
 
-## Validation
-
-`Python/tests/integrations/test_perforce.py` covers resolved launch arguments and
-failure propagation, client PATH fallback, missing-client handling, and a POSIX
-interactive Bash fixture that verifies explicit server and argument forwarding.
-It uses a stub client rather than provisioning a real P4D server. Changes can be
-checked through the owning desktop test entry point:
-
-```sh
-python3 dev.py test desktop test_perforce.py
-```
-
-The November 4, 2026 documentation audit read these tests and the feature source,
-then checked Markdown structure and links. No tests, Qt, terminal/server launches,
-builds or device validation ran during the release quiet hold. This review does
-not establish live-server connectivity, terminal availability or native acceptance.
+See [feature conventions](../../../development/features.md) for the shared
+folder contribution contract.

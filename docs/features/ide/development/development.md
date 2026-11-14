@@ -1,85 +1,82 @@
 # Project IDE
 
-[User guide](../user/user.md) · [Mobile support](../user_mobile/user_mobile.md) · [Architecture](ide.md)
+Register a source directory to edit, search and navigate files in a desktop
+project workspace. See the [user guide](../user/user.md) for controls and
+[mobile availability](../user_mobile/user_mobile.md) for the platform boundary.
 
-`projects.py` owns the versioned registration store. `ui/page.py` manages project
-settings and retained tabs. `ui/workspace.py` owns canonical document paths, groups,
-workers, close decisions and restoration. `ui/browser.py` wraps the shared lazy
-filesystem model. `ui/documents.py` owns shared text buffers and independent CodeEdit views;
-`ui/navigation.py` presents `analysis.py`'s background Jedi and bounded scan results.
-No IDE import depends on the standalone Text Editor. `ui/git_status.py` optionally
-uses the Git backend for read-only project-tree colors independently of Git UI
-activation or repository registration.
+## Try a column guide change
 
-Project containers reuse shared Workspace sizing, detachment and menu routing.
-Internal editor gestures use ScopedTabBar, confined to each project’s editor
-splitter; file tabs never become floating windows. See the user guide for menus
-and left/center/right snapping.
+On desktop, enable **IDE** in **Settings → Features** and select its rail
+icon. Use **+ → Register / Open existing project** to register a temporary
+directory containing a Python file. Open the file, use **Split right**, and
+open **Project → Project Settings / Source Paths**. The **Column guide**
+setting defaults to 120 for new projects and applies to both source views.
 
-## Desktop presentation
+Try changing the default to 100 in `Python/features/ide/projects.py`
+(`Project.column_guide` and the fallback in `Project.from_dict`). Keep explicit
+saved values, including 0 for Off. `IDEPage.settings` in `ui/page.py` owns
+the control, and `ProjectWorkspace` in `ui/workspace.py` applies it to existing
+and new editors. Update the default assertions in `test_ide.py` and
+`test_ide_markdown.py`. Run from the repository root after
+[desktop setup](../../../development/getting-started.md):
 
-Desktop widgets and controllers live in feature-owned `ui/`. Registration stays lazy; portable domain modules do not import this package. IDE/Text Editor change-marker and hunk integration is shared through `services/editors/ui/`.
+```sh
+python3 dev.py test desktop --exact-file Python/tests/ide/test_ide.py --exact-file Python/tests/ide/test_ide_markdown.py
+```
+
+Expect both files to pass. The tests check the fallback for older project
+records, explicitly saved values, and updates in existing and split views
+without modifying their text. Register a fresh disposable project after
+relaunch to see the new default. An existing project with an explicitly
+saved value keeps that value.
+
+## Find the owner
+
+Paths below are relative to `Python/features/ide/`.
+
+| Change | Start here |
+| --- | --- |
+| Destination and project tabs | `__init__.py:register` declares the lazy `ide.workspace` page. `ui/page.py:IDEPage` manages projects, settings and retained tabs. |
+| Project registration and workspace recovery | `projects.py:ProjectStore` owns the versioned checkpoint. `ui/workspace.py:ProjectWorkspace` owns worker lifetime, document groups and restoration. |
+| Editing, split views or Markdown | `ui/documents.py` and `ui/markdown_document.py` own the project buffer and view adapters. |
+| Project tree, rename or Git status | `ui/browser.py` wraps the shared lazy filesystem model. `ui/git_status.py` reads Git status independently of Git page activation or registration. |
+| Search, definitions or usages | `ui/find_files.py` owns Find in Files. `analysis.py` and `ui/navigation.py` own the Jedi requests and navigation. `ui/usages.py` owns the result popup. |
+
+See [IDE architecture and implementation](ide.md) for editing, navigation,
+workspace recovery and test ownership. IDE and Text Editor share editor
+primitives and change-marker services through commonUtils and
+`Python/services/editors/ui/`. IDE owns project buffers and imports no
+standalone Text Editor UI.
 
 ## Workspace checkpoint admission
 
-`ProjectStore` reads at most 4 MiB plus one byte before parsing. It validates
-project records, unique identifiers, the open-project list and active identifier
-before publishing any loaded state. A malformed checkpoint leaves an empty store
-with a visible error and prevents saving over the original. Duplicate open IDs
-remain deduplicated and stale string IDs remain filtered as before. The schema
-version, project fields and JSON layout are unchanged. `test_ide.py` covers
-malformed structures, partial admission, conflicting writers and round trips.
+`ProjectStore` keeps a version-1 `IDE/workspace.json` beside the application
+preferences. It reads at most 4 MiB plus one byte and validates the entire
+project list, identifiers and open-project selection before publishing any
+state. Duplicate open IDs collapse and stale string IDs are filtered out.
+Malformed or unsupported checkpoints leave an empty store with a visible
+error and block writes over the original. Preserve that file for recovery.
+
+Atomic publication checks the previous bytes to detect another instance's
+writes. This is optimistic conflict detection. Reopen the workspace after
+a write conflict before trying again. Project and file records remain
+available when the root or file is temporarily inaccessible.
 
 ## Test ownership and execution
 
-`Python/tests/ide/` keeps project persistence, shared-buffer lifetimes, Markdown
-integration, navigation, tree presentation and confined drag coverage. Pure
-`search_files` masks, exclusions, regex and live-buffer cases live in commonUtils'
-`tests/browser/test_search.py`; the IDE Find in Files tests retain real worker,
-preview, cancellation, project exclusions and unsaved-buffer navigation checks. The unused
-`analysis.search_project` predecessor has been removed; Find in Files uses the
-shared search owner and Go to File retains `analysis.project_files`.
+Select the file that owns your change in `Python/tests/ide/`. The
+[architecture guide](ide.md#validation) maps the focused files to behavior.
+The default full profile includes the 1,000-line theme-switch test and,
+in the drag file, the extended side-drop matrix. The daily profile retains
+both directions and both event receivers, merge/split, cancellation and
+group-cap checks.
 
-Run the daily selection with `python3 dev.py test desktop 'test_ide*.py' --profile daily`.
-The default full profile additionally runs the 1,000-line theme-switch case and
-48 synthetic plus 24 QTest side-drop matrix. Daily tests retain both side-drop
-receivers/directions, QTest input, merge/split, cancellation and group-cap checks.
-Non-autosave fixtures explicitly disable autosave; dedicated autosave/change-marker
-coverage remains in `Python/tests/editing/test_editor_changes.py`. The IDE owner
-selection includes that file: `python3 dev.py test-owner ide --profile daily`.
-Run the relocated shared cases with `python3 dev.py test shared test_search.py`.
+`test_ide_browser.py` needs native filesystem notifications even with offscreen
+Qt. A restricted macOS sandbox can populate initial rows and miss later
+creations. If automatic discovery times out, rerun that file with notification
+access. Keep the real automatic-update assertion. The Git status tests
+explicitly refresh after staging and retain an automatic timer-driven check
+for a modified file becoming clean.
 
-Find in Files checks reject nonempty stale results both while a newer request
-is pending and after closing; a superseded preview cannot replace the newly
-selected file. Gesture checks preserve unsaved text, cursor and
-undo through both synthetic and QTest input; the group-cap case also verifies
-that a rejected drop has no target or preview.
-
-Browser discovery checks need native filesystem notification access even with
-`QT_QPA_PLATFORM=offscreen`. A restricted macOS sandbox can populate the initial
-rows but miss later file creations. Run the isolated suite with notification
-access before treating that timeout as an application regression; keep the real
-automatic-update assertion. Failure diagnostics include the expected and actual
-rows and active filter. Git status tests explicitly refresh staging changes but
-retain an automatic timer-driven check when a modified file becomes clean.
-
-These host checks validate Qt integration and document state, not native window
-manager behavior or visual appearance on each supported desktop platform.
-
-## Platform boundary and documentation audit
-
-IDE registers a desktop `PageContribution` in `features/ide/__init__.py` and
-constructs Qt widgets lazily through `ui/page.py`. It has no mobile adapter or
-`mobile_sources.json`, and `mobile_build/tools.py` does not include IDE among its
-source owners. The mobile app does not expose the project workspace. Portable
-project metadata alone does not establish mobile IDE support.
-
-The November 4, 2026 documentation audit reviewed registration, project storage,
-project-tree Git snapshots and mutation guards against the IDE tests. In
-particular, `test_ide_browser.py` asserts normal folder foregrounds, olive ignored
-paths and individual dirty-submodule files; `test_ide.py` covers renaming modified
-open files without losing shared buffers. The user guide now matches these
-contracts. No Qt, build, simulator or device checks were run during this audit;
-static link and whitespace checks do not establish native platform acceptance.
-The dated validation records in the architecture page describe their original
-revisions, not current acceptance.
+IDE registers a desktop Qt page. The mobile feature catalog and source
+staging have no IDE entry or adapter.

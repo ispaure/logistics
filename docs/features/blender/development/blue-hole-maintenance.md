@@ -1,7 +1,8 @@
 # Blue Hole consumer maintenance
 
-This guide covers Logistics' Blue Hole integration. Blue Hole's addon internals,
-operators, export policy and its own vendored dependencies belong to that project.
+Change the Blue Hole source, version compatibility or installed-copy recovery
+from **Blender → Configure Blender… → Presets → Blue Hole**. Blue Hole's add-on
+internals, operators, export policy and vendored dependencies belong to that project.
 For the full launcher architecture, see [Blender development](development.md);
 for controls and recovery, see [Blender usage](../user/user.md).
 
@@ -26,6 +27,13 @@ Archive normalization keeps the stable `legacy:BlueHole` identity, with bounded
 archive size/member count and regular library metadata/safety validation.
 Browsing settings and saving intent do not call the remote update path.
 
+For **Local**, `local_checkout()` validates the chosen Git working tree and
+`local_addon()` checks its metadata against the managed release. Apply uses a
+directory symlink or Windows junction to the checkout. Copying a preset keeps
+the choice and recreates the link on launch. Rollback moves the link itself,
+and switching to GitHub replaces it with a real directory. The checkout lives
+outside the preset and local mode skips GitHub.
+
 ## Apply and recovery
 
 The regular addon apply transaction in `addons/library.py` owns resource backup,
@@ -43,21 +51,27 @@ waits for a successful online resolution.
 On update, `envFiles/default` remains publisher-owned. Other existing environments
 are preserved; disabling keeps them under preset `addon-data/bluehole` so a later
 re-enable can restore them. These files follow preset copy/delete and rollback.
-Deluxe writes preset preferences and keymaps only when its payload digest changes,
-keeping the first pre-Deluxe preferences backup. Turning Deluxe off does not undo
-previously stamped files.
+For releases below Blender 5.2.2, Logistics can stamp Deluxe preferences and
+keymaps when the payload digest changes, keeping the first pre-Deluxe preference
+backup if there was a preference file. Previously stamped files remain after
+turning Deluxe off. From 5.2.2 onward the add-on handles Deluxe at runtime and
+Logistics drops the legacy stamp setting from pending and applied state.
 
 ## Validation limits
 
-`Python/tests/blender/test_blender_bluehole.py` supplies mocked remote branch and
-commit responses for version/channel routing, commit cache reuse, unsafe and
-incompatible archives, environment preservation and Deluxe boundaries.
+Run from the repository root after [desktop setup](../../../development/getting-started.md):
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/blender/test_blender_bluehole.py
+```
+
+Expect 14 passes. The file supplies mocked remote branch and commit responses
+for version/channel routing, commit cache reuse, unsafe and incompatible
+archives, environment preservation and legacy Deluxe boundaries.
 `test_blender_library.py` covers transactional updates, disable/re-enable,
 rollback and installed-copy fallback; `test_blender_page.py` covers requested
 versus installed state and the offline warning.
 
-These contracts do not prove current remote branch availability, Blender addon
-registration, operator UI, theme/keymap correctness or export behavior. Blender
-5.2.2 addon acceptance remains incomplete. This audit used source/test review and
-static documentation checks only; historical Blender runs in the developer guide
-retain their original platform and date limits.
+Current remote branch availability and native add-on registration, operator UI,
+theme/keymap correctness and exports require separate runtime checks. Blue Hole
+acceptance on Blender 5.2.2 remains incomplete.
