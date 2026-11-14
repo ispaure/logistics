@@ -1,20 +1,62 @@
-# Paper Pro brush calibration
+# Notebook brush calibration
 
-## November 4, 2026 sample
+Change the shared brush catalog for new ink on desktop, Android and iOS.
+To change how that ink looks on screen, start with [Canvas rendering](#app-graphite-appearance).
 
-A completed twelve-page worksheet from a Paper Pro running OS **3.29.0.153**
-contains 1,585 native strokes, including handwritten notes and calibration marks.
-The matching native color PDF supplies a rendering reference. Original files,
-handwriting coordinates, rendered pages and detailed measurements remain under
-ignored local test evidence, outside the wiki and release payloads. Tests use
-independently constructed synthetic geometry and aggregate numeric fields.
+## Try a brush change
 
-The supplied PDF-backed worksheet imported successfully, accepted native writing
-and exported as both `.rmdoc` and color PDF. That establishes this particular
-import/write/export path, not native selection/movement/erasure of generated ink,
-other firmware, optical latency or Boox input behavior.
+Use a disposable RMDOC. In the desktop **New / Open Document** chooser, select
+**Notebook (.rmdoc)**, choose **New**, create a blank page and save it to a
+temporary folder. Reopen that file with **Open** in the same chooser. Select
+Fineliner and Medium, draw a short stroke, then save and reopen to compare the
+stored result with the live preview.
 
-## Corrections shared by desktop and mobile
+For example, try raising the Medium Fineliner width from 3.5 to 3.75 page units.
+Edit tool 17 in `Python/features/notebooks/brushes.py` (`BRUSHES`), and update the
+Medium expectation in both the constant-width and thickness round-trip tests.
+Draw a fresh stroke after relaunch. A previously saved stroke retains its
+original width. This is a disposable experiment. Keep the measured value in
+production unless you have a new calibration.
+
+Run this from the repository root with the desktop environment set up:
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/notebooks/test_brush_calibration.py
+```
+
+Expect six passing tests. They check constant widths, Shader saturation,
+thickness fields, Highlighter IDs and round trips, legacy RGBA and unknown
+colors, and writing colors. For preview or compositing changes, also run the
+[Canvas probe](#canvas-probe). Use [hardware acceptance](hardware-acceptance.md)
+for physical pen and firmware checks.
+
+## How widths reach the file
+
+`ink.py` calls `brushes.stroke_points` when adding new ink.
+`editor.py` publishes the same catalog to `assets/drawing.js`, where
+`pressureWidth` and `strokePoint` compute the live preview. Both use the
+profile's power curve or interpolate its pressure knots, apply directional nib
+scaling where configured, and round once to the nearest quarter page unit with
+a minimum of 0.25. Expanded PDF scenes use a separate derived catalog with a
+Fineliner override. On Boox, the native Ballpoint preview receives the factor,
+exponent and base widths through its configuration.
+
+Imported native v6 point widths already encode tablet dynamics in page units.
+Render them directly, including zero widths. The separate thickness field is
+stored alongside those widths. Applying that field or pressure again changes
+imported ink.
+
+## Measured widths and colors
+
+The source is a twelve-page Paper Pro worksheet from November 4, 2026
+(OS **3.29.0.153**, 1,585 native strokes) and its native color PDF. The
+worksheet exercised PDF-backed import, writing and export as RMDOC and color
+PDF on the sampled path. Tests use independently generated geometry and
+aggregate numeric fields. For a new measurement, use the notebook test
+utility `measure_calibration.py` with `--archive`, `--pdf` and `--output`.
+It requires a completed version-2 worksheet and rejects unsupported pages.
+Keep original files, hashes, coordinates and render reports under ignored
+test results.
 
 Native point widths are in scene units and already include tablet dynamics.
 They must not be multiplied by thickness scale or pressure again. New strokes
@@ -48,110 +90,57 @@ so legacy writing color IDs are not reinterpreted globally. Previously imported
 color-9 RGBA highlights remain intact. Shader retains native color 9 and its
 existing eight measured RGBA values, which this worksheet confirms.
 
-`brushes.py` supplies the shared catalog. Python creation and browser preview
-interpolate the same pressure knots and quantize once to quarter-units. The Boox
-Ballpoint preview receives the shared factor/exponent through its configuration
-and accepts the measured base widths. This changes only its math/configuration;
-it does not constitute a new physical pen test.
+The constant widths and Shader saturation are directly observed. Ballpoint,
+Pencil, Marker, Paintbrush and Calligraphy use fitted or approximate dynamics.
+On the worksheet, the fitted mean absolute point-width errors in page units
+were 0.061 for Ballpoint, 0.924 for Pencil, 1.413 for Marker, 0.628 for
+Paintbrush, 1.249 for Calligraphy and 0.023 for Shader. The sample includes
+tilt and speed tasks. All twelve pages open without preservation warnings and
+unmodified ink retains the original scene bytes. Exact texture, speed and
+tilt behavior and interoperability on other firmware still require validation.
 
-## Validation and remaining limits
-
-The original archive now opens all twelve pages without preservation warnings;
-unchanged ink roundtrips retain the original scene bytes. Before the color-ID
-fix, the complete last page became preservation-only because the codec rejected
-14–16. The raw input files remain unchanged.
-
-On this same calibration sample, mean absolute point-width error changed as
-follows. These are calibration-set comparisons, not held-out firmware tests or
-pixel/texture similarity scores. Tilt and speed tasks are included:
-
-| Tool | Previous mean error | Updated mean error |
-| --- | ---: | ---: |
-| Fineliner | 1.241 | 0 |
-| Mechanical Pencil | 3.961 | 0 |
-| Highlighter | 11.000 | 0 |
-| Ballpoint | 1.434 | 0.061 |
-| Pencil | 2.232 | 0.924 |
-| Marker | 2.139 | 1.413 |
-| Paintbrush | 2.142 | 0.628 |
-| Calligraphy | 2.360 | 1.249 |
-| Shader | 9.159 | 0.023 |
-
-Focused pure model/calibration regressions and the serial Qt WebEngine brush
-probe cover desktop, mobile and iOS-scheduled HTML: per-tool width controls,
-native IDs/palettes, Python/JavaScript parity, native-width preservation,
-grayscale isolation, Shader compositing and preview/completed raster agreement.
-The optional `boox_ballpoint_parity.py --output ...` checks all 256 pressure
-levels at three widths (768 cases) with portable Java and a TouchHelper stub.
-It does not build Android or exercise the real SDK.
-
-Focused Android package acceptance also passes against the production compiled
-`BooxBallpoint`: all 768 cases through both the default and explicitly configured
-curve (1,536 Android method invocations). The packaged `TouchHelper` class links
-in Android. Four synthetic stylus MotionEvent gestures pass through production
-`NotebookInput`: three Ballpoint sizes/colors and blue Highlighter, each saving
-exactly one six-point stroke. Pressure, quarter-unit widths, native color/scale
-and archive roundtrips agree; Highlighter stays at 26 units with one UI size.
-The test fits the full page and verifies the visible canvas/native-view bounds
-before drawing. Reusing the source-verified QA package changes only its Python
-payload; DEX and native libraries are checked byte-for-byte after restaging.
-The QA app, disposable emulator and scratch workspace are removed afterward.
-This narrow check does not cover the complete native input/history suite, actual
-Onyx driver attachment, physical stylus behavior or optical latency.
-
-`measure_calibration.py --archive ... --pdf ... --output ...` reads a completed
-version-2 worksheet and emits counts, ranges, native colors and source hashes.
-Keep its output under ignored test results. It refuses unsupported pages rather
-than reporting partial measurements as complete.
-
-Exact textured rendering, speed/tilt response, native calligraphy nib behavior,
-other tablets/firmware and physical pen-to-pixel behavior remain unverified.
-No repeat of the supplied worksheet is needed to use these measurements. The
-remaining interoperability procedure is [hardware acceptance](hardware-acceptance.md).
+The [manufacturer's writing tools guide](https://support.remarkable.com/s/article/Writing-tools)
+and [OS 3.15 notes](https://remarkable.com/blog/remarkable-os-3-15-whats-new)
+describe the tools and palette. Supplementary measurements and color definitions
+come from [Paper Pro field measurements](https://cable729.github.io/inkterop/docs/formats/remarkable/),
+[native RGBA examples](https://github.com/Scratchydisk/remarkable-rm#rgba-colour-discovery)
+and the [Shader color definitions](https://github.com/ingatellent/xovi-qmd-extensions#changegreencolorqmd).
 
 ## App graphite appearance
 
-Pencil and Mechanical Pencil use original procedural graphite materials in
-`assets/drawing.js`. The Pencil material combines fine tooth with clustered
-paper gaps and a softer body. Mechanical Pencil keeps a denser lead with sparse
-fine pits. A deterministic, seamless paper field replaces the former repeating
-eight-unit lattice. Texture coordinates stay anchored to native page units and
-are shared by completed strokes and incremental draft recoloring.
+Edit `Python/features/notebooks/assets/drawing.js` for on-screen brush
+appearance. Pencil uses clustered paper gaps and a softer body. Mechanical
+Pencil uses denser lead with sparse fine pits. The deterministic texture field
+is anchored to page units, so live and completed strokes share the same grain.
+Two reusable 128 × 128 alpha masks and a 24-entry material cache bound texture
+work. Tool, color and grayscale changes prepare materials before contact.
+Motion updates the latest segment's bounds and pen-up composites the existing
+mask. Native point data and portable exports retain their own representation.
 
-This is editor presentation. Native point arrays, pressure/width calibration,
-scene thickness scales, brush IDs and portable exports retain the same values.
-Export converts templates to vector PDF backgrounds independently of the Canvas
-renderer. Stored handwriting remains editable native geometry; the bounded
-Canvas backing is its on-screen compositor.
+Highlighter accumulates opaque coverage for consecutive same-color strokes,
+then multiplies the tint into the page once. This keeps crossings uniform
+while underlying marks and template rules show through. Across an intervening
+mark, the latest pass of a color owns the overlap. Pages Overview uses the same
+renderer at thumbnail size.
 
-Two 128-by-128 alpha masks are reused across colors, and a 24-entry material
-cache bounds colored tiles. Selected styles are prepared on tool, color and
-grayscale changes before the next pen contact. Active-contact events do not
-trigger this prewarming. Live drawing continues to update only the new segment's
-mask bounds; pen-up composites the accumulated ink bounds without replaying the
-stroke. The existing Boox Ballpoint/Fineliner direct-preview eligibility and
-complete-stroke handoff are unchanged. Pencil tools keep the shared incremental
-Canvas path; this change does not add a vendor SDK brush mode.
+## Canvas probe
 
-The original synthetic graphite fixture checks visual distinction, stable
-redraws, history-density independence, zoom, hue/grayscale, live/committed
-agreement and native/export member invariance. Its timings describe the tested
-browser, rather than physical Boox pen latency. No tablet textures, proprietary
-brush code or private handwriting are included in the implementation or tests.
+Run from the repository root on macOS or Linux with the desktop environment
+installed. On Windows use `.venv\Scripts\python.exe` and set `PYTHONPATH`
+to `Python;.` in the shell before running the script.
 
-On November 4, 2026, private Qt 6.12 browser checks passed for desktop, mobile
-and the iOS scheduling presentation, followed by the existing nine-brush
-regression checks. The tested source and fixture hashes were captured. Native
-scene and portable-export members stayed byte-identical with identical export
-clock inputs. UI prewarming left the first preview with no new texture allocation
-or upload; a move after 2,000 points processed only its two-point tail. Pen-up
-replayed no geometry and retained identical pixels. The private environment,
-source/SDK snapshots and caches were removed afterward. This does not establish
-physical tablet responsiveness or reproduce firmware texture algorithms.
+```sh
+PYTHONPATH=Python:. .venv/bin/python Python/tests/notebooks/brush_canvas_probe.py --output test-results/notebook-brushes/rendering
+```
 
-The renderer builds opaque coverage for consecutive same-color Highlighter
-strokes, then multiplies their tint into the page once. This keeps repeated
-passes and crossings in a single stroke uniform while letting underlying
-ink and template rules show through. Across intervening marks, the latest
-pass of a color still owns its overlap. The Pages Overview uses the same
-brush renderer at thumbnail size.
+Expect matching Python and JavaScript widths, direct imported widths,
+distinct brushes, grayscale isolation and matching live/completed raster
+output in desktop and both mobile scheduling presentations. Inspect the
+contact sheets and probe results in the output folder. This exercises real
+Qt WebEngine with synthetic input. For native Boox math, the notebook test
+utility `boox_ballpoint_parity.py --output ...` covers 256 pressure levels
+at each of three widths with portable Java and a TouchHelper stub. Managed
+Android package checks additionally exercise the compiled curve, SDK class
+linkage and six-point synthetic Ballpoint and Highlighter gestures through
+`NotebookInput`. Physical SDK attachment, stylus behavior and pen-to-pixel
+latency remain hardware checks.
