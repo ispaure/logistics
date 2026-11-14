@@ -14,7 +14,8 @@ Expect the new formatted notice and Git's exact original patch in **Raw**.
 
 | Change | Owner under `Python/features/git/` |
 | --- | --- |
-| Workspace, status, preview | `ui/page.py`, `ui/repository_view.py`, `ui/preview.py` |
+| Workspace and shared diff preview | `ui/page.py` and `ui/repository_view.py` own the workspace. The repository view moves the same `ui/preview.py` widget between File status, History and Search. |
+| File status, History and Search panels | `ui/layout.py` assembles the views built by `ui/changes.py`, `ui/history.py` and `ui/search.py`. |
 | History, paging, graph | `ui/history_controller.py`, `graph.py` |
 | Forms, capture, dispatch, execution | `ui/commands/forms.py`, `ui/commands/requests.py`, `ui/jobs.py`, `repository.py`, `runner.py` |
 | Repository and application settings | `ui/settings.py`, `preferences.py`, `options.py`, `accounts.py` |
