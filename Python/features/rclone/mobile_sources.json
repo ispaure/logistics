@@ -12,6 +12,7 @@
     "diagnostics.py",
     "mobile/credential_loading.py",
     "mobile/credential_workflow.py",
+    "mobile/credential_panels.py",
     "mobile/credentials.py",
     "mobile/credential_retention.py",
     "remote_access.py",

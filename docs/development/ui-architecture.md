@@ -21,7 +21,7 @@ Application-wide guidance has moved to [developer documentation](development.md)
 | Mobile Settings → Privacy & Security | `Python/mobile/settings/privacy_security.py`; audio and trusted Wi-Fi controls in sibling modules | Same registry; access policy remains with the [privacy owners](access-privacy.md) |
 | Mobile Settings → Markdown, Text or EPUB | `Python/mobile/settings/text.py` | One parameterized font/reading panel, with feature-specific controls retained |
 | Mobile Settings → Workspaces | `Python/mobile/settings/workspaces.py` | Storage and connection actions delegate to their existing owners |
-| Mobile rclone connections → Import credential ZIP | `Python/features/rclone/mobile/cloud_ui.py` presents the Settings routes | [Mobile credential import](../features/rclone/development/credentials.md#mobile-credential-import) traces picker admission, workflow state and route retirement. |
+| Mobile rclone connections → Credential Packages, Import credential ZIP and Unlock credential ZIP | `Python/features/rclone/mobile/credential_panels.py` builds the controls | `cloud_ui.py` presents the Settings routes. [Mobile credential import](../features/rclone/development/credentials.md#mobile-credential-import) traces picker admission, workflow state and route retirement. |
 | Mobile Settings → Help or About | `Python/mobile/settings/help.py`; installed-version content in `information.py` | Help/About share one module; their routes remain separate |
 | Desktop Settings → Appearance & shared controls | `Python/desktop/settings/appearance.py:AppearanceSettingsPanel` | `desktop.pages.settings.SettingsPage._selected()` |
 | Desktop Settings → Configuration | `Python/desktop/settings/configuration.py:ConfigurationPanel` | Same retained category host |
