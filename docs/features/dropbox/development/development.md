@@ -1,52 +1,56 @@
-# Dropbox Feature
+# Developing Dropbox folder tools
 
-For workflows, settings and troubleshooting, see the [user guide](../user/user.md).
+Logistics discovers folders managed by the desktop Dropbox client and reviews
+conflicting copies before offering cleanup. See the [user guide](../user/user.md)
+for setup and the [mobile guide](../user_mobile/user_mobile.md) for platform scope.
 
-Developer notes. See the [user guide](../user/user.md) for controls and setup,
-and [UI architecture](../../../development/features.md) for shared contribution conventions.
+## Try a change to conflict cleanup
 
-Provides Dropbox-specific maintenance tools for Logistics.
+On desktop, follow **Workspaces → Local → Source → Dropbox**, select a folder,
+and open **Conflicting Copies… → Review conflicting copies**. The workflow in
+`Python/features/dropbox/ui_contributions.py:_open_conflicts` creates
+`DropboxConflictsDialog`. Its Review and Delete buttons use
+`review_conflicts` and `delete_reviewed_conflicts` in
+`Python/features/dropbox/conflicts.py`.
 
-## Responsibilities
+For example, change `_require_reviewed_identity` to report which path
+changed after review. Keep the identity and symlink checks for both files.
+Use the existing synthetic
+`note.txt` and `note (user conflicted copy 2026).txt` fixture to exercise your
+change in a temporary directory. The test replaces the original or the copy
+after hashing. Run from the repository root with the desktop environment set up:
 
-- Detect Dropbox conflicting-copy files.
-- Determine whether a conflicting copy still has its original file.
-- Report conflicting copies that require manual review.
-- Review candidates and remove only unchanged, byte-identical conflict copies.
+```sh
+python3 dev.py test desktop --exact-file Python/tests/integrations/test_dropbox.py
+```
 
-## Structure
+Expect five passing tests. Both files survive a replacement or edit after
+review. An unchanged identical copy can be removed, and cancellation during
+Apply lets the current item finish. The fixture uses local files and exercises
+the cleanup logic directly. Account discovery, Qt interaction and Dropbox
+recovery require separate checks.
 
-- `detection.py` locates Dropbox account roots and lists their folders.
-- `ui_contributions.py` contributes folder sources and the cleanup workflow.
-- `conflicts.py` contains conflicting-copy detection, reporting, and cleanup behavior.
+## Discovery and workflow ownership
 
-## Conflicting Copy Safety
+`__init__.py:register` exposes a desktop folder source, folder action and
+workflow through `ui_contributions.py:get_contributions`. `detection.py`
+reads the first existing Dropbox account settings file from
+`%APPDATA%/Dropbox/info.json` or `%LOCALAPPDATA%/Dropbox/info.json` on Windows
+and `~/.dropbox/info.json` on macOS and Linux. Existing account roots each
+contribute a source with their immediate child directories. Local selections
+resolved inside those roots receive the cleanup action. The feature has no
+mobile registration or source manifest.
 
-The Folders page offers one source per account discovered through Dropbox's platform-specific `info.json`, listing immediate child directories of each account root. Missing or unconfigured installations contribute no sources. Local folders inside detected roots receive a Conflicting Copies workflow.
+## Review and deletion safety
 
-Review records identities and hashes without changing files. Apply rechecks the
-conflict and original before deleting the identical copy. Unique edits, missing
-originals, ambiguous names and changed files remain. The dialog retains results
-and runs scanning/deletion on owned workers with cooperative cancellation.
+The analyzer recognizes the Dropbox conflicting-copy filename pattern. Review
+skips symlink candidates, records `lstat` identities and compares SHA-256
+hashes. Unique edits, missing originals and ambiguous names stay on disk.
+`ui/dialogs.py:DropboxConflictsDialog` invalidates the review when the folder
+or recursion changes and runs review and deletion in cancellable workers.
 
-## Platform and validation boundary
-
-The feature contributes desktop folder sources and a Qt workflow; it has no
-mobile adapter or mobile source manifest. See [mobile scope](../user_mobile/user_mobile.md).
-Detection reads `%APPDATA%/Dropbox/info.json` or `%LOCALAPPDATA%/Dropbox/info.json`
-on Windows, and `~/.dropbox/info.json` on macOS/Linux. It uses the first existing
-candidate and retains only configured roots that exist as directories.
-
-`ui/dialogs.py` owns review invalidation when the path or recursion changes.
-`review_conflicts` skips symbolic-link candidates, captures lstat identities and
-compares SHA-256 hashes. `conflicts.py:delete_reviewed_conflicts` checks both
-reviewed identities before hashing and rechecks them after equal hashes,
-immediately before unlinking the copy. An observed edit or replacement fails
-that item and preserves both files. Another change can still occur between the
-last check and unlinking.
-
-`Python/tests/integrations/test_dropbox.py` covers deletion of an identical copy,
-preservation of unique content, and edits or replacements after hashing. These
-local-file fixtures do not verify a real Dropbox account, OS source discovery or
-service-side recovery. The November 4 documentation audit read source/tests only;
-it did not rerun tests or establish native acceptance.
+Deletion verifies both identities before hashing and again immediately before
+unlinking the identical copy. An observed edit or replacement fails that item.
+There is still a race between the final check and unlinking. Apply deletes
+directly with no Trash or Undo. Re-review after changes and inspect failures
+and remaining items before retrying. Dropbox owns propagation and recovery.

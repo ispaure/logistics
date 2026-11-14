@@ -1,5 +1,13 @@
 # Transfer planning, review and execution
 
+On desktop, select a configured remote in **Workspaces → Cloud**, open its
+actions and choose **Pull**. The rclone contribution in
+`Python/features/rclone/ui_contributions.py:_get_actions` chooses the Pull
+route. `actions.py` hands the request to `transfers/workflow.py:sync_transfer` with
+review enabled.
+On mobile, the corresponding review starts in
+`transfers/mobile/review_ui.py`.
+
 Interactive Push/Pull uses `TransferService.review` then `execute`. Programmatic
 callers use `run` explicitly. Both use the captured platform plan and mandatory
 execution preflight. Credential loading and persistence are described in
@@ -65,7 +73,7 @@ revision checks reject foreign or stale approval messages. Revocation, retiremen
 and host disposal clear private content and detach callbacks. Progress retained
 after credential revocation is redacted, including file paths.
 
-The full native review driver waits for the current model revision to reach the
+The native review driver waits for the current model revision to reach the
 WebView, then clicks its rendered approval or early-review button. Cancellation
 uses the platform Back control; review has no progress-background button.
 It preserves native confirmation, bounded fresh-review retries and comparison
@@ -175,8 +183,7 @@ session launched without a usable GUI runs synchronously to keep secrets out of
 terminal command strings and the global environment.
 
 `transfer_concurrency` names the existing source-path convention: paths containing
-`-VM`, including parent directories, use one transfer; other paths use ten. This
-refactor preserves that behavior rather than introducing a new preference.
+`-VM`, including parent directories, use one transfer; other paths use ten. The limit is derived from the source path.
 
 ## Python–Go boundary
 
@@ -233,18 +240,19 @@ belong under ignored `test-results/`.
 
 ## Checks for a change
 
-Run tests through the project runner from the repository root:
+Run the file for the layer you changed from the repository root:
 
 ```sh
-python3 dev.py test desktop 'test_rclone_*.py' --mode fast
-python3 dev.py test desktop test_transfer_adapters.py --mode fast
-python3 dev.py test mobile 'test_mirror_*.py' --mode fast
-python3 dev.py test mobile 'test_*transfer*.py' --mode fast
-python3 dev.py test mobile test_bridge_protocol.py --mode fast
-python3 dev.py test bridge --profile smoke --mode fast
+python3 dev.py test desktop --exact-file Python/tests/resources/test_transfer_adapters.py
+python3 dev.py test mobile --exact-file mobile_build/tests/transfers/test_mirror_ui.py
+python3 dev.py test mobile --exact-file mobile_build/tests/tooling/test_bridge_protocol.py
 ```
 
-The native service tests cover captured mapping changes, generation revocation,
-storage relocation, cancellation retirement and incomplete approval. Mirror tests
-cover changed records, path/link rejection, crypt preflight and partial transfers.
-Desktop outcome tests distinguish launch acceptance from completed success.
+The desktop adapter cases cover captured options, credential revocation and the
+difference between full and incomplete approval. The mobile mirror cases cover
+changed records, crypt preflight, review and partial transfers. Mobile Pull can
+replace the file behind an open document while preserving its unsaved draft.
+The editor detects the changed revision on a later save and keeps the draft on
+conflict. Push still requires the existing save-or-close preflight.
+The protocol cases verify wire bounds and validation. The Go tests and the
+native presentation probes cover the corresponding bridge and runtime behavior.

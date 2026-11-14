@@ -1,18 +1,40 @@
-# Links development
+# Developing Personal Links
 
-Personal Links contributes a desktop page for a fixed catalog of configured
-HTTP/HTTPS shortcuts. See the [desktop guide](../user/user.md) and
-[mobile availability](../user_mobile/user_mobile.md).
+Personal Links opens configured HTTP and HTTPS shortcuts in the desktop browser.
+See the [desktop guide](../user/user.md) and [mobile scope](../user_mobile/user_mobile.md).
+
+## Try a change to shortcut settings
+
+On desktop, enable **Personal Links** in **Settings → Features**, then open
+**Links → Quick Links** and find **Google**. The button binds the `google` key
+from `Python/features/links/catalog.py:LINK_CATEGORIES`.
+`Python/features/links/configuration.py:get_url` reads that key in **URLs** when
+the button is clicked.
+
+For example, factor the typed-key lookup shared by `get_url` and
+`get_resolve_ip` into a single reader in `configuration.py`. Extend the
+synthetic INI fixture to include both `google_str = https://example.com` and
+`google = https://example.org`. The reader should choose the typed value and
+still accept a file containing only the legacy key. Run from the repository
+root with the desktop environment set up:
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/application/test_ini_settings.py
+```
+
+Expect the settings panel and typed/legacy reader cases to pass. They use a
+temporary INI and never start a browser. The existing fixture tests each spelling
+separately. The suggested extension also exercises precedence when both exist.
 
 ## Owners and registration
 
-Source is under `Python/features/links/`:
+Follow `Python/features/links/__init__.py:register` into the desktop contributions.
 
 | Owner | Responsibility |
 | --- | --- |
 | `__init__.py` | Feature name `links`, label Personal Links and lazy registration |
 | `ui_contributions.py` | Configuration settings contribution and Links page factory, page ID `links`, order 40 and `links` navigation icon |
-| `catalog.py` | Immutable entry/group/category records and the fixed `LINK_CATEGORIES` button catalog |
+| `catalog.py` | Entry/group/category records and the fixed `LINK_CATEGORIES` button catalog |
 | `configuration.py` | Layered defaults/personal configuration access and typed/legacy key compatibility |
 | `actions.py` | Substitution, URL validation and `webbrowser.open` handoff |
 | `ui/page.py` | Scrollable category layout, four-column button grids and inline launch status |
@@ -44,8 +66,6 @@ change the catalog and its defaults together for a new supported shortcut.
 
 ## Validation scope
 
-`Python/tests/application/test_ini_settings.py` covers the Links configuration
-reader's typed and legacy keys, together with central configuration-panel wiring.
 `Python/tests/application/test_features_page.py` checks the Personal Links label.
 These tests do not establish browser launch, service availability or native
 mobile support. The similarly named `test_links_images_voices_probe.py` covers
@@ -57,7 +77,3 @@ inline error presentation. Keep browser calls mocked for automated checks.
 When native desktop interaction is needed, separately check the configured
 browser handoff; do not interpret an accepted launch as a reachable service.
 Use the owning workflow in [Testing](../../../development/testing.md).
-
-The November 4, 2026 documentation audit inspected source and tests and ran only
-static documentation checks during a release hold. It did not launch a browser,
-Qt application, build, simulator or device, or rerun runtime acceptance.
