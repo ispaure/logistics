@@ -89,7 +89,7 @@ class JourneyAdapterTests(unittest.TestCase):
 
     def test_development_device_destination_is_scoped_and_allows_captured_local_edits(self):
         self.source['dirty'] = True
-        def device_plan(project, target, recipients, context, revision):
+        def device_plan(project, target, recipients, context, revision, *, shared, skip_tests):
             build = Phase('prepare-device-app', (sys.executable, '-c', 'pass'), str(self.root), effect='build', kind='build')
             install = Phase('install-phone', (sys.executable, '-c', 'pass'), str(self.root), effect='deploy', dependencies=(build.id,))
             return Plan('Logistics', 'Device app', context.source(project, revision), (build, install), str(self.root / 'devices'))
@@ -98,18 +98,20 @@ class JourneyAdapterTests(unittest.TestCase):
         self.assertIn('android.validated', transitive_dependency_ids(plan, 'android.devices.install-phone'))
         self.assertEqual(plan.journey['destinations']['android-devices']['platforms'], ['android'])
         self.assertEqual(make.call_args.args[2][0]['id'], 'serial-1')
+        self.assertFalse(make.call_args.kwargs['skip_tests'])
         self.assertTrue(plan.source['dirty'])
         self.assertNotIn('android.validation.release-acceptance', {phase.id for phase in plan.phases})
         validate_plan(plan)
 
     def test_explicit_debug_device_only_plan_omits_tests_but_keeps_reviewed_install(self):
-        def device_plan(project, target, recipients, context, revision):
+        def device_plan(project, target, recipients, context, revision, *, shared, skip_tests):
             build = Phase('prepare-device-app', (sys.executable, '-c', 'pass'), str(self.root), effect='build', kind='build')
             install = Phase('install-phone', (sys.executable, '-c', 'pass'), str(self.root), effect='deploy', dependencies=(build.id,))
             return Plan('Logistics', 'Device app', context.source(project, revision), (build, install), str(self.root / 'devices'))
-        with patch('logistics_build.manager_devices.make_plan', side_effect=device_plan):
+        with patch('logistics_build.manager_devices.make_plan', side_effect=device_plan) as make:
             plan = self.project.make_journey('deliver', [], ['android-devices'], revision='HEAD',
                 run_overrides={'devices.android': '["serial-1"]'})
+        self.assertTrue(make.call_args.kwargs['skip_tests'])
         self.assertEqual(self.project.calls, [])
         self.assertEqual(plan.journey['platforms'], {})
         self.assertEqual([p.effect for p in plan.phases], ['build', 'deploy'])
@@ -183,7 +185,7 @@ class JourneyAdapterTests(unittest.TestCase):
                 self.assertEqual(observed, [primary, secondary, deploy])
 
     def test_release_device_reuses_one_preparation_regardless_of_destination_order(self):
-        def device_plan(project, target, recipients, context, revision, *, shared):
+        def device_plan(project, target, recipients, context, revision, *, shared, skip_tests):
             prepare = Phase('prepare-device-app', (sys.executable, '-c', 'pass'), str(self.root), effect='build', kind='build')
             install = Phase('install-phone', (sys.executable, '-c', 'pass'), str(self.root), effect='deploy', dependencies=(prepare.id,))
             return Plan('Logistics', 'Release device', context.source(project, revision), (prepare, install), str(self.root / 'devices'))
@@ -200,7 +202,7 @@ class JourneyAdapterTests(unittest.TestCase):
             validate_plan(plan)
 
     def test_release_only_ios_devices_do_not_export_or_upload_testflight(self):
-        def device_plan(project, target, recipients, context, revision, *, shared):
+        def device_plan(project, target, recipients, context, revision, *, shared, skip_tests):
             install = Phase('install-phone', (sys.executable, '-c', 'pass'), str(self.root), effect='deploy')
             return Plan('Logistics', 'Release device', context.source(project, revision), (install,), str(self.root / 'devices'))
         with patch('logistics_build.manager_devices.make_plan', side_effect=device_plan):
@@ -284,6 +286,9 @@ class JourneyAdapterTests(unittest.TestCase):
         self.assertIn(str(self.project.private / 'workspaces/android/operation.lock'), plan.resource_locks)
 
     def test_mobile_branches_overlap_but_shared_build_steps_do_not(self):
+        from build_manager.test_workers import configure
+        resources = self.root / 'resources'
+        configure(dict(per_platform=1, host=2), resources)
         plan = self.make('validate', platforms=['ios', 'android'], destinations=[])
         ready = {target: self.root / (target + '-ready.json') for target in ('ios', 'android')}
         def command(phase):
@@ -306,8 +311,9 @@ class JourneyAdapterTests(unittest.TestCase):
                 code = 'pass'
             return (sys.executable, '-c', code)
         phases = tuple(replace(phase, argv=command(phase), artifacts=(), artifact_types={}, environment={k: v for k, v in phase.environment.items() if k.startswith('BUILD_MANAGER_TEST_')}) for phase in plan.phases)
-        result = Executor(resource_directory=self.root / 'resources').run(replace(plan, phases=phases), self.root / 'result')
-        self.assertEqual(result['status'], 'passed')
+        result = Executor(resource_directory=resources).run(replace(plan, phases=phases), self.root / 'result')
+        self.assertEqual(result['status'], 'passed',
+                         [(row['id'], row.get('error')) for row in result['phases'] if row['status'] != 'passed'])
         checks = [json.loads((self.root / (target + '.validation.commonutils.json')).read_text()) for target in ('ios', 'android')]
         self.assertLess(max(row[0] for row in checks), min(row[1] for row in checks))
         builds = [json.loads((self.root / (target + '.validation.build.json')).read_text()) for target in ('ios', 'android')]

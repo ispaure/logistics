@@ -200,7 +200,7 @@ def source_members(snapshot):
     for relative in ('', 'Python/commonUtils'):
         folder = snapshot / relative
         names = working_paths(folder) if relative else working_paths(folder, EXCLUDE_ROOT_TMP)
-        members.extend(str(Path(relative) / name) for name in names
+        members.extend((Path(relative) / name).as_posix() for name in names
                        if (folder / name).is_file() or (folder / name).is_symlink())
         if relative:
             members.append(relative + '/.git')

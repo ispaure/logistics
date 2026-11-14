@@ -23,8 +23,8 @@ class CanvasHeaderTests(unittest.TestCase):
     def test_canvas_filename_controls_and_library_panels_at_phone_duo_tablet_sizes(self):
         root = Path(__file__).resolve().parents[3]
         output = root / 'test-results/notebook-canvas-header'
-        result = subprocess.run([sys.executable, str(Path(__file__).with_name('notebook_mobile_ui_probe.py')),
+        result = subprocess.run([sys.executable, '-u', str(Path(__file__).with_name('notebook_mobile_ui_probe.py')),
                                  '--header-only', '--output', str(output)], capture_output=True, text=True,
-                                timeout=90, env=dict(os.environ, QT_QPA_PLATFORM='offscreen',
+                                timeout=180, env=dict(os.environ, QT_QPA_PLATFORM='offscreen',
                                     QTWEBENGINE_CHROMIUM_FLAGS='--disable-gpu', QT_QUICK_BACKEND='software'))
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)

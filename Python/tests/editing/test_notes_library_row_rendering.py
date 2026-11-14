@@ -61,10 +61,11 @@ class DesktopRowRenderingTests(QtTestCase):
 
         def publish(path, rows, pages=None):
             start = perf_counter()
+            clock.armed = True
             result = populate(path, rows, pages)
             row_seconds.append(perf_counter() - start)
             publications.append((path, len(rows)))
-            clock.armed = True
+            window.tree.viewport().update()
             return result
 
         widgets = len(qt.QApplication.allWidgets())
@@ -72,7 +73,9 @@ class DesktopRowRenderingTests(QtTestCase):
                 patch.object(window, 'populate', side_effect=publish):
             clock.start()
             folder.setExpanded(True)
-            self.wait_until(lambda: clock.elapsed is not None and not window.progress.busy, timeout=30)
+            self.wait_until(lambda: clock.elapsed is not None and not window.progress.busy, timeout=30,
+                            message=lambda: f'{storage} tree: published={publications!r}, '
+                                            f'painted={clock.elapsed is not None}, busy={window.progress.busy}')
         cold = clock.elapsed
         self.assertEqual(publications, [('Library/Folder', count + 4)])
         self.assertEqual(folder.childCount(), count + 4)
