@@ -145,7 +145,7 @@ def availability_policy(choice='bounded'):
 
 
 def make_plan(project, platform, targets, context, revision, *, shared=None, retained_snapshot=None,
-              _mixed_signing=False):
+              skip_tests=False, _mixed_signing=False):
     from logistics_build.build_snapshots import materialize, PRIVATE_RUNTIME_NAMES
     source = context.source(project, revision)
     independent = shared is None and retained_snapshot is None and not _mixed_signing
@@ -165,7 +165,7 @@ def make_plan(project, platform, targets, context, revision, *, shared=None, ret
             plans = []
             for mode, recipients in groups.items():
                 plan = make_plan(project, platform, recipients, context, revision, shared=shared,
-                                 retained_snapshot=retained_snapshot, _mixed_signing=True)
+                                 retained_snapshot=retained_snapshot, skip_tests=skip_tests, _mixed_signing=True)
                 names = {phase.id: 'signing-' + mode + '.' + phase.id for phase in plan.phases}
                 plans.append(replace(plan, phases=tuple(replace(phase, id=names[phase.id],
                     dependencies=tuple(names[dep] for dep in phase.dependencies)) for phase in plan.phases)))
@@ -205,6 +205,8 @@ def make_plan(project, platform, targets, context, revision, *, shared=None, ret
     workspace = parent / uuid4().hex
     workspace.mkdir(parents=True, exist_ok=True)
     recipe = dict(schema=1, platform=platform, source=source, root=str(snapshot), workspace=str(workspace), targets=targets)
+    if skip_tests:
+        recipe['skip_tests'] = True
     if signing_mode is not None:
         recipe['android_signing_mode'] = signing_mode
     if shared is not None:
@@ -277,7 +279,7 @@ def prepare(path, digest):
     elif platform == 'android':
         from mobile_build.deployment import android_deploy as android
         # No device queries or wireless connections while building.
-        android.deploy(build_only=True, devices=[], discover=False)
+        android.deploy(build_only=True, devices=[], discover=False, skip_tests=data.get('skip_tests', False))
         package = workspace / 'app.apk'
         shutil.copy2(android.PROJECT / 'app/build/outputs/apk/debug/app-debug.apk', package)
         data['identity'] = dict(bundle_id=BUNDLE, certificate=sign_android_debug(data, package))
@@ -287,7 +289,8 @@ def prepare(path, digest):
             raise ValueError('Device signing configuration changed; review a new plan.')
         config = read_json(data['config'])
         developer, _ = ios.choose(ios.installed()); env = dict(os.environ, DEVELOPER_DIR=developer)
-        ios.refresh_sources(env); ios.prepare_project(config['team_id'])
+        ios.refresh_sources(env, skip_tests=data.get('skip_tests', False))
+        ios.prepare_project(config['team_id'])
         ios.run(['xcodebuild', '-project', str(ios.PBX.parent), '-scheme', 'Logistics Mobile',
             '-configuration', 'Debug', '-sdk', 'iphoneos', '-destination', 'generic/platform=iOS',
             '-derivedDataPath', str(ios.DERIVED), *ios_provisioning_args(data['source'], ios),
