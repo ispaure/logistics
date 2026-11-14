@@ -16,7 +16,26 @@ Use `acceptance.rmdoc` for legacy page order and `modern.rmdoc` for reordered/co
 4. Draw and immediately Save or close, including Keep editing. Verify the last saved stroke survives reopening and a retired canvas cannot edit its replacement.
 5. For visible latency use an external camera and record frame rate and method.
 
-For Apple Pencil delivery, use an actual iPad/Pencil for pressure, hover and palm checks.
+## Apple Pencil delivery
+
+1. On a supported iPad with a pressure-capable Pencil, open a blank RMDOC in the
+   authorized QA build. Use the automatic pressure setting and draw slow,
+   light and firm strokes with Medium Ballpoint. Save and check the native
+   points for distinct pressures and widths.
+   Medium Fineliner is the constant-width control at 3.5 page units on blank paper.
+2. With finger drawing enabled, rest a palm during a Pencil stroke. On hardware
+   that supports hover, try a finger gesture while the Pencil hovers over the
+   canvas. Expect no unwanted stroke, pan or page change. Lift the pen and palm,
+   then confirm that ordinary touch works again.
+3. Tap 20 separate dots in rapid succession on a fresh page, then immediately
+   Save. Close and reopen. Require 20 distinct dots, including the final one.
+   Repeat after reopening the canvas to exercise its new input binding.
+
+Record iPad/Pencil model, OS, app build and exact source/payload identity. Keep
+the saved archive hash, per-page stroke counts, pressure/width ranges, and a
+short external video that lets a reviewer count contacts and see any palm or
+hover effects. Save the video and archives under ignored test results. For
+Pencils without pressure sensing, record a separate constant-pressure run.
 
 ## reMarkable native ink editing
 
