@@ -7,6 +7,13 @@ from toga.style.pack import COLUMN
 from .provider_ui import private_label, _MarkdownState
 
 
+def _sync_pdf_artwork(app):
+    from .external_display import sync as sync_external
+    from .ios_content_background import sync as sync_background
+    sync_external(app)
+    sync_background(app)
+
+
 class ProviderView:
     """Unpublished controls until route admission transfers them to the session.
 
@@ -86,7 +93,10 @@ class ProviderDocumentView:
         from commonUtils.ui.native.image_canvas import ImageCanvas
         if reader.kind == '.pdf':
             from features.pdf.mobile.canvas import PDFReaderCanvas
-            view.crypt_image = PDFReaderCanvas(owner, reader)
+            view.crypt_image = PDFReaderCanvas(
+                owner, reader, on_artwork_change=lambda: _sync_pdf_artwork(owner.app),
+                private_label=private_label,
+            )
         else:
             view.crypt_image = ImageCanvas(on_page=owner.swipe_crypt_page,
                 page_swipes_at_edges=reader.kind in {'.cbz', '.zip'} or getattr(reader, 'image_document', False),
