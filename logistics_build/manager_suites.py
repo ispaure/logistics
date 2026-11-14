@@ -67,12 +67,15 @@ def with_reports(plan, target):
             continue
         report = directory / (phase.id + '.xml')
         argv = list(phase.argv)
-        if 'Python/tests/run_regressions.py' in argv:
-            argv += ['--junit', str(report), '--report', str(report.with_suffix('.json'))]
-        elif 'dev.py' in argv:
+        if 'dev.py' in argv:
             pattern = argv[argv.index('desktop') + 1]
             argv = [argv[0], 'Python/tests/run_regressions.py', 'Python/tests', '--isolate-modules',
-                    '--pattern', pattern, '--junit', str(report), '--report', str(report.with_suffix('.json'))]
+                    '--pattern', pattern]
+        reports = {str(report): 'junit'}
+        if argv[1:2] == ['Python/tests/run_regressions.py']:
+            timing = str(report.with_suffix('.json'))
+            argv += ['--junit', str(report), '--report', timing]
+            reports[timing] = 'json'
         else:
             native = phase.id in {'android-native', 'android-runtime', 'iphone', 'duo', 'ipad', 'ios-runtime'}
             mode = ['native', '--root', phase.cwd, '--target', target, '--json', phase.artifacts[0]] if native else ['command']
@@ -96,8 +99,8 @@ def with_reports(plan, target):
             inventory = tuple(row.path.relative_to(test_root).as_posix() for row in classified
                               if any(stage.value in selected for _, stage, _ in row.cases)
                               or not row.cases and row.default.value in selected)
-        reported = replace(phase, test_files=inventory, argv=tuple(argv), artifacts=(*phase.artifacts, str(report)),
-                           artifact_types=dict(phase.artifact_types, **{str(report): 'junit'}))
+        reported = replace(phase, test_files=inventory, argv=tuple(argv), artifacts=(*phase.artifacts, *reports),
+                           artifact_types={**phase.artifact_types, **reports})
         phases.append(reported)
     return replace(plan, phases=tuple(phases))
 
@@ -218,6 +221,23 @@ def release_evidence(root, target, native, runtime, require_ipad=False):
     return dict(schema=1, status='passed', source=source, target=target, native_reports=list(map(str, native)), runtime_report=str(runtime))
 
 
+def remaining_mobile_stages(phases):
+    """Exclude smoke only when the same required runner already gates the suite."""
+    from logistics_build.validation_plans import REMAINING_STAGES, SMOKE_ARGS
+
+    by_id = {phase.id: phase for phase in phases}
+    for phase in phases:
+        smoke = by_id.get(phase.id + '.smoke')
+        if (smoke and smoke.id in phase.dependencies and smoke.required and not smoke.always
+                and smoke.kind == phase.kind == 'test' and smoke.cwd == phase.cwd
+                and smoke.environment == phase.environment
+                and phase.argv[1:2] == ('Python/tests/run_regressions.py',)
+                and phase.argv[3:] == ('--isolate-modules',)
+                and smoke.argv == (*phase.argv, *SMOKE_ARGS)):
+            phase = replace(phase, argv=(*phase.argv, *REMAINING_STAGES))
+        yield phase
+
+
 def with_host_gates(plan, desktop_python, *, release=False):
     """Tester release policy requires host contracts/UI as well as native proof."""
     from build_manager import Phase
@@ -227,9 +247,9 @@ def with_host_gates(plan, desktop_python, *, release=False):
     if not hasattr(test_manifest, 'structure_contract'):
         raise ValueError('Update the configured build manager: test-structure and smoke-gate manifest support is required.')
     manifest_phases = test_manifest.phases
-    hosts = manifest_phases(first.cwd, 'mobile-host',
+    hosts = tuple(remaining_mobile_stages(manifest_phases(first.cwd, 'mobile-host',
         {'desktop': desktop_python, 'mobile': first.argv[0]},
-        ('Python/tests/run_regressions.py', '{directory}', '--isolate-modules'), environment=env)
+        ('Python/tests/run_regressions.py', '{directory}', '--isolate-modules'), environment=env)))
     from logistics_build.browser_tooling import require_release_browser
     if release:
         hosts = require_release_browser(hosts, first, desktop_python, plan.workspace)

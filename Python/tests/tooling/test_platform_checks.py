@@ -40,8 +40,13 @@ class PlatformCheckTests(unittest.TestCase):
                 "RESERVATION_ENV = 'BUILD_MANAGER_RESERVED_TEST_WORKERS'\n"
                 "QT_GROUPS = {'Python/commonUtils/tests/index': ('test_fixture.py',)}\n")
             (runner / 'run_regressions.py').write_text(
-                "import json, os\nprint(json.dumps({key: os.environ.get(key) for key in "
-                "('BUILD_MANAGER_RESERVED_TEST_WORKERS', 'BUILD_MANAGER_TEST_PLATFORM')}))\n")
+                'import json, os, sys\nfrom pathlib import Path\n'
+                'config = {key: os.environ.get(key) for key in '
+                '("BUILD_MANAGER_RESERVED_TEST_WORKERS", "BUILD_MANAGER_TEST_PLATFORM")}\n'
+                'print(json.dumps(config))\n'
+                'Path(sys.argv[sys.argv.index("--junit")+1]).write_text('
+                '\'<testsuite><testcase name="passed"/></testsuite>\')\n'
+                'Path(sys.argv[sys.argv.index("--report")+1]).write_text(json.dumps(config))\n')
             private = root / 'manager'
             with patch.object(test_workers, 'config_directory', return_value=private), \
                     patch.object(resources, 'config_directory', return_value=private), \
@@ -53,6 +58,10 @@ class PlatformCheckTests(unittest.TestCase):
             self.assertEqual(row['status'], 'passed', row)
             data = json.loads((root / 'results/shared.log').read_text().strip())
             self.assertEqual(data, dict(BUILD_MANAGER_RESERVED_TEST_WORKERS='2', BUILD_MANAGER_TEST_PLATFORM='macos'))
+            report = json.loads((Path(row['execution']) / 'result.json').read_text())
+            junit, timing = report['phases'][0]['artifacts']
+            self.assertEqual((junit['kind'], timing['kind']), ('junit', 'json'))
+            self.assertEqual(json.loads(Path(timing['path']).read_text()), data)
 
     def test_success_retains_unicode_log_and_actual_outcome(self):
         with TemporaryDirectory() as folder:

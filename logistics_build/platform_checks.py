@@ -14,6 +14,10 @@ def run_check(name, argv, *, root, results, environment, timeout):
     # worker variables cannot be carried into the new plan as declarations.
     environment = {key: value for key, value in environment.items() if key not in {
         'BUILD_MANAGER_TEST_PLATFORM', 'BUILD_MANAGER_TEST_WORKERS', 'BUILD_MANAGER_RESERVED_TEST_WORKERS'}}
+    if len(argv) > 1 and argv[1] == 'Python/tests/run_regressions.py':
+        for flag, filename in (('--junit', 'junit.xml'), ('--report', 'timing.json')):
+            if flag not in argv:
+                argv = (*argv, flag, str(execution / filename))
     outputs = tuple(str(argv[index + 1]) for index, value in enumerate(argv[:-1]) if value in {'--junit', '--report'})
     phase = Phase(name, tuple(argv), str(root), timeout=timeout, environment=environment, effect='test',
                   artifacts=outputs, artifact_types={path: 'junit' if path.endswith('.xml') else 'json' for path in outputs})
@@ -52,4 +56,4 @@ def run_check(name, argv, *, root, results, environment, timeout):
     code = 0 if row['status']=='passed' else 124 if row['status']=='timeout' else row.get('exit_code') or 1
     return dict(name=name, exit_code=code, seconds=round(row['seconds'],2), status=row['status'],
                 execution=str(execution/'result'),
-                **{key: row[key] for key in ('error', 'cleanup_error') if row.get(key)})
+                **{key: row[key] for key in ('error', 'cleanup_error', 'reused', 'reuse') if row.get(key)})

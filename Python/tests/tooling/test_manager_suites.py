@@ -90,10 +90,32 @@ class ManagerSuiteTests(unittest.TestCase):
                 '--isolate-modules', '--include-pattern', 'test_live*'), str(root))
             plan = Plan('Fixture', 'Test', {}, (phase,), str(root))
             planned = suites.with_reports(plan, 'android')
-            self.assertEqual(planned.phases[0].test_files, ('nested/test_live_two.py', 'test_live_one.py'))
+            reported = planned.phases[0]
+            self.assertEqual(reported.test_files, ('nested/test_live_two.py', 'test_live_one.py'))
+            junit, timing = reported.artifacts
+            self.assertEqual(reported.argv[-4:], ('--junit', junit, '--report', timing))
+            self.assertEqual(reported.artifact_types, {junit: 'junit', timing: 'json'})
             smoke = replace(phase, argv=(*phase.argv, '--profile', 'smoke'))
             self.assertEqual(suites.with_reports(replace(plan, phases=(smoke,)), 'android').phases[0].test_files,
                              ('test_live_one.py',))
+
+    def test_mobile_broad_phase_requires_a_matching_canonical_smoke_dependency(self):
+        from logistics_build.validation_plans import REMAINING_STAGES, SMOKE_ARGS
+
+        broad = Phase('mobile-host', (sys.executable, 'Python/tests/run_regressions.py', 'mobile_build/tests',
+                      '--isolate-modules'), str(ROOT), dependencies=('mobile-host.smoke',))
+        smoke = replace(broad, id='mobile-host.smoke', argv=(*broad.argv, *SMOKE_ARGS), dependencies=())
+        self.assertEqual(tuple(suites.remaining_mobile_stages((smoke, broad))),
+                         (smoke, replace(broad, argv=(*broad.argv, *REMAINING_STAGES))))
+        for other_smoke, other_broad in (
+                (smoke, replace(broad, dependencies=())),
+                (replace(smoke, required=False), broad),
+                (replace(smoke, argv=(*smoke.argv, '--pattern', 'test_example.py')), broad),
+                (replace(smoke, argv=('different-python', *smoke.argv[1:])), broad),
+                (replace(smoke, environment={'TOGA_BACKEND': 'toga_dummy'}), broad)):
+            with self.subTest(smoke=other_smoke, broad=other_broad):
+                original = (other_smoke, other_broad)
+                self.assertEqual(tuple(suites.remaining_mobile_stages(original)), original)
 
     def test_catalog_selection_rejects_unknown_inapplicable_and_remote_suites(self):
         suites.selection(ROOT, 'portable.contracts', 'Test', 'macos', 'This Mac', 'test_manager*.py')
@@ -286,6 +308,12 @@ class ManagerSuiteTests(unittest.TestCase):
             self.assertIn('Python/tests/tooling', rows['portable-contracts'].argv)
             self.assertIn('Python/tests/application', rows['desktop-ui'].argv)
             self.assertIn('mobile_build/tests', rows['mobile-host'].argv)
+            for name in ('commonutils', 'portable-contracts', 'desktop-ui', 'mobile-host'):
+                broad, smoke = rows[name], rows[name + '.smoke']
+                self.assertEqual(broad.argv[-8:-4], ('--stage', 'regression', '--stage', 'extended'))
+                self.assertEqual(smoke.argv[-8:-4], ('--profile', 'smoke', '--mode', 'fast'))
+                self.assertIn(smoke.id, broad.dependencies)
+                self.assertFalse(smoke.reuse_key)
             self.assertIn('release-acceptance', rows['prepare-verified-artifact'].dependencies)
             self.assertEqual(rows['reviewed-distribution'].dependencies, ('prepare-verified-artifact', 'native-prerequisites'))
             self.assertEqual(rows['reviewed-distribution'].effect, 'upload')

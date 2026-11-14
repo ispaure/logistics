@@ -4,8 +4,8 @@ import json
 from pathlib import Path
 
 
-DESKTOP_SMOKE_ARGS = ['--profile', 'smoke', '--mode', 'fast']
-DESKTOP_REMAINING_STAGES = ['--stage', 'regression', '--stage', 'extended']
+SMOKE_ARGS = ('--profile', 'smoke', '--mode', 'fast')
+REMAINING_STAGES = ('--stage', 'regression', '--stage', 'extended')
 
 
 def desktop_checks(system, results, root=None):
@@ -21,8 +21,8 @@ def desktop_checks(system, results, root=None):
     for row in rows:
         command = ['Python/tests/run_regressions.py', row['directory'], '--isolate-modules']
         # Only the canonical gate proves the entire smoke stage ran up front.
-        if row.get('smoke_args') == DESKTOP_SMOKE_ARGS:
-            command.extend(DESKTOP_REMAINING_STAGES)
+        if tuple(row.get('smoke_args', ())) == SMOKE_ARGS:
+            command.extend(REMAINING_STAGES)
         checks.append((row['id'], command, row['timeout']))
     checks.extend([
         ('compression-parity', ['Python/tests/compare_comic_zip_versions.py', '--output-dir', str(Path(results) / 'parity')], 600),
