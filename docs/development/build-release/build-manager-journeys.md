@@ -5,7 +5,7 @@ See [operator journeys](../../user/build-manager-journeys.md) for starting check
 ## Trace a validation plan
 
 1. From the checkout root run `python3 logistics_build/tooling_bootstrap.py status` (`py` on Windows). If either environment needs repair, follow [tooling readiness](../../user/build-manager.md#project-tooling-readiness-and-repair).
-2. In the manager choose the trusted checkout, **Run checks**, a platform and local host, then **Next: review plan**. Inspect source, host, phases and prerequisites.
+2. In the manager choose the trusted checkout, **Run checks**, a platform and local host, then **Next: review plan**. Inspect source, host, phases and prerequisites. Plan review can refresh retention state and prepare snapshots. Stop before **Start validation**.
 3. Trace `build-project.json` → `LogisticsProject.make_journey` → `logistics_build/manager_journeys.py` (bridge action `journey_plan`). Match its [suite IDs](#shared-tests-and-suite-discovery) to `build-tests.json`.
 4. From the root run `python3 dev.py test desktop --exact-file Python/tests/tooling/test_manager_journeys.py`. Expect fixture plans to pass source binding, gate and cleanup checks using mocked native/provider work. For import errors, see [local SDK verification](#local-manager-dependency-and-verification).
 

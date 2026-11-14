@@ -2,13 +2,13 @@
 
 ## Find a screen by its visible name
 
-Paths are relative to `Python/`. For Settings → Appearance, follow the platform
-category host to the appearance panel, then follow its shared palette or typography
-adapter below.
+Paths are relative to `Python/`. Desktop labels the category **Appearance &
+shared controls**. Mobile uses **Appearance**. Follow the category host to
+the panel and then its palette or typography adapter.
 
 | Screen | Presentation owner |
 | --- | --- |
-| Desktop Settings → Appearance, Configuration, Feature settings | `desktop/settings/{appearance,configuration,feature_settings}.py`, mounted by `desktop/pages/settings.py:SettingsPage` |
+| Desktop Settings → Appearance & shared controls, Configuration, Feature settings | `desktop/settings/{appearance,configuration,feature_settings}.py`, mounted by `desktop/pages/settings.py:SettingsPage` |
 | Desktop Files, Workspaces, Open Documents | `desktop/file_browser.py`, `desktop/pages/folders.py`, `desktop/documents.py` |
 | Desktop Bulk Rename and workspace actions | `desktop/bulk_rename/`, `desktop/folder_actions.py` |
 | Mobile Home, Documents | `mobile/{home,documents_hub,hub_controls}.py`; `hub_ui.py` retains sessions and reopen |
