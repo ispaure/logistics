@@ -920,7 +920,7 @@ def github_client(values, root):
 
 # The terminal witness below is valid only for this reviewed release DAG:
 # package requires selected gates or explicit owned bypass; publish requires package success.
-_RELEASE_DAG_SHA256 = 'f1f91bfb9d5185fe0344c481e53224ac78e83cbf204cc0a46f83b881438fd35c'
+_RELEASE_DAG_SHA256 = '4b41b4f4c6dca9af1c442c6c4893990ad2110eabe49320635f20f231ba2a72f3'
 
 
 def _publication_capabilities(client):
