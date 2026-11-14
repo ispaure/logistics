@@ -49,9 +49,14 @@ import runpy, sys
 from pathlib import Path
 root = Path(sys.argv[1])
 sys.path[:0] = [str(root), str(root / 'Python')]
-from build_manager import test_manifest
+from build_manager import resources, test_manifest, test_workers
 from logistics_build import validation_plans
 fixture = Path(sys.argv[2])
+# This child tests stage order. It needs an independent pool because the
+# enclosing Desktop test already holds the production macOS worker slots.
+private = fixture / 'manager'
+resources.config_directory = test_workers.config_directory = lambda: private
+test_workers.configure(dict(per_platform=1, host=1))
 test_manifest.discover = lambda *_: [dict(
     id='fixture', directory=str(fixture), timeout=30,
     smoke_args=['--profile', 'smoke', '--mode', 'fast'])]
@@ -91,7 +96,9 @@ class Fixture(TestCase):
                                         cwd=directory, capture_output=True, text=True, encoding='utf-8', timeout=60,
                                         env=dict(os.environ, LOGISTICS_REUSE_TEST_RESULTS='off'))
                 self.assertEqual(result.returncode, int(bool(failure)), result.stdout + result.stderr)
-                observed = (fixture / 'observed').read_text().splitlines()
+                observed_path = fixture / 'observed'
+                self.assertTrue(observed_path.is_file(), result.stdout + result.stderr)
+                observed = observed_path.read_text().splitlines()
                 report = json.loads((fixture / 'results/summary.json').read_text())
                 if failure == 'smoke':
                     self.assertEqual(observed, ['smoke'])
