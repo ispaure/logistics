@@ -33,7 +33,7 @@
 
 @interface LGVideoController : UIViewController
     <VLCDrawable, VLCPictureInPictureDrawable, VLCPictureInPictureMediaControlling,
-     VLCMediaPlayerDelegate, CXCallObserverDelegate, UIGestureRecognizerDelegate>
+     VLCMediaPlayerDelegate, CXCallObserverDelegate, UIGestureRecognizerDelegate, AVRoutePickerViewDelegate>
 @property(nonatomic, copy) NSString *videoURL;
 @property(nonatomic, strong) LGScreenAwakeLease *awakeLease;
 @property(nonatomic, copy) NSString *subtitleJSON;
@@ -43,6 +43,17 @@
 @property(nonatomic) int64_t knownDuration;
 @property(nonatomic) BOOL resumeSeekSubmitted;
 @property(nonatomic) BOOL restricted;
+@property(nonatomic) BOOL airPlayAvailable, airPlayWasExternal, airPlaySeekPending;
+@property(nonatomic) BOOL airPlayPickerOpen, airPlayPreparing, airPlayResumeLocal;
+@property(nonatomic) NSTimeInterval airPlayRouteDeadline;
+@property(nonatomic) int64_t airPlaySeekTarget, airPlayStartPosition;
+@property(nonatomic) NSTimeInterval airPlayConnectionDeadline;
+@property(nonatomic) NSUInteger airPlaySeekGeneration;
+@property(nonatomic, copy) BOOL (^airPlayAllowed)(void);
+@property(nonatomic, strong) AVPlayerViewController *airPlayController;
+@property(nonatomic, strong) AVRoutePickerView *airPlayPicker;
+@property(nonatomic, strong) UILabel *airPlayLabel;
+@property(nonatomic, strong) AVPlayer *airPlayPlayer;
 @property(nonatomic, copy) BOOL (^allowed)(BOOL external);
 @property(nonatomic, copy) BOOL (^requestPlay)(void);
 @property(nonatomic, copy) void (^closed)(void);
@@ -132,6 +143,24 @@
 @end
 
 static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoController *owner);
+
+@interface LGVideoController (AirPlay)
+- (void)installAirPlayControls;
+- (BOOL)beginAirPlay:(AVPlayer *)player URL:(NSURL *)url title:(NSString *)title;
+- (BOOL)hasAirPlay;
+- (BOOL)allowsAirPlay;
+- (void)startAirPlayPlayback;
+- (void)seekAirPlay:(int64_t)target;
+- (int64_t)airPlayTime:(CMTime)time;
+- (void)updateAirPlay;
+- (void)finishAirPlayWithMessage:(NSString *)message;
+- (BOOL)hasAirPlayAudioRoute;
+- (void)updateAirPlayRoute;
+- (BOOL)holdLocalPlayForAirPlay;
+- (void)airPlayPreparationFailed:(NSString *)message;
+- (void)showAirPlayTracks:(id)sender subtitles:(BOOL)text;
+- (void)detachAirPlayKeepingRoute:(BOOL)keepRoute;
+@end
 
 @interface LGVideoController (PlaybackControls)
 - (void)installPlaybackTools;
@@ -256,7 +285,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
             [UIAction actionWithTitle:@"Show in folder" image:[UIImage systemImageNamed:@"folder"] identifier:nil handler:^(UIAction *action) { [owner emitCommand:@"showInFolder" value:@""]; }],
             [UIAction actionWithTitle:@"Favourite file" image:[UIImage systemImageNamed:@"star"] identifier:nil handler:^(UIAction *action) { [owner emitCommand:@"favourite" value:@""]; }],
             [UIAction actionWithTitle:@"Picture in picture" image:[UIImage systemImageNamed:@"pip"] identifier:nil handler:^(UIAction *action) { [owner pip:anchor]; }],
-            [UIAction actionWithTitle:@"Cast…" image:[UIImage systemImageNamed:@"tv"] identifier:nil handler:^(UIAction *action) { [owner cast:anchor]; }]
+            [UIAction actionWithTitle:@"VLC Cast…" image:[UIImage systemImageNamed:@"tv"] identifier:nil handler:^(UIAction *action) { [owner cast:anchor]; }]
         ]];
         [utilities addObject:more];
     }
@@ -285,6 +314,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     [self.transport addArrangedSubview:self.playButton];
     [self.transport addArrangedSubview:[self deckButton:@"Forward 10 seconds" symbol:@"goforward.10" selector:@selector(forward:) primary:NO]];
     [self.controls addArrangedSubview:self.transport];
+    if (self.airPlayAvailable) [self installAirPlayControls];
     self.tabletopUtilities = [[UIStackView alloc] init];
     self.tabletopUtilities.axis = UILayoutConstraintAxisVertical;
     self.tabletopUtilities.spacing = 4;
@@ -548,6 +578,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 - (BOOL)moveVideoToExternalHost:(UIView *)host {
     NSAssert(NSThread.isMainThread, @"Move the video drawable on the UI thread");
     if (host) {
+        if ([self hasAirPlay]) return NO;
         if (![self permitsExternalDisplay]) { [self revokeExternalVideo]; return NO; }
         if (!self.surfaceVisible || !host.window || self.casting || self.pipActive) {
             [self moveVideoToExternalHost:nil];
@@ -803,9 +834,15 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 
 - (void)togglePlay:(id)sender {
     if (self.controlsLocked) return;
+    if ([self hasAirPlay]) {
+        if (!self.playRequested) [self startAirPlayPlayback];
+        else [self pause];
+        return;
+    }
     if (self.playRequested) [self pause]; else [self startByUser];
 }
 - (void)seekToMilliseconds:(int64_t)target {
+    if ([self hasAirPlay]) { [self seekAirPlay:target]; return; }
     if (self.controlsLocked || ![self canPlay:NO] || !self.player.isSeekable) return;
     int64_t duration = self.player.media.length.value.longLongValue;
     target = MAX(0, target);
@@ -825,7 +862,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 - (void)back:(id)sender { [self skipMilliseconds:-10000]; }
 - (void)forward:(id)sender { [self skipMilliseconds:10000]; }
 - (void)seekChanged:(UISlider *)slider {
-    int64_t duration = self.player.media.length.value.longLongValue;
+    int64_t duration = [self durationMilliseconds];
     if (duration <= 0) return;
     [self seekToMilliseconds:(int64_t)(slider.value * duration)];
     [self.controlsTimer invalidate]; self.controlsTimer = nil;
@@ -833,6 +870,14 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 }
 - (void)done:(id)sender { if (self.closed) self.closed(); }
 - (void)pause {
+    if ([self hasAirPlay]) {
+        [self.airPlayPlayer pause];
+        self.playRequested = NO;
+        self.airPlayConnectionDeadline = 0;
+        [self updatePlayButton];
+        [self setControlsShown:YES];
+        return;
+    }
     if (!self.audioSuppressed) {
         self.resumeMuted = self.player.audio.isMuted;
         self.audioSuppressed = YES;
@@ -917,6 +962,9 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     [self showStatus:self.transportFailure ?: @"Playback stopped unexpectedly. Press Play to retry from this position."];
 }
 - (void)startByUser {
+    if ([self hasAirPlay]) { [self startAirPlayPlayback]; return; }
+    if ([self holdLocalPlayForAirPlay]) return;
+    self.airPlayResumeLocal = NO;
     if (self.externalVideoHost && ![self permitsExternalDisplay]) [self revokeExternalVideo];
     if (!self.restricted && self.externalVideoRevoked &&
         (!self.externalDisplayAllowed || !self.externalDisplayAllowed())) return;
@@ -925,7 +973,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     AVAudioSession *audio = AVAudioSession.sharedInstance;
     if (![audio setCategory:AVAudioSessionCategoryPlayback error:&error] ||
         ![audio setActive:YES error:&error]) return;
-    if (![self canPlay:NO]) return; // Activation can change the selected output.
+    if (![self canPlay:NO] || [self holdLocalPlayForAirPlay]) return; // Activation can change the selected output.
     self.externalVideoRevoked = NO;
     [self revealSurface];
     if (self.externalOutputChanged) self.externalOutputChanged();
@@ -1021,6 +1069,13 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     NSUInteger reason = [notification.userInfo[AVAudioSessionRouteChangeReasonKey] unsignedIntegerValue];
     AVAudioSessionRouteDescription *previous = notification.userInfo[AVAudioSessionRouteChangePreviousRouteKey];
     dispatch_async(dispatch_get_main_queue(), ^{
+        if (self.airPlayAvailable && ([self hasAirPlay] || self.airPlayPreparing ||
+            [self hasAirPlayAudioRoute] || self.airPlayResumeLocal || self.airPlayRouteDeadline > 0)) {
+            if (reason != AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory) {
+                if ([self hasAirPlay]) [self updateAirPlay]; else [self updateAirPlayRoute];
+                return;
+            }
+        }
         BOOL lostDisplay = reason == AVAudioSessionRouteChangeReasonOldDeviceUnavailable &&
             previous.outputs.count == 1 && [self isExternalAudioPort:previous.outputs.firstObject.portType] &&
             AVAudioSession.sharedInstance.currentRoute.outputs.count && [self continuesAfterDisplayDisconnect];
@@ -1035,6 +1090,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 - (void)suspendForLock {
     if (self.lockHidden) return;
     self.lockHidden = YES;
+    [self detachAirPlayKeepingRoute:NO];
     [self revokeExternalVideo];
     [self.captionPiP stopPictureInPicture];
     [self clearPausePresentation];
@@ -1047,34 +1103,50 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 - (void)revealSurface {
     // Only the authenticated Python presentation owner calls this entry point.
     self.lockHidden = NO;
-    self.movie.hidden = self.externalVideoRevoked || (self.restricted && self.view.window.screen.isCaptured);
+    self.movie.hidden = [self hasAirPlay] || self.externalVideoRevoked || (self.restricted && self.view.window.screen.isCaptured);
 }
 - (void)background {
     [self setScreenAwake:NO];
-    if (self.restricted) [self suspendForLock]; else if (!self.pipActive && !self.casting) [self pause];
+    if (self.restricted) [self suspendForLock]; else if (!self.pipActive && !self.casting && !self.airPlayPlayer.externalPlaybackActive) [self pause];
 }
 - (void)backgroundNotification:(NSNotification *)notification { [self background]; }
-- (void)protectedData:(NSNotification *)notification { if (self.restricted) [self suspendForLock]; else [self pause]; }
+- (void)protectedData:(NSNotification *)notification {
+    if (self.restricted) [self suspendForLock];
+    else if ([self hasAirPlay]) {
+        [self detachAirPlayKeepingRoute:NO];
+        [self revealSurface];
+    } else [self pause];
+}
 - (void)captureChanged:(NSNotification *)notification {
     if (self.restricted && self.view.window.screen.isCaptured) {
         [self pause]; [self clearPausePresentation]; self.movie.hidden = YES;
-    } else if (!self.lockHidden && !self.externalVideoRevoked && [self canPlay:NO]) self.movie.hidden = NO;
+    } else if (!self.lockHidden && ![self hasAirPlay] && !self.externalVideoRevoked && [self canPlay:NO]) self.movie.hidden = NO;
 }
 - (int64_t)progressPosition {
     if (self.ended) return 0;
+    if ([self hasAirPlay]) return !self.airPlayWasExternal || self.airPlaySeekTarget >= 0 ||
+        self.airPlayPlayer.currentItem.status != AVPlayerItemStatusReadyToPlay ? -1 :
+        [self airPlayTime:self.airPlayPlayer.currentTime];
     if (self.progressSeek >= 0 || self.networkResumePending || self.resumeSeekSubmitted || self.startMilliseconds >= 0)
         return -1;
     return self.player.time.value ? self.player.time.value.longLongValue : -1;
 }
 - (int64_t)positionMilliseconds {
     if (self.ended) return 0;
+    if ([self hasAirPlay]) {
+        if (self.airPlaySeekTarget >= 0) return self.airPlaySeekTarget;
+        if (!self.airPlayWasExternal) return self.airPlayStartPosition;
+        int64_t current = [self airPlayTime:self.airPlayPlayer.currentTime];
+        return current >= 0 ? current : MAX(0, self.lastPosition);
+    }
     if (self.networkResumePending) return self.bufferPosition;
     if (self.startMilliseconds >= 0) return self.startMilliseconds;
     int64_t value = self.player.time.value.longLongValue;
     return value >= 0 ? value : self.lastPosition;
 }
 - (int64_t)durationMilliseconds {
-    int64_t duration = self.player.media.length.value.longLongValue;
+    int64_t duration = [self hasAirPlay] ? [self airPlayTime:self.airPlayPlayer.currentItem.duration] :
+        self.player.media.length.value.longLongValue;
     if (duration > 0) self.knownDuration = duration;
     return MAX(0, self.knownDuration);
 }
@@ -1096,6 +1168,12 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     [self setControlsShown:YES];
 }
 - (void)tick:(NSTimer *)timer {
+    if ([self hasAirPlay]) {
+        [self updateAirPlay];
+        [self updateTimeline];
+        return;
+    }
+    [self updateAirPlayRoute];
     if (self.externalVideoHost && ![self permitsExternalDisplay]) [self revokeExternalVideo];
     // Keep the resume target visible until the decoder acknowledges that seek.
     // The acknowledgement window measures wall time even at faster playback.
@@ -1134,11 +1212,16 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     [self applyPictureSize];
     if (self.controlsLocked) [self.view bringSubviewToFront:self.unlockButton];
     [self updateScreenAwake];
+    [self updateTimeline];
+}
+
+- (void)updateTimeline {
     int64_t position = [self positionMilliseconds];
     int64_t duration = [self durationMilliseconds];
     if (!self.seek.tracking && duration > 0) self.seek.value = (float)position / duration;
     self.seek.hidden = NO;
-    self.seek.enabled = duration > 0 && self.player.isSeekable;
+    self.seek.enabled = duration > 0 && ([self hasAirPlay] ?
+        self.airPlayPlayer.currentItem.status == AVPlayerItemStatusReadyToPlay : self.player.isSeekable);
     NSString *(^time)(int64_t) = ^NSString *(int64_t value) {
         int64_t seconds = MAX(0, value / 1000);
         return [NSString stringWithFormat:@"%lld:%02lld:%02lld", seconds / 3600, seconds / 60 % 60, seconds % 60];
@@ -1153,7 +1236,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 }
 - (void)mediaPlayerStateChanged:(VLCMediaPlayerState)state {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (self.retired) return;
+        if (self.retired || [self hasAirPlay]) return;
         [self logHDRTransition:[NSString stringWithFormat:@"state-%ld", (long)state]];
         if (state != VLCMediaPlayerStatePlaying) self.pausePending = NO;
         if (state == VLCMediaPlayerStatePaused && self.player.state == VLCMediaPlayerStatePaused &&
@@ -1283,6 +1366,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 }
 - (void)tracks:(id)sender subtitles:(BOOL)text {
     if (![self canPlay:NO]) return;
+    if ([self hasAirPlay]) { [self showAirPlayTracks:sender subtitles:text]; return; }
     // The timer defers hiding while a menu is presented and resumes afterward.
     [self setControlsShown:YES];
     UIAlertController *menu = [self menu:text ? @"Subtitles" : @"Audio tracks" sender:sender];
@@ -1312,6 +1396,10 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     // flowing. The render-progress watchdog owns the quiet buffering indicator.
 }
 - (void)cast:(id)sender {
+    if ([self hasAirPlay] || self.airPlayPreparing || (self.airPlayAvailable && [self hasAirPlayAudioRoute])) {
+        [self showStatus:@"Use the AirPlay picker to change the current output."];
+        return;
+    }
     if (![self canPlay:YES]) return;
     if (self.discoverers.count == 0) {
         for (VLCRendererDiscovererDescription *description in [VLCRendererDiscoverer list]) {
@@ -1336,7 +1424,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     [self presentPlaybackDialog:menu];
 }
 - (void)selectRenderer:(VLCRendererItem *)renderer {
-    if (![self canPlay:YES]) return;
+    if ([self hasAirPlay] || ![self canPlay:YES]) return;
     if (self.pipActive) {
         [self showStatus:@"Close Picture in Picture before changing Cast output."];
         return;
@@ -1350,6 +1438,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     if (self.externalOutputChanged) self.externalOutputChanged();
 }
 - (void)pip:(id)sender {
+    if ([self hasAirPlay]) { [self showStatus:@"Choose this device in AirPlay to use Picture in Picture."]; return; }
     if (![self canPlay:YES]) return;
     if (self.externalVideoHost || self.casting) {
         [self showStatus:@"Disconnect the external display or Cast to use Picture in Picture."];
@@ -1442,7 +1531,11 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     if (completion) [self.retirementCallbacks addObject:[completion copy]];
     if (self.retired) return;
     [self setScreenAwake:NO];
+    // Remove the movie before releasing its source. Leave the empty AVPlayer
+    // available for another explicit AirPlay request in this window.
     self.retired = YES;
+    [self detachAirPlayKeepingRoute:YES];
+    self.airPlayAllowed = nil;
     self.rateChangePending = NO;
     [self clearPausePresentation];
     self.command = nil;

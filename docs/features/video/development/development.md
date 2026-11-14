@@ -105,15 +105,14 @@ revocation. Save logs under ignored test results.
 
 ### Native AirPlay video
 
-The iOS-only `native_video_airplay` mobile preference defaults off. On open,
-`IOSAirPlayVideo` admits ordinary local MP4, MOV and M4V sources with an
-external-playback grant and a guarded physical file path. The retained source
-still owns revision checks and the shared resume checkpoint. AVPlayer reads the
-file URL directly and AVPlayerViewController supplies the route picker and
-system remote controls. Revocation detaches the current item and disables
-external playback. Protected, encrypted, provider-decoded and cloud content
-use the existing VLC path. Selecting the player on each open lets the user
-switch back after a format or receiver failure.
+The iOS-only `native_video_airplay` preference defaults off. Ordinary local
+MP4, MOV, M4V and MKV files with a guarded path and an external-playback grant
+have one native **AirPlay** picker in the VLC controller. The selected AirPlay
+audio route starts preparation. The controller confirms external video with
+AVPlayer and keeps the same deck and timeline. On route loss or playback
+failure, the picker stays available. VLC waits for the audio route to return
+before resuming. Revocation disables external playback and detaches the item.
+A window reuses its empty AVPlayer for successive requests.
 
 An iPad simulator smoke test verified local H.264/AAC and HEVC/AAC playback
 from a saved seek position, pause and teardown, with external playback enabled.
@@ -142,8 +141,11 @@ The driver uses host FFmpeg and ffprobe with synthetic media. Only the JSON
 report survives the build manager's scratch lease.
 
 On iOS, the same preference enables indexed local MKV with H.264 or HEVC
-and one AAC, AC-3 or E-AC-3 track. If none are present, the adapter can
-convert mono, stereo or 5.1 Opus to AAC-LC. Each fragment starts a fresh
+and separate AAC, AC-3 or E-AC-3 audio renditions. Mono, stereo or 5.1 Opus
+tracks convert to AAC-LC. A master playlist exposes audio renditions and
+plain-text WebVTT derived from embedded SubRip or WebVTT and ordinary local
+SRT or WebVTT sidecars. Audio and subtitle menus select the AVPlayer media
+options while on TV. Each fragment starts a fresh
 decoder and encoder, using audio preroll and a shared AAC sample grid so
 fragments can be generated out of order. The HEVC bitstream and color signaling
 stay with the video. `MKVRemux.m` uses FFmpeg 9.0 headers
@@ -155,8 +157,10 @@ binds the Wi-Fi interface for receiver access and serves only the current
 unpredictable capability URL. It keeps fragments in memory and rechecks
 the source revision and external playback policy during each response.
 Closing the player stops the server and releases its file descriptor.
-Admission failure selects VLC. **Use VLC** reopens the current file at the
-shared checkpoint without changing the preference.
+Selecting the phone in the same picker returns to
+VLC within the same presentation. At open HEVC GOP boundaries, a fragment can
+hold its final frame briefly across the gap left by dropping leading pictures
+that depend on both sides of the boundary.
 
 An iPhone simulator probe linked the pinned VLCKit binary, requested
 fragments out of order and decoded each fragment independently. Compressed

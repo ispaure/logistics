@@ -11,7 +11,7 @@ def video(app):
     title = 'Native AirPlay video'
     switch = toga.Switch(title, value=app.preferences.values[key] == 'true', style=Pack(height=48))
 
-    def changed(widget, **kwargs):
+    def changed(widget, *args, **kwargs):
         if save_boolean_switch(app.preferences, widget, key, changed, app.settings_status):
             app.settings_status.text = ''
 
@@ -27,6 +27,6 @@ def video(app):
     switch.on_change = changed
     box._settings_on_open = refresh
     box.add(switch_row(app, title, switch,
-        'Use Apple’s player and AirPlay controls for compatible local MP4, MOV, M4V and MKV files. '
-        'Applies when you reopen a video. Turn it off to use VLC.'))
+        'Show an AirPlay picker in the Logistics player for compatible local MP4, MOV, M4V and MKV files. '
+        'Applies when you reopen a video.'))
     return box

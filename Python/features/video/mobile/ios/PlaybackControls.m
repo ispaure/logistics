@@ -21,6 +21,45 @@
 }
 @end
 
+@interface LGVideoController (AirPlayPlaybackOptions)
+- (float)requestedPlaybackRate;
+- (void)applyAirPlayPlaybackOptions;
+- (void)playAirPlayAtRequestedRate;
+@end
+
+@implementation LGVideoController (AirPlayPlaybackOptions)
+- (float)requestedPlaybackRate {
+    float rate = [[self playbackOptions][@"rate"] floatValue];
+    return isfinite(rate) && rate >= .5f && rate <= 2.f ? rate : 1.f;
+}
+- (void)applyAirPlayPlaybackOptions {
+    AVPlayer *player = self.airPlayPlayer;
+    if (!player || self.retired) return;
+    float rate = [self requestedPlaybackRate];
+    if (rate < 1.f && player.currentItem.status == AVPlayerItemStatusReadyToPlay &&
+        !player.currentItem.canPlaySlowForward) rate = 1.f;
+    if (@available(iOS 16.0, *)) player.defaultRate = rate;
+    player.currentItem.audioTimePitchAlgorithm = AVAudioTimePitchAlgorithmTimeDomain;
+    // Pause and a pending seek suppress output independently of the user's
+    // mute preference, which also survives the handoff back to VLC.
+    player.muted = !player.externalPlaybackActive || self.airPlaySeekTarget >= 0 || self.resumeMuted;
+    // A settings refresh must not undo a pause from the TV before the next
+    // timeline tick has observed it, or start playback during a seek.
+    if (self.playRequested && self.airPlaySeekTarget < 0 && [self allowsAirPlay] && [self canPlay:NO] &&
+        player.timeControlStatus != AVPlayerTimeControlStatusPaused && fabsf(player.rate - rate) > .001f)
+        player.rate = rate;
+}
+- (void)playAirPlayAtRequestedRate {
+    [self applyAirPlayPlaybackOptions];
+    if (@available(iOS 16.0, *)) [self.airPlayPlayer play];
+    else {
+        float rate = [self requestedPlaybackRate];
+        if (rate < 1.f && !self.airPlayPlayer.currentItem.canPlaySlowForward) rate = 1.f;
+        self.airPlayPlayer.rate = rate;
+    }
+}
+@end
+
 @implementation LGVideoController (PlaybackControls)
 - (void)presentPlaybackDialog:(UIAlertController *)dialog {
     if (self.retired || self.lockHidden || ![self canPlay:NO]) return;
@@ -64,15 +103,20 @@
 - (void)applyPlaybackOptions {
     if (!self.player || self.retired) return;
     NSDictionary *options = [self playbackOptions];
+    float rate = [self requestedPlaybackRate];
+    UIButtonConfiguration *speed = self.portraitSpeedButton.configuration;
+    speed.title = [NSString stringWithFormat:@"%g×", rate];
+    self.portraitSpeedButton.configuration = speed;
+    if ([self hasAirPlay]) {
+        [self applyAirPlayPlaybackOptions];
+        [self applyPictureSize];
+        return;
+    }
     if ([options[@"subtitle_track"] isKindOfClass:NSNumber.class]) {
         self.pendingSubtitleURL = nil;
         self.subtitleTracksBeforeAttachment = nil;
     }
     if (self.pendingSubtitleURL.length) [self attachSubtitleURL:self.pendingSubtitleURL];
-    float rate = [options[@"rate"] floatValue];
-    UIButtonConfiguration *speed = self.portraitSpeedButton.configuration;
-    speed.title = [NSString stringWithFormat:@"%g×", rate >= .5 && rate <= 2. ? rate : 1.];
-    self.portraitSpeedButton.configuration = speed;
     self.player.currentVideoSubTitleDelay = [options[@"subtitle_delay_ms"] longLongValue] * 1000;
     self.player.currentAudioPlaybackDelay = [options[@"audio_delay_ms"] longLongValue] * 1000;
     // VLCKit uses a relative font scale. Preserve the established baseline.
@@ -130,6 +174,7 @@
     [self applyPlaybackRate];
 }
 - (void)applyPlaybackRate {
+    if ([self hasAirPlay]) { [self applyAirPlayPlaybackOptions]; return; }
     if (!self.player || self.retired || self.rateChangePending) return;
     float rate = [[self playbackOptions][@"rate"] floatValue];
     if (rate < .5 || rate > 2. || !isfinite(rate) || fabsf(self.player.rate - rate) < .001f) return;
@@ -160,6 +205,10 @@
     BOOL fill = [[self playbackOptions][@"aspect"] isEqualToString:@"fill"];
     NSString *label = fill ? @"Fit view" : @"Fill view";
     if (![self.pictureButton.accessibilityLabel isEqualToString:label]) [self updateItem:self.pictureButton label:label];
+    if ([self hasAirPlay]) {
+        self.airPlayPlayer.externalPlaybackVideoGravity = fill ? AVLayerVideoGravityResizeAspectFill : AVLayerVideoGravityResizeAspect;
+        return;
+    }
     NSString *aspect = fill && !self.externalVideoHost ? @"fill" : @"fit";
     CGRect bounds = self.movie.bounds;
     NSString *geometry = [NSString stringWithFormat:@"%@:%g:%g", aspect, bounds.size.width, bounds.size.height];
@@ -209,6 +258,12 @@
 
 - (void)toggleMute:(id)sender {
     if (![self canPlay:NO] || self.controlsLocked) return;
+    if ([self hasAirPlay]) {
+        self.resumeMuted = !self.resumeMuted;
+        [self applyAirPlayPlaybackOptions];
+        [self showStatus:self.resumeMuted ? @"Muted" : @"Sound on"];
+        return;
+    }
     BOOL muted = self.audioSuppressed ? self.resumeMuted : self.player.audio.muted;
     if (self.audioSuppressed) self.resumeMuted = !muted;
     else self.player.audio.muted = !muted;
@@ -261,12 +316,27 @@
     [self setting:@"aspect" value:filled ? @"fit" : @"fill"];
 }
 - (void)speedOptions:(id)sender {
+    if (![self canPlay:NO] || self.controlsLocked) return;
+    if ([self hasAirPlay] && self.airPlayPlayer.currentItem.status != AVPlayerItemStatusReadyToPlay) {
+        [self showStatus:@"AirPlay is connecting. Try changing speed once it is ready."];
+        return;
+    }
     UIAlertController *menu = [self menu:@"Speed · pitch preserved" sender:sender];
-    for (NSNumber *rate in @[@.5,@.75,@1.,@1.25,@1.5,@1.75,@2.])
+    for (NSNumber *rate in @[@.5,@.75,@1.,@1.25,@1.5,@1.75,@2.]) {
+        if ([self hasAirPlay] && rate.floatValue < 1.f && !self.airPlayPlayer.currentItem.canPlaySlowForward) continue;
         [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:[NSString stringWithFormat:@"%@×",rate] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self setting:@"rate" value:rate]; }]];
+    }
     [self presentPlaybackDialog:menu];
 }
 - (void)subtitleOptions:(id)sender {
+    if ([self hasAirPlay]) {
+        UIAlertController *menu = [self menu:@"TV subtitles and audio" sender:sender];
+        menu.message = @"Choose tracks here or in the TV’s playback controls. Subtitle appearance is controlled by the TV. Audio and subtitle delays apply to playback on this device.";
+        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Audio tracks…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self showAirPlayTracks:sender subtitles:NO]; }]];
+        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Subtitles…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self showAirPlayTracks:sender subtitles:YES]; }]];
+        [self presentPlaybackDialog:menu];
+        return;
+    }
     UIAlertController *menu = [self menu:@"Subtitles and audio" sender:sender];
     [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Choose subtitle file…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self emitCommand:@"subtitleBrowse" value:@""]; }]];
     for (NSArray *entry in @[@[@"Subtitle delay (ms; positive = later)", @"subtitle_delay_ms"], @[@"Audio delay (ms; positive = later)", @"audio_delay_ms"], @[@"Preferred audio language (e.g. fr)", @"audio_language"], @[@"Preferred subtitle language (e.g. en)", @"subtitle_language"]])
@@ -274,6 +344,7 @@
     [self presentPlaybackDialog:menu];
 }
 - (void)subtitleSizeOptions:(id)sender {
+    if ([self hasAirPlay]) { [self showStatus:@"Change subtitle appearance in the TV’s accessibility settings."]; return; }
     UIAlertController *menu = [self menu:@"Subtitle size" sender:sender];
     for (NSNumber *scale in @[@.75,@1.,@1.25,@1.5,@2.]) {
         [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:[NSString stringWithFormat:@"Subtitle size %@×",scale] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
@@ -284,6 +355,7 @@
 }
 - (void)hdrDisplayOptions:(id)sender {
     if (![self canPlay:NO]) return;
+    if ([self hasAirPlay]) { [self showStatus:@"HDR output is controlled by the TV’s video settings."]; return; }
     UIAlertController *menu = [self menu:@"HDR display mode (session)" sender:sender];
     if (@available(iOS 26.0, *)) {
         BOOL forced = self.forceMaximumHDR;

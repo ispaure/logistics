@@ -15,7 +15,7 @@ typedef struct {
     AVFrame *frame;
     AVPacket *packet;
     float *pcm;
-    int channels, used;
+    int channels, used, outputIndex;
     double gain;
     int64_t first, end, cursor, inputCursor;
     const uint8_t *order;
@@ -54,6 +54,7 @@ static BOOL LGOpusOpen(LGMKVOpus *audio, AVCodecParameters *input, AVStream *out
     }
     audio->order = channels == 6 ? surround : stereo;
     audio->channels = channels;
+    audio->outputIndex = output->index;
     audio->gain = pow(10.0, (int16_t)AV_RL16(head + 16) / (256.0 * 20.0));
     int error = 0;
     audio->decoder = opus_multistream_decoder_create(48000, channels, streams, coupled, mapping, &error);
@@ -98,8 +99,8 @@ static BOOL LGOpusEncode(LGMKVOpus *audio, AVFormatContext *output, AVFrame *fra
         if (packet->pts >= audio->first && packet->pts < audio->end) {
             packet->pts += 4800;
             packet->dts += 4800;
-            packet->stream_index = 1;
-            av_packet_rescale_ts(packet, LGOpusClock, output->streams[1]->time_base);
+            packet->stream_index = audio->outputIndex;
+            av_packet_rescale_ts(packet, LGOpusClock, output->streams[audio->outputIndex]->time_base);
             if (av_interleaved_write_frame(output, packet) < 0) return NO;
             *wrote = YES;
         }

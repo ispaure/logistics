@@ -104,6 +104,11 @@ class PlaybackControls:
                 observation = owner.accept_sample(int(value))
                 if observation is not None:
                     await owner.flush_progress(observation)
+            elif name == "airplay":
+                await owner.prepare_airplay()
+            elif name == "airplayDetached":
+                if not owner.native.airplay_active():
+                    await owner.release_airplay_stream()
             elif name == "seek":
                 owner.native.seek(parse_time(value))
             elif name in ("previous", "next", "queue", "ended"):

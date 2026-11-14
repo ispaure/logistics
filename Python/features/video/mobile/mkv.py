@@ -1,10 +1,79 @@
 """Session-scoped HLS access to the iOS Matroska stream-copy adapter."""
+from bisect import bisect_left, bisect_right
+from html import escape, unescape
+import json
+from math import ceil
+from pathlib import Path
 from http.server import BaseHTTPRequestHandler
 from re import fullmatch
 from secrets import token_urlsafe
 from threading import BoundedSemaphore, Event, Lock, Thread
 
+from features.video.subtitles import MAX_SUBTITLE, Subtitles
 from features.video.transport import VideoHTTPServer, byte_range
+
+
+PLAYLIST_MIME = 'application/vnd.apple.mpegurl'
+MEDIA_RESOURCE = r'(video|audio-[0-9]{1,10})/(init\.mp4|segment-([0-9]{1,6})\.m4s)'
+SUBTITLE_RESOURCE = r'(text-[0-9]{1,10}|sidecar-[0-9]{1,3})/segment-([0-9]{1,6})\.vtt'
+
+
+def playlist(boundaries, extension, *, initialization=False):
+    spans = [end - start for start, end in zip(boundaries, boundaries[1:])]
+    lines = ['#EXTM3U', '#EXT-X-VERSION:7', f'#EXT-X-TARGETDURATION:{ceil(max(spans) / 1000)}',
+             '#EXT-X-MEDIA-SEQUENCE:0', '#EXT-X-PLAYLIST-TYPE:VOD']
+    if initialization:
+        lines.append('#EXT-X-MAP:URI="init.mp4"')
+    for index, milliseconds in enumerate(spans):
+        lines.extend((f'#EXTINF:{milliseconds / 1000:.3f},', f'segment-{index}.{extension}'))
+    return ('\n'.join([*lines, '#EXT-X-ENDLIST']) + '\n').encode('ascii')
+
+
+def rendition_name(track, number):
+    name = track['name'] or track['language']
+    if name == 'und':
+        name = 'Track'
+    name = ''.join(c for c in name[:96] if c.isprintable() and c not in '"\\')
+    return f'{name or "Track"} ({number})'
+
+
+def master_playlist(audio, subtitles, default_audio, bandwidth):
+    lines = ['#EXTM3U', '#EXT-X-VERSION:7']
+    for kind, group, renditions in (('AUDIO', 'audio', audio), ('SUBTITLES', 'text', subtitles)):
+        for number, (route, track) in enumerate(renditions.items(), 1):
+            default = kind == 'AUDIO' and track['id'] == default_audio
+            flags = f'DEFAULT={"YES" if default else "NO"},AUTOSELECT={"YES" if default else "NO"}'
+            if kind == 'SUBTITLES':
+                flags += ',FORCED=NO'
+            if fullmatch(r'[a-zA-Z]{2,8}(-[a-zA-Z0-9]{1,8})*', track['language']):
+                flags += f',LANGUAGE="{track["language"]}"'
+            if kind == 'AUDIO' and track['channels'] > 0:
+                flags += f',CHANNELS="{track["channels"]}"'
+            lines.append(f'#EXT-X-MEDIA:TYPE={kind},GROUP-ID="{group}",NAME="{rendition_name(track, number)}",'
+                         f'{flags},URI="{route}/index.m3u8"')
+    attributes = f'BANDWIDTH={bandwidth},AUDIO="audio"'
+    if subtitles:
+        attributes += ',SUBTITLES="text"'
+    lines.extend((f'#EXT-X-STREAM-INF:{attributes}', 'video/index.m3u8'))
+    return ('\n'.join(lines) + '\n').encode('utf-8')
+
+
+def webvtt_segment(cues, start, end):
+    def time(milliseconds):
+        seconds, millis = divmod(max(0, milliseconds), 1000)
+        minutes, seconds = divmod(seconds, 60)
+        hours, minutes = divmod(minutes, 60)
+        return f'{hours:02d}:{minutes:02d}:{seconds:02d}.{millis:03d}'
+
+    lines = ['WEBVTT', 'X-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:0', '']
+    for first, last, cue in cues:
+        if first >= end or last <= start:
+            continue
+        clean = escape(unescape(cue), quote=False).replace('\r', '')
+        clean = '\n'.join(line for line in clean.splitlines() if line.strip())
+        if clean:
+            lines.extend((f'{time(first)} --> {time(last)}', clean, ''))
+    return ('\n'.join(lines) + '\n').encode('utf-8')
 
 
 class MKVStream:
@@ -17,20 +86,36 @@ class MKVStream:
         self.lock = Lock()
         self.slots = BoundedSemaphore(4)
         self.route = '/' + token_urlsafe(32) + '/'
-        self.cached = None
+        self.cached = {}
+        self.headers = {}
+        self.sidecars = {}
         with autoreleasepool():
             remux = ObjCClass('LGMKVRemux')
             address = remux.streamAddress()
             if address is None:
-                raise ValueError('Native MKV playback requires Wi-Fi.')
+                raise ValueError('AirPlay for MKV requires Wi-Fi.')
             self.remux = remux.alloc().initWithPath(str(path))
             if self.remux is None or not self.allowed():
-                raise ValueError('This MKV cannot be streamed.')
-            init = self.remux.initialization
-            if init is None:
-                raise ValueError('The MKV does not begin at a supported keyframe.')
-            self.init = py_from_ns(init)
-            self.playlist = str(self.remux.playlist).encode('ascii')
+                raise ValueError('This MKV’s tracks or seek index could not be prepared for AirPlay.')
+            metadata = json.loads(str(self.remux.renditionsJSON()))
+            self.boundaries = metadata['boundaries']
+            if len(self.boundaries) < 2 or any(start >= end for start, end in zip(self.boundaries, self.boundaries[1:])):
+                raise ValueError('The MKV seek index could not be prepared for AirPlay.')
+            self.audio = {f'audio-{track["id"]}': track for track in metadata['audio']}
+            default_audio = metadata['defaultAudio']
+            self.subtitles = {f'text-{track["id"]}': track for track in metadata['text']}
+            for route in ('video', f'audio-{default_audio}'):
+                header = self.remux.initializationForTrack(-1 if route == 'video' else default_audio)
+                if header is None:
+                    raise ValueError('The opening MKV segment could not be prepared for AirPlay.')
+                self.headers[route] = py_from_ns(header)
+        self.load_sidecars(tuple(owner.subtitles))
+        # A single video variant. Use a generous estimate when the MKV has no
+        # per-track peak bitrate metadata.
+        average = owner.content.size * 8000 // max(1, self.boundaries[-1])
+        self.playlist = master_playlist(self.audio, self.subtitles, default_audio, max(2_000_000, 3 * average))
+        self.media_playlist = playlist(self.boundaries, 'm4s', initialization=True)
+        self.subtitle_playlist = playlist(self.boundaries, 'vtt')
         stream = self
 
         class Handler(BaseHTTPRequestHandler):
@@ -106,26 +191,98 @@ class MKVStream:
             return False
         return True
 
+    def load_sidecars(self, subtitles):
+        remaining = 2 * MAX_SUBTITLE
+        for subtitle in subtitles:
+            if not self.allowed() or len(self.sidecars) >= 16:
+                break
+            path = Path(subtitle.path)
+            if path.suffix.lower() not in {'.vtt', '.srt'} or subtitle.restricted or subtitle.size > MAX_SUBTITLE:
+                continue
+            if subtitle.size > remaining:
+                continue
+            try:
+                subtitle.require_external()
+                with subtitle.open() as source:
+                    data = source.read(min(MAX_SUBTITLE, remaining) + 1)
+                if len(data) > remaining:
+                    continue
+                remaining -= len(data)
+                cues = Subtitles(data)
+            except (OSError, ValueError):
+                continue
+            index = len(self.sidecars)
+            route = f'sidecar-{index}'
+            self.sidecars[route] = subtitle, cues
+            self.subtitles[route] = dict(id=index, name=path.stem, language='und')
+
     def resource(self, name):
         if name == 'video.m3u8':
-            return self.playlist, 'application/vnd.apple.mpegurl'
-        if name == 'init.mp4':
-            return self.init, 'video/mp4'
-        match = fullmatch(r'segment-([0-9]{1,5})\.m4s', name)
-        if match is None:
-            return None, None
-        index = int(match[1])
+            return self.playlist, PLAYLIST_MIME
+        if name.endswith('/index.m3u8'):
+            route = name.removesuffix('/index.m3u8')
+            if route == 'video' or route in self.audio:
+                return self.media_playlist, PLAYLIST_MIME
+            if route in self.subtitles:
+                return self.subtitle_playlist, PLAYLIST_MIME
+        media = fullmatch(MEDIA_RESOURCE, name)
+        if media and (media[1] == 'video' or media[1] in self.audio):
+            return self.media_resource(media[1], int(media[3]) if media[3] is not None else None)
+        subtitle = fullmatch(SUBTITLE_RESOURCE, name)
+        if subtitle and subtitle[1] in self.subtitles:
+            return self.subtitle_resource(subtitle[1], int(subtitle[2]))
+        return None, None
+
+    def media_resource(self, route, index):
         from rubicon.objc import py_from_ns
         from rubicon.objc.runtime import autoreleasepool
+        track = -1 if route == 'video' else self.audio[route]['id']
         with self.lock, autoreleasepool():
             if not self.allowed():
                 return None, None
-            if self.cached is None or self.cached[0] != index:
-                media = self.remux.segment(index)
+            if index is None:
+                if route not in self.headers:
+                    header = self.remux.initializationForTrack(track)
+                    if header is None:
+                        return None, None
+                    self.headers[route] = py_from_ns(header)
+                return self.headers[route], 'video/mp4' if track < 0 else 'audio/mp4'
+            if not 0 <= index < len(self.boundaries) - 1:
+                return None, None
+            key = ('video' if track < 0 else 'audio', route, index)
+            previous = self.cached.get(key[0])
+            if previous is None or previous[0] != key:
+                media = self.remux.fragment(index, track=track)
                 if media is None or not self.allowed():
                     return None, None
-                self.cached = index, py_from_ns(media)
-            return self.cached[1], 'video/iso.segment'
+                self.cached[key[0]] = previous = key, py_from_ns(media)
+            return previous[1], 'video/iso.segment' if track < 0 else 'audio/mp4'
+
+    def subtitle_resource(self, route, index):
+        if not 0 <= index < len(self.boundaries) - 1:
+            return None, None
+        start, end = self.boundaries[index:index + 2]
+        entry = self.sidecars.get(route)
+        if entry is not None:
+            subtitle, sidecar = entry
+            try:
+                subtitle.require_external()
+                subtitle.check()
+            except (OSError, ValueError):
+                return None, None
+            first = bisect_right(sidecar.starts, start - sidecar.max_duration)
+            last = bisect_left(sidecar.starts, end)
+            cues = [(cue.start, cue.end, cue.text) for cue in sidecar.cues[first:last]]
+        else:
+            from rubicon.objc.runtime import autoreleasepool
+            with self.lock, autoreleasepool():
+                if not self.allowed():
+                    return None, None
+                data = self.remux.textSegment(index, track=self.subtitles[route]['id'])
+                if data is None:
+                    return None, None
+                cues = json.loads(str(data))
+        return webvtt_segment(cues, start, end), 'text/vtt; charset=utf-8'
 
     def close(self):
         self.stopped.set()
@@ -133,4 +290,6 @@ class MKVStream:
         self.server.server_close()
         self.thread.join()
         self.remux = None
-        self.cached = None
+        self.cached.clear()
+        self.headers.clear()
+        self.sidecars.clear()

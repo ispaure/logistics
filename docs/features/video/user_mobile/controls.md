@@ -80,38 +80,22 @@ to return to classic PiP. Changing this preference leaves active playback intact
 
 ## Watching on a TV with iPhone or iPad
 
-Turn on **Settings → Video → Native AirPlay video**, then open an ordinary local
-MP4, MOV or M4V and choose your Apple TV from the AirPlay controls in Apple’s
-player. Compatible local MKVs can use the same picker over Wi-Fi. The MKV
-path copies H.264 or H.265 (HEVC) video, including its HDR metadata, and one
-AAC, AC-3 or E-AC-3 track into streaming fragments as needed. If those audio
-tracks are unavailable, it can convert mono, stereo or 5.1 Opus to AAC.
-For TrueHD/Atmos files with an AC-3 track, Apple’s player uses the AC-3 track.
-Receiver support can vary.
-Apple’s player provides
-the playback controls and supported embedded tracks. The switch is off by
-default and its value is saved on the device. Turn it off and reopen the video
-to use VLC for every file, or tap **Use VLC** in Apple’s player for the
-current file. Unsupported MKVs, encrypted and cloud files open in VLC.
-VLC provides MKV subtitle tracks, additional audio tracks and subtitle sidecars.
-Session-only protection blocks AirPlay.
+Turn on **Settings → Video → Native AirPlay video**, then open a local MP4,
+MOV, M4V or MKV. Tap the **AirPlay** picker in the Logistics player and choose
+your TV. Use the same timeline, play/pause and skip controls while the TV plays.
+To return to the Duo, choose **iPhone** in the same picker. Playback returns
+to the current position when the audio route switches.
 
-Use the iPhone timeline to jump to another part of the movie. The playlist
-covers the full movie and the player requests the fragment around the new
-position. A jump may pause briefly while Logistics reads from the nearest
-keyframe. Apple’s player handles remote transport commands during AirPlay,
-with Siri Remote behavior subject to physical receiver testing.
+Compatible MKVs stream over Wi-Fi. Logistics copies H.264 or H.265 (HEVC)
+video, including HDR metadata, and offers compatible AAC, AC-3, E-AC-3 and
+mono, stereo or 5.1 Opus audio. Opus converts to AAC. TrueHD/Atmos files can
+use an alternate AC-3 track if present. While on TV, use **Audio tracks** and
+**Subtitles** in Logistics to choose the tracks the receiver can play.
+Embedded SubRip and WebVTT and discovered local SRT and WebVTT sidecars are
+available as TV text subtitles. Image-based PGS subtitles remain available
+during local playback. Session-only protection blocks AirPlay.
 
-With VLC, use the steps below for screen output.
-
-Connect through AirPlay Screen Mirroring before or during playback. When iOS
-provides a dedicated display, the TV shows the video and its selected subtitles
-against black, fitted to the TV’s own bounds. Play, pause and seek on the phone
-or tablet. Disconnecting returns the picture to the device at the same position.
-Leaving the video restores mirroring or the active comic or PDF.
-
-An active Cast receiver or Picture in Picture session takes priority. Close
-Picture in Picture to return to the connected TV. Session-only credentials and
-retained protected items block external output. If protection activates during
-playback, Logistics stops the output. After unlocking, reopen the video if the
-player closed, or press Play if the controls are still visible.
+The playlist covers the full movie, so a timeline jump requests the fragment
+around the new position. A jump may pause briefly while Logistics reads from
+the nearest keyframe. Receiver support and Siri Remote behavior depend on the
+TV.

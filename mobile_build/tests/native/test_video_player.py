@@ -28,15 +28,34 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         owner.native.status.assert_called_with('Storage unavailable')
         self.assertFalse(owner.closed)
 
-    async def test_airplay_fallback_samples_position_and_forces_vlc_for_one_open(self):
+    async def test_airplay_hands_off_without_reopening_the_logistics_player(self):
         owner = self.player(restricted=False)
-        owner.native.progress_position.return_value = (12000, False)
-        with patch.object(owner, 'accept_sample') as sample, patch(
-                'features.video.mobile.player.open_video', new=AsyncMock()) as reopen:
-            await owner.switch_to_vlc()
-        owner.native.pause.assert_called_once_with()
-        sample.assert_called_once_with(12000, False)
-        reopen.assert_awaited_once_with(owner.app, owner.content.provider, owner.content.path, force_vlc=True)
+        native = owner.native
+        native.airplay_active.return_value = False
+        owner.content.check = Mock()
+        path = Path('/unused/movie.mkv')
+        stream = Mock()
+        with patch('features.video.mobile.ios.airplay_file', return_value=path), patch(
+                'features.video.mobile.mkv.MKVStream', return_value=stream):
+            await owner.prepare_airplay()
+        self.assertIs(owner.native, native)
+        native.start_airplay.assert_called_once_with(path, stream)
+        native.dispose.assert_not_called()
+        self.assertIs(owner.mkv_stream, stream)
+        await owner.controls.command('airplayDetached', '')
+        stream.close.assert_called_once_with()
+        self.assertIsNone(owner.mkv_stream)
+
+    async def test_airplay_admission_failure_keeps_local_playback(self):
+        owner = self.player(restricted=False)
+        owner.native.airplay_active.return_value = False
+        path = Path('/unused/movie.mkv')
+        with patch('features.video.mobile.ios.airplay_file', return_value=path), patch(
+                'features.video.mobile.mkv.MKVStream', side_effect=ValueError('MKV unavailable')):
+            await owner.prepare_airplay()
+        owner.native.airplay_preparation_failed.assert_called_with('MKV unavailable')
+        owner.native.start_airplay.assert_not_called()
+        owner.native.pause.assert_not_called()
         self.assertFalse(owner.switching_player)
 
     def player(self, *, restricted=True):
@@ -868,17 +887,22 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
         from features.video.mobile.mkv import MKVStream
 
         allowed = Mock(return_value=True)
-        owner = SimpleNamespace(allowed=allowed, content=Mock())
-        engine = SimpleNamespace(initialization=b'init', playlist='#EXTM3U\n',
-            segment=Mock(return_value=b'abcdef'))
+        owner = SimpleNamespace(allowed=allowed, content=Mock(size=200_000), subtitles=[])
+        import json
+        engine = SimpleNamespace(
+            renditionsJSON=lambda: json.dumps(dict(boundaries=[0, 6000, 12000, 18000],
+                defaultAudio=1, audio=[dict(id=1, name='Main', language='eng', channels=6),
+                                       dict(id=2, name='Commentary', language='eng', channels=2)],
+                text=[dict(id=3, name='Spanish', language='spa')])),
+            initializationForTrack=Mock(return_value=SimpleNamespace(payload=b'init')),
+            fragment=Mock(return_value=SimpleNamespace(payload=b'abcdef')),
+            textSegment=Mock(return_value='[[11900, 12500, "Hello & goodbye"]]'))
         bridge = Mock()
         bridge.streamAddress.return_value = '127.0.0.1'
         bridge.alloc.return_value.initWithPath.return_value = engine
         def from_native(data):
             return data.payload
 
-        engine.initialization = SimpleNamespace(payload=engine.initialization)
-        engine.segment.return_value = SimpleNamespace(payload=engine.segment.return_value)
         modules = {
             'rubicon': SimpleNamespace(),
             'rubicon.objc': SimpleNamespace(ObjCClass=lambda _: bridge, py_from_ns=from_native),
@@ -889,15 +913,27 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
             stream = MKVStream(owner, Path('/movie.mkv'), cancelled)
             try:
                 with urlopen(stream.url, timeout=2) as response:
-                    self.assertEqual(response.read(), b'#EXTM3U\n')
-                fragment = stream.url.replace('video.m3u8', 'segment-2.m4s')
+                    master = response.read()
+                    self.assertIn(b'URI="audio-2/index.m3u8"', master)
+                    self.assertIn(b'URI="text-3/index.m3u8"', master)
+                for group in ('video', 'audio-2', 'text-3'):
+                    uri = stream.url.replace('video.m3u8', group + '/index.m3u8')
+                    with urlopen(uri, timeout=2) as response:
+                        self.assertEqual(response.read().count(b'#EXTINF:6.000,'), 3)
+                subtitle = stream.url.replace('video.m3u8', 'text-3/segment-2.vtt')
+                with urlopen(subtitle, timeout=2) as response:
+                    self.assertIn(b'00:00:11.900 --> 00:00:12.500\nHello &amp; goodbye', response.read())
+                alternate_audio = stream.url.replace('video.m3u8', 'audio-2/segment-1.m4s')
+                with urlopen(alternate_audio, timeout=2) as response:
+                    self.assertEqual(response.read(), b'abcdef')
+                fragment = stream.url.replace('video.m3u8', 'video/segment-2.m4s')
                 request = Request(fragment, headers={'Range': 'bytes=2-4'})
                 with urlopen(request, timeout=2) as response:
                     self.assertEqual(response.status, 206)
                     self.assertEqual(response.read(), b'cde')
                 with urlopen(Request(fragment, method='HEAD'), timeout=2) as response:
                     self.assertEqual(response.headers['Content-Length'], '6')
-                engine.segment.assert_called_once_with(2)
+                self.assertEqual(engine.fragment.call_args_list, [unittest.mock.call(1, track=2), unittest.mock.call(2, track=-1)])
                 with self.assertRaises(HTTPError) as unrouted:
                     urlopen(fragment.replace(stream.route, '/unknown/'), timeout=2)
                 self.assertEqual(unrouted.exception.code, 404)
@@ -905,7 +941,7 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
                 with self.assertRaises(HTTPError) as revoked:
                     urlopen(fragment, timeout=2)
                 self.assertEqual(revoked.exception.code, 404)
-                engine.segment.assert_called_once_with(2)
+                self.assertEqual(engine.fragment.call_args_list, [unittest.mock.call(1, track=2), unittest.mock.call(2, track=-1)])
             finally:
                 stream.close()
 

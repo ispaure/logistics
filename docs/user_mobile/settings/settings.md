@@ -60,7 +60,8 @@ available independently of Text Editor.
 
 ## Video
 
-On iPhone and iPad, turn on **Native AirPlay video** for compatible local files.
+On iPhone and iPad, turn on **Native AirPlay video** to show the **AirPlay** picker
+in the Logistics player for compatible local files.
 The switch defaults off and applies the next time you open a video. See
 [watching on a TV](../../features/video/user_mobile/controls.md#watching-on-a-tv-with-iphone-or-ipad).
 
