@@ -54,6 +54,7 @@ class RemoteBrowserView(qt.QMainWindow):
         self.file_browser = RemoteBrowser(self.provider, self,
             directory=self.provider.root / location.directory,
             path_label=lambda path: display_path(self.provider, path),
+            actions=(('Download locally…', self._can_download, self.download_locally),),
             thumbnail=self._thumbnail, details=self._details)
         self.file_browser.filter.setPlaceholderText('Search this folder')
         self.file_browser.notice.setText('Remote · Read-only · Previews stay in memory')
@@ -91,6 +92,39 @@ class RemoteBrowserView(qt.QMainWindow):
     def _details(self, row, cancelled):
         from features.rclone.localcrypt.ui.views import CryptBrowserView
         return CryptBrowserView._details(self, row, cancelled)
+
+    def _can_download(self, _row=None):
+        return not self.closing and not self.operation.busy and self.isEnabled()
+
+    def download_locally(self, path):
+        if not self._can_download():
+            return
+        title = 'Download locally'
+        folder = qt.QFileDialog.getExistingDirectory(self, 'Choose download folder')
+        if not folder or not self._can_download():
+            return
+        name, accepted = qt.QInputDialog.getText(self, title, 'Save as', text=Path(path).name)
+        if not accepted or not self._can_download():
+            return
+        from commonUtils.filesystem.transfers import validate_name
+        try:
+            validate_name(name)
+        except ValueError as error:
+            qt.QMessageBox.warning(self, title, str(error))
+            return
+        if self.provider.encrypted:
+            answer = qt.QMessageBox.question(self, title,
+                'Download a readable copy that remains accessible after the remote is locked?',
+                qt.QMessageBox.StandardButton.Yes | qt.QMessageBox.StandardButton.Cancel,
+                qt.QMessageBox.StandardButton.Cancel)
+            if answer != qt.QMessageBox.StandardButton.Yes or not self._can_download():
+                return
+
+        from features.rclone.transfers.ui.progress import open_download_progress
+        try:
+            return open_download_progress(self.provider, path, Path(folder) / name)
+        except (OSError, ValueError) as error:
+            qt.QMessageBox.warning(self, title, str(error))
 
     def open_document(self, path):
         if self.closing or self.operation.busy:

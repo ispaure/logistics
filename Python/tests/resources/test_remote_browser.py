@@ -241,10 +241,14 @@ class RemoteBrowserTests(QtTestCase):
             with self.assertRaisesRegex(ValueError, 'Credentials'):
                 provider.list()
 
-    def test_desktop_preview_only_actions_and_manual_copy_dialog(self):
+    def test_desktop_selected_file_and_folder_downloads(self):
+        from commonUtils.ui.tasks.process_host import register_process_host
+        from commonUtils.ui.tasks.process_progress import ProcessProgressWindow
         from desktop.file_browser import FileBrowserWindow
+        from desktop.folder_actions import FolderActionsPage
         from features.rclone.ui.remote_browser import RemoteLocation
         from features.rclone.remote_policy import LOCAL_COPY_MESSAGE
+        from features.rclone.transfers import remote_download
         with self.temporary_directory() as folder:
             root = Path(folder)
             source, copies = root / 'source', root / 'copies'
@@ -252,7 +256,9 @@ class RemoteBrowserTests(QtTestCase):
             copies.mkdir()
             (source / 'note.txt').write_text('Explicit local copy')
             (source / 'unsupported.bin').write_bytes(b'unsupported')
-            (source / 'empty').mkdir()
+            (source / 'large.bin').write_bytes(b'x' * (2 * 1024 * 1024))
+            (source / 'nested' / 'empty').mkdir(parents=True)
+            (source / 'nested' / 'child.txt').write_bytes(b'child')
             context = root / 'account.session'
             session.remember(context, {'Files': {'type': 'alias', 'remote': str(source)}})
             self.addCleanup(session.forget, context)
@@ -260,9 +266,13 @@ class RemoteBrowserTests(QtTestCase):
                 window = FileBrowserWindow(RemoteLocation(context, 'Files'))
                 window.show()
                 view = window.workspace.active_view
+                host = qt.QMainWindow()
+                actions = FolderActionsPage(lambda: None, host)
+                host.setCentralWidget(actions)
+                host.show()
+                self.enterContext(patch.object(qt.QApplication.instance(), '_commonutils_process_host', create=True))
+                register_process_host(actions)
                 self.wait_until(lambda: not view.file_browser.busy, timeout=15)
-                self.assertFalse(hasattr(view, 'download'))
-                self.assertFalse(hasattr(view.provider, 'download'))
                 menu = view.menuBar().actions()[0].menu()
                 self.assertEqual([action.text() for action in menu.actions()], ['Open Remote…'])
                 with patch.object(qt.QMessageBox, 'information') as dialog:
@@ -270,6 +280,54 @@ class RemoteBrowserTests(QtTestCase):
                     self.wait_until(lambda: not view.operation.busy, timeout=15)
                     self.assertEqual(dialog.call_args.args[2], LOCAL_COPY_MESSAGE)
                     self.assertEqual(list(copies.iterdir()), [])
+                label, available, download = view.file_browser.actions[0]
+                self.assertEqual(label, 'Download locally…')
+                for source_name, copy_name in (('note.txt', 'renamed.txt'), ('nested', 'folder')):
+                    with patch.object(qt.QFileDialog, 'getExistingDirectory', return_value=str(copies)), \
+                         patch.object(qt.QInputDialog, 'getText', return_value=(copy_name, True)), \
+                         patch.object(qt.QMessageBox, 'warning') as warning:
+                        self.assertTrue(available({'path': source_name}))
+                        progress = download(view.provider.root / source_name)
+                        self.assertIsInstance(progress, ProcessProgressWindow)
+                        self.assertEqual(progress.name.text(), 'Pull')
+                        self.assertIs(actions.workspace.active_view.document, progress)
+                        self.assertFalse(view.operation.busy)
+                        self.wait_until(lambda: not progress.busy, timeout=15)
+                        self.assertTrue(progress.result.succeeded)
+                        self.assertEqual(progress.bar.format(), 'Complete')
+                        self.assertEqual(progress.metrics['files'], 1)
+                        progress.close()
+                        warning.assert_not_called()
+                self.assertEqual((copies / 'renamed.txt').read_text(), 'Explicit local copy')
+                self.assertEqual((copies / 'folder' / 'child.txt').read_bytes(), b'child')
+                self.assertTrue((copies / 'folder' / 'empty').is_dir())
+                self.assertEqual({path.name for path in copies.iterdir()}, {'renamed.txt', 'folder'})
+                with patch.object(qt.QFileDialog, 'getExistingDirectory', return_value=str(copies)), \
+                     patch.object(qt.QInputDialog, 'getText', return_value=('renamed.txt', True)):
+                    progress = download(view.provider.root / 'unsupported.bin')
+                    self.wait_until(lambda: not progress.busy, timeout=15)
+                    self.assertEqual(progress.result.state, 'failed')
+                    self.assertIn('already exists', progress.details.text())
+                    progress.close()
+
+                copy = remote_download._copy
+
+                def throttle(arguments, *args):
+                    return copy([arguments[0], '--bwlimit', '128k', *arguments[1:]], *args)
+
+                with patch.object(remote_download, '_copy', side_effect=throttle), \
+                     patch.object(qt.QFileDialog, 'getExistingDirectory', return_value=str(copies)), \
+                     patch.object(qt.QInputDialog, 'getText', return_value=('cancelled.bin', True)):
+                    progress = download(view.provider.root / 'large.bin')
+                    self.wait_until(lambda: (progress.metrics.get('bytes') or 0) > 0, timeout=15)
+                    self.assertTrue(progress.busy)
+                    progress.cancel_button.click()
+                    self.wait_until(lambda: not progress.busy, timeout=15)
+                    self.assertEqual(progress.result.state, 'cancelled')
+                    self.assertEqual({path.name for path in copies.iterdir()}, {'renamed.txt', 'folder'})
+                    progress.close()
+                self.assertEqual((copies / 'renamed.txt').read_text(), 'Explicit local copy')
+                self.assertEqual((source / 'unsupported.bin').read_bytes(), b'unsupported')
                 capture = os.environ.get('LOGISTICS_REMOTE_CAPTURE')
                 if capture:
                     window.grab().save(capture)
@@ -306,7 +364,6 @@ class RemoteBrowserTests(QtTestCase):
                 window.show()
                 view = window.workspace.active_view
                 self.wait_until(lambda: not view.file_browser.busy, timeout=15)
-                self.assertEqual(view.file_browser.actions, ())
                 for name, expected in [('book.epub', BookWindow), ('comic.cbz', ComicReaderWindow)]:
                     before = set(qt.QApplication.topLevelWidgets())
                     view.open_document(view.provider.root / name)

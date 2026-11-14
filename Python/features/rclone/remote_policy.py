@@ -3,7 +3,7 @@ from features.video.formats import VIDEO_EXTENSIONS
 from pathlib import PurePosixPath
 
 LOCAL_COPY_MESSAGE = ('This file cannot be previewed directly through the remote. '
-                      'Please manually make a local copy, then open that copy.')
+                      'Download a local copy, then open it.')
 TEXT = {'.txt', '.md', '.markdown', '.ini'}
 IMAGES = {'.png', '.jpg', '.jpeg', '.webp'}
 ARCHIVES = {'.epub', '.cbz', '.zip'}
