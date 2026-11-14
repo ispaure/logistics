@@ -6,15 +6,26 @@ process I/O, range streams and Markdown storage hooks. Its
 [provider contracts](../../../../Python/commonUtils/docs/development/reference/ui/resource-providers.md) are owned
 and documented in that repository.
 
-## Initial Pull storage choice
+On desktop, open an existing **Encrypted Copy** from **Workspaces → Local**.
+`Python/features/rclone/localcrypt/backend.py:CryptResources` serves decoded
+names and content through the file browser. On Android and iOS, open the copy
+in Workspaces. `localcrypt/mobile/resources.py` maps paths and
+`localcrypt/mobile/content.py:CryptContentProvider` handles reads and verified
+saves. Unlock the credential package associated with the copy.
 
-Mobile file moves retain the native descriptor/rewrap stream hooks while reporting
-copy progress. `write_progress` observes the owned ciphertext output descriptor
-every 250 ms and signals native cancellation when the move event is set; it never
-opens a plaintext temporary file. The watcher retires before the output closes.
-Native encryption reports physical bytes with an indeterminate bar; subsequent
-verification reports logical bytes read from both providers. Range-stream logical
-lengths replace ciphertext metadata estimates as each source is opened.
+To change how encrypted names are mapped or commands are cancelled, run the
+synthetic transport checks from the repository root:
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/resources/test_localcrypt_transport.py
+```
+
+Expect bounded, ordered batches and rejection of partial results or revoked
+access. This fixture mocks the command transport. The pinned CLI and compiled
+native bridge have separate synthetic fixtures for real ciphertext; OS
+presentation and device behavior require their own checks.
+
+## Initial Pull storage choice
 
 Desktop exposes one Pull action. For a session-loaded crypt remote without a
 selected local copy, it opens the LocalCrypt/Local choice with LocalCrypt as the
@@ -24,49 +35,13 @@ credentials and non-crypt remotes create Local copies directly through review.
 Existing copies retain their storage type. This presentation policy does not
 change encryption, transfer routing or existing LocalCrypt mappings.
 
-## Desktop
-
-`localcrypt/note_lookup.py` shares filename-only Notes Library discovery between
-desktop and mobile providers. `note_file_paths` scans ciphertext directories and
-batches basename decoding across sibling folders, reusing repeated decoded names
-within one call. This avoids one process/native request per folder for Dataview's
-page index. It prunes hidden directories before descent, retains the 10,000-entry
-limit, rejects links and shared/special files, checks directory identity after
-decoding, and validates cancellation and credentials before publication. No note
-content or persistent plaintext filename index is created. Desktop encrypted
-fixture tests cover cipher naming modes; mobile host tests cover batch bounds,
-name refresh, hidden-directory pruning and revocation during decoding.
-
-`localcrypt/path_batches.py` owns `map_path_entries`: callers supply `(path,
-directory)` pairs, a batch resolver and an access/cancellation check. It removes
-duplicate pairs within a call, preserves result order and bounds requests by
-both item count and a conservative 24 KiB argument budget. Partial or non-string
-result batches fail; access is checked before and after every batch. CLI encoding
-and decoding use up to 128 names per process. Native mapping uses up to 256 names
-per bridge call. The optional native entry field `encode: true` requests encoding;
-omitted fields retain decoding behavior. The mobile bridge must be rebuilt with
-payloads that use batched encoding.
-
-The same helper serves Dataview discovery, note-link lookup, folder listings and
-landing-note probes. Transfer comparison streams changed filenames in batches
-and maps directory rows together; cleanup previews map candidate filenames
-together. Mobile Push batches directory-name validation while retaining separate
-file-content authentication and the final inventory comparison. Directory
-discovery rechecks the identity of queued folders before descending, so ordinary
-directory replacement cannot publish names under a stale decoded prefix.
-
-New LocalCrypt copies require a crypt remote from session-only credentials
-(`session.credentials` with the originating ZIP association). A saved config alone
-does not satisfy this creation contract. The same session can supply online Cloud
-remotes, including those without a local copy. Credential lifetime and persistence
-of the ciphertext copy are separate: ending the session preserves the copy.
+## Desktop copy identity and migration
 
 `features/rclone/localcrypt/mapping.py` maps an absolute credential ZIP path and remote
 name to a stable directory under the Logistics per-user application support root's
 `LocalCrypt`. `.connections` records contain
 only schema, package path and remote name. Schema 2 stores new copies directly at
-`LocalCrypt/<remote-name>`. Only schema 2 is loaded/published; the hashed-layout
-compatibility branch is removed. Unsupported records and their ciphertext are
+`LocalCrypt/<remote-name>`. The current reader and writer accept schema 2. Unsupported records and their ciphertext are
 preserved without migration or deletion. A same-account unsupported record blocks
 publication of a replacement mapping instead of adopting or overwriting data.
 Import copy identities and routing helpers from this mapping owner; reader sessions
@@ -107,6 +82,8 @@ to the backing target and retains its relative encrypted subpath. Missing mappin
 and mismatched packages fail before launching a transfer. These are destructive
 mirror operations with no rollback; editing does not upload anything.
 
+## Desktop private reads and saves
+
 `CryptResources` builds a private process-local crypt configuration pointing at the
 local ciphertext root. Decrypted names and bytes are supplied to generic widgets;
 virtual cleartext paths must never be opened directly on disk. Archive reads use
@@ -141,24 +118,6 @@ return generic `BrowserDetails`; comic and EPUB fields/covers never probe their
 virtual cleartext paths on disk. The shared Preview host owns selection changes,
 stale result rejection and shutdown. Picker browsers explicitly omit Preview.
 
-The private comic metadata action snapshots the selected ZIP/CBZ files and folders
-when the clicked row belongs to the selection; otherwise it edits only that row.
-`ComicSelection` scans provider entries/listings for folders, deduplicates virtual
-paths without filesystem resolution and caps discovery at 10,000 entries. ZIP
-headers must contain supported comic image pages; unrelated ZIPs are ignored.
-Provider-backed metadata editors determine folder selection through `entry`,
-never `Path.is_dir()` on virtual cleartext names. Minimal archive sources retain
-explicit-file selection support. Batch password failures retain the established
-skip/report policy, and saves validate all loaded snapshots before per-file
-encrypted publication. Page data and untouched metadata remain unchanged.
-`CryptBrowserView` connects comic editor `saved` notifications to the selected
-item's existing `ResourcePreview.request` worker, so a successful bulk save
-invalidates displayed metadata even when the browser selection does not change.
-The preview owner coalesces notifications and rejects older in-flight results.
-Pull completion does not notify retained browser views; their Refresh command
-reloads listings and selected metadata. Provider revision checks invalidate cached
-archive bytes after a pull, and a newly opened metadata editor reads that revision.
-
 `ValidatedPasswordDialog` validates credential and file passwords on a worker
 before accepting. Failed attempts retain the dialog, show a sanitized inline
 error, clear and focus the field. Enter/Return events are consumed in that field
@@ -189,42 +148,86 @@ parent replacement during construction and discarded-media cleanup with controll
 host fixtures. These checks do not establish immediate memory erasure or native
 device privacy.
 
-Desktop credential imports require every non-directory TXT entry to be encrypted,
-including when saving a config. Validation completes in memory before saved-config or session
-publication, so plain/mixed packages leave existing credentials intact.
-`session.revocation_check` captures a credential generation without copying its
-secrets. Sync and comparison subprocesses poll that generation; integrated Qt
-transfers receive revocation through a queued signal on their owning thread.
-LocalCrypt commands and path encoding include revocation in cancellation and
-recheck it before returning output. A new unlock cannot revive an old generation.
-Cancellation does not undo transfer changes already published to the destination.
+Displayed content can remain in RAM after credential revocation. rclone's
+child process receives keys in its environment. See [credential loading](credentials.md)
+for package validation and [transfers](transfers.md) for revocation during sync.
 
-Already displayed document content can remain in RAM after credential revocation;
-this is not secure memory erasure. Per-process rclone environments contain keys,
-but settings are not written to plaintext config files or command arguments.
+### Desktop metadata selection and preview
 
-## Mobile
+The private comic metadata action snapshots the selected ZIP/CBZ files and folders
+when the clicked row belongs to the selection; otherwise it edits only that row.
+`ComicSelection` scans provider entries/listings for folders, deduplicates virtual
+paths without filesystem resolution and caps discovery at 10,000 entries. ZIP
+headers must contain supported comic image pages; unrelated ZIPs are ignored.
+Provider-backed metadata editors determine folder selection through `entry`,
+never `Path.is_dir()` on virtual cleartext names. Minimal archive sources retain
+explicit-file selection support. Batch password failures retain the established
+skip/report policy, and saves validate all loaded snapshots before per-file
+encrypted publication. Page data and untouched metadata remain unchanged.
+`CryptBrowserView` connects comic editor `saved` notifications to the selected
+item's existing `ResourcePreview.request` worker, so a successful bulk save
+invalidates displayed metadata even when the browser selection does not change.
+The preview owner coalesces notifications and rejects older in-flight results.
+Pull completion does not notify retained browser views; their Refresh command
+reloads listings and selected metadata. Provider revision checks invalidate cached
+archive bytes after a pull, and a newly opened metadata editor reads that revision.
 
+## Filename discovery and batch mapping
 
-Mobile rclone ownership is under `Python/features/rclone/mobile`: bridge/credentials,
-transfer jobs, ciphertext copies/providers and their native operation screens.
-The app retains generic provider-document controllers in `mobile/provider_ui.py`
-and `provider_opening.py`. Storage-neutral reader/editor adapters live in
+`localcrypt/note_lookup.py` shares filename-only Notes Library discovery between
+desktop and mobile providers. `note_file_paths` scans ciphertext directories and
+batches basename decoding across sibling folders, reusing repeated decoded names
+within one call. This avoids one process/native request per folder for Dataview's
+page index. It prunes hidden directories before descent, retains the 10,000-entry
+limit, rejects links and shared/special files, checks directory identity after
+decoding, and validates cancellation and credentials before publication. No note
+content or persistent plaintext filename index is created. Desktop encrypted
+fixture tests cover cipher naming modes; mobile host tests cover batch bounds,
+name refresh, hidden-directory pruning and revocation during decoding.
+
+`localcrypt/path_batches.py` owns `map_path_entries`: callers supply `(path,
+directory)` pairs, a batch resolver and an access/cancellation check. It removes
+duplicate pairs within a call, preserves result order and bounds requests by
+both item count and a conservative 24 KiB argument budget. Partial or non-string
+result batches fail; access is checked before and after every batch. CLI encoding
+and decoding use up to 128 names per process. Native mapping uses up to 256 names
+per bridge call. The optional native entry field `encode: true` requests encoding;
+omitted fields retain decoding behavior. The mobile bridge must be rebuilt with
+payloads that use batched encoding.
+
+The same helper serves Dataview discovery, note-link lookup, folder listings and
+landing-note probes. Transfer comparison streams changed filenames in batches
+and maps directory rows together; cleanup previews map candidate filenames
+together. Mobile Push batches directory-name validation while retaining separate
+file-content authentication and the final inventory comparison. Directory
+discovery rechecks the identity of queued folders before descending, so ordinary
+directory replacement cannot publish names under a stale decoded prefix.
+
+New LocalCrypt copies require a crypt remote from session-only credentials
+(`session.credentials` with the originating ZIP association). A saved config alone
+does not satisfy this creation contract. The same session can supply online Cloud
+remotes, including those without a local copy. Credential lifetime and persistence
+of the ciphertext copy are separate: ending the session preserves the copy.
+
+## Mobile storage and provider ownership
+
+Mobile bridge and credential adapters live under `Python/features/rclone/mobile/`.
+Transfer jobs live under `transfers/mobile/` and encrypted copy providers under
+`localcrypt/mobile/`, both relative to the rclone feature. Generic app controllers
+live in `Python/mobile/provider_ui.py` and `provider_opening.py`. Storage-neutral reader/editor adapters live in
 `services/documents/provider_documents.py`; ordinary locations live in
 `services/documents/locations.py`, and native archive facades in
 `services/documents/archive_access.py`. Private sessions, format-feature
 views, navigation, persistence and screen privacy remain with their existing owners.
-The rclone catalog UI subclasses the generic provider UI; generic private-session
-controllers inherit `ProviderUI` directly, without inheriting remote download UI.
+The rclone catalog UI subclasses the generic `ProviderUI`, as do the generic
+private-session controllers.
 See the [module ownership map](development.md#mobile-ownership).
 
 Managed `CryptFiles` and existing `DownloadedCryptFile` copies share the
 `localcrypt/mobile/content.py:CryptContentProvider` content/write boundary.
 `LocalCryptCopies` retains catalog identity and delegates opening and saving to
-the provider adapter; it no longer has a separate document transaction engine.
-commonUtils' generic content factory knows no rclone commands, credentials or
-format editors. The LocalCrypt implementation owns those commands, verified
-ciphertext staging and revision-safe publication, including native ZIP metadata
+the provider adapter. LocalCrypt owns the rclone commands, verified ciphertext
+staging and revision-safe publication, including native ZIP metadata
 rewrites that preserve untouched members. Byte saves and archive metadata saves
 retain their distinct streaming/buffer limits within that one provider contract.
 
@@ -239,7 +242,6 @@ crypt operations remain in the provider adapter. See the
 [reader access trace](../../../development/document-storage.md#trace-a-mobile-provider-reader)
 for the host handoff and the separate remote transport owner.
 
-
 The embedded bridge implements crypt using rclone's cipher over an allowlisted
 backing remote in the same credential package. It does not instantiate arbitrary
 filesystem or nested wrapper configurations. Validation runs on import and vault
@@ -248,8 +250,7 @@ restore before replacing active credentials.
 `features/rclone/localcrypt/mobile/copies.py` reads existing UUID ciphertext copies
 under app-private `LocalCrypt`, with an encrypted relative path, remote and
 crypt-settings fingerprint. New folder copies use reviewed Pull and the mappings
-owned by `transfers/mobile/jobs.py`; the former `crypt_fetch` action is absent
-from the bridge contract.
+managed by `transfers/mobile/jobs.py`.
 No decoded filename or key is added to those records. The rclone settings determine
 whether original filename encryption is enabled. Incomplete/invalid copies are
 excluded. The fingerprint binds an offline copy to its crypt settings independently
@@ -278,6 +279,8 @@ reads, cancellation, ciphertext corruption and exact member content; its
 `BenchmarkCryptArchivePage` compares uncached and cached archive reads using a
 synthetic deflated member. This benchmark excludes image decoding and display.
 
+## Mobile verified saves and moves
+
 Mobile folder Pull/Push streams files to the selected Local or LocalCrypt copy.
 Reader support includes text/Markdown editing up to 1 MiB, EPUB chapter text and
 PNG/JPEG/WebP CBZ pages.
@@ -302,6 +305,19 @@ the local ciphertext only; uploading requires a separate reviewed Push.
 Desktop ciphertext-copy directories are not imported as a mobile library. Close
 clears reader references; credential import/reload/forget also clears displayed
 private content and decrypted copy labels. OS memory/backup policies are outside application-level persistence rules.
+
+Mobile file moves retain the native descriptor/rewrap stream hooks while reporting
+copy progress. `write_progress` observes the owned ciphertext output descriptor
+every 250 ms and signals native cancellation when the move event is set; it never
+opens a plaintext temporary file. The watcher retires before the output closes.
+Native encryption reports physical bytes with an indeterminate bar; subsequent
+verification reports logical bytes read from both providers. Range-stream logical
+lengths replace ciphertext metadata estimates as each source is opened.
+
+The native `workspace-move` probe exercises the item menu on Android and iOS
+with files at the root and in nested folders. It checks destination bytes,
+source removal and encrypted storage. The same fixture can run against the
+host's compiled bridge with dummy widgets.
 
 ## Shared metadata editing
 
@@ -330,31 +346,3 @@ authentication and generated-file cleanup, retaining mapping, access and structu
 checks. Normal desktop approval and native mobile approval retain full preflight.
 Missing mappings, mismatched identities, changed ciphertext and linked storage
 are refused before transfer. See [transfer workflow](transfers.md).
-
-## Shared mobile browsing and streaming
-
-`localcrypt/mobile/content.py` owns native content reads and verified writes.
-`archive_source.py` supplies bounded seekable archive access; `resources.py` owns
-virtual-to-physical mapping and the provider's resource session. Generic readers
-receive provider capabilities rather than opening virtual cleartext paths.
-
-Publication stages ciphertext, verifies the staged version, checks the original
-revision and access grant, publishes and cleans staging. Closing or cancelling a
-reader cannot authorize a late write or bind it to replacement credentials.
-
-## Validation and history
-
-Use `python3 dev.py test-owner rclone --mode fast` for the declared desktop and
-mobile host suites. Real CLI tests use synthetic local/crypt backends when the
-pinned executable is available. Native bridge tests and physical-device acceptance
-are separate; host tests do not establish iOS or Android device behavior.
-
-Workspace item-menu dispatch accepts commands that return an already scheduled
-task, including the shared Move destination picker. Destination workflow host
-tests cover opening that picker from root and nested LocalCrypt files. The
-`workspace-move` native probe moves both through the item menu and verifies the
-destination bytes, source removal and encrypted storage on Android and iOS.
-The same fixture can run with the host's compiled bridge and dummy widgets.
-Apple action-sheet title discovery accepts both property and method forms of
-UIKit child-view getters, so enabling the full-path title hold cannot prevent
-the file menu from opening.

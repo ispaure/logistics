@@ -1,22 +1,12 @@
 # Read-only remote browsing
 
-Mobile `CloudUI.show_cloud` retains prepared-client admission, cached credential
-publication, restore startup, busy-state projection and generation refresh checks.
-`_build_cloud_controls` constructs the existing connection/browser/download controls;
-`_build_cloud_views` assembles their connection/import/advanced routes and browser
-directly in their final layout. Browser status and parent navigation belong to the
-browser header; advanced actions never temporarily adopt those controls. Both
-builders populate the retained CloudController fields;
-they introduce no account, request or cancellation owner. Credential workflows and
-the remote listing service remain independent from this construction boundary.
+Select a configured account and remote in **Workspaces → Cloud** on desktop or
+mobile. On desktop, **File Browser → File → Open Remote…** reaches the same
+provider browser. Change listing, preview or reader behavior here. Use
+[Transfers](transfers.md) for explicit Push/Pull and [LocalCrypt](localcrypt.md)
+for encrypted offline copies.
 
-Mobile Workspaces keeps each loaded account's Cloud destination independently of
-its local sync mappings. A matching mapping replaces only its own account's
-browse target with the mapped folder scope. If the saved connection identity no
-longer matches, the loaded Cloud destination stays available and unlocked;
-Pull/Push retain their existing identity checks and do not retarget the local
-copy. `test_folder_discovery.py` covers stale mappings, credential filtering and
-multiple packages declaring the same remote name.
+## Desktop browser and unlock
 
 Desktop hosts `RemoteBrowserView` in the existing File Browser workspace. Its
 `RemoteLocation` carries config identity, remote name and relative directory;
@@ -49,21 +39,32 @@ policy and previews. The commonUtils provider browser and range-reader contracts
 are reused without modification. No remote path is passed to the ordinary local
 filesystem browser, index, local mutation actions or external document launchers.
 
-For mobile document opens, `mobile/remote_readers.py:RemoteReaders` owns format
-handoff over an independently reopened grant. `mobile/remote_source.py:RemoteSource`
-owns the generation-bound transport, seekable ranges and native RAM archive token;
-`remote_readers.RemoteSource` remains available as an import for existing callers.
-Decoded header/member lifetime is shared through
-`services/documents/archive_access.py:NativeArchiveAccess`. Follow the
-[source-to-reader trace](../../../development/document-storage.md#trace-a-mobile-provider-reader)
-for publication, retry and terminal-close ownership.
-
 Desktop remote commands retain at most 64 KiB of rclone stderr in memory on a
 failed request. The adapter translates recognized authorization, missing backing
 remote, invalid crypt password setting, folder access, rate limit and network errors to fixed recovery messages;
 unknown failures report the exit status. Raw provider text, tokens and paths are
 never included in the presented exception. Credential revocation takes precedence
 over command failure when a session is locked during a request.
+
+Desktop snapshots an explicit account's configuration into an isolated in-memory
+child session, with process-private aliases and a null rclone config. Parent
+session revocation invalidates the child. Saved configs are checked for revision
+changes before/after I/O; credential-manager replacement/removal immediately
+revokes their browser snapshots. Readers retain provider leases beyond the tab lifetime;
+private-view guards retire their windows when the credential session is revoked.
+Commands use bounded output, connection/read timeouts and per-worker cancellation.
+Range reads compare metadata before/after fetching; this detects observed changes,
+not an atomic remote snapshot. CLI process startup and stat calls add latency.
+
+## Mobile listings and connection admission
+
+Mobile Workspaces keeps each loaded account's Cloud destination independently of
+its local sync mappings. A matching mapping replaces only its own account's
+browse target with the mapped folder scope. If the saved connection identity no
+longer matches, the loaded Cloud destination stays available and unlocked;
+Pull/Push retain their existing identity checks and do not retarget the local
+copy. `test_folder_discovery.py` covers stale mappings, credential filtering and
+multiple packages declaring the same remote name.
 
 Mobile Workspaces projects loaded remotes and retained ZIP metadata into Cloud
 rows. Retained package names and connection identities allow password unlock
@@ -90,25 +91,11 @@ requests can retire in either order. Its presentation port projects messages int
 the browser/folder status controls. The timer and indeterminate bar are retired on
 success, error and cancellation; late or already-queued worker callbacks are
 ignored after their request retires.
-The mobile browser is titled **Cloud File Browser** and starts with its compact
-location header and the listing. Open documents and Recent use cloud/device and
-connection lock badges. The mobile host's `document_sources` keeps saved-credential
-references in ordinary app-private history. Session-only credential paths and
-filenames use `mobile.document_lists.CredentialDocumentLists` instead. The host
-injects its reference validator, history limit and reopen callback; the feature
-does not import the mobile application package. Native
-`document_lists_seal/open` writes/reads an AES-256 ZIP containing one generic
-`entries.json` member, under hashes of the credential package and window. The
-credential ZIP's original password is held only in native session memory and is
-cleared with credential lock/replacement. Only authenticated, password-protected
-credential ZIPs enable this cache. No cache contains file contents or unsaved edits.
 
-Native startup initializes the cloud controller and awaits its saved-vault restore
-in the workspace preparation phase, before building Home. Remote and LocalCrypt
-document reopening also await an existing restore before resolving identities or
-checking credential generations. Navigation away during that wait cancels the
-open intent. Credential publication queues Home and Documents badge refreshes
-even for saved packages, which have no session-only encrypted-list state.
+`mobile/cloud_ui.py:CloudUI.show_cloud` admits the prepared client and manages
+startup and busy presentation. `_build_cloud_controls` builds the controls and
+`_build_cloud_views` assembles the browser and connection routes. The listing
+workflow owns request validity and cancellation.
 
 Workspaces derives online crypt-folder icons from published `crypt_identities`
 as well as the loaded crypt-name list and retained package metadata; a local copy
@@ -129,40 +116,30 @@ unlock/import flow; encrypted local copies retain their identity checks. Host te
 in `test_multi_credentials.py` cover mixed modes, a shared Dropbox name, opening
 a uniquely named Workspaces remote, alias resolution and identity mismatch.
 
-After credential unlock, validated open/recent entries restore in RAM; restored
-open entries are transient placeholders until selected. Restore never fetches
-remote file content. Explicit close updates the encrypted open list; credential
-lock preserves it. Documents has a blue **Clear** action beside **Recent**; it
-clears ordinary history and the recent lists of currently unlocked credential
-caches while preserving open references and saved files. Forgetting retained credentials deletes list caches across
-windows, and cache writes serialize with deletion. Malformed/authentication-failed
-archives are preserved; there is no plaintext cache fallback. Native tests cover
-AES strength, credential-password compatibility, authentication, tampering,
-replacement, isolation and bounded input; host tests cover restoration, migration,
-list limits, explicit close and forget actions. Live readers remain transient.
-`set_cloud_busy` attaches Cancel to the location header and a slim progress bar
-below it only during requests, removing both on completion. It uses the header’s
-current parent because adaptive presentation may wrap the browser contents.
-Successful remote listings mark the location header unlocked. Encrypted locations
-reuse Workspaces's combined folder/lock glyph and color beside the cloud icon;
-local encrypted listings use the same unlocked glyph beside the device icon.
-Remote provider opening holds the application's cloud-busy state, and Cancel
-signals both pending private controllers and the native request. Workspaces
-shows a status and spinner in its existing list before awaiting a folder,
-rejecting duplicate taps while opening. Its menu uses the displayed snapshot
-without rediscovery; credential grouping reuses the same discovery result instead
-of scanning the folders again. Existing mapping actions retain a guarded online destination
-before credentials load, preserving the job's identity and decoded folder scope.
+Workspaces checks online busy state before native credential lookups. A pending
+online folder does not suppress a different local tap; completion respects the
+newer navigation. LocalCrypt can share transfers and credential-stable remote
+reads. Credential writes retain their guard. Busy action pages expose Cancel.
+`folder_choices` performs no native discovery. Credential loading and explicit
+Refresh populate `hub_crypt_locations` through a worker; discovery failure keeps
+the existing UI usable. Refresh and credential/path checks compare navigation and
+credential generations before publishing or navigating. Hub entry, credential
+filter changes and action-page rendering reuse this snapshot. Mapped remote
+identity checks and crypt path decoding run in workers with a visible status,
+including the transfer-review entry path. They must never wait on native locks
+on the UI thread. The native remote probe checks comic → Hub → other remote's
+actions and rejects native requests made from the UI thread during that return.
 
-Desktop snapshots an explicit account's configuration into an isolated in-memory
-child session, with process-private aliases and a null rclone config. Parent
-session revocation invalidates the child. Saved configs are checked for revision
-changes before/after I/O; credential-manager replacement/removal immediately
-revokes their browser snapshots. Readers retain provider leases beyond the tab lifetime;
-private-view guards retire their windows when the credential session is revoked.
-Commands use bounded output, connection/read timeouts and per-worker cancellation.
-Range reads compare metadata before/after fetching; this detects observed changes,
-not an atomic remote snapshot. CLI process startup and stat calls add latency.
+## Mobile reader opening and cache
+
+For mobile document opens, `mobile/remote_readers.py:RemoteReaders` owns format
+handoff over an independently reopened grant. `mobile/remote_source.py:RemoteSource`
+owns the generation-bound transport, seekable ranges and native RAM archive token;
+`remote_readers.RemoteSource` remains available as an import for existing callers.
+Decoded header/member lifetime is shared through
+`services/documents/archive_access.py:NativeArchiveAccess`. Follow the
+[source-to-reader trace](../../../development/document-storage.md#trace-a-mobile-provider-reader)
+for publication, retry and terminal-close ownership.
 
 Mobile remote reads use the existing serialized native network-operation scope.
 Every stat/range/archive request binds a connection fingerprint; content requests
@@ -182,20 +159,6 @@ reports byte progress to the existing UI-loop status callback and always retires
 These calls do not create temporary plaintext files or change the transfer engine.
 Network reads can wait for an active serialized network operation; LocalCrypt's
 independent offline read scope remains separate.
-
-Workspaces checks online busy state before native credential lookups. A pending
-online folder does not suppress a different local tap; completion respects the
-newer navigation. LocalCrypt can share transfers and credential-stable remote
-reads. Credential writes retain their guard. Busy action pages expose Cancel.
-`folder_choices` performs no native discovery. Credential loading and explicit
-Refresh populate `hub_crypt_locations` through a worker; discovery failure keeps
-the existing UI usable. Refresh and credential/path checks compare navigation and
-credential generations before publishing or navigating. Hub entry, credential
-filter changes and action-page rendering reuse this snapshot. Mapped remote
-identity checks and crypt path decoding run in workers with a visible status,
-including the transfer-review entry path. They must never wait on native locks
-on the UI thread. The native remote probe checks comic → Hub → other remote's
-actions and rejects native requests made from the UI thread during that return.
 
 Remote readers are read-only, including text and metadata. The internal Markdown
 editor entry point also rejects read-only readers. Plaintext history eligibility
@@ -218,29 +181,43 @@ of leaving only a selection message. Workspaces retains name-based groups but
 does not promote the current remote listing's subfolders into its entry tree.
 Explicit Workspaces locations preserve their folder when switching remotes.
 
-Desktop browser actions remain preview-only. Mobile also offers an explicit
-selected-item Pull through `mobile/remote_downloads.py`; see
-[selected downloads](development.md#selected-remote-item-downloads-on-mobile).
-Opening a preview does not transfer files to local storage. Retired Python
-copy/folder-download helpers and native `read`, `crypt_read` and `crypt_fetch`
-endpoints remain removed. Existing offline-copy catalogs retain read/edit/export
-compatibility; their tests seed pre-existing records directly.
+Desktop browser actions preview remote items. Mobile also offers explicit
+[selected-item Pull](development.md#selected-remote-item-downloads-on-mobile).
+Existing offline-copy records retain read, edit and export compatibility.
 
-Validation uses synthetic local/alias/crypt CLI backends, memory-backed native Go
-remotes, and Toga dummy/Qt offscreen UI tests. No user accounts are accessed.
-`test_remote_browser.py` covers account isolation, range/CBZ reads, nested encrypted navigation, preview-only actions, revocation, tab cloning and current-folder filtering.
-Mobile `test_remote_readers.py` covers reader presentation, mutation guards,
-manual-copy dialogs, cache revocation and absence of retired copy APIs.
-`test_remote_downloads.py` covers the current explicit selected-item Pull. Native
-`remote_document_test.go` checks ordinary/crypt ranges, archive members, identity,
-revisions, bounds and cancellation. Live-service performance and physical-device
-behavior remain outside this local validation.
+## Mobile document history
 
-`test_remote_bridge_native.py` can also run against a rebuilt host C bridge using
-`LOGISTICS_REMOTE_BRIDGE=/absolute/path/to/library`. It round-trips synthetic
-ordinary/crypt remote text and comics through the real Python/native boundary,
-without creating an offline copy.
+Open documents and Recent use cloud/device and connection lock badges. The mobile
+host's `document_sources` keeps saved-credential
+references in ordinary app-private history. Session-only credential paths and
+filenames use `mobile.document_lists.CredentialDocumentLists` instead. The host
+injects its reference validator, history limit and reopen callback; the feature
+does not import the mobile application package. Native
+`document_lists_seal/open` writes/reads an AES-256 ZIP containing one generic
+`entries.json` member, under hashes of the credential package and window. The
+credential ZIP's original password is held only in native session memory and is
+cleared with credential lock/replacement. Only authenticated, password-protected
+credential ZIPs enable this cache. No cache contains file contents or unsaved edits.
 
+Native startup initializes the cloud controller and awaits its saved-vault restore
+in the workspace preparation phase, before building Home. Remote and LocalCrypt
+document reopening also await an existing restore before resolving identities or
+checking credential generations. Navigation away during that wait cancels the
+open intent. Credential publication queues Home and Documents badge refreshes
+even for saved packages, which have no session-only encrypted-list state.
+
+After credential unlock, validated open/recent entries restore in RAM; restored
+open entries are transient placeholders until selected. Restore never fetches
+remote file content. Explicit close updates the encrypted open list; credential
+lock preserves it. The **Clear** action beside
+**Recent** clears ordinary history and the recent lists of currently unlocked
+credential caches while preserving open references and saved files. Forgetting
+retained credentials deletes list caches across windows and serializes with
+cache writes. Malformed/authentication-failed
+archives are preserved; there is no plaintext cache fallback. Native tests cover
+AES strength, credential-password compatibility, authentication, tampering,
+replacement, isolation and bounded input; host tests cover restoration, migration,
+list limits, explicit close and forget actions. Live readers remain transient.
 
 ## Native connection and archive errors
 
@@ -265,12 +242,23 @@ These host checks do not establish OS/device acceptance.
 
 ## Remote reader validation
 
-Desktop and mobile checks cover current-folder filtering, direct rendering,
-format-specific read-only commands, credential lock and replacement, and error
-handling for missing, oversized or corrupt files. Native checks use synthetic
-ordinary and crypt remotes and cover reader tools, navigation and return paths.
-Managed transfers and existing offline copies have separate coverage. Use live
-provider and physical device checks for service behavior and touch gestures.
+From the repository root, run the desktop or mobile host checks for the code
+you changed:
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/resources/test_remote_browser.py
+python3 dev.py test mobile --exact-file mobile_build/tests/reading/test_remote_readers.py
+```
+
+The desktop fixture uses synthetic local, alias and crypt CLI backends for
+account isolation, read-only opens, tab cloning, filtering and revocation.
+Its CLI cases require the pinned rclone executable. The mobile fixture uses
+stub clients to check read-only presentation, bounded caches, listing recovery
+and generation revocation. Native `remote_document_test.go` exercises ranges,
+archive members, identity, revision checks and cancellation with synthetic
+remotes. `test_remote_bridge_native.py` can use a rebuilt host library through
+`LOGISTICS_REMOTE_BRIDGE=/absolute/path/to/library`. Live-service performance and
+touch interaction require separate checks.
 
 ## Offline folder snapshots
 

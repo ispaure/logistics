@@ -1,16 +1,36 @@
-# FUSE Feature
+# Developing FUSE mounts
 
-For workflows, settings and troubleshooting, see the [user guide](../user/user.md).
+FUSE lets rclone expose a remote as a local folder on macOS, Windows and Linux.
+See the [user guide](../user/user.md) for setup and how to retry a failed mount.
 
-Developer notes. See the [user guide](../user/user.md) for controls and setup,
-and [UI architecture](../../../development/features.md) for shared contribution conventions.
+## Try a change to mount action discovery
 
-Provides optional mounted-folder access for rclone remotes.
+On desktop, enable rclone and FUSE, then select an rclone remote with saved
+credentials in **Workspaces → Cloud**. Its FUSE section offers **Open Mount
+Folder**. The callback in `Python/features/fuse/ui_contributions.py:_get_actions`
+passes the selected remote name and config path to
+`actions.mount_and_open_remote`.
+
+For example, shorten the action's description in `_get_actions` while keeping
+the selected config bound to the callback. The fixture
+`test_folder_action_discovery_is_lazy` constructs a remote entry and mocks
+the mount action. Run from the repository root with the desktop environment set up:
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/integrations/test_fuse.py
+```
+
+Expect the fixture to find the action and see exactly one call with the
+selected remote and config after invoking the callback. Before the callback,
+discovery performs no mount attempt. Check the wording in `_get_actions`;
+the test checks the handoff and timing. It uses simulated mount states and a
+temporary local directory for the readiness probe. Driver and remote behavior
+require platform checks.
 
 ## Dependency and execution boundary
 
-FUSE requires the rclone feature. It contributes Open Mount Folder for configured
-remotes, using the selected credential context. Browsing/switching folders must
+`__init__.py:register` declares the rclone dependency and contributes the
+desktop folder action through `ui_contributions.py`. Browsing/switching folders must
 not probe mounts, contact remotes or provision software; dependency checks,
 readiness probes and mounting run only after that action. Mount-path calculation
 resolves configuration without creating unrelated Software or credential folders.
@@ -23,8 +43,8 @@ resolves configuration without creating unrelated Software or credential folders
 | Windows | WinFsp in standard Program Files locations | Offer the pinned WinFsp installer. |
 | Linux | `/dev/fuse` and `fusermount`/`fusermount3` | System package manager; no universal driver download. |
 
-Versions, hashes and installer paths belong to the
-[software manifest](../../../../Python/software_manifest.json), not duplicated feature constants.
+Update versions, hashes and installer paths in the
+[software manifest](../../../../Python/software_manifest.json).
 See [resource setup](../../../user/configuration.md#public-software-provisioning) for
 pin updates and overrides. Logistics verifies and opens the installer after consent;
 the OS owns installation, privileges and restarts. Retry mounting after installation.
@@ -58,11 +78,6 @@ recovery; failed startup reports failure and removes only an ordinary empty moun
 directory. Automatic recovery of an unresponsive Windows mount remains unsupported.
 Linux dependency/installer checks do not require private Software resources.
 
-`Python/tests/integrations/test_fuse.py` simulates mount states and process outcomes, including
-deadline handling, recovery failures and link preservation. It also runs the
-directory probe against a temporary local folder. These tests do not mount real
-remotes or validate macFUSE/WinFsp/Linux drivers.
-
 Mount locations include a stable identity derived from the configuration path,
 so same-named remotes in different credential files stay separate. Mount readiness
 runs in a retained progress dialog after dependency prompts on the GUI thread.
@@ -78,15 +93,10 @@ credentials with identical values cannot reactivate a revoked session mount.
 Bindings stay in memory. A mount inherited after application restart, or a mount
 whose credentials changed during startup, requires explicit unmounting before it
 can be opened again. Unknown mounts are not automatically unmounted or browsed.
-Tests simulate these policies; native driver validation remains outstanding.
 
-## Host exposure and audit scope
+## Platform exposure
 
 `ui_contributions._get_config_path` restricts the desktop action to rclone entries
 with a credential context and excludes `.session` contexts. Internal binding tests
 for session generations do not imply that session-only mounting is offered by the
 GUI. There is no mobile FUSE adapter; see [mobile scope](../user_mobile/user_mobile.md).
-
-The November 4 documentation audit inspected `actions.py`, `ui_contributions.py`,
-`bindings.py` and the integration test cases without starting Qt, drivers or
-mount processes. It adds no new platform acceptance result.
