@@ -133,6 +133,20 @@ class BlenderPageTests(QtTestCase):
         self.assertTrue(page.bluehole_form.isRowVisible(page.bluehole_checkout_row))
         with patch('features.blender.ui.page.qt.QFileDialog.getExistingDirectory', return_value=str(checkout)):
             page._browse_bluehole_checkout()
+        self.manager.create_preset(self.builds[0], 'Other')
+        page.refresh()
+        page.preset.setCurrentText('Other')
+        self.assertEqual(page.bluehole_source.currentText(), 'GitHub')
+        self.assertEqual(page.bluehole_checkout.text(), '')
+        page.preset.setCurrentText('Art')
+        page = BlenderPage(manager=self.manager, settings_mode=True)
+        self.assertEqual(page.bluehole_source.currentText(), 'Local')
+        self.assertEqual(page.bluehole_checkout.text(), str(checkout))
+        page.bluehole_checkout.setText(str(checkout / 'typed'))
+        page.bluehole_checkout.editingFinished.emit()
+        page.refresh()
+        self.assertEqual(page.bluehole_checkout.text(), str(checkout / 'typed'))
+        page.bluehole_checkout.setText(str(checkout))
         page.bluehole_enabled.setChecked(True)
         page._apply_addons()
         self.assertEqual(page.library.selection(root)['bluehole'],
@@ -141,7 +155,11 @@ class BlenderPageTests(QtTestCase):
         self.assertEqual(page.bluehole_checkout.text(), str(checkout.resolve()))
         page.bluehole_source.setCurrentText('GitHub')
         page._apply_addons()
-        self.assertEqual(page.library.selection(root)['bluehole'], {'enabled': True, 'branch': 'main'})
+        self.assertEqual(page.library.selection(root)['bluehole'],
+                         {'enabled': True, 'branch': 'main', 'path': str(checkout.resolve())})
+        page.refresh()
+        page.bluehole_source.setCurrentText('Local')
+        self.assertEqual(page.bluehole_checkout.text(), str(checkout.resolve()))
 
     def test_shared_library_groups_versions_and_preset_import_is_private(self):
         import zipfile

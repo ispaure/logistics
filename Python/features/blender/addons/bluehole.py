@@ -70,13 +70,15 @@ def validate(value):
         raise ValueError('Choose Yes or No for Blue Hole Deluxe')
     config = {'enabled': value['enabled'], 'branch': value['branch'], 'deluxe': value.get('deluxe', False)}
     source = value.get('source', 'github')
-    if source == 'local':
-        path = value.get('path', '')
-        if not isinstance(path, str):
-            raise ValueError('Choose a local Blue Hole checkout folder')
-        config.update(source=source, path=path)
-    elif source != 'github':
+    if source not in ('local', 'github'):
         raise ValueError('Choose GitHub or Local for Blue Hole')
+    path = value.get('path', '')
+    if not isinstance(path, str):
+        raise ValueError('Choose a local Blue Hole checkout folder')
+    if source == 'local':
+        config['source'] = source
+    if source == 'local' or path:
+        config['path'] = path
     return config
 
 

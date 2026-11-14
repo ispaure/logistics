@@ -355,6 +355,19 @@ class AddonLibrary:
             raise ValueError('Invalid preset addon replacements')
         return value
 
+    def save_bluehole_source(self, release, name, source, path):
+        """Save source preferences independently of addon installation."""
+        from features.blender.addons import bluehole
+        from features.blender.installation.install import installation_lock
+
+        root = self.manager.preset(release, name)
+        with installation_lock(root):
+            state = self.selection(root)
+            choice = {**state.get('bluehole', bluehole.DEFAULT), 'source': source, 'path': path}
+            bluehole.validate(choice)
+            state['bluehole'] = choice
+            self._publish_selection(root, state)
+
     def save_pending_selection(self, release, name, identities, *, bluehole):
         """Save choices for the next launch while retaining installed state."""
         from features.blender.addons import bluehole as bluehole_source

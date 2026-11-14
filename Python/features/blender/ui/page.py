@@ -475,6 +475,16 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
             self.bluehole_group.setEnabled(True)
             self.apply_button.setEnabled(True)
 
+    def _save_bluehole_source(self, *_args):
+        release, name = self.release, self.preset.currentText()
+        if not release or self._choices_context != (release.version, name):
+            return
+        try:
+            self.library.save_bluehole_source(
+                release, name, self.bluehole_source.currentText().lower(), self.bluehole_checkout.text().strip())
+        except (OSError, ValueError) as error:
+            self.status.setText(f'Could not save Blue Hole source: {error}')
+
     def _apply_addons(self):
         if not self.release or self._choices_context != (self.release.version, self.preset.currentText()):
             self.status.setText('Refresh this preset before saving its addon selection.')
@@ -483,8 +493,7 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
                       if self.choices.item(row, 0).checkState() == qt.Qt.CheckState.Checked]
         release, name = self.release, self.preset.currentText()
         config = {'enabled': self.bluehole_enabled.isChecked(), 'branch': self.bluehole_branch.currentText()}
-        if self.bluehole_source.currentText() == 'Local':
-            config.update(source='local', path=self.bluehole_checkout.text().strip())
+        config.update(source=self.bluehole_source.currentText().lower(), path=self.bluehole_checkout.text().strip())
         if not bluehole.uses_runtime_deluxe(release):
             config['deluxe'] = self.bluehole_deluxe.currentText() == 'Yes'
         try:
