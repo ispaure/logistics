@@ -25,7 +25,7 @@ class ComicPasswordUITests(QtTestCase):
         self.wait_until(lambda: not dialog.busy, message='Comic password operation did not finish')
 
     def test_reader_retries_password_on_gui_thread_then_cancel_is_safe(self):
-        from features.comics import reader
+        from features.comics.ui import reader_opening as reader
         from features.comics.pages import ComicPages
         source = self.root / 'comic.cbz'
         with open_archive(source, 'w', password='test-only') as archive:

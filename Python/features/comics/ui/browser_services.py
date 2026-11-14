@@ -4,7 +4,7 @@ from pathlib import Path
 
 from commonUtils.ui import pyside as qt
 from features.comics.pages import ComicPages
-from features.comics.reader import open_reader
+from features.comics.ui.reader_opening import open_reader
 from features.comics.selection import normalize_targets
 from .metadata_editor import MetadataEditor
 from commonUtils.ui.tasks.operations import Operation

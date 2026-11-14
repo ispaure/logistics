@@ -43,7 +43,7 @@
       "desktop.dialogs"
     ],
     [
-      "Python/features/comics/reader.py",
+      "Python/features/comics/ui/reader_opening.py",
       "desktop.dialogs"
     ],
     [
