@@ -20,6 +20,11 @@ through the session, then asks the tree to restore the active row if a switch fa
 
 `ChatController.show_chat_configuration` opens `mobile/chat_settings.py:ChatSettingsPanel` from Chat or Settings and returns to the originating destination. `mobile/ui.py` owns workspace controls, `presentation.py` the transcript and `laptop.py` reserved-region layout. Retain draft and transcript across resizing. [Mobile server setup](lm.md#mobile-server-setup)
 
+`ChatController` holds one operation and client until model lookup or reply
+generation finishes. Stop applies to generation, and the host can cancel either
+client during retirement. A generation checkpoints its original conversation
+after retirement. Widget updates require the originating host to remain active.
+
 ## Shared desktop and mobile generation
 
 `GenerationCoordinator` publishes the pending user turn before dispatch. Publication failure restores editable state. Startup failure retains the turn and records failure. Keys stay in memory. Pass `session.response_token` to delta and terminal callbacks to reject stale responses. Retirement cancels and awaits workers. Preserve partial replies and any new draft, and surface save failures for retry/export.

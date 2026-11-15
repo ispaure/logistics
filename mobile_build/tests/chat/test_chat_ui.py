@@ -125,6 +125,33 @@ class ChatUITests(unittest.TestCase):
         self.assertEqual(saved['messages'][1]['status'], 'complete')
         self.assertEqual(saved['draft'], '')
 
+    def test_recovery_save_failure_restores_the_entire_unsent_turn(self):
+        app = self.app
+        self.configure('http://127.0.0.1:1234')
+        app.chat_prompt.value = '  Keep the draft exactly as typed\n'
+        self.assertTrue(app.checkpoint_chat())
+        record = app.chat_current
+        before = deepcopy(record)
+        save = app.chat_store.save
+
+        def reject_pending_turn(data):
+            if data['messages'] and data['messages'][-1]['status'] == 'streaming':
+                raise OSError('Recovery record could not be published')
+            return save(data)
+
+        with patch.object(app.chat_store, 'save', side_effect=reject_pending_turn), \
+                patch('features.lm.mobile.ui.ChatClient.stream') as stream:
+            app.loop.run_until_complete(app.send_chat())
+            stream.assert_not_called()
+
+        self.assertIs(app.chat_current, record)
+        self.assertEqual(record, before)
+        self.assertEqual(app.chat_store.load(record['id']), before)
+        self.assertEqual(app.chat_prompt.value, before['draft'])
+        self.assertIn('The request was not sent', app.chat_status.value)
+        self.assertFalse(app.chat_busy)
+        self.assertIsNone(app.chat_client)
+
     def test_retired_host_discards_delayed_model_results_and_errors(self):
         app = self.app
         self.configure('http://127.0.0.1:1234')
@@ -180,8 +207,8 @@ class ChatUITests(unittest.TestCase):
         app = self.app
         self.configure('http://127.0.0.1:1234')
 
-        async def exercise(error):
-            entered, release = asyncio.Event(), Event()
+        async def exercise(status):
+            entered, retiring, release = asyncio.Event(), asyncio.Event(), Event()
             loop = asyncio.get_running_loop()
 
             def stream(payload, fragment):
@@ -190,13 +217,14 @@ class ChatUITests(unittest.TestCase):
                 if not release.wait(3):
                     raise RuntimeError('Stream test gate timed out')
                 fragment('Discard this late fragment')
-                if error:
+                if status == 'failed':
                     raise ValueError('Delayed stream failure')
                 return 'stop'
 
             app.chat_prompt.value = 'Question'
             with patch('features.lm.mobile.ui.ChatClient') as factory:
                 factory.return_value.stream.side_effect = stream
+                factory.return_value.cancel.side_effect = retiring.set
                 task = asyncio.create_task(app.send_chat())
                 try:
                     await asyncio.wait_for(entered.wait(), 3)
@@ -205,20 +233,32 @@ class ChatUITests(unittest.TestCase):
                             await asyncio.sleep(.01)
                     app.chat_prompt.value = 'Keep the next draft'
                     self.assertTrue(app.checkpoint_chat())
-                    status = app.chat_status.value
+                    visible_status = app.chat_status.value
                     revision = app.chat_render_revision
                     app.active_host = False
                     app.chat_client.cancel()
-                    release.set()
-                    await asyncio.wait_for(task, 3)
+                    if status == 'interrupted':
+                        retiring.clear()
+                        task.cancel()
+                        await asyncio.wait_for(retiring.wait(), 3)
+                        task.cancel()
+                        await asyncio.sleep(0)
+                        self.assertTrue(app.chat_busy)
+                        self.assertIs(app.chat_client, factory.return_value)
+                        release.set()
+                        with self.assertRaises(asyncio.CancelledError):
+                            await asyncio.wait_for(task, 3)
+                    else:
+                        release.set()
+                        await asyncio.wait_for(task, 3)
                     saved = app.chat_store.load(app.chat_current['id'])
-                    self.assertEqual(saved['messages'][-1]['status'], 'failed' if error else 'complete')
+                    self.assertEqual(saved['messages'][-1]['status'], status)
                     self.assertEqual(saved['messages'][-1]['content'], 'Published partial')
                     self.assertEqual(saved['draft'], 'Keep the next draft')
                     self.assertIsNone(app.chat_client)
                     self.assertFalse(app.chat_busy)
                     self.assertEqual(app.chat_send.accessible_name, 'Stop')
-                    self.assertEqual(app.chat_status.value, status)
+                    self.assertEqual(app.chat_status.value, visible_status)
                     self.assertEqual(app.chat_render_revision, revision)
                 finally:
                     release.set()
@@ -226,9 +266,9 @@ class ChatUITests(unittest.TestCase):
                     app.active_host = True
                     app.set_chat_busy(False)
 
-        for error in (False, True):
-            with self.subTest(error=error):
-                app.loop.run_until_complete(exercise(error))
+        for status in ('complete', 'failed', 'interrupted'):
+            with self.subTest(status=status):
+                app.loop.run_until_complete(exercise(status))
 
     def test_retired_host_discards_queued_transcript_acknowledgement(self):
         app = self.app
@@ -530,12 +570,54 @@ class ChatUITests(unittest.TestCase):
         self.assertEqual(app.chat_send.accessible_name, 'Send')
         self.assertTrue(app.chat_send.enabled)
 
-    def test_model_refresh_cannot_turn_the_primary_button_into_stop(self):
+    def test_model_lookup_keeps_send_disabled_until_its_worker_retires(self):
         app = self.app
-        app.set_chat_busy(True)
-        self.assertEqual(app.chat_send.accessible_name, 'Send')
-        self.assertFalse(app.chat_send.enabled)
-        app.set_chat_busy(False)
+        self.configure('http://127.0.0.1:1234')
+
+        async def exercise():
+            entered, cancelled, release = asyncio.Event(), asyncio.Event(), Event()
+            loop = asyncio.get_running_loop()
+
+            def models():
+                loop.call_soon_threadsafe(entered.set)
+                if not release.wait(3):
+                    raise RuntimeError('Model test gate timed out')
+                return ['Discard this late model']
+
+            with patch('features.lm.mobile.ui.ChatClient') as factory:
+                client = factory.return_value
+                client.models.side_effect = models
+                client.cancel.side_effect = cancelled.set
+                task = asyncio.create_task(app.refresh_chat_models())
+                try:
+                    await asyncio.wait_for(entered.wait(), 3)
+                    self.assertEqual(app.chat_send.accessible_name, 'Send')
+                    self.assertFalse(app.chat_send.enabled)
+                    await app.chat_primary_action()
+                    app.cancel_chat()
+                    client.cancel.assert_not_called()
+
+                    task.cancel()
+                    await asyncio.wait_for(cancelled.wait(), 3)
+                    task.cancel()
+                    await asyncio.sleep(0)
+                    self.assertTrue(app.chat_busy)
+                    self.assertIs(app.chat_client, client)
+                    self.assertFalse(app.chat_send.enabled)
+
+                    release.set()
+                    with self.assertRaises(asyncio.CancelledError):
+                        await asyncio.wait_for(task, 3)
+                    self.assertEqual(list(app.chat_models.items), [])
+                    self.assertEqual(app.chat_store.profile()[0]['model'], 'fixture-model')
+                    self.assertFalse(app.chat_busy)
+                    self.assertIsNone(app.chat_client)
+                    self.assertTrue(app.chat_send.enabled)
+                finally:
+                    release.set()
+                    await asyncio.gather(task, return_exceptions=True)
+
+        app.loop.run_until_complete(exercise())
 
     def test_connect_discovers_and_saves_model_without_manual_id(self):
         app = self.app

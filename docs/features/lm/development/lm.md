@@ -12,7 +12,7 @@ Chat/Code tabs preserve independent selections; absent legacy `mode` means Chat.
 
 ## Mobile server setup
 
-`mobile/ui.py` and `mobile/transport.py` connect and list models without a model ID. Preserve the current listed model, allow manual IDs and defer initial history selection until connection controls are idle. `mobile_api_url` adds `/v1` only for an empty path. Discovery times out after 15 seconds; chat has a 120-second socket idle timeout and a ten-minute deadline checked between events. Diagnostics exclude keys and bodies. `Python/tests/test_mobile_chat.py`, `test_chat_ui.py` and `test_chat_inventory.py` cover transport and draft/selection ordering. Use `chat-settings`, `chat-laptop` and the keyboard probe for native layout and retained drafts.
+`mobile/controller.py` runs model lookup through `transport.py` without a model ID. Preserve the current listed model, allow manual IDs and defer initial history selection until connection controls are idle. `mobile_api_url` adds `/v1` only for an empty path. Discovery times out after 15 seconds; chat has a 120-second socket idle timeout and a ten-minute deadline checked between events. Diagnostics exclude keys and bodies. `Python/tests/test_mobile_chat.py`, `test_chat_ui.py` and `test_chat_inventory.py` cover transport and draft/selection ordering. Use `chat-settings`, `chat-laptop` and the keyboard probe for native layout and retained drafts.
 
 ## Pasted screenshots
 

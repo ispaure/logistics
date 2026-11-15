@@ -1,16 +1,15 @@
 """Native text chat controls; only explicit user actions contact a server."""
 from commonUtils.ui.native.forms import FittedLabel, fit_text
 import asyncio
-from copy import deepcopy
 import inspect
 import time
 import toga
 from toga.style import Pack
 from toga.style.pack import CENTER, COLUMN, ROW, END, NONE, PACK
 
-from features.lm.domain import build_request, conversation, message, validate_settings
+from features.lm.domain import conversation, validate_settings
 from features.lm.mobile.storage import ChatStore, DEFAULT_SETTINGS, export_chat
-from features.lm.mobile.transport import ChatClient, ChatCancelled
+from features.lm.mobile.transport import ChatClient
 from features.lm.mobile.on_device import MODELS, PROVIDERS, configured, client_for
 from features.lm.mobile.presentation import (COMPOSER_BOTTOM_GAP, ConversationTree, composer_height,
                                            transcript_document, transcript_entries, transcript_update)
@@ -32,9 +31,6 @@ class ChatUI(ChatSettingsPanel):
             return
         if not hasattr(self, 'chat_store'):
             self.chat_store = ChatStore(self.private_root / 'LM')
-            self.state.current = None
-            self.state.busy = self.state.loading = False
-            self.state.client = None
             self.chat_labels = {}
             try:
                 self.chat_profile, self.chat_profile_original = self.chat_store.profile()
@@ -193,8 +189,8 @@ class ChatUI(ChatSettingsPanel):
             self.chat_setup_box.remove(self.chat_setup)
         elif not hide_setup and self.chat_setup not in self.chat_setup_box.children:
             self.chat_setup_box.add(self.chat_setup)
-        generating = self.state.generating
-        self.chat_send.enabled = generating or (ready and not self.state.busy)
+        self.chat_send.enabled = ((self.state.generating and not self.state.cancelled)
+                                  or (ready and not self.state.busy))
         self.chat_setup.enabled = not self.state.busy
 
     def sync_chat_navigation(self):
@@ -436,10 +432,13 @@ class ChatUI(ChatSettingsPanel):
             self.open_chat(row.key)
 
     def checkpoint_chat(self):
-        if self.state.current is None:
+        return self._checkpoint_chat_record(self.state.current)
+
+    def _checkpoint_chat_record(self, record):
+        if record is None:
             return True
         try:
-            self.chat_store.save(self.state.current)
+            self.chat_store.save(record)
             return True
         except (OSError, ValueError) as error:
             self.set_chat_status('Chat not saved: ' + str(error))
@@ -578,11 +577,10 @@ class ChatUI(ChatSettingsPanel):
         else:
             await self.send_chat()
 
-    def set_chat_busy(self, busy, *, generating=False):
-        self.state.busy = busy
-        self.state.generating = busy and generating
+    def _update_chat_operation_controls(self):
         if not self.active_host:
             return
+        busy = self.state.busy
         self.chat_config_save.enabled = not busy
         for control in (self.chat_provider, self.chat_url, self.chat_key, self.chat_model, self.chat_models, self.chat_selector,
                         self.chat_header_new, self.chat_refresh, self.chat_export, self.chat_actions_button,
@@ -626,155 +624,56 @@ class ChatUI(ChatSettingsPanel):
         if not self.state.loading and widget.value:
             self.chat_model.value = widget.value
 
-    async def refresh_chat_models(self, widget=None, **kwargs):
-        if not self.active_host:
-            return
-        if not self.app.require_feature('lm', destination=getattr(self, 'chat_config_destination', 'chat')):
-            return
-        if self.state.busy:
-            return
-        self.set_chat_busy(True)
-        self.set_chat_status('Connecting to server…' if PROVIDERS[self.chat_provider.value] == 'server' else 'Preparing on-device model…')
-        try:
-            profile = self.chat_fields()
-            self.state.client = (ChatClient(profile['base_url'], self.chat_key.value)
-                                 if profile.get('provider', 'server') == 'server' else client_for(profile))
-            models = await asyncio.to_thread(self.state.client.models)
-            if not self.active_host:
-                return
-            # Replacing Selection.items can fire on_change for its first item.
-            # Retain the configured/manual model if the server still offers it.
-            selected = profile['model'] if profile['model'] in models else (models[0] if models else '')
-            self.state.loading = True
-            try:
-                self.chat_models.items = models
-                if selected:
-                    self.chat_models.value = selected
-            finally:
-                self.state.loading = False
-            if models:
-                self.chat_model.value = selected
-                self.chat_fields()
-            elif profile.get('provider', 'server') == 'server' and self.chat_model not in self.chat_manual_box.children:
-                self.toggle_chat_manual_model()
-            self.set_chat_status('On-device model ready. Save settings to finish.' if profile.get('provider') in MODELS else f'Connected. {len(models)} model(s) available. Save settings to finish.' if models
-                                 else 'Connected, but no models were listed. Load a model on the server or enter its exact ID below.')
-        except Exception as error:
-            if not self.active_host:
-                return
-            if PROVIDERS[self.chat_provider.value] != 'server':
-                self.chat_model.value = ''
-                try:
-                    self.chat_fields()
-                except (OSError, ValueError):
-                    pass
-            self.set_chat_status('Models unavailable: ' + str(error)[:400])
-        finally:
-            self.state.client = None
-            self.set_chat_busy(False)
+    def _chat_request_client(self, profile, api_key):
+        if profile.get('provider', 'server') == 'server':
+            return ChatClient(profile['base_url'], api_key)
+        return client_for(profile)
 
-    async def send_chat(self, widget=None, **kwargs):
-        if not self.active_host:
-            return
-        if not self.app.require_feature('lm', destination='chat'):
-            return
-        if self.state.busy or self.state.current is None:
-            return
-        prompt = self.chat_prompt.value.strip()
-        if not prompt:
-            self.set_chat_status('Enter a message first.')
-            return
-        if len(self.state.current['messages']) > 198:
-            self.set_chat_status('This conversation has reached 200 messages. Start a new conversation.')
-            return
-        self.set_chat_busy(True, generating=True)
-        self.state.cancelled = False
-        session = None
-        transport = None
-        response = None
-        before = None
+    def _show_chat_models(self, profile, models):
+        # Replacing Selection.items can fire on_change for its first item.
+        # Retain the configured/manual model if the server still offers it.
+        selected = profile['model'] if profile['model'] in models else (models[0] if models else '')
+        self.state.loading = True
         try:
-            from features.lm.session import ConversationSession
-            from features.lm.generation import GenerationCoordinator, GenerationInputs
-            from features.lm.execution.mobile import MobileGenerationTransport
-            profile = self.chat_fields()
-            data = self.state.current
-            session = ConversationSession(self.chat_store)
-            session.attach(data)
-            # Client validation must not leave an unsent turn in saved history.
-            self.state.client = (ChatClient(profile['base_url'], self.chat_key.value)
-                                 if profile.get('provider', 'server') == 'server' else client_for(profile))
-            before = session.append_user(prompt, settings=profile['settings'], model=profile['model'],
-                                         title_limit=60, retitle=True)
-            transport = MobileGenerationTransport(self.state.client, session,
-                current=lambda: self.active_host and self.state.current is data)
-            coordinator = GenerationCoordinator(session, transport)
-            try:
-                request_profile = (dict(profile, base_url='on-device://' + profile['provider'])
-                                   if profile.get('provider') in MODELS else profile)
-                plan = coordinator.prepare(GenerationInputs(request_profile))
-            except Exception:
-                session.rollback(before)
-                raise
-            def published():
-                self.state.loading = True
-                self.chat_prompt.value = ''
-                self.state.loading = False
-                self.resize_chat_composer()
-                self.transcript.force_latest = True
-                self.update_chat_transcript()
-            try:
-                result = coordinator.start(plan, self.chat_key.value, clear_draft=True, published=published)
-            except (OSError, ValueError):
-                session.rollback(before)
-                self.state.loading = True
-                self.chat_prompt.value = data['draft']
-                self.state.loading = False
-                raise ValueError('The request was not sent because its recovery record could not be saved.')
-            if not result.started:
-                raise ValueError(result.error)
-            response = session.response_token
-            assistant = session.active_message
-            omitted = plan.metadata['omitted_turns']
-            self.set_chat_status(f'Generating… {omitted} older turn(s) omitted from context.' if omitted else 'Generating…')
-            reason = await transport.drain(changed=self.update_chat_transcript, checkpoint=self.checkpoint_chat)
-            session.complete_response('cancelled' if self.state.cancelled else 'complete', '',
-                                      dict(finish_reason=reason), token=response)
-            assistant['finish_reason'] = reason
-            self.set_chat_status('Reply stopped; partial text preserved.' if self.state.cancelled else '')
-        except ChatCancelled:
-            if session is not None:
-                session.complete_response('cancelled', '', {}, token=response)
-            self.set_chat_status('Request cancelled; partial text preserved.')
-        except asyncio.CancelledError:
-            if session is not None:
-                session.complete_response('interrupted', '', {}, token=response)
-            raise
-        except Exception as error:
-            if session is not None:
-                session.complete_response('failed', str(error)[:400], {}, token=response)
-            self.set_chat_status('Chat failed: ' + str(error)[:400])
+            self.chat_models.items = models
+            if selected:
+                self.chat_models.value = selected
         finally:
             self.state.loading = False
-            if transport is not None:
-                await transport.retire()
-            elif self.state.client:
-                self.state.client.cancel()
-            self.state.client = None
-            # The terminal reply and draft still belong to this conversation.
-            self.checkpoint_chat()
-            self.update_chat_transcript()
-            self.refresh_chats()
-            self.set_chat_busy(False)
+        if models:
+            self.chat_model.value = selected
+            self.chat_fields()
+        elif profile.get('provider', 'server') == 'server' and self.chat_model not in self.chat_manual_box.children:
+            self.toggle_chat_manual_model()
+        if profile.get('provider') in MODELS:
+            status = 'On-device model ready. Save settings to finish.'
+        elif models:
+            status = f'Connected. {len(models)} model(s) available. Save settings to finish.'
+        else:
+            status = 'Connected, but no models were listed. Load a model on the server or enter its exact ID below.'
+        self.set_chat_status(status)
 
-    def cancel_chat(self, widget=None, **kwargs):
-        if not self.active_host:
-            return
-        self.state.cancelled = True
-        if self.state.client:
-            self.state.client.cancel()
-        self.chat_send.enabled = False
-        self.set_chat_status('Stopping…')
+    def _show_chat_model_error(self, error):
+        if PROVIDERS[self.chat_provider.value] != 'server':
+            self.chat_model.value = ''
+            try:
+                self.chat_fields()
+            except (OSError, ValueError):
+                pass
+        self.set_chat_status('Models unavailable: ' + str(error)[:400])
+
+    def _set_chat_draft(self, value):
+        self.state.loading = True
+        try:
+            self.chat_prompt.value = value
+        finally:
+            self.state.loading = False
+
+    def _show_chat_pending_turn(self):
+        self._set_chat_draft('')
+        self.resize_chat_composer()
+        self.transcript.force_latest = True
+        self.update_chat_transcript()
 
     async def export_chat(self, widget=None, **kwargs):
         if not self.active_host:
