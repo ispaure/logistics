@@ -8,6 +8,7 @@
 | Rebuildable probe compiler cache | `tmp/cache/compiler/` |
 | Managed mobile device build workspaces | `tmp/build/mobile/` |
 | Standalone widget and video API reports | `tmp/test-results/widgets/` and `tmp/test-results/media/` |
+| Standalone mobile navigation reports | `tmp/test-results/navigation/`, one directory per run unless `--output` is supplied |
 | Manager history and host timing | `test-results/build-manager/` and `test-results/test-timings/` |
 | Mobile deployment diagnostics | `mobile_build/logs/` |
 

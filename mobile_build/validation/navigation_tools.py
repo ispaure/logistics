@@ -1,7 +1,7 @@
-"""External Android native lifecycle proof using only a disposable test-mode app.
+"""Check native navigation with a disposable Android or iOS test-mode app.
 
-Requires a booted emulator with the current test APK installed. Does not inspect
-credentials or user documents. Size/density changes are reset in finally.
+Run from mobile_build with the current test app installed on an owned emulator
+or simulator. The Android probe restores size and density after the check.
 """
 import argparse
 import json
@@ -10,6 +10,7 @@ import shlex
 import shutil
 from pathlib import Path
 import subprocess
+from tempfile import mkdtemp
 import time
 
 BUNDLE = 'io.github.ispaure.logisticsmobile'
@@ -197,15 +198,28 @@ def apple(device, output, *, workspace=False):
         run('terminate', device, BUNDLE)
 
 
-if __name__ == '__main__':
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--adb', type=Path, default=Path(os.environ.get('ANDROID_HOME', '')) / 'platform-tools/adb')
     parser.add_argument('--device', required=True)
     parser.add_argument('--ios', action='store_true', help='Exercise an installed Apple test-mode app')
     parser.add_argument('--workspace', action='store_true', help='Exercise the actual two-document workspace instead of the foundation fixture')
-    parser.add_argument('--output', type=Path, default=Path('logs/navigation/android-lifecycle'))
-    args = parser.parse_args()
+    parser.add_argument('--output', type=Path,
+                        help='Report directory (default: a fresh directory under tmp/test-results/navigation)')
+    args = parser.parse_args(argv)
+    output = args.output
+    if output is None:
+        reports = Path(__file__).resolve().parents[2] / 'tmp/test-results/navigation'
+        reports.mkdir(parents=True, exist_ok=True)
+        platform = 'ios' if args.ios else 'android'
+        probe = 'workspace' if args.workspace else 'lifecycle'
+        output = Path(mkdtemp(prefix=f'{platform}-{probe}-', dir=reports))
+    print(f'Navigation reports: {output.resolve()}', flush=True)
     if args.ios:
-        apple(args.device, args.output, workspace=args.workspace)
+        apple(args.device, output, workspace=args.workspace)
     else:
-        android(args.adb, args.device, args.output, workspace=args.workspace)
+        android(args.adb, args.device, output, workspace=args.workspace)
+
+
+if __name__ == '__main__':
+    main()
