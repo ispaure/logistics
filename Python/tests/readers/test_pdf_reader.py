@@ -70,9 +70,8 @@ class PDFReaderTests(QtTestCase):
         for data in (b'', b'not a pdf'):
             with self.assertRaises(ValueError):
                 PDFDocument(data)
-        with patch('features.pdf.document.MAX_PDF', 8):
-            with self.assertRaises(ValueError):
-                PDFDocument(pdf_bytes())
+        with self.assertRaisesRegex(ValueError, 'PDF reading is limited'):
+            PDFDocument(pdf_bytes(), max_bytes=8)
 
     def test_provider_reads_bounded_memory_without_filesystem_fallback(self):
         data = pdf_bytes()
