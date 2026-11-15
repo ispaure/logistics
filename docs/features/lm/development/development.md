@@ -12,6 +12,10 @@ python3 dev.py test desktop --exact-file Python/tests/chat/test_lm_appearance.py
 
 `register` lazily exposes `lm.chat`. Under `Python/features/lm/`, `ui/page.py` and `ui/composer.py` own input, `ui/conversation_*.py` owns history and presentation, `ui/profiles.py` owns server settings, and `domain.py`, `storage.py` and `session.py` own records and leases. `ui/attachments.py` checks containment, exclusions and the 64 KiB draft cap before inserting reviewable attachments. `ui/ide_context.py` snapshots editors on the GUI thread.
 
+`ui/conversation_tree.py` projects the desktop inventory and restores folder
+expansion and selection during refresh. `LMPage` coordinates opening and saving
+through the session, then asks the tree to restore the active row if a switch fails.
+
 ## Mobile ownership
 
 `ChatController.show_chat_configuration` opens `mobile/chat_settings.py:ChatSettingsPanel` from Chat or Settings and returns to the originating destination. `mobile/ui.py` owns workspace controls, `presentation.py` the transcript and `laptop.py` reserved-region layout. Retain draft and transcript across resizing. [Mobile server setup](lm.md#mobile-server-setup)

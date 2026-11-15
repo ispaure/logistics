@@ -20,7 +20,7 @@ class ConversationActions:
         if item is None or page.client.busy:
             return
         page.list.setCurrentItem(item)
-        key = item.data(0, qt.Qt.ItemDataRole.UserRole)
+        key = page.list.conversation_key(item)
         menu = qt.QMenu(page.list)
         if key:
             if page.data is None or page.data['id'] != key:
@@ -82,8 +82,8 @@ class ConversationActions:
             page.status.setText(str(error))
             return
         page.refresh(reveal_current=True)
-        if not key and moved_folder in page.folder_items:
-            page.list.setCurrentItem(page.folder_items[moved_folder])
+        if not key:
+            page.list.select_folder(moved_folder)
         page.status.setText('Moved to ' + (destination or '/') + '.')
 
 
@@ -104,7 +104,7 @@ class ConversationActions:
             return
         page.search.clear()
         page.refresh()
-        page.list.setCurrentItem(page.folder_items[path])
+        page.list.select_folder(path)
         page.status.setText(f'Folder created: {path}. New conversations will be saved here.')
 
 

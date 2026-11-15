@@ -102,7 +102,7 @@ class LMPage(qt.QWidget):
             theme.changed.connect(self.apply_chrome)
         self.load_profiles()
         self.refresh()
-        first = next((item for item in self.tree_items() if item.data(0, qt.Qt.ItemDataRole.UserRole)), None)
+        first = self.list.first_conversation()
         if first is not None:
             self.list.setCurrentItem(first)
         self.update_controls()
@@ -316,15 +316,11 @@ class LMPage(qt.QWidget):
         self.transcript.clear()
         self.search.setText(self.mode_search.get(target, ''))
         self.loading = False
-        self.list.blockSignals(True)
-        self.list.clear()
-        self.folder_items = {}
-        self.list.blockSignals(False)
+        self.list.clear_inventory()
         if target == 'code':
             self.load_projects()
         self.refresh()
-        keys = [item.data(0, qt.Qt.ItemDataRole.UserRole) for item in self.tree_items()
-                if item.data(0, qt.Qt.ItemDataRole.UserRole)]
+        first = self.list.first_conversation()
         remembered = self.last_conversations.get(target)
         if remembered:
             try:
@@ -333,7 +329,7 @@ class LMPage(qt.QWidget):
                     remembered = None
             except (OSError, ValueError):
                 remembered = None
-        key = remembered or (keys[0] if keys else None)
+        key = remembered or self.list.conversation_key(first)
         if key:
             self.open_conversation(key)
             self.refresh(reveal_current=True)
@@ -412,62 +408,23 @@ class LMPage(qt.QWidget):
             self.closing = False
             self.open_conversation(key)
         current = self.data['id'] if self.data else None
-        selected = self.list.currentItem()
-        selected_folder = (selected.data(0, qt.Qt.ItemDataRole.UserRole + 1)
-                           if selected is not None and not selected.data(0, qt.Qt.ItemDataRole.UserRole) else None)
-        expanded = {path: item.isExpanded() for path, item in getattr(self, 'folder_items', {}).items()}
+        query = self.search.text()
         try:
-            records, warnings = self.store.list(self.search.text())
-            records = [record for record in records if record.get('mode', 'chat') == self.mode.currentData()]
+            records, warnings = self.store.list(query)
             folders = self.store.folders()
         except (OSError, ValueError) as error:
             self.status.setText(str(error))
             return
-        self.list.blockSignals(True)
-        self._populate_conversation_tree(records, folders, current)
-        if selected_folder in self.folder_items and not reveal_current:
-            self.list.setCurrentItem(self.folder_items[selected_folder])
-        for path, item in self.folder_items.items():
-            item.setExpanded(True if self.search.text() else expanded.get(path, True))
-        if reveal_current and self.list.currentItem() is not None:
-            parent = self.list.currentItem().parent()
-            while parent is not None:
-                parent.setExpanded(True)
-                parent = parent.parent()
-        self.list.blockSignals(False)
+        self.list.rebuild(records, folders, mode=self.mode.currentData(), searching=bool(query),
+                          current=current, reveal_current=reveal_current)
         self.update_controls()
         if warnings:
             self.status.setText('Some conversation files could not be read and were preserved. ' + '\n'.join(warnings[:3]))
 
-    def _populate_conversation_tree(self, records, folders, current):
-        """Project records/folders while refresh retains the selection and signal guard."""
-        self.list.clear()
-        root = qt.QTreeWidgetItem(self.list, ['Conversations'])
-        root.setData(0, qt.Qt.ItemDataRole.UserRole + 1, '')
-        self.folder_items = {'': root}
-        visible_folders = set(folders) if not self.search.text() else set()
-        for data in records:
-            path = data['folder']
-            while path:
-                visible_folders.add(path)
-                path = path.rpartition('/')[0]
-        for path in sorted(visible_folders, key=lambda name: (name.count('/'), name.casefold())):
-            parent, _, label = path.rpartition('/')
-            item = qt.QTreeWidgetItem(self.folder_items[parent], [label])
-            item.setData(0, qt.Qt.ItemDataRole.UserRole + 1, path)
-            item.setIcon(0, self.style().standardIcon(qt.QStyle.StandardPixmap.SP_DirIcon))
-            self.folder_items[path] = item
-        for data in records:
-            item = qt.QTreeWidgetItem(self.folder_items[data['folder']], [('★ ' if data.get('pinned') else '') + data['title']])
-            item.setData(0, qt.Qt.ItemDataRole.UserRole, data['id'])
-            item.setData(0, qt.Qt.ItemDataRole.UserRole + 1, data['folder'])
-            if data['id'] == current:
-                self.list.setCurrentItem(item)
-
     def select(self, item, previous=None):
         if item is None or self.client.busy:
             return
-        key = item.data(0, qt.Qt.ItemDataRole.UserRole)
+        key = self.list.conversation_key(item)
         if not key:
             self.update_controls()
             return
@@ -476,17 +433,15 @@ class LMPage(qt.QWidget):
             return
         self.open_conversation(key)
 
+    @property
+    def folder_items(self):
+        return self.list.folder_items
+
     def tree_items(self):
-        iterator = qt.QTreeWidgetItemIterator(self.list)
-        while iterator.value() is not None:
-            yield iterator.value()
-            iterator += 1
+        return self.list.items()
 
     def selected_folder(self):
-        item = self.list.currentItem()
-        return item.data(0, qt.Qt.ItemDataRole.UserRole + 1) if item is not None else ''
-
-
+        return self.list.selected_folder()
 
     def open_conversation(self, key):
         if not self.persist():
@@ -591,10 +546,7 @@ class LMPage(qt.QWidget):
         """Refresh publication feedback without recollecting or resaving the draft."""
         self.save_error.clear()
         self.save_error.hide()
-        for item in self.tree_items():
-            if item.data(0, qt.Qt.ItemDataRole.UserRole) == self.data['id']:
-                item.setText(0, ('★ ' if self.data.get('pinned') else '') + self.data['title'])
-
+        self.list.update_conversation_label(self.data)
 
     def edit_profiles(self):
         if self.client.busy or not self.persist():
@@ -860,9 +812,7 @@ class LMPage(qt.QWidget):
         self.send_button.setAccessibleName(action)
         self.transcript.set_retry_enabled(editable and not busy)
         self.auth_toggle.setEnabled(not busy)
-        selected = self.list.currentItem()
-        selected_conversation = (selected is not None and self.data is not None and
-            selected.data(0, qt.Qt.ItemDataRole.UserRole) == self.data['id'])
+        selected_conversation = self.data is not None and self.list.selected_conversation() == self.data['id']
         for widget in (self.rename_button, self.delete_button):
             widget.setEnabled(editable and not busy and selected_conversation)
         self.move_button.setEnabled(editable and not busy)

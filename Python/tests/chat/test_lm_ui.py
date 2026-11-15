@@ -1111,17 +1111,23 @@ class LMWidgetTests(LMPageFixture):
         self.assertEqual(self.page.data['messages'][-1]['status'], 'interrupted')
         self.assertEqual(self.store.load(data['id'])['messages'][-1]['status'], 'interrupted')
 
-    def test_conflict_does_not_switch_or_lose_current_draft(self):
+    def test_tree_selection_rolls_back_when_current_draft_cannot_be_saved(self):
         self.page.conversations.new_conversation()
         key = self.page.data['id']
+        lease = self.page.lease
         other = self.store.load(key)
         other['title'] = 'External change'
         self.store.save(other)
         next_data = conversation(SETTINGS)
         self.store.save(next_data)
+        self.page.refresh()
+        target = next(item for item in self.page.tree_items()
+                      if item.data(0, qt.Qt.ItemDataRole.UserRole) == next_data['id'])
         self.page.composer.setPlainText('Local draft')
-        self.page.open_conversation(next_data['id'])
+        self.page.list.setCurrentItem(target)
         self.assertEqual(self.page.data['id'], key)
+        self.assertEqual(self.page.list.currentItem().data(0, qt.Qt.ItemDataRole.UserRole), key)
+        self.assertIs(self.page.lease, lease)
         self.assertEqual(self.page.composer.toPlainText(), 'Local draft')
         self.assertIn('changed on disk', self.page.save_error.text())
         # Explicitly discard this test-only conflicting draft before teardown.
