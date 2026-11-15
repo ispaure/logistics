@@ -754,6 +754,78 @@ class FolderSourceTests(QtTestCase):
         self.assertIn('New action', buttons)
         self.assertNotIn('Old action', buttons)
 
+    def test_detector_failure_after_lock_returns_actions_to_unlock(self):
+        from threading import Event
+        from features.contributions import FolderFeatureContribution
+        from features.rclone import session
+        from models.folder_entry import FolderEntry
+        config = self.root / 'account.session'
+        session.remember(config, {'Plain': {'type': 'local'}})
+        self.addCleanup(session.forget, config)
+        entry = FolderEntry('Plain', local=self.folder('Plain'), remote_name='Plain',
+                            remote_source='rclone', remote_context=config)
+        entered, release = Event(), Event()
+
+        def available(_entry):
+            entered.set()
+            release.wait(5)
+            raise ValueError('Credential is no longer available')
+
+        tool = FolderFeatureContribution('Fixture', available, get_actions=lambda entry: [])
+        page = self.page()
+        self.addCleanup(release.set)
+        page._folder_features = [RegisteredContribution('test', 'Test', tool)]
+        page._show_entry(entry)
+        self.until(entered.is_set)
+        session.forget(config)
+        release.set()
+        self.wait(page)
+        self.assertIsNotNone(page._actions_unlock_view)
+
+    def test_latest_queued_selection_recaptures_replaced_credentials(self):
+        from threading import Event
+        from features.contributions import FolderFeatureContribution, UIAction
+        from features.rclone import session
+        from models.folder_entry import FolderEntry
+        config = self.root / 'account.session'
+        session.remember(config, {'Latest': {'type': 'local', 'label': 'Old'}})
+        self.addCleanup(session.forget, config)
+        first = FolderEntry('First', local=self.folder('First'))
+        skipped = FolderEntry('Skipped', local=self.folder('Skipped'))
+        latest = FolderEntry('Latest', local=self.folder('Latest'), remote_name='Latest',
+                             remote_source='rclone', remote_context=config)
+        entered, release = Event(), Event()
+        checked = []
+
+        def available(entry):
+            checked.append(entry.name)
+            if entry.name == 'First':
+                entered.set()
+                release.wait(5)
+                raise ValueError('Superseded detector failed')
+            return True
+
+        def actions(_entry):
+            label = session.credentials(config)['Latest']['label']
+            return [UIAction(label + ' action', callback=lambda: None)]
+
+        tool = FolderFeatureContribution('Fixture', available, get_actions=actions)
+        page = self.page()
+        self.addCleanup(release.set)
+        page._folder_features = [RegisteredContribution('test', 'Test', tool)]
+        with patch.object(page, '_refresh_lock_icons', wraps=page._refresh_lock_icons) as refresh_icons:
+            page._show_entry(first)
+            self.until(entered.is_set)
+            page._show_entry(skipped)
+            page._show_entry(latest)
+            session.remember(config, {'Latest': {'type': 'local', 'label': 'New'}})
+            release.set()
+            self.wait(page)
+        refresh_icons.assert_called_once_with()
+        self.assertEqual(checked, ['First', 'Latest'])
+        buttons = {button.text() for button in page.detail_scroll.widget().findChildren(qt.QPushButton)}
+        self.assertEqual(buttons, {'New action'})
+
     def test_plain_local_actions_require_unlock_and_discard_late_password_results(self):
         from threading import Event
         from types import SimpleNamespace

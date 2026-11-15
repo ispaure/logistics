@@ -29,8 +29,6 @@ class FoldersPage(pyside.QWidget):
     browse_requested = pyside.Signal(object)
     _refresh_generation = StateAttribute('controller', 'refresh_generation')
     _refresh_pending = StateAttribute('controller', 'refresh_pending')
-    _detail_generation = StateAttribute('controller', 'detail_generation')
-    _detail_pending = StateAttribute('controller', 'detail_pending')
 
     def __init__(self, parent=None, *, panes_locked=WORKSPACE_PANES_LOCKED):
         super().__init__(parent)
@@ -84,8 +82,6 @@ class FoldersPage(pyside.QWidget):
         self.discovery.completed.connect(self._discovered)
         self.details = OperationProgress(self)
         self.details.completed.connect(self._details_ready)
-        self._detail_generation = 0
-        self._detail_pending = None
 
         self.folder_tree = WorkspaceTree()
         self.folder_tree.setHeaderHidden(True)
@@ -584,8 +580,7 @@ class FoldersPage(pyside.QWidget):
         self._retire_actions_unlock()
         self.selected_entry_name = None
         self._selected_entry_key = None
-        self._detail_generation += 1
-        self._detail_pending = None
+        self.controller.clear_detail()
         self.details.request_cancel()
         self._tools_status = None
         widget = pyside.QWidget()
@@ -625,44 +620,44 @@ class FoldersPage(pyside.QWidget):
 
     def _show_entry(self, entry):
         self._retire_actions_unlock()
-        self._detail_generation += 1
-        self._detail_pending = None
         self.details.request_cancel()
+        online = self._get_selected_source()[0] == 'remote'
+        target, needs_credentials = self.controller.select_detail(
+            entry, self._folder_features, scope='remote' if online else 'local',
+            unlock_target=self._entry_unlock_target)
         self._tools_status = None
         self._show_info(entry)
-        target = self._entry_unlock_target(entry)
-        needs_credentials = (self._get_selected_source()[0] == 'remote'
-                             and entry.remote_source == 'rclone' and entry.remote_context is None)
-        online = self._get_selected_source()[0] == 'remote'
         self.panes.set_actions_available(not (target is not None and
             (online or getattr(entry.local, 'private', False))))
         if target is not None or needs_credentials:
-            widget = pyside.QWidget()
-            layout = pyside.QVBoxLayout(widget)
-            label = pyside.QLabel('Unlock the workspace credentials to load its actions.')
-            label.setWordWrap(True)
-            layout.addWidget(label)
-            online = self._get_selected_source()[0] == 'remote'
-            if needs_credentials:
-                label.setText('Load the matching credential package in Settings to load this workspace’s actions.')
-            elif not online and not getattr(entry.local, 'private', False):
-                # Plain local files remain browsable; only the remote actions need a password.
-                from features.rclone.ui.workspace_unlock import WorkspaceUnlockView
-                view = WorkspaceUnlockView(*target, parent=widget, purpose='load this workspace’s actions',
-                                           workspace_name=entry.name)
-                self._actions_unlock_view = view
-                view.unlocked.connect(lambda: self._actions_unlocked(view, entry))
-                view.idle.connect(self._browser_idle)
-                layout.addWidget(view)
-            else:
-                label.setText('Unlock this workspace in Files to load its actions.')
-            layout.addStretch()
-            self.detail_scroll.setWidget(widget)
+            self._show_actions_unlock(entry, target, needs_credentials, online)
             return
-        self._prepare_workspace_actions(entry)
+        self._show_loading_actions(entry)
+        self._start_details()
 
-    def _prepare_workspace_actions(self, entry):
-        """Mount accepted action scope before starting/coalescing its retained detail job."""
+    def _show_actions_unlock(self, entry, target, needs_credentials, online):
+        widget = pyside.QWidget()
+        layout = pyside.QVBoxLayout(widget)
+        label = pyside.QLabel('Unlock the workspace credentials to load its actions.')
+        label.setWordWrap(True)
+        layout.addWidget(label)
+        if needs_credentials:
+            label.setText('Load the matching credential package in Settings to load this workspace’s actions.')
+        elif not online and not getattr(entry.local, 'private', False):
+            # Plain local files remain browsable; only the remote actions need a password.
+            from features.rclone.ui.workspace_unlock import WorkspaceUnlockView
+            view = WorkspaceUnlockView(*target, parent=widget, purpose='load this workspace’s actions',
+                                       workspace_name=entry.name)
+            self._actions_unlock_view = view
+            view.unlocked.connect(lambda: self._actions_unlocked(view, entry))
+            view.idle.connect(self._browser_idle)
+            layout.addWidget(view)
+        else:
+            label.setText('Unlock this workspace in Files to load its actions.')
+        layout.addStretch()
+        self.detail_scroll.setWidget(widget)
+
+    def _show_loading_actions(self, entry):
         widget = pyside.QWidget()
         layout = pyside.QVBoxLayout(widget)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -684,46 +679,31 @@ class FoldersPage(pyside.QWidget):
         layout.addWidget(self._tools_status)
         layout.addStretch()
         self.detail_scroll.setWidget(widget)
-        from dataclasses import replace
-        self._detail_pending = replace(entry, storage_scope=(
-            'remote' if self._get_selected_source()[0] == 'remote' else 'local'))
-        if self.details.busy:
-            self.details.request_cancel()
-        else:
-            self._start_details()
 
     def _start_details(self):
-        entry, self._detail_pending = self._detail_pending, None
-        features = tuple(self._folder_features)
-        from features.rclone import session
-        config = (entry.local.connection.context if getattr(entry.local, 'private', False) else
-                  entry.remote_context if entry.remote_source == 'rclone' else None)
-        self._detail_credentials_revoked = (session.revocation_check(Path(config))
-            if config is not None and Path(config).suffix == '.session' else lambda: False)
-        self.details.start(self.controller.detail_work(entry, features), show_progress=False)
+        request = self.controller.start_detail()
+        if request is not None:
+            self.details.start(request.detect, show_progress=False)
 
     def _details_ready(self, result, error):
+        request, credentials_changed = self.controller.complete_detail(self._entry_unlock_target)
         if self._closing:
             if not self.discovery.busy:
                 self.window().close()
             return
-        if self._detail_pending is not None:
+        if request is None:
             self._start_details()
-            return
-        if result is None or result[0] != self._detail_generation:
-            if error and self._tools_status is not None:
-                self._tools_status.setText(f'Workspace tools unavailable: {error}')
-            return
-        _, entry, found = result
-        if self._detail_credentials_revoked() or self._entry_unlock_target(entry) is not None:
+        elif credentials_changed:
             # Credential changes can race with provider detection on its worker.
-            self._show_entry(entry)
+            self._show_entry(request.entry)
             self._refresh_lock_icons()
-            return
-        self._mount_action_sections(entry, found)
+        elif error:
+            self._tools_status.setText(f'Workspace tools unavailable: {error}')
+        elif result is not None:
+            self._mount_action_sections(request.entry, result)
 
     def _mount_action_sections(self, entry, found):
-        """Project only the detail result admitted by generation and credential guards."""
+        """Mount the accepted detail result on the GUI thread."""
         layout = self.detail_scroll.widget().layout()
         self._tools_status.hide()
         try:
@@ -852,7 +832,7 @@ class FoldersPage(pyside.QWidget):
     def prepare_close(self):
         self._closing = True
         self._refresh_pending = False
-        self._detail_pending = None
+        self.controller.clear_detail()
         for task in (self.discovery, self.details):
             task.request_cancel()
         browsers_ready = True

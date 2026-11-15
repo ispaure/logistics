@@ -8,6 +8,7 @@ from types import SimpleNamespace as NS
 import unittest
 from commonUtils.runtime.operations import OperationCancelled
 from desktop.pages.folder_controller import FolderController
+from models.folder_entry import FolderEntry
 
 
 class FolderControllerTests(unittest.TestCase):
@@ -26,12 +27,14 @@ class FolderControllerTests(unittest.TestCase):
                 is_available=lambda entry: calls.append(private) or True,
                 create_widget=None, get_actions=lambda entry: ['action']))
         controller = FolderController()
-        work = controller.detail_work(NS(local=NS(private=True)), [tool(False), tool(True)])
-        self.assertEqual(len(work(None, Event().is_set)[2]), 1)
+        entry = FolderEntry('Private', local=NS(private=True, connection=NS(context='saved.conf')))
+        controller.select_detail(entry, [tool(False), tool(True)], scope='local', unlock_target=lambda entry: None)
+        request = controller.start_detail()
+        self.assertEqual(len(request.detect(None, Event().is_set)), 1)
         self.assertEqual(calls, [True])
         calls.clear()
         cancelled = Event()
         cancelled.set()
         with self.assertRaises(OperationCancelled):
-            work(None, cancelled.is_set)
+            request.detect(None, cancelled.is_set)
         self.assertEqual(calls, [])

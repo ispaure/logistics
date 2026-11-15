@@ -183,10 +183,13 @@ for the open, Back and disposal paths.
 
 ## Desktop Folder Hub requests
 
-`desktop/pages/folder_controller.py` captures source/detail request generations. `FoldersPage`
-resolves declarations on the GUI thread, runs I/O and availability in workers,
-and rejects stale/revoked results before mounting. Private tools must declare
-backend-aware support. Info and Actions retain separate content under Sources.
+`desktop/pages/folder_controller.py` captures each detail request's workspace root,
+storage scope, feature list and credential generation at selection. It retains the
+latest selection while detection runs and admits completion only for that request.
+Credential changes can return Actions to unlock or trigger fresh detection, even
+when a detector fails. Private tools must declare backend-aware support.
+`FoldersPage` owns the workers and mounts Info and Actions on the GUI thread.
+Browsing a child keeps Actions scoped to the selected workspace root.
 [Folder source contract](features.md#remote-folder-source-context)
 
 Shared Qt initialization owns hover recovery. `services.seasonal.snow_enabled`
