@@ -53,6 +53,21 @@ elif name == 'systemd-run':
     if post:
         subprocess.run(['/bin/sh', post.removeprefix('/bin/sh ')], check=True)
     sys.exit(result.returncode)
+elif name == 'busctl':
+    unit, prop = args[-3], args[-1]
+    if unit.endswith('/xochitl_2eservice'):
+        entered = os.environ.get('LQA_XOCHITL_ENTERED', '1000000')
+        interval = os.environ.get('LQA_XOCHITL_WINDOW', '600000000')
+    elif unit.endswith('/rm_2dsync_2eservice'):
+        entered = os.environ.get('LQA_SYNC_ENTERED', '1000000')
+        interval = '60000000'
+    else:
+        sys.exit('Unexpected service property path')
+    print({'StartLimitIntervalUSec': 't ' + interval, 'StartLimitBurst': 'u 4',
+           'ActiveEnterTimestampMonotonic': 't ' + entered}[prop])
+elif name == 'journalctl':
+    assert '--boot=0' in args and '--lines=1' in args and '--output=export' in args
+    print(os.environ.get('LQA_JOURNAL', '__MONOTONIC_TIMESTAMP=1000000000'))
 elif name == 'sha256sum':
     if os.environ.get('LQA_FAIL_HASH') and args[0] == os.environ['LQA_TARGET']:
         sys.exit(1)
@@ -93,7 +108,7 @@ class MetadataTransactionTests(unittest.TestCase):
         self.transactions.mkdir(mode=0o700)
         self.bin = self.root / 'bin'
         self.bin.mkdir()
-        for name in ('systemctl', 'systemd-run', 'sha256sum', 'stat', 'sync', 'timeout', 'mv', 'head'):
+        for name in ('systemctl', 'systemd-run', 'busctl', 'journalctl', 'sha256sum', 'stat', 'sync', 'timeout', 'mv', 'head'):
             executable = self.bin / name
             executable.write_text('#!' + sys.executable + '\n' + UTILITIES)
             executable.chmod(0o700)
@@ -292,6 +307,24 @@ class MetadataTransactionTests(unittest.TestCase):
         self.assertNotIn('start xochitl', self.service_calls.read_text())
         self.assertEqual(self.target.read_bytes(), self.before)
         self.assertEqual(self.services.read_text(), 'inactive')
+
+    def test_recent_activation_or_unknown_start_limit_cannot_stop_services(self):
+        for environment in ({'LQA_XOCHITL_ENTERED': '400000000'},
+                            {'LQA_SYNC_ENTERED': '990000000'},
+                            {'LQA_XOCHITL_WINDOW': '18446744073709551615'},
+                            {'LQA_JOURNAL': '-- No entries --'}):
+            with self.subTest(environment=environment):
+                self.transaction = transactions.prepare_metadata_transaction(self.change)
+                self.stage = Path(self.transaction.directory)
+                self.prepare()
+                failure = self.run_script('apply.sh', **environment)
+                self.assertNotEqual(failure.returncode, 0)
+                self.assertIn(b'under the native start limits', failure.stderr)
+                self.assertEqual(self.run_script('restart.sh').returncode, 0)
+                self.assertFalse((self.stage / 'restart-needed').exists())
+                self.assertNotIn('stop xochitl', self.service_calls.read_text())
+                self.assertNotIn('start xochitl', self.service_calls.read_text())
+                self.assertEqual(self.target.read_bytes(), self.before)
 
     def test_foreign_edit_or_recovery_member_is_preserved_and_blocks_cleanup(self):
         self.prepare()

@@ -45,6 +45,41 @@ actual=$(sha256sum {path})
 '''
 
 
+# Compare timestamps in the same boot's CLOCK_MONOTONIC domain. A recent
+# journal entry gives a conservative lower bound, including after suspend
+# or a wall-clock adjustment. Missing or unreadable evidence blocks stopping.
+RESTART_PREFLIGHT = r'''
+unit_property() {
+    busctl --system --timeout=5s get-property org.freedesktop.systemd1 \
+        "/org/freedesktop/systemd1/unit/${1}_2eservice" org.freedesktop.systemd1.Unit "$2"
+}
+
+positive_integer() {
+    case "$1" in ''|0*|*[!0-9]*) return 1 ;; esac
+    [ "${#1}" -le 15 ]
+}
+
+restart_window_clear() {
+    journal_entry=$(journalctl --boot=0 --lines=1 --output=export \
+        --output-fields=__MONOTONIC_TIMESTAMP --quiet --no-pager) || return 1
+    journal_time=$(printf '%s\n' "$journal_entry" | sed -n 's/^__MONOTONIC_TIMESTAMP=//p')
+    positive_integer "$journal_time" || return 1
+    for checked_unit in xochitl rm_2dsync; do
+        interval=$(unit_property "$checked_unit" StartLimitIntervalUSec) || return 1
+        burst=$(unit_property "$checked_unit" StartLimitBurst) || return 1
+        entered=$(unit_property "$checked_unit" ActiveEnterTimestampMonotonic) || return 1
+        case "$interval:$burst:$entered" in 't '*':u '*':t '*) ;; *) return 1 ;; esac
+        interval=${interval#t }
+        burst=${burst#u }
+        entered=${entered#t }
+        positive_integer "$interval" && positive_integer "$burst" && positive_integer "$entered" || return 1
+        # Wait out the full configured start window after the last activation.
+        [ "$((journal_time - entered))" -gt "$interval" ] || return 1
+    done
+}
+'''
+
+
 def prepare_metadata_transaction(change: MetadataChange) -> MetadataTransaction:
     """Build immutable scripts/payload; a detached unit owns publication/restart.
 
@@ -116,7 +151,7 @@ services_are() {{
     done
 }}
 '''
-    apply = prefix + f'''
+    apply = prefix + RESTART_PREFLIGHT + f'''
 require_same_boot
 [ ! -e "$root/active" ] && [ ! -L "$root/active" ] || exit 1
 ln "$stage/lease-token" "$root/active"
@@ -128,6 +163,11 @@ ln "$stage/lease-token" "$root/active"
     apply += f'''
 services_are active
 [ "$(stat -c %d "$stage")" = "$(stat -c %d {quote(STORE_PATH)})" ]
+restart_window_clear || {{
+    echo 'Could not verify a full stable interval under the native start limits; no stop was requested.' >&2
+    exit 1
+}}
+services_are active
 printf '%s\\n' restart > "$stage/restart-needed"
 systemctl stop xochitl
 services_are inactive
