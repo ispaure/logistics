@@ -1,5 +1,6 @@
 """Notebook documents in the shared mobile workspace, history and saved list."""
 from pathlib import Path
+import sys
 
 from features.notebooks.recovery import Repository
 from features.notebooks.mobile.panel import NotebookPanel
@@ -41,7 +42,7 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
         if resource is not None:
             resource.close()
         return False
-    from features.notebooks.notebook import IS_ANDROID, MAX_ARCHIVE, Notebook
+    from features.notebooks.notebook import IS_ANDROID, MAX_ARCHIVE, STREAMED_PDF_THRESHOLD, Notebook, StreamedPDFUnavailable
     from features.notebooks.storage import NotebookDocument
     from services.documents.storage import DocumentResource
     from services.documents.mobile_storage import restore_notebook_resource, remember_notebook_resource
@@ -85,12 +86,12 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
         recovery = repository(app) if resource is None or resource.policy.persistent else None
         if resource is None and key is not None:
             resource, binding = restore_notebook_resource(recovery, key)
-        large_view = False
-        if IS_ANDROID and resource is not None and resource.policy.persistent:
+        stream_candidate = False
+        if (IS_ANDROID or sys.platform == 'ios') and resource is not None and resource.policy.persistent:
             from services.documents.locations import ordinary_index_provider
-            large_view = (ordinary_index_provider(resource.provider)
-                          and resource.check()['size'] > MAX_ARCHIVE)
-        if resource is not None and resource.policy.persistent and not large_view:
+            stream_candidate = (ordinary_index_provider(resource.provider)
+                                and resource.check()['size'] > STREAMED_PDF_THRESHOLD)
+        if resource is not None and resource.policy.persistent and not (IS_ANDROID and stream_candidate):
             from mobile.resource_imports import ResourceImports
             from services.documents.locations import collection_path
             source_path = resource.provider.root / resource.path
@@ -114,13 +115,21 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
                 if previous is not None:
                     previous.close()
         def load():
-            if large_view:
-                document = _read_large_local_notebook(resource, Path(app.paths.cache))
+            # Ordinary recovery drafts may contain unsaved edits. Keep their
+            # existing open path, including on iOS, where they could predate
+            # file-backed notebooks.
+            if stream_candidate and (IS_ANDROID or key is None):
                 try:
-                    return document, panel.load_progress(document.book, document.key, resource)
-                except BaseException:
-                    document.close()
-                    raise
+                    document = _read_large_local_notebook(resource, Path(app.paths.cache))
+                except StreamedPDFUnavailable:
+                    if IS_ANDROID:
+                        raise
+                else:
+                    try:
+                        return document, panel.load_progress(document.book, document.key, resource)
+                    except BaseException:
+                        document.close()
+                        raise
             active_resource = resource
             if resource is not None:
                 try:
@@ -178,7 +187,7 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
         if not await panel.prewarm_pdf() or app.navigation_generation != generation:
             panel.dispose()
             return False
-        if imports is not None:
+        if imports is not None and not document.book.large_pdf_view:
             imports.remember(source_path, 'notebook', document.key)
     except asyncio.CancelledError:
         panel.dispose()
@@ -195,7 +204,8 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
         app.show_view(panel.view, destination=destination, route='notebook-error', title='Notebook')
         return False
     session = app.workspace.open('notebook', document.key, 'notebook', document.book.name,
-                                 transient=large_view or not (resource is None or resource.policy.persistent))
+                                 transient=(document.book.large_pdf_view
+                                            or not (resource is None or resource.policy.persistent)))
     panel.session = session
     panel.view._reader_session_id = session.id
     panels(app)[session.id] = panel

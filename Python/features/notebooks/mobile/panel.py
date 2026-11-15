@@ -586,7 +586,7 @@ class NotebookPanel:
                 return
             op = validate_action(action)
             if editor.notebook.large_pdf_view and op in ('save-as', 'export'):
-                await respond(update_script(self.state(), 'Use Save for large PDF notebooks on Android.'),
+                await respond(update_script(self.state(), 'Use Save for streamed PDF notebooks.'),
                               acknowledges=True)
                 return
             if op == 'paper-preview':

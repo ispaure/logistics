@@ -1,5 +1,7 @@
 """Platform PDF rendering adapter; document lifetime stays in the feature facade."""
 
+from pathlib import Path
+
 from ..limits import PAGE_EDGE
 
 
@@ -14,11 +16,11 @@ class ApplePDF:
         )
         # Neighbor prefetch runs on a long-lived Python worker thread.
         with autoreleasepool():
-            self.document = (
-                ObjCClass("PDFDocument")
-                .alloc()
-                .initWithData(ObjCClass("NSData").dataWithBytes(data, length=len(data)))
-            )
+            document = ObjCClass("PDFDocument").alloc()
+            if isinstance(data, Path):
+                self.document = document.initWithURL(ObjCClass("NSURL").fileURLWithPath(str(data)))
+            else:
+                self.document = document.initWithData(ObjCClass("NSData").dataWithBytes(data, length=len(data)))
         if self.document is None or self.document.isLocked:
             raise ValueError(
                 "Cannot open PDF. It may be damaged or password protected."

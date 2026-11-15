@@ -20,12 +20,17 @@ from commonUtils.runtime.streams import iter_chunks
 # Android and some Android Python builds identify themselves differently.
 IS_ANDROID = sys.platform == 'android' or hasattr(sys, 'getandroidapilevel')
 MAX_ARCHIVE = (256 if IS_ANDROID else 512) * 1024 * 1024
-ANDROID_PDF_VIEW_LIMIT = 512 * 1024 * 1024
-ANDROID_PDF_SIDECAR_LIMIT = 64 * 1024 * 1024
+STREAMED_PDF_THRESHOLD = 256 * 1024 * 1024
+STREAMED_PDF_MAX_ARCHIVE = 512 * 1024 * 1024
+STREAMED_PDF_SIDECAR_LIMIT = 64 * 1024 * 1024
 TABLET_MAX_ARCHIVE = 128 * 1024 * 1024
 DESKTOP_MAX_ARCHIVE = 2 * 1024 * 1024 * 1024
 MAX_EXPANDED = 256 * 1024 * 1024
 MAX_MEMBERS = 65536
+
+
+class StreamedPDFUnavailable(ValueError):
+    """A valid archive may require the ordinary in-memory editor path."""
 
 
 def identifier(value):
@@ -78,8 +83,10 @@ def _read_zip_members(stream, max_bytes, *, pdf_path=None):
                 if len(roots) != 1:
                     raise ValueError('Choose an archive containing exactly one reMarkable document.')
                 pdf_name = roots[0] + '.pdf'
-                if sum(info.file_size for info in infos if info.filename != pdf_name) > ANDROID_PDF_SIDECAR_LIMIT:
-                    raise ValueError('Large PDF notebooks may contain up to 64 MiB of other expanded data.')
+                if not any(info.filename == pdf_name and not info.is_dir() for info in infos):
+                    raise StreamedPDFUnavailable('Streaming requires an embedded PDF.')
+                if sum(info.file_size for info in infos if info.filename != pdf_name) > STREAMED_PDF_SIDECAR_LIMIT:
+                    raise StreamedPDFUnavailable('Streamed PDF notebooks allow up to 64 MiB of other expanded data.')
             for info in infos:
                 # ZipInfo.filename normalizes Windows separators and truncates
                 # NULs; validate the original entry before that transformation.
@@ -155,20 +162,20 @@ class Notebook:
     @classmethod
     def read_large_pdf(cls, stream, directory):
         """Extract the dominant PDF member of a local archive in bounded reads."""
-        if stream.seek(0, 2) > ANDROID_PDF_VIEW_LIMIT:
-            raise ValueError('Large PDF notebook viewing is limited to 512 MiB compressed.')
+        if stream.seek(0, 2) > STREAMED_PDF_MAX_ARCHIVE:
+            raise ValueError('Streamed PDF notebooks are limited to 512 MiB compressed.')
         stream.seek(0)
         workspace = TemporaryDirectory(prefix='notebook-pdf-', dir=directory)
         try:
             target = Path(workspace.name) / 'background.pdf'
-            members = _read_zip_members(stream, ANDROID_PDF_VIEW_LIMIT, pdf_path=target)
-            book = cls._from_members(members, max_bytes=ANDROID_PDF_VIEW_LIMIT)
-            if book.content.get('fileType') != 'pdf' or not target.is_file():
-                raise ValueError('Android viewing above 256 MiB requires an embedded PDF.')
+            members = _read_zip_members(stream, STREAMED_PDF_MAX_ARCHIVE, pdf_path=target)
+            book = cls._from_members(members, max_bytes=STREAMED_PDF_MAX_ARCHIVE)
+            if book.content.get('fileType') != 'pdf':
+                raise StreamedPDFUnavailable('Streaming requires a PDF-backed notebook.')
             from pypdf import PdfReader
             with target.open('rb') as source:
                 if PdfReader(source).is_encrypted:
-                    raise ValueError('Large password-protected PDF notebooks cannot open in Android viewing mode.')
+                    raise StreamedPDFUnavailable('Password-protected PDFs require the ordinary notebook editor.')
             book._pdf_workspace = workspace
             return book
         except BaseException:
@@ -354,7 +361,7 @@ class Notebook:
 
     def to_bytes(self):
         if self.large_pdf_view:
-            raise ValueError('Use Save to write a large PDF notebook on Android.')
+            raise ValueError('Use Save to write a streamed PDF notebook.')
         output = BytesIO()
         with ZipFile(output, 'w', compression=ZIP_DEFLATED) as archive:
             for name, data in self._archive_members().items():
@@ -369,8 +376,8 @@ class Notebook:
         if not self.large_pdf_view:
             raise ValueError('This notebook does not have a streamed PDF.')
         members = self._archive_members()
-        if sum(len(data) for data in members.values() if not isinstance(data, Path)) > ANDROID_PDF_SIDECAR_LIMIT:
-            raise ValueError('Large PDF notebooks may contain up to 64 MiB of other expanded data.')
+        if sum(len(data) for data in members.values() if not isinstance(data, Path)) > STREAMED_PDF_SIDECAR_LIMIT:
+            raise ValueError('Streamed PDF notebooks allow up to 64 MiB of other expanded data.')
         pdf_hash = sha256()
         with ZipFile(stream, 'w', compression=ZIP_DEFLATED) as archive:
             for name, data in members.items():

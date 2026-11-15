@@ -28,6 +28,28 @@ def linked_pdf(rotation=0):
 
 
 class PDFLinkTests(unittest.TestCase):
+    def test_apple_pdf_opens_file_backing_by_url(self):
+        from contextlib import nullcontext
+        from pathlib import Path
+        from types import SimpleNamespace
+        from unittest.mock import Mock, patch
+        from features.pdf.backends.apple import ApplePDF
+
+        path = Path('/synthetic/background.pdf')
+        initializer = Mock()
+        initializer.initWithURL.return_value = SimpleNamespace(isLocked=False, pageCount=2)
+        urls = Mock()
+        classes = {'PDFDocument': Mock(alloc=Mock(return_value=initializer)), 'NSURL': urls}
+        modules = {
+            'rubicon.objc': SimpleNamespace(ObjCClass=classes.__getitem__),
+            'rubicon.objc.runtime': SimpleNamespace(autoreleasepool=nullcontext),
+        }
+        with patch.dict('sys.modules', modules), patch('ctypes.CDLL'):
+            with ApplePDF(path) as pdf:
+                self.assertEqual(pdf.count, 2)
+        urls.fileURLWithPath.assert_called_once_with(str(path))
+        initializer.initWithURL.assert_called_once_with(urls.fileURLWithPath.return_value)
+
     def test_notebook_background_uses_one_native_pdf_open(self):
         from contextlib import nullcontext
         from types import SimpleNamespace
