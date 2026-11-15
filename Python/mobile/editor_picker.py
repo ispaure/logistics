@@ -7,12 +7,11 @@ import threading
 from dataclasses import dataclass, replace
 
 import toga
-from toga.style.pack import COLUMN, ROW, NONE
 from commonUtils.runtime.operations import MutationIncomplete, OperationCancelled
 from commonUtils.runtime.resources.selection import ResourceSelection
 from commonUtils.runtime.resources.paths import resource_name
 from commonUtils.runtime.resources.provider import capabilities
-from .document_destination_form import PickerMessage as PickerMessage, build_destination_form
+from .document_destination_form import DestinationForm, PickerMessage as PickerMessage
 from .local_sources import destination_location_labels
 from services.documents.storage import DocumentPolicy
 from services.workflow_host import HostService, StateAttribute
@@ -66,7 +65,7 @@ class PickerWork:
     progress: object = None
 
 
-class EditorPicker:
+class EditorPicker(DestinationForm):
     cloud_busy = HostService('cloud_busy')
     cloud_view = HostService('cloud_view')
     cloud_restore_task = HostService('cloud_restore_task')
@@ -96,6 +95,7 @@ class EditorPicker:
     editor_picker_mode = StateAttribute('operation', 'mode')
 
     def __init__(self, app):
+        super().__init__()
         self.app = app
         self.operation = PickerOperation()
         self.editor_picker_rows = {}
@@ -106,13 +106,7 @@ class EditorPicker:
         self.editor_linked_roots = {}
         self._work = None
         self._epoch = 0
-        self.panel = None
         self._restore_when_idle = None
-        self.creation_layout = None
-        self.name_panel = None
-        self.location_panel = None
-        self.creation_type = None
-        self.notebook_templates = None
         self._listed_provider = None
         self._listed_credentials = None
         from .protection import for_app
@@ -137,8 +131,7 @@ class EditorPicker:
             notice.parent.remove(notice)
         self._epoch += 1
         self.cancel()
-        self.creation_layout = None
-        self.name_panel = self.location_panel = None
+        self.reset_creation_steps()
         self.panel = self._restore_when_idle = None
         pending = getattr(self, '_storage_refresh', None)
         if pending is not None and not pending.done():
@@ -152,26 +145,7 @@ class EditorPicker:
         self.editor_storage_folders = {}
         self.editor_locked_roots = {}
         self.editor_linked_roots = {}
-        if hasattr(self, 'editor_browser'):
-            self.editor_browser.stop()
-        if hasattr(self, 'creation_location'):
-            self.creation_location.crumbs.clear()
-        if hasattr(self, 'picker_destination'):
-            self.picker_destination.text = ''
-            self.picker_header.folder_name.text = ''
-            self.picker_header.status.value = ''
-        if hasattr(self, 'picker_entries'):
-            self.picker_entries.items = []
-            self.picker_folder.value = ''
-            self.save_as_name.value = ''
-            self.new_folder_name.value = ''
-            self.save_as_storage.items = []
-            self.save_as_status.value = ''
-
-        # Drop the retained private source only after its displayed labels clear.
-        if self.notebook_templates is not None:
-            self.notebook_templates.changed = lambda *args: None
-            self.notebook_templates = None
+        self.clear_destination_fields()
         self.operation = PickerOperation()
         from .protection import for_app
         for_app(self.app).changed()
@@ -187,15 +161,7 @@ class EditorPicker:
             work.cancel.set()
         self._work = work
         self.set_cloud_busy(True)
-        self.save_as_storage.enabled = False
-        self.picker_parent.enabled = False
-        self.picker_primary.enabled = False
-        if self.location_panel is not None:
-            self.edit_name.enabled = False
-            self.creation_location.set_enabled(False)
-            self.creation_type.enabled = self.save_as_name.enabled = False
-            self.creation_formats.set_enabled(False)
-        self.picker_new_folder.enabled = False
+        self.disable_picker_actions()
         return work
 
     def _accepts(self, work):
@@ -330,11 +296,10 @@ class EditorPicker:
             await self.editor_browser.close()
         if not self.active_host or epoch != self._epoch:
             return
-        self.creation_layout = None
-        self.name_panel = self.location_panel = None
+        self.reset_creation_steps()
         self.editor_picker_location = self._listed_provider = self._listed_credentials = None
         self.operation = operation
-        self.notebook_templates = None
+        self.discard_notebook_templates()
         from .protection import for_app
         for_app(self.app).changed()
         if creation is not None or mode == 'folder':
@@ -373,8 +338,9 @@ class EditorPicker:
             self.editor_storage_roots[source_label] = source_provider
             source_folder = (self.operation.binary_owner.document.resource.path if self.operation.binary_owner is not None
                              else getattr(source_reader, 'key', '') or '').rpartition('/')[0]
-        panel, title = build_destination_form(
-            self, source_label=source_label, source_folder=source_folder)
+        self.editor_picker_rows = {}
+        roots = [*self.editor_storage_roots, *self.editor_locked_roots]
+        panel, title = self.build_destination_form(roots, source_label=source_label, source_folder=source_folder)
         if creation is not None:
             self.show_creation_name()
             if self.creation_layout.paired:
@@ -449,11 +415,7 @@ class EditorPicker:
         if self.cloud_busy:
             return
         returning = self.visible()
-        self.hide_new_folder()
-        self.fit_keyboard(False)
-        self.panel = self.name_panel
-        self.next_button.enabled = self._creation_name_valid
-        self.creation_layout.reflow()
+        self.show_naming_step()
         if not returning:
             self.show_view(self.creation_layout, route='text-destination', title='New document')
             self.app.loop.call_soon(self.creation_layout.on_resize, None)
@@ -471,11 +433,7 @@ class EditorPicker:
         self.update_effective_name()
         if not self._creation_name_valid:
             return
-        self.fit_keyboard(False)
-        self.panel = self.location_panel
-        from .keyboard import dismiss_picker_keyboard
-        dismiss_picker_keyboard(self)
-        self.creation_layout.reflow()
+        self.show_location_step()
         await self.load_picker_location()
 
     async def load_picker_location(self):
@@ -492,147 +450,15 @@ class EditorPicker:
         else:
             self.save_as_status.value = 'Locations changed while loading. Select a location to refresh.'
 
-    def fit_keyboard(self, compact):
-        """Keep naming and completion usable without reparenting the focused input."""
-        if self.panel is None or not hasattr(self, 'picker_form') or getattr(self, '_fitting_keyboard', False):
-            return
-        from .keyboard import _tuck_control, reset_picker_keyboard
-        self._fitting_keyboard = True
-        try:
-            self._compact_keyboard = compact
-            apple = type(self.app._impl).__module__.startswith('toga_iOS.')
-            if apple and not compact:
-                reset_picker_keyboard(self)
-            def focused(control):
-                return bool(getattr(getattr(control._impl, 'native', None), 'isFirstResponder', False))
-            if not compact or not apple or focused(self.save_as_storage):
-                self._naming_keyboard_active = False
-            elif focused(self.save_as_name) or focused(self.new_folder_name):
-                self._naming_keyboard_active = True
-            naming = self.panel is self.name_panel
-            paired = self.creation_layout is not None and self.creation_layout.paired
-            controls = () if naming else self._browse_controls
-            editing_folder = self.entering_creation_folder()
-            hide_browser = editing_folder or (compact and not paired)
-            if not hide_browser:
-                controls = reversed(controls)
-            for control in controls:
-                # iOS Selection opens a keyboard inputView. Removing its text
-                # field here immediately resigns focus and closes that picker.
-                # A location read briefly disables the field and drops focus;
-                # preserve its input-view session until typing or keyboard hide.
-                preserve_selector = ((control is self.save_as_storage or
-                    (self.creation_type is not None and control is self.creation_location.storage)) and apple
-                    and not self._naming_keyboard_active)
-                _tuck_control(control, hide_browser and (editing_folder or not preserve_selector))
-            # A landscape keyboard can leave only ~100 logical pixels.
-            # Put full-size completion buttons beside the scrollable form;
-            # stacking both areas would squash the native buttons to a sliver.
-            visible_height = self.app.main_window.size.height
-            # UIKit keeps the outer window size and reserves the keyboard in
-            # safe-area insets. Android already reports its resized viewport.
-            if compact and type(self.app._impl).__module__.startswith('toga_iOS.'):
-                visible_height -= self.app.native_host.adapter.keyboard_inset
-            if self.creation_type is not None:
-                width = (self.name_panel.style.width if paired else
-                         self.app.adaptive.content_width(self.app.native_host.state.destination, margin=0))
-                # UIKit location selections also present a keyboard inputView.
-                # Only collapse formats for text entry, not location browsing;
-                # retain the naming-session flag across transient focus loss.
-                format_keyboard = compact and (not apple or self._naming_keyboard_active)
-                self.creation_formats.fit(format_keyboard, visible_height - 120, width)
-            # Creation's UIKit completion lives in its native navigation bar.
-            # Other picker forms retain their existing short-viewport layout.
-            tight = (compact and not paired and visible_height < 220
-                     and (not apple or self.creation_type is None))
-            actions = self.name_actions if naming else self.picker_actions
-            changes = ((self.panel, 'direction', ROW if tight else COLUMN),
-                       (actions, 'direction', COLUMN if tight else ROW),
-                       (actions, 'width', 112 if tight else NONE),
-                       (actions, 'margin_bottom', 0 if tight else 12))
-            for control, field, value in changes:
-                if getattr(control.style, field) != value:
-                    setattr(control.style, field, value)
-            expand_form = naming or editing_folder or (compact and not paired)
-            flex = 1 if expand_form else 0
-            form = self.name_form if naming else self.picker_form
-            if form.style.flex != flex:
-                form.style.flex = flex
-            # Travertino layout sizes already use logical units. Scaling them
-            # out again clips the status area on high-density Android screens.
-            natural = self.save_as_view.layout.min_height or 180
-            minimum = 72 if self.location_panel is not None else 120
-            height = NONE if expand_form else min(max(minimum, natural), max(minimum, self.app.main_window.size.height / 2))
-            if form.style.height != height:
-                form.style.height = height
-        finally:
-            self._fitting_keyboard = False
-        if not compact and apple:
-            from .keyboard import reset_picker_keyboard_insets
-            reset_picker_keyboard_insets(self)
-        pending = getattr(self, '_keyboard_reveal', None)
-        if pending is not None:
-            pending.cancel()
-            self._keyboard_reveal = None
-        if compact and type(self.app._impl).__module__.startswith('toga_iOS.'):
-            # UIKit and Toga resize the scroll viewport after the keyboard/rotation
-            # callback. Reveal the existing first responder in that final layout.
-            panel = self.panel
-            def reveal():
-                self._keyboard_reveal = None
-                if self.panel is panel and self._compact_keyboard and self.active_host and self.visible():
-                    from .keyboard import reveal_picker_input
-                    reveal_picker_input(self)
-            self._keyboard_reveal = self.app.loop.call_soon(reveal)
-
-    def update_effective_name(self, widget=None, **kwargs):
-        if self.operation.mode != 'save':
-            self.effective_name.text = ''
-            return
-        try:
-            self.effective_name.text = 'Save as: ' + self.destination_filename()
-            self._creation_name_valid = True
-        except ValueError as error:
-            self._creation_name_valid = False
-            self.effective_name.text = str(error) if self.save_as_name.value else 'Enter a file name.'
-        if self.name_panel is not None:
-            self.next_button.enabled = self._creation_name_valid
-            if self.listed_path:
-                self.update_creation_summary()
-        if self.operation.creation is not None and self.save_as_name.parent is not None and self.visible():
-            self.update_picker_actions()
-
-    def update_creation_summary(self):
-        name = self.destination_filename() if self._creation_name_valid else 'Enter a valid file name'
-        self.picker_destination.text = f'{name}\nIn {self.listed_path}'
-
-    def destination_filename(self):
-        if self.operation.creation is not None:
-            from .document_choices import creation_filename
-            return creation_filename(self.save_as_name.value, dict(self.creation_choices)[self.creation_type.value])
-        from .destination_names import save_filename
-        return save_filename(self.save_as_name.value, self.operation.filename, extensions=self.picker_extensions())
-
-    def change_creation_type(self, widget=None, **kwargs):
-        extension = dict(self.creation_choices)[self.creation_type.value]
-        self.operation.filename = 'Untitled.' + extension
-        self.save_as_name.set_extension('.' + extension)
-        self.creation_formats.update()
-        self.sync_notebook_templates()
-        self.update_effective_name()
-
-    def sync_notebook_templates(self):
-        controls = self.notebook_templates
-        if controls is None:
-            return
-        enabled = dict(self.creation_choices)[self.creation_type.value] == 'rmdoc'
-        if enabled and controls.parent is None:
-            self.name_view.add(controls)
-        elif not enabled and controls.parent is self.name_view:
-            self.name_view.remove(controls)
-
     def creating_notebook(self):
         return (self.operation.creation is not None or self.operation.binary_owner is not None) and Path(self.operation.filename).suffix.lower() == '.rmdoc'
+
+    def select_creation_format(self, extension):
+        self.operation.filename = 'Untitled.' + extension
+
+    def select_notebook_template(self, operation, template, paper_format):
+        if self.operation is operation and self._work is None:
+            operation.notebook_template, operation.notebook_format = template, paper_format
 
     def picker_extensions(self):
         if self.operation.destination_action is not None:
@@ -649,77 +475,26 @@ class EditorPicker:
             self.operation.creation is not None and label in ('Local', 'Received Files'))
 
     def update_picker_actions(self):
-        ready = (not self.cloud_busy and self.editor_picker_location ==
+        from .local_sources import DeviceFiles
+        busy = self.cloud_busy
+        ready = (not busy and self.editor_picker_location ==
                  (self.save_as_storage.value, self.picker_folder.value))
         client = getattr(self.app, 'cloud_client', None)
         ready = ready and self._listed_credentials == (client, getattr(client, 'generation', None))
-        self.save_as_storage.enabled = not self.cloud_busy
-        self.save_as_name.enabled = self._work is None
-        if self.creation_type is not None:
-            self.creation_type.enabled = self._work is None
-            self.creation_formats.set_enabled(self._work is None)
-        self.picker_parent.enabled = ready and self.has_parent_folder()
-        if self.location_panel is not None:
-            self.edit_name.enabled = not self.cloud_busy
-            self.creation_location.set_enabled(ready and not self.entering_creation_folder())
-            self.save_as_name.enabled = self._work is None
-        self.picker_primary.enabled = ready
         provider = self._listed_provider if ready else None
-        writable = provider is not None and not getattr(provider, 'remote_storage', False)
-        from .local_sources import DeviceFiles
-        if isinstance(provider, DeviceFiles) and not self.picker_folder.value:
-            writable = False
-        self.picker_new_folder.enabled = (self.operation.mode != 'open' and writable
-                                          and capabilities(provider).create)
-        if self.operation.mode == 'folder':
-            self.picker_primary.enabled = (writable and capabilities(provider).create
-                and capabilities(provider).delete and not self.entering_creation_folder())
-        elif self.operation.mode != 'open':
-            self.picker_primary.enabled = writable and all(
-                getattr(capabilities(provider), key) for key in ('create', 'rename', 'delete'))
-            if self.operation.creation is not None:
-                self.picker_primary.enabled = (self.picker_primary.enabled and self._creation_name_valid
-                                               and not self.entering_creation_folder())
-            virtual_root = ready and isinstance(provider, DeviceFiles) and not self.picker_folder.value
-            self.picker_primary.text = ('Choose a folder first' if virtual_root and self.operation.creation is None else
-                getattr(self.operation.destination_action, 'primary', 'Move here') if self.operation.destination_action is not None else
-                'Create here' if self.operation.creation is not None else 'Save here')
-            if virtual_root:
-                self.save_as_status.value = ('Open a folder to create your document here.'
-                    if self.operation.creation is not None else
-                    'Choose Local or Received Files above, then choose or create a folder.')
-        self.fit_keyboard(getattr(self, '_compact_keyboard', False))
-
-    def entering_creation_folder(self):
-        return ((self.creation is not None or self.operation.mode == 'folder')
-                and self.new_folder_form in self.save_as_view.children)
-
-    def show_new_folder(self, widget=None, **kwargs):
-        if not self.picker_new_folder.enabled:
-            return
-        if self.creation is not None:
-            self.panel = self.location_panel
-            self.creation_layout.reflow()
-        self.new_folder_name.value = ''
-        if self.new_folder_form not in self.save_as_view.children:
-            self.save_as_view.insert(1, self.new_folder_form)
-        if self.entering_creation_folder():
-            self.update_picker_actions()
-        self.new_folder_name.focus()
-
-    def hide_new_folder(self, widget=None, **kwargs):
-        if hasattr(self, 'new_folder_form') and self.new_folder_form in self.save_as_view.children:
-            entering_folder = self.entering_creation_folder()
-            if entering_folder:
-                if self._work is not None:
-                    return
-                from .keyboard import dismiss_picker_keyboard
-                dismiss_picker_keyboard(self, self.new_folder_name)
-            self.save_as_view.remove(self.new_folder_form)
-            if entering_folder:
-                if self.save_as_status.value.startswith('Folder creation failed:'):
-                    self.save_as_status.value = ''
-                self.update_picker_actions()
+        virtual_root = isinstance(provider, DeviceFiles) and not self.picker_folder.value
+        writable = provider is not None and not getattr(provider, 'remote_storage', False) and not virtual_root
+        mode = self.operation.mode
+        can_create_folder = mode != 'open' and writable and capabilities(provider).create
+        if mode == 'open':
+            can_submit = ready
+        elif mode == 'folder':
+            can_submit = can_create_folder and capabilities(provider).delete
+        else:
+            can_submit = writable and all(getattr(capabilities(provider), key) for key in ('create', 'rename', 'delete'))
+        self.present_picker_actions(ready=ready, has_parent=ready and self.has_parent_folder(),
+                                    busy=busy, working=self._work is not None, can_create_folder=can_create_folder,
+                                    can_submit=can_submit, virtual_root=virtual_root)
 
     async def create_picker_folder(self, widget=None, **kwargs):
         from commonUtils.runtime.resources.mutations import create_resource_folder
@@ -908,12 +683,6 @@ class EditorPicker:
         if folder != self.picker_folder.value:
             await self.browser_editor_location((self.save_as_storage.value, folder))
 
-    def toggle_editor_new_folder(self, widget=None, **kwargs):
-        if self.new_folder_form in self.save_as_view.children:
-            self.hide_new_folder()
-        else:
-            self.show_new_folder()
-
     async def create_editor_folder(self, widget=None, **kwargs):
         return await self.create_picker_folder()
 
@@ -1005,20 +774,9 @@ class EditorPicker:
                 self.picker_entries.value = next(iter(self.editor_picker_rows))
             self.editor_browser.set_entries(model, folder, rows, location=(label, folder))
             self.picker_header.update_provider(folder, model.provider)
-            if self.creation is not None:
-                from .control_icons import apply_icon
-                apply_icon(self.picker_parent, 'up', 'Parent folder')
-            self.picker_parent.enabled = self.has_parent_folder()
-            privacy = 'Encrypted' if model.provider.private else 'Plaintext'
-            path = f'{label} / {folder or "Root"} · {privacy}'
-            if self.creation is not None:
-                self.creation_location.update(label, folder)
-                self.listed_path = ' › '.join([label, *filter(None, folder.split('/'))]) + f' · {privacy}'
-                self.update_creation_summary()
-            else:
-                self.picker_destination.text = path
-            self.save_as_status.value = ('Create a folder, or save here.'
-                if self.creation is not None and not rows and capabilities(model.provider).create else '')
+            self.present_picker_location(label, folder, has_parent=self.has_parent_folder(),
+                                         private=model.provider.private, suggest_creation=(
+                                             self.creation is not None and not rows and capabilities(model.provider).create))
             return True
         except Exception as error:
             if not self._accepts(work):
