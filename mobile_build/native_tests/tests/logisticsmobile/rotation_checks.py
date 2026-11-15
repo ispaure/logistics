@@ -746,8 +746,15 @@ async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
                 assert actual == expected, (name, orientation, expected, actual)
                 try:
                     with section(app, 'rotation-geometry', panel=name, orientation=orientation, cycle=cycle):
+                        if sys.platform == 'ios' and name == 'provider-epub':
+                            # The reader's resize can arrive on a later UIKit layout turn,
+                            # after the scene and visible controls already fit portrait.
+                            geometry = await wait_for_assertion(lambda: safe_geometry(app),
+                                                                timeout=CONTROL_SETTLE_TIMEOUT, interval=.1)
+                        else:
+                            geometry = safe_geometry(app)
                         sample = dict(panel=name, cycle=cycle, orientation=orientation,
-                                      pose=pose_snapshot(app), **safe_geometry(app))
+                                      pose=pose_snapshot(app), **geometry)
                 except AssertionError:
                     await capture_epub_width_failure(app, panel=name, cycle=cycle, orientation=orientation)
                     raise
