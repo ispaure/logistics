@@ -41,6 +41,14 @@ class BlueHoleTests(unittest.TestCase):
         self.assertEqual(list(destination.iterdir()), [])
         self.assertEqual(list(destination.parent.iterdir()), [destination])
 
+    def test_auto_update_defaults_on_for_existing_presets_and_requires_a_boolean(self):
+        config = {'enabled': True, 'branch': 'main'}
+        self.assertTrue(bluehole.validate(config)['auto_update'])
+        self.assertFalse(bluehole.validate({**config, 'auto_update': False})['auto_update'])
+        for invalid in (None, 0, 1, 'false'):
+            with self.subTest(invalid=invalid), self.assertRaises(ValueError):
+                bluehole.validate({**config, 'auto_update': invalid})
+
     def test_rechecks_head_but_downloads_same_commit_only_once(self):
         with patch.object(bluehole, 'branch_commit', return_value='a' * 40) as head, patch.object(bluehole, 'download', side_effect=self.download) as download:
             first, commit = bluehole.update(self.manager, self.release, 'main')

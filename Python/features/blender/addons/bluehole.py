@@ -18,7 +18,7 @@ from features.blender.installation.releases import relative_path
 IDENTITY = 'legacy:BlueHole'
 ADDON_PATH = 'scripts/addons/BlueHole'
 BRANCHES = ('main', 'beta', 'alpha')
-DEFAULT = {'enabled': True, 'branch': 'main', 'deluxe': False}
+DEFAULT = {'enabled': True, 'branch': 'main', 'deluxe': False, 'auto_update': True}
 VERSION_BRANCH = re.compile(r'blender-(\d+\.\d+\.\d+)/(main|beta|alpha)')
 
 
@@ -68,7 +68,10 @@ def validate(value):
         raise ValueError('Choose main, beta or alpha for Blue Hole')
     if not isinstance(value.get('deluxe', False), bool):
         raise ValueError('Choose Yes or No for Blue Hole Deluxe')
-    config = {'enabled': value['enabled'], 'branch': value['branch'], 'deluxe': value.get('deluxe', False)}
+    if not isinstance(value.get('auto_update', True), bool):
+        raise ValueError('Choose whether to auto-update Blue Hole')
+    config = {'enabled': value['enabled'], 'branch': value['branch'], 'deluxe': value.get('deluxe', False),
+              'auto_update': value.get('auto_update', True)}
     source = value.get('source', 'github')
     if source not in ('local', 'github'):
         raise ValueError('Choose GitHub or Local for Blue Hole')

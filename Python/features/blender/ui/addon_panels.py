@@ -46,18 +46,25 @@ def build_addon_selection(page, controls, manage_layout):
     page.bluehole_branch = qt.QComboBox()
     page.bluehole_branch.addItems(bluehole.BRANCHES)
     page.bluehole_branch.setAccessibleName('Blue Hole branch')
+    page.bluehole_auto_update = qt.QCheckBox('Auto-update on launch')
+    page.bluehole_auto_update.setChecked(True)
+    page.bluehole_auto_update.setToolTip(
+        'Check GitHub for updates on each launch. When off, keep the installed version. '
+        'First installation and changing branches still download the selected branch.')
     page.bluehole_deluxe = qt.QComboBox()
     page.bluehole_deluxe.addItems(['No', 'Yes'])
     page.bluehole_deluxe.setAccessibleName('Blue Hole Deluxe')
     bluehole_form.addRow(page.bluehole_enabled)
     bluehole_form.addRow('Source', page.bluehole_source)
     bluehole_form.addRow('Branch', page.bluehole_branch)
+    bluehole_form.addRow(page.bluehole_auto_update)
     bluehole_form.addRow('Checkout', page.bluehole_checkout_row)
     bluehole_form.addRow('Deluxe', page.bluehole_deluxe)
     page.bluehole_form = bluehole_form
     page.bluehole_source.currentTextChanged.connect(page._show_bluehole_source)
     page.bluehole_source.currentTextChanged.connect(page._save_bluehole_source)
     page.bluehole_checkout.editingFinished.connect(page._save_bluehole_source)
+    page.bluehole_auto_update.toggled.connect(page._save_bluehole_source)
     page._show_bluehole_source()
     page.bluehole_installed = qt.QLabel('Not installed')
     page.bluehole_installed.setTextInteractionFlags(qt.Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -104,6 +111,7 @@ class PresetAddonPresentation:
     def _show_bluehole_source(self):
         local = self.bluehole_source.currentText() == 'Local'
         self.bluehole_form.setRowVisible(self.bluehole_branch, not local)
+        self.bluehole_form.setRowVisible(self.bluehole_auto_update, not local)
         self.bluehole_form.setRowVisible(self.bluehole_checkout_row, local)
 
     def _browse_bluehole_checkout(self):
@@ -117,9 +125,10 @@ class PresetAddonPresentation:
         config = state.get('bluehole', bluehole.DEFAULT)
         config = bluehole.validate(config)
         self.bluehole_enabled.setChecked(config['enabled'])
-        with qt.QSignalBlocker(self.bluehole_source), qt.QSignalBlocker(self.bluehole_checkout):
+        with qt.QSignalBlocker(self.bluehole_source), qt.QSignalBlocker(self.bluehole_checkout), qt.QSignalBlocker(self.bluehole_auto_update):
             self.bluehole_source.setCurrentText('Local' if config.get('source') == 'local' else 'GitHub')
             self.bluehole_checkout.setText(config.get('path', ''))
+            self.bluehole_auto_update.setChecked(config['auto_update'])
         self._show_bluehole_source()
         self.bluehole_branch.setCurrentText(config['branch'])
         runtime_deluxe = self.release is not None and bluehole.uses_runtime_deluxe(self.release)

@@ -133,7 +133,7 @@ class BlenderLibraryTests(unittest.TestCase):
             self.manager.remove_preset(self.release, 'Copy')
             self.assertTrue(source.is_file())
             state = self.library.selection(self.preset)
-            github = {'enabled': True, 'branch': 'alpha'}
+            github = {'enabled': True, 'branch': 'alpha', 'auto_update': False}
             run.side_effect = OSError('prepare failed')
             with self.assertRaisesRegex(OSError, 'prepare failed'):
                 self.library.apply(self.release, 'Art', [], bluehole=github)
@@ -149,6 +149,7 @@ class BlenderLibraryTests(unittest.TestCase):
             entry = destination / '__init__.py'
             downloaded = entry.read_text()
             entry.write_text(downloaded + '# edited installed copy')
+            github['auto_update'] = True
             update.return_value = (remote_package, 'b' * 40)
             self.library.apply(self.release, 'Art', [], bluehole=github)
             self.assertEqual(entry.read_text(), downloaded)
@@ -229,7 +230,7 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertEqual(self.library.selection(preset), {
             'selected': [], 'installed': installed,
             'installed_bluehole': {'branch': 'main', 'commit': 'a' * 40},
-            'bluehole': {**config, 'deluxe_stamp': 'fixture'},
+            'bluehole': {**config, 'deluxe_stamp': 'fixture', 'auto_update': True},
         })
 
     def test_import_does_not_execute_code_unknown_is_not_auto_resolved_and_conflicts_refused(self):
@@ -510,9 +511,99 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertEqual(overlay.read_bytes(), b'artist overlay')
         self.assertFalse((preset / 'config/userpref.before-bluehole-deluxe.blend').exists())
         self.assertEqual(self.library.selection(preset)['bluehole'],
-                         {'enabled': True, 'branch': 'alpha', 'commit': 'a' * 40})
+                         {'enabled': True, 'branch': 'alpha', 'commit': 'a' * 40, 'auto_update': True})
         self.library.save_pending_selection(release, 'Runtime', [], bluehole=config)
-        self.assertEqual(self.library.selection(preset)['bluehole'], {'enabled': True, 'branch': 'alpha'})
+        self.assertEqual(self.library.selection(preset)['bluehole'], {'enabled': True, 'branch': 'alpha', 'auto_update': True})
+
+    def test_bluehole_auto_update_off_installs_once_and_keeps_copy_without_cache(self):
+        from features.blender.addons import bluehole
+
+        config = {'enabled': True, 'branch': 'main', 'auto_update': False}
+        path = self.package('bluehole.zip', module='BlueHole')
+        addon = replace(inspect_package(path), branch='blender-4.5.1/main')
+        self.library.save_pending_selection(self.release, 'Art', [], bluehole=config)
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch('features.blender.addons.scanning.run_blender_script'), \
+                patch.object(bluehole, 'update', return_value=(addon, 'a' * 40)) as update:
+            self.library.apply(self.release, 'Art', [])
+            update.assert_called_once()
+            update.reset_mock()
+            path.unlink()
+            installed = self.preset / 'scripts/addons/BlueHole/helper.py'
+            installed.write_text('# artist customization')
+            self.library.apply(self.release, 'Art', [])
+        update.assert_not_called()
+        self.assertEqual(installed.read_text(), '# artist customization')
+        state = self.library.selection(self.preset)
+        self.assertEqual(state['installed_bluehole']['branch'], 'blender-4.5.1/main')
+        self.assertEqual(state['installed_bluehole']['commit'], 'a' * 40)
+        self.assertFalse(state['bluehole']['auto_update'])
+        self.assertEqual(self.library.warnings, [])
+
+    def test_bluehole_auto_update_off_allows_branch_changes_and_reenabling_updates(self):
+        from features.blender.addons import bluehole
+
+        config = {'enabled': True, 'branch': 'main', 'auto_update': False}
+        addon = inspect_package(self.package('bluehole.zip', module='BlueHole'))
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch('features.blender.addons.scanning.run_blender_script'), \
+                patch.object(bluehole, 'update', return_value=(replace(addon, branch='blender-4.5.1/main'), 'a' * 40)) as update:
+            self.library.apply(self.release, 'Art', [], bluehole=config)
+            update.return_value = (replace(addon, branch='blender-4.5.1/beta'), 'b' * 40)
+            self.library.save_pending_selection(self.release, 'Art', [], bluehole={**config, 'branch': 'beta'})
+            self.library.apply(self.release, 'Art', [])
+            self.assertEqual(update.call_args.args[2], 'beta')
+            self.assertEqual(self.library.selection(self.preset)['installed_bluehole']['commit'], 'b' * 40)
+            self.library.apply(self.release, 'Art', [])
+            self.assertEqual(update.call_count, 2)
+            self.library.save_bluehole_source(self.release, 'Art', 'github', '', auto_update=True)
+            update.return_value = (replace(addon, branch='blender-4.5.1/beta'), 'c' * 40)
+            self.library.apply(self.release, 'Art', [])
+        self.assertEqual(update.call_count, 3)
+        self.assertEqual(self.library.selection(self.preset)['installed_bluehole']['commit'], 'c' * 40)
+
+    def test_bluehole_auto_update_off_does_not_replace_a_broken_installed_copy(self):
+        from features.blender.addons import bluehole
+
+        config = {'enabled': True, 'branch': 'main', 'auto_update': False}
+        addon = inspect_package(self.package('bluehole.zip', module='BlueHole'))
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch('features.blender.addons.scanning.run_blender_script'), \
+                patch.object(bluehole, 'update', return_value=(addon, 'a' * 40)) as update:
+            self.library.apply(self.release, 'Art', [], bluehole=config)
+            update.reset_mock()
+            (self.preset / 'scripts/addons/BlueHole/__init__.py').unlink()
+            with self.assertRaisesRegex(ValueError, 'entrypoint is missing'):
+                self.library.apply(self.release, 'Art', [])
+        update.assert_not_called()
+
+    def test_bluehole_auto_update_off_can_enable_legacy_deluxe_without_cache(self):
+        from features.blender.addons import bluehole
+
+        release = replace(self.release, version='4.5.1')
+        preset = self.manager.create_preset(release, 'Legacy')
+        config = {'enabled': True, 'branch': 'main', 'auto_update': False}
+        path = self.package('deluxe.zip', module='BlueHole')
+        with zipfile.ZipFile(path, 'a') as archive:
+            archive.writestr('BlueHole/overlays/deluxe/payload/userpref.blend', b'Deluxe preferences')
+            archive.writestr('BlueHole/overlays/deluxe/payload/keyconfig/BH_Keymaps.py', b'# Deluxe keymaps')
+        preferences = preset / 'config/userpref.blend'
+        preferences.write_bytes(b'artist preferences')
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch('features.blender.addons.scanning.run_blender_script'), \
+                patch.object(bluehole, 'update', return_value=(inspect_package(path), 'a' * 40)) as update:
+            self.library.apply(release, 'Legacy', [], bluehole=config)
+            path.unlink()
+            update.reset_mock()
+            self.library.save_pending_selection(release, 'Legacy', [], bluehole={**config, 'deluxe': True})
+            self.library.apply(release, 'Legacy', [])
+            self.assertEqual(preferences.read_bytes(), b'Deluxe preferences')
+            self.assertEqual((preset / 'config/userpref.before-bluehole-deluxe.blend').read_bytes(), b'artist preferences')
+            self.assertEqual((preset / 'scripts/presets/keyconfig/BH_Keymaps.py').read_bytes(), b'# Deluxe keymaps')
+            preferences.write_bytes(b'customized Deluxe preferences')
+            self.library.apply(release, 'Legacy', [])
+            self.assertEqual(preferences.read_bytes(), b'customized Deluxe preferences')
+        update.assert_not_called()
 
     def test_bluehole_update_preserves_custom_environments_and_failed_apply_rolls_back(self):
         from features.blender.addons import bluehole

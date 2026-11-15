@@ -62,12 +62,19 @@ before relaunching. If no compatible ZIP remains, deselect it in Manage.
 ## Blue Hole
 
 Under **Presets**, **Enable Blue Hole** defaults to on. With **Source → GitHub**,
-select **main**, **beta** or **alpha** and save. Launch resolves the newest
+select **main**, **beta** or **alpha** and save. **Auto-update on launch** defaults
+to on, including for existing presets, and saves immediately for this preset.
+With it on, launch resolves the newest
 compatible Blender baseline (for example `blender-4.5.1/main`), checks its head
 and downloads that exact commit if needed. An incompatible update stops launch.
 On network failure, an already installed compatible copy can launch with a
 warning showing its actual commit. Deluxe changes wait for a successful online
 update. First installs need internet access.
+
+Turn **Auto-update on launch** off to keep the installed GitHub version without
+checking for updates. First installation, changing the selected branch or switching
+from Local to GitHub still fetches the selected branch. Turn it back on to resume
+updates on the next launch. The option is hidden for Local sources.
 
 For unpublished work, use **Source → Local → Browse…** and select the Blue Hole
 checkout or worktree. macOS/Linux use symlinks and Windows uses a junction.

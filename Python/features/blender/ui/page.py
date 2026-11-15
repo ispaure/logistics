@@ -481,7 +481,8 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
             return
         try:
             self.library.save_bluehole_source(
-                release, name, self.bluehole_source.currentText().lower(), self.bluehole_checkout.text().strip())
+                release, name, self.bluehole_source.currentText().lower(), self.bluehole_checkout.text().strip(),
+                auto_update=self.bluehole_auto_update.isChecked())
         except (OSError, ValueError) as error:
             self.status.setText(f'Could not save Blue Hole source: {error}')
 
@@ -492,7 +493,8 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
         identities = [self.choices.item(row, 0).data(qt.Qt.ItemDataRole.UserRole) for row in range(self.choices.rowCount())
                       if self.choices.item(row, 0).checkState() == qt.Qt.CheckState.Checked]
         release, name = self.release, self.preset.currentText()
-        config = {'enabled': self.bluehole_enabled.isChecked(), 'branch': self.bluehole_branch.currentText()}
+        config = {'enabled': self.bluehole_enabled.isChecked(), 'branch': self.bluehole_branch.currentText(),
+                  'auto_update': self.bluehole_auto_update.isChecked()}
         config.update(source=self.bluehole_source.currentText().lower(), path=self.bluehole_checkout.text().strip())
         if not bluehole.uses_runtime_deluxe(release):
             config['deluxe'] = self.bluehole_deluxe.currentText() == 'Yes'

@@ -355,7 +355,7 @@ class AddonLibrary:
             raise ValueError('Invalid preset addon replacements')
         return value
 
-    def save_bluehole_source(self, release, name, source, path):
+    def save_bluehole_source(self, release, name, source, path, *, auto_update=None):
         """Save source preferences independently of addon installation."""
         from features.blender.addons import bluehole
         from features.blender.installation.install import installation_lock
@@ -364,6 +364,8 @@ class AddonLibrary:
         with installation_lock(root):
             state = self.selection(root)
             choice = {**state.get('bluehole', bluehole.DEFAULT), 'source': source, 'path': path}
+            if auto_update is not None:
+                choice['auto_update'] = auto_update
             bluehole.validate(choice)
             state['bluehole'] = choice
             self._publish_selection(root, state)
@@ -430,7 +432,9 @@ class AddonLibrary:
         commit = None
         installed_branch = bluehole['branch']
         fallback = False
+        keep_installed = False
         checkout = None
+        current = state.get('installed_bluehole') or state.get('bluehole', {})
         if bluehole['enabled']:
             if bluehole.get('source') == 'local':
                 checkout = bluehole_source.local_checkout(bluehole['path'])
@@ -438,6 +442,12 @@ class AddonLibrary:
                     raise ValueError('Choose a Blue Hole checkout outside this Blender preset')
                 bluehole['path'] = str(checkout)
                 addon = bluehole_source.local_addon(checkout, release)
+            elif (not bluehole['auto_update'] and bluehole_source.IDENTITY in state['installed']
+                  and current.get('source', 'github') == 'github'
+                  and bluehole_source.valid_branch(current.get('branch'))
+                  and current['branch'].rsplit('/', 1)[-1] == bluehole['branch']):
+                addon, installed_branch, commit = bluehole_source.installed_fallback(manager, release, root, state)
+                keep_installed = True
             else:
                 try:
                     addon, commit = bluehole_source.update(manager, release, bluehole['branch'], cancelled=cancelled)
@@ -491,6 +501,8 @@ class AddonLibrary:
             deluxe_stamp = state.get('bluehole', {}).get('deluxe_stamp') if fallback else None
             if stamp_deluxe and not fallback:
                 bluehole_addon = next(a for a in resolved if a.identity == bluehole_source.IDENTITY)
+                if keep_installed:
+                    bluehole_addon = replace(bluehole_addon, package_name=str(root / bluehole_source.ADDON_PATH))
                 deluxe_stamp = bluehole_source.apply_deluxe(bluehole_addon, root,
                                 state.get('bluehole', {}).get('deluxe_stamp'), cancelled=cancelled)
             request = backup / 'request.json'
@@ -661,7 +673,8 @@ class AddonLibrary:
         snapshots = {}
         for index, addon in enumerate(resolved):
             if addon.source == 'Local checkout' or (
-                    addon.identity in retained and not (addon.identity == bluehole_source.IDENTITY and deluxe)):
+                    addon.identity in retained and not (addon.identity == bluehole_source.IDENTITY and deluxe
+                                                        and addon.package is not None)):
                 snapshots[addon.identity] = addon
                 continue
             staged_package = packages / f'{index}.zip'
