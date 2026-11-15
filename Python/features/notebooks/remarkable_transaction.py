@@ -21,7 +21,7 @@ TRANSACTION_ROOT = '/home/root/.local/share/logistics-remarkable-transactions'
 BOOT_ID_PATH = '/proc/sys/kernel/random/boot_id'
 FILES = ('payload.tar', 'before', 'after', 'apply.sh', 'restart.sh', 'lease-token', 'boot-id',
          'manifest.json', 'original', 'publish', 'outcome', 'outcome.tmp',
-         'restart-needed', 'service-state', 'service-state.tmp')
+         'restart-needed', 'restart-requested', 'service-state', 'service-state.tmp')
 
 
 @dataclass(frozen=True)
@@ -191,9 +191,18 @@ sync
 require_same_boot
 # Restore the interface before hashing or writing any receipts. A job that
 # never requested a stop must still observe both services active to close.
-if [ -e "$stage/restart-needed" ] || [ -L "$stage/restart-needed" ]; then
-    [ -f "$stage/restart-needed" ] && [ ! -L "$stage/restart-needed" ] || exit 1
-    timeout 45 systemctl start xochitl
+if ! services_are active; then
+    # Consume the stop marker before issuing the request. A timed-out client
+    # cannot tell whether systemd accepted it, so recovery only observes health.
+    if [ -e "$stage/restart-requested" ] || [ -L "$stage/restart-requested" ]; then
+        echo 'A service start was already requested; retain evidence until both services are active.' >&2
+        exit 1
+    fi
+    if [ -e "$stage/restart-needed" ] || [ -L "$stage/restart-needed" ]; then
+        [ -f "$stage/restart-needed" ] && [ ! -L "$stage/restart-needed" ] || exit 1
+        mv "$stage/restart-needed" "$stage/restart-requested"
+        timeout 45 systemctl start xochitl
+    fi
 fi
 services_are active
 outcome=conflict
@@ -212,7 +221,7 @@ mv "$stage/service-state.tmp" "$stage/service-state"
 sync
 rm "$root/active"
 '''
-    manifest = dict(version=2, token=token, identity=change.identity, operation=change.operation,
+    manifest = dict(version=3, token=token, identity=change.identity, operation=change.operation,
                     before_sha256=before_hash, after_sha256=after_hash, guards=guards)
     members = {'before': change.before, 'after': change.after, 'apply.sh': apply.encode(),
                'restart.sh': restart.encode(), 'lease-token': (token + '\n').encode(),
@@ -259,6 +268,10 @@ for name in outcome service-state; do
         esac
     fi
 done
+if [ -e "$stage/restart-requested" ] || [ -L "$stage/restart-requested" ]; then
+    [ -f "$stage/restart-requested" ] && [ ! -L "$stage/restart-requested" ] || exit 1
+    printf 'restart=requested\\n'
+fi
 if [ ! -e "$root/active" ] && [ ! -L "$root/active" ]; then
     printf 'lease=clear\\n'
 elif [ -f "$root/active" ] && [ ! -L "$root/active" ] && [ "$(cat "$root/active")" = "$token" ]; then

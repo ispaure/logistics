@@ -197,15 +197,21 @@ class MetadataTransactionTests(unittest.TestCase):
                 self.assertEqual(self.services.read_text(), 'active')
                 self.assert_preserved()
 
-    def test_failed_restart_keeps_lease_until_explicit_recovery(self):
+    def test_failed_restart_is_not_repeated_and_recovery_verifies_service_health(self):
         self.prepare()
         self.assertEqual(self.run_script('apply.sh').returncode, 0)
         self.assertNotEqual(self.run_script('restart.sh', LQA_FAIL_RESTART='yes').returncode, 0)
         self.assertTrue((self.transactions / 'active').exists())
         self.assertFalse((self.stage / 'service-state').exists())
         self.assertNotEqual(self.run_command(self.transaction.cleanup_command).returncode, 0)
+        self.assertIn(b'restart=requested', self.run_command(self.transaction.inspect_command).stdout)
+        self.assertNotEqual(self.run_command(self.transaction.recovery_command).returncode, 0)
+        self.assertTrue((self.transactions / 'active').exists())
+        self.assertEqual(self.service_calls.read_text().splitlines().count('start xochitl'), 1)
+        self.services.write_text('active')
         self.assertEqual(self.run_command(self.transaction.recovery_command).returncode, 0)
         self.assertEqual(self.services.read_text(), 'active')
+        self.assertEqual(self.service_calls.read_text().splitlines().count('start xochitl'), 1)
         self.assertFalse((self.transactions / 'active').exists())
 
     def test_reboot_or_missing_boot_receipt_refuses_recovery_without_service_actions(self):
@@ -266,6 +272,7 @@ class MetadataTransactionTests(unittest.TestCase):
         self.assertEqual(self.run_script('restart.sh', LQA_FAIL_HASH='yes').returncode, 0)
         self.assertEqual((self.stage / 'outcome').read_text().strip(), 'conflict')
         self.assertEqual(self.services.read_text(), 'active')
+        self.assertEqual(self.service_calls.read_text().splitlines().count('start xochitl'), 1)
 
     def test_stale_ancestor_or_symlink_never_stops_services(self):
         self.prepare()
