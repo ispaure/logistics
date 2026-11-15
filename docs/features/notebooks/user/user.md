@@ -36,7 +36,7 @@ Use **⋯ → Duplicate as .rmdoc to annotate** in a PDF Reader to create an edi
 
 The compressed and expanded RMDOC limits are 2 GiB each on desktop, 512 MiB each on iOS, and 256 MiB each on Android. All three allow up to 65,536 entries. Storage providers can impose additional limits. See the [development guide](../development/development.md).
 
-Android can also open local, unencrypted PDF-backed RMDOC files up to 512 MiB compressed and expanded in view-only mode. Other archive members can use up to 64 MiB expanded. The app streams the PDF to its private cache and removes the temporary copy when you close the notebook.
+Android can also open, edit, and save local, unencrypted PDF-backed RMDOC files up to 512 MiB compressed and expanded. Other archive members can use up to 64 MiB expanded. The app streams the PDF to its private cache and removes the temporary copy when you close the notebook. Use **Save** to update the open file. Large notebooks keep unsaved edits in the open session.
 
 ## Page templates and paper sizes
 

@@ -40,11 +40,12 @@ def archive(members):
 
 
 class NotebookTests(unittest.TestCase):
-    def test_large_android_pdf_streams_to_view_only_backing_and_releases_it(self):
+    def test_large_android_pdf_streams_edits_and_reopens_with_unchanged_pdf(self):
         import hashlib
         from pypdf import PdfWriter
         from features.notebooks.storage import NotebookDocument
         from features.pdf.backends.android import _pdf_source
+        from services.documents.storage import local_document_resource
 
         writer = PdfWriter()
         writer.add_blank_page(300, 600)
@@ -61,17 +62,36 @@ class NotebookTests(unittest.TestCase):
             baseline = hashlib.sha256(source.read_bytes()).digest()
             with source.open('rb') as stream:
                 book = Notebook.read_large_pdf(stream, directory)
-            document = NotebookDocument(book)
-            background = Editor(book).pdf_data()
+            resource = local_document_resource(source, max_bytes=book.max_bytes)
+            resource.revision = resource.check()['revision']
+            document = NotebookDocument(book, resource=resource)
+            editor = Editor(book, document.checkpoint)
+            background = editor.pdf_data()
             try:
                 self.assertIsInstance(background, Path)
                 self.assertIsNotNone(Editor(book).pdf_bounds())
-                self.assertFalse(document.writable)
+                self.assertTrue(document.writable)
                 with _pdf_source(background) as backing:
                     self.assertEqual(backing.read(), pdf.getvalue())
-                with self.assertRaisesRegex(ValueError, 'view-only'):
+                editor.apply(dict(op='stroke', tool=17, width=3, points=[[150, 170, 1], [250, 170, 1]]))
+                self.assertTrue(document.dirty)
+                document.save()
+                self.assertFalse(document.dirty)
+                self.assertNotEqual(hashlib.sha256(source.read_bytes()).digest(), baseline)
+                with source.open('rb') as stream:
+                    reopened = Notebook.read_large_pdf(stream, directory)
+                try:
+                    self.assertEqual(len(reopened.page(0).strokes), 1)
+                    self.assertEqual(reopened.members[book.id + '.pdf'].read_bytes(), pdf.getvalue())
+                finally:
+                    reopened.close_large_pdf()
+                published = source.read_bytes()
+                editor.apply(dict(op='stroke', tool=17, width=3, points=[[170, 200, 1], [250, 200, 1]]))
+                source.write_bytes(published + b'synthetic competing write')
+                with self.assertRaisesRegex(ValueError, 'original preserved'):
                     document.save()
-                self.assertEqual(hashlib.sha256(source.read_bytes()).digest(), baseline)
+                self.assertTrue(document.dirty)
+                self.assertEqual(source.read_bytes(), published + b'synthetic competing write')
             finally:
                 document.close()
             self.assertFalse(background.exists())

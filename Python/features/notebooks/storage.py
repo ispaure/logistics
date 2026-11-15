@@ -18,7 +18,7 @@ class NotebookDocument:
 
     @property
     def writable(self):
-        return not self.book.large_pdf_view and (self.resource is None or self.resource.policy.writable)
+        return self.resource is None or self.resource.policy.writable
 
     @property
     def can_autosave(self):
@@ -29,8 +29,6 @@ class NotebookDocument:
         return self.source_deleted or self.recovery_deleted
 
     def _check_editable(self):
-        if self.book.large_pdf_view:
-            raise ValueError('Large PDF notebooks are view-only on Android.')
         if self.deletion_started:
             raise ValueError('This notebook was deleted. Retry Delete to finish cleanup, or use Save As.')
 
@@ -69,13 +67,35 @@ class NotebookDocument:
     def save(self, *, cancelled=lambda: False):
         self._check_editable()
         if self.resource is not None:
-            data = self.book.to_bytes()
-            self.resource.save(data, validate=lambda value: Notebook.read(value, max_bytes=self.book.max_bytes),
-                               cancelled=cancelled)
+            if self.book.large_pdf_view:
+                self._save_large_archive(cancelled)
+            else:
+                data = self.book.to_bytes()
+                self.resource.save(data, validate=lambda value: Notebook.read(value, max_bytes=self.book.max_bytes),
+                                   cancelled=cancelled)
         elif self.recovery is not None:
             self.recovery.save(self.key, self.book)
         self.dirty = False
         self.changed(self)
+
+    def _save_large_archive(self, cancelled):
+        from os import fstat
+        from services.documents.storage import stage_local_document_export
+
+        resource = self.resource
+        if not self.writable or not resource.policy.persistent or resource.revision is None:
+            raise ValueError('Open the writable local notebook before saving.')
+        target = resource.provider.transfer_location(resource.path)
+        with stage_local_document_export(target, expected_revision=resource.revision,
+                                         cancelled=cancelled) as staged:
+            self.book.write_large_archive(staged, cancelled=cancelled)
+            staged.flush()
+            info = fstat(staged.fileno())
+            expected = (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns)
+        revision = resource.check()['revision']
+        if revision[:4] != expected:
+            raise ValueError('The notebook changed after saving. Reopen it to check the saved copy.')
+        resource.revision = revision
 
     @serialize_mutation
     def discard(self):

@@ -1,6 +1,7 @@
 """Bounded rmdoc archives, opaque-member preservation and notebook page operations."""
 from copy import deepcopy
 from dataclasses import dataclass, field
+from hashlib import sha256
 from io import BytesIO
 import json
 from pathlib import Path, PurePosixPath
@@ -10,15 +11,17 @@ import sys
 import time
 from tempfile import TemporaryDirectory
 from uuid import uuid4
-from zipfile import ZipFile, ZIP_DEFLATED, BadZipFile
+from zipfile import ZipFile, ZipInfo, ZIP_DEFLATED, BadZipFile
 
 from .ink import InkPage
+from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.streams import iter_chunks
 
 # Android and some Android Python builds identify themselves differently.
 IS_ANDROID = sys.platform == 'android' or hasattr(sys, 'getandroidapilevel')
 MAX_ARCHIVE = (256 if IS_ANDROID else 512) * 1024 * 1024
 ANDROID_PDF_VIEW_LIMIT = 512 * 1024 * 1024
+ANDROID_PDF_SIDECAR_LIMIT = 64 * 1024 * 1024
 TABLET_MAX_ARCHIVE = 128 * 1024 * 1024
 DESKTOP_MAX_ARCHIVE = 2 * 1024 * 1024 * 1024
 MAX_EXPANDED = 256 * 1024 * 1024
@@ -75,7 +78,7 @@ def _read_zip_members(stream, max_bytes, *, pdf_path=None):
                 if len(roots) != 1:
                     raise ValueError('Choose an archive containing exactly one reMarkable document.')
                 pdf_name = roots[0] + '.pdf'
-                if sum(info.file_size for info in infos if info.filename != pdf_name) > 64 * 1024 * 1024:
+                if sum(info.file_size for info in infos if info.filename != pdf_name) > ANDROID_PDF_SIDECAR_LIMIT:
                     raise ValueError('Large PDF notebooks may contain up to 64 MiB of other expanded data.')
             for info in infos:
                 # ZipInfo.filename normalizes Windows separators and truncates
@@ -304,9 +307,7 @@ class Notebook:
         self.structure_dirty = True
         return page
 
-    def to_bytes(self):
-        if self.large_pdf_view:
-            raise ValueError('Large PDF notebooks are view-only on Android.')
+    def _archive_members(self):
         members = dict(self.members)
         content, metadata = deepcopy(self.content), deepcopy(self.metadata)
         changed = self.structure_dirty or self.metadata_dirty
@@ -346,13 +347,57 @@ class Notebook:
                             version=int(metadata.get('version', 0)) + 1,
                             lastOpenedPage=min(int(metadata.get('lastOpenedPage', 0)), len(self.pages) - 1))
             members[self.id + '.metadata'] = json_bytes(metadata)
-        if len(members) > MAX_MEMBERS or sum(map(len, members.values())) > max(MAX_EXPANDED, self.max_bytes):
+        expanded = sum(data.stat().st_size if isinstance(data, Path) else len(data) for data in members.values())
+        if len(members) > MAX_MEMBERS or expanded > max(MAX_EXPANDED, self.max_bytes):
             raise ValueError('Notebook exceeds the archive size/member limit.')
+        return members
+
+    def to_bytes(self):
+        if self.large_pdf_view:
+            raise ValueError('Use Save to write a large PDF notebook on Android.')
         output = BytesIO()
         with ZipFile(output, 'w', compression=ZIP_DEFLATED) as archive:
-            for name, data in members.items():
+            for name, data in self._archive_members().items():
                 archive.writestr(name, data)
         data = output.getvalue()
         if len(data) > self.max_bytes:
             raise ValueError(f'Export exceeds the {self.max_bytes // (1024 * 1024)} MiB compressed limit.')
         return data
+
+    def write_large_archive(self, stream, *, cancelled=lambda: False):
+        """Write and verify a staged ZIP while keeping its PDF file-backed."""
+        if not self.large_pdf_view:
+            raise ValueError('This notebook does not have a streamed PDF.')
+        members = self._archive_members()
+        if sum(len(data) for data in members.values() if not isinstance(data, Path)) > ANDROID_PDF_SIDECAR_LIMIT:
+            raise ValueError('Large PDF notebooks may contain up to 64 MiB of other expanded data.')
+        pdf_hash = sha256()
+        with ZipFile(stream, 'w', compression=ZIP_DEFLATED) as archive:
+            for name, data in members.items():
+                check_cancelled(cancelled)
+                if isinstance(data, Path):
+                    # PDF streams are usually compressed already. Store the
+                    # backing file so saving ink does not recompress it.
+                    with data.open('rb') as source, archive.open(ZipInfo(name), 'w') as target:
+                        for chunk in iter_chunks(source, cancelled=cancelled):
+                            pdf_hash.update(chunk)
+                            target.write(chunk)
+                else:
+                    archive.writestr(name, data)
+        if stream.tell() > self.max_bytes:
+            raise ValueError(f'Export exceeds the {self.max_bytes // (1024 * 1024)} MiB compressed limit.')
+        with ZipFile(stream) as archive:
+            if archive.namelist() != list(members):
+                raise ValueError('Notebook archive members did not verify.')
+            for name, expected in members.items():
+                check_cancelled(cancelled)
+                if isinstance(expected, Path):
+                    received = sha256()
+                    with archive.open(name) as source:
+                        for chunk in iter_chunks(source, cancelled=cancelled):
+                            received.update(chunk)
+                    matches = received.digest() == pdf_hash.digest()
+                else:
+                    matches = archive.read(name) == expected
+                if not matches:
+                    raise ValueError('Notebook archive contents did not verify.')

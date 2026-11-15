@@ -585,8 +585,8 @@ class NotebookPanel:
                 self._brush_presets_sent = raw
                 return
             op = validate_action(action)
-            if editor.notebook.large_pdf_view and op in ('save', 'save-as', 'export', 'transfer'):
-                await respond(update_script(self.state(), 'Large PDF notebooks are view-only on Android.'),
+            if editor.notebook.large_pdf_view and op in ('save-as', 'export'):
+                await respond(update_script(self.state(), 'Use Save for large PDF notebooks on Android.'),
                               acknowledges=True)
                 return
             if op == 'paper-preview':

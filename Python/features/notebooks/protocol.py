@@ -88,8 +88,6 @@ def validate_action(action):
 def save_status(document):
     if document is None:
         return 'Saved on this device. Export a copy to share.'
-    if getattr(getattr(document, 'book', None), 'large_pdf_view', False):
-        return 'View only · Large PDF notebook'
     if document.deletion_started:
         return 'Deleted; retry Delete to close or use Save As'
     if document.dirty:
