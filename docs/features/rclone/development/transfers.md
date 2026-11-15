@@ -39,7 +39,7 @@ Read schema 3 and atomically save schema 4. Validate the record key, mapping, co
 
 ## Find desktop transfer controls
 
-Start at `transfers/ui/progress.py:open_transfer_progress` for title, context and removals. `transfers/progress.py:RcloneProgressParser` converts stats to shared `ProcessUpdate`. commonUtils `ui/tasks/process_progress.py` owns bars, file rows, logs and Cancel/Close; the runner reports the exit result. `desktop/folder_actions.py:FolderActionsPage` owns tabs and docking. Setup and review live in `transfers/ui/`.
+Start at `transfers/ui/progress.py:transfer_presentation` for the dry-run labels and removal counters used by desktop transfers. `transfers/progress.py:RcloneProgressParser` converts stats to shared `ProcessUpdate`. commonUtils `ui/tasks/process_transfer_progress.py` renders the transfer table. `ui/tasks/process_progress.py` owns the bar, logs, Cancel and Close. The runner supplies the exit result. `desktop/folder_actions.py:FolderActionsPage` owns tabs and docking. Setup and review live in `transfers/ui/`.
 
 Old `transfers.sync._watch_transfer` and `transfers.progress.add_removal_statistics` delegate with `FutureWarning`. Use `transfers.ui.progress` for new calls. `rclone_sync` preserves legacy results. `launch.py:LaunchMode` distinguishes preview, wait, GUI and terminal. Only `SUCCEEDED` means completed; private sessions without GUI run synchronously to protect secrets.
 

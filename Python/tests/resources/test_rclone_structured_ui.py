@@ -73,8 +73,11 @@ class RealStructuredRcloneTests(QtTestCase):
         source=source or self.source;destination=self.root/f'destination-{len(self.windows)}'
         destination.mkdir()
         if operation=='sync':(destination/'obsolete.txt').write_text('remove this fixture')
+        from features.rclone.transfers.ui.progress import transfer_presentation
+        dry_run = '--dry-run' in options.get('extra', [])
         window=ProcessProgressWindow(f'rclone {operation}',runner=ProcessRunner(parser=RcloneProgressParser()),
-            context={'operation':operation.capitalize(),'source':str(source),'destination':str(destination),'dry_run':'--dry-run' in options.get('extra',[])})
+            context={'operation':operation.capitalize(),'source':str(source),'destination':str(destination)},
+            presentation=transfer_presentation(dry_run=dry_run, show_removals=operation == 'sync'))
         self.windows.append(window);window.show()
         updates=[];window.runner.progress.connect(updates.append)
         arguments=['--config',str(self.config),operation,'--copy-links','--use-json-log','--stats','100ms',
