@@ -127,7 +127,8 @@ class ArchitectureTests(unittest.TestCase):
             policy = {'host_adapters': [], 'feature_dependencies': [],
                       'portable_modules': ['features.books.data']}
             (root / 'Scripts/architecture.json').write_text(json.dumps(policy))
-            for factory in ('commonUtils.ui.native.forms:FittedLabel', 'PySide6.QtWidgets:QWidget', 'toga'):
+            for factory in ('commonUtils.ui.native.forms:FittedLabel', 'PySide6.QtWidgets:QWidget',
+                            'toga', 'features.books.ui.panel:Reader', 'services.documents.ui.dialogs:Picker'):
                 with self.subTest(factory=factory):
                     (folder / 'data.py').write_text(f'FACTORY = {factory!r}\n')
                     output = StringIO()

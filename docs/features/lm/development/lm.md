@@ -4,6 +4,10 @@
 
 Desktop `storage.py:Store` derives folders from physical placement, keeping legacy flat version-one files readable. Preserve malformed, oversized and duplicate records for recovery. Conversation IDs own edit leases across moves. Publish moves without clobber, check both revisions, then remove the source. On removal failure, roll back only while both verified copies survive unchanged. Profiles have independent locks; keys stay in memory. Failed checkpoints retain exportable state. [Shared generation](development.md#shared-desktop-and-mobile-generation)
 
+Desktop Chat can open and read its store without loading presentation. Edit and
+publication leases use QtCore's `QLockFile` protocol through `desktop_locks.py`.
+Tests can pass their own `lock_factory` to exercise conflicts and publication.
+
 Chat/Code tabs preserve independent selections; absent legacy `mode` means Chat. Requests budget recent completed turns and save effective settings, endpoint, chosen message IDs and usage. [Code mode](development.md#code-mode-and-optional-direct-edits)
 
 ## Mobile server setup

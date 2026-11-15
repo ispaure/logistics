@@ -36,7 +36,7 @@ def folder_name(value):
 class Store:
     def __init__(self, root=None, *, lock_factory=None):
         if lock_factory is None:
-            from .ui.leases import lock_file
+            from .desktop_locks import lock_file
             lock_factory = lock_file
         self.lock_factory = lock_factory
         if root is None:

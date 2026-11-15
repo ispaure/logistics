@@ -41,7 +41,8 @@ the shared host. A direct destination also needs a page contribution.
 ## Portable owner policy
 
 `Scripts/architecture.json` declares portable modules and recursive packages.
-`python3 dev.py architecture` checks direct and literal deferred imports.
+`python3 dev.py architecture` checks direct and literal deferred imports,
+including imports of feature and service `ui` packages.
 `test_portable_imports.py` imports selected owners in fresh interpreters with Qt,
 Toga, host packages and `commonUtils.ui` blocked. Review dependency additions at
 the narrowest owner. Presentation-only exceptions, such as LM's desktop Git

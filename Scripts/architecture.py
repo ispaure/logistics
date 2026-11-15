@@ -104,8 +104,10 @@ def portable_sources(root, policy):
 
 
 def presentation_dependency(module):
-    return (module.split('.')[0] in {'PySide6', 'toga', 'desktop', 'mobile'}
-            or module == 'commonUtils.ui' or module.startswith('commonUtils.ui.'))
+    parts = module.split('.')
+    return (parts[0] in {'PySide6', 'toga', 'desktop', 'mobile'}
+            or parts[:2] == ['commonUtils', 'ui']
+            or (parts[0] in {'features', 'services'} and 'ui' in parts[1:]))
 
 
 def check(root=ROOT):

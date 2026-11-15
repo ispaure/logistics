@@ -88,6 +88,17 @@ if feature.id != 'notes_library' or feature.requires:
 ''')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_chat_storage_reads_without_importing_presentation(self):
+        result = self.probe(['features.lm.storage'], forbidden=('features.lm.ui',), checks='''
+from tempfile import TemporaryDirectory
+from features.lm.storage import Store
+
+with TemporaryDirectory() as root:
+    if Store(root).list() != ([], []):
+        raise AssertionError('An empty desktop Chat store unexpectedly has history')
+''')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
     def test_provider_adapters_import_without_presentation_and_read_private_text(self):
         result = self.probe([
             'services.documents.readers', 'services.documents.archive_access',

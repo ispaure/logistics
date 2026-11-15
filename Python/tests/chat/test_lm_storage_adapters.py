@@ -1,4 +1,4 @@
-"""Storage lock injection retains conflict policy without constructing Qt locks."""
+"""Check Chat storage lock compatibility and injected conflict policy."""
 
 from commonUtils.testing.stages import TestStage
 
@@ -15,6 +15,40 @@ from features.lm.domain import conversation, defaults
 
 
 class StorageAdapterTests(TestCase):
+    def test_default_leases_interoperate_with_existing_qt_lock_files(self):
+        import warnings
+        from PySide6.QtCore import QLockFile
+        from features.lm.desktop_locks import lock_file
+        from features.lm.ui.leases import lock_file as legacy_lock_file
+
+        with TemporaryDirectory() as directory:
+            compatibility_path = Path(directory) / 'legacy.lock'
+            with warnings.catch_warnings(record=True) as notices:
+                warnings.simplefilter('default', FutureWarning)
+                for _ in range(2):
+                    self.assertEqual(legacy_lock_file(compatibility_path).fileName(),
+                                     lock_file(compatibility_path).fileName())
+            self.assertEqual(len(notices), 1)
+            self.assertIn('features.lm.desktop_locks.lock_file', str(notices[0].message))
+            self.assertEqual(Path(notices[0].filename), Path(__file__))
+            store = Store(directory)
+            key = conversation(defaults())['id']
+            path = store.folder_path(create=True) / (key + '.lock')
+            existing = QLockFile(str(path))
+            existing.setStaleLockTime(0)
+            self.assertTrue(existing.tryLock(0))
+            try:
+                with self.assertRaisesRegex(ConflictError, 'open in another Logistics window'):
+                    store.lease(key)
+            finally:
+                existing.unlock()
+
+            owned = store.lease(key)
+            try:
+                self.assertFalse(existing.tryLock(0))
+            finally:
+                owned.unlock()
+
     def test_injected_locks_guard_publication_and_conflicts_preserve_saved_record(self):
         with TemporaryDirectory() as directory:
             locks = []
