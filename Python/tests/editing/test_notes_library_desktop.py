@@ -305,8 +305,11 @@ class NotesLibraryDesktopTests(QtTestCase):
             self.assertFalse(window.note_controls.isVisible())
             self.assertFalse(window.calendar.isVisible())
             results = window.search_results_stack
-            bottom = window.search_panel.contentsRect().bottom()
-            self.wait_until(lambda: results.geometry().bottom() == bottom)
+            def footer_collapsed():
+                return (window.search_footers.isHidden()
+                        and results.geometry().bottom() == window.search_panel.contentsRect().bottom())
+
+            self.wait_until(footer_collapsed)
             self.assertTrue(window.search_notice.isHidden())
             window.search_notice.setText('Searching…')
             self.wait_until(lambda: results.geometry().bottom() < window.search_footers.geometry().top())
@@ -314,10 +317,10 @@ class NotesLibraryDesktopTests(QtTestCase):
             window.search_notice.setText('Some items could not be searched.')
             self.assertFalse(window.search_notice.isHidden())
             window.search_notice.setText('')
-            self.wait_until(lambda: results.geometry().bottom() == bottom)
+            self.wait_until(footer_collapsed)
             window.search_notice.setText('Search failed.')
             window.search_notice.clear()
-            self.wait_until(lambda: results.geometry().bottom() == bottom)
+            self.wait_until(footer_collapsed)
             self.assertTrue(window.search_notice.isHidden())
             window.panel_tabs.setCurrentWidget(window.calendar_panel)
             self.assertTrue(window.calendar.isVisible())
