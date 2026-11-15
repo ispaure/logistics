@@ -8,7 +8,7 @@ from features.notes_library.mobile.notes_library import VaultBrowser as _VaultBr
 
 class VaultBrowser(_VaultBrowser):
     def __init__(self, app, provider, root, destination):
-        from .composition.presentation import notes_host
+        from .composition.notes import notes_host
         super().__init__(notes_host(app), provider, root, destination,
                          index_database=app.private_root / 'Cache' / 'directory-index.sqlite3')
         from .layout_participants import participants

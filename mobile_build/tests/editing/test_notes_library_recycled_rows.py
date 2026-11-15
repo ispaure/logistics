@@ -6,7 +6,7 @@ import unittest
 from unittest.mock import AsyncMock, Mock, patch
 
 from commonUtils.testing.stages import TestStage
-from mobile.composition import presentation
+from mobile.composition import notes
 from mobile.obsidian import open_vault
 from mobile.recycled_file_list import RecycledFileList
 from features.notes_library.mobile.tree_rows import NativeTreeRows
@@ -26,8 +26,8 @@ class RecycledNotesRowsTests(unittest.TestCase):
             (folder / f'Note {index}.md').write_text('# Fixture')
         (folder / 'Child').mkdir()
         (folder / 'Child' / 'Child.md').write_text('# Landing')
-        factory = presentation.notes_host
-        with patch.object(presentation, 'notes_host', side_effect=lambda app: replace(factory(app),
+        factory = notes.notes_host
+        with patch.object(notes, 'notes_host', side_effect=lambda app: replace(factory(app),
                 tree_rows=lambda owner: NativeTreeRows(owner, RecycledFileList))):
             owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
         owner.sidebar.show_sidebar()

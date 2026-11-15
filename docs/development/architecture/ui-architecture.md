@@ -62,7 +62,7 @@ its own lazy category declarations in `mobile/settings/categories.py`.
 | Settings → Help → Mobile documentation; Saved files | `mobile/documentation_ui.py` (built on commonUtils `ui/native/markdown.py:MarkdownWikiView`), `mobile/saved_files_ui.py` | `test_documentation_ui.py`, `test_saved_files.py` |
 | Cloud credential packages and unlock; Workspaces → Transfers | `features/rclone/mobile/{cloud_ui,credential_panels}.py`; `mobile/transfer_status.py` mounts the shortcut to `features/rclone/transfers/mobile/{ui,review_ui,surface,native_fallback}.py`. `transfers/assets/surface.{html,css,js}` supplies the offline WebView | `test_credential_packages.py`, `test_mirror_ui.py`, `test_transfer_feedback.py` |
 | Chat → Model & server settings, Conversations | `features/lm/mobile/ui.py:ChatUI` → `chat_settings.py:ChatSettingsPanel`; `presentation.py` owns the embedded transcript, `laptop.py` the server connection UI | `test_chat_ui.py`, `test_chat_dom.py` |
-| Documents → Libraries → Notes; Markdown | `mobile/documents_hub.py` → `mobile/notes_discovery.py` → `features/notes_library/mobile/{notes_library,library_panels,library_opening,library_document}.py`. Host capabilities are composed in `mobile/composition/presentation.py`; shared Markdown authoring is in `services/documents/authoring/markdown_editor.py` | `test_notes_library.py`, `test_markdown_library_workflow.py` |
+| Documents → Libraries → Notes; Markdown | `mobile/documents_hub.py` → `mobile/notes_discovery.py` → `features/notes_library/mobile/{notes_library,library_panels,library_opening,library_document}.py`. Host capabilities are composed in `mobile/composition/notes.py:notes_host`; shared Markdown authoring is in `services/documents/authoring/markdown_editor.py` | `test_notes_library.py`, `test_markdown_library_workflow.py` |
 | PDF opened from a file or provider; Contents / Search | `mobile/provider_opening.py` → `mobile/provider_view.py` supplies host artwork to `features/pdf/mobile/canvas.py`; `contents.py` and `search.py` own dialogs, `continuous.py` and `scroll_script.py` the continuous WebView | `test_pdf_reader.py`, `test_pdf_scroll.py` |
 | Books & Comics → Refresh / Import…; EPUB and comic readers | `mobile/{reader_ui,reader_sessions}.py` mounts `features/books/mobile/library/{catalog_panel,catalog}.py`. EPUB content uses `features/books/mobile/{content,provider_reader,text_reader}.py`; comics use `features/comics/mobile/reader_controller.py` | `test_library_catalog.py`, `test_reader_cohesion.py` |
 | Notebook; Burst camera | `features/notebooks/mobile/documents.py` opens `panel.py:NotebookPanel` and `surface.py` loads its embedded `features/notebooks/assets/`. `features/images/mobile/burst_camera.py` owns capture | `test_notebook_native_tools.py`, `test_navigation.py` |
@@ -175,7 +175,7 @@ touch, Back and WebView behavior.
 
 Notes owns Files and Links in `features/notes_library/mobile/drawers.py`,
 with native swipe binding in `drawer_gestures.py` and animation in
-`drawer_motion.py`. `mobile/composition/presentation.py:notes_drawer_host`
+`drawer_motion.py`. `mobile/composition/notes.py:notes_drawer_host`
 supplies the current window, fold geometry, appearance, overlays, scroll
 clearance and privacy gate. The native reader host applies bottom clearance
 through a view callback. See the [Notes lifecycle](../../features/notes_library/development/development.md#files-and-links-drawers)
