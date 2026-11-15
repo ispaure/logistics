@@ -8,7 +8,7 @@ On iOS, the fullscreen deck fades after three seconds while playing. On Android,
 
 **More playback options → Picture in picture** or **Cast…** is available for ordinary Local and saved-credential LocalCrypt when policy allows. Use [Native AirPlay video](controls.md#watching-on-a-tv-with-iphone-or-ipad) for compatible local files on iPhone or iPad. Session-only credentials block external playback and can conceal even ordinary video. Unlock with the credential password or an authorized trusted Wi-Fi resume, then press Play.
 
-Backgrounding pauses inline playback. Audio interruptions and loss of an audio output pause playback. Press Play after returning. Visible playback keeps the display awake, including while buffering. Pause or close to release it.
+On iPhone and iPad, an ordinary local video keeps its audio playing when you switch apps or lock the device. Returning restores the picture; a video you paused stays paused. Private, remote and session-only sources retain their stricter background and lock rules. Android inline playback pauses in the background. Audio interruptions and loss of an audio output pause playback; press Play to resume. Visible playback keeps the display awake, including while buffering. Pause or close to release it.
 
 Cloud startup and seeking may buffer or fail. Press Play to retry from the held position. Reopen a changed file or make a Local/LocalCrypt copy for persistent problems. Remote cache is limited to 128 MiB in memory per movie. Cloud resume is encrypted and there is no plaintext movie cache.
 

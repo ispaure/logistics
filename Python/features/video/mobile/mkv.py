@@ -26,14 +26,24 @@ class UnsupportedAirPlayMedia(ValueError):
     """The native HLS adapter cannot represent this file's tracks/index."""
 
 
-def playlist(boundaries, extension, *, initialization=False):
+def playlist(boundaries, extension, *, initialization=False, end_ms=None):
     spans = [end - start for start, end in zip(boundaries, boundaries[1:])]
     lines = ['#EXTM3U', '#EXT-X-VERSION:7', f'#EXT-X-TARGETDURATION:{ceil(max(spans) / 1000)}',
              '#EXT-X-MEDIA-SEQUENCE:0', '#EXT-X-PLAYLIST-TYPE:VOD']
     if initialization:
         lines.append('#EXT-X-MAP:URI="init.mp4"')
     for index, milliseconds in enumerate(spans):
-        lines.extend((f'#EXTINF:{milliseconds / 1000:.3f},', f'segment-{index}.{extension}'))
+        start = boundaries[index]
+        # A partial final audio fragment ends where its samples end. Advertising
+        # the whole video interval corrupts AVPlayer's subsequent GAP time map.
+        if end_ms is not None and start < end_ms < start + milliseconds:
+            lines.extend((f'#EXTINF:{(end_ms - start) / 1000:.3f},', f'segment-{index}.{extension}',
+                          '#EXT-X-GAP', f'#EXTINF:{(start + milliseconds - end_ms) / 1000:.3f},',
+                          f'gap-{index}.{extension}'))
+        else:
+            if end_ms is not None and start >= end_ms:
+                lines.append('#EXT-X-GAP')
+            lines.extend((f'#EXTINF:{milliseconds / 1000:.3f},', f'segment-{index}.{extension}'))
     return ('\n'.join([*lines, '#EXT-X-ENDLIST']) + '\n').encode('ascii')
 
 
@@ -137,7 +147,7 @@ def master_playlist(audio, subtitles, default_audio, bandwidth, video):
     return ('\n'.join(lines) + '\n').encode('utf-8')
 
 
-def webvtt_segment(cues, start, end, *, timestamp_offset=0):
+def webvtt_segment(cues, start, end, *, timestamp_offset=0, playable_end=None):
     def time(milliseconds):
         seconds, millis = divmod(max(0, milliseconds), 1000)
         minutes, seconds = divmod(seconds, 60)
@@ -146,7 +156,9 @@ def webvtt_segment(cues, start, end, *, timestamp_offset=0):
 
     lines = ['WEBVTT', f'X-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:{round(timestamp_offset * 90)}', '']
     for first, last, cue in cues:
-        if first >= end or last <= start:
+        if playable_end is not None:
+            last = min(last, playable_end)
+        if last <= first or first >= end or last <= start:
             continue
         clean = escape(unescape(sub(r'<[^>]*>', '', cue)), quote=False).replace('\r', '')
         clean = '\n'.join(line for line in clean.splitlines() if line.strip())
@@ -173,7 +185,7 @@ class MKVStream:
             address = remux.streamAddress()
             if address is None:
                 raise UnsupportedAirPlayMedia('AirPlay subtitles and MKV playback require Wi-Fi.')
-            self.remux = remux.alloc().initWithPath(str(path))
+            self.remux = remux.alloc().initWithPath(str(path), bounds=json.dumps(getattr(owner.content, 'media_bounds', None) or {}))
             if self.remux is None:
                 raise UnsupportedAirPlayMedia('This video’s tracks or seek index could not be prepared for AirPlay.')
             if not self.allowed():
@@ -319,8 +331,10 @@ class MKVStream:
             return self.playlist, PLAYLIST_MIME
         if name.endswith('/index.m3u8'):
             route = name.removesuffix('/index.m3u8')
-            if route == 'video' or route in self.audio:
+            if route == 'video':
                 return self.media_playlist, PLAYLIST_MIME
+            if route in self.audio:
+                return playlist(self.boundaries, 'm4s', initialization=True, end_ms=self.audio[route].get('end_ms')), PLAYLIST_MIME
             if route in self.subtitles:
                 return self.subtitle_playlist, PLAYLIST_MIME
         media = fullmatch(MEDIA_RESOURCE, name)
@@ -383,7 +397,7 @@ class MKVStream:
                 if data is None:
                     return None, None
                 cues = json.loads(str(data))
-        return webvtt_segment(cues, start, end, timestamp_offset=self.subtitle_timestamp_offset), 'text/vtt; charset=utf-8'
+        return webvtt_segment(cues, start, end, timestamp_offset=self.subtitle_timestamp_offset, playable_end=self.boundaries[-1]), 'text/vtt; charset=utf-8'
 
     def close(self):
         self.stopped.set()

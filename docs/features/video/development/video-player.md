@@ -11,8 +11,11 @@ Revocation retires the decoder and transport. See the
 
 Session-only access denies external display, Cast, PiP and desktop pop-out.
 Enforce the policy in native actions and admission. Lock pauses and conceals
-output. Unlock restores controls without autoplay. Ordinary background
-playback requires an explicitly selected supported external mode. Remote
+output. Unlock restores controls without autoplay. On iOS, ordinary retained local files
+can continue their existing audio during background or device lock; foregrounding
+restores the picture without issuing Play. Remote, private and session-only
+sources retain their stricter policy. External playback retains its own route
+and access checks. Remote
 credentials stay with the provider and never appear in decoder URLs.
 [Resume ownership](development.md#playback-tool-ownership)
 
@@ -73,3 +76,51 @@ native audio output, paused selection/resume, rapid replacement and stale
 callbacks, nonseekable refusal, timeout and retirement. The runner records its
 result before removing the simulator and scratch workspace. These counters
 verify native audio delivery, not physical speaker audibility.
+
+## Unequal stream lengths and declared media bounds
+
+A file's video, audio and subtitles can end at different times. A subtitle cue
+must not extend the playable timeline. The bounded metadata reader in
+`features.video.chapters` exposes per-track declared bounds separately from
+unknown values; it never scans the whole media file to invent an endpoint.
+MP4 track headers and supported edit lists use their proper timescales.
+Matroska duration tags retain muxer provenance and a bounded first-block start
+witness when the tag is a span. The overall cap is available only when every
+A/V track has a known declared endpoint. Native track IDs and container IDs
+are separate namespaces; bindings must not equate them.
+
+VLC can reopen a continuing audio tail with video decoding disabled when its
+exhausted picture track prevents seeking or clock progress. Captions resume
+when a seek restores the original video input. A video-only tail keeps the
+native picture and subtitle renderer; choosing an already-ended language
+records the selection for playback after a backward seek without waiting for
+nonexistent audio output. Playback intent and declared A/V bounds survive
+these transitions.
+
+The iOS adapter reads libVLC's actual clock for seek acknowledgment, since the
+VLCKit time property can retain an optimistic target during preroll. Statistics
+come from a retained native media descriptor with an initialized C struct and
+a checked success result; unavailable counters never become output evidence.
+
+## AirPlay unequal-stream remuxing
+
+The stream-copy adapter retains its byte, read and deadline limits while
+allowing a longer final audio tail after the final video keyframe. It extends
+the last *presented* picture, which can differ from the last decoded B-frame.
+The bounded final-fragment timing repair preserves every presentation
+timestamp, compressed sample and sync flag; decode durations and signed
+composition offsets account for the held picture. It does not replay a GOP.
+
+A shorter audio rendition advertises its actual final sample interval,
+followed by explicit HLS gaps. Split a partially populated final interval at
+the declared audio endpoint: advertising absent audio as present misaligns
+AVPlayer's later gap seeks. Opus conversion uses that same per-track endpoint
+instead of padding the absent remainder of a video interval. Text renditions share the A/V timeline and clip
+cues at its endpoint.
+
+`video_chrome_tools --airplay-controls` exercises the production remuxer and
+playlists with native AVPlayer: HEVC B-frames and EAC3, both unequal-stream
+directions, natural transitions, legible tail captions, pause, backward and
+near-end seeks, and actual end notifications with later subtitle cues. It
+uses AVPlayer's ordinary buffering policy. Receiver hardware, physical TV
+routing and speaker audibility remain separate acceptance checks.

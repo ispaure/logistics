@@ -4,7 +4,9 @@ from time import monotonic
 
 from commonUtils.ui import pyside as qt
 from PySide6.QtMultimedia import QMediaPlayer, QMediaMetaData
-from .backend import AUDIO_SWITCH_ERROR, AUDIO_SWITCH_TIMEOUT, PlaybackCapabilities
+from .backend import (
+    AUDIO_SWITCH_ERROR, AUDIO_SWITCH_TIMEOUT, SEEK_ERROR, SEEK_TIMEOUT, VIDEO_WITHOUT_AUDIO, PlaybackCapabilities,
+)
 from .mpv_binding import API, Core
 from .mpv_surface import ColourSurface
 
@@ -15,6 +17,7 @@ class AudioSwitch:
     track: int | str
     position: int
     deadline: float | None
+    frames: int
 
 
 class ColourAudio(qt.QObject):
@@ -52,6 +55,7 @@ class ColourPlayer(qt.QObject):
     playbackStateChanged = qt.Signal(object)
     errorOccurred = qt.Signal()
     renderedProgress = qt.Signal()
+    audioProgress = qt.Signal()
     audioSwitchChanged = qt.Signal(bool, str)
     PlaybackState, Error, MediaStatus = QMediaPlayer.PlaybackState, QMediaPlayer.Error, QMediaPlayer.MediaStatus
 
@@ -61,7 +65,9 @@ class ColourPlayer(qt.QObject):
         self.audio = ColourAudio(core, parent)
         self._source, self._position, self._duration = qt.QUrl(), 0, 0
         self._pending_seek, self._ready, self._loaded = None, False, False
+        self._seek_deadline, self._seek_error, self._audio_pts = None, False, None
         self._audio_switch, self._audio_switch_serial = None, 0
+        self._frames = 0
         self._state, self._error = self.PlaybackState.StoppedState, self.Error.NoError
         self.generation, self.retired, self.presented, self._ended = 0, False, False, False
         self._tracks, self._chapters, self._settings, self._subtitles = [], [], None, set()
@@ -96,6 +102,7 @@ class ColourPlayer(qt.QObject):
         self.generation += 1
         self._source, self._position, self._duration = qt.QUrl(url), 0, 0
         self._pending_seek, self._loaded, self._ended = None, False, False
+        self._seek_deadline, self._seek_error, self._audio_pts = None, False, None
         self._tracks, self._chapters, self._subtitles = [], [], set()
         self._error = self.Error.NoError
         self.audio.suppress(True)
@@ -128,6 +135,7 @@ class ColourPlayer(qt.QObject):
     def stop(self):
         if not self.retired:
             self.finish_audio_switch()
+            self._pending_seek = self._seek_deadline = None
             self.core.submit('command', 'stop')
             self.video.clear()
             self.set_state(self.PlaybackState.StoppedState)
@@ -146,10 +154,20 @@ class ColourPlayer(qt.QObject):
         return self._position if self._pending_seek is None else self._pending_seek
 
     def duration(self):
-        return self._duration
+        bounds = getattr(getattr(self.parent(), 'content', None), 'media_bounds', None)
+        return (bounds.get('end_ms') if bounds else None) or self._duration
 
     def setPosition(self, value):
         if not self.retired:
+            if self._error != self.Error.NoError and self._audio_switch is None:
+                playing = self._state == self.PlaybackState.PlayingState
+                self.setSource(self._source)
+                self.setPosition(value)
+                if playing:
+                    self.play()
+                else:
+                    self.pause()
+                return
             if self._ended:
                 self._ended = False
                 self.mediaStatusChanged.emit(self.MediaStatus.BufferedMedia)
@@ -159,6 +177,7 @@ class ColourPlayer(qt.QObject):
                 self.positionChanged.emit(target)
                 return
             self._pending_seek = target
+            self._seek_deadline = monotonic() + SEEK_TIMEOUT
             self.core.submit('seek', self._pending_seek)
             self.positionChanged.emit(self._pending_seek)
 
@@ -172,6 +191,8 @@ class ColourPlayer(qt.QObject):
         return self._error
 
     def errorString(self):
+        if self._seek_error:
+            return SEEK_ERROR
         return 'The colour video renderer could not read or present this video.'
 
     def failed(self, message):
@@ -182,7 +203,10 @@ class ColourPlayer(qt.QObject):
             self.errorOccurred.emit()
 
     def frame_submitted(self):
-        if not self.retired and self._loaded and self._audio_switch is None:
+        if self.retired or not self._loaded:
+            return
+        self._frames += 1
+        if self._audio_switch is None:
             self.presented = True
             self.renderedProgress.emit()
 
@@ -214,11 +238,26 @@ class ColourPlayer(qt.QObject):
         if self._audio_switch is not None:
             self.update_audio_switch(state, position)
         if self._audio_switch is None and self._error == self.Error.NoError:
-            if self._pending_seek is not None and abs(position - self._pending_seek) <= 200 and not state.get('seeking'):
-                self._pending_seek = None
+            if self._pending_seek is not None:
+                if self._loaded and state.get('seeking') is False and -200 <= position - self._pending_seek <= 500:
+                    self._pending_seek = self._seek_deadline = None
+                elif (monotonic() >= self._seek_deadline or
+                      (state.get('eof-reached') and self._duration - self._pending_seek > 1500)):
+                    self._position = self._pending_seek
+                    self._pending_seek = self._seek_deadline = None
+                    self._seek_error = True
+                    self._error = self.Error.ResourceError
+                    self.pause()
+                    self.errorOccurred.emit()
+                    return
             if self._pending_seek is None and position != self._position:
                 self._position = position
                 self.positionChanged.emit(position)
+        audio_pts = state.get('audio-pts')
+        if (audio_pts is not None and audio_pts != self._audio_pts
+                and self._state == self.PlaybackState.PlayingState and state.get('seeking') is False):
+            self.audioProgress.emit()
+        self._audio_pts = audio_pts
         self.audio.suppress(not self._loaded or self._state != self.PlaybackState.PlayingState)
         if self.video.source_ready != was_ready:
             self.video.update()
@@ -287,8 +326,9 @@ class ColourPlayer(qt.QObject):
         was_pending = self._audio_switch is not None
         self._audio_switch_serial += 1
         deadline = monotonic() + AUDIO_SWITCH_TIMEOUT if self._state == self.PlaybackState.PlayingState else None
-        self._audio_switch = AudioSwitch(self._audio_switch_serial, track, position, deadline)
+        self._audio_switch = AudioSwitch(self._audio_switch_serial, track, position, deadline, self._frames)
         self._pending_seek = None
+        self._seek_deadline = None
         # Native exact-seek preroll holds both outputs. Do not consume muted
         # samples while waiting for the next worker readiness snapshot.
         self.audio.suppress(not self._loaded or self._state != self.PlaybackState.PlayingState)
@@ -305,6 +345,9 @@ class ColourPlayer(qt.QObject):
     def update_audio_switch(self, state, position):
         switch = self._audio_switch
         native_switch = state.get('audio-switch')
+        if state.get('eof-reached') and self._duration - max(position, switch.position) <= 1500:
+            self.finish_audio_switch()
+            return
         if (state.get('eof-reached') or (native_switch == (switch.serial, 'failed'))
                 or (switch.deadline is not None and monotonic() >= switch.deadline)):
             self._position = switch.position
@@ -313,12 +356,16 @@ class ColourPlayer(qt.QObject):
             self.finish_audio_switch(AUDIO_SWITCH_ERROR)
             return
         selected = next((row['id'] for row in self.track_rows('audio') if row.get('selected')), 'no')
-        if (native_switch == (switch.serial, 'restarted') and state.get('seeking') is False
-                and not state.get('paused-for-cache') and selected == switch.track
-                and position >= switch.position - 200
-                and (selected == 'no' or state.get('audio-pts') is not None)):
+        if (native_switch != (switch.serial, 'restarted') or state.get('seeking') is not False
+                or state.get('paused-for-cache') or selected != switch.track or position < switch.position - 200):
+            return
+        if selected == 'no' or state.get('audio-pts') is not None:
             self._error = self.Error.NoError
             self.finish_audio_switch()
+        elif (self._state == self.PlaybackState.PlayingState and position - switch.position >= 1250
+                and self._frames > switch.frames and not getattr(self.parent(), 'network_waits', ())):
+            self._error = self.Error.NoError
+            self.finish_audio_switch(VIDEO_WITHOUT_AUDIO)
 
     def setActiveSubtitleTrack(self, index):
         self.select_track('sub', index)

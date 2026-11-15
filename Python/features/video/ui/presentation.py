@@ -6,7 +6,7 @@ from commonUtils.ui import pyside as qt
 from PySide6.QtMultimedia import QMediaPlayer
 from commonUtils.ui.readers.reader_chrome import ReaderFullscreen
 
-from .backend import AUDIO_SWITCH_ERROR
+from .backend import AUDIO_ONLY_MESSAGE, AUDIO_SWITCH_ERROR, VIDEO_WITHOUT_AUDIO
 
 
 class VideoFullscreen(ReaderFullscreen):
@@ -91,6 +91,7 @@ class PlaybackPresentation:
         self.switching_audio = False
         self.network_waits = set()
         self.last_frame = self.last_clock = monotonic()
+        self.last_audio = 0
         self.have_frame = False
         self.controls_locked = False
         self.keyboard_focus = False
@@ -109,6 +110,12 @@ class PlaybackPresentation:
             self.player.renderedProgress.connect(self.render_progress)
         if hasattr(self.player, 'audioSwitchChanged'):
             self.player.audioSwitchChanged.connect(self.audio_switch_changed)
+        if hasattr(self.player, 'audioProgress'):
+            self.player.audioProgress.connect(self.audio_progress)
+        if hasattr(self.player, 'audioOnlyChanged'):
+            self.player.audioOnlyChanged.connect(self.audio_only_changed)
+        if hasattr(self.player, 'videoOnlyChanged'):
+            self.player.videoOnlyChanged.connect(self.video_only_changed)
         self.network_wait.connect(self.network_waiting)
         self.overlay.setMouseTracking(True)
         self.overlay.installEventFilter(self)
@@ -134,10 +141,32 @@ class PlaybackPresentation:
             return
         self.last_frame = monotonic()
         self.frame_position = self.player.position()
+        self.clear_playback_wait()
+
+    def audio_progress(self):
+        if not self.closing and not self.switching_audio:
+            self.last_audio = monotonic()
+            if self.status.text() == VIDEO_WITHOUT_AUDIO:
+                self.status.setText('Playing.')
+            self.clear_playback_wait()
+
+    def clear_playback_wait(self):
         if not self.network_hold:
             self.wait_indicator.hide()
             if self.status.text() == 'Waiting for video data…':
                 self.status.setText('Playing.' if self.requested_play else 'Paused.')
+
+    def audio_only_changed(self, active):
+        if active:
+            self.status.setText(AUDIO_ONLY_MESSAGE)
+        elif self.status.text() == AUDIO_ONLY_MESSAGE:
+            self.status.setText('Playing.' if self.requested_play else 'Paused.')
+
+    def video_only_changed(self, active):
+        if active:
+            self.status.setText(VIDEO_WITHOUT_AUDIO)
+        elif self.status.text() == VIDEO_WITHOUT_AUDIO:
+            self.status.setText('Playing.' if self.requested_play else 'Paused.')
 
     def audio_switch_changed(self, pending, error):
         if self.closing:
@@ -146,7 +175,7 @@ class PlaybackPresentation:
         self.last_frame = self.last_clock = monotonic()
         self.wait_indicator.setText('Switching audio…' if pending else 'Buffering…')
         self.wait_indicator.setAccessibleName('Switching audio' if pending else 'Waiting for video data')
-        self.wait_indicator.setVisible(pending)
+        self.wait_indicator.setVisible(pending and self.requested_play)
         if error:
             self.status.setText(self.transport_failure or error)
         elif self.status.text() == AUDIO_SWITCH_ERROR:
@@ -186,8 +215,7 @@ class PlaybackPresentation:
         self.requested_play = False
         self.network_hold = False
         self.player.pause()
-        if not self.switching_audio:
-            self.wait_indicator.hide()
+        self.wait_indicator.hide()
         self.update_play(self.player.playbackState())
         self.show_controls()
 
@@ -207,25 +235,26 @@ class PlaybackPresentation:
             self.pause_requested()
             return
         if self.switching_audio:
+            self.wait_indicator.setVisible(self.requested_play)
             self.show_controls()
             return
         now = monotonic()
+        last_output = max(self.last_frame, self.last_clock, self.last_audio)
         waiting = (self.requested_play and not self.casting and (
-            now - (max(self.last_frame, self.last_clock) if self.have_frame else self.last_frame) >= 3
-            or self.network_hold))
+            now - last_output >= 3 or self.network_hold))
         self.wait_indicator.setVisible(waiting)
         if waiting:
             self.show_controls()
-        if (self.requested_play and self.have_frame and self.network_waits and not self.casting
+        if (self.requested_play and (self.have_frame or self.last_audio) and self.network_waits and not self.casting
                 and not self.network_hold
-                and (now - max(self.last_frame, self.last_clock) >= 3
-                     or now - self.last_frame >= 6)):
+                and (now - last_output >= 3 or now - max(self.last_frame, self.last_audio) >= 6)):
             self.network_hold = True
+            position = self.player.position() if self.last_audio > self.last_frame else self.frame_position
             self.player.pause()
             if hasattr(self.player, 'hold_position'):
-                self.player.hold_position(self.frame_position)
+                self.player.hold_position(position)
             else:
-                self.player.setPosition(self.frame_position)
+                self.player.setPosition(position)
             self.status.setText('Waiting for video data…')
             self.show_controls()
 

@@ -59,12 +59,23 @@ def ios(workspace):
                 file = tar.extractfile(member)
                 if file is not None:
                     (includes / Path(member.name).name).write_bytes(file.read())
+    # Matching libVLC revision from the pinned VLCKit build script's TESTEDHASH.
+    core = workspace / 'libvlc.tar.gz'
+    download('https://api.github.com/repos/videolan/vlc/tarball/005e69e67', core)
+    with tarfile.open(core) as tar:
+        for member in tar.getmembers():
+            if member.isfile() and '/include/vlc/' in member.name and member.name.endswith('.h'):
+                file = tar.extractfile(member)
+                if file is not None:
+                    destination = includes / 'vlc' / Path(member.name).name
+                    destination.parent.mkdir(exist_ok=True)
+                    destination.write_bytes(file.read())
     sdk = subprocess.check_output(['xcrun', '--sdk', 'iphonesimulator', '--show-sdk-path'], text=True).strip()
     source = ROOT / 'Python/features/video/mobile/ios/VideoPlayer.m'
     subprocess.run(['xcrun', 'clang', '-fsyntax-only', '-fobjc-arc', '-fmodules',
         '-fmodules-cache-path=' + str(workspace / 'modules'),
         '-target', 'arm64-apple-ios15.0-simulator', '-isysroot', sdk,
-        '-I', str(includes.parent), '-I', str(workspace / 'VideoFFmpeg'),
+        '-I', str(includes.parent), '-I', str(includes), '-I', str(workspace / 'VideoFFmpeg'),
         '-I', str(ROOT / 'Python/mobile/ios'), str(source)], check=True)
 
 

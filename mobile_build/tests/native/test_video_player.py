@@ -890,13 +890,16 @@ class VideoBuildTests(unittest.TestCase):
             pbx = project / 'Logistics Mobile.xcodeproj/project.pbxproj'
             pbx.parent.mkdir()
             pbx.write_bytes(plistlib.dumps(dict(rootObject='project', objects={
-                'project': {}, 'app': dict(productType='com.apple.product-type.application', buildPhases=['frameworks']),
+                'project': {}, 'app': dict(productType='com.apple.product-type.application', buildPhases=['frameworks'], buildConfigurationList='configs'),
+                'configs': dict(buildConfigurations=['debug']), 'debug': dict(buildSettings={}),
                 'frameworks': dict(isa='PBXFrameworksBuildPhase', files=[])})))
             configure_ios(project)
             configure_ios(project)
             result = plistlib.loads(pbx.read_bytes())
             self.assertEqual(len(result['objects']['project']['packageReferences']), 1)
             self.assertEqual(len(result['objects']['frameworks']['files']), 4)
+            self.assertEqual(result['objects']['debug']['buildSettings']['HEADER_SEARCH_PATHS'].count(
+                '$(BUILT_PRODUCTS_DIR)/VLCKit.framework/Headers'), 1)
             packages = [value for value in result['objects'].values() if value.get('isa') == 'XCRemoteSwiftPackageReference']
             self.assertEqual(packages[0]['requirement']['kind'], 'revision')
             self.assertEqual((app / 'main.m').read_text().count('Support/VideoPlayer.m'), 1)
@@ -955,8 +958,9 @@ class CloudVideoDispatchTests(unittest.IsolatedAsyncioTestCase):
         owner.app = SimpleNamespace(_impl=None)
         owner.progress = Mock(load=lambda: 1234)
         owner.controls = SimpleNamespace(store=Mock())
-        owner.content = SimpleNamespace(path='movie.mp4', remote=True,
+        owner.content = SimpleNamespace(path='movie.mp4', remote=True, media_bounds=None,
             provider=Mock(list=Mock(side_effect=OSError('listing unavailable'))))
+        owner.prepare_media_bounds = Mock()  # Independent optional timing lookup owns its own coverage.
         self.assertEqual(owner.prepare(), (1234, []))
         owner.content.provider.list.assert_not_called()
         self.assertEqual(owner.prepare_sidecars(), [])
@@ -1210,6 +1214,16 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
             with self.subTest(invalid=codec), self.assertRaises(ValueError):
                 codec_string(dict(codec=codec, configuration=b64encode(header).decode('ascii')))
 
+    def test_hls_exhausted_audio_segments_are_gaps_without_extending_timeline(self):
+        from features.video.mobile.mkv import playlist
+        result = playlist([0, 2000, 4000, 6000], 'm4s', initialization=True, end_ms=3008).decode()
+        self.assertEqual(result.count('#EXT-X-GAP'), 2)
+        self.assertIn('#EXT-X-GAP\n#EXTINF:2.000,\nsegment-2.m4s', result)
+        self.assertEqual(result.count('#EXTINF:'), 4)
+        self.assertIn('#EXTINF:1.008,\nsegment-1.m4s\n#EXT-X-GAP\n#EXTINF:0.992,\ngap-1.m4s', result)
+        self.assertTrue(result.endswith('#EXT-X-ENDLIST\n'))
+        self.assertNotIn('#EXT-X-GAP', playlist([0, 2000, 4000], 'vtt').decode())
+
     def test_airplay_master_advertises_receiver_track_roles_and_codecs(self):
         from base64 import b64encode
         from features.video.mobile.mkv import master_playlist
@@ -1270,6 +1284,9 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
         self.assertNotIn('<i>', segment)
         self.assertNotIn('Next segment', segment)
         self.assertTrue(webvtt_segment([], 0, 6000).endswith(b'\n\n'))
+        clipped = webvtt_segment([(1000, 20000, 'Tail'), (18000, 22000, 'After')], 0, 18000, playable_end=18000).decode()
+        self.assertIn('00:00:01.000 --> 00:00:18.000', clipped)
+        self.assertNotIn('After', clipped)
 
     @contextmanager
     def mkv_stream(self, *, sidecars=(), path=Path('/movie.mkv'), embedded=True):
@@ -1278,7 +1295,7 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
         from features.video.mobile.mkv import MKVStream
 
         allowed = Mock(return_value=True)
-        owner = SimpleNamespace(allowed=allowed, content=Mock(size=200_000), subtitles=list(sidecars))
+        owner = SimpleNamespace(allowed=allowed, content=Mock(size=200_000, media_bounds=None), subtitles=list(sidecars))
         import json
         engine = SimpleNamespace(
             renditionsJSON=lambda: json.dumps(dict(boundaries=[0, 6000, 12000, 18000],
@@ -1455,6 +1472,27 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
             finally:
                 for _ in range(4):
                     stream.slots.release()
+
+    def test_background_audio_admits_only_ordinary_unmapped_local_video(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from features.video.mobile.ios import ordinary_local_video
+        from features.video.playback import VideoContent
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / 'movie.avi').write_bytes(b'ordinary background audio')
+            content = VideoContent(LocalFiles(root), 'movie.avi')
+            try:
+                self.assertTrue(ordinary_local_video(content))
+                content.remote = True
+                self.assertFalse(ordinary_local_video(content))
+                content.remote = False
+                with patch.object(content.provider, 'private', True, create=True):
+                    self.assertFalse(ordinary_local_video(content))
+                with patch.object(content.source, 'backend', Mock()):
+                    self.assertFalse(ordinary_local_video(content))
+            finally:
+                content.close()
 
     def test_native_airplay_only_opens_admitted_ordinary_local_files(self):
         from commonUtils.runtime.resources.local import LocalFiles

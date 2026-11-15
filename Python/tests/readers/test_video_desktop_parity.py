@@ -18,6 +18,72 @@ TEST_STAGE = TestStage.EXTENDED
 
 
 class DesktopVideoParityTests(QtTestCase):
+    def test_vlc_audio_tail_resume_pause_and_seek_recovery(self):
+        from time import monotonic
+        from features.video.playback import VideoContent
+        from features.video.ui.backend import AUDIO_ONLY_MESSAGE, SEEK_ERROR
+        from features.video.ui.player import VideoWindow
+        from logistics_build.build_retention import scratch
+        from services.documents.video_progress import VideoProgress
+        from tests.readers.decoder_fixtures import headless_vlc_playback
+
+        if not shutil.which('ffmpeg'):
+            self.skipTest('FFmpeg fixture generator required')
+        with scratch() as root:
+            path = root / 'audio-tail.mkv'
+            subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i',
+                'testsrc2=size=192x108:rate=25:duration=3', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=10',
+                '-map', '0:v', '-map', '1:a', '-c:v', 'libx265', '-pix_fmt', 'yuv420p10le',
+                '-x265-params', 'pools=2:frame-threads=1:log-level=error', '-g', '25', '-c:a', 'eac3', str(path)],
+                check=True, timeout=30)
+            for resume in (5700, 0):
+                provider = LocalFiles(root)
+                state = root / f'cache-{resume}'
+                if resume:
+                    content = VideoContent(provider, path.name)
+                    try:
+                        progress = VideoProgress(content, state / 'Video')
+                        progress.load()
+                        progress.duration = 10000
+                        progress.observe(resume)
+                        progress.flush()
+                    finally:
+                        content.close()
+                with self.subTest(resume=resume), patch('commonUtils.filesystem.storage.cache_directory', return_value=state):
+                    window = VideoWindow(ResourceChoice(provider, path.name), backend_factory=headless_vlc_playback)
+                    try:
+                        window.show()
+                        target = resume or 3000
+                        self.wait_until(lambda: window.player.position() > target + 500 and window.last_audio,
+                                        timeout=14, message=lambda: repr((window.player.position(),
+                                            window.player.native.get_state(), window.player._pending_seek,
+                                            window.status.text(), window.player.stats.played_abuffers)))
+                        self.assertEqual(window.status.text(), AUDIO_ONLY_MESSAGE)
+                        self.assertFalse(window.wait_indicator.isVisible())
+                        self.assertTrue(window.seek.isEnabled())
+                        window.pause_requested()
+                        held = window.player.position()
+                        self.assertGreater(held, target)
+                        self.wait_until(lambda: window.player.native.get_state() == window.player.vlc.State.Paused)
+                        self.assertEqual(window.player.position(), held)
+                        window.seek_to(600)
+                        self.wait_until(lambda: window.have_frame and 400 <= window.player.position() <= 800, timeout=10)
+                        self.assertEqual(window.player.playbackState(), window.player.PlaybackState.PausedState)
+                        window.toggle_play()
+                        self.wait_until(lambda: window.player.position() > 950)
+                        # Let the transport remain valid while a decoder ignores a seek.
+                        with patch.object(window.player.native, 'set_time'):
+                            window.seek_to(6500)
+                            window.player._seek_deadline = monotonic() - 1
+                            self.wait_until(lambda: window.status.text() == SEEK_ERROR)
+                        self.assertTrue(window.seek.isEnabled())
+                        window.seek_to(0)
+                        self.wait_until(lambda: window.have_frame and window.player.position() <= 200, timeout=10)
+                        self.assertFalse(window.requested_play)
+                        self.assertEqual(window.player.error(), window.player.Error.NoError)
+                    finally:
+                        window.close()
+
     def test_selected_speed_changes_real_playback_clock_after_resume(self):
         from time import monotonic
         from features.video.ui.player import VideoWindow

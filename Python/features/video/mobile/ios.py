@@ -24,6 +24,9 @@ class IOSVideo:
         self.native.startMilliseconds = position
         self.native.knownDuration = owner.progress.duration
         self.native.restricted = owner.restricted
+        if ordinary_local_video(owner.content):
+            self.background_audio_allowed = Block(lambda: not owner.restricted, c_bool)
+            self.native.backgroundAudioAllowed = self.background_audio_allowed
         self.native.airPlayAvailable = airplay_file(owner) is not None
         self.airplay_allowed = Block(self.airplay_source_allowed, c_bool)
         self.native.airPlayAllowed = self.airplay_allowed
@@ -221,20 +224,22 @@ class IOSVideo:
         return self.disposal
 
 
-def airplay_file(owner):
-    """Resolve a direct file URL only for ordinary, unmapped local storage."""
+def ordinary_local_video(content):
     from services.documents.progress_identity import ordinary_local_provider
 
+    return (not content.remote and content.source.backend is None
+            and ordinary_local_provider(content.provider) is content.provider)
+
+
+def airplay_file(owner):
+    """Resolve a direct file URL only for ordinary, unmapped local storage."""
     content = owner.content
     if (owner.app.preferences.values.get('native_video_airplay') != 'true'
             or Path(content.path).suffix.lower() not in {'.mp4', '.mov', '.m4v', '.mkv'}
-            or content.remote or not owner.allowed(external=True)):
-        return None
-    provider = content.provider
-    if content.source.backend is not None or ordinary_local_provider(provider) is not provider:
+            or not ordinary_local_video(content) or not owner.allowed(external=True)):
         return None
     try:
-        path = provider.local_move_path(content.path)
+        path = content.provider.local_move_path(content.path)
         content.check()
         return path
     except (OSError, ValueError):

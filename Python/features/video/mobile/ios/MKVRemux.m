@@ -21,6 +21,7 @@ _Static_assert(LIBAVFORMAT_VERSION_INT == AV_VERSION_INT(63, 1, 100),
 @property(nonatomic, readonly) NSData *initialization;
 @property(nonatomic, readonly) NSString *playlist;
 - (instancetype)initWithPath:(NSString *)path;
+- (instancetype)initWithPath:(NSString *)path bounds:(NSString *)bounds;
 - (NSData *)segment:(NSUInteger)index;
 - (NSString *)renditionsJSON;
 - (NSData *)fragment:(NSUInteger)index track:(int)track;
@@ -142,6 +143,79 @@ static NSString *LGMKVSubtitleText(AVPacket *packet, enum AVCodecID codec) {
     return text;
 }
 
+// ISO BMFF stores sample duration in decode order. With B pictures, holding
+// the last decoded sample does not hold the last displayed picture. Relocate
+// that duration to the greatest PTS and compensate subsequent signed CTS values
+// so every presentation timestamp, compressed packet and sync flag is unchanged.
+static uint8_t *LGMKVBox(uint8_t *bytes, NSUInteger length, const char *kind, uint32_t *boxSize) {
+    for (NSUInteger offset = 0; offset + 8 <= length;) {
+        uint32_t size = AV_RB32(bytes + offset);
+        if (size < 8 || size > length - offset) return NULL;
+        if (!memcmp(bytes + offset + 4, kind, 4)) { *boxSize = size; return bytes + offset; }
+        offset += size;
+    }
+    return NULL;
+}
+static BOOL LGMKVHoldLastPresentation(NSMutableData *data, int64_t end, int64_t originalLastDuration) {
+    uint32_t moofSize = 0;
+    uint8_t *moof = LGMKVBox(data.mutableBytes, data.length, "moof", &moofSize);
+    if (!moof || end < 0 || originalLastDuration <= 0 || originalLastDuration > UINT32_MAX) return NO;
+    for (NSUInteger offset = 8; offset + 8 <= moofSize;) {
+        uint8_t *traf = moof + offset;
+        uint32_t size = AV_RB32(traf);
+        if (size < 8 || size > moofSize - offset) return NO;
+        offset += size;
+        if (memcmp(traf + 4, "traf", 4)) continue;
+        uint32_t headerSize = 0, timeSize = 0, runSize = 0;
+        uint8_t *header = LGMKVBox(traf + 8, size - 8, "tfhd", &headerSize);
+        if (!header || headerSize < 16) return NO;
+        if (AV_RB32(header + 12) != 1) continue; // Video is output track one.
+        uint8_t *time = LGMKVBox(traf + 8, size - 8, "tfdt", &timeSize);
+        uint8_t *run = LGMKVBox(traf + 8, size - 8, "trun", &runSize);
+        if (!time || !run || runSize < 16 || timeSize < (time[8] ? 20 : 16) || time[8] > 1) return NO;
+        uint64_t start = time[8] ? AV_RB64(time + 12) : AV_RB32(time + 12);
+        if (start > INT64_MAX) return NO;
+        int64_t dts = (int64_t)start, maximumPTS = INT64_MIN;
+        uint32_t flags = AV_RB32(run + 8) & 0xffffff, count = AV_RB32(run + 12);
+        NSUInteger cursor = 16 + ((flags & 1) ? 4 : 0) + ((flags & 4) ? 4 : 0);
+        NSUInteger width = ((flags & 0x100) ? 4 : 0) + ((flags & 0x200) ? 4 : 0) +
+            ((flags & 0x400) ? 4 : 0) + ((flags & 0x800) ? 4 : 0);
+        if (!(flags & 0x100) || !count || count > 150000 || cursor > runSize ||
+            width == 0 || count > (runSize - cursor) / width) return NO;
+        NSUInteger first = cursor, maximum = 0;
+        NSUInteger ctsOffset = width - 4;
+        for (NSUInteger i = 0; i < count; i++, cursor += width) {
+            int64_t cts = (flags & 0x800) ? (run[8] == 1 ? (int32_t)AV_RB32(run + cursor + ctsOffset) :
+                (int64_t)AV_RB32(run + cursor + ctsOffset)) : 0;
+            if ((cts > 0 && dts > INT64_MAX - cts) || (cts < 0 && dts < INT64_MIN - cts)) return NO;
+            if (dts + cts > maximumPTS) { maximumPTS = dts + cts; maximum = i; }
+            uint32_t duration = AV_RB32(run + cursor);
+            if (dts > INT64_MAX - duration) return NO;
+            dts += duration;
+        }
+        if (maximum == count - 1) return YES; // Existing last-sample hold is correct without reorder.
+        if (!(flags & 0x800) || run[8] != 1) return NO;
+        uint8_t *held = run + first + maximum * width;
+        int64_t duration = AV_RB32(held);
+        if (maximumPTS < 0 || end <= maximumPTS + duration) return YES;
+        int64_t extra = end - maximumPTS - duration;
+        if (extra > INT32_MAX || duration + extra > UINT32_MAX) return NO;
+        // Validate all offsets before mutating the fragment.
+        for (NSUInteger i = maximum + 1; i < count; i++) {
+            int64_t cts = (int32_t)AV_RB32(run + first + i * width + ctsOffset);
+            if (cts - extra < INT32_MIN) return NO;
+        }
+        AV_WB32(run + first + (count - 1) * width, (uint32_t)originalLastDuration);
+        AV_WB32(held, (uint32_t)(duration + extra));
+        for (NSUInteger i = maximum + 1; i < count; i++) {
+            uint8_t *field = run + first + i * width + ctsOffset;
+            AV_WB32(field, (uint32_t)((int64_t)(int32_t)AV_RB32(field) - extra));
+        }
+        return YES;
+    }
+    return NO;
+}
+
 @implementation LGMKVRemux {
     int _file;
     int _video, _audio;
@@ -177,7 +251,8 @@ static NSString *LGMKVSubtitleText(AVPacket *packet, enum AVCodecID codec) {
 #endif
 }
 
-- (instancetype)initWithPath:(NSString *)path {
+- (instancetype)initWithPath:(NSString *)path { return [self initWithPath:path bounds:@"{}"]; }
+- (instancetype)initWithPath:(NSString *)path bounds:(NSString *)boundsJSON {
     self = [super init];
     if (!self) return nil;
     _file = open(path.fileSystemRepresentation, O_RDONLY | O_NOFOLLOW | O_CLOEXEC);
@@ -216,6 +291,12 @@ static NSString *LGMKVSubtitleText(AVPacket *packet, enum AVCodecID codec) {
     if ((video->disposition & AV_DISPOSITION_ATTACHED_PIC) ||
         video->time_base.num <= 0 || video->time_base.den <= 0 ||
         (video->codecpar->codec_id != AV_CODEC_ID_H264 && video->codecpar->codec_id != AV_CODEC_ID_HEVC)) return nil;
+    NSDictionary *bounds = [NSJSONSerialization JSONObjectWithData:[boundsJSON dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+    if (![bounds isKindOfClass:NSDictionary.class]) bounds = @{};
+    NSArray *audioBounds = [bounds[@"audio"] isKindOfClass:NSArray.class] ? bounds[@"audio"] : @[];
+    NSUInteger audioTrackCount = 0;
+    for (unsigned i = 0; i < _source->nb_streams; i++)
+        if (_source->streams[i]->codecpar->codec_type == AVMEDIA_TYPE_AUDIO) audioTrackCount++;
     NSMutableArray *audio = [NSMutableArray array], *text = [NSMutableArray array];
     _audio = -1;
     int opus = -1;
@@ -249,12 +330,22 @@ static NSString *LGMKVSubtitleText(AVPacket *packet, enum AVCodecID codec) {
             @"hearingImpaired": @((stream->disposition & AV_DISPOSITION_HEARING_IMPAIRED) != 0),
             @"visualImpaired": @((stream->disposition & AV_DISPOSITION_VISUAL_IMPAIRED) != 0),
             @"commentary": @((stream->disposition & AV_DISPOSITION_COMMENT) != 0)}];
+        if ((copyAudio || opusAudio) && audioBounds.count == audioTrackCount) {
+            id entry = audioBounds[audioNumber - 1];
+            id endpoint = [entry isKindOfClass:NSDictionary.class] ? entry[@"end_ms"] : nil;
+            if ([endpoint isKindOfClass:NSNumber.class] && [endpoint longLongValue] > 0 && [endpoint longLongValue] <= 43200000)
+                track[@"end_ms"] = endpoint;
+        }
         if (copyAudio || opusAudio) [audio addObject:track];
         else [text addObject:track];
     }
     if (_audio < 0) _audio = opus;
     if (_audio < 0) return nil;
-    _duration = av_rescale_q(_source->duration, AV_TIME_BASE_Q, video->time_base);
+    id declaredEnd = bounds[@"end_ms"];
+    int64_t boundedEnd = [declaredEnd isKindOfClass:NSNumber.class] ? [declaredEnd longLongValue] : 0;
+    _duration = boundedEnd > 0 && boundedEnd <= 43200000 ?
+        av_rescale_q(boundedEnd, (AVRational){1, 1000}, video->time_base) :
+        av_rescale_q(_source->duration, AV_TIME_BASE_Q, video->time_base);
     if (av_seek_frame(_source, _video, 0, AVSEEK_FLAG_BACKWARD) < 0) return nil;
 
     // Build a compact playlist from cues. Media packets are read only when a
@@ -299,8 +390,11 @@ static NSString *LGMKVSubtitleText(AVPacket *packet, enum AVCodecID codec) {
             [seeks addObject:@(seek)];
         }
     }
-    if (!starts.count || starts.firstObject.longLongValue > av_rescale_q(1, (AVRational){1, 1}, video->time_base) ||
-        _duration - starts.lastObject.longLongValue > maximum) return nil;
+    // A final audio-only tail can extend well beyond the last video cue.
+    // Interior cue gaps remain capped above. The final fragment is bounded by
+    // the same 128 MiB output, 256 MiB reads and 12-second request deadline,
+    // rather than rejecting a legitimate long tail by its timeline duration.
+    if (!starts.count || starts.firstObject.longLongValue > av_rescale_q(1, (AVRational){1, 1}, video->time_base)) return nil;
     _starts = [starts copy];
     _seekStarts = mp4 ? [seeks copy] : nil;
     NSMutableArray *boundaries = [NSMutableArray arrayWithObject:@0];
@@ -349,12 +443,24 @@ static NSString *LGMKVSubtitleText(AVPacket *packet, enum AVCodecID codec) {
     uint8_t *buffer = NULL;
     AVStream *video = _source->streams[_video];
     BOOL success = NO, hasVideo = NO, hasAudio = NO;
+    int64_t heldEnd = -1, originalLastDuration = 0;
     int64_t start = _starts[index].longLongValue;
     int64_t end = index + 1 == _starts.count ? _duration : _starts[index + 1].longLongValue;
     int status = 0;
     int inputTracks[] = {_video, audio};
     BOOL convertOpus = writeAudio && _source->streams[audio]->codecpar->codec_id == AV_CODEC_ID_OPUS;
     LGMKVOpus opus = {0};
+    int64_t audioEnd = end;
+    if (convertOpus) {
+        for (NSDictionary *rendition in _renditions[@"audio"]) {
+            NSNumber *declared = rendition[@"end_ms"];
+            if ([rendition[@"id"] intValue] == audio && declared.longLongValue > 0)
+                audioEnd = MIN(audioEnd, av_rescale_q(declared.longLongValue, (AVRational){1, 1000}, video->time_base));
+        }
+        // A short rendition ends within this video interval; the HLS playlist
+        // advertises the remainder as a gap, not fabricated encoded silence.
+        if (audioEnd <= start) goto done;
+    }
     _reader.bytes = 0;
     _reader.deadline = sink.deadline;
     // Seek to the previous cue so audio interleaved before the target video
@@ -375,7 +481,7 @@ static NSString *LGMKVSubtitleText(AVPacket *packet, enum AVCodecID codec) {
         if (!out) goto done;
         if (i == 1 && convertOpus) {
             if (!LGOpusOpen(&opus, in->codecpar, out, av_rescale_q(start, video->time_base, LGOpusClock),
-                            av_rescale_q(end, video->time_base, LGOpusClock))) goto done;
+                            av_rescale_q(audioEnd, video->time_base, LGOpusClock))) goto done;
             if (_mp4TimestampOffset) opus.timestampOffset = _mp4TimestampOffset * 48;
             continue;
         }
@@ -479,6 +585,19 @@ static NSString *LGMKVSubtitleText(AVPacket *packet, enum AVCodecID codec) {
         tail->duration = av_rescale_q(end + timelineOffset, video->time_base, outputClock) - tail->dts;
         if (tail->duration <= 0) goto done;
     }
+    if (writeVideo && index + 1 == _starts.count && status == AVERROR_EOF) {
+        // Reserve the terminal hold on the last decoded sample; the bounded
+        // post-mux repair moves it to the last presented sample for B-frames.
+        // Presentation timestamps and compressed samples remain unchanged.
+        AVRational clock = output->streams[0]->time_base;
+        int64_t offset = _mp4TimestampOffset ?: 100;
+        int64_t endPTS = av_rescale_q(end, video->time_base, clock) +
+            av_rescale_q(offset, (AVRational){1, 1000}, clock);
+        if (!_seekStarts) endPTS += av_rescale_q(compositionDelay, video->time_base, clock);
+        originalLastDuration = tail->duration;
+        heldEnd = endPTS;
+        tail->duration = MAX(tail->duration, endPTS - tail->pts);
+    }
     if (writeVideo && av_interleaved_write_frame(output, tail) < 0) goto done;
     if (convertOpus) {
         if (opus.end - opus.cursor > 4800 ||
@@ -497,7 +616,7 @@ done:
     av_dict_free(&options);
     avformat_free_context(output);
     LGMKVFreeIO(&writer);
-    if (!success) return nil;
+    if (!success || (heldEnd >= 0 && !LGMKVHoldLastPresentation(data, heldEnd, originalLastDuration))) return nil;
     const uint8_t *bytes = data.bytes;
     for (NSUInteger offset = 0; offset + 8 <= data.length;) {
         uint32_t size = AV_RB32(bytes + offset);

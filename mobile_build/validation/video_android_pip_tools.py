@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[2]
 BUNDLE = 'io.github.ispaure.logisticsvideopipqa'
 
 
-def project_files(project):
+def project_files(project, fixture_name='VideoPipQAActivity', *, config_changes=''):
     template = ROOT / 'mobile_build/build/logisticsmobile/android/gradle'
     shutil.copytree(template / 'gradle', project / 'gradle', dirs_exist_ok=True)
     shutil.copy2(template / 'gradlew', project / 'gradlew')
@@ -36,8 +36,8 @@ def project_files(project):
     app = project / 'app'
     (app / 'src/main/java').mkdir(parents=True, exist_ok=True)
     native = ROOT / 'Python/features/video/mobile/android'
-    fixture = ROOT / 'mobile_build/validation/fixtures/VideoPipQAActivity.java'
-    shutil.copy2(fixture, app / 'src/main/java/VideoPipQAActivity.java')
+    fixture = ROOT / 'mobile_build/validation/fixtures' / (fixture_name + '.java')
+    shutil.copy2(fixture, app / 'src/main/java' / fixture.name)
     (app / 'build.gradle').write_text("""apply plugin: 'com.android.application'
     android {
         namespace 'io.github.ispaure.logisticsvideopipqa'
@@ -65,9 +65,9 @@ def project_files(project):
     (app / 'src/main/AndroidManifest.xml').write_text("""<manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET"/>
     <application android:theme="@android:style/Theme.Material.Light.NoActionBar" android:label="Video PiP QA">
-    <activity android:name="io.github.ispaure.logistics.video.VideoPipQAActivity" android:exported="true"
+    <activity android:name="io.github.ispaure.logistics.video.""" + fixture_name + """" android:exported="true"
         android:supportsPictureInPicture="true" android:resizeableActivity="true"
-        android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode">
+        android:configChanges="orientation|keyboardHidden|screenSize|smallestScreenSize|screenLayout|uiMode""" + config_changes + """">
         <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
     </activity></application></manifest>""")
     return app / 'src/main/assets', [*native.rglob('*.java'), fixture]

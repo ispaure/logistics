@@ -79,13 +79,13 @@ def configure_ios(project, *, remux_headers=None):
     if len(targets) != 1:
         raise ValueError('Expected one containing iOS video app.')
     target = targets[0]
-    if remux_headers is not None:
-        for key in objects[target['buildConfigurationList']]['buildConfigurations']:
-            settings = objects[key]['buildSettings']
-            paths = settings.setdefault('HEADER_SEARCH_PATHS', ['$(inherited)'])
-            if isinstance(paths, str):
-                paths = settings['HEADER_SEARCH_PATHS'] = [paths]
-            path = '$(SRCROOT)/Support/VideoFFmpeg'
+    for key in objects[target['buildConfigurationList']]['buildConfigurations']:
+        settings = objects[key]['buildSettings']
+        paths = settings.setdefault('HEADER_SEARCH_PATHS', ['$(inherited)'])
+        if isinstance(paths, str):
+            paths = settings['HEADER_SEARCH_PATHS'] = [paths]
+        for path in ['$(BUILT_PRODUCTS_DIR)/VLCKit.framework/Headers', *(
+                ['$(SRCROOT)/Support/VideoFFmpeg'] if remux_headers is not None else [])]:
             if path not in paths:
                 paths.append(path)
     def put(name, **value):

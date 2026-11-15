@@ -8,6 +8,7 @@ import argparse
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
+import os
 from hashlib import sha256
 from pathlib import Path
 import plistlib
@@ -24,7 +25,7 @@ from logistics_build.build_retention import scratch
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def run(framework, output, model, orientation='portrait', hdr=False, resume=0, fold=False, *, movie=None, url=None, duration=30000, unknown_duration=False, pause_transitions=False, pip_controls=False, pip_subtitles=False, embedded_subtitles=False, external_display=False, airplay_controls=False, audio_switch=False):
+def run(framework, output, model, orientation='portrait', hdr=False, resume=0, fold=False, *, movie=None, url=None, duration=30000, unknown_duration=False, pause_transitions=False, pip_controls=False, pip_subtitles=False, embedded_subtitles=False, external_display=False, airplay_controls=False, audio_switch=False, seek_recovery=False, audio_tail=False, video_tail=False, subtitle_tail=False, background_audio=False):
     output.mkdir(parents=True, exist_ok=False)
     client = AppleSimulators()
     device = None
@@ -35,9 +36,10 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
         app.mkdir()
         (app / 'Frameworks').mkdir()
         shutil.copytree(framework, app / 'Frameworks/VLCKit.framework', symlinks=True)
+        fixture_movie = app / ('fixture.mkv' if audio_tail or video_tail or subtitle_tail else 'fixture.mp4')
         source = workspace / 'main.m'
         controller = ROOT / 'Python/features/video/mobile/ios/VideoPlayer.m'
-        fixture = ROOT / 'mobile_build/validation/fixtures' / ('video_audio_switch_checks.m' if audio_switch else 'video_airplay_checks.m' if airplay_controls else 'video_chrome_checks.m')
+        fixture = ROOT / 'mobile_build/validation/fixtures' / ('video_background_audio_checks.m' if background_audio else 'video_duration_tail_checks.m' if subtitle_tail else 'video_video_tail_checks.m' if video_tail else 'video_audio_tail_checks.m' if audio_tail else 'video_seek_recovery_checks.m' if seek_recovery else 'video_audio_switch_checks.m' if audio_switch else 'video_airplay_checks.m' if airplay_controls else 'video_chrome_checks.m')
         geometry = ('#define LG_VIDEO_FOLD_QA 1\n' +
                     (ROOT / 'mobile_build/validation/fixtures/video_fold_geometry.m').read_text()) if fold else ''
         source.write_text('#import ' + json.dumps(str(controller)) + '\n' + geometry + fixture.read_text())
@@ -45,7 +47,7 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
             install_remux_headers(workspace)
         sdk = subprocess.check_output(['xcrun', '--sdk', 'iphonesimulator', '--show-sdk-path'], text=True).strip()
         command = ['xcrun', 'clang', '-fobjc-arc', '-fmodules', '-fmodules-cache-path=' + str(workspace / 'modules'),
-                   '-I', str(fixture.parent), '-I', str(workspace / 'VideoFFmpeg'), '-target', 'arm64-apple-ios17.0-simulator', '-isysroot', sdk, '-I', str(ROOT / 'Python/mobile/ios'), '-F', str(framework.parent),
+                   '-I', str(fixture.parent), '-I', str(framework / 'Headers'), '-I', str(workspace / 'VideoFFmpeg'), '-target', 'arm64-apple-ios17.0-simulator', '-isysroot', sdk, '-I', str(ROOT / 'Python/mobile/ios'), '-F', str(framework.parent),
                    '-framework', 'UIKit', '-framework', 'AVFoundation', '-framework', 'AVKit', '-framework', 'CoreImage', '-framework', 'CallKit', '-framework', 'VLCKit',
                    '-Wl,-rpath,@executable_path/Frameworks', str(source), '-o', str(app / 'VideoChromeQA')]
         result = subprocess.run(command, text=True, capture_output=True)
@@ -61,25 +63,63 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
                  ['-c:v', 'libx264', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p'])
         if pip_subtitles:
             (app / 'captions.srt').write_text('1\n00:00:00,000 --> 00:00:08,000\nFIRST PIP CAPTION\n\n2\n00:00:08,000 --> 00:00:29,000\n<font color="#ffff00">SECOND PIP CAPTION</font>\n')
+        if background_audio:
+            (app / 'captions.srt').write_text('1\n00:00:00,000 --> 00:00:29,000\nLOCAL VIDEO CAPTION\n')
         if movie is not None:
-            shutil.copyfile(movie, app / 'fixture.mp4')
+            shutil.copyfile(movie, fixture_movie)
         else:
-            audio = ['-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-c:a', 'aac'] if airplay_controls else []
+            audio = ['-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-c:a', 'aac'] if airplay_controls or background_audio else []
+            if subtitle_tail:
+                audio = ['-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=3', '-c:a', 'aac']
+            if video_tail:
+                audio = ['-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=3',
+                         '-f', 'lavfi', '-i', 'sine=frequency=880:sample_rate=48000:duration=3',
+                         '-map', '0:v', '-map', '1:a', '-map', '2:a', '-c:a', 'eac3', '-ac', '6',
+                         '-metadata:s:a:0', 'language=eng', '-metadata:s:a:1', 'language=jpn']
+            if audio_tail:
+                audio = ['-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=10',
+                         '-map', '0:v', '-map', '1:a', '-c:a', 'aac']
             if audio_switch:
                 audio = ['-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000',
                          '-f', 'lavfi', '-i', 'sine=frequency=880:sample_rate=48000',
                          '-map', '0:v', '-map', '1:a', '-map', '2:a', '-c:a', 'aac',
                          '-metadata:s:a:0', 'language=eng', '-metadata:s:a:1', 'language=fra']
             subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
-                            'color=c=0x102040:size=640x360:rate=24' if pip_subtitles else 'testsrc2=size=128x72:rate=12', *audio, '-t', '30',
-                            '-threads', '1', *codec, str(app / 'fixture.mp4')], check=True)
-        if embedded_subtitles:
+                            'testsrc2=size=128x72:rate=12:duration=3' if audio_tail else
+                            'color=c=0x102040:size=640x360:rate=24' if pip_subtitles else 'testsrc2=size=128x72:rate=12', *audio, '-t', '3' if subtitle_tail else '10' if audio_tail or video_tail else '30',
+                            '-threads', '1', *codec, str(fixture_movie)], check=True)
+        if subtitle_tail:
+            captions = workspace / 'long.srt'
+            captions.write_text('1\n00:00:01,000 --> 00:00:20,000\nLONG CAPTION MUST NOT EXTEND PLAYBACK\n')
+            muxed = workspace / 'long-caption.mkv'
+            subprocess.run(['ffmpeg', '-v', 'error', '-i', str(fixture_movie), '-i', str(captions),
+                '-map', '0', '-map', '1', '-c', 'copy', str(muxed)], check=True)
+            shutil.move(muxed, fixture_movie)
+        if embedded_subtitles or background_audio:
             muxed = workspace / 'captioned.mp4'
-            subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-i', str(app / 'fixture.mp4'),
+            subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-i', str(fixture_movie),
                 '-i', str(app / 'captions.srt'), '-c:v', 'copy', '-c:s', 'mov_text',
                 '-disposition:s:0', 'default', str(muxed)], check=True)
-            shutil.move(muxed, app / 'fixture.mp4')
+            shutil.move(muxed, fixture_movie)
         if airplay_controls:
+            reverse_captions = workspace / 'reverse.srt'
+            reverse_captions.write_text('1\n00:00:06,000 --> 00:00:09,000\nVIDEO TAIL CAPTION\n\n2\n00:00:17,000 --> 00:00:40,000\nLONG SUBTITLE TAIL\n')
+            subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=12:duration=18',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=3', '-i', str(reverse_captions),
+                '-map', '0:v', '-map', '1:a', '-map', '2:s', '-c:v', 'libx265', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p10le',
+                '-g', '24', '-bf', '2', '-x265-params', 'pools=1:frame-threads=1:log-level=error',
+                '-c:a', 'eac3', '-ac', '6', '-c:s', 'copy', str(app / 'reverse.mkv')], check=True)
+            subprocess.run(['ffmpeg', '-v', 'error', '-i', str(app / 'reverse.mkv'),
+                '-map', '0', '-c:v', 'copy', '-c:a', 'libopus', '-ac', '2', '-c:s', 'copy',
+                str(app / 'reverse-opus.mkv')], check=True)
+            tail_captions = workspace / 'tail.srt'
+            tail_captions.write_text('1\n00:01:00,000 --> 00:01:05,000\nAUDIO TAIL CAPTION\n\n2\n00:01:29,000 --> 00:01:50,000\nLONG SUBTITLE TAIL\n')
+            subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=12:duration=3',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=90', '-i', str(tail_captions),
+                '-map', '0:v', '-map', '1:a', '-map', '2:s', '-c:s', 'copy', '-c:v', 'libx265', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p10le',
+                '-g', '24', '-bf', '2', '-x265-params', 'pools=1:frame-threads=1:log-level=error',
+                '-c:a', 'aac' if os.environ.get('LG_TAIL_AAC') else 'eac3',
+                '-ac', '2' if os.environ.get('LG_TAIL_AAC') else '6', str(app / 'tail.mkv')], check=True)
             captions = workspace / 'airplay.srt'
             captions.write_text('1\n00:00:00,000 --> 00:00:05,000\nFIRST AIRPLAY CAPTION\n\n'
                                 '2\n00:00:11,900 --> 00:00:13,500\n<i>CROSSING AIRPLAY CAPTION</i>\n')
@@ -102,7 +142,7 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
                 '-map', '0:v', '-map', '0:a', '-map', '0:s', '-c:v', 'copy',
                 '-c:a', 'aac', '-c:s', 'mov_text', str(app / 'captions.mp4')], check=True)
         metadata = subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', 'v:0',
-            '-show_streams', '-of', 'json', str(app / 'fixture.mp4')], text=True)
+            '-show_streams', '-of', 'json', str(fixture_movie)], text=True)
         (output / 'fixture.json').write_text(metadata)
         if hdr:
             stream = json.loads(metadata)['streams'][0]
@@ -116,7 +156,7 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
             CFBundleShortVersionString='1.0', CFBundlePackageType='APPL', MinimumOSVersion='17.0',
             UIDeviceFamily=[1, 2], UILaunchScreen={},
             UIApplicationSceneManifest=dict(UIApplicationSupportsMultipleScenes=False, UISceneConfigurations={
-                'UIWindowSceneSessionRoleApplication': [dict(UISceneConfigurationName='QA', UISceneDelegateClassName='LGVideoAudioSwitchChecks' if audio_switch else 'LGVideoAirPlayChecks' if airplay_controls else 'LGVideoChromeChecks')]}),
+                'UIWindowSceneSessionRoleApplication': [dict(UISceneConfigurationName='QA', UISceneDelegateClassName='LGVideoBackgroundAudioChecks' if background_audio else 'LGVideoDurationTailChecks' if subtitle_tail else 'LGVideoVideoTailChecks' if video_tail else 'LGVideoAudioTailChecks' if audio_tail else 'LGVideoSeekRecoveryChecks' if seek_recovery else 'LGVideoAudioSwitchChecks' if audio_switch else 'LGVideoAirPlayChecks' if airplay_controls else 'LGVideoChromeChecks')]}),
             UISupportedInterfaceOrientations=['UIInterfaceOrientationPortrait', 'UIInterfaceOrientationLandscapeLeft',
                                               'UIInterfaceOrientationLandscapeRight'])))
         subprocess.run(['codesign', '--force', '--deep', '--sign', '-', str(app)], check=True, capture_output=True)
@@ -136,6 +176,7 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
             cache = Path(client.invoke('get_app_container', device, bundle, 'data')) / 'Documents/result.json'
             deadline = time.monotonic() + (100 if url or pip_subtitles else 50)
             backgrounded = False
+            foregrounded = False
             while time.monotonic() < deadline:
                 if airplay_controls and hls_server is None and cache.with_name('hls-fixtures.json').exists():
                     hls_server = serve_airplay_fixtures(cache.parent)
@@ -148,6 +189,12 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
                     time.sleep(1)
                     client.invoke('io', device, 'screenshot', str(output / 'pip-background.png'))
                     cache.with_name('pip-background-ready').touch()
+                if background_audio and not backgrounded and cache.with_name('background-ready').exists():
+                    client.invoke('launch', device, 'com.apple.Preferences')
+                    backgrounded = True
+                if background_audio and not foregrounded and cache.with_name('foreground-ready').exists():
+                    client.invoke('launch', device, bundle)
+                    foregrounded = True
                 if cache.exists():
                     report = json.loads(cache.read_text())
                     (output / 'result.json').write_text(json.dumps(report, indent=2))
@@ -202,13 +249,13 @@ def serve_airplay_fixtures(documents):
         boundaries = metadata['boundaries']
         (root / 'index.m3u8').write_bytes(master_playlist(audio, subtitles, metadata['defaultAudio'], 2_000_000, metadata['video']))
         for route in ('video', *audio):
-            (root / route / 'index.m3u8').write_bytes(playlist(boundaries, 'm4s', initialization=True))
+            (root / route / 'index.m3u8').write_bytes(playlist(boundaries, 'm4s', initialization=True, end_ms=audio.get(route, {}).get('end_ms')))
         for route in subtitles:
             (root / route / 'index.m3u8').write_bytes(playlist(boundaries, 'vtt'))
             for index, (start, end) in enumerate(zip(boundaries, boundaries[1:])):
                 cues = json.loads((root / route / f'segment-{index}.json').read_text())
                 (root / route / f'segment-{index}.vtt').write_bytes(webvtt_segment(
-                    cues, start, end, timestamp_offset=metadata['subtitleTimestampOffset']))
+                    cues, start, end, timestamp_offset=metadata['subtitleTimestampOffset'], playable_end=boundaries[-1]))
     class Handler(SimpleHTTPRequestHandler):
         def log_message(self, *args):
             pass
@@ -228,7 +275,12 @@ def main():
     parser.add_argument('--hdr', action='store_true', help='Decode 10-bit BT.2020 PQ HEVC and inspect the native HDR layer.')
     parser.add_argument('--pip-subtitles', action='store_true', help='Exercise composited subtitles, real PiP/background, track-off/on and skip callbacks.')
     parser.add_argument('--pip-controls', action='store_true', help='Check live PiP delegate skips, boundaries and lock; no system PiP window.')
+    parser.add_argument('--subtitle-tail', action='store_true', help='Check a subtitle cue cannot extend playable A/V duration')
+    parser.add_argument('--video-tail', action='store_true', help='Check video-only tails and language selection')
+    parser.add_argument('--audio-tail', action='store_true', help='Play/reopen beyond video EOS with a longer real audio track, then return to video.')
+    parser.add_argument('--seek-recovery', action='store_true', help='Recover real failed/stopped inputs at a new timeline target without autoplay.')
     parser.add_argument('--audio-switch', action='store_true', help='Check live two-language audio switches, paused intent and cancellation.')
+    parser.add_argument('--background-audio', action='store_true', help='Check ordinary local background audio and protected-data lifecycle policy.')
     parser.add_argument('--airplay-controls', action='store_true', help='Check local mute recovery and simulated receiver loading, seeks and route layout.')
     parser.add_argument('--external-display', action='store_true', help='Exercise the live drawable handoff into a synthetic external viewport.')
     parser.add_argument('--pause-transitions', action='store_true', help='Run native Play/Pause/Resume checks in both HDR modes without chrome timing checks.')
@@ -238,7 +290,7 @@ def main():
     args = parser.parse_args()
     if args.embedded_subtitles and not args.pip_subtitles:
         parser.error("--embedded-subtitles requires --pip-subtitles")
-    run(args.framework.resolve(), args.output.resolve(), args.model, args.orientation, args.hdr, args.resume, args.fold, pause_transitions=args.pause_transitions, pip_controls=args.pip_controls, pip_subtitles=args.pip_subtitles, embedded_subtitles=args.embedded_subtitles, external_display=args.external_display, airplay_controls=args.airplay_controls, audio_switch=args.audio_switch)
+    run(args.framework.resolve(), args.output.resolve(), args.model, args.orientation, args.hdr, args.resume, args.fold, pause_transitions=args.pause_transitions, pip_controls=args.pip_controls, pip_subtitles=args.pip_subtitles, embedded_subtitles=args.embedded_subtitles, external_display=args.external_display, airplay_controls=args.airplay_controls, audio_switch=args.audio_switch, seek_recovery=args.seek_recovery, audio_tail=args.audio_tail, video_tail=args.video_tail, subtitle_tail=args.subtitle_tail, background_audio=args.background_audio)
 
 
 if __name__ == '__main__':

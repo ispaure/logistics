@@ -17,7 +17,7 @@ def clock(milliseconds):
 
 
 from .controls import PlaybackTools
-from .backend import QtPlayback
+from .backend import SEEK_ERROR, QtPlayback
 from .presentation import PlaybackPresentation
 from .chrome import DockedChrome
 from .panels import PlaybackPanels
@@ -31,6 +31,7 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
     stream_problem = qt.Signal(str)
     network_wait = qt.Signal(object, bool)
     sidecar_result = qt.Signal(object)
+    bounds_result = qt.Signal(object)
 
     def __init__(self, choice, *, backend_factory=QtPlayback):
         super().__init__()
@@ -72,6 +73,7 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
             self.build_tools(cache_directory(create=False) / 'Video')
             self.build_presentation()
             self.sidecar_result.connect(self.sidecars_loaded)
+            self.bounds_result.connect(self.bounds_loaded)
             self.start_sidecars()
             self._last_progress_position = self.progress.position
             if self.progress.resume_notice:
@@ -210,11 +212,14 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
             self.transport_failure = None
             self.requested_play = True
             self.last_frame = self.last_clock = monotonic()
+            self.last_audio = 0
             self.player.play()
             self.update_play(self.player.playbackState())
             self.show_controls()
 
     def duration_changed(self, duration):
+        bounds = self.content.media_bounds
+        duration = (bounds.get('end_ms') if bounds else None) or duration
         if duration <= 0:
             return
         self.progress.duration = duration
@@ -224,6 +229,7 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
             self.status.setText("Resumed playback. Use Playback → Start over to restart.")
             self.have_frame = False
             self.last_frame = self.last_clock = monotonic()
+            self.last_audio = 0
             self.player.setPosition(min(self.resume_at, max(0, duration - 1000)))
             self.resume_at = None
         self.position_changed(self.player.position())
@@ -332,8 +338,26 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
                 resource.close()
             choice.close()
 
+    def bounds_loaded(self, bounds):
+        if self.closing or self.chapter_cancelled.is_set():
+            return
+        try:
+            self.content.check_access()
+        except (OSError, ValueError):
+            return
+        self.content.media_bounds = bounds
+        self.duration_changed(self.player.duration())
+
     def start_sidecars(self):
         def load():
+            from dataclasses import asdict
+            from features.video.chapters import read_media_bounds
+            try:
+                bounds = read_media_bounds(self.content, cancelled=self.chapter_cancelled.is_set)
+                if not self.chapter_cancelled.is_set():
+                    self.bounds_result.emit({**asdict(bounds), 'end_ms': bounds.end_ms})
+            except (OSError, ValueError):
+                pass
             from features.video.sidecars import discover_sidecars
             from features.video.subtitles import Subtitles, MAX_SUBTITLE
             resources = []
@@ -410,13 +434,17 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
         self.requested_play = False
         self.network_hold = False
         self.show_controls()
+        self.wait_indicator.hide()
         messages = {
             QMediaPlayer.Error.FormatError: 'This video format could not be decoded.',
             QMediaPlayer.Error.AccessDeniedError: 'Video access was denied. Unlock the source and press Play to retry.',
             QMediaPlayer.Error.NetworkError: 'The video connection failed. Press Play to retry.',
         }
-        self.status.setText(self.transport_failure or messages.get(self.player.error(),
-            'Playback could not continue. Press Play to retry from this position.'))
+        if self.player.errorString() == SEEK_ERROR and not self.transport_failure:
+            self.status.setText(SEEK_ERROR)
+        else:
+            self.status.setText(self.transport_failure or messages.get(self.player.error(),
+                'Playback could not continue. Press Play to retry from this position.'))
 
     def show_chapters(self):
         if not self.controls_allowed():
@@ -456,6 +484,9 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
             self.remember_seek(position)
             self.have_frame = False
             self.last_frame = self.last_clock = monotonic()
+            self.last_audio = 0
+            if self.status.text() == SEEK_ERROR:
+                self.status.setText('Playing.' if self.requested_play else 'Paused.')
             if self.player.duration() <= 0:
                 self.resume_at = position
             self.player.setPosition(position)

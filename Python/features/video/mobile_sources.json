@@ -19,6 +19,7 @@
     "mobile/mkv.py",
     "formats.py",
     "buffering.py",
+    "chapters.py",
     "session.py",
     "mobile/controls.py",
     "mobile/ios/PlaybackControls.m",

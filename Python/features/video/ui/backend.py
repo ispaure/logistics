@@ -10,6 +10,10 @@ from .audio_output import audio_output
 
 AUDIO_SWITCH_TIMEOUT = 8
 AUDIO_SWITCH_ERROR = 'Could not switch audio. Choose another track or press Play to retry.'
+VIDEO_WITHOUT_AUDIO = 'Audio has not started here. Video continues.'
+SEEK_TIMEOUT = 8
+SEEK_ERROR = 'Could not seek to this position. Use Playback → Start over or Go to time.'
+AUDIO_ONLY_MESSAGE = 'Continuing audio. Seek back to restore video.'
 
 
 @dataclass(frozen=True)

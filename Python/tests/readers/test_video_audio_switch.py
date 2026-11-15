@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch
 from commonUtils.testing.stages import TestStage, stage
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
-from features.video.ui.backend import AUDIO_SWITCH_TIMEOUT
+from features.video.ui.backend import AUDIO_SWITCH_TIMEOUT, VIDEO_WITHOUT_AUDIO
 from features.video.ui.mpv_backend import ColourPlayer
 from features.video.ui.vlc_backend import VLCPlayer
 
@@ -24,7 +24,7 @@ class AudioSwitchTests(QtTestCase):
         native.audio_get_track.return_value = 1
         native.audio_set_track.side_effect = lambda track: setattr(native.audio_get_track, 'return_value', track) or 0
         native.play.return_value = 0
-        vlc = NS(State=NS(Playing='playing', Paused='paused'),
+        vlc = NS(State=NS(Playing='playing', Paused='paused', Error='error', Ended='ended'),
                  EventType=NS(MediaPlayerBuffering=1), MediaStats=Mock)
         owner = qt.QWidget()
         owner.playback_permitted = lambda: True
@@ -148,6 +148,79 @@ class AudioSwitchTests(QtTestCase):
         player.update_audio_switch({'audio-switch': (latest, 'restarted'), 'seeking': False, 'audio-pts': 9}, 9000)
         self.assertIsNone(player._audio_switch)
         self.assertEqual(player.playbackState(), player.PlaybackState.PausedState)
+
+    def test_vlc_switch_reports_video_continuing_only_after_decoded_output_evidence(self):
+        player, native = self.vlc_player()
+        states = []
+        player.audioSwitchChanged.connect(lambda *state: states.append(state))
+        player.setActiveAudioTrack(1)
+        player.poll_audio_switch('playing', 4000, 15, 30, 100)
+        self.buffering(player, 0)
+        self.buffering(player, 100)
+        player.poll_audio_switch('playing', 4100, 15, 30, 110)
+        player.poll_audio_switch('playing', 5300, 15, 30, 110)
+        self.assertEqual(states, [(True, '')])
+        player.poll_audio_switch('playing', 5300, 15, 31, 130)
+        self.assertEqual(states, [(True, '')])
+        player.poll_audio_switch('playing', 5310, 16, 31, 131)
+        self.assertEqual(states[-1], (False, ''))
+        self.assertEqual(native.audio_get_track(), 2)
+
+    @stage(TestStage.EXTENDED)
+    @skipUnless(shutil.which('ffmpeg'), 'FFmpeg track muxer is required')
+    def test_pinned_vlc_video_tail_restores_clock_and_switches_two_expired_audio_tracks(self):
+        from logistics_build.build_retention import scratch
+        from tests.readers.decoder_fixtures import headless_vlc_playback
+
+        with scratch() as root:
+            path = root / 'video-tail.mkv'
+            subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i',
+                'testsrc2=size=192x108:rate=25:duration=10', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=3',
+                '-f', 'lavfi', '-i', 'sine=frequency=660:duration=3', '-map', '0:v', '-map', '1:a', '-map', '2:a',
+                '-c:v', 'libx265', '-pix_fmt', 'yuv420p10le',
+                '-x265-params', 'pools=2:frame-threads=1:log-level=error', '-g', '25', '-c:a', 'eac3',
+                '-metadata:s:a:0', 'language=eng', '-metadata:s:a:1', 'language=fra', str(path)],
+                check=True, timeout=30)
+            for resume in (6000, 0):
+                with self.subTest(resume=resume):
+                    owner = qt.QWidget()
+                    owner.playback_permitted = lambda: True
+                    backend = headless_vlc_playback(owner)
+                    player = backend.player
+                    states, statuses = [], []
+                    player.audioSwitchChanged.connect(lambda *state: states.append(state))
+                    player.mediaStatusChanged.connect(statuses.append)
+                    try:
+                        player.setSource(qt.QUrl.fromLocalFile(str(path)))
+                        if resume:
+                            player.setPosition(resume)
+                        player.play()
+                        self.wait_until(lambda: player.position() > (resume or 3000) + 300
+                                        and player.presentation_current and len(player.audioTracks()) == 2, timeout=10)
+                        player.setActiveAudioTrack(1)
+                        self.wait_until(lambda: len(states) == 2, timeout=6, message=lambda: repr((
+                            states, player.position(), player.native.get_time(), player._audio_seek,
+                            player.stats.decoded_audio, player.stats.decoded_video)))
+                        self.assertEqual(states, [(True, ''), (False, VIDEO_WITHOUT_AUDIO)])
+                        self.assertEqual(player.activeAudioTrack(), 1)
+                        self.assertEqual(player.playbackState(), player.PlaybackState.PlayingState)
+                        player.pause()
+                        held = player.position()
+                        self.wait_until(lambda: player.native.get_state() == player.vlc.State.Paused)
+                        self.assertEqual(player.position(), held)
+                        if not resume:
+                            player.play()
+                            self.wait_until(lambda: player.MediaStatus.EndOfMedia in statuses, timeout=10)
+                            player.setPosition(0)
+                        else:
+                            player.setPosition(1000)
+                        self.wait_until(lambda: player.presentation_current and player.position() <= 1200, timeout=8)
+                        player.play()
+                        self.wait_until(lambda: player.position() > 1400 and player.stats.played_abuffers > 0)
+                        self.assertEqual(player.activeAudioTrack(), 1)
+                    finally:
+                        backend.retire()
+                        owner.deleteLater()
 
     @stage(TestStage.EXTENDED)
     @skipUnless(shutil.which('ffmpeg'), 'FFmpeg track muxer is required')

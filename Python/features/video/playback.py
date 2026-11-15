@@ -28,6 +28,7 @@ class VideoContent:
         self.remote = document_remote(self.provider)
         self.closed = False
         self.buffering, self.memory = buffering, None
+        self.media_bounds = None  # Optional declared per-track endpoints; session-local, never source mutations.
         self.timestamp_byte_anchors = None  # Session-only; externally verified MP4/MKV index, if available.
         try:
             self._restricted = session_only(self.provider)

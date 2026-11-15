@@ -180,8 +180,21 @@ class MobileVideo:
         except (OSError, ValueError, PermissionError):
             self.retire()
 
+    def prepare_media_bounds(self):
+        from dataclasses import asdict
+        from features.video.chapters import read_media_bounds
+        bounds = read_media_bounds(self.content, cancelled=lambda: self.closed)
+        self.content.check_access()
+        if not self.closed:
+            self.content.media_bounds = {**asdict(bounds), 'end_ms': bounds.end_ms}
+
     def prepare(self):
+        if not self.content.remote:
+            self.prepare_media_bounds()
         position = self.progress.load()
+        end = (self.content.media_bounds or {}).get('end_ms')
+        if end is not None:
+            position = min(position, max(0, end - 1))
         self.controls.settings = self.controls.store.load()
         # Remote directory enumeration and optional sidecar stats must not sit
         # in front of the first video request. Keep the retained source until
@@ -189,6 +202,8 @@ class MobileVideo:
         return position, [] if self.content.remote else self.prepare_sidecars()
 
     def prepare_sidecars(self):
+        if self.content.remote and self.content.media_bounds is None:
+            self.prepare_media_bounds()
         folder = self.content.path.rpartition('/')[0]
         try:
             rows = self.content.provider.list(folder)

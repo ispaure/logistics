@@ -5,6 +5,16 @@
 #import <CallKit/CallKit.h>
 #import <math.h>
 #import <VLCKit/VLCKit.h>
+#import <VLCKit/vlc/libvlc.h>
+#import <VLCKit/vlc/libvlc_media.h>
+#import <VLCKit/vlc/libvlc_media_player.h>
+// VLCKit's existing descriptor bridge keeps this call on its retained media.
+@interface VLCMedia (LGStatisticsDescriptor)
+- (libvlc_media_t *)libVLCMediaDescriptor;
+@end
+@interface VLCMediaPlayer (LGClockDescriptor)
+- (libvlc_media_player_t *)libVLCMediaPlayer;
+@end
 #if __has_include(<UIKit/UIHingeInteraction.h>)
 #import <UIKit/UIHingeInteraction.h>
 #import <UIKit/UIViewReservedRegion.h>
@@ -67,13 +77,17 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
     <VLCDrawable, VLCPictureInPictureDrawable, VLCPictureInPictureMediaControlling,
      VLCMediaPlayerDelegate, CXCallObserverDelegate, UIGestureRecognizerDelegate, AVRoutePickerViewDelegate>
 @property(nonatomic, copy) NSString *videoURL;
+@property(nonatomic) VLCMediaStats lastPlaybackStats;
+@property(nonatomic, weak) VLCMedia *statisticsMedia;
 @property(nonatomic, strong) LGScreenAwakeLease *awakeLease;
 @property(nonatomic, copy) NSString *subtitleJSON;
 @property(nonatomic, copy) NSString *pendingSubtitleURL;
 @property(nonatomic, copy) NSSet<NSString *> *subtitleTracksBeforeAttachment;
 @property(nonatomic) int64_t startMilliseconds; // Deferred resume/paused seek; -1 means no pending seek.
 @property(nonatomic) int64_t knownDuration;
-@property(nonatomic) BOOL resumeSeekSubmitted;
+@property(nonatomic) BOOL resumeSeekSubmitted, inputNeedsRestart, audioOnlyInput, openingSeekPending;
+@property(nonatomic) NSTimeInterval seekSubmittedAt, seekDeadline;
+@property(nonatomic) uint64_t seekAudioBaseline, seekFrameBaseline;
 @property(nonatomic) BOOL restricted;
 @property(nonatomic) BOOL airPlayAvailable, airPlayWasExternal, airPlaySeekPending;
 @property(nonatomic) BOOL airPlayPickerOpen, airPlayPreparing, airPlayResumeLocal;
@@ -88,6 +102,8 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic, strong) AVPlayer *airPlayPlayer;
 @property(nonatomic, strong) AVPlayer *airPlayRoutePlayer;
 @property(nonatomic, copy) BOOL (^allowed)(BOOL external);
+@property(nonatomic, copy) BOOL (^backgroundAudioAllowed)(void);
+@property(nonatomic) BOOL localAudioInBackground;
 @property(nonatomic, copy) BOOL (^requestPlay)(void);
 @property(nonatomic, copy) void (^closed)(void);
 @property(nonatomic, strong) VLCMediaPlayer *player;
@@ -109,8 +125,9 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic, copy) NSString *audioSwitchTrack;
 @property(nonatomic) NSUInteger audioSwitchGeneration;
 @property(nonatomic) BOOL audioSwitchSawBuffering, audioSwitchBuffered;
-@property(nonatomic) uint64_t audioSwitchPlayed;
-@property(nonatomic) int64_t audioSwitchClock;
+@property(nonatomic) uint64_t audioSwitchPlayed, audioSwitchDecoded, audioSwitchFrames, audioMissingPlayed;
+@property(nonatomic) BOOL audioOutputMissing;
+@property(nonatomic) int64_t audioSwitchClock, audioSwitchDecodeClock;
 @property(nonatomic) NSTimeInterval audioSwitchDeadline;
 @property(nonatomic, copy) NSString *transportFailure;
 @property(nonatomic) BOOL hingePartiallyOpen, tabletop, portraitTabletop;
@@ -128,8 +145,8 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic) BOOL networkWaiting, networkResumePending, playRequested;
 @property(nonatomic) int64_t bufferPosition;
 @property(nonatomic) int64_t observedClock, lastRenderedClock;
-@property(nonatomic) uint64_t observedFrames;
-@property(nonatomic) NSTimeInterval lastPlaybackProgress, lastFrameProgress;
+@property(nonatomic) uint64_t observedFrames, observedAudio;
+@property(nonatomic) NSTimeInterval lastPlaybackProgress, lastFrameProgress, lastAudioProgress;
 @property(nonatomic, strong) NSLayoutConstraint *bufferCenterX, *bufferCenterY;
 @property(nonatomic, strong) UILabel *timeLabel;
 @property(nonatomic, strong) NSLayoutConstraint *controlsLeading, *controlsTrailing, *controlsTop, *controlsBottom;
@@ -183,6 +200,8 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 - (void)revokeExternalVideo;
 - (BOOL)isExternalAudioPort:(NSString *)type;
 - (BOOL)protectedDataAvailable;
+- (VLCMediaStats)playbackStats;
+- (int64_t)nativeTimeMilliseconds;
 @end
 
 static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoController *owner);
@@ -287,6 +306,8 @@ typedef struct {
 }
 
 - (void)initializePlaybackClock {
+    if ([self declaredMediaEnd] > 0 && self.startMilliseconds >= 0)
+        self.startMilliseconds = MIN(self.startMilliseconds, [self declaredMediaEnd] - 1);
     self.lastPosition = self.startMilliseconds;
     self.progressSeek = -1;
     self.observedClock = -1;
@@ -320,7 +341,9 @@ typedef struct {
 - (void)observePlaybackPolicy {
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     [center addObserver:self selector:@selector(backgroundNotification:) name:UIApplicationDidEnterBackgroundNotification object:nil];
+    [center addObserver:self selector:@selector(foregroundNotification:) name:UIApplicationDidBecomeActiveNotification object:nil];
     [center addObserver:self selector:@selector(protectedData:) name:UIApplicationProtectedDataWillBecomeUnavailable object:nil];
+    [center addObserver:self selector:@selector(foregroundNotification:) name:UIApplicationProtectedDataDidBecomeAvailable object:nil];
     [center addObserver:self selector:@selector(captureChanged:) name:UIScreenCapturedDidChangeNotification object:nil];
     [center addObserver:self selector:@selector(audioInterrupted:) name:AVAudioSessionInterruptionNotification object:nil];
     [center addObserver:self selector:@selector(audioRouteChanged:) name:AVAudioSessionRouteChangeNotification object:nil];
@@ -606,10 +629,18 @@ typedef struct {
 
 - (BOOL)protectedDataAvailable { return UIApplication.sharedApplication.protectedDataAvailable; }
 
+- (BOOL)permitsLocalBackgroundAudio {
+    return !self.restricted && !self.lockHidden && ![self hasAirPlay] && !self.pipActive &&
+        !self.casting && !self.externalVideoHost && !self.externalVideoRevoked &&
+        self.backgroundAudioAllowed && self.backgroundAudioAllowed();
+}
+
 - (BOOL)canPlay:(BOOL)external {
     if (self.retired || self.interrupted || [self hasActiveCall] || (external && self.restricted)) return NO;
     if (self.restricted && (self.lockHidden || UIApplication.sharedApplication.applicationState == UIApplicationStateBackground)) return NO;
-    if (![self protectedDataAvailable] && !([self hasEstablishedAirPlay] && [self allowsAirPlay])) return NO;
+    if (self.localAudioInBackground && (external || ![self permitsLocalBackgroundAudio])) return NO;
+    if (![self protectedDataAvailable] && !([self hasEstablishedAirPlay] && [self allowsAirPlay]) &&
+        (external || !self.localAudioInBackground || !self.playRequested)) return NO;
     if (self.restricted && (self.view.window.screen.isCaptured || [self hasExternalAudio])) return NO;
     return self.allowed && self.allowed(external);
 }
@@ -625,10 +656,32 @@ typedef struct {
 }
 - (void)seekToMilliseconds:(int64_t)target {
     if ([self hasAirPlay]) { [self seekAirPlay:target]; return; }
-    if (self.controlsLocked || ![self canPlay:NO] || !self.player.isSeekable) return;
-    int64_t duration = self.player.media.length.value.longLongValue;
+    if (self.controlsLocked || ![self canPlay:NO]) return;
+    int64_t duration = [self durationMilliseconds];
+    if (!self.player.isSeekable && duration <= 0) return;
     target = MAX(0, target);
     if (duration > 0) target = MIN(target, MAX(0, duration - 1));
+    if (self.audioOnlyInput || [self isDeclaredAudioTail:target]) {
+        self.audioOnlyInput = NO; // Every explicit seek gives video another chance.
+        self.inputNeedsRestart = YES;
+    }
+    if (self.inputNeedsRestart || !self.player.isSeekable || self.player.state == VLCMediaPlayerStateError ||
+        self.player.state == VLCMediaPlayerStateStopped) {
+        // An input stuck opening a saved seek can lose seekability. Keep a
+        // known-duration movie recoverable without editing its saved state or
+        // forcing playback when the user had paused it.
+        BOOL resume = self.playRequested && !self.manualResumeRequired;
+        [self cancelAudioSwitch];
+        self.ended = NO;
+        self.inputNeedsRestart = YES;
+        self.startMilliseconds = self.lastPosition = target;
+        self.progressSeek = target;
+        self.resumeSeekSubmitted = NO;
+        [self updateTimeline];
+        if (resume) [self startByUser];
+        else [self showStatus:@"Position selected. Press Play to retry."];
+        return;
+    }
     // VLC may retain the old reported clock while paused. Preserve the requested
     // position for controls/checkpoints and apply it again on explicit Play.
     self.ended = NO;
@@ -637,12 +690,17 @@ typedef struct {
     if (self.audioSwitchTrack.length) {
         self.audioSwitchGeneration++;
         self.audioSwitchSawBuffering = self.audioSwitchBuffered = NO;
-        self.audioSwitchPlayed = self.player.media.statistics.playedAudioBuffers;
+        self.audioSwitchPlayed = [self playbackStats].playedAudioBuffers;
+        self.audioSwitchDecoded = [self playbackStats].decodedAudio;
         self.audioSwitchDeadline = NSProcessInfo.processInfo.systemUptime + 20;
     }
     if (self.networkResumePending) self.bufferPosition = target;
-    self.startMilliseconds = self.player.isPlaying ? -1 : target;
-    self.resumeSeekSubmitted = NO;
+    self.startMilliseconds = target;
+    self.resumeSeekSubmitted = self.player.isPlaying;
+    self.seekSubmittedAt = NSProcessInfo.processInfo.systemUptime;
+    self.seekDeadline = self.seekSubmittedAt + 20;
+    self.seekAudioBaseline = [self playbackStats].playedAudioBuffers;
+    self.seekFrameBaseline = [self playbackStats].displayedPictures;
     self.progressSeek = target;
     self.player.time = [VLCTime timeWithNumber:@(target)];
 }
@@ -681,7 +739,10 @@ typedef struct {
     if (self.startMilliseconds < 0) {
         NSTimeInterval age = NSProcessInfo.processInfo.systemUptime - self.lastFrameProgress;
         int64_t position = [self positionMilliseconds];
-        if (self.observedFrames > 0 && age >= 2.0 && self.lastRenderedClock >= 0)
+        if (self.observedFrames > 0 && age >= 2.0 &&
+            NSProcessInfo.processInfo.systemUptime - self.lastAudioProgress >= 2.0 &&
+            (self.observedAudio == 0 || NSProcessInfo.processInfo.systemUptime - self.lastPlaybackProgress >= 2.0) &&
+            self.lastRenderedClock >= 0)
             position = self.lastRenderedClock;
         self.startMilliseconds = MAX(0, position);
     }
@@ -715,9 +776,34 @@ typedef struct {
     for (CXCall *call in self.callObserver.calls) if (!call.hasEnded) return YES;
     return NO;
 }
+- (BOOL)isDeclaredAudioTail:(int64_t)target {
+    NSDictionary *bounds = [self playbackOptions][@"media_bounds"];
+    if (![bounds isKindOfClass:NSDictionary.class]) return NO;
+    NSArray *video = bounds[@"video"], *audio = bounds[@"audio"];
+    if (![video isKindOfClass:NSArray.class] || ![audio isKindOfClass:NSArray.class]) return NO;
+    if (target < 0 || !video.count || !audio.count || self.casting || self.pipActive) return NO;
+    int64_t videoEnd = 0, audioEnd = INT64_MAX;
+    for (NSDictionary *track in video) {
+        if (![track isKindOfClass:NSDictionary.class] || ![track[@"end_ms"] isKindOfClass:NSNumber.class]) return NO;
+        videoEnd = MAX(videoEnd, [track[@"end_ms"] longLongValue]);
+    }
+    for (NSDictionary *track in audio) {
+        if (![track isKindOfClass:NSDictionary.class] || ![track[@"end_ms"] isKindOfClass:NSNumber.class]) return NO;
+        audioEnd = MIN(audioEnd, [track[@"end_ms"] longLongValue]);
+    }
+    return videoEnd > 0 && target >= videoEnd && target < audioEnd;
+}
 - (VLCMedia *)playbackMedia {
+    if ([self isDeclaredAudioTail:self.startMilliseconds]) {
+        self.audioOnlyInput = YES;
+    }
     VLCMedia *media = [VLCMedia mediaWithURL:[NSURL URLWithString:self.videoURL]];
+    self.openingSeekPending = self.startMilliseconds >= 0;
+    self.lastPlaybackStats = (VLCMediaStats){0};
+    self.statisticsMedia = nil;
     self.resumeSeekSubmitted = NO;
+    self.seekSubmittedAt = 0;
+    self.seekDeadline = 0;
     // Indexed MKV seeks must use the embedded cues instead of scanning every
     // preceding cluster over the retained provider's HTTP range transport.
     if ([[NSURL URLWithString:self.videoURL].pathExtension.lowercaseString isEqualToString:@"mkv"])
@@ -732,6 +818,7 @@ typedef struct {
     [media addOption:@":no-avcodec-hurry-up"];
     [media addOption:@":no-avcodec-corrupted"];
     [media addOption:@":audio-time-stretch"];
+    if (self.audioOnlyInput) [media addOption:@":no-video"];
     NSDictionary *options = [self playbackOptions];
     for (NSArray *entry in @[@[@"audio_language", @"audio-language"], @[@"subtitle_language", @"sub-language"]]) {
         NSString *language = options[entry[0]];
@@ -742,6 +829,25 @@ typedef struct {
 - (void)setTransportFailure:(NSString *)message {
     _transportFailure = [message copy];
     if (self.player.state == VLCMediaPlayerStateError) [self showStatus:message];
+}
+- (BOOL)recoverEarlyAudioEnd {
+    // VLC can stop at the exhausted video's clock even though the container
+    // and decoded audio extend further. Retry only a terminal early end with
+    // actual audio output; never disable video on a slow/buffering input.
+    if (self.startMilliseconds < 0 || self.audioOnlyInput || !self.playRequested || self.manualResumeRequired ||
+        self.transportFailure || self.networkWaiting || self.audioSwitchTrack.length ||
+        self.networkResumePending || self.retired || ![self canPlay:NO]) return NO;
+    int64_t duration = [self durationMilliseconds];
+    int64_t clock = [self nativeTimeMilliseconds];
+    int64_t target = self.startMilliseconds >= 0 ? self.startMilliseconds : MAX(0, self.lastPosition);
+    if (clock < 0 || duration <= clock + 1000 || target >= duration ||
+        [self playbackStats].playedAudioBuffers == 0) return NO;
+    self.audioOnlyInput = YES;
+    self.inputNeedsRestart = YES;
+    self.startMilliseconds = self.lastPosition = target;
+    [self startByUser];
+    [self showStatus:@"Continuing audio. Seek back to restore video."];
+    return YES;
 }
 - (void)playbackFailed {
     int64_t position = MAX(0, self.lastPosition);
@@ -765,10 +871,15 @@ typedef struct {
     self.externalVideoRevoked = NO;
     [self revealSurface];
     if (self.externalOutputChanged) self.externalOutputChanged();
-    if (self.player.state == VLCMediaPlayerStateError || self.player.state == VLCMediaPlayerStateStopped) {
-        if (self.hasPlayed) self.startMilliseconds = self.ended ? 0 : MAX(0, self.lastPosition);
+    BOOL freshInput = self.ended || self.inputNeedsRestart || self.player.state == VLCMediaPlayerStateError || self.player.state == VLCMediaPlayerStateStopped;
+    if (freshInput) {
+        if (self.ended) { self.startMilliseconds = 0; self.audioOnlyInput = NO; }
+        else if (self.startMilliseconds < 0 && self.hasPlayed) self.startMilliseconds = MAX(0, self.lastPosition);
         self.ended = NO;
         self.hasPlayed = NO;
+        self.inputNeedsRestart = NO;
+        self.languageSignature = nil;
+        self.lastAudioTrackCount = self.lastTextTrackCount = 0;
         self.player.media = [self playbackMedia];
     }
     self.transportFailure = nil;
@@ -778,6 +889,7 @@ typedef struct {
     self.pausePending = NO;
     if (self.audioSuppressed) { self.player.audio.muted = self.resumeMuted; self.audioSuppressed = NO; }
     self.playRequested = YES;
+    if (self.startMilliseconds >= 0) self.seekDeadline = NSProcessInfo.processInfo.systemUptime + 20;
     if (self.audioSwitchTrack.length) {
         // Paused preroll can advance VLC's reported clock while the displayed
         // checkpoint stays held. Reflush at that checkpoint on explicit Play.
@@ -789,7 +901,7 @@ typedef struct {
     [self clearPausePresentation];
     // Resume an already-open paused input immediately. Fresh inputs are
     // positioned as soon as the native Opening event arrives.
-    if (self.startMilliseconds >= 0 && self.player.isPlaying) {
+    if (!freshInput && self.startMilliseconds >= 0 && self.player.isPlaying) {
         self.player.time = [VLCTime timeWithNumber:@(self.startMilliseconds)];
         self.resumeSeekSubmitted = YES;
         self.localAudioNeedsRefresh = NO;
@@ -797,9 +909,9 @@ typedef struct {
     self.lastPlaybackProgress = self.lastFrameProgress = NSProcessInfo.processInfo.systemUptime;
     [self updatePlayButton];
     self.networkResumePending = NO;
-    NSLog(@"[VideoPlayback] play target=%lld current=%lld", self.startMilliseconds, self.player.time.value.longLongValue);
+    NSLog(@"[VideoPlayback] play target=%lld current=%lld", self.startMilliseconds, [self nativeTimeMilliseconds]);
     [self logHDRTransition:@"play-request"];
-    if (!self.rateChangePending && !self.player.isPlaying) [self.player play];
+    if (!self.rateChangePending && (freshInput || !self.player.isPlaying)) [self.player play];
     [self tick:nil];
     if ([self.message.text isEqualToString:@"Ready. Press Play to start."]) {
         self.message.text = @"";
@@ -814,12 +926,17 @@ typedef struct {
     // HTTP read-ahead availability is not decoded-video readiness. In particular,
     // do not pause VLC or restart it when a single chunk arrives.
     NSLog(@"[VideoPlayback] networkWait=%d clock=%lld frames=%llu", waiting,
-          self.player.time.value.longLongValue, (unsigned long long)self.observedFrames);
+          [self nativeTimeMilliseconds], (unsigned long long)self.observedFrames);
 }
 - (void)updatePlaybackProgress {
     NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
-    int64_t clock = self.player.time.value.longLongValue;
-    uint64_t frames = self.player.media.statistics.displayedPictures;
+    int64_t clock = [self nativeTimeMilliseconds];
+    VLCMediaStats statistics = [self playbackStats];
+    uint64_t frames = statistics.displayedPictures;
+    uint64_t audio = statistics.playedAudioBuffers;
+    BOOL newAudio = audio > self.observedAudio;
+    if (newAudio) self.lastAudioProgress = now;
+    self.observedAudio = audio;
     BOOL newFrame = frames > self.observedFrames;
     BOOL statsReset = frames < self.observedFrames;
     if (newFrame) {
@@ -833,9 +950,14 @@ typedef struct {
     // When VLC does not expose picture stats, fall back to clock progress and
     // transport starvation rather than leaving the spinner stuck forever.
     BOOL missingFrames = frames == 0 && self.observedFrames == 0;
-    BOOL frameStall = !missingFrames && (now - self.lastFrameProgress >= 2.5);
-    BOOL fallbackStall = missingFrames && (now - self.lastPlaybackProgress >= 3.0 ||
-        (self.networkWaiting && now - self.lastFrameProgress >= 3.0));
+    // A container can legitimately outlast its video track. Fresh audio output
+    // is progress too, including an audio-only tail reached by a saved seek.
+    BOOL frameStall = !missingFrames && (now - self.lastFrameProgress >= 2.5) &&
+        now - self.lastAudioProgress >= 2.5 &&
+        (audio == 0 || now - self.lastPlaybackProgress >= 2.5);
+    BOOL fallbackStall = missingFrames && now - self.lastAudioProgress >= 3.0 &&
+        (now - self.lastPlaybackProgress >= 3.0 ||
+         (self.networkWaiting && now - self.lastFrameProgress >= 3.0));
     BOOL switchingAudio = self.audioSwitchTrack.length && self.playRequested;
     BOOL stalled = switchingAudio || (self.playRequested && !self.manualResumeRequired && !self.ended &&
         (!self.pausePending || self.rateChangePending) && (frameStall || fallbackStall));
@@ -906,13 +1028,33 @@ typedef struct {
 - (void)revealSurface {
     // Only the authenticated Python presentation owner calls this entry point.
     self.lockHidden = NO;
-    self.movie.hidden = [self hasAirPlay] || self.externalVideoRevoked || (self.restricted && self.view.window.screen.isCaptured);
+    self.movie.hidden = self.localAudioInBackground || [self hasAirPlay] || self.externalVideoRevoked ||
+        (self.restricted && self.view.window.screen.isCaptured);
+}
+- (BOOL)continueLocalAudioInBackground {
+    if (!self.playRequested || self.manualResumeRequired || self.retired || self.interrupted ||
+        [self hasActiveCall] || ![self permitsLocalBackgroundAudio] || !self.allowed || !self.allowed(NO)) return NO;
+    self.localAudioInBackground = YES;
+    // Keep the input and caption tracks attached. The native display layer
+    // handles the suspended presentation and flushes on activation.
+    self.movie.hidden = YES;
+    return YES;
 }
 - (void)background {
     [self setScreenAwake:NO];
-    if (self.restricted) [self suspendForLock]; else if (!self.pipActive && !self.casting && !self.airPlayPlayer.externalPlaybackActive) [self pause];
+    if (self.restricted) [self suspendForLock];
+    else if (!self.pipActive && !self.casting && !self.airPlayPlayer.externalPlaybackActive &&
+             ![self continueLocalAudioInBackground]) [self pause];
 }
 - (void)backgroundNotification:(NSNotification *)notification { [self background]; }
+- (void)foregroundNotification:(NSNotification *)notification {
+    if (!self.localAudioInBackground || UIApplication.sharedApplication.applicationState != UIApplicationStateActive ||
+        ![self protectedDataAvailable]) return;
+    self.localAudioInBackground = NO;
+    if (![self canPlay:NO]) { [self pause]; return; }
+    [self revealSurface];
+    [self updateScreenAwake];
+}
 - (void)protectedData:(NSNotification *)notification {
     if (self.restricted) [self suspendForLock];
     else if ([self hasAirPlay]) {
@@ -924,12 +1066,16 @@ typedef struct {
         }
         [self detachAirPlayKeepingRoute:NO];
         [self revealSurface];
-    } else [self pause];
+    } else {
+        [self setScreenAwake:NO];
+        if (![self continueLocalAudioInBackground]) [self pause];
+    }
 }
 - (void)captureChanged:(NSNotification *)notification {
     if (self.restricted && self.view.window.screen.isCaptured) {
         [self pause]; [self clearPausePresentation]; self.movie.hidden = YES;
-    } else if (!self.lockHidden && ![self hasAirPlay] && !self.externalVideoRevoked && [self canPlay:NO]) self.movie.hidden = NO;
+    } else if (!self.lockHidden && !self.localAudioInBackground && ![self hasAirPlay] &&
+               !self.externalVideoRevoked && [self canPlay:NO]) self.movie.hidden = NO;
 }
 - (int64_t)progressPosition {
     if (self.ended) return 0;
@@ -938,7 +1084,7 @@ typedef struct {
         [self airPlayTime:self.airPlayPlayer.currentTime];
     if (self.progressSeek >= 0 || self.networkResumePending || self.resumeSeekSubmitted || self.startMilliseconds >= 0)
         return -1;
-    return self.player.time.value ? self.player.time.value.longLongValue : -1;
+    return [self nativeTimeMilliseconds];
 }
 - (int64_t)positionMilliseconds {
     if (self.ended) return 0;
@@ -950,18 +1096,57 @@ typedef struct {
     }
     if (self.networkResumePending) return self.bufferPosition;
     if (self.startMilliseconds >= 0) return self.startMilliseconds;
-    int64_t value = self.player.time.value.longLongValue;
+    int64_t value = [self nativeTimeMilliseconds];
     return value >= 0 ? value : self.lastPosition;
 }
+- (int64_t)declaredMediaEnd {
+    NSDictionary *bounds = [self playbackOptions][@"media_bounds"];
+    id declared = [bounds isKindOfClass:NSDictionary.class] ? bounds[@"end_ms"] : nil;
+    int64_t end = [declared isKindOfClass:NSNumber.class] ? [declared longLongValue] : 0;
+    return end > 0 ? end : 0;
+}
 - (int64_t)durationMilliseconds {
+    int64_t end = [self declaredMediaEnd];
+    if (end > 0) return end; // Per-A/V declarations exclude subtitle-only container tails.
     int64_t duration = [self hasAirPlay] ? [self airPlayTime:self.airPlayPlayer.currentItem.duration] :
         self.player.media.length.value.longLongValue;
     if (duration > 0) self.knownDuration = duration;
     return MAX(0, self.knownDuration);
 }
+- (int64_t)nativeTimeMilliseconds {
+    // VLCKit's time property can remain at an optimistic seek target while
+    // the native clock is still prerolling. UI holds use startMilliseconds.
+    __attribute__((objc_precise_lifetime)) VLCMediaPlayer *player = self.player;
+    libvlc_media_player_t *instance = [player libVLCMediaPlayer];
+    if (!instance) return -1;
+    int64_t value = libvlc_media_player_get_time(instance);
+    return value >= 0 ? value / 1000 : -1;
+}
+- (VLCMediaStats)playbackStats {
+    // VLCKit's statistics getter ignores the C API's unavailable result.
+    // Retain the exact input and only cache a successful, initialized sample.
+    __attribute__((objc_precise_lifetime)) VLCMedia *media = self.player.media;
+    if (media != self.statisticsMedia) {
+        self.lastPlaybackStats = (VLCMediaStats){0};
+        self.statisticsMedia = media;
+    }
+    libvlc_media_stats_t value = {0};
+    libvlc_media_t *descriptor = [media libVLCMediaDescriptor];
+    if (descriptor && libvlc_media_get_stats(descriptor, &value)) {
+        self.lastPlaybackStats = (VLCMediaStats){
+            .readBytes = value.i_read_bytes, .inputBitrate = value.f_input_bitrate,
+            .demuxReadBytes = value.i_demux_read_bytes, .demuxBitrate = value.f_demux_bitrate,
+            .demuxCorrupted = value.i_demux_corrupted, .demuxDiscontinuity = value.i_demux_discontinuity,
+            .decodedVideo = value.i_decoded_video, .decodedAudio = value.i_decoded_audio,
+            .displayedPictures = value.i_displayed_pictures, .latePictures = value.i_late_pictures,
+            .lostPictures = value.i_lost_pictures, .playedAudioBuffers = value.i_played_abuffers,
+            .lostAudioBuffers = value.i_lost_abuffers};
+    }
+    return self.lastPlaybackStats;
+}
 - (BOOL)completed { return self.ended; }
 - (NSString *)playbackDiagnosticJSON {
-    VLCMediaStats stats = self.player.media.statistics;
+    VLCMediaStats stats = [self playbackStats];
     NSDictionary *value = @{@"requested": @(self.playRequested), @"playing": @(self.player.isPlaying),
         @"manualPause": @(self.manualResumeRequired), @"networkWaiting": @(self.networkWaiting),
         @"held": @(self.networkResumePending), @"buffering": @(self.buffering),
@@ -983,6 +1168,11 @@ typedef struct {
         return;
     }
     [self updateAirPlayRoute];
+    if ([self declaredMediaEnd] > 0 && self.startMilliseconds < 0 &&
+        self.playRequested && [self nativeTimeMilliseconds] >= [self declaredMediaEnd]) {
+        [self pause]; [self.player stop]; self.ended = YES;
+        [self emitCommand:@"ended" value:@""];
+    }
     if (self.localAudioNeedsRefresh && self.playRequested && self.player.isPlaying &&
         self.player.isSeekable && [self canPlay:NO]) {
         // A route return can leave queued audio attached to the former output.
@@ -996,15 +1186,43 @@ typedef struct {
     // Keep the resume target visible until the decoder acknowledges that seek.
     // The acknowledgement window measures wall time even at faster playback.
     int64_t seekTolerance = (int64_t)(1500 * MAX(1.f, fabsf(self.player.rate)));
-    if (self.resumeSeekSubmitted && self.startMilliseconds >= 0 && self.player.isPlaying &&
-        self.player.media.statistics.displayedPictures > 0 &&
-        llabs(self.player.time.value.longLongValue - self.startMilliseconds) < seekTolerance) {
+    VLCMediaStats seekStats = [self playbackStats];
+    // Replacing a playing VLC input need not emit another Playing event.
+    // Submit its held seek once the new media itself has decoded data.
+    if (self.openingSeekPending && self.startMilliseconds >= 0 && self.playRequested &&
+        self.player.isPlaying && self.player.isSeekable && [self canPlay:NO] &&
+        (seekStats.decodedAudio > 0 || seekStats.decodedVideo > 0)) {
+        self.openingSeekPending = NO;
+        int64_t actual = [self nativeTimeMilliseconds];
+        if (actual < self.startMilliseconds || actual > self.startMilliseconds + seekTolerance) {
+            self.player.time = [VLCTime timeWithNumber:@(self.startMilliseconds)];
+            self.seekSubmittedAt = NSProcessInfo.processInfo.systemUptime;
+            self.seekAudioBaseline = seekStats.playedAudioBuffers;
+            self.seekFrameBaseline = seekStats.displayedPictures;
+        }
+        self.resumeSeekSubmitted = YES;
+    }
+    BOOL freshSeekOutput = [self nativeTimeMilliseconds] >= self.startMilliseconds +
+        MIN(100, MAX(0, [self durationMilliseconds] - self.startMilliseconds - 1)) &&
+        (self.seekSubmittedAt == 0 || (NSProcessInfo.processInfo.systemUptime - self.seekSubmittedAt >= .5 &&
+         (seekStats.displayedPictures > self.seekFrameBaseline || seekStats.playedAudioBuffers > self.seekAudioBaseline)));
+    if (self.resumeSeekSubmitted && self.startMilliseconds >= 0 && self.player.isPlaying && freshSeekOutput &&
+        (seekStats.displayedPictures > 0 || seekStats.playedAudioBuffers > 0) &&
+        llabs([self nativeTimeMilliseconds] - self.startMilliseconds) < seekTolerance) {
         self.startMilliseconds = -1;
         self.resumeSeekSubmitted = NO;
+        self.seekDeadline = 0;
+        self.progressSeek = -1;
+    }
+    if (self.startMilliseconds >= 0 && self.playRequested && !self.manualResumeRequired &&
+        self.seekDeadline > 0 && NSProcessInfo.processInfo.systemUptime >= self.seekDeadline) {
+        self.lastPosition = self.startMilliseconds;
+        [self playbackFailed];
+        [self showStatus:@"Could not reach this position. Choose another time or press Play to retry."];
     }
     if (![self canPlay:NO]) [self pause];
-    if (self.progressSeek >= 0 && self.player.time.value) {
-        int64_t position = self.player.time.value.longLongValue;
+    if (self.progressSeek >= 0 && self.startMilliseconds < 0 && [self nativeTimeMilliseconds] >= 0) {
+        int64_t position = [self nativeTimeMilliseconds];
         if (position >= 0 && llabs(position - self.progressSeek) <= 750) {
             self.progressSeek = -1;
             [self emitCommand:@"progress" value:[NSString stringWithFormat:@"%lld", position]];
@@ -1018,6 +1236,23 @@ typedef struct {
     }
     [self updateAudioSwitch];
     [self updatePlaybackProgress];
+    // Some inputs keep delivering audio while VLC's master clock stops at
+    // the declared last picture. Reopen only at that known video endpoint,
+    // with recent real audio and a stalled picture, never at a mid-file stall.
+    int64_t nativeClock = [self nativeTimeMilliseconds];
+    NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
+    if (!self.audioOnlyInput && self.startMilliseconds < 0 && self.playRequested &&
+        !self.manualResumeRequired && !self.networkWaiting && !self.networkResumePending &&
+        !self.transportFailure && !self.audioSwitchTrack.length && [self canPlay:NO] &&
+        [self isDeclaredAudioTail:nativeClock + 100] &&
+        seekStats.playedAudioBuffers > 0 && now - self.lastAudioProgress < .5 &&
+        now - self.lastFrameProgress >= 1.5 && now - self.lastPlaybackProgress >= 1.5) {
+        self.audioOnlyInput = YES;
+        self.inputNeedsRestart = YES;
+        self.startMilliseconds = self.lastPosition = MAX(0, nativeClock);
+        [self startByUser];
+        [self showStatus:@"Continuing audio. Seek back to restore video."];
+    }
     // Playing can arrive before the first frame/seek acknowledgement. Revisit
     // eligibility once those arrive without postponing an existing deadline.
     [self scheduleControls];
@@ -1039,9 +1274,9 @@ typedef struct {
     int64_t duration = [self durationMilliseconds];
     if (!self.seek.tracking && duration > 0) self.seek.value = (float)position / duration;
     self.seek.hidden = NO;
-    // AVKit can load a large movie after its duration is already known to VLC.
-    // Accept the new target now and submit it when the item becomes ready.
-    self.seek.enabled = duration > 0 && ([self hasAirPlay] || self.player.isSeekable);
+    // Known-duration inputs remain recoverable even after a failed saved seek
+    // makes VLC nonseekable. seekToMilliseconds queues a fresh input in that case.
+    self.seek.enabled = duration > 0 && !self.controlsLocked && [self canPlay:NO];
     NSString *(^time)(int64_t) = ^NSString *(int64_t value) {
         int64_t seconds = MAX(0, value / 1000);
         return [NSString stringWithFormat:@"%lld:%02lld:%02lld", seconds / 3600, seconds / 60 % 60, seconds % 60];
@@ -1083,14 +1318,16 @@ typedef struct {
             self.player.audio.muted = self.resumeMuted;
             if (self.startMilliseconds >= 0) {
                 int64_t seekTolerance = (int64_t)(1500 * MAX(1.f, fabsf(self.player.rate)));
-                if (llabs(self.player.time.value.longLongValue - self.startMilliseconds) >= seekTolerance)
+                if (llabs([self nativeTimeMilliseconds] - self.startMilliseconds) >= seekTolerance)
                     self.player.time = [VLCTime timeWithNumber:@(self.startMilliseconds)];
                 self.resumeSeekSubmitted = YES;
             }
             self.ended = NO;
             [self scheduleControls];
         }
-        int64_t duration = self.player.media.length.value.longLongValue;
+        int64_t duration = [self durationMilliseconds];
+        if (state == VLCMediaPlayerStateStopped && self.player.state == VLCMediaPlayerStateStopped &&
+            [self recoverEarlyAudioEnd]) return;
         if (state == VLCMediaPlayerStateStopped && (self.player.position >= .999 ||
             (duration > 0 && self.lastPosition >= duration - 1000))) {
             BOOL notify = !self.ended;
@@ -1234,8 +1471,10 @@ typedef struct {
             self.audioSwitchBuffered = YES;
             // Anything counted before this post-flush event could belong to
             // the old output queue. Require another real output buffer.
-            self.audioSwitchPlayed = self.player.media.statistics.playedAudioBuffers;
-            self.audioSwitchClock = self.player.time.value.longLongValue;
+            self.audioSwitchPlayed = [self playbackStats].playedAudioBuffers;
+            self.audioSwitchClock = self.audioSwitchDecodeClock = [self nativeTimeMilliseconds];
+            self.audioSwitchDecoded = [self playbackStats].decodedAudio;
+
         }
         [self updateAudioSwitch];
     });
@@ -1367,9 +1606,9 @@ typedef struct {
     // Always release the system request, including denied/nonseekable seeks.
     if (completion) dispatch_async(dispatch_get_main_queue(), completion);
 }
-- (int64_t)mediaLength { return self.player.media.length.value.longLongValue; }
+- (int64_t)mediaLength { return [self durationMilliseconds]; }
 - (int64_t)mediaTime { return [self positionMilliseconds]; }
-- (BOOL)isMediaSeekable { return !self.controlsLocked && [self canPlay:YES] && self.player.isSeekable; }
+- (BOOL)isMediaSeekable { return !self.controlsLocked && [self canPlay:YES] && [self durationMilliseconds] > 0; }
 - (BOOL)isMediaPlaying { return self.player.isPlaying; }
 - (void)retireWithCompletion:(dispatch_block_t)completion {
     NSAssert(NSThread.isMainThread, @"Retire video on the UI thread");
@@ -1387,6 +1626,7 @@ typedef struct {
     // external playback while browsing or opening a protected document.
     [self detachAirPlayKeepingRoute:NO];
     self.airPlayAllowed = nil;
+    self.backgroundAudioAllowed = nil;
     self.rateChangePending = NO;
     [self clearPausePresentation];
     self.command = nil;

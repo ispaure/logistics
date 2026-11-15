@@ -40,6 +40,12 @@
 @property(nonatomic) BOOL completed;
 @property(nonatomic, strong) AVPlayer *hlsPlayer;
 @property(nonatomic, copy) NSString *lastCaption;
+@property(nonatomic, strong) AVPlayerItemVideoOutput *tailVideoOutput;
+@property(nonatomic) NSInteger tailStage;
+@property(nonatomic) BOOL tailEnded;
+@property(nonatomic, strong) id tailEndObserver;
+@property(nonatomic) NSTimeInterval tailPausedAt;
+@property(nonatomic) double tailHeld;
 @end
 @implementation LGVideoAirPlayChecks
 - (void)finish:(NSString *)error {
@@ -189,11 +195,14 @@
 - (BOOL)exportSubtitleFixtures {
     NSString *documents = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents"];
     NSMutableDictionary *fixtures = [NSMutableDictionary dictionary];
-    for (NSString *extension in @[@"mkv", @"mp4"]) {
-        LGMKVRemux *remux = [[LGMKVRemux alloc] initWithPath:[NSBundle.mainBundle pathForResource:@"captions" ofType:extension]];
+    for (NSString *extension in @[@"mkv", @"mp4", @"tail", @"reverse", @"reverse-opus"]) {
+        BOOL reverseTail = [extension hasPrefix:@"reverse"];
+        BOOL tail = [extension isEqualToString:@"tail"] || reverseTail;
+        LGMKVRemux *remux = [[LGMKVRemux alloc] initWithPath:[NSBundle.mainBundle pathForResource:tail ? extension : @"captions" ofType:tail ? @"mkv" : extension]
+            bounds:reverseTail ? @"{\"end_ms\":18000,\"audio\":[{\"end_ms\":3008}]}" : tail ? @"{\"end_ms\":90016}" : @"{}"];
         NSData *json = [[remux renditionsJSON] dataUsingEncoding:NSUTF8StringEncoding];
         NSDictionary *metadata = json ? [NSJSONSerialization JSONObjectWithData:json options:0 error:nil] : nil;
-        if ([metadata[@"text"] count] != 2) { [self finish:[extension stringByAppendingString:@" subtitle tracks missing"]]; return NO; }
+        if (!metadata || (!tail && [metadata[@"text"] count] != 2)) { [self finish:[extension stringByAppendingString:@" subtitle tracks missing"]]; return NO; }
         fixtures[extension] = metadata;
         NSString *root = [documents stringByAppendingPathComponent:[@"hls/" stringByAppendingString:extension]];
         NSMutableDictionary *routes = [NSMutableDictionary dictionaryWithObject:@-1 forKey:@"video"];
@@ -212,12 +221,15 @@
             // demuxer's previous cursor or a sequential video request.
             for (NSUInteger reverse = count; reverse; reverse--) {
                 NSUInteger index = reverse - 1;
+                NSNumber *audioEnd = nil;
+                for (NSDictionary *audio in metadata[@"audio"]) if ([audio[@"id"] intValue] == track) audioEnd = audio[@"end_ms"];
+                if (audioEnd && [metadata[@"boundaries"][index] longLongValue] >= audioEnd.longLongValue) continue;
                 NSData *data = text ? [[remux textSegment:index track:track] dataUsingEncoding:NSUTF8StringEncoding] : [remux fragment:index track:track];
                 NSString *file = [NSString stringWithFormat:@"segment-%lu.%@", (unsigned long)index, text ? @"json" : @"m4s"];
                 if (!data.length || ![data writeToFile:[directory stringByAppendingPathComponent:file] atomically:YES]) {
                     [self finish:[NSString stringWithFormat:@"%@ %@ fragment %lu failed", extension, route, (unsigned long)index]]; return NO;
                 }
-                if (text && index == 2) {
+                if (text && !tail && index == 2) {
                     NSString *cues = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
                     if (![cues containsString:@"CROSSING AIRPLAY CAPTION"] || [cues containsString:@"Default,"]) {
                         [self finish:[extension stringByAppendingString:@" lost overlapping subtitle text"]]; return NO;
@@ -239,6 +251,30 @@
 }
 - (void)checkHLS:(NSArray<NSString *> *)urls {
     if (!urls.count) { [self finish:nil]; return; }
+    if (([urls.firstObject containsString:@"/tail/"] || [urls.firstObject containsString:@"/reverse"])) {
+        NSString *tailURL = urls.firstObject;
+        if ([NSProcessInfo.processInfo.environment[@"LG_TAIL_AUDIO_ONLY"] boolValue])
+            tailURL = [tailURL stringByReplacingOccurrencesOfString:@"/index.m3u8" withString:@"/audio-1/index.m3u8"];
+        self.hlsPlayer = [AVPlayer playerWithURL:[NSURL URLWithString:tailURL]];
+        AVPlayerItemLegibleOutput *captions = [[AVPlayerItemLegibleOutput alloc] initWithMediaSubtypesForNativeRepresentation:nil];
+        [captions setDelegate:self queue:dispatch_get_main_queue()];
+        [self.hlsPlayer.currentItem addOutput:captions];
+        self.lastCaption = @"";
+        AVPlayerItem *tailItem = self.hlsPlayer.currentItem;
+        [tailItem.asset loadMediaSelectionGroupForMediaCharacteristic:AVMediaCharacteristicLegible completionHandler:^(AVMediaSelectionGroup *group, NSError *error) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (error || !group.options.count) { [self finish:@"Tail captions unavailable"]; return; }
+                [tailItem selectMediaOption:group.options.firstObject inMediaSelectionGroup:group];
+            });
+        }];
+        self.tailStage = 0; self.tailEnded = NO;
+        self.tailEndObserver = [NSNotificationCenter.defaultCenter addObserverForName:AVPlayerItemDidPlayToEndTimeNotification object:self.hlsPlayer.currentItem queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) { self.tailEnded = YES; }];
+        self.tailVideoOutput = [[AVPlayerItemVideoOutput alloc] initWithPixelBufferAttributes:@{(id)kCVPixelBufferPixelFormatTypeKey: @(kCVPixelFormatType_32BGRA)}];
+        [self.hlsPlayer.currentItem addOutput:self.tailVideoOutput];
+        [self.hlsPlayer play];
+        [self checkHLSTail:urls attempts:100 sought:NO];
+        return;
+    }
     AVURLAsset *asset = [AVURLAsset URLAssetWithURL:[NSURL URLWithString:urls.firstObject] options:nil];
     [asset loadMediaSelectionGroupForMediaCharacteristic:AVMediaCharacteristicLegible completionHandler:^(AVMediaSelectionGroup *group, NSError *error) {
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -257,6 +293,63 @@
             [self checkHLSReady:urls group:group attempts:100];
         });
     }];
+}
+- (BOOL)checkTailPicture:(NSString *)phase near:(double)expected {
+    CMTime display = kCMTimeInvalid;
+    CVPixelBufferRef frame = [self.tailVideoOutput copyPixelBufferForItemTime:self.hlsPlayer.currentTime itemTimeForDisplay:&display];
+    double time = CMTimeGetSeconds(display);
+    BOOL valid = frame && isfinite(time) && fabs(time - expected) < .8;
+    [self.samples addObject:@{@"event": @"hls-tail-picture", @"phase": phase, @"present": @(frame != NULL), @"time": @(isfinite(time) ? time : -1)}];
+    if (frame) CVPixelBufferRelease(frame);
+    return valid;
+}
+- (void)checkHLSTail:(NSArray *)urls attempts:(NSUInteger)attempts sought:(BOOL)sought {
+    AVPlayerItem *item = self.hlsPlayer.currentItem;
+    double clock = CMTimeGetSeconds(self.hlsPlayer.currentTime);
+    BOOL audioOnly = [NSProcessInfo.processInfo.environment[@"LG_TAIL_AUDIO_ONLY"] boolValue];
+    BOOL reverse = [urls.firstObject containsString:@"/reverse"];
+    if (attempts % 10 == 0) [self.samples addObject:@{@"event": @"hls-tail-state", @"clock": @(clock),
+        @"status": @(item.status), @"control": @(self.hlsPlayer.timeControlStatus), @"stage": @(self.tailStage),
+        @"reason": self.hlsPlayer.reasonForWaitingToPlay ?: @"", @"ranges": [item.loadedTimeRanges description]}];
+    if (item.status == AVPlayerItemStatusFailed || !attempts) {
+        [self finish:[NSString stringWithFormat:@"Audio-tail HLS failed stage %ld at %.3f: %@", (long)self.tailStage, clock, item.error]]; return;
+    }
+    double target = -1;
+    if (item.status == AVPlayerItemStatusReadyToPlay && self.tailStage == 0) { target = 1; self.tailStage = 1; }
+    else if (self.tailStage == 1 && clock > 3.5) {
+        if (!audioOnly && ![self checkTailPicture:@"transition" near:reverse ? clock : 3]) { [self finish:@"Timing repair shifted the opening video presentation"]; return; }
+        target = reverse ? 6 : 60; self.tailStage = 2;
+    } else if (self.tailStage == 2 && clock > (reverse ? 6.5 : 60.5) && self.hlsPlayer.timeControlStatus == AVPlayerTimeControlStatusPlaying) {
+        if (![self.lastCaption containsString:reverse ? @"VIDEO TAIL CAPTION" : @"AUDIO TAIL CAPTION"]) { [self finish:@"Native AVPlayer omitted the tail caption"]; return; }
+        if (!audioOnly && ![self checkTailPicture:@"tail" near:reverse ? clock : 3]) { [self finish:@"Audio-tail HLS did not retain the final picture"]; return; }
+        [self.samples addObject:@{@"event": @"hls-audio-tail", @"clock": @(clock), @"duration": @(CMTimeGetSeconds(item.duration))}];
+        [self.hlsPlayer pause]; self.tailHeld = clock; self.tailPausedAt = NSProcessInfo.processInfo.systemUptime; self.tailStage = 3;
+    } else if (self.tailStage == 3 && NSProcessInfo.processInfo.systemUptime-self.tailPausedAt > .4) {
+        if (fabs(clock-self.tailHeld) > .1) { [self finish:@"Audio-tail HLS ignored Pause"]; return; }
+        target = 1; self.tailStage = 4;
+    } else if (self.tailStage == 4 && clock > 1.3) {
+        if (!audioOnly && ![self checkTailPicture:@"back" near:clock]) { [self finish:@"Audio-tail HLS failed to restore video on backward seek"]; return; }
+        target = reverse ? 17.5 : 89.5; self.tailStage = 5;
+    } else if (self.tailStage == 5 && self.tailEnded && self.hlsPlayer.rate == 0 && clock > (reverse ? 17.5 : 89.5)) {
+        double end = reverse ? 18 : 90.016;
+        if (clock > end + .3 || CMTimeGetSeconds(item.duration) > end + .3) { [self finish:@"Text extended native HLS playback beyond A/V"]; return; }
+        [NSNotificationCenter.defaultCenter removeObserver:self.tailEndObserver]; self.tailEndObserver = nil;
+        [self.samples addObject:@{@"event": @"hls-tail-end", @"clock": @(clock), @"duration": @(CMTimeGetSeconds(item.duration))}];
+        [self.hlsPlayer pause]; self.hlsPlayer = nil; self.tailVideoOutput = nil;
+        [self checkHLS:[urls subarrayWithRange:NSMakeRange(1, urls.count - 1)]]; return;
+    }
+    if (target >= 0) {
+        [self.hlsPlayer seekToTime:CMTimeMakeWithSeconds(target, 1000) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero completionHandler:^(BOOL finished) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (!finished) { [self finish:@"Audio-tail HLS seek rejected"]; return; }
+                [self.hlsPlayer play];
+                [self checkHLSTail:urls attempts:100 sought:YES];
+            });
+        }]; return;
+    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC/10), dispatch_get_main_queue(), ^{
+        [self checkHLSTail:urls attempts:attempts-1 sought:sought];
+    });
 }
 - (void)checkHLSReady:(NSArray *)urls group:(AVMediaSelectionGroup *)group attempts:(NSUInteger)attempts {
     AVPlayerItem *item = self.hlsPlayer.currentItem;

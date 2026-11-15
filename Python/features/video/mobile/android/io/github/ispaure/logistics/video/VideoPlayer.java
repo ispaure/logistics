@@ -52,6 +52,10 @@ import java.util.ArrayList;
 
 /** In-process VLC surface. No file intents, storage permissions or plaintext files. */
 public final class VideoPlayer {
+    private static final long SEEK_TIMEOUT_MS = 20000;
+    private static final long EARLY_END_MARGIN_MS = 1500;
+    private static final String AUDIO_PENDING_OUTPUT = "Audio has not started at this position. Video continues.";
+    private enum Tail { NONE, AUDIO, VIDEO }
     public interface Listener {
         String controlInsets(String metrics);
         boolean allowed(boolean external);
@@ -82,8 +86,10 @@ public final class VideoPlayer {
     private final TextView bufferingLabel;
     private boolean buffering;
     private AudioTrackSwitch audioTrackSwitch;
+    private long audioSwitchBegan, audioSwitchFrames, audioSwitchDecoded;
+    private boolean audioSwitchPrerollPending;
     private boolean networkWaiting, networkResumePending, playRequested;
-    private long bufferPosition, observedClock = -1, observedFrames, lastPlaybackProgress, lastFrameProgress, lastRenderedClock;
+    private long bufferPosition, observedClock = -1, observedFrames, observedAudio, lastAudioProgress, lastPlaybackProgress, lastFrameProgress, lastRenderedClock;
     private final TextView timeLabel;
     final SeekBar seek;
     private final ImageButton play;
@@ -103,13 +109,22 @@ public final class VideoPlayer {
     private int pipActionState = -1;
     private final String pipAction = "io.github.ispaure.logistics.video.PIP." + java.util.UUID.randomUUID();
     String pendingSubtitleURL;
+    private String selectedSubtitleURL;
     private final JSONArray subtitles;
     private final ArrayList<RendererDiscoverer> discoverers = new ArrayList<>();
     private final ArrayList<RendererItem> renderers = new ArrayList<>();
     private boolean done, ended, attached, casting, wasSecure;
     private long resume, lastPosition, progressSeek = -1;
+    private long startupVideoSeek = -1;
+    private boolean inputWithoutVideo;
+    private int lastAudioOnlyTrack = -1;
+    private boolean liveVideoOutput, confirmingStartupVideoSeek, startupSeekReset, startupSeekBuffered;
+    private long startupSeekClock = -1;
+    private long seekIssuedAt = -1, framesAtSeek, audioAtSeek, audioAtClock, framesAtClock, lastClockProgress;
     private long knownDuration;
-    private boolean mediaStartsAtResume, resumeSeekSubmitted;
+    private boolean mediaStartsAtResume, resumeSeekSubmitted, inputHasVideoAndAudio, inputPlayedAudio, inputDisplayedVideo;
+    private Tail tail = Tail.NONE;
+    private int reopenAudioTrack = -1, reopenSubtitleTrack = -1, videoTailAudioPreference = -1;
     private int resumeVolume = 100;
     private boolean audioSuppressed;
     private int previousCapturePolicy = -1;
@@ -364,7 +379,7 @@ public final class VideoPlayer {
             public void onStartTrackingTouch(SeekBar bar) { handler.removeCallbacks(hideControls); }
             public void onProgressChanged(SeekBar bar, int value, boolean user) { }
             public void onStopTrackingTouch(SeekBar bar) {
-                seekTo(Math.round(player.getLength() * bar.getProgress() / 10000d));
+                seekTo(Math.round(durationMilliseconds() * bar.getProgress() / 10000d));
                 scheduleControls();
             }
         });
@@ -681,28 +696,81 @@ public final class VideoPlayer {
         dialog.setOnDismissListener(value -> { if (openDialog == dialog) openDialog = null; scheduleControls(); });
         dialog.show();
     }
+    private long declaredDuration = -1, declaredVideoEnd = -1, declaredAudioEnd = -1;
+
+    private static long declaredTrackEnd(JSONObject bounds, String kind) {
+        JSONArray tracks = bounds == null ? null : bounds.optJSONArray(kind);
+        long end = -1;
+        if (tracks != null) for (int index = 0; index < tracks.length(); index++) {
+            JSONObject track = tracks.optJSONObject(index);
+            long value = track == null ? -1 : track.optLong("end_ms", -1);
+            if (value <= 0) return -1;
+            end = Math.max(end, value);
+        }
+        return end;
+    }
+
     public void configurePlayback(String options, String queue) {
-        if (!done) { tools.configure(options, queue); root.requestApplyInsets(); }
+        if (done) return;
+        try {
+            org.json.JSONObject bounds = new org.json.JSONObject(options).optJSONObject("media_bounds");
+            declaredDuration = bounds == null ? -1 : bounds.optLong("end_ms", -1);
+            declaredVideoEnd = declaredTrackEnd(bounds, "video");
+            declaredAudioEnd = declaredTrackEnd(bounds, "audio");
+        } catch (org.json.JSONException error) { declaredDuration = declaredVideoEnd = declaredAudioEnd = -1; }
+        boolean staleTarget = declaredDuration > 0 && (resume >= declaredDuration || progressSeek >= declaredDuration);
+        if (staleTarget) {
+            // Remote metadata can arrive after opening a checkpoint written
+            // when the muxer still reported a longer subtitle-only span.
+            cancelAudioTrackSwitch();
+            resume = lastPosition = progressSeek = declaredDuration - 1;
+            seekIssuedAt = -1;
+            tail = Tail.NONE;
+            playbackFailed = true;
+        }
+        tools.configure(options, queue);
+        if (staleTarget && playbackFailed && playRequested && !manualResumeRequired && allowed(false)) startByUser();
+        root.requestApplyInsets();
     }
     public void showSubtitleBrowser(String json) { if (!done) tools.browser(json); }
     public void showCachedRanges(String json) { if (!done && allowed(false)) tools.cached(json); }
     public void attachSubtitleURL(String url) {
-        pendingSubtitleURL = url;
+        selectedSubtitleURL = url;
+        pendingSubtitleURL = tail == Tail.AUDIO ? null : url;
+        if (pendingSubtitleURL == null) return;
         if (allowed(false) && player.isPlaying() && player.addSlave(Media.Slave.Type.Subtitle, Uri.parse(url), true))
             pendingSubtitleURL = null;
     }
     void selectSubtitleTrack(int track) {
+        selectedSubtitleURL = pendingSubtitleURL = null;
+        reopenSubtitleTrack = track;
         if (player.getSpuTrack() == track) return;
         long current = position();
-        if (player.setSpuTrack(track) && track >= 0) {
+        if (tail != Tail.AUDIO && player.setSpuTrack(track) && track >= 0 &&
+                audioTrackSwitch == null && progressSeek < 0 && player.isSeekable() && allowed(false)) {
             // VLC can leave the active cue blank after off/on until the next
             // cue boundary. Re-decode this position without changing play intent.
-            seekTo(current);
+            seekPlayback(current, false);
         }
     }
 
     boolean selectAudioTrack(int track, boolean manual) {
         if (lockHidden || (playbackFailed && !manual) || !allowed(false)) return false;
+        if (tail == Tail.VIDEO) {
+            if (declaredTail(position()) == Tail.VIDEO) {
+                // Every declared audio track has finished here. Remember the
+                // chosen language for a rewind without restarting silent audio.
+                if (manual || videoTailAudioPreference < 0) videoTailAudioPreference = track;
+                if (manual && track >= 0) status("This audio track has ended. Seek back to hear it.");
+                return true;
+            }
+            if (!manual || track < 0) return track < 0;
+            // Another language can have more audio than the exhausted one.
+            // Give it a fresh input at the current position without autoplay.
+            reopenAudioTrack = track;
+            prepareFullSeek(position());
+            return true;
+        }
         if (audioTrackSwitch != null) {
             // Native events carry no request ID. Finish the in-flight cycle
             // before issuing the latest replacement; never reassign its queued
@@ -720,12 +788,18 @@ public final class VideoPlayer {
             if (manual) status("Audio tracks can only be switched when this video supports seeking.");
             return false;
         }
+        IMedia.Stats before = track >= 0 ? playbackStats() : null;
         if (!player.setAudioTrack(track)) {
             if (manual) status("This audio track could not be selected.");
             return false;
         }
+        if (track < 0 && inputWithoutVideo) lastAudioOnlyTrack = -1;
         if (track >= 0) {
             audioTrackSwitch = new AudioTrackSwitch(track);
+            audioSwitchBegan = android.os.SystemClock.elapsedRealtime();
+            audioSwitchFrames = before == null ? 0 : before.displayedPictures;
+            audioSwitchDecoded = before == null ? 0 : before.decodedAudio;
+            audioSwitchPrerollPending = false;
             // A same-track user seek may emit no new ESSelected. All events
             // belonging to the previous operation have already been consumed.
             audioTrackSwitch.selected(player.getAudioTrack());
@@ -777,13 +851,32 @@ public final class VideoPlayer {
 
     private void onPlayerEvent(MediaPlayer.Event event) {
         if (done) return;
-        if (event.type == MediaPlayer.Event.Stopped && optionsReloadPending) return;
+        if (optionsReloadPending && (event.type == MediaPlayer.Event.Stopped ||
+                event.type == MediaPlayer.Event.EndReached)) return;
+        if (event.type == MediaPlayer.Event.Vout) liveVideoOutput = event.getVoutCount() > 0;
+        if (confirmingStartupVideoSeek) {
+            if (event.type == MediaPlayer.Event.Buffering && event.getBuffering() == 0f) {
+                startupSeekReset = true;
+                startupSeekBuffered = false;
+                startupSeekClock = -1;
+            } else if (event.type == MediaPlayer.Event.Buffering && event.getBuffering() >= 100f && startupSeekReset) {
+                startupSeekBuffered = true;
+            } else if (event.type == MediaPlayer.Event.TimeChanged && startupSeekBuffered) {
+                startupSeekClock = event.getTimeChanged();
+            }
+        }
         if (audioTrackSwitch != null) {
             if (event.type == MediaPlayer.Event.ESSelected && event.getEsChangedType() == IMedia.Track.Type.Audio) {
                 audioTrackSwitch.selected(event.getEsChangedID());
             } else if (event.type == MediaPlayer.Event.Buffering) {
                 float percent = event.getBuffering();
                 IMedia.Stats stats = percent >= 100f ? playbackStats() : null;
+                if (percent == 0f) audioSwitchPrerollPending = true;
+                else if (percent >= 100f && audioSwitchPrerollPending && stats != null) {
+                    audioSwitchFrames = stats.displayedPictures;
+                    audioSwitchDecoded = stats.decodedAudio;
+                    audioSwitchPrerollPending = false;
+                }
                 audioTrackSwitch.buffering(percent, stats == null ? 0 : stats.playedAbuffers);
             } else if (event.type == MediaPlayer.Event.TimeChanged) {
                 audioTrackSwitch.timeChanged(event.getTimeChanged());
@@ -804,19 +897,30 @@ public final class VideoPlayer {
                 return;
             }
             if (resume >= 0) {
-                if (audioTrackSwitch == null && Math.abs(player.getTime() - resume) >= 1500) player.setTime(resume);
-                mediaStartsAtResume = false;
+                // A fresh input already has a demux seek queued by :start-time.
+                if (!mediaStartsAtResume && startupVideoSeek < 0 && audioTrackSwitch == null &&
+                        Math.abs(player.getTime() - resume) >= 1500)
+                    player.setTime(resume);
                 resumeSeekSubmitted = true;
             }
+            mediaStartsAtResume = false;
+            if (progressSeek >= 0 && seekIssuedAt < 0) beginProgressSeek();
             if (tools != null) tools.apply();
             scheduleControls();
         }
         if ((event.type == MediaPlayer.Event.ESAdded ||
                 (event.type == MediaPlayer.Event.SeekableChanged && event.getSeekable())) && tools != null) tools.apply();
-        if (event.type == MediaPlayer.Event.TimeChanged && progressSeek >= 0 && audioTrackSwitch == null)
-            confirmProgressSeek();
         if (event.type == MediaPlayer.Event.EndReached) {
+            if (ended) return;
+            IMedia.Stats stats = playbackStats();
+            long clock = Math.max(observedClock, player.getTime());
+            if (recoverTerminalTail(clock, stats)) return;
+            if (playRequested && progressSeek >= 0 && durationMilliseconds() - progressSeek > EARLY_END_MARGIN_MS) {
+                failProgressSeek();
+                return;
+            }
             cancelAudioTrackSwitch();
+            progressSeek = seekIssuedAt = -1;
             ended = true;
             playRequested = false;
             lastPosition = 0;
@@ -825,7 +929,10 @@ public final class VideoPlayer {
         }
         if (event.type == MediaPlayer.Event.EncounteredError ||
                 (event.type == MediaPlayer.Event.Stopped && playbackActive && playRequested && !ended)) {
+            if (event.type == MediaPlayer.Event.Stopped &&
+                    recoverTerminalTail(Math.max(observedClock, player.getTime()), playbackStats())) return;
             if (audioTrackSwitch != null) failAudioTrackSwitch();
+            else if (progressSeek >= 0) failProgressSeek();
             else {
                 playbackFailed = true;
                 long position = Math.max(0, lastPosition);
@@ -850,10 +957,47 @@ public final class VideoPlayer {
 
     private void installMedia() {
         cancelAudioTrackSwitch();
+        boolean restoringVideo = inputWithoutVideo && tail == Tail.NONE && resume >= 0;
+        inputWithoutVideo = tail == Tail.AUDIO;
+        liveVideoOutput = false;
+        confirmingStartupVideoSeek = false;
+        if (tools != null && !tools.settings.isNull("subtitle_track")) selectedSubtitleURL = null;
+        pendingSubtitleURL = tail == Tail.AUDIO ? null : selectedSubtitleURL;
         Media media = new Media(vlc, Uri.parse(sourceURL));
-        mediaStartsAtResume = resume > 0;
+        inputHasVideoAndAudio = inputPlayedAudio = inputDisplayedVideo = false;
+        observedClock = -1;
+        observedFrames = observedAudio = audioAtClock = framesAtClock = 0;
+        lastPlaybackProgress = lastFrameProgress = lastAudioProgress = lastClockProgress = android.os.SystemClock.elapsedRealtime();
         resumeSeekSubmitted = false;
-        if (mediaStartsAtResume) media.addOption(String.format(java.util.Locale.ROOT, ":start-time=%.3f", resume / 1000.0));
+        seekIssuedAt = -1;
+        mediaStartsAtResume = resume >= 0;
+        // The subtitle decoder needs a live video output before the seek
+        // can deliver a cue at the target. Do one seek after the first picture.
+        boolean waitForPicture = restoringVideo || (tail == Tail.VIDEO && declaredTail(resume) == Tail.VIDEO);
+        startupVideoSeek = waitForPicture ? resume : -1;
+        if (resume > 0 || restoringVideo) {
+            progressSeek = resume;
+            if (startupVideoSeek < 0)
+                media.addOption(String.format(java.util.Locale.ROOT, ":start-time=%.3f", resume / 1000.0));
+        }
+        if (declaredDuration > 0) {
+            media.addOption(String.format(java.util.Locale.ROOT, ":stop-time=%.3f", declaredDuration / 1000.0));
+        }
+        if (tail == Tail.AUDIO) media.addOption(":no-video");
+        if (tail == Tail.VIDEO) media.addOption(":no-audio");
+        if (reopenAudioTrack >= 0) {
+            media.addOption(":audio-track-id=" + reopenAudioTrack);
+            reopenAudioTrack = -1;
+        }
+        if (tail != Tail.AUDIO) {
+            if (selectedSubtitleURL != null) {
+                media.addOption(":sub-file=" + selectedSubtitleURL);
+                pendingSubtitleURL = null;
+            } else if (reopenSubtitleTrack >= 0) {
+                media.addOption(":sub-track-id=" + reopenSubtitleTrack);
+            }
+            reopenSubtitleTrack = -1;
+        }
         media.setHWDecoderEnabled(true, false);
         media.addOption(":network-caching=6000");
         media.addOption(":file-caching=1500");
@@ -862,14 +1006,87 @@ public final class VideoPlayer {
         media.release();
     }
 
+    private void restartInput() {
+        optionsReloadPending = true;
+        playbackActive = false;
+        // Keep the enabled tracks through initial preroll. Selecting a cue
+        // decoder later can miss a subtitle that already spans the target.
+        if (reopenAudioTrack < 0 && tail != Tail.VIDEO) {
+            reopenAudioTrack = player.getAudioTrack();
+            if (reopenAudioTrack < 0 && inputWithoutVideo) reopenAudioTrack = lastAudioOnlyTrack;
+        }
+        int currentSubtitleTrack = player.getSpuTrack();
+        if (currentSubtitleTrack >= 0) reopenSubtitleTrack = currentSubtitleTrack;
+        player.stop();
+        installMedia();
+        playbackFailed = false;
+    }
+
+    private boolean recoverTerminalTail(long clock, IMedia.Stats stats) {
+        // A longer subtitle track can inflate the container duration. A
+        // normal terminal event is insufficient without a regressed seek.
+        if (progressSeek < 0 || progressSeek - clock <= 500) return false;
+        boolean audio = inputPlayedAudio || (stats != null && stats.playedAbuffers > 0);
+        boolean pictures = inputDisplayedVideo || (stats != null && stats.displayedPictures > 0);
+        if (audio && (!pictures || lastAudioProgress >= lastFrameProgress)) return recoverTail(clock, Tail.AUDIO);
+        return pictures && recoverTail(clock, Tail.VIDEO);
+    }
+
+    private boolean recoverTail(long clock, Tail continuing) {
+        boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
+        if (tail != Tail.NONE || casting || pip || !playRequested || manualResumeRequired ||
+                pausePending || !focusHeld || networkWaiting || transportFailure != null || lockHidden ||
+                !inputHasVideoAndAudio || !allowed(false)) return false;
+        long duration = durationMilliseconds();
+        long target = progressSeek >= 0 ? progressSeek : clock;
+        if (clock < 0 || duration - clock <= EARLY_END_MARGIN_MS || duration - target <= EARLY_END_MARGIN_MS)
+            return false;
+        // VLC can pin its clock to the shorter stream even as the other one
+        // outputs samples. Retry once with only the continuing decoder.
+        if (continuing == Tail.VIDEO) videoTailAudioPreference = player.getAudioTrack();
+        tail = continuing;
+        resume = lastPosition = progressSeek = target;
+        restartInput();
+        if (allowed(false) && focusHeld) {
+            player.play();
+            status(continuing == Tail.AUDIO ? "Continuing audio. Seek back to restore video." :
+                "Continuing video. Seek back to restore audio.");
+        } else pause();
+        return true;
+    }
+
+    private void failProgressSeek() {
+        long target = progressSeek;
+        cancelAudioTrackSwitch();
+        playbackFailed = true;
+        pause();
+        resume = target;
+        progressSeek = seekIssuedAt = -1;
+        status(transportFailure != null ? transportFailure :
+            "Playback could not reach this position. Seek to another position or press Play to retry.");
+    }
+
     public void setTransportFailure(String value) { transportFailure = value; }
 
     public void seekTo(long target) {
         if (tools != null && tools.locked) return;
-        if (!allowed(false) || !player.isSeekable()) return;
+        if (!allowed(false)) return;
+        long duration = durationMilliseconds();
+        target = Math.max(0, duration > 0 ? Math.min(target, duration - 1) : target);
+        Tail targetTail = declaredTail(target);
+        if (startupVideoSeek >= 0 && tail == Tail.NONE && targetTail == Tail.NONE) {
+            // A scrub during video restoration replaces the held target.
+            startupVideoSeek = resume = lastPosition = progressSeek = target;
+            beginProgressSeek();
+            return;
+        }
+        if (targetTail != Tail.NONE || tail != Tail.NONE || !player.isSeekable()) {
+            if (duration <= 0) return;
+            reopenAudioTrack = -1;
+            prepareSeek(target, targetTail);
+            return;
+        }
         if (audioTrackSwitch != null) {
-            target = Math.max(0, target);
-            if (player.getLength() > 0) target = Math.min(target, player.getLength() - 1);
             audioTrackSwitch.request(audioTrackSwitch.requestedTrack(), target);
             progressSeek = target;
             return;
@@ -877,16 +1094,52 @@ public final class VideoPlayer {
         seekPlayback(target, true);
     }
 
+    private void prepareFullSeek(long target) {
+        prepareSeek(target, Tail.NONE);
+    }
+
+    private Tail declaredTail(long position) {
+        boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
+        if (casting || pip || networkWaiting || declaredDuration <= 0 ||
+                declaredVideoEnd <= 0 || declaredAudioEnd <= 0) return Tail.NONE;
+        if (position >= declaredVideoEnd && position < declaredAudioEnd &&
+                (tools == null || tools.settings.optInt("audio_track", 0) != -1)) return Tail.AUDIO;
+        if (position >= declaredAudioEnd && position < declaredVideoEnd) return Tail.VIDEO;
+        return Tail.NONE;
+    }
+
+    private void prepareSeek(long target, Tail targetTail) {
+        if (tail == Tail.VIDEO && targetTail != Tail.VIDEO && reopenAudioTrack < 0)
+            reopenAudioTrack = videoTailAudioPreference;
+        if (tail != Tail.VIDEO && targetTail == Tail.VIDEO) videoTailAudioPreference = player.getAudioTrack();
+        tail = targetTail;
+        startupVideoSeek = -1;
+        boolean requested = playRequested && !manualResumeRequired;
+        cancelAudioTrackSwitch();
+        ended = false;
+        resume = lastPosition = progressSeek = target;
+        seekIssuedAt = -1;
+        playbackFailed = true;
+        if (requested) startByUser();
+        else status("Position selected. Press Play to retry.");
+    }
+
     private void seekPlayback(long target, boolean recordProgress) {
         target = Math.max(0, target);
-        if (player.getLength() > 0) target = Math.min(target, player.getLength() - 1);
+        if (durationMilliseconds() > 0) target = Math.min(target, durationMilliseconds() - 1);
         ended = false;
+        startupVideoSeek = -1;
+        confirmingStartupVideoSeek = false;
         lastPlaybackProgress = lastFrameProgress = android.os.SystemClock.elapsedRealtime();
         lastRenderedClock = target;
         if (networkResumePending) bufferPosition = target;
+        if (AUDIO_PENDING_OUTPUT.contentEquals(message.getText())) status("");
         resume = playRequested ? -1 : target;
         resumeSeekSubmitted = false;
-        if (recordProgress) progressSeek = target;
+        if (recordProgress) {
+            progressSeek = target;
+        }
+        if (progressSeek == target) beginProgressSeek();
         if (audioTrackSwitch != null) {
             audioTrackSwitch.seek(target);
             audioTrackSwitch.playing(playRequested, lastPlaybackProgress);
@@ -924,13 +1177,14 @@ public final class VideoPlayer {
         if (listener == null || !listener.requestPlay() || !allowed(false) || !requestFocus()) return;
         focusHeld = true;
         if (!allowed(false)) { pause(); return; } // Focus acquisition can change output.
-        if (ended) { resume = 0; ended = false; playbackFailed = true; }
-        if (playbackFailed) {
-            playbackActive = false;
-            player.stop();
-            installMedia();
-            playbackFailed = false;
+        if (ended) { resume = 0; ended = false; tail = Tail.NONE; playbackFailed = true; }
+        Tail initialTail = declaredTail(resume);
+        if (tail == Tail.NONE && initialTail != Tail.NONE) {
+            if (initialTail == Tail.VIDEO) videoTailAudioPreference = player.getAudioTrack();
+            tail = initialTail;
+            playbackFailed = true;
         }
+        if (playbackFailed) restartInput();
         transportFailure = null;
         message.setText("");
         message.setVisibility(View.GONE);
@@ -939,10 +1193,11 @@ public final class VideoPlayer {
         if (audioSuppressed) { player.setVolume(resumeVolume); audioSuppressed = false; }
         playRequested = true;
         pausePresentation.clear();
-        if (audioTrackSwitch == null && resume >= 0 && player.isPlaying()) {
+        if (audioTrackSwitch == null && startupVideoSeek < 0 && resume >= 0 && player.isPlaying()) {
             player.setTime(resume);
             resumeSeekSubmitted = true;
         }
+        if (progressSeek >= 0 && seekIssuedAt < 0) beginProgressSeek();
         lastPlaybackProgress = lastFrameProgress = android.os.SystemClock.elapsedRealtime();
         if (audioTrackSwitch != null) audioTrackSwitch.playing(true, lastPlaybackProgress);
         updatePlayIcon();
@@ -960,37 +1215,100 @@ public final class VideoPlayer {
     }
 
     private void updatePlaybackProgress() {
+        if (progressSeek < 0 && playRequested && declaredDuration > 0 && player.getTime() >= declaredDuration) {
+            cancelAudioTrackSwitch();
+            ended = true; playRequested = false; resume = lastPosition = 0;
+            player.stop(); setControlsVisible(true);
+            if (tools != null) tools.emit("ended", "");
+        }
         long now = android.os.SystemClock.elapsedRealtime(), clock = player.getTime();
         IMedia.Stats stats = playbackStats();
         long frames = stats == null ? 0 : stats.displayedPictures;
+        long audio = stats == null ? 0 : stats.playedAbuffers;
+        if (inputWithoutVideo && audio > 0) {
+            int track = player.getAudioTrack();
+            if (track >= 0) lastAudioOnlyTrack = track;
+        }
+        // Some devices omit displayedPictures. The new input starts at zero,
+        // so a live VOUT and clock movement also prove video startup.
+        boolean videoOutputReady = frames > 0 || (liveVideoOutput && clock > 0);
+        if (startupVideoSeek >= 0 && videoOutputReady && playRequested && !manualResumeRequired &&
+                !pausePending && player.isSeekable() && allowed(false)) {
+            long target = startupVideoSeek;
+            startupVideoSeek = -1;
+            beginProgressSeek();
+            confirmingStartupVideoSeek = true;
+            startupSeekReset = startupSeekBuffered = false;
+            startupSeekClock = -1;
+            player.setTime(target);
+            return;
+        }
+        boolean newAudio = audio > observedAudio;
+        if (newAudio) {
+            lastAudioProgress = now;
+            if (AUDIO_PENDING_OUTPUT.contentEquals(message.getText())) status("");
+        }
+        if (audio > 0) inputPlayedAudio = true;
+        if (frames > 0) inputDisplayedVideo = true;
+        if (!inputHasVideoAndAudio && tail == Tail.NONE)
+            inputHasVideoAndAudio = player.getAudioTrack() >= 0 && player.getVideoTrack() >= 0;
+        observedAudio = audio;
         boolean newFrame = frames > observedFrames;
         boolean statsReset = frames < observedFrames;
         if (newFrame) { lastRenderedClock = clock; lastFrameProgress = now; }
+        if (clock != observedClock) {
+            lastClockProgress = now;
+            audioAtClock = audio;
+            framesAtClock = frames;
+        }
         if (newFrame || clock != observedClock) lastPlaybackProgress = now;
         if (statsReset) lastFrameProgress = now; // VLC stats reset on a new input.
         observedFrames = frames;
         observedClock = clock;
+        if (now - lastClockProgress >= EARLY_END_MARGIN_MS) {
+            if (newAudio && audio > audioAtClock && frames == framesAtClock && recoverTail(clock, Tail.AUDIO)) return;
+            if (newFrame && frames > framesAtClock && audio == audioAtClock && recoverTail(clock, Tail.VIDEO)) return;
+        }
         if (audioTrackSwitch != null) {
-            if (audioTrackSwitch.ready(player.getAudioTrack(), stats == null ? -1 : stats.playedAbuffers, !casting)) {
+            int selected = player.getAudioTrack();
+            boolean audioReady = audioTrackSwitch.ready(selected, stats == null ? -1 : audio, !casting);
+            // An exhausted audio track can have no packets here. The same
+            // native preroll plus fresh pictures and advancing video confirms
+            // playback, while an absent audio packet remains a separate status.
+            boolean videoReadyWithoutAudio = !audioReady && !casting && !networkWaiting && transportFailure == null &&
+                playRequested && stats != null && frames > audioSwitchFrames && stats.decodedAudio <= audioSwitchDecoded &&
+                now - audioSwitchBegan >= 1250 && clock - audioTrackSwitch.position >= 1250 &&
+                audioTrackSwitch.ready(selected, audio, false);
+            if (audioReady || videoReadyWithoutAudio) {
                 AudioTrackSwitch completed = audioTrackSwitch;
                 cancelAudioTrackSwitch();
                 if (completed.hasReplacement() && allowed(false)) {
                     selectAudioTrackAt(completed.requestedTrack(), true, completed.requestedPosition());
                     return;
                 }
-                if (progressSeek >= 0) confirmProgressSeek();
+                confirmProgressSeek(now, clock, frames, audio);
                 lastPlaybackProgress = lastFrameProgress = now;
-                scheduleControls();
+                if (videoReadyWithoutAudio) status(AUDIO_PENDING_OUTPUT);
+                else scheduleControls();
             } else if (playRequested && (transportFailure != null || audioTrackSwitch.expired(now))) {
                 failAudioTrackSwitch();
             }
             return;
         }
+        confirmProgressSeek(now, clock, frames, audio);
+        if (progressSeek >= 0 && seekIssuedAt >= 0 && playRequested && !networkWaiting &&
+                now - seekIssuedAt >= SEEK_TIMEOUT_MS && allowed(false)) {
+            failProgressSeek();
+            return;
+        }
         // Some devices never report displayedPictures: use a guarded fallback.
         boolean missingFrames = frames == 0 && observedFrames == 0;
-        boolean frameStall = !missingFrames && now - lastFrameProgress >= 2500;
-        boolean fallbackStall = missingFrames && (now - lastPlaybackProgress >= 3000 ||
-            (networkWaiting && now - lastFrameProgress >= 3000));
+        // Audio can outlast video in an otherwise playable file. Its native
+        // output and clock progress must not become a false video-frame stall.
+        boolean frameStall = !missingFrames && now - lastFrameProgress >= 2500 && now - lastAudioProgress >= 2500 &&
+            (!inputPlayedAudio || now - lastPlaybackProgress >= 2500);
+        boolean fallbackStall = missingFrames && now - lastAudioProgress >= 3000 &&
+            (now - lastPlaybackProgress >= 3000 || (networkWaiting && now - lastFrameProgress >= 3000));
         boolean stalled = playRequested && !manualResumeRequired && !ended && !pausePending &&
             (frameStall || fallbackStall);
         if (stalled && transportFailure != null) {
@@ -1022,7 +1340,9 @@ public final class VideoPlayer {
             if (done) return;
             updatePlaybackProgress();
             updateScreenAwake();
-            if (resumeSeekSubmitted && resume >= 0 && observedFrames > 0 && player.isPlaying() && Math.abs(player.getTime() - resume) < 1500) {
+            if (progressSeek < 0 && resumeSeekSubmitted && resume >= 0 &&
+                    (observedFrames > 0 || observedAudio > 0) && player.isPlaying() &&
+                    Math.abs(player.getTime() - resume) < 1500) {
                 resume = -1;
                 resumeSeekSubmitted = false;
             }
@@ -1030,7 +1350,7 @@ public final class VideoPlayer {
             if (time >= 0 && !ended) lastPosition = time;
             if (!seek.isPressed() && length > 0) seek.setProgress((int)(time * 10000 / length));
             seek.setVisibility(View.VISIBLE);
-            seek.setEnabled(length > 0 && player.isSeekable());
+            seek.setEnabled(length > 0 && (tools == null || !tools.locked) && allowed(false));
             updatePlayIcon();
             timeLabel.setText(clock(time) + " / " + (length > 0 ? clock(length) : "Loading duration…") + (tools != null && tools.cacheApproximate ? " · Cache ≈" : ""));
             seek.setContentDescription("Video position: " + timeLabel.getText());
@@ -1144,7 +1464,8 @@ public final class VideoPlayer {
         if (subtitlesOnly) { labels.add("Subtitles off"); actions.add(() -> { player.setSpuTrack(-1); tools.selectTrack("subtitle_track", -1, ""); }); }
         MediaPlayer.TrackDescription[] audio = player.getAudioTracks();
         if (!subtitlesOnly && audio != null) for (MediaPlayer.TrackDescription track : audio) {
-            int selected = audioTrackSwitch == null ? player.getAudioTrack() : audioTrackSwitch.requestedTrack();
+            int selected = audioTrackSwitch != null ? audioTrackSwitch.requestedTrack() :
+                tail == Tail.VIDEO ? videoTailAudioPreference : player.getAudioTrack();
             labels.add((selected == track.id ? "✓ " : "") + trackLabel(track, false));
             actions.add(() -> {
                 if (selectAudioTrack(track.id, true)) tools.selectTrack("audio_track", track.id, trackKey(track, false));
@@ -1152,7 +1473,11 @@ public final class VideoPlayer {
         }
         MediaPlayer.TrackDescription[] text = player.getSpuTracks();
         if (subtitlesOnly && text != null) for (MediaPlayer.TrackDescription track : text) {
-            labels.add((player.getSpuTrack() == track.id ? "✓ " : "") + trackLabel(track, true)); actions.add(() -> { player.setSpuTrack(track.id); tools.selectTrack("subtitle_track", track.id, trackKey(track, true)); });
+            labels.add((player.getSpuTrack() == track.id ? "✓ " : "") + trackLabel(track, true));
+            actions.add(() -> {
+                selectSubtitleTrack(track.id);
+                tools.selectTrack("subtitle_track", track.id, trackKey(track, true));
+            });
         }
         for (int index = 0; subtitlesOnly && index < subtitles.length(); index++) {
             final int selected = index;
@@ -1188,8 +1513,8 @@ public final class VideoPlayer {
         java.util.List<RemoteAction> actions = new ArrayList<>();
         RemoteAction back = pipControl(-1, android.R.drawable.ic_media_rew, "Back 10 seconds");
         RemoteAction forward = pipControl(1, android.R.drawable.ic_media_ff, "Forward 10 seconds");
-        back.setEnabled(player.isSeekable() && !tools.locked);
-        forward.setEnabled(player.isSeekable() && !tools.locked);
+        back.setEnabled(durationMilliseconds() > 0 && !tools.locked);
+        forward.setEnabled(durationMilliseconds() > 0 && !tools.locked);
         actions.add(back);
         RemoteAction playback = pipControl(0, player.isPlaying() ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play,
             player.isPlaying() ? "Pause" : "Play");
@@ -1201,7 +1526,7 @@ public final class VideoPlayer {
 
     private void updatePipActions() {
         if (Build.VERSION.SDK_INT < 26 || !activity.isInPictureInPictureMode() || done) return;
-        int state = (player.isPlaying() ? 1 : 0) | (player.isSeekable() ? 2 : 0) | (tools.locked ? 4 : 0);
+        int state = (player.isPlaying() ? 1 : 0) | (durationMilliseconds() > 0 ? 2 : 0) | (tools.locked ? 4 : 0);
         if (state == pipActionState) return;
         pipActionState = state;
         activity.setPictureInPictureParams(pipParams());
@@ -1306,12 +1631,29 @@ public final class VideoPlayer {
         }
     }
 
-    private void confirmProgressSeek() {
-        long time = player.getTime();
-        if (time >= 0 && Math.abs(time - progressSeek) <= 750) {
-            progressSeek = -1;
-            if (tools != null) tools.emit("progress", Long.toString(time));
+    private void beginProgressSeek() {
+        IMedia.Stats stats = playbackStats();
+        framesAtSeek = stats == null ? 0 : stats.displayedPictures;
+        audioAtSeek = stats == null ? 0 : stats.playedAbuffers;
+        seekIssuedAt = playRequested ? android.os.SystemClock.elapsedRealtime() : -1;
+    }
+
+    private void confirmProgressSeek(long now, long clock, long frames, long audio) {
+        if (startupVideoSeek >= 0 || progressSeek < 0 || seekIssuedAt < 0 || !playRequested || !player.isPlaying() ||
+                now - seekIssuedAt < 500 || clock <= progressSeek + 100) return;
+        if (!casting && frames <= framesAtSeek && audio <= audioAtSeek) {
+            // A live VOUT can confirm a seek without picture counters only
+            // when VLC completed a new buffering cycle and reported its clock.
+            if (!confirmingStartupVideoSeek || !liveVideoOutput || startupSeekClock <= progressSeek + 100) return;
+            clock = startupSeekClock;
         }
+        // A backwards seek can expose the prior clock until VLC handles it.
+        long maxAdvance = (long)((now - seekIssuedAt) * Math.max(1f, player.getRate())) + 1500;
+        if (clock - progressSeek > maxAdvance) return;
+        progressSeek = seekIssuedAt = resume = -1;
+        confirmingStartupVideoSeek = false;
+        resumeSeekSubmitted = false;
+        if (tools != null) tools.emit("progress", Long.toString(clock));
     }
 
     public long progressPosition() {
@@ -1323,6 +1665,7 @@ public final class VideoPlayer {
     public long position() {
         if (ended) return 0;
         if (audioTrackSwitch != null) return audioTrackSwitch.requestedPosition();
+        if (progressSeek >= 0) return progressSeek;
         if (networkResumePending) return bufferPosition;
         if (resume >= 0) return resume;
         long value = player.getTime();
@@ -1333,12 +1676,13 @@ public final class VideoPlayer {
         long time = position();
         if (knownDuration > 0) seek.setProgress((int)(time * 10000 / knownDuration));
         seek.setVisibility(View.VISIBLE);
-        seek.setEnabled(knownDuration > 0 && player.isSeekable());
+        seek.setEnabled(knownDuration > 0 && (tools == null || !tools.locked) && allowed(false));
         timeLabel.setText(clock(time) + " / " + (knownDuration > 0 ? clock(knownDuration) : "Loading duration…"));
     }
     public long durationMilliseconds() {
+        if (declaredDuration > 0) return declaredDuration;
         long duration = player.getLength();
-        if (duration > 0) knownDuration = duration;
+        if (duration > 0) knownDuration = tail != Tail.NONE ? Math.max(knownDuration, duration) : duration;
         return knownDuration;
     }
     public boolean completed() { return ended; }
@@ -1352,7 +1696,10 @@ public final class VideoPlayer {
         player.setVolume(0); // Silence the decoder before updating the paused UI.
         if (resume < 0) {
             long target = position();
-            if (observedFrames > 0 && android.os.SystemClock.elapsedRealtime() - lastFrameProgress >= 2000 && lastRenderedClock >= 0)
+            long now = android.os.SystemClock.elapsedRealtime();
+            if (progressSeek < 0 && observedFrames > 0 && now - lastFrameProgress >= 2000 &&
+                    now - lastAudioProgress >= 2000 && (!inputPlayedAudio || now - lastPlaybackProgress >= 2000) &&
+                    lastRenderedClock >= 0)
                 target = lastRenderedClock;
             resume = Math.max(0, target);
         }
@@ -1362,6 +1709,7 @@ public final class VideoPlayer {
         setControlsVisible(true);
         manualResumeRequired = true;
         playRequested = false;
+        seekIssuedAt = -1;
         if (audioTrackSwitch != null) audioTrackSwitch.playing(false, 0);
         updatePlayIcon();
         if (networkResumePending) resume = bufferPosition;

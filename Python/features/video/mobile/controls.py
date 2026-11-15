@@ -21,6 +21,7 @@ def native_options(options, content=None):
         from services.documents.storage import display_path, document_display_name
         values['video_path'] = display_path(content.provider, content.path)
         values['video_title'] = document_display_name(content.provider, content.path)
+        values['media_bounds'] = getattr(content, 'media_bounds', None)
         values['source_remote'] = content.remote
         values['source_private'] = private
         values['source_label'] = ('Cloud file' if content.remote else

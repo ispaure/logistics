@@ -205,13 +205,12 @@ class Core(qt.QObject):
                 now = monotonic()
                 if now - last >= .1:
                     keys = ('time-pos', 'duration', 'pause', 'eof-reached', 'seeking', 'paused-for-cache',
-                            'video-out-params', 'video-params', 'track-list', 'chapter-list', 'target-peak', 'target-trc')
+                            'video-out-params', 'video-params', 'track-list', 'chapter-list', 'target-peak', 'target-trc',
+                            'audio-pts')
                     state = {key: self.api.property(self.handle, key) for key in keys}
                     state.update(generation=generation, loaded=loaded, error=failed)
                     if switch_serial is not None:
                         state['audio-switch'] = (switch_serial, switch_state)
-                        if switch_state == 'restarted':
-                            state['audio-pts'] = self.api.property(self.handle, 'audio-pts')
                     if not self.closed:
                         self.snapshot.emit(state)
                     last = now
