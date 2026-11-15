@@ -14,7 +14,8 @@ from unittest.mock import patch
 
 from logistics_build.build_retention import (clean, compiler_cache, compiler_cache_group,
                                             COMPILER_CACHE_MARKER, delete_storage, enroll_output,
-                                            prune_device_workspaces, scratch, storage_inventory)
+                                            prune_device_workspaces, scratch, snapshot_intermediates,
+                                            storage_inventory)
 from logistics_build.device_workspace_paths import DEVICE_WORKSPACES, LEGACY_DEVICE_WORKSPACES
 from build_manager.locking import workspace_lock
 from build_manager.retention import durable_hold, lease
@@ -229,6 +230,35 @@ class BuildRetentionTests(unittest.TestCase):
                 self.assertEqual(clean(root, apply=True), [str(paths[0])])
                 self.assertFalse(paths[0].exists())
                 self.assertTrue(all(path.exists() for path in paths[1:]))
+
+    def test_snapshot_compiler_cache_discovery_stays_inside_owned_snapshot_paths(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            snapshots = root / 'mobile_build/.tools/build-manager/snapshots'
+            outside = root / 'unowned'
+            outside_build = outside / 'build'
+            (outside_build / 'testflight/101/derived').mkdir(parents=True)
+            for index, relative, target in (
+                (1, 'mobile_build', outside),
+                (2, 'mobile_build/build', outside_build),
+                (3, 'mobile_build/build/testflight', outside_build / 'testflight'),
+            ):
+                snapshot = snapshots / (str(index) * 64)
+                link = snapshot / relative
+                link.parent.mkdir(parents=True)
+                (snapshot / '.manager-source.json').write_text('{}')
+                link.symlink_to(target, target_is_directory=True)
+
+            owned = snapshots / ('4' * 64)
+            (owned / 'mobile_build/build/testflight/102/derived').mkdir(parents=True)
+            (owned / '.manager-source.json').write_text('{}')
+            with patch.object(Path, 'iterdir', autospec=True, side_effect=Path.iterdir) as directories:
+                specs = list(snapshot_intermediates(root))
+            self.assertEqual([call.args[0] for call in directories.call_args_list],
+                             [snapshots, owned / 'mobile_build/build/testflight'])
+            cache_roots = {spec['root'] for _, spec in specs}
+            self.assertIn(owned / 'mobile_build/build/testflight/102', cache_roots)
+            self.assertFalse(any(path.name == '101' for path in cache_roots))
 
     def test_scratch_command_keeps_document_history_out_of_parent_storage(self):
         from logistics_build.build_retention import main

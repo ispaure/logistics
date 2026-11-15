@@ -248,6 +248,8 @@ def snapshot_intermediates(root):
                 or linked(marker) or not marker.is_file()):
             continue
         build = snapshot / 'mobile_build/build'
+        if linked(build.parent) or linked(build):
+            continue
         specs = [
             (build / 'logisticsmobile/android/gradle/app/build', {'intermediates', 'tmp', 'generated'}),
             (build / 'logisticsmobile/android/gradle', {'.gradle'}),
@@ -255,8 +257,9 @@ def snapshot_intermediates(root):
                 'EagerLinkingTBDs', 'ExplicitPrecompiledModules', 'SharedPrecompiledHeaders', 'SwiftExplicitPrecompiledModules'}),
         ]
         provider = build / 'testflight'
-        if provider.is_dir() and not linked(provider):
-            specs.extend((path, {'derived'}) for path in provider.iterdir() if path.name.isdigit() and path.is_dir() and not linked(path))
+        if not linked(provider) and provider.is_dir():
+            specs.extend((path, {'derived'}) for path in provider.iterdir()
+                         if path.name.isdigit() and not linked(path) and path.is_dir())
         for cache_root, names in specs:
             def eligible(path, names=names, snapshot=snapshot):
                 return path.name in names and not explicitly_pinned(snapshot) and cache_idle(snapshot)
