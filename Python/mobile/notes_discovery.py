@@ -104,6 +104,20 @@ def _close_provider(provider):
         provider.close()
 
 
+async def _acquire_provider(factory):
+    """Retire a provider returned after its waiting row was cancelled."""
+    worker = asyncio.create_task(asyncio.to_thread(factory))
+    try:
+        return await asyncio.shield(worker)
+    except asyncio.CancelledError:
+        def retire(finished):
+            if not finished.cancelled() and finished.exception() is None:
+                _close_provider(finished.result())
+
+        worker.add_done_callback(retire)
+        raise
+
+
 def _discover(request):
     app = request.app
     found, had_errors = [], False
@@ -127,7 +141,7 @@ async def _open_library(request, library, status):
         return
     provider = None
     try:
-        provider = await asyncio.to_thread(library.open_provider)
+        provider = await _acquire_provider(library.open_provider)
         if not request.is_current():
             return
         from .obsidian import open_vault
