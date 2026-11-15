@@ -26,6 +26,15 @@ On Windows, the harness records the pristine baseline's read-only `fsync`
 failure and uses `r+b` for the legacy flush in the parity run. It checks that the
 pristine run preserves its input and yields the same staging result.
 
+## Native Windows pointer checks
+
+Inspect the dedicated guest's signed-in desktop before reproducing hover or popup
+failures with the native Qt backend. A Windows Security firewall prompt can
+cover active test windows and make Qt's global hit test return no widget.
+Choose **Cancel** if the prompt asks for inbound access for the disposable
+Python interpreter, then verify the desktop is clear and rerun the local
+UI fixture.
+
 ## Fedora environment preparation
 
 `Python/tests/platform/fedora.Containerfile` defines the shared hosted/local
