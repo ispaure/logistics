@@ -36,6 +36,7 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
         self.preset.currentIndexChanged.connect(self._preset_changed)
         self.remove_button.clicked.connect(self._remove)
         self.launch_button.clicked.connect(self._launch)
+        self.console_window.toggled.connect(self._save_console_option)
         self.create_button.clicked.connect(self._create)
         self.duplicate_button.clicked.connect(self._duplicate)
         self.copy_button.clicked.connect(self._copy)
@@ -102,6 +103,7 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
         has_preset = bool(release and self.preset.currentText())
         self.remove_button.setEnabled(ready)
         self.launch_button.setEnabled(has_preset)
+        self.console_window.setEnabled(has_preset)
         self.install_folder.setEnabled(ready)
         self.create_button.setEnabled(bool(release))
         for button in (self.duplicate_button, self.rename_button, self.delete_button,
@@ -110,7 +112,6 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
         self.copy_button.setEnabled(has_preset and len(self.releases) > 1)
         self.addon_folder.setEnabled(self.table.rowCount() > 0)
         self.add_addon.setEnabled(has_preset)
-        self.apply_button.setEnabled(has_preset and self._choices_context is not None)
         self.bluehole_group.setEnabled(has_preset)
         self.tabs.setEnabled(has_preset)
         self.bluehole_enabled.setEnabled(has_preset)
@@ -126,6 +127,9 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
         try:
             rows = scan_preset(self.manager.preset(self.release, self.preset.currentText())) if (
                 self.release and self.preset.currentText()) else []
+            with qt.QSignalBlocker(self.console_window):
+                self.console_window.setChecked(bool(self.release and self.preset.currentText() and
+                    self.manager.launch_settings(self.release, self.preset.currentText())['console']))
             self._show_rows(rows)
             self._show_choices()
             if self.release:
@@ -140,6 +144,16 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
         except (OSError, ValueError) as error:
             self.status.setText(str(error))
             self.controls.setEnabled(False)
+
+    def _save_console_option(self, checked):
+        if not self.release or not self.preset.currentText():
+            return
+        try:
+            self.manager.save_launch_settings(self.release, self.preset.currentText(), console=checked)
+        except (OSError, ValueError) as error:
+            with qt.QSignalBlocker(self.console_window):
+                self.console_window.setChecked(not checked)
+            self.status.setText(f'Could not save launch option: {error}')
 
     def _confirm(self, text):
         return qt.QMessageBox.question(self, 'Blender', text,
@@ -202,7 +216,7 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
                                                   f'Destination: {self.manager.installation(release)}'):
                 return
             bluehole_choice = bluehole.validate(state.get('bluehole', bluehole.DEFAULT))
-            if needs_install or state['selected'] or state['installed'] or bluehole_choice['enabled']:
+            if needs_install or state['selected'] or state['installed'] or bluehole_choice['enabled'] or self.manager.launch_settings(release, name)['console']:
                 def work(report, cancelled):
                     if needs_install:
                         self.manager.install(release, report=report, cancelled=cancelled)
@@ -435,7 +449,6 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
     def _invalidate_choices(self):
         self._choices_context = None
         self.choices.setRowCount(0)
-        self.apply_button.setEnabled(False)
         self.bluehole_group.setEnabled(False)
 
     def _show_choices(self):
@@ -473,7 +486,6 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
         if root is not None:
             self._choices_context = (self.release.version, self.preset.currentText())
             self.bluehole_group.setEnabled(True)
-            self.apply_button.setEnabled(True)
 
     def _save_bluehole_source(self, *_args):
         release, name = self.release, self.preset.currentText()
@@ -486,9 +498,12 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
         except (OSError, ValueError) as error:
             self.status.setText(f'Could not save Blue Hole source: {error}')
 
-    def _apply_addons(self):
+    def _addon_selection_changed(self, item):
+        if item.column() == 0:
+            self._save_addon_selection()
+
+    def _save_addon_selection(self, *_args):
         if not self.release or self._choices_context != (self.release.version, self.preset.currentText()):
-            self.status.setText('Refresh this preset before saving its addon selection.')
             return
         identities = [self.choices.item(row, 0).data(qt.Qt.ItemDataRole.UserRole) for row in range(self.choices.rowCount())
                       if self.choices.item(row, 0).checkState() == qt.Qt.CheckState.Checked]
@@ -503,7 +518,8 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
             self._show_choices()
             self.status.setText('Addon selection saved. It will be applied on the next launch.')
         except (OSError, ValueError) as error:
-            self.status.setText(str(error))
+            self._show_choices()
+            self.status.setText(f'Could not save addon selection: {error}')
 
     def prepare_close(self):
         if self.task.busy:

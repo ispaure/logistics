@@ -23,6 +23,15 @@ Exact `config-<major.minor.patch>.ini` files pin platform checksums. Legacy expl
 
 Install verifies, safely extracts into a sibling workspace, and publishes without overwrite under a version lock. Verify ownership before removing an interrupted lock. Readiness checks marker and executable. DMG copying preserves signed bundle metadata. The preset selects config, scripts, extensions and datafiles through the child environment. Managed launches survive Logistics closure.
 
+Per-preset `.logistics-launch.json` stores the `console` launch option (default
+false). `presets/console_launch.py` uses commonUtils' native terminal launcher.
+Blender's bundled Python runs the stdlib-only bridge, transferring only explicit
+Blender environment variables and recording the real Blender PID and exit status.
+Console launches run through the page's worker, including presets with no addons.
+Addon selection changes save immediately; rendering a new preset invalidates the
+previous selection context before projecting controls, so refreshes do not save.
+Manager, page and console regression tests cover persistence, failures and process tracking.
+
 Resolve compatible add-ons by version, then legacy format, then dated revision. Preset packages override provided packages of the same identity/version. Retain undated imports, selected legacy imports and confirmed migration aliases. Quarantine conflicting revisions.
 
 Saving writes pending intent. Apply verifies ZIP snapshots, refuses unmanaged collisions, repairs missing entrypoints and backs up managed resources before preparation. Failure or cancellation restores files. Add-on side effects can survive. Background preparation suppresses imports of GPU-dependent add-ons. Interactive launch activates them while preserving saved preferences. Check preset `blender-addons-error-*.log` or `blender-launch-*.log`.

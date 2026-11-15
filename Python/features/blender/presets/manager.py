@@ -7,6 +7,7 @@ import shutil
 import subprocess
 from tempfile import NamedTemporaryFile, TemporaryDirectory
 
+from commonUtils.persistence.atomic import atomic_write_bytes
 from features.preferences import preferences_path
 from commonUtils.persistence.publication import rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
@@ -135,6 +136,24 @@ class BlenderManager:
             library.remove_checkout_link(root / ADDON_PATH)
         shutil.rmtree(root)
 
+    def launch_settings(self, release, name):
+        root = self.preset(release, name)
+        path = self._contained(root, '.logistics-launch.json')
+        value = json.loads(path.read_text(encoding='utf-8')) if path.exists() else {}
+        if not isinstance(value, dict) or not isinstance(value.get('console', False), bool):
+            raise ValueError('Invalid Blender launch settings')
+        return {**value, 'console': value.get('console', False)}
+
+    def save_launch_settings(self, release, name, *, console):
+        root = self.preset(release, name)
+        if not root.is_dir():
+            raise ValueError('Create or select an existing preset first')
+        if not isinstance(console, bool):
+            raise ValueError('Console must be enabled or disabled')
+        value = {**self.launch_settings(release, name), 'console': console}
+        atomic_write_bytes(self._contained(root, '.logistics-launch.json'),
+                           json.dumps(value, indent=2).encode('utf-8'))
+
     def environment(self, release, name):
         root = self.preset(release, name)
         if not root.is_dir():
@@ -157,6 +176,7 @@ class BlenderManager:
 
     def launch(self, release, name):
         executable = self.executable(release)
+        settings = self.launch_settings(release, name)
         from features.blender.addons.library import AddonLibrary
         state = AddonLibrary(self).selection(self.preset(release, name))
         entries = sorted(state['installed'].values(),
@@ -167,14 +187,25 @@ class BlenderManager:
         command = [str(executable)]
         env = self.environment(release, name)
         env.pop('LOGISTICS_BLENDER_ADDONS', None)
+        if settings['console']:
+            env['PYTHONUNBUFFERED'] = '1'
+            # Embedded Python may ignore environment flags. Configure its
+            # streams before activating managed addons so output arrives live.
+            command.extend(['--python-expr',
+                "import sys; [s.reconfigure(line_buffering=True, write_through=True) "
+                "for s in (sys.stdout, sys.stderr) if hasattr(s, 'reconfigure')]"])
         if modules:
             command.extend(['--addons', ','.join(modules), '--python', str(Path(__file__).parents[1] / 'addons' / 'launch_addons.py')])
             env['LOGISTICS_BLENDER_ADDONS'] = json.dumps(modules)
-        with NamedTemporaryFile(prefix='blender-launch-', suffix='.log',
-                                dir=self.preset(release, name), delete=False) as log:
-            process = subprocess.Popen(command, env=env,
-                                       cwd=self.preset(release, name), stdin=subprocess.DEVNULL,
-                                       stdout=log, stderr=log)
+        if settings['console']:
+            from .console_launch import launch_in_console
+            process = launch_in_console(command, env, self.preset(release, name), release.version)
+        else:
+            with NamedTemporaryFile(prefix='blender-launch-', suffix='.log',
+                                    dir=self.preset(release, name), delete=False) as log:
+                process = subprocess.Popen(command, env=env,
+                                           cwd=self.preset(release, name), stdin=subprocess.DEVNULL,
+                                           stdout=log, stderr=log)
         self.processes.append((process, release.version, name))
         return process.pid
 

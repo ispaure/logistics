@@ -221,12 +221,10 @@ class BlenderLibraryTests(unittest.TestCase):
         with installation_lock(preset):
             with self.assertRaisesRegex(ValueError, 'Another operation'):
                 self.library.save_pending_selection(release, 'Legacy', [], bluehole=config)
-        with patch.object(self.manager, 'running', return_value=True):
-            with self.assertRaisesRegex(ValueError, 'Close the Blender instance'):
-                self.library.save_pending_selection(release, 'Legacy', [], bluehole=config)
         self.assertEqual(selection_file.read_bytes(), original)
-
-        self.library.save_pending_selection(release, 'Legacy', [], bluehole=config)
+        # Pending choices are metadata only; the running Blender files stay put.
+        with patch.object(self.manager, 'running', return_value=True):
+            self.library.save_pending_selection(release, 'Legacy', [], bluehole=config)
         self.assertEqual(self.library.selection(preset), {
             'selected': [], 'installed': installed,
             'installed_bluehole': {'branch': 'main', 'commit': 'a' * 40},

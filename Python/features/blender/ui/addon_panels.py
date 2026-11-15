@@ -14,12 +14,11 @@ def build_addon_selection(page, controls, manage_layout):
     page.choices.horizontalHeader().setStretchLastSection(False)
     for column in range(page.choices.columnCount()):
         page.choices.horizontalHeader().setSectionResizeMode(column, qt.QHeaderView.ResizeMode.Stretch if column == 1 else qt.QHeaderView.ResizeMode.ResizeToContents)
-    page.apply_button = qt.QPushButton('Save Addon Selection')
-    page.apply_button.clicked.connect(page._apply_addons)
+    page.choices.itemChanged.connect(page._addon_selection_changed)
     page.tabs = qt.QTabWidget()
     selection_page = qt.QWidget()
     selection_layout = qt.QVBoxLayout(selection_page)
-    note = qt.QLabel('Choose addons from the library for this preset. Installed shows the current files. Latest compatible and Type show what the next launch will apply.')
+    note = qt.QLabel('Addon selections save automatically and apply on the next launch. Installed shows the current files. Latest compatible and Type show what the next launch will apply.')
     note.setWordWrap(True)
     selection_layout.addWidget(note)
     page.catalog_warning = qt.QLabel()
@@ -65,6 +64,9 @@ def build_addon_selection(page, controls, manage_layout):
     page.bluehole_source.currentTextChanged.connect(page._save_bluehole_source)
     page.bluehole_checkout.editingFinished.connect(page._save_bluehole_source)
     page.bluehole_auto_update.toggled.connect(page._save_bluehole_source)
+    page.bluehole_enabled.toggled.connect(page._save_addon_selection)
+    page.bluehole_branch.currentTextChanged.connect(page._save_addon_selection)
+    page.bluehole_deluxe.currentTextChanged.connect(page._save_addon_selection)
     page._show_bluehole_source()
     page.bluehole_installed = qt.QLabel('Not installed')
     page.bluehole_installed.setTextInteractionFlags(qt.Qt.TextInteractionFlag.TextSelectableByMouse)
@@ -74,7 +76,6 @@ def build_addon_selection(page, controls, manage_layout):
     bluehole_form.addRow(page.bluehole_deluxe_note)
     controls.insertWidget(1, page.bluehole_group)
     selection_layout.addWidget(page.choices)
-    selection_layout.addWidget(page.apply_button, 0, qt.Qt.AlignmentFlag.AlignLeft)
     page.tabs.addTab(selection_page, 'Addons')
     manage_layout.addWidget(page.tabs, 1)
 
@@ -135,7 +136,7 @@ class PresetAddonPresentation:
         self.bluehole_form.setRowVisible(self.bluehole_deluxe, not runtime_deluxe)
         self.bluehole_deluxe.setCurrentText('Yes' if config['deluxe'] else 'No')
         self.bluehole_deluxe_note.setText(
-            'Enable Deluxe Keymaps in Blender under Blue Hole → Updates & Deluxe.'
+            'Enable Blue Hole Keymaps & Pie Menus from the Blue Hole menu in Blender.'
             if runtime_deluxe else 'Deluxe copies Blue Hole keymaps and stamps this preset’s saved preferences.')
         current = state.get('installed_bluehole') or state.get('bluehole', {})
         bh = state['installed'].get(bluehole.IDENTITY)

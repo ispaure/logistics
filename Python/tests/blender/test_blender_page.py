@@ -61,6 +61,30 @@ class BlenderPageTests(QtTestCase):
         self.assertEqual(page.table.item(0, 3).text(), 'Unknown')
         self.assertEqual(page.table.item(0, 4).text(), 'Preset')
 
+    def test_console_option_saves_on_toggle_and_tracks_selected_preset(self):
+        self.manager.create_preset(self.builds[0], 'Art')
+        self.manager.create_preset(self.builds[0], 'Other')
+        page = BlenderPage(manager=self.manager, settings_mode=True)
+        self.assertFalse(page.console_window.isChecked())
+        page.console_window.setChecked(True)
+        self.assertTrue(self.manager.launch_settings(self.builds[0], 'Art')['console'])
+        page.preset.setCurrentText('Other')
+        self.assertFalse(page.console_window.isChecked())
+        page.preset.setCurrentText('Art')
+        self.assertTrue(page.console_window.isChecked())
+        with patch.object(self.manager, 'save_launch_settings', side_effect=OSError('read only')):
+            page.console_window.setChecked(False)
+        self.assertTrue(page.console_window.isChecked())
+        self.assertIn('Could not save launch option', page.status.text())
+
+    def test_console_launch_uses_worker_even_without_selected_addons(self):
+        self.manager.create_preset(self.builds[0], 'Art')
+        self.manager.save_launch_settings(self.builds[0], 'Art', console=True)
+        page = BlenderPage(manager=self.manager)
+        with patch.object(self.manager, 'ready', return_value=True), patch.object(page, '_run') as run:
+            page._launch()
+        self.assertEqual(run.call_args.args[0], 'Launching Blender')
+
     def test_launch_cards_manage_and_library_are_separate(self):
         self.manager.create_preset(self.builds[0], 'Animation')
         self.manager.create_preset(self.builds[0], 'Modeling')
@@ -107,11 +131,11 @@ class BlenderPageTests(QtTestCase):
         self.assertEqual([panel.presets.bluehole_branch.itemText(i) for i in range(3)], ['main', 'beta', 'alpha'])
         panel.presets.bluehole_enabled.setChecked(False)
         panel.presets.bluehole_branch.setCurrentText('beta')
-        panel.presets._apply_addons()
+        panel.presets._save_addon_selection()
         state = panel.presets.library.selection(self.manager.preset(self.builds[0], 'Art'))
         self.assertEqual(state['bluehole'], {'enabled': False, 'branch': 'beta', 'auto_update': True})
         self.assertFalse(panel.presets.bluehole_form.isRowVisible(panel.presets.bluehole_deluxe))
-        self.assertIn('Updates & Deluxe', panel.presets.bluehole_deluxe_note.text())
+        self.assertIn('Keymaps & Pie Menus', panel.presets.bluehole_deluxe_note.text())
         with patch.object(BlenderPage, 'release', self.builds[-1]):
             panel.presets._project_bluehole_choice({'installed': {}}, {})
         self.assertTrue(panel.presets.bluehole_form.isRowVisible(panel.presets.bluehole_deluxe))
@@ -155,7 +179,7 @@ class BlenderPageTests(QtTestCase):
         self.assertEqual(page.bluehole_checkout.text(), str(checkout / 'typed'))
         page.bluehole_checkout.setText(str(checkout))
         page.bluehole_enabled.setChecked(True)
-        page._apply_addons()
+        page._save_addon_selection()
         self.assertEqual(page.library.selection(root)['bluehole'],
                          {'enabled': True, 'branch': 'main', 'source': 'local', 'path': str(checkout.resolve()), 'auto_update': False})
         self.assertEqual(page.bluehole_source.currentText(), 'Local')
@@ -163,7 +187,7 @@ class BlenderPageTests(QtTestCase):
         page.bluehole_source.setCurrentText('GitHub')
         self.assertTrue(page.bluehole_form.isRowVisible(page.bluehole_auto_update))
         self.assertFalse(page.bluehole_auto_update.isChecked())
-        page._apply_addons()
+        page._save_addon_selection()
         self.assertEqual(page.library.selection(root)['bluehole'],
                          {'enabled': True, 'branch': 'main', 'path': str(checkout.resolve()), 'auto_update': False})
         page.refresh()
@@ -177,7 +201,7 @@ class BlenderPageTests(QtTestCase):
         self.assertFalse(page.library.selection(root)['bluehole']['auto_update'])
         page = BlenderPage(manager=self.manager, settings_mode=True)
         self.assertFalse(page.bluehole_auto_update.isChecked())
-        page._apply_addons()
+        page._save_addon_selection()
         self.assertFalse(page.library.selection(root)['bluehole']['auto_update'])
         page.bluehole_auto_update.setChecked(True)
         page.refresh()
@@ -270,7 +294,7 @@ class BlenderPageTests(QtTestCase):
         self.assertEqual(page.choices.item(row, 5).text(), 'Preset provided')
         self.assertEqual(page.choices.item(rows['legacy:missing'], 4).text(), 'No compatible version')
         page.choices.item(row, 0).setCheckState(qt.Qt.CheckState.Unchecked)
-        page._apply_addons()
+        page._save_addon_selection()
         self.assertEqual(page.choices.item(row, 4).text(), 'Removal pending')
 
     def test_catalog_failure_clears_choices_and_blocks_cross_preset_save_until_refresh(self):
@@ -288,20 +312,20 @@ class BlenderPageTests(QtTestCase):
         with patch('features.blender.addons.library.AddonLibrary.entries', side_effect=OSError('unavailable')):
             page.preset_list.setCurrentRow(1)
             self.assertEqual(page.choices.rowCount(), 0)
-            self.assertFalse(page.apply_button.isEnabled())
-            page._apply_addons()
+            self.assertFalse(bool(page._choices_context))
+            page._save_addon_selection()
         self.assertFalse((other / '.logistics-addons.json').exists())
         page.refresh()
-        self.assertTrue(page.apply_button.isEnabled())
+        self.assertTrue(bool(page._choices_context))
         self.assertTrue(page.controls.isEnabled())
         self.assertEqual(page.choices.rowCount(), 0)
         provided = page.library.provided_root; provided.mkdir()
         (provided / 'broken.zip').write_bytes(b'broken')
         page.preset_list.setCurrentRow(0)
         self.assertEqual(page.choices.rowCount(), 1)
-        self.assertTrue(page.apply_button.isEnabled())
+        self.assertTrue(bool(page._choices_context))
         self.assertIn('broken.zip', page.catalog_warning.text())
-        page._apply_addons()
+        page._save_addon_selection()
         self.assertEqual(page.library.selection(art)['selected'], ['legacy:tool'])
 
     def test_changing_bluehole_branch_preserves_installed_branch_and_commit(self):
@@ -315,7 +339,7 @@ class BlenderPageTests(QtTestCase):
         page = BlenderPage(manager=self.manager, settings_mode=True)
         self.assertIn('main · ' + 'a' * 12, page.bluehole_installed.text())
         page.bluehole_branch.setCurrentText('beta')
-        page._apply_addons()
+        page._save_addon_selection()
         state = page.library.selection(root)
         self.assertEqual(state['bluehole']['branch'], 'beta')
         self.assertEqual(state['installed_bluehole']['branch'], 'main')
@@ -461,6 +485,34 @@ class BlenderPageTests(QtTestCase):
             self._wait_for_operation(page)
         self.assertEqual(page.table.item(0, 3).text(), 'Yes')
         self.assertEqual(page.status.text(), 'Saved state')
+
+    def test_bluehole_selection_fields_save_without_an_apply_button(self):
+        root = self.manager.create_preset(self.builds[0], 'Art')
+        page = BlenderPage(manager=self.manager, settings_mode=True)
+        self.assertFalse(hasattr(page, 'apply_button'))
+        page.bluehole_enabled.setChecked(True)
+        page.bluehole_branch.setCurrentText('alpha')
+        state = page.library.selection(root)
+        self.assertTrue(state['bluehole']['enabled'])
+        self.assertEqual(state['bluehole']['branch'], 'alpha')
+        page.bluehole_enabled.setChecked(False)
+        self.assertFalse(page.library.selection(root)['bluehole']['enabled'])
+
+    def test_addon_checkbox_saves_and_failed_save_restores_display(self):
+        import zipfile
+        root = self.manager.create_preset(self.builds[0], 'Art')
+        package = Path(self.temporary.name) / 'autosave.zip'
+        with zipfile.ZipFile(package, 'w') as archive:
+            archive.writestr('autosave/__init__.py', 'bl_info={"name":"Autosave","version":(1,0,0),"blender":(3,0,0)}')
+        page = BlenderPage(manager=self.manager, settings_mode=True)
+        page.library.for_preset(root).add(package)
+        page._show_choices()
+        page.choices.item(0, 0).setCheckState(qt.Qt.CheckState.Checked)
+        self.assertEqual(page.library.selection(root)['selected'], ['legacy:autosave'])
+        with patch.object(page.library, 'save_pending_selection', side_effect=OSError('read only')):
+            page.choices.item(0, 0).setCheckState(qt.Qt.CheckState.Unchecked)
+        self.assertEqual(page.choices.item(0, 0).checkState(), qt.Qt.CheckState.Checked)
+        self.assertIn('Could not save addon selection', page.status.text())
 
 
 if __name__ == '__main__':

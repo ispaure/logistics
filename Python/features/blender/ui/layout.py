@@ -117,6 +117,9 @@ def _build_configuration_controls(page, settings_mode, manage_layout):
     else:
         selection.addRow('Blender version', page.version)
         selection.addRow('Preference preset', page.preset)
+    page.console_window = qt.QCheckBox('Open console window')
+    page.console_window.setToolTip('Launch Blender in a native console/terminal window. Saved immediately for this preset.')
+    selection.addRow('Launch options', page.console_window)
     controls.addLayout(selection)
     page.install_status = qt.QLabel()
     page.install_status.setWordWrap(True)

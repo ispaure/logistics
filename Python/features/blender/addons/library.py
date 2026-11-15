@@ -386,7 +386,6 @@ class AddonLibrary:
             bluehole_source.local_addon(checkout, release)
             config['path'] = str(checkout)
         with installation_lock(root):
-            self.manager._require_idle(release, name)
             state = self.selection(root)
             previous = state.get('bluehole', {})
             if 'installed_bluehole' not in state and previous.get('commit'):

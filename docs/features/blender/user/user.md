@@ -27,6 +27,15 @@ Launch from its card or **Launch Blender**. Presets have independent `config`,
 **More… → Open Preset Folder** to access `config/userpref.blend`, legacy
 `scripts/addons` or other preset files.
 
+Enable **Open console window** in a preset's **Launch options** to start Blender
+in a native terminal/console through commonUtils. The choice saves immediately,
+defaults to off and follows duplicated/copied presets. Startup messages and addon
+errors appear in that terminal. Blender uses the same preset resources and addon
+selection as a normal launch.
+
+Addon checkboxes and Blue Hole's enable/channel/Deluxe fields save automatically.
+Selections apply on the next launch; there is no separate Save Addon Selection button.
+
 Close Blender before duplicating, copying to another version, renaming or
 deleting a preset. Copies include its private addon ZIPs, preserve symlinks and
 keep absolute paths stored inside preferences. Deleting permanently removes
@@ -40,7 +49,7 @@ that preset and its private files. Use Logistics to launch with its resources.
   to the selected preset. Available legacy imports already selected by a preset
   appear as **User provided (legacy)**.
 
-Select addons, then **Save Addon Selection**. On launch, Logistics applies the
+Select addons; the selection saves automatically. On launch, Logistics applies the
 newest declared-compatible release, preferring the preset’s ZIP at equal
 identity/version. Legacy `bl_info` and modern `blender_manifest.toml` metadata
 must identify one addon and its compatibility. Minimum versions are inclusive,

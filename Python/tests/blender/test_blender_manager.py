@@ -262,6 +262,49 @@ class BlenderManagerTests(unittest.TestCase):
             import os
             self.assertEqual(os.environ['BLENDER_USER_CONFIG'], '/external/preferences')
 
+    def test_console_option_is_private_persistent_and_copied(self):
+        self.manager.create_preset(self.release, 'Art')
+        self.manager.create_preset(self.release, 'Other')
+        self.assertFalse(self.manager.launch_settings(self.release, 'Art')['console'])
+        self.manager.save_launch_settings(self.release, 'Art', console=True)
+        reopened = BlenderManager(self.root)
+        self.assertTrue(reopened.launch_settings(self.release, 'Art')['console'])
+        self.assertFalse(reopened.launch_settings(self.release, 'Other')['console'])
+        reopened.duplicate_preset(self.release, 'Art', 'Copy')
+        self.assertTrue(reopened.launch_settings(self.release, 'Copy')['console'])
+        reopened.save_launch_settings(self.release, 'Copy', console=False)
+        self.assertTrue(reopened.launch_settings(self.release, 'Art')['console'])
+
+    def test_console_launch_uses_native_terminal_and_retains_actual_blender_process(self):
+        self.manager.create_preset(self.release, 'Art')
+        self._mark_installed()
+        self.manager.save_launch_settings(self.release, 'Art', console=True)
+        process = Mock(pid=321)
+        with patch('features.blender.presets.console_launch.launch_in_console', return_value=process) as launch, \
+                patch('features.blender.presets.manager.subprocess.Popen') as plain:
+            self.assertEqual(self.manager.launch(self.release, 'Art'), 321)
+        plain.assert_not_called()
+        command, env, cwd, version = launch.call_args.args
+        self.assertEqual(command[1], '--python-expr')
+        self.assertEqual(env['PYTHONUNBUFFERED'], '1')
+        self.assertEqual(cwd, self.manager.preset(self.release, 'Art'))
+        self.assertEqual(self.manager.processes[-1], (process, version, 'Art'))
+
+    def test_console_settings_reject_invalid_values_and_links(self):
+        root = self.manager.create_preset(self.release, 'Art')
+        path = root / '.logistics-launch.json'
+        for value in ([], {'console': 'false'}, {'console': 1}):
+            path.write_text(json.dumps(value))
+            with self.assertRaises(ValueError):
+                self.manager.launch_settings(self.release, 'Art')
+        path.unlink()
+        external = self.root / 'external.json'
+        external.write_text('{}')
+        path.symlink_to(external)
+        with self.assertRaises(ValueError):
+            self.manager.save_launch_settings(self.release, 'Art', console=True)
+        self.assertEqual(external.read_text(), '{}')
+
     def test_running_blender_blocks_installation_and_preset_deletion(self):
         process = Mock()
         process.poll.return_value = None
