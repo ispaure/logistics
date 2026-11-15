@@ -106,7 +106,7 @@ def conservative_page_receipt(expected, measured):
     return dict(page=expected['index'], status=status, reason=reason, measured=measured)
 
 
-def desktop_inspector(workspace, *, synthetic=False):
+def desktop_inspector(workspace, *, synthetic=False, max_bytes=MAX_ARCHIVE):
     """Open arbitrary documents conservatively; strict fixture assertions opt in."""
     from commonUtils.ui import pyside as qt
     from features.notebooks.ui.workspace import NotebookWorkspace, NotebookWindow
@@ -132,8 +132,8 @@ def desktop_inspector(workspace, *, synthetic=False):
             instance.window.show()
             resource = None
             try:
-                resource = local_document_resource(target, max_bytes=MAX_ARCHIVE)
-                book = Notebook.read(resource.read())
+                resource = local_document_resource(target, max_bytes=max_bytes)
+                book = Notebook.read(resource.read(), max_bytes=max_bytes)
                 instance.panel.open_resource(NotebookDocument(book, resource=resource, recovery=instance.panel.repository))
                 instance.ready()
                 return instance
@@ -146,7 +146,7 @@ def desktop_inspector(workspace, *, synthetic=False):
 
         try:
             probe = open_copy()
-            original = Notebook.read(source.read_bytes())
+            original = Notebook.read(source.read_bytes(), max_bytes=max_bytes)
             assert [page.id for page in probe.panel.editor.notebook.pages] == [page.id for page in original.pages]
             if synthetic:
                 assert len(original.pages) == (7 if original.content['fileType'] == 'notebook' else 3)

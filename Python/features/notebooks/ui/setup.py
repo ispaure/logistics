@@ -1,6 +1,6 @@
 """Desktop notebook creation using the same generated template catalog as mobile."""
 from commonUtils.ui import pyside as qt
-from ..notebook import Notebook
+from ..notebook import DESKTOP_MAX_ARCHIVE, Notebook
 from ..templates import CATALOG, FORMATS, TEMPLATE_NOTICE, description, svg
 
 
@@ -64,7 +64,7 @@ class NotebookSetup(qt.QDialog):
 
     def notebook(self):
         return Notebook.new(self.name.text().strip(), template=self.template.currentData(),
-                            paper_format=self.paper_format.currentData())
+                            paper_format=self.paper_format.currentData(), max_bytes=DESKTOP_MAX_ARCHIVE)
 
 
 def choose_new_notebook(parent=None, *, name='Notebook', fixed_name=False):

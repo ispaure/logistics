@@ -8,7 +8,7 @@ from weakref import WeakKeyDictionary
 from commonUtils.persistence import atomic_write_json
 from commonUtils.persistence.publication import serialize_mutation
 from commonUtils.persistence.atomic import atomic_write_bytes
-from .notebook import Notebook, Page, identifier
+from .notebook import MAX_ARCHIVE, Notebook, Page, identifier
 from .ink import InkPage
 from .protocol import RecoveryIncomplete
 
@@ -29,7 +29,8 @@ class Repository:
             if (self.root / identifier(key)).exists():
                 raise
 
-    def __init__(self, root):
+    def __init__(self, root, *, max_bytes=MAX_ARCHIVE):
+        self.max_bytes = max_bytes
         self.revisions = WeakKeyDictionary()
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
@@ -75,7 +76,7 @@ class Repository:
         previous = self.check_revision(key, notebook)
         # Explicit source adoption preserves the archive exactly, including
         # missing legacy ink members. Loading a blank page may synthesize ink.
-        source_baseline = Notebook.read(source_bytes) if source_bytes is not None else None
+        source_baseline = Notebook.read(source_bytes, max_bytes=self.max_bytes) if source_bytes is not None else None
         # Each immutable page snapshot precedes publication of its manifest.
         # Interrupted saves leave the previous manifest and pages recoverable.
         pages = []
@@ -110,7 +111,7 @@ class Repository:
         baseline = None
         if structural or source_bytes is not None:
             base = source_bytes if source_bytes is not None else notebook.to_bytes()
-            baseline = source_baseline if source_bytes is not None else Notebook.read(base)
+            baseline = source_baseline if source_bytes is not None else Notebook.read(base, max_bytes=self.max_bytes)
             digest = sha256(base).hexdigest()
             target = directory / (digest + '.rmdoc')
             if not target.exists():
@@ -161,7 +162,8 @@ class Repository:
         base = state.get('base', 'base.rmdoc')
         if Path(base).name != base or not base.endswith('.rmdoc'):
             raise ValueError('Invalid notebook recovery base.')
-        notebook = Notebook.read((directory / base).read_bytes())
+        with (directory / base).open('rb') as stream:
+            notebook = Notebook.read(stream.read(self.max_bytes + 1), max_bytes=self.max_bytes)
         pages = []
         for item in state['pages']:
             digest = item['ink']

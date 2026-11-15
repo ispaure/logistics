@@ -109,7 +109,7 @@ def export_rmdoc(book, *, cancelled=lambda: False):
 
     pdf = backgrounds_pdf(book, cancelled=cancelled)
     check_cancelled(cancelled)
-    copy = Notebook.read(book.to_bytes())
+    copy = Notebook.read(book.to_bytes(), max_bytes=book.max_bytes)
     copy.members[copy.id + '.pdf'] = pdf
     copy.content.update(fileType='pdf', originalPageCount=len(copy.pages))
     for index, page in enumerate(copy.pages):

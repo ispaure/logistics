@@ -4,6 +4,7 @@ from copy import copy, deepcopy
 
 from .protocol import validate_action, RecoveryIncomplete
 from .ink import WIDTH, HEIGHT, TOOLS, COLORS, notebook_ink_height
+from .notebook import DESKTOP_MAX_ARCHIVE
 from .brushes import BRUSHES, EXPANDED_BRUSHES, EXPANDED_INK_SCALE, PALETTE, HIGHLIGHTS, HIGHLIGHT_IDS, NATIVE_HIGHLIGHTS, SHADERS, WIDTHS
 
 
@@ -43,7 +44,7 @@ class Editor:
         from features.pdf.document import PDFDocument
 
         data, index = key
-        pdf = PDFDocument(data)
+        pdf = PDFDocument(data, max_bytes=DESKTOP_MAX_ARCHIVE)
         try:
             return 'data:image/png;base64,' + b64encode(pdf.page(index)).decode('ascii')
         finally:
@@ -219,7 +220,7 @@ class Editor:
         from .previews import THUMBNAIL_EDGE
 
         reader = PdfReader(BytesIO(data))
-        pdf = PDFDocument(data)
+        pdf = PDFDocument(data, max_bytes=DESKTOP_MAX_ARCHIVE)
         try:
             with pdf.open() as renderer:
                 def artwork(index):

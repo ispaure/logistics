@@ -34,7 +34,7 @@ Supported ordinary v6 ink is editable in legacy and modern `cPages` notebooks. U
 
 Use **⋯ → Duplicate as .rmdoc to annotate** in a PDF Reader to create an editable sibling with the PDF as its background. A writable folder is required and an existing notebook is preserved. PDF-backed pages can be duplicated or reordered within their notebook.
 
-RMDOC limits are 128 MiB compressed, 256 MiB expanded and 65,536 entries. Embedded PDFs and storage providers have separate limits. Physical Boox and reMarkable compatibility remains under validation. See the [development guide](../development/development.md).
+Desktop opens RMDOC archives up to 512 MiB compressed and 512 MiB expanded. Mobile allows 128 MiB compressed and 256 MiB expanded. Both allow up to 65,536 entries. Storage providers can impose additional limits. See the [development guide](../development/development.md).
 
 ## Page templates and paper sizes
 

@@ -55,4 +55,9 @@ const canvasPixelLimit=__CANVAS_PIXEL_LIMIT__;
     template = template.replace('__PRESENTATION_CLASS__', ' '.join(classes))
     template = template.replace('__ENGINE__', engine).replace(
         '__PRESENTATION__', '<script>\n' + presentation + '\n</script>')
+    if state is None:
+        if not desktop:
+            raise ValueError('Only the desktop canvas receives injected state.')
+        return template.replace('__STATE__', 'globalThis.__notebookInitialState').replace(
+            'const canvasPixelLimit=', 'delete globalThis.__notebookInitialState;\nconst canvasPixelLimit=', 1)
     return template.replace('__STATE__', canvas_state_json(state).replace('<', '\\u003c'))

@@ -35,9 +35,9 @@ def read_pdf(stream):
 
 
 class PDFDocument:
-    def __init__(self, data):
-        if not data or len(data) > MAX_PDF:
-            raise ValueError('PDF reading is limited to 32 MiB.')
+    def __init__(self, data, *, max_bytes=MAX_PDF):
+        if not data or len(data) > max_bytes:
+            raise ValueError(f'PDF reading is limited to {max_bytes // (1024 * 1024)} MiB.')
         self.data = data
         with self.open() as document:
             self.count = document.count

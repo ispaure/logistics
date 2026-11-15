@@ -208,6 +208,47 @@ class NotebookMenuTests(unittest.TestCase):
         self.addCleanup(window.deleteLater)
         return window
 
+    def test_large_initial_image_opens_and_releases_canvas_seed(self):
+        import base64
+        import struct
+        from tempfile import TemporaryDirectory
+        import zlib
+        from commonUtils.ui import pyside as qt
+        from features.notebooks.images import add_picture
+        from features.notebooks.notebook import Notebook
+        from features.notebooks.storage import NotebookDocument
+        from features.notebooks.ui.workspace import NotebookWorkspace
+        from Python.tests.notebooks.image_fixtures import png_source
+        from Python.tests.notebooks.webengine_driver import javascript, wait_until
+
+        png = base64.b64decode(png_source().split(',', 1)[1])
+        # A valid PNG text chunk makes the encoded state exceed the URL limit
+        # without making the synthetic image expensive to rasterize.
+        text = b'Comment\0' + b'x' * (2 * 1024 * 1024)
+        chunk = struct.pack('>I', len(text)) + b'tEXt' + text + struct.pack('>I', zlib.crc32(b'tEXt' + text))
+        book = Notebook.new()
+        add_picture(book, 0, png[:-12] + chunk + png[-12:], book.page(0).layers[0][0],
+                    [[100, 100], [200, 100], [200, 200], [100, 200]])
+        with TemporaryDirectory() as directory:
+            panel = NotebookWorkspace(root=directory, library=False)
+            try:
+                panel.show()
+                with patch.object(panel, 'load_progress', return_value=(None, {})):
+                    panel.open_resource(NotebookDocument(book))
+                wait_until(lambda: javascript(panel.web, 'typeof window.notebookUI === "function"'),
+                           'large notebook canvas')
+                wait_until(lambda: javascript(panel.web,
+                           'state.images.length === 1 && imageCache.get(state.images[0].src)?.naturalWidth === 16'),
+                           'initial image decoded')
+                wait_until(lambda: not panel.web.page().scripts().find('notebook-initial-state'),
+                           'initial payload released')
+                self.assertTrue(javascript(panel.web, '!("__notebookInitialState" in globalThis)'))
+            finally:
+                panel.dispose()
+                panel.close()
+                panel.deleteLater()
+                qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)
+
     def test_standard_shortcuts_page_bounds_and_disabled_history(self):
         from commonUtils.ui import pyside as qt
         window = self.owner()

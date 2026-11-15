@@ -6,7 +6,7 @@ from commonUtils.ui import pyside as qt
 
 
 def open_notebook_choice(choice, parent=None, *, create=False):
-    from features.notebooks.notebook import Notebook, MAX_ARCHIVE
+    from features.notebooks.notebook import Notebook, DESKTOP_MAX_ARCHIVE
     from features.notebooks.storage import NotebookDocument
     from features.notebooks.ui.workspace import open_workspace
     created_book = None
@@ -19,12 +19,12 @@ def open_notebook_choice(choice, parent=None, *, create=False):
     dialog = ResourceTaskDialog(parent, 'Creating notebook' if create else 'Opening notebook')
     opened = []
     def work(report, cancelled):
-        resource = DocumentResource(choice.provider, choice.path, max_bytes=MAX_ARCHIVE)
+        resource = DocumentResource(choice.provider, choice.path, max_bytes=DESKTOP_MAX_ARCHIVE)
         try:
             if create:
                 DocumentResource.publish(choice.provider, choice.path, created_book.to_bytes(),
-                    max_bytes=MAX_ARCHIVE, validate=Notebook.read, cancelled=cancelled)
-            book = Notebook.read(resource.read(cancelled=cancelled))
+                    max_bytes=DESKTOP_MAX_ARCHIVE, validate=lambda data: Notebook.read(data, max_bytes=DESKTOP_MAX_ARCHIVE), cancelled=cancelled)
+            book = Notebook.read(resource.read(cancelled=cancelled), max_bytes=DESKTOP_MAX_ARCHIVE)
             return NotebookDocument(book, resource=resource)
         except Exception:
             resource.close()

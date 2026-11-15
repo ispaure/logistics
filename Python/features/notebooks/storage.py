@@ -68,7 +68,8 @@ class NotebookDocument:
         self._check_editable()
         if self.resource is not None:
             data = self.book.to_bytes()
-            self.resource.save(data, validate=Notebook.read, cancelled=cancelled)
+            self.resource.save(data, validate=lambda value: Notebook.read(value, max_bytes=self.book.max_bytes),
+                               cancelled=cancelled)
         elif self.recovery is not None:
             self.recovery.save(self.key, self.book)
         self.dirty = False
@@ -93,7 +94,7 @@ class NotebookDocument:
         revision = self.resource.revision
         try:
             source_bytes = self.resource.read()
-            saved = Notebook.read(source_bytes)
+            saved = Notebook.read(source_bytes, max_bytes=self.book.max_bytes)
             # Use this editor's observed recovery revision: never discard changes
             # checkpointed by another window after this editor last wrote.
             self.recovery.adopt(self.key, saved, self.book)

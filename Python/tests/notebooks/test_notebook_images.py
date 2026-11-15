@@ -16,6 +16,24 @@ from features.notebooks.recovery import Repository
 from Python.tests.notebooks.image_fixtures import png_source, paste_action, locked_book
 
 class NotebookImageTests(unittest.TestCase):
+    def test_native_jpeg_reopens_with_its_original_bytes_and_media_type(self):
+        from commonUtils.ui import pyside as qt
+        from features.notebooks.images import add_picture, image_data
+
+        image = qt.QImage(8, 8, qt.QImage.Format.Format_RGB32)
+        image.fill(qt.QColor('red'))
+        buffer = qt.QBuffer()
+        buffer.open(qt.QIODevice.OpenModeFlag.WriteOnly)
+        self.assertTrue(image.save(buffer, 'JPEG'))
+        jpeg = bytes(buffer.data())
+        book = Notebook.new()
+        add_picture(book, 0, jpeg, book.page(0).layers[0][0],
+                    [[100, 100], [200, 100], [200, 200], [100, 200]])
+        reopened = Notebook.read(book.to_bytes())
+        self.assertEqual([bytes_ for _, bytes_ in image_data(reopened, 0)], [jpeg])
+        self.assertTrue(any(name.endswith('.jpg') for name in reopened.members))
+        self.assertTrue(image_payloads(reopened, 0)[0]['src'].startswith('data:image/jpeg;base64,'))
+
     def test_real_pen_input_paints_before_incremental_stroke_acknowledgement(self):
         import json
         from pathlib import Path

@@ -40,6 +40,22 @@ def archive(members):
 
 
 class NotebookTests(unittest.TestCase):
+    def test_larger_archive_budget_is_preserved_in_desktop_recovery(self):
+        book = Notebook.new()
+        members = read_archive(book.to_bytes())
+        members['opaque.bin'] = bytes(range(256)) * 8
+        data = archive(members)
+        with self.assertRaisesRegex(ValueError, 'compressed'):
+            Notebook.read(data, max_bytes=len(data) - 1)
+        with TemporaryDirectory() as directory:
+            recovered = Repository(directory, max_bytes=len(data))
+            source = Notebook.read(data, max_bytes=len(data))
+            key = recovered.create(source)
+            reopened = recovered.open(key)
+            self.assertEqual(reopened.max_bytes, len(data))
+            self.assertEqual(reopened.members['opaque.bin'], members['opaque.bin'])
+            self.assertLessEqual(len(reopened.to_bytes()), len(data))
+
     def test_move_template_recovers_without_valid_display_settings(self):
         from features.notebooks.templates import settings, background
         self.editor.apply(dict(op='template', name='Logistics Restaurant review', format='move', visible=True))

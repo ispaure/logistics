@@ -158,7 +158,7 @@ def picture_assets(book, index):
 
     def read(picture):
         name = resources.get(picture.resource, '')
-        if not re.fullmatch(r'[A-Za-z0-9_-]+\.png', name):
+        if not re.fullmatch(r'[A-Za-z0-9_-]+\.(?:png|jpe?g)', name):
             raise ValueError('Invalid image resource name.')
         data = book.members.get(prefix + name)
         if data is None:
@@ -176,7 +176,12 @@ def image_data(book, index, *, layers=None):
 
 
 def image_source(data):
-    return 'data:image/png;base64,' + base64.b64encode(data).decode()
+    subtype = 'jpeg' if image_suffix(data) == '.jpg' else 'png'
+    return 'data:image/' + subtype + ';base64,' + base64.b64encode(data).decode()
+
+
+def image_suffix(data):
+    return '.jpg' if data.startswith(b'\xff\xd8\xff') else '.png'
 
 
 def image_payloads(book, index):
@@ -215,7 +220,7 @@ def add_picture(book, index, data, layer, corners):
         raise ValueError('At most 256 images fit on a page.')
     author, first, _ = allocation(ink._blocks)
     identity = uuid4()
-    resource = Resource(identity.bytes, CrdtId(author, first), str(identity) + '.png')
+    resource = Resource(identity.bytes, CrdtId(author, first), str(identity) + image_suffix(data))
     # A fresh resource block is merged with the existing table during encoding.
     ink.image_resources = [*ink.image_resources, resource]
     ink.images = [*ink.images, Picture(uuid4().hex, layer, identity.bytes, deepcopy_corners(corners))]

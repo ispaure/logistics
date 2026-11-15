@@ -13,6 +13,7 @@ from zipfile import ZipFile, ZIP_DEFLATED, BadZipFile
 from .ink import InkPage
 
 MAX_ARCHIVE = 128 * 1024 * 1024
+DESKTOP_MAX_ARCHIVE = 512 * 1024 * 1024
 MAX_EXPANDED = 256 * 1024 * 1024
 MAX_MEMBERS = 65536
 
@@ -46,15 +47,15 @@ def page_index(index, count, *, insertion=False):
     return index
 
 
-def read_archive(data):
-    if len(data) > MAX_ARCHIVE:
-        raise ValueError('RMDOC imports are limited to 128 MiB compressed.')
+def read_archive(data, *, max_bytes=MAX_ARCHIVE):
+    if len(data) > max_bytes:
+        raise ValueError(f'RMDOC imports are limited to {max_bytes // (1024 * 1024)} MiB compressed.')
     members = {}
     seen = set()
     try:
         with ZipFile(BytesIO(data)) as archive:
             infos = archive.infolist()
-            if len(infos) > MAX_MEMBERS or sum(i.file_size for i in infos) > MAX_EXPANDED:
+            if len(infos) > MAX_MEMBERS or sum(i.file_size for i in infos) > max(MAX_EXPANDED, max_bytes):
                 raise ValueError('RMDOC archive exceeds the expanded size/member limit.')
             for info in infos:
                 # ZipInfo.filename normalizes Windows separators and truncates
@@ -87,20 +88,21 @@ class Page:
 
 
 class Notebook:
-    def __init__(self, members, doc_id, content, metadata, pages):
+    def __init__(self, members, doc_id, content, metadata, pages, *, max_bytes=MAX_ARCHIVE):
+        self.max_bytes = max_bytes
         self.members, self.id = members, doc_id
         self.content, self.metadata, self.pages = content, metadata, pages
         self.structure_dirty = False
         self.metadata_dirty = False
 
     @classmethod
-    def new(cls, name='Notebook', *, template=None, paper_format='pro'):
+    def new(cls, name='Notebook', *, template=None, paper_format='pro', max_bytes=MAX_ARCHIVE):
         identity = str(uuid4())
         result = cls({}, identity,
             dict(fileType='notebook', formatVersion=1, pageCount=1, pages=[],
                  lineHeight=-1, margins=100, textScale=1, orientation='portrait'),
             dict(visibleName=name, type='DocumentType', parent='', version=1,
-                 deleted=False, pinned=False, synced=False, modified=True, lastOpenedPage=0), [])
+                 deleted=False, pinned=False, synced=False, modified=True, lastOpenedPage=0), [], max_bytes=max_bytes)
         result.add_page()
         result.metadata_dirty = True
         if template is not None:
@@ -109,8 +111,8 @@ class Notebook:
         return result
 
     @classmethod
-    def read(cls, data):
-        members = read_archive(data)
+    def read(cls, data, *, max_bytes=MAX_ARCHIVE):
+        members = read_archive(data, max_bytes=max_bytes)
         roots = [name[:-8] for name in members if '/' not in name and name.endswith('.content')]
         if len(roots) != 1:
             raise ValueError('Choose an archive containing exactly one reMarkable document.')
@@ -159,7 +161,7 @@ class Notebook:
                 raise ValueError('Duplicate notebook page identifiers.')
         except (KeyError, TypeError, AttributeError, UnicodeError, json.JSONDecodeError) as error:
             raise ValueError('Malformed RMDOC page metadata.') from error
-        return cls(members, identity, content, metadata, pages)
+        return cls(members, identity, content, metadata, pages, max_bytes=max_bytes)
 
     @property
     def name(self):
@@ -281,13 +283,13 @@ class Notebook:
                             version=int(metadata.get('version', 0)) + 1,
                             lastOpenedPage=min(int(metadata.get('lastOpenedPage', 0)), len(self.pages) - 1))
             members[self.id + '.metadata'] = json_bytes(metadata)
-        if len(members) > MAX_MEMBERS or sum(map(len, members.values())) > MAX_EXPANDED:
+        if len(members) > MAX_MEMBERS or sum(map(len, members.values())) > max(MAX_EXPANDED, self.max_bytes):
             raise ValueError('Notebook exceeds the archive size/member limit.')
         output = BytesIO()
         with ZipFile(output, 'w', compression=ZIP_DEFLATED) as archive:
             for name, data in members.items():
                 archive.writestr(name, data)
         data = output.getvalue()
-        if len(data) > MAX_ARCHIVE:
-            raise ValueError('Export exceeds the 128 MiB compressed limit.')
+        if len(data) > self.max_bytes:
+            raise ValueError(f'Export exceeds the {self.max_bytes // (1024 * 1024)} MiB compressed limit.')
         return data
