@@ -483,6 +483,36 @@
       "via": "services.documents.storage.stage_local_document_export"
     },
     {
+      "module": "features.notebooks.editor",
+      "scope": "_pdf_reader",
+      "operation": "raw-method:open",
+      "reason": "The PDF parser reads the notebook's owned temporary backing file. In-memory documents use BytesIO."
+    },
+    {
+      "module": "features.notebooks.notebook",
+      "scope": "_read_zip_members",
+      "operation": "raw-method:open",
+      "reason": "Extracts a validated PDF member in bounded chunks to the notebook's private temporary backing file."
+    },
+    {
+      "module": "features.notebooks.notebook",
+      "scope": "Notebook.read_large_pdf",
+      "operation": "raw-method:open",
+      "reason": "Checks encryption on the owned temporary PDF backing before handing it to the editor."
+    },
+    {
+      "module": "features.notebooks.notebook",
+      "scope": "Notebook.write_large_archive",
+      "operation": "archive-write:zipfile.ZipFile",
+      "reason": "Serializes and verifies a ZIP in the host-owned atomic export stage passed in as a stream."
+    },
+    {
+      "module": "features.notebooks.notebook",
+      "scope": "Notebook.write_large_archive",
+      "operation": "raw-method:open",
+      "reason": "Streams the owned temporary PDF into the supplied export stage without loading it into memory."
+    },
+    {
       "module": "features.notebooks.recovery",
       "scope": "Repository.create",
       "operation": "raw-call:commonUtils.persistence.atomic.atomic_write_bytes",
@@ -493,6 +523,12 @@
       "scope": "Repository.list",
       "operation": "raw-method:read_text",
       "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
+    },
+    {
+      "module": "features.notebooks.recovery",
+      "scope": "Repository.open",
+      "operation": "raw-method:open",
+      "reason": "Reads an app-owned ordinary notebook recovery base with a bounded archive read."
     },
     {
       "module": "features.notebooks.recovery",
@@ -538,9 +574,15 @@
     },
     {
       "module": "features.pdf.backends.android",
-      "scope": "AndroidPDF.__init__",
+      "scope": "_pdf_source",
       "operation": "raw-call:os.fdopen",
       "reason": "Anonymous memfd bytes consumed by Android PdfRenderer; no filesystem destination or plaintext cache."
+    },
+    {
+      "module": "features.pdf.backends.android",
+      "scope": "_pdf_source",
+      "operation": "raw-method:open",
+      "reason": "Opens the notebook's owned temporary PDF backing for Android PdfRenderer."
     },
     {
       "module": "features.text_editor.ui.commands",
