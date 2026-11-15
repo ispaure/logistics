@@ -520,12 +520,18 @@
     "developer-tools": {
       "sources": [
         "dev.py",
-        "Scripts"
+        "Scripts",
+        "test-structure.json",
+        "Python/tests/run_regressions.py",
+        "Python/tests/parallel_regressions.py",
+        "Python/tests/regression_timing.py"
       ],
       "guide": "docs/development/testing/testing.md",
       "tests": {
         "desktop": [
           "test_dev_commands.py",
+          "test_regression_runner.py",
+          "test_parallel_regressions.py",
           "test_architecture_contracts.py",
           "test_document_architecture.py",
           "test_documentation_layout.py",
@@ -553,6 +559,7 @@
         "logistics_build",
         "build-project.json",
         "build-tests.json",
+        "test-environments.json",
         "build-manager-dependency.json"
       ],
       "guide": "docs/development/build-release/build-manager.md",
@@ -564,6 +571,9 @@
           "test_ios_runtime.py",
           "test_android_runtime_prepare.py",
           "test_continuation_inputs.py",
+          "test_validation_plans.py",
+          "test_platform_checks.py",
+          "test_platform_entrypoint.py",
           "test_test_evidence.py",
           "test_release_test_evidence.py",
           "test_mobile_build_cache.py"

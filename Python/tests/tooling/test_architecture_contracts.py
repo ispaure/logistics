@@ -232,6 +232,10 @@ class OwnershipTests(unittest.TestCase):
                                   ('mobile', 'test_protection_scope.py')],
             'mobile-host': [('mobile', 'test_application_lifecycle.py')],
             'mobile-storage': [('mobile', 'test_storage_location.py')],
+            'developer-tools': [('desktop', 'test_regression_runner.py'),
+                                ('desktop', 'test_parallel_regressions.py')],
+            'build-adapter': [('desktop', 'test_validation_plans.py'), ('desktop', 'test_platform_checks.py'),
+                              ('desktop', 'test_platform_entrypoint.py'), ('desktop', 'test_test_evidence.py')],
         }
         for owner, tests in required.items():
             with self.subTest(owner=owner):
