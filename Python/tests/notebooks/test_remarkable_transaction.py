@@ -30,6 +30,9 @@ if name == 'systemctl':
     if args[0] == 'is-active':
         print(state.read_text() if args[1] in ('xochitl', 'rm-sync') else 'inactive')
     elif args[0] == 'stop':
+        changed = os.environ.get('LQA_CHANGE_ON_STOP')
+        if changed:
+            pathlib.Path(changed).write_bytes(b'concurrent native edit')
         state.write_text('inactive')
     elif args[0] == 'start':
         if os.environ.get('LQA_FAIL_RESTART'):
@@ -249,7 +252,7 @@ class MetadataTransactionTests(unittest.TestCase):
         self.assertEqual((self.stage / 'outcome').read_text().strip(), 'conflict')
         self.assertEqual(self.services.read_text(), 'active')
 
-    def test_stale_ancestor_or_symlink_blocks_publication_and_restarts(self):
+    def test_stale_ancestor_or_symlink_never_stops_services(self):
         self.prepare()
         ancestor = self.store / (FOLDER + '.metadata')
         ancestor.write_bytes(self.records[FOLDER] + b' ')
@@ -262,6 +265,33 @@ class MetadataTransactionTests(unittest.TestCase):
         self.assertNotEqual(self.run_script('apply.sh').returncode, 0)
         self.assertEqual(self.run_script('restart.sh').returncode, 0)
         self.assertEqual(self.target.read_bytes(), self.before)
+        self.assertFalse((self.stage / 'restart-needed').exists())
+        self.assertNotIn('stop xochitl', self.service_calls.read_text())
+        self.assertNotIn('start xochitl', self.service_calls.read_text())
+
+    def test_native_change_during_stop_is_rechecked_before_publication(self):
+        self.prepare()
+        ancestor = self.store / (FOLDER + '.metadata')
+        self.assertNotEqual(self.run_script('apply.sh', LQA_CHANGE_ON_STOP=str(ancestor)).returncode, 0)
+        self.assertEqual(self.services.read_text(), 'inactive')
+        self.assertEqual(self.run_script('restart.sh').returncode, 0)
+        self.assertEqual(self.services.read_text(), 'active')
+        self.assertEqual(ancestor.read_bytes(), b'concurrent native edit')
+        self.assertEqual(self.target.read_bytes(), self.before)
+        self.assertEqual((self.stage / 'outcome').read_text().strip(), 'unchanged')
+
+    def test_inactive_service_at_preflight_does_not_produce_restoration_receipt(self):
+        self.prepare()
+        self.services.write_text('inactive')
+        self.assertNotEqual(self.run_script('apply.sh').returncode, 0)
+        self.assertNotEqual(self.run_script('restart.sh').returncode, 0)
+        self.assertFalse((self.stage / 'service-state').exists())
+        self.assertTrue((self.transactions / 'active').exists())
+        self.assertNotEqual(self.run_command(self.transaction.cleanup_command).returncode, 0)
+        self.assertNotIn('stop xochitl', self.service_calls.read_text())
+        self.assertNotIn('start xochitl', self.service_calls.read_text())
+        self.assertEqual(self.target.read_bytes(), self.before)
+        self.assertEqual(self.services.read_text(), 'inactive')
 
     def test_foreign_edit_or_recovery_member_is_preserved_and_blocks_cleanup(self):
         self.prepare()

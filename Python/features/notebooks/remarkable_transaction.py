@@ -73,6 +73,11 @@ def prepare_metadata_transaction(change: MetadataChange) -> MetadataTransaction:
     directory = root / token
     target = PurePosixPath(STORE_PATH) / (change.identity + '.metadata')
     unit = 'logistics-remarkable-' + token
+    revision_checks = ''.join(
+        _check_file(PurePosixPath(STORE_PATH) / (identity + '.metadata'), digest)
+        for identity, digest in sorted(guards.items())
+    )
+    revision_checks += _check_file(directory / 'before', before_hash) + _check_file(directory / 'after', after_hash)
     # Every shell value is generated here or validated as UUID/hex. Document
     # names and metadata stay in tar members and are never shell source.
     prefix = f'''#!/bin/sh
@@ -105,25 +110,29 @@ require_same_boot() {{
         exit 1
     }}
 }}
+services_are() {{
+    for service in xochitl rm-sync; do
+        [ "$(systemctl is-active "$service" || :)" = "$1" ] || return 1
+    done
+}}
 '''
     apply = prefix + f'''
 require_same_boot
 [ ! -e "$root/active" ] && [ ! -L "$root/active" ] || exit 1
 ln "$stage/lease-token" "$root/active"
 [ "$(cat "$root/active")" = "$token" ]
-for service in xochitl rm-sync; do
-    [ "$(systemctl is-active "$service" || :)" = active ]
-done
+'''
+    # Reject stale or incomplete work before stopping the interface. Recheck
+    # after the stop because a native writer can still edit during preflight.
+    apply += revision_checks
+    apply += f'''
+services_are active
 [ "$(stat -c %d "$stage")" = "$(stat -c %d {quote(STORE_PATH)})" ]
 printf '%s\\n' restart > "$stage/restart-needed"
 systemctl stop xochitl
-for service in xochitl rm-sync; do
-    [ "$(systemctl is-active "$service" || :)" = inactive ]
-done
+services_are inactive
 '''
-    for identity, digest in sorted(guards.items()):
-        apply += _check_file(PurePosixPath(STORE_PATH) / (identity + '.metadata'), digest)
-    apply += _check_file(directory / 'before', before_hash) + _check_file(directory / 'after', after_hash)
+    apply += revision_checks
     apply += '''cp -p "$target" "$stage/original"
 cp -p "$target" "$stage/publish"
 cat "$stage/after" > "$stage/publish"
@@ -140,6 +149,13 @@ sync
 [ "$(cat "$root/active")" = "$token" ] || exit 0
 # An old lease must not restart services belonging to a later boot.
 require_same_boot
+# Restore the interface before hashing or writing any receipts. A job that
+# never requested a stop must still observe both services active to close.
+if [ -e "$stage/restart-needed" ] || [ -L "$stage/restart-needed" ]; then
+    [ -f "$stage/restart-needed" ] && [ ! -L "$stage/restart-needed" ] || exit 1
+    timeout 45 systemctl start xochitl
+fi
+services_are active
 outcome=conflict
 if [ -f "$target" ] && [ ! -L "$target" ]; then
     if actual=$(sha256sum "$target"); then
@@ -148,13 +164,6 @@ if [ -f "$target" ] && [ ! -L "$target" ]; then
             {after_hash}) outcome=committed ;;
         esac
     fi
-fi
-# Receipt I/O must not prevent the interface restart, including a full disk.
-if [ -f "$stage/restart-needed" ]; then
-    timeout 45 systemctl start xochitl
-    for service in xochitl rm-sync; do
-        [ "$(systemctl is-active "$service" || :)" = active ]
-    done
 fi
 printf '%s\\n' "$outcome" > "$stage/outcome.tmp"
 mv "$stage/outcome.tmp" "$stage/outcome"

@@ -17,7 +17,7 @@ Expect synthetic folders and documents to keep their UUID identities across refr
 
 ## Direct publication requirements
 
-The experimental transaction uses an owned private directory, exclusive lease, revision checks under stopped Xochitl/rm-sync, a preserved original and atomic same-filesystem rename. A detached systemd job handles publication and bounded restart. Keep the token before submission. Reconcile unexpected stages or changed destinations before retrying. Require terminal job, service-restoration receipt and expected owned files before cleanup. Retain recovery files and lease on failed restart. See [Xochitl storage guidance](https://developer.remarkable.com/documentation/xochitl).
+The experimental transaction checks target, ancestor and payload hashes before stopping Xochitl/rm-sync. It checks them again after the stop and before the atomic rename. A detached systemd job handles publication and bounded restart. Recovery checks that both services are active before recording restoration and releasing the lease. Keep the token before submission. Reconcile unexpected stages or changed destinations before retrying. Require a terminal job, service-restoration receipt and expected owned files before cleanup. Retain recovery files and the lease on failed restart. See [Xochitl storage guidance](https://developer.remarkable.com/documentation/xochitl).
 
 New transactions record the kernel boot ID before submission. Publication and recovery refuse a changed or unknown boot without service actions. Inspection reports boot continuity and the unit's `LoadState`; an absent transient unit is not proof of completion. Reconcile retained evidence after a reboot instead of replaying recovery. Cleanup rejects any outstanding lease or nonregular member before reading receipts or removing files. These host-tested guards do not qualify the restart procedure on a tablet.
 
@@ -36,6 +36,8 @@ Host coverage includes `test_remarkable_transfer.py`, `test_remarkable_mutations
 
 1. **Read-only corpus:** use the stable-ID enumeration and export contract for authorized reruns. Preserve the existing USB fixtures and native organization receipts.
 2. **Two-way browser:** resolve the restart and index refresh behavior before another live write trial. Selected-folder upload, fresh-ID copies, folder creation, recursive operations, and their collision and recovery controls remain incomplete. Complete synthetic checks first, then propose a bounded device test for the exact hardware and software.
+
+The next tablet session is read-only. Confirm the running firmware and boot identity, check whether the November 13 boot is still in the journal or kernel crash store, and inspect the Xochitl/rm-sync unit dependencies and restart or failure actions. Keep journal output local and report only relevant findings. If boot evidence has expired, record that limit and keep the direct-write path disabled while qualifying a supported indexing route.
 
 No tablet interaction is required to close the completed temporary-file cleanup. Restoring or renaming the disposable notebook in Trash is optional housekeeping, not a prerequisite for read-only retrieval.
 
