@@ -23,7 +23,7 @@ python="$workspace/environment/bin/python"
 run_step manager 180s "$python" logistics_build/install_build_manager.py --from-pin "$LOGISTICS_MANAGER_CHECKOUT"
 run_step dependencies 600s "$python" Python/tests/run_platform_checks.py --install --prepare-only
 if [[ ${GITHUB_ACTIONS:-} == true ]]; then
-    run_step worker-budget 30s "$python" -c 'import os; from build_manager.test_workers import configure; workers = min(2, len(os.sched_getaffinity(0))); configure(dict(per_platform=workers, host=workers))'
+    run_step worker-budget 30s "$python" -c 'import json,os,sys; from build_manager.test_workers import configure; workers = int(sys.argv[1]); cpus = len(os.sched_getaffinity(0)); print(json.dumps(dict(worker_limit=workers, available_cpus=cpus))); assert workers <= cpus; configure(dict(per_platform=workers, host=workers))' "${FEDORA_BENCHMARK_WORKERS:-2}"
 fi
 # Dependency preparation above exercises real crypt setup. Retain its required
 # coverage when invoking validation separately for useful setup/test timings.

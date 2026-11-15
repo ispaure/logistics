@@ -1,0 +1,54 @@
+name: Fedora full worker benchmark
+on:
+  push:
+    branches: [codex/fedora-full-worker-benchmark]
+permissions:
+  contents: read
+jobs:
+  compare:
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          fetch-depth: 0
+          persist-credentials: false
+      - run: git -C Python/commonUtils fetch --no-tags origin d5c42ffd4306c010d9625b8a9bae57cdf097a567
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8
+        with:
+          context: Python/tests/platform
+          file: Python/tests/platform/fedora.Containerfile
+          build-args: FEDORA_IMAGE=fedora:44
+          load: true
+          pull: true
+          tags: logistics-fedora-tests:local
+          cache-from: type=gha,scope=fedora-tests-${{ runner.arch }}
+      - name: Compare the same full suite with two and four workers
+        run: |
+          set +e
+          status=0
+          for cap in 2 4; do
+            started=$SECONDS
+            docker run --rm -e GITHUB_ACTIONS=true -e LOGISTICS_REUSE_TEST_RESULTS=off \
+              -e TEST_PYTHON=3.12.2 -e FEDORA_BENCHMARK_WORKERS="$cap" \
+              -v "$PWD:/workspace" -w /workspace logistics-fedora-tests:local \
+              bash Python/tests/platform/fedora.sh
+            code=$?
+            if [ "$code" -ne 0 ]; then status=1; fi
+            sudo chown -R --no-dereference "$(id -u):$(id -g)" test-results
+            mv test-results "worker-results-$cap"
+            printf '{"workers":%s,"wall_seconds":%s,"exit_code":%s}\n' "$cap" "$((SECONDS-started))" "$code" >"worker-results-$cap/benchmark.json"
+          done
+          exit "$status"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        if: always()
+        with:
+          name: fedora-full-worker-benchmark
+          path: |
+            worker-results-*/benchmark.json
+            worker-results-*/summary.json
+            worker-results-*/fedora-setup.log
+            worker-results-*/checks/*/*/timing.json
+          retention-days: 14
