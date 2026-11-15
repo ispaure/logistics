@@ -41,6 +41,8 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 
 
 def diagnostics(entry_point):
+    if entry_point.endswith('.rotation_crash_probe'):
+        return NATIVE_DIAGNOSTICS + ('logistics-native-ui-rotation-trace.jsonl',)
     if entry_point.endswith('.comic_guidance_probe'):
         return NATIVE_DIAGNOSTICS + ('comic-guidance-progress.json', 'comic-guidance-failure.png',
             'comic-guidance-reduced-motion.png', 'comic-guidance-eink.png') + tuple(
@@ -1112,7 +1114,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('comic-guidance', 'workspace-edges', 'mobile-feedback', 'documents-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'playlist-speech', 'native-suite', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('comic-guidance', 'workspace-edges', 'mobile-feedback', 'documents-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'playlist-speech', 'native-suite', 'rotation-crash', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--retain-build', action='store_true', help='Pin this managed QA build for reruns; caller must remove the pin and workspace afterward.')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
@@ -1127,6 +1129,8 @@ def main():
     parser.add_argument('--comic-scope', choices=COMIC_SCOPES,
                         help='Run one comic-guidance acceptance scope (default: matrix).')
     args = parser.parse_args()
+    if args.probe == 'rotation-crash' and args.platform != 'ios':
+        parser.error('The rotation lifetime trace requires an owned iOS simulator.')
     try:
         validate_comic_scope('tests.logisticsmobile.' + args.probe.replace('-', '_') + '_probe',
             args.comic_scope, platform=args.platform, family=args.family, pose=args.pose)
@@ -1327,6 +1331,9 @@ def main():
         if args.probe == 'native-suite':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.native_suite_probe', result_name='logistics-native-ui-result.json')
+        if args.probe == 'rotation-crash':
+            creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+                entry_point='tests.logisticsmobile.rotation_crash_probe', result_name='logistics-native-ui-result.json')
         if args.platform == 'ios' and (args.family == 'all' or args.pose) and args.duoctl is None:
             from urllib.request import urlopen
             from hashlib import sha256

@@ -84,6 +84,42 @@ Check local workflow changes with `test_parallel_ios_workflow.py`,
 `test_native_report.py` and actionlint with the `xcode-27` runner label.
 Hosted native execution and capacity require a hosted run.
 
+## Native iOS crash diagnostics
+
+For an iOS rotation lifetime investigation, the opt-in `rotation-crash` probe
+runs the complete native journey in a disposable QA app:
+
+```sh
+python -m mobile_build.validation.document_storage_tools ios --probe rotation-crash \
+  --family iPhone --output test-results/rotation-crash
+```
+
+The existing manager scratch and simulator cleanup own its temporary resources.
+Before cleanup, the driver saves `logistics-native-ui-rotation-trace.jsonl` with
+request/acknowledgement events, scalar scene/controller addresses, presentation
+state, main-thread checks and Python rotation-owner collection. Collection does
+not establish native deallocation: UIKit can retain a copied callback separately.
+The probe preserves the original orientation predicates, case inventory and
+geometry assertions. It adds no waits, retries or forced collection, but native
+getters and trace output still change timing. A passing diagnostic attempt does
+not demonstrate a fix. Keep allocator diagnostics in separately labelled runs,
+and compare original crash signatures, image UUIDs, source manifests and toolchain
+receipts before attributing failures to one cause.
+
+For allocation/free history, use `MallocStackLoggingNoCompact=1` with
+`MallocStackLogging` **absent**, not empty. When both are set,
+`MallocStackLogging` takes precedence; `1` selects live-allocation-only lite mode
+on current tooling, and `full` can still compact adjacent allocation/free pairs.
+For a simulator, use the manager-selected Xcode to invoke its runtime reader:
+`xcrun simctl spawn DEVICE /usr/bin/malloc_history PID -fullStacks ADDRESS`.
+Keep full logs in owned scratch or the disposable app's cache. Verify a known
+allocation/free pair after app initialization by its requested size and stack,
+since a recycled address may have unrelated older history. A stop at `main` can
+be too early for the reader, even when debugger expressions can allocate memory.
+Save fault registers, all threads,
+relevant allocation/free stacks and needed raw logs before owned cleanup.
+Classify termination signals from cleanup separately from application faults.
+
 ## Native suite timings
 
 Summarize a report or `logistics-native-ui-timings.json`:
