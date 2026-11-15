@@ -330,3 +330,203 @@ class ProviderWorkerLifetimeTests(unittest.IsolatedAsyncioTestCase):
                 owner._show_crypt_content.assert_not_called()
                 owner.manager.revoke_stale.assert_not_called()
                 owner.crypt_reader.source.close.assert_not_called()
+
+    async def test_saved_reader_progress_borrow_reconciles_cancellation_and_terminal_retirement(self):
+        import asyncio
+        from threading import Event
+        from unittest.mock import patch
+        for metadata in (False, True):
+            for outcome in ('cancelled', 'terminal', 'failed', 'same-reader-stale'):
+                with self.subTest(metadata=metadata, outcome=outcome):
+                    owner = self.save_owner(metadata=metadata)
+                    document, original = owner.provider_document(), owner.crypt_reader
+                    returned = original if outcome == 'same-reader-stale' else NS(**vars(original))
+                    returned.key = 'synthetic'
+                    if returned is not original:
+                        returned.source = NS(close=Mock())
+                    returned.password = 'synthetic-password'
+                    owner._crypt_reader_store.save = owner._crypt_reader_store.save_metadata = Mock(return_value=returned)
+                    entered, release = asyncio.Event(), Event()
+                    loop = asyncio.get_running_loop()
+
+                    def load():
+                        loop.call_soon_threadsafe(entered.set)
+                        if not release.wait(5):
+                            raise RuntimeError('Fixture not released')
+                        if outcome == 'failed':
+                            raise OSError('Synthetic progress load failure')
+
+                    replacement = NS(load=load, close=Mock(), worker=None, watch_surface=Mock())
+                    previous = owner._provider_progress = NS(worker=None, sample_surface=Mock(),
+                                                             close=Mock(), retire=Mock())
+                    def replace(successor):
+                        owner._provider_progress = successor
+                        return successor
+                    previous.replace_with = Mock(side_effect=replace)
+                    with patch('services.documents.access.can_write', return_value=True), \
+                            patch('features.comics.mobile.metadata.patch', return_value={'title': 'Submitted'}), \
+                            patch('mobile.provider_progress.ProviderProgress', return_value=replacement):
+                        task = asyncio.create_task(owner.save_crypt_metadata() if metadata else owner.save_crypt())
+                        try:
+                            await asyncio.wait_for(entered.wait(), 2)
+                            if outcome == 'terminal':
+                                document.terminal = True
+                                returned.source.close.side_effect = [OSError('Retry close'), None]
+                                replacement.close.side_effect = [OSError('Retry progress close'), None]
+                            elif outcome == 'same-reader-stale':
+                                owner.workspace.invalidate('doc')
+                            if outcome in ('cancelled', 'terminal'):
+                                task.cancel()
+                                await asyncio.sleep(0)
+                                task.cancel()
+                                await asyncio.sleep(0)
+                            self.assertFalse(task.done())
+                            self.assertTrue(owner.cloud_busy)
+                            self.assertFalse(owner.operation_idle.is_set())
+                            self.assertIsNotNone(document.worker)
+                            with self.assertRaises(OSError):
+                                document.dispose()
+                            with self.assertRaises(OSError):
+                                document.reader = original
+                            original.source.close.assert_not_called()
+                            replacement.close.assert_not_called()
+                        finally:
+                            release.set()
+                            if outcome in ('cancelled', 'terminal'):
+                                with self.assertRaises(asyncio.CancelledError):
+                                    await task
+                            else:
+                                await task
+                    self.assertFalse(owner.cloud_busy)
+                    self.assertTrue(owner.operation_idle.is_set())
+                    self.assertIsNone(document.worker)
+                    self.assertIsNone(document.cancel)
+                    owner._show_crypt_content.assert_not_called()
+                    if outcome == 'cancelled':
+                        self.assertIs(document.reader, returned)
+                        previous.replace_with.assert_called_once_with(replacement)
+                        replacement.close.assert_not_called()
+                        original.source.close.assert_called_once_with()
+                        if metadata:
+                            self.assertEqual(owner.crypt_metadata_initial, {'title': 'Saved'})
+                    else:
+                        self.assertIs(document.reader, original)
+                        previous.replace_with.assert_not_called()
+                        replacement.close.assert_called_once_with()
+                        original.source.close.assert_not_called()
+                        if returned is not original:
+                            returned.source.close.assert_called_once_with()
+                            self.assertEqual(returned.password, '')
+                    if outcome == 'terminal':
+                        document.dispose()
+                        document.dispose()
+                        self.assertTrue(document.closed)
+                        self.assertIsNone(document.reader)
+                        self.assertEqual(returned.source.close.call_count, 2)
+                        self.assertEqual(replacement.close.call_count, 2)
+                        original.source.close.assert_called_once_with()
+                        self.assertEqual(owner.crypt_text.value, '')
+                        self.assertEqual(owner.crypt_metadata_fields, {})
+
+    async def test_speech_borrow_rejects_stale_reader_gate_and_cancelled_output(self):
+        import asyncio
+        from threading import Event
+        for outcome in ('cancelled', 'cancelled-error', 'gate', 'terminal', 'intent', 'wrong-reader'):
+            with self.subTest(outcome=outcome):
+                owner = self.save_owner(metadata=True)
+                document, reader = owner.provider_document(), owner.crypt_reader
+                owner.privacy_gate = NS(revision=0)
+                owner.provider_speech_read_allowed = lambda: True
+                valid = [True]
+                entered, release = asyncio.Event(), Event()
+                loop = asyncio.get_running_loop()
+                def page(*args):
+                    loop.call_soon_threadsafe(entered.set)
+                    if not release.wait(5):
+                        raise RuntimeError('Fixture not released')
+                    if outcome == 'cancelled-error':
+                        raise OSError('Synthetic speech failure')
+                    return 'epub', 'Private speech'
+                owner.provider_page_content = Mock(side_effect=page)
+                if outcome == 'wrong-reader':
+                    with self.assertRaises(PermissionError):
+                        await owner.read_provider_speech_chapter(NS(**vars(reader)), 0, lambda: True)
+                    owner.provider_page_content.assert_not_called()
+                    continue
+                task = asyncio.create_task(owner.read_provider_speech_chapter(reader, 0, lambda: valid[0]))
+                try:
+                    await asyncio.wait_for(entered.wait(), 2)
+                    if outcome.startswith('cancelled'):
+                        task.cancel()
+                        await asyncio.sleep(0)
+                        task.cancel()
+                        await asyncio.sleep(0)
+                        self.assertTrue(document.cancel.is_set())
+                    elif outcome == 'gate':
+                        owner.privacy_gate.revision += 1
+                    elif outcome == 'intent':
+                        valid[0] = False
+                    else:
+                        document.terminal = True
+                    self.assertFalse(task.done())
+                    self.assertFalse(owner.operation_idle.is_set())
+                    with self.assertRaises(OSError):
+                        document.dispose()
+                    reader.source.close.assert_not_called()
+                finally:
+                    release.set()
+                    with self.assertRaises(asyncio.CancelledError if outcome.startswith('cancelled') else PermissionError):
+                        await task
+                self.assertFalse(owner.cloud_busy)
+                self.assertTrue(owner.operation_idle.is_set())
+                self.assertIsNone(document.worker)
+                self.assertIsNone(document.cancel)
+                self.assertEqual(owner.crypt_title.text, 'Unchanged')
+                if outcome == 'terminal':
+                    document.dispose()
+                    reader.source.close.assert_called_once_with()
+
+    async def test_control_failure_releases_reservation_without_borrowing_reader(self):
+        from unittest.mock import patch
+        owner = self.save_owner()
+        class RetiredButton:
+            @property
+            def enabled(self):
+                return False
+            @enabled.setter
+            def enabled(self, value):
+                raise OSError('Synthetic retired control')
+        owner.crypt_save = RetiredButton()
+        with patch('services.documents.access.can_write', return_value=True):
+            with self.assertRaisesRegex(OSError, 'retired control'):
+                await owner.save_crypt()
+        self.assertFalse(owner.cloud_busy)
+        self.assertTrue(owner.operation_idle.is_set())
+        self.assertIsNone(owner.provider_document().cancel)
+        self.assertTrue(owner.provider_document().can_start())
+
+    async def test_progress_error_after_adoption_preserves_the_published_owner(self):
+        from unittest.mock import patch
+        owner = self.save_owner()
+        original = owner.crypt_reader
+        returned = NS(**vars(original))
+        returned.key, returned.source = 'synthetic', NS(close=Mock())
+        owner._crypt_reader_store.save = Mock(return_value=returned)
+        replacement = NS(load=Mock(), close=Mock(), worker=None)
+        previous = owner._provider_progress = NS(worker=None, sample_surface=Mock())
+        def replace(successor):
+            owner._provider_progress = successor
+            raise OSError('Synthetic progress error after adoption')
+        previous.replace_with = replace
+        with patch('services.documents.access.can_write', return_value=True), \
+                patch('mobile.provider_progress.ProviderProgress', return_value=replacement):
+            await owner.save_crypt()
+        self.assertIs(owner.crypt_reader, returned)
+        self.assertIs(owner._provider_progress, replacement)
+        replacement.close.assert_not_called()
+        returned.source.close.assert_not_called()
+        original.source.close.assert_called_once_with()
+        self.assertFalse(owner.cloud_busy)
+        owner.provider_document().dispose()
+        replacement.close.assert_called_once_with()
+        returned.source.close.assert_called_once_with()

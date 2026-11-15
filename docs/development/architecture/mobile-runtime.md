@@ -172,6 +172,18 @@ ownership if later presentation work raises. Release busy state and temporary
 remote sources through their owning workflow. Reader teardown attempts each
 cleanup step and clears its password. See [provider reader workflow](document-storage.md#trace-a-mobile-provider-reader).
 
+For an adopted reader, `ProviderDocumentSession.begin_operation` reserves the
+reader across worker borrows and saved-reader handoff. `read` drains cancelled
+page and speech workers without publishing their output. `save_reader` retains
+a committed result through progress preparation, then adopts it only for the
+captured live owner or releases it. Task cancellation waits until the saved
+baseline is reconciled. Failed cleanup retains reader and unpublished progress
+handles for disposal retry. `finish_operation` releases the reservation without
+touching stale controls. The `worker`, `cancel` and `busy` fields remain available
+to lifecycle checks and native probes; opening stays with `ProviderDocumentOpening`.
+Run `test_document_reading.py` for cancellation during saves, progress loads,
+page and speech reads, stale owners and terminal cleanup retries.
+
 Managed Markdown instead uses `ManagedDocumentWorkflows.show_preview` for
 checkpoint, route, saved scroll and Edit policy and `preview.prepare_managed_preview`
 for controls. The retained `TextEditorView` owns their lifetime. Keep source,

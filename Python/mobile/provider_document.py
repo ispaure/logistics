@@ -1,4 +1,26 @@
 """Provider document state and resource lifetime, separate from format commands."""
+import asyncio
+import threading
+
+from commonUtils.runtime.operations import check_cancelled
+from services.worker_retirement import drain_worker
+
+
+class _DocumentOperation:
+    """One session reservation, spanning worker borrows and a saved-reader handoff."""
+
+    def __init__(self, session, current):
+        self.reader = session.reader
+        self._current = current
+        self.cancel = threading.Event()
+        self.cancellation = None
+
+    def current(self):
+        return self._current(self.reader)
+
+    def raise_cancelled(self):
+        if self.cancellation is not None:
+            raise self.cancellation
 
 
 class ProviderDocumentSession:
@@ -15,8 +37,10 @@ class ProviderDocumentSession:
         self.closed = False
         self.terminal = False
         self.worker = None
+        self._operation = None
         self._disposed = set()
         self._reader_cleanup = []
+        self._progress_cleanup = []
 
     def set_busy(self, busy):
         """Notify document controls without changing the connection's busy state."""
@@ -31,8 +55,12 @@ class ProviderDocumentSession:
     def reader(self, value):
         if self.terminal:
             raise OSError('This private document has retired.')
-        if self.worker is not None or getattr(getattr(self.owner, '_provider_progress', None), 'worker', None) is not None:
+        if (self._operation is not None or self.worker is not None
+                or getattr(getattr(self.owner, '_provider_progress', None), 'worker', None) is not None):
             raise OSError('The private document is still in use.')
+        self._replace_reader(value)
+
+    def _replace_reader(self, value):
         previous, self._reader = self._reader, value
         if previous is not None and previous is not value:
             self.release_reader(previous)
@@ -41,7 +69,7 @@ class ProviderDocumentSession:
             self._disposed.clear()
 
     def can_start(self):
-        return (not self.terminal and not self.busy and self.worker is None
+        return (not self.terminal and not self.busy and self._operation is None and self.worker is None
                 and getattr(getattr(self.owner, '_provider_progress', None), 'worker', None) is None)
 
     def capture(self):
@@ -73,14 +101,112 @@ class ProviderDocumentSession:
             return True
         return current
 
-    def finish_operation(self, current):
+    def begin_operation(self, current):
+        """Reserve this reader until all borrows and any committed save settle."""
+        if not self.can_start() or not current():
+            raise OSError('The private document is no longer available.')
+        operation = self._operation = _DocumentOperation(self, current)
+        self.cancel = operation.cancel
+        try:
+            self.set_busy(True)
+        except BaseException:
+            self._operation = self.cancel = None
+            self.busy = False
+            idle = getattr(self.owner, 'operation_idle', None)
+            if idle is not None:
+                idle.set()
+            raise
+        return operation
+
+    async def _borrow(self, operation, function, *args, reconcile=False, **kwargs):
+        """Keep the compatibility worker marker until the actual thread retires."""
+        if self._operation is not operation or self.worker is not None:
+            raise OSError('The private document operation does not own this reader.')
+        worker = self.worker = asyncio.create_task(asyncio.to_thread(function, *args, **kwargs))
+        try:
+            try:
+                return await asyncio.shield(worker)
+            except asyncio.CancelledError as error:
+                if operation.cancellation is None:
+                    operation.cancellation = error
+                operation.cancel.set()
+                await drain_worker(worker)
+                # Writes may already have committed. Their returned reader and
+                # progress must be reconciled before propagating cancellation.
+                if reconcile and not worker.cancelled() and worker.exception() is None:
+                    return worker.result()
+                operation.raise_cancelled()
+        finally:
+            self.worker = None
+
+    async def read(self, operation, function, *args):
+        """Borrow a decoder; cancelled reads never publish their late output."""
+        if not operation.current():
+            raise PermissionError('The current provider session cannot read this document.')
+        check_cancelled(operation.cancel.is_set)
+        result = await self._borrow(operation, function, *args)
+        check_cancelled(operation.cancel.is_set)
+        return result
+
+    async def save_reader(self, operation, save, value, *, sample_progress=False):
+        """Own a committed result through progress preparation and adoption.
+
+        An obsolete or failed handoff releases only a newly returned reader;
+        returning the existing reader never transfers its ownership away.
+        Cancellation is deferred until the caller reconciles its editable
+        baseline, then raised by the caller or finish_operation.
+        """
+        if not operation.current():
+            raise PermissionError('The current provider session cannot save this document.')
+        original = operation.reader
+        result = await self._borrow(operation, save, original, value,
+                                    cancelled=operation.cancel.is_set, reconcile=True)
+        replacement = None
+        try:
+            if not operation.current():
+                return result
+            progress = getattr(self.owner, '_provider_progress', None)
+            if progress is not None:
+                if sample_progress:
+                    progress.sample_surface()
+
+                def prepare():
+                    nonlocal replacement
+                    from .provider_progress import ProviderProgress
+                    replacement = ProviderProgress(self.owner, self.owner._crypt_reader_store, result, result.key)
+                    replacement.load()
+
+                await self._borrow(operation, prepare, reconcile=True)
+            if not operation.current():
+                return result
+            self._replace_reader(result)
+            operation.reader = result
+            if replacement is not None and operation.current():
+                progress = progress.replace_with(replacement)
+                replacement = None  # replace_with adopts or closes its successor.
+                if sample_progress and operation.current():
+                    progress.watch_surface(initial=True)
+            return result
+        finally:
+            # Also runs on progress load failure or cancellation. The session
+            # retains failed reader closes for its normal disposal retry.
+            if result is not original and self.reader is not result:
+                self.release_reader(result)
+            if replacement is not None and getattr(self.owner, '_provider_progress', None) is not replacement:
+                if not self.release_progress(replacement):
+                    raise OSError('Saved reader progress cleanup is incomplete; retry retirement.')
+
+    def finish_operation(self, operation):
         """Release internal ownership even when its old native controls are stale."""
+        if self._operation is not operation or self.worker is not None:
+            raise OSError('The private document operation has not retired.')
+        self._operation = None
         self.cancel = None
         self.busy = False
         idle = getattr(self.owner, 'operation_idle', None)
         if idle is not None:
             idle.set()
-        if current():
+        if operation.current():
             self.owner.set_cloud_busy(False)
         else:
             manager = getattr(self.owner, 'manager', None)
@@ -91,6 +217,18 @@ class ProviderDocumentSession:
                     and manager.controllers.get(self.owner.session.id) is self.owner
                     and not getattr(manager, 'terminal', False)):
                 revoke()
+        operation.raise_cancelled()
+
+    def release_progress(self, progress):
+        """Retain an unpublished progress owner if retiring it needs a retry."""
+        if not any(retained is progress for retained in self._progress_cleanup):
+            self._progress_cleanup.append(progress)
+        try:
+            progress.close()
+        except Exception:
+            return False
+        self._progress_cleanup[:] = [item for item in self._progress_cleanup if item is not progress]
+        return True
 
     def release_reader(self, reader):
         """Retry failed native closes without repeating successful source closes."""
@@ -123,9 +261,9 @@ class ProviderDocumentSession:
     def dispose(self):
         """Reusable close, or retry of already admitted terminal retirement."""
         progress = getattr(self.owner, '_provider_progress', None)
-        if self.worker is not None or getattr(progress, 'worker', None) is not None:
+        if self._operation is not None or self.worker is not None or getattr(progress, 'worker', None) is not None:
             raise OSError('The private document is still in use.')
-        if self.closed and not self._reader_cleanup:
+        if self.closed and not self._reader_cleanup and not self._progress_cleanup:
             return
         owner = self.owner
         failed = []
@@ -145,6 +283,9 @@ class ProviderDocumentSession:
         clean('comic-guidance', lambda: clear_comic_feedback(getattr(owner, 'app', owner), owner=owner))
         resource('footer', getattr(getattr(owner, 'crypt_view', None), 'page_footer', None), 'dispose')
         resource('progress', progress, 'retire' if self.terminal else 'close')
+        for retained in tuple(self._progress_cleanup):
+            if not self.release_progress(retained):
+                failed.append('retained-progress')
         for name in ('_provider_layout_task', '_provider_width_task'):
             resource(name, getattr(owner, name, None), 'cancel')
         for name in ('provider_epub_view', 'pdf_search', 'pdf_contents'):

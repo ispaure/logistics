@@ -1,8 +1,6 @@
 """App-hosted provider documents: private drafts, format views and session controls."""
 import asyncio
-import threading
 import textwrap
-from functools import partial
 from pathlib import Path
 import toga
 from toga.style import Pack
@@ -223,20 +221,6 @@ class ProviderUI(FilesUI):
         self.crypt_metadata_view = toga.ScrollContainer(horizontal=False, content=toga.Box(children=children, style=Pack(direction=COLUMN, margin=12)), style=Pack(flex=1))
         self.show_view(self.crypt_metadata_view)
 
-    async def _updated_provider_progress(self, reader, cancelled):
-        previous = getattr(self, '_provider_progress', None)
-        if previous is None:
-            return None
-        from .provider_opening import _await_opening_worker
-        from .provider_progress import ProviderProgress
-
-        def prepare():
-            progress = ProviderProgress(self, self._crypt_reader_store, reader, reader.key)
-            progress.load()
-            return progress
-
-        return await _await_opening_worker(asyncio.to_thread(prepare), cancelled)
-
     async def save_crypt_metadata(self, widget=None, **kwargs):
         document = self.provider_document()
         current = document.capture()
@@ -254,48 +238,14 @@ class ProviderUI(FilesUI):
         if not changes:
             self.crypt_metadata_status.text = 'No changes to save.'
             return
-        reader = self.crypt_reader
-        cancelled = document.cancel = threading.Event()
-        self.set_cloud_busy(True)
-        self.crypt_metadata_save.enabled = False
-        for field in self.crypt_metadata_fields.values():
-            field.readonly = True
-        cancellation = None
+        operation = document.begin_operation(current)
+        current = operation.current
         try:
-            worker = document.worker = asyncio.create_task(asyncio.to_thread(
-                self._crypt_reader_store.save_metadata, reader, changes, cancelled=cancelled.is_set))
-            try:
-                try:
-                    result = await asyncio.shield(worker)
-                except asyncio.CancelledError as error:
-                    cancellation = error
-                    cancelled.set()
-                    from services.worker_retirement import drain_worker
-                    await drain_worker(worker)
-                    if worker.cancelled() or worker.exception() is not None:
-                        raise cancellation
-                    result = worker.result()
-            finally:
-                document.worker = None
+            self.crypt_metadata_save.enabled = False
+            for field in self.crypt_metadata_fields.values():
+                field.readonly = True
+            result = await document.save_reader(operation, self._crypt_reader_store.save_metadata, changes)
             if not current():
-                if result is not reader:
-                    document.release_reader(result)
-                if cancellation is not None:
-                    raise cancellation
-                return
-            replacement = await self._updated_provider_progress(result, cancelled)
-            if not current():
-                document.release_reader(result)
-                if replacement is not None:
-                    replacement.close()
-                return
-            self.crypt_reader = result
-            if replacement is not None:
-                self._provider_progress.replace_with(replacement)
-            current = partial(current, result)
-            if not current():
-                if cancellation is not None:
-                    raise cancellation
                 return
             if result.kind == '.epub':
                 self.crypt_metadata_values = {key: result.book.values(key) for key in self.crypt_metadata_fields}
@@ -307,8 +257,7 @@ class ProviderUI(FilesUI):
                 if field.value == edited[key]:
                     field.value = saved[key]
             self.crypt_metadata_initial = saved
-            if cancellation is not None:
-                raise cancellation
+            operation.raise_cancelled()
             if not current():
                 return
             self.crypt_metadata_status.text = 'Metadata saved encrypted locally.'
@@ -319,17 +268,7 @@ class ProviderUI(FilesUI):
             self._provider_comic_mode = self.private_comic_mode()
             self._provider_comic_sharing = self.format_services.comic_sharing()
             self._provider_comic_seam = self.private_comic_seam()
-            worker = document.worker = asyncio.create_task(asyncio.to_thread(self.provider_page_content, result, index))
-            try:
-                try:
-                    kind, content = await asyncio.shield(worker)
-                except asyncio.CancelledError:
-                    cancelled.set()
-                    from services.worker_retirement import drain_worker
-                    await drain_worker(worker)
-                    raise
-            finally:
-                document.worker = None
+            kind, content = await document.read(operation, self.provider_page_content, result, index)
             if current():
                 self._show_crypt_content(kind, content)
                 self.refresh_private_bookmarks()
@@ -339,11 +278,13 @@ class ProviderUI(FilesUI):
             if current():
                 self.crypt_metadata_status.text = private_label('Save failed; edits retained: ' + str(error)[:200])
         finally:
-            if current():
-                self.crypt_metadata_save.enabled = True
-                for field in self.crypt_metadata_fields.values():
-                    field.readonly = False
-            document.finish_operation(current)
+            try:
+                if current():
+                    self.crypt_metadata_save.enabled = True
+                    for field in self.crypt_metadata_fields.values():
+                        field.readonly = False
+            finally:
+                document.finish_operation(operation)
 
     async def save_crypt(self, widget=None, **kwargs):
         document = self.provider_document()
@@ -355,63 +296,35 @@ class ProviderUI(FilesUI):
             return
         if self.cloud_busy or self.crypt_reader is None or not self.crypt_reader.editable:
             return
-        reader = self.crypt_reader
-        cancelled = document.cancel = threading.Event()
-        self.set_cloud_busy(True)
-        self.crypt_save.enabled = False
-        self.crypt_text.readonly = True
-        cancellation = None
+        operation = document.begin_operation(current)
+        current = operation.current
         try:
+            self.crypt_save.enabled = False
+            self.crypt_text.readonly = True
             workflow = getattr(self, '_provider_markdown', None)
             if workflow is not None:
                 await workflow.flush()
             if not current():
                 return
-            worker = document.worker = asyncio.create_task(asyncio.to_thread(
-                self._crypt_reader_store.save, reader, self.crypt_text.value, cancelled=cancelled.is_set))
-            try:
-                try:
-                    result = await asyncio.shield(worker)
-                except asyncio.CancelledError as error:
-                    cancellation = error
-                    cancelled.set()
-                    from services.worker_retirement import drain_worker
-                    await drain_worker(worker)
-                    if worker.cancelled() or worker.exception() is not None:
-                        raise cancellation
-                    result = worker.result()
-            finally:
-                document.worker = None
-            if current():
-                progress = getattr(self, '_provider_progress', None)
-                if progress is not None:
-                    progress.sample_surface()
-                replacement = await self._updated_provider_progress(result, cancelled)
-                if not current():
-                    document.release_reader(result)
-                    if replacement is not None:
-                        replacement.close()
-                    return
-                self.crypt_reader = result
-                if replacement is not None:
-                    progress.replace_with(replacement).watch_surface(initial=True)
-                current = partial(current, result)
-            elif result is not reader:
-                document.release_reader(result)
-            if cancellation is not None:
-                raise cancellation
+            await document.save_reader(operation, self._crypt_reader_store.save,
+                                       self.crypt_text.value, sample_progress=True)
+            operation.raise_cancelled()
             if current():
                 self.crypt_title.text = private_label(Path(self.crypt_reader.name).name + ' · Saved locally')
         except Exception as error:
             if current():
                 self.crypt_title.text = private_label('Save failed; edits retained: ' + str(error)[:200])
         finally:
-            if current():
-                self.crypt_text.readonly = False
-                self.crypt_save.enabled = True
-            document.finish_operation(current)
-            if current():
-                self.refresh_private_text_controls()
+            try:
+                if current():
+                    self.crypt_text.readonly = False
+                    self.crypt_save.enabled = True
+            finally:
+                try:
+                    document.finish_operation(operation)
+                finally:
+                    if current():
+                        self.refresh_private_text_controls()
 
     def discard_crypt(self, widget=None, **kwargs):
         if not self.cloud_busy and self.clear_private_reader(discard=True):
@@ -519,7 +432,7 @@ class ProviderUI(FilesUI):
         revision = getattr(gate, 'revision', None)
 
         def allowed():
-            return (current() and valid() and self.provider_speech_read_allowed()
+            return (reader is document.reader and current() and valid() and self.provider_speech_read_allowed()
                     and self.privacy_gate is gate and getattr(gate, 'revision', None) == revision)
 
         def load():
@@ -533,21 +446,14 @@ class ProviderUI(FilesUI):
             await asyncio.wait({progress.task})
         if not allowed() or self.cloud_busy or not document.can_start():
             raise PermissionError('The current provider session cannot read this chapter.')
-        self.set_cloud_busy(True)
-        worker = document.worker = self.loop.create_task(asyncio.to_thread(load))
+        operation = document.begin_operation(current)
         try:
-            try:
-                result = await asyncio.shield(worker)
-            except asyncio.CancelledError:
-                from services.worker_retirement import drain_worker
-                await drain_worker(worker)
-                raise
+            result = await document.read(operation, load)
             if not allowed():
                 raise PermissionError('The current provider session cannot read this chapter.')
             return result
         finally:
-            document.worker = None
-            document.finish_operation(current)
+            document.finish_operation(operation)
 
     async def read_crypt_page(self, widget=None, *, preserve_speech=False, speech_chapter=None,
                               valid=lambda: True, **kwargs):
@@ -571,10 +477,9 @@ class ProviderUI(FilesUI):
         panel = getattr(self, 'provider_epub_view', None)
         if not preserve_speech and panel is not None and hasattr(panel, 'close_read_aloud'):
             panel.close_read_aloud()
-        cancelled = document.cancel = threading.Event()
-        self.set_cloud_busy(True)
-        self.crypt_read_page.enabled = False
+        operation = document.begin_operation(current)
         try:
+            self.crypt_read_page.enabled = False
             index = self.crypt_reader.labels.index(self.crypt_page.value)
             if reader.kind != '.pdf':
                 self._provider_viewport = self.private_comic_viewport()
@@ -590,17 +495,7 @@ class ProviderUI(FilesUI):
             if speech_chapter is not None:
                 kind, content = 'epub', speech_chapter
             else:
-                worker = document.worker = asyncio.create_task(asyncio.to_thread(self.provider_page_content, reader, index))
-                try:
-                    try:
-                        kind, content = await asyncio.shield(worker)
-                    except asyncio.CancelledError:
-                        cancelled.set()
-                        from services.worker_retirement import drain_worker
-                        await drain_worker(worker)
-                        raise
-                finally:
-                    document.worker = None
+                kind, content = await document.read(operation, self.provider_page_content, reader, index)
             if not current() or not publication.current() or self.manager.active is not self:
                 return
             if not self._show_crypt_content(kind, content):
@@ -634,9 +529,11 @@ class ProviderUI(FilesUI):
                 # Expose the error, retry and Close instead of trapping the user.
                 self.toggle_private_reading_mode()
         finally:
-            if current():
-                self.crypt_read_page.enabled = True
-            document.finish_operation(current)
+            try:
+                if current():
+                    self.crypt_read_page.enabled = True
+            finally:
+                document.finish_operation(operation)
 
     def refresh_private_bookmarks(self):
         index = self.crypt_reader.labels.index(self.crypt_page.value)
