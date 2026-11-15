@@ -21,4 +21,17 @@ PYTHONPATH=Python python -m desktop.bulk_rename --paths /path/to/a.jpg /path/to/
 
 On Windows, set `PYTHONPATH` with your shell. Embedders can instantiate `BulkRenameWidget(path, parent=...)` and refresh on `renamed`. Call `can_close()` and retry on `idle` so workers can finish rollback.
 
-`widget.py` accepts only the current preview generation. The [commonUtils engine](../../../development/architecture/commonutils-integration.md) validates apply and undo. Report stale sources or occupied destinations. On rollback failure, preserve and report staged and original paths. Undo covers the last successful batch in the current session. See [recovery](../user/user.md#applying-cancelling-and-undo) and [mobile availability](../user_mobile/user_mobile.md).
+`widget.py` handles scan, preview and disk batch results separately. A successful
+scan fills the table and schedules a preview. A preview can publish only if its
+generation is current. Apply and undo share batch result handling and use the
+[commonUtils engine](../../../development/architecture/commonutils-integration.md)
+to validate sources and destinations. A successful apply retains the undo receipt
+for that batch in the current session; a successful undo clears it. A completed
+rollback leaves the existing receipt available. If rollback is incomplete, the
+widget clears the receipt and reports the staged and original paths. See
+[recovery](../user/user.md#applying-cancelling-and-undo) and
+[mobile availability](../user_mobile/user_mobile.md).
+
+After handling the result, the widget starts a queued input replacement without
+emitting `idle` between jobs. Otherwise it schedules any pending preview, updates
+the actions and emits `idle` before retrying a waiting close.

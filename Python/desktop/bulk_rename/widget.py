@@ -576,46 +576,14 @@ class BulkRenameWidget(qt.QWidget):
     def _finished(self, result, error):
         state, self._state = self._state, ''
         self.progress.hide()
-        if state in ('scan', 'preview') and self.progress.cancelled.is_set():
-            error = 'Folder scan cancelled' if state == 'scan' else 'Preview cancelled'
-        if error:
-            self.status.setText(error)
-            if state in ('preview', 'rename'):
-                self.plan = None
-        elif state == 'scan':
-            self.directory, items = result
-            self.path_edit.setText(str(self.directory))
-            self._fill(items)
-            if self.directory.anchor != self._tree_anchor:
-                self._tree_anchor = self.directory.anchor
-                self.folder_model.setRootPath(self._tree_anchor)
-            self._folder_reveal_pending = self.directory
-            self._folder_reveal_timer.start(0)
-            self.request_preview()
+        if state == 'scan':
+            self._complete_scan(result, error)
         elif state == 'preview':
-            self._show_plan(*result)
+            self._complete_preview(result, error)
         else:
-            if result.success:
-                previous = self._items
-                mapping = {entry.source: entry.target for entry in result.entries}
-                items = [(mapping.get(path, path), *details) for path, details in previous.items()]
-                self._fill(items)
-                if state == 'rename':
-                    self.receipt = result
-                else:
-                    self.receipt = None
-                self.renamed.emit(result)
-                self.status.setText(f'{len(result.entries)} items {"renamed" if state == "rename" else "restored"}. '
-                                    'Rules retained; change a rule or click Preview to prepare another batch.')
-            else:
-                self.plan = None
-                message = result.error + (' Batch rolled back.' if not result.recovery else '')
-                if result.recovery:
-                    message += '\nManual recovery required:\n' + '\n'.join(f'{current} → {original}: {problem}'
-                                                                          for current, original, problem in result.recovery)
-                    self.receipt = None
-                self.renamed.emit(result)
-                self.status.setText(message)
+            self._complete_batch(result, error, applying=state == 'rename')
+
+        # Replacing inputs starts another scan; do not publish idle between them.
         if self._pending_inputs is not None and not self._closing:
             self._replace_inputs()
             return
@@ -626,6 +594,59 @@ class BulkRenameWidget(qt.QWidget):
         self.idle.emit()
         if self._closing:
             self.close()
+
+    def _complete_scan(self, result, error):
+        if self.progress.cancelled.is_set():
+            error = 'Folder scan cancelled'
+        if error:
+            self.status.setText(error)
+            return
+        self.directory, items = result
+        self.path_edit.setText(str(self.directory))
+        self._fill(items)
+        if self.directory.anchor != self._tree_anchor:
+            self._tree_anchor = self.directory.anchor
+            self.folder_model.setRootPath(self._tree_anchor)
+        self._folder_reveal_pending = self.directory
+        self._folder_reveal_timer.start(0)
+        self.request_preview()
+
+    def _complete_preview(self, result, error):
+        if self.progress.cancelled.is_set():
+            error = 'Preview cancelled'
+        if error:
+            self.status.setText(error)
+            self.plan = None
+            return
+        self._show_plan(*result)
+
+    def _complete_batch(self, result, error, *, applying):
+        # A worker exception is separate from a batch result that reports rollback.
+        if error:
+            self.status.setText(error)
+            if applying:
+                self.plan = None
+            return
+        if not result.success:
+            self.plan = None
+            if result.recovery:
+                paths = '\n'.join(f'{current} → {original}: {problem}'
+                                  for current, original, problem in result.recovery)
+                message = f'{result.error}\nManual recovery required:\n{paths}'
+                self.receipt = None
+            else:
+                message = f'{result.error} Batch rolled back.'
+            self.renamed.emit(result)
+            self.status.setText(message)
+            return
+
+        mapping = {entry.source: entry.target for entry in result.entries}
+        self._fill([(mapping.get(path, path), *details) for path, details in self._items.items()])
+        self.receipt = result if applying else None
+        self.renamed.emit(result)
+        verb = 'renamed' if applying else 'restored'
+        self.status.setText(f'{len(result.entries)} items {verb}. '
+                            'Rules retained; change a rule or click Preview to prepare another batch.')
 
     def apply(self):
         if (self.progress.busy or not self.plan or not self.plan.valid or not self.plan.changes

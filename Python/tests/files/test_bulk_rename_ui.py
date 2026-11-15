@@ -290,6 +290,47 @@ class BulkRenameWidgetTests(QtTestCase):
         self.assertEqual(self.second.read_text(), 'ten')
         self.assertFalse(self.widget.undo_button.isEnabled())
 
+    def test_undo_can_retry_after_rollback_but_not_after_incomplete_recovery(self):
+        from commonUtils.filesystem import rename as rename_utils
+        widget = self.widget
+        widget.controls.fields['prefix'].setText('new_')
+        self.wait_idle()
+        self.assertTrue(widget.apply())
+        self.wait_idle()
+
+        renamed_first = self.root / 'new_page2.txt'
+        renamed_second = self.root / 'new_page10.txt'
+        original = rename_utils._rename_exclusive
+
+        def fail_undo(source, target):
+            if target == self.first:
+                raise OSError('Could not restore original name')
+            return original(source, target)
+
+        with patch.object(rename_utils, '_rename_exclusive', side_effect=fail_undo):
+            widget.undo_button.click()
+            self.wait_idle()
+        self.assertIn('Batch rolled back.', widget.status.text())
+        self.assertTrue(widget.undo_button.isEnabled())
+        self.assertEqual(renamed_first.read_text(), 'two')
+        self.assertEqual(renamed_second.read_text(), 'ten')
+
+        def fail_undo_and_rollback(source, target):
+            if target == renamed_first:
+                raise OSError('Could not restore renamed path')
+            return fail_undo(source, target)
+
+        with patch.object(rename_utils, '_rename_exclusive', side_effect=fail_undo_and_rollback):
+            widget.undo_button.click()
+            self.wait_idle()
+        status = widget.status.text()
+        self.assertIn('Manual recovery required:', status)
+        self.assertNotIn('Batch rolled back.', status)
+        self.assertFalse(widget.undo_button.isEnabled())
+        staged, = self.root.glob('.bulk-rename-*')
+        self.assertIn(f'{staged} → {renamed_first}: Could not restore renamed path', status)
+        self.assertEqual(staged.read_text(), 'two')
+
     def test_selection_conflicts_and_invalid_regex_block_rename(self):
         self.widget.controls.set_rules(RenameRules(name_mode='fixed', fixed_name='same'))
         self.wait_idle()
