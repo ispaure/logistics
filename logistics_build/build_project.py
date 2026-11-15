@@ -1,5 +1,6 @@
 """Logistics adapter for the reusable manager; suites and app policy live here."""
 import argparse
+from dataclasses import replace
 from datetime import datetime, timezone
 import json
 import os
@@ -152,111 +153,119 @@ class LogisticsProject:
         return make_plan(self, run_directory, destinations, run_overrides)
 
     def make_plan(self, operation, target, backend, **options):
-        from dataclasses import replace
         started = time.monotonic()
-        from logistics_build.manager_suites import selection, with_reports, with_host_gates, acceptance_phase
+        from logistics_build.manager_suites import acceptance_phase, selection, with_host_gates, with_suite_projection
         run_overrides = options.pop('run_overrides', None)
         if run_overrides:
             from logistics_build.manager_journeys import capture
             if options.get('_context') is not None:
                 raise ValueError('Cannot replace captured settings inside a workflow.')
-            options['_context'] = capture(self, options.get('revision','working-tree'), run_overrides)
+            options['_context'] = capture(self, options.get('revision', 'working-tree'), run_overrides)
         suite = options.pop('suite', '')
         release_validation = options.pop('_release_validation', False)
-        selection(self.root, suite, operation, target, backend, options.get('pattern', ''))
-        workflow = operation in ('Reviewed TestFlight workflow','Reviewed Firebase workflow')
-        requested_operation = operation
-        if workflow:
-            operation = 'Prepare TestFlight' if operation == 'Reviewed TestFlight workflow' else 'Prepare Firebase'
+        pattern = options.get('pattern', '')
+        selection(self.root, suite, operation, target, backend, pattern)
         from logistics_build.build_retention import clean
         try:
             if options.get('_context') is None:
                 clean(self.root, apply=True)
         except (OSError, RuntimeError) as error:
             print('Build retention incomplete: ' + str(error), flush=True)
-        plan = self._make_plan(operation, target, backend, suite=suite, **options)
-        if workflow:
-            validation_options = dict(options)
-            if target == 'ios':
-                validation_options['include_ipad'] = True  # Required release inventory, independent of standalone test choices.
-            validation = self._make_plan('Test', target, self.backend_options(target, 'Test')[0], **validation_options)
-            if any(validation.source.get(key) != plan.source.get(key)
-                   for key in ('fingerprint', 'logistics_commit', 'commonUtils_commit')):
-                raise ValueError('Native validation and preparation must use the exact same source.')
-            host_python = validation.source.get('effective_settings', {}).get('values', {}).get('tools.desktop_python', str(self.interpreter))
-            validation = with_host_gates(validation, host_python, release=True)
-            gate = acceptance_phase(validation, target)
-            # Required native/runtime gates and owned cleanup precede signing.
-            plan = replace(plan, phases=(*validation.phases, gate,
-                *(replace(phase, dependencies=(*phase.dependencies, gate.id)) for phase in plan.phases)))
-            preparation = plan.phases[-1]
-            report = Path(preparation.artifacts[0])
-            receipt = report.with_name(report.stem+'-distribution.json')
-            upload = Phase('reviewed-distribution',(preparation.argv[0],'-m','logistics_build.distribute_prepared',
-                '--report',str(report),'--receipt',str(receipt)),preparation.cwd,timeout=14400,
-                dependencies=(preparation.id,),environment=dict(preparation.environment),kind='distribution',
-                effect='upload',provider='testflight' if target=='ios' else 'firebase',artifacts=(str(receipt),))
-            plan = replace(plan,operation=requested_operation,phases=(*plan.phases,upload))
+
+        base_operation = operation
+        if operation == 'Reviewed TestFlight workflow':
+            base_operation = 'Prepare TestFlight'
+        elif operation == 'Reviewed Firebase workflow':
+            base_operation = 'Prepare Firebase'
+        plan = self._make_plan(base_operation, target, backend, suite=suite, **options)
+        mobile_test = target in {'ios', 'android'} and operation == 'Test'
+        if base_operation != operation:
+            plan = self._with_reviewed_distribution(plan, operation, target, options)
         elif release_validation:
-            if target not in {'ios', 'android'} or operation != 'Test':
+            if not mobile_test:
                 raise ValueError('Release validation applies only to complete mobile tests.')
             host_python = plan.source['effective_settings']['values']['tools.desktop_python']
             plan = with_host_gates(plan, host_python, release=True)
-            gate = acceptance_phase(plan, target)
-            plan = replace(plan, phases=(*plan.phases, gate))
-        elif target in {'ios', 'android'} and operation == 'Test' and not suite and not options.get('pattern') and backend != 'GitHub':
-            host_python = plan.source.get('effective_settings', {}).get('values', {}).get('tools.desktop_python', str(self.interpreter))
-            plan = with_host_gates(plan, host_python)
-        if suite == 'android.native':
-            plan = replace(plan, phases=tuple(replace(phase, dependencies=tuple(name for name in phase.dependencies if name != 'android-runtime-tools'))
-                for phase in plan.phases if phase.id not in {'android-runtime','android-runtime-tools'}))
-        elif suite == 'android.runtime':
-            plan = replace(plan, phases=tuple(replace(phase, dependencies=tuple(name for name in phase.dependencies if name != 'android-build'))
-                for phase in plan.phases if phase.id not in {'android-native','android-build'}))
-        if suite in {'ios.native', 'ios.runtime'}:
-            core = {'ios-runtime-tools', 'ios-runtime', 'ios-runtime-cleanup'}
-            kept = tuple(phase for phase in plan.phases if (phase.id in core) == (suite == 'ios.runtime'))
-            names = {phase.id for phase in kept}
-            plan = replace(plan, phases=tuple(replace(phase, dependencies=tuple(name for name in phase.dependencies if name in names)) for phase in kept))
-        if suite:
-            plan = replace(plan, source=dict(plan.source, test_suite=suite))
-        if options.get('pattern'):
-            plan = replace(plan, source=dict(plan.source, focused_test_pattern=options['pattern']))
-        from logistics_build.manager_suites import with_structure_gate
-        plan = with_structure_gate(plan, str(self.interpreter))
+            plan = replace(plan, phases=(*plan.phases, acceptance_phase(plan, target)))
+        elif mobile_test and not suite and not pattern and backend != 'GitHub':
+            values = plan.source.get('effective_settings', {}).get('values', {})
+            plan = with_host_gates(plan, values.get('tools.desktop_python', str(self.interpreter)))
+
+        plan = with_suite_projection(plan, suite, pattern)
+        return self._finalize_plan(plan, base_operation, target, started)
+
+    def _with_reviewed_distribution(self, plan, operation, target, options):
+        from logistics_build.manager_suites import acceptance_phase, with_host_gates
+        validation_options = dict(options)
+        if target == 'ios':
+            validation_options['include_ipad'] = True  # Required release inventory.
+        validation = self._make_plan('Test', target, self.backend_options(target, 'Test')[0], **validation_options)
+        if any(validation.source.get(key) != plan.source.get(key)
+               for key in ('fingerprint', 'logistics_commit', 'commonUtils_commit')):
+            raise ValueError('Native validation and preparation must use the exact same source.')
+        values = validation.source.get('effective_settings', {}).get('values', {})
+        validation = with_host_gates(validation, values.get('tools.desktop_python', str(self.interpreter)), release=True)
+        gate = acceptance_phase(validation, target)
+        # Required native/runtime gates and owned cleanup precede signing.
+        plan = replace(plan, phases=(*validation.phases, gate,
+            *(replace(phase, dependencies=(*phase.dependencies, gate.id)) for phase in plan.phases)))
+
+        preparation = plan.phases[-1]
+        report = Path(preparation.artifacts[0])
+        receipt = report.with_name(report.stem + '-distribution.json')
+        upload = Phase('reviewed-distribution', (preparation.argv[0], '-m', 'logistics_build.distribute_prepared',
+            '--report', str(report), '--receipt', str(receipt)), preparation.cwd, timeout=14400,
+            dependencies=(preparation.id,), environment=dict(preparation.environment), kind='distribution',
+            effect='upload', provider='testflight' if target == 'ios' else 'firebase', artifacts=(str(receipt),))
+        return replace(plan, operation=operation, phases=(*plan.phases, upload))
+
+    def _finalize_plan(self, plan, base_operation, target, started):
+        from logistics_build.manager_suites import with_reports, with_structure_gate, with_worker_budget
         from logistics_build.native_prerequisites import with_prerequisites
+        from logistics_build.source_layout import adapt_plan
+        from logistics_build.storage_extras import with_storage_owner
+        from logistics_build.test_evidence import with_reuse
+
+        plan = with_structure_gate(plan, str(self.interpreter))
         plan = with_prerequisites(plan, target, self.interpreter)
         plan = with_reports(plan, target)
-        from logistics_build.manager_suites import with_worker_budget
         plan = with_worker_budget(plan, target)
         snapshot = self.private / 'snapshots' / plan.source.get('fingerprint', '')
-        resources = (str(snapshot.with_suffix('.lock')),) if (snapshot / '.manager-source.json').is_file() else ()
-        plan = declare_resources(plan,target)
+        snapshot_locks = (str(snapshot.with_suffix('.lock')),) if (snapshot / '.manager-source.json').is_file() else ()
+        plan = declare_resources(plan, target)
+
         settings_snapshot = plan.source.get('effective_settings')
-        phases = plan.phases
+        values = settings_snapshot['values'] if settings_snapshot else {}
         if settings_snapshot:
-            from build_manager.profiles import save_profile
-            reference = Path(plan.workspace) / 'settings' / (uuid4().hex + '.json')
-            save_profile(reference, settings_snapshot['values'], allowed=manager_settings.defaults(self.mobile))
-            phases = tuple(replace(phase, environment=dict(phase.environment,
-                LOGISTICS_MANAGER_PROFILE=str(reference), LOGISTICS_MANAGER_ACCOUNT_DEFAULTS='{}')) for phase in phases)
-        secrets=plan.secret_environment
-        if settings_snapshot:
-            reference=settings_snapshot['values'].get('auth.github_reference','')
-            if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',reference):secrets=tuple(dict.fromkeys((*secrets,reference)))
-        values=settings_snapshot['values'] if settings_snapshot else {}
-        destination=(values.get('github.repository','declared GitHub repository') if plan.backend=='GitHub' else
-            {'app':values.get('testflight.app_id'),'group':values.get('testflight.external_group')} if operation=='Prepare TestFlight' else
-            {'app':values.get('firebase.app_id'),'group':values.get('firebase.group')} if operation=='Prepare Firebase' else
-            'local '+target+' workspace')
-        plan = replace(plan, phases=phases, secret_environment=secrets, resource_locks=(*plan.resource_locks,*resources),
-                       source=dict(plan.source,destination=destination,plan_preparation_seconds=time.monotonic()-started))
-        from logistics_build.source_layout import adapt_plan
-        from logistics_build.test_evidence import with_reuse
+            plan = self._with_settings_profile(plan, values)
+        if plan.backend == 'GitHub':
+            destination = values.get('github.repository', 'declared GitHub repository')
+        elif base_operation == 'Prepare TestFlight':
+            destination = {'app': values.get('testflight.app_id'), 'group': values.get('testflight.external_group')}
+        elif base_operation == 'Prepare Firebase':
+            destination = {'app': values.get('firebase.app_id'), 'group': values.get('firebase.group')}
+        else:
+            destination = 'local ' + target + ' workspace'
+        plan = replace(plan, resource_locks=(*plan.resource_locks, *snapshot_locks), source=dict(
+            plan.source, destination=destination, plan_preparation_seconds=time.monotonic() - started))
+
         # Capture receipts from the actual selected-source command, then resolve
         # the newly added probe through that same historical layout.
-        from logistics_build.storage_extras import with_storage_owner
-        return with_storage_owner(adapt_plan(with_reuse(adapt_plan(plan))), self.root)
+        plan = adapt_plan(plan)
+        plan = with_reuse(plan)
+        return with_storage_owner(adapt_plan(plan), self.root)
+
+    def _with_settings_profile(self, plan, values):
+        from build_manager.profiles import save_profile
+        profile = Path(plan.workspace) / 'settings' / (uuid4().hex + '.json')
+        save_profile(profile, values, allowed=manager_settings.defaults(self.mobile))
+        phases = tuple(replace(phase, environment=dict(phase.environment,
+            LOGISTICS_MANAGER_PROFILE=str(profile), LOGISTICS_MANAGER_ACCOUNT_DEFAULTS='{}')) for phase in plan.phases)
+        secrets = plan.secret_environment
+        github_reference = values.get('auth.github_reference', '')
+        if re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', github_reference):
+            secrets = tuple(dict.fromkeys((*secrets, github_reference)))
+        return replace(plan, phases=phases, secret_environment=secrets)
 
     def _make_plan(self, operation, target, backend, *, revision='working-tree', pattern='', build_override='', include_ipad=False, release_tag='', suite='', _context=None):
         if operation not in self.operations or target not in self.platforms or backend not in self.backend_options(target, operation):

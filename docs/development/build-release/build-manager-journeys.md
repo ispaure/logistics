@@ -9,6 +9,17 @@ See [operator journeys](operator/workflows.md) for starting checks and delivery.
 3. Trace `build-project.json` → `LogisticsProject.make_journey` → `logistics_build/manager_journeys.py` (bridge action `journey_plan`). Match its [suite IDs](#shared-tests-and-suite-discovery) to `build-tests.json`.
 4. From the root run `python3 dev.py test desktop --exact-file Python/tests/tooling/test_manager_journeys.py`. Expect fixture plans to pass source binding, gate and cleanup checks using mocked native/provider work. For import errors, see [local SDK verification](#local-manager-dependency-and-verification).
 
+## Trace a single-platform plan
+
+`LogisticsProject.make_plan` in `logistics_build/build_project.py` starts with the
+selected backend's base plan. Reviewed tester workflows bind validation to the
+same source as signing and make upload depend on the prepared artifact.
+`manager_suites.with_suite_projection` selects the named native or runtime
+steps before the adapter adds prerequisites, reports and resources. The
+adapter freezes effective settings and resolves commands against the selected
+source before recording reusable evidence recipes. Historical snapshots also
+resolve the resulting evidence probe against their own module layout.
+
 ## Source, settings and resource integrity
 
 One immutable PlanningContext binds source, version and effective settings. Each branch uses unique IDs, scoped resources and explicit dependencies. Source/settings drift stops preparation. Credentials remain protected references. Independent platform branches can overlap. See [storage policy](build-manager.md#automatic-storage-retention) and [manager installation](operator/setup.md#external-manager-installation-adapter-api-1).

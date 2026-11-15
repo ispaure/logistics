@@ -150,6 +150,34 @@ class ManagerSuiteTests(unittest.TestCase):
             with self.subTest(suite=suite, backend=backend), self.assertRaises(ValueError):
                 suites.selection(ROOT, suite, operation, target, backend, pattern)
 
+    def test_android_suites_keep_shared_emulator_lifecycle_with_one_setup_dependency(self):
+        project = LogisticsProject(ROOT)
+        with TemporaryDirectory() as temporary:
+            command = (sys.executable, '-c', 'pass')
+            phases = (
+                Phase('android-build', command, temporary, kind='build'),
+                Phase('android-runtime-tools', command, temporary, kind='setup'),
+                Phase('android-ready', command, temporary, kind='setup',
+                      dependencies=('android-build', 'android-runtime-tools')),
+                *(Phase('android-' + name, command, temporary, dependencies=('android-ready',),
+                        artifacts=(str(Path(temporary) / (name + '.json')),)) for name in ('native', 'runtime')),
+                Phase('android-cleanup', command, temporary, always=True, kind='cleanup'),
+            )
+            full = Plan('Logistics', 'Test', {}, phases, temporary)
+            with patch.object(project, '_make_plan', return_value=full), patch('logistics_build.build_retention.clean'):
+                for name, setup in (('native', 'android-build'), ('runtime', 'android-runtime-tools')):
+                    with self.subTest(suite=name):
+                        suite = 'android.' + name
+                        plan = project.make_plan('Test', 'android', 'This Mac — Android Emulator', suite=suite)
+                        rows = {phase.id: phase for phase in plan.phases}
+                        self.assertEqual(tuple(rows), ('test-structure', 'native-prerequisites', setup,
+                                                      'android-ready', 'android-' + name, 'android-cleanup'))
+                        self.assertEqual(rows['android-ready'].dependencies, (setup, 'native-prerequisites'))
+                        gate = rows['native-prerequisites']
+                        self.assertEqual(gate.argv[gate.argv.index('--capability') + 1], name)
+                        self.assertEqual(rows['android-cleanup'].dependencies, ())
+                        self.assertEqual(plan.source['test_suite'], suite)
+
     def test_ios_runtime_suite_keeps_only_core_gates_and_generated_receipt(self):
         project = LogisticsProject(ROOT)
         with TemporaryDirectory() as temporary:

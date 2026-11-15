@@ -25,6 +25,32 @@ def selection(root, suite, operation, target, backend, pattern):
         raise ValueError('Focused patterns cannot narrow native or release acceptance.')
 
 
+def with_suite_projection(plan, suite, pattern):
+    phases = plan.phases
+    if suite in {'android.native', 'android.runtime'}:
+        # Both suites keep emulator setup and cleanup, with one setup input.
+        if suite == 'android.native':
+            omitted_test, omitted_setup = 'android-runtime', 'android-runtime-tools'
+        else:
+            omitted_test, omitted_setup = 'android-native', 'android-build'
+        phases = tuple(replace(phase, dependencies=tuple(name for name in phase.dependencies if name != omitted_setup))
+                       for phase in phases if phase.id not in {omitted_test, omitted_setup})
+    elif suite in {'ios.native', 'ios.runtime'}:
+        runtime = {'ios-runtime-tools', 'ios-runtime', 'ios-runtime-cleanup'}
+        kept = tuple(phase for phase in phases if (phase.id in runtime) == (suite == 'ios.runtime'))
+        names = {phase.id for phase in kept}
+        phases = tuple(replace(phase, dependencies=tuple(name for name in phase.dependencies if name in names))
+                       for phase in kept)
+    if not suite and not pattern:
+        return plan
+    source = dict(plan.source)
+    if suite:
+        source['test_suite'] = suite
+    if pattern:
+        source['focused_test_pattern'] = pattern
+    return replace(plan, phases=phases, source=source)
+
+
 def declared_cases(root, runtime=False):
     path = Path(root) / ('Python/mobile/smoke.py' if runtime else 'mobile_build/native_tests/tests/logisticsmobile/__init__.py')
     variable = 'EXPECTED_TESTS' if runtime else 'CASES'
