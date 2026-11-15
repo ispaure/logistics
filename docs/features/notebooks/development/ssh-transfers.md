@@ -28,13 +28,13 @@ Before enabling native mutations, qualify fresh IDs and asset publication for up
 - **USB importer, user-reported 3.29.1.0.** A mixed version-1/`cPages` candidate returned HTTP 201 with PDF only. Its two ink files and PNG were absent on re-export. Version-2 diagnostics isolated mixed ink/image insertion anchors. Clock-ordered reconstruction referencing older IDs preserved both previously failing arrangements, including geometry, stacking, PNG and PDF bytes after native pen edits. Qualification is limited to those fixtures.
 - **Native UI and scoped reads.** Exact-ID USB re-exports confirmed rename, move, trash and explicit restore to My files with unchanged document content. Scoped SSH reads confirmed collection metadata without content sidecars.
 - **Direct-write trial halted.** The tablet label identifies the tested model as RM03A. The device reported `reMarkable Chiappa` and systemd 259.5, with user-reported software 3.29.1.0. Stale guard rejection, rename, two moves and a post-submit disconnect passed their scoped checks. A later trash checkpoint coincided with a verified reboot of unknown cause. Readback recovered metadata and original content. Return-to-root and rename-back remain unfinished. The disposable copy remains in native Trash.
-- **Cleanup and current status.** Owned inactive transaction files and the stale lease were removed after preserving evidence. Service start times and restart counts stayed unchanged during cleanup. Restart/recovery remains unresolved. Keep the browser read-only and direct-write qualification halted. Synthetic corpus rehearsal is complete. Personal-corpus acquisition and end-to-end acceptance are pending.
+- **Cleanup and current status.** Owned inactive transaction files and the stale lease were removed after preserving evidence. Service start times and restart counts stayed unchanged during cleanup. Restart/recovery remains unresolved. Keep the browser read-only and direct-write qualification halted. The [read-only corpus validation](corpus-validation.md) ran separately.
 
 Host coverage includes `test_remarkable_transfer.py`, `test_remarkable_mutations.py` and `test_remarkable_transaction.py` under `Python/tests/notebooks/`.
 
 ## Remaining acceptance
 
-1. **Read-only corpus:** use the stable-ID enumeration and export contract in an authorized session with the corpus owner. Preserve the existing USB fixtures and native organization receipts.
+1. **Read-only corpus:** use the stable-ID enumeration and export contract for authorized reruns. Preserve the existing USB fixtures and native organization receipts.
 2. **Two-way browser:** resolve the restart and index refresh behavior before another live write trial. Selected-folder upload, fresh-ID copies, folder creation, recursive operations, and their collision and recovery controls remain incomplete. Complete synthetic checks first, then propose a bounded device test for the exact hardware and software.
 
 No tablet interaction is required to close the completed temporary-file cleanup. Restoring or renaming the disposable notebook in Trash is optional housekeeping, not a prerequisite for read-only retrieval.
