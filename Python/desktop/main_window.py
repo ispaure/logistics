@@ -290,45 +290,43 @@ class MainWindow(pyside.Window):
 
     def _populate_tabs(self):
         """Build core and feature-contributed tabs in one ordered list."""
-
-        pages = registry.get_pages()
-        seen_page_ids = set()
-        for registered in pages:
-            contribution = registered.contribution
-
-            if contribution.page_id in seen_page_ids:
-                raise ValueError(
-                    f'Duplicate contributed page ID: {contribution.page_id}'
-                )
-
-            seen_page_ids.add(contribution.page_id)
-
-        tabs = []
+        # Validate the full startup roster before any factory runs.
+        contributions = list(self._discover_feature_pages())
         # Keep each constructed page owned even if a later page fails at startup.
         for order, name, page_type in CORE_TABS:
             page = page_type(parent=self.dlg)
-            tabs.append((order, name, page))
             self._core_pages.append((order, name, page))
             if isinstance(page, FoldersPage):
                 page.browse_requested.connect(self._browse_folder)
-        for registered in pages:
-            contribution = registered.contribution
-            page = self._create_feature_page(contribution)
-            self._feature_pages[(registered.feature_name, contribution.page_id)] = page
-            page.setProperty('navigation_icon', contribution.navigation_icon)
-            tabs.append(
-                (
-                    contribution.order,
-                    contribution.name,
-                    page
-                )
-            )
-
-        for _order, name, page in sorted(
-            tabs,
-            key=lambda item: (item[0], item[1].casefold())
-        ):
+        entries = [*self._core_pages, *self._feature_tab_entries(contributions)]
+        for name, page in self._ordered_tabs(entries):
             self.tabs.addTab(page, name)
+
+    @staticmethod
+    def _discover_feature_pages():
+        seen_page_ids = set()
+        for registered in registry.get_pages():
+            contribution = registered.contribution
+            page_id = contribution.page_id
+            if page_id in seen_page_ids:
+                raise ValueError(f'Duplicate contributed page ID: {page_id}')
+            seen_page_ids.add(page_id)
+            yield (registered.feature_name, page_id), contribution
+
+    def _feature_tab_entries(self, contributions):
+        for key, contribution in contributions:
+            page = self._feature_pages.get(key)
+            if page is None:
+                page = self._create_feature_page(contribution)
+                # Startup cleanup must be able to find the page if property setup fails.
+                self._feature_pages[key] = page
+                page.setProperty('navigation_icon', contribution.navigation_icon)
+            yield contribution.order, contribution.name, page
+
+    @staticmethod
+    def _ordered_tabs(entries):
+        return [(name, page) for _, name, page in
+                sorted(entries, key=lambda entry: (entry[0], entry[1].casefold()))]
 
     def _cleanup_failed_startup(self):
         """Retire a failed construction/launch, draining workers before destruction."""
@@ -452,8 +450,6 @@ class MainWindow(pyside.Window):
         if not isValid(self.dlg):
             return
         current = self.tabs.currentWidget()
-        pages = registry.get_pages()
-        seen = set()
         entries = list(self._core_pages)
         # Once opened, Documents remains a destination even with zero tabs.
         # Feature refresh must not remove it based on attached document count.
@@ -463,22 +459,12 @@ class MainWindow(pyside.Window):
             entries.append((85, 'Workspace actions', self.actions))
         if self.bulk_rename is not None:
             entries.append((86, 'Bulk Rename', self.bulk_rename))
-        for registered in pages:
-            contribution = registered.contribution
-            if contribution.page_id in seen:
-                raise ValueError(f'Duplicate contributed page ID: {contribution.page_id}')
-            seen.add(contribution.page_id)
-            key = (registered.feature_name, contribution.page_id)
-            if key not in self._feature_pages:
-                self._feature_pages[key] = self._create_feature_page(contribution)
-                self._feature_pages[key].setProperty('navigation_icon', contribution.navigation_icon)
-            entries.append((contribution.order, contribution.name, self._feature_pages[key]))
+        entries.extend(self._feature_tab_entries(self._discover_feature_pages()))
         active_pages = {page for _, _, page in entries}
-        for (feature, page_id), page in self._feature_pages.items():
+        for page in self._feature_pages.values():
             if page not in active_pages and getattr(page, 'retain_when_disabled', False) and page.count:
                 entries.append((17, 'Notes Library', page))
-        ordered_tabs = [(name, page) for _, name, page in
-                        sorted(entries, key=lambda entry: (entry[0], entry[1].casefold()))]
+        ordered_tabs = self._ordered_tabs(entries)
         if skip_unchanged and ordered_tabs == [
                 (self.tabs.tabText(index), self.tabs.widget(index)) for index in range(self.tabs.count())]:
             return

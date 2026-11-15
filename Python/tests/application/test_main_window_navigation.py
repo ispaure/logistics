@@ -505,6 +505,34 @@ class MainWindowNavigationTests(MainWindowFixture, QtTestCase):
                          self.contribution('Two', 'same')])
         self.assertEqual(self.pages, [])
 
+    def test_duplicate_during_refresh_keeps_tabs_and_retains_constructed_page(self):
+        existing = self.contribution('Zebra', 'existing')
+        window = self.window([existing])
+        selected = window.tabs.widget(1)
+        window.tabs.setCurrentWidget(selected)
+        added = RegisteredContribution('other', 'Other', PageContribution(
+            'apple', 'added', self.page, order=50, navigation_icon='blender'))
+        duplicate_factory = Mock()
+        duplicate = RegisteredContribution('third', 'Third', PageContribution(
+            'Duplicate', 'added', duplicate_factory, order=51))
+
+        with patch.object(main_window.registry, 'get_pages', return_value=[existing, added, duplicate]):
+            with self.assertRaisesRegex(ValueError, 'Duplicate contributed page ID: added'):
+                window._sync_feature_pages()
+        duplicate_factory.assert_not_called()
+        page = window._feature_pages[('other', 'added')]
+        self.assertEqual(window.tabs.count(), 3)
+        self.assertEqual(window.tabs.indexOf(page), -1)
+        self.assertIs(window.tabs.currentWidget(), selected)
+
+        self._window_contributions = [existing, added]
+        window._sync_feature_pages()
+        self.assertEqual([window.tabs.tabText(index) for index in range(window.tabs.count())],
+                         ['Folders', 'apple', 'Zebra', 'Debug'])
+        self.assertIs(window.tabs.widget(1), page)
+        self.assertEqual(page.property('navigation_icon'), 'blender')
+        self.assertIs(window.tabs.currentWidget(), selected)
+
     def test_pages_without_refresh_and_empty_navigation_are_safe(self):
         window = self.window()
         plain_page = qt.QWidget(window.dlg)

@@ -13,7 +13,13 @@ errors. Start the index participant, apply theme/preferences, initialize enabled
 features, construct MainWindow and enter the event loop. The [registry](features.md)
 registers types before hooks and runs hard dependencies first.
 
-Validate page IDs before calling factories. Refresh a page when selected.
+`MainWindow` shares page ID validation, widget creation and tab ordering between
+startup and refresh. Startup validates the full roster before calling factories.
+Refresh checks IDs as it walks the roster and reuses widgets by feature and page
+ID. If a later contribution fails, earlier widgets remain owned and displayed
+tabs stay in place. Refresh keeps Documents once opened, Workspace actions while
+jobs exist, Bulk Rename once created and disabled Notes Library while it has open
+views. Refresh a page when selected.
 Resolve Workspaces declarations on the GUI thread, then discover providers and
 action availability in workers. Mount controls on the GUI thread only after
 checking the current selection and credential. Explicit refresh rereads sources.
