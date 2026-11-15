@@ -1,6 +1,5 @@
 """User-created documents publish into browsable local or encrypted folders."""
 
-from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.SMOKE
@@ -10,25 +9,17 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from mobile.app import LogisticsMobile
 from mobile.local_sources import device_files
+from mobile_build.tests.support.app import create_app
 from mobile_build.tests.support.localcrypt import CreationClient
 
 
 class DocumentCreationTests(unittest.TestCase):
     def setUp(self):
-        self.directory = TemporaryDirectory()
-        self.root = Path(self.directory.name)
-        LogisticsMobile.storage_root = self.root
-        self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+        directory = self.enterContext(TemporaryDirectory())
+        self.root = Path(directory)
+        self.app = create_app(self, root=self.root)
         self.app.show_home()
-
-    def tearDown(self):
-        self.app.main_window.close()
-        self.app.loop.run_until_complete(self.app.loop.shutdown_default_executor())
-        close_loop(self.app.loop)
-        LogisticsMobile.storage_root = None
-        self.directory.cleanup()
 
     def test_naming_form_replaces_type_alert_and_cancel_keeps_origin(self):
         origin = self.app.body
