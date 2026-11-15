@@ -7,15 +7,18 @@ class ApplePDF:
     def __init__(self, data):
         import ctypes
         from rubicon.objc import ObjCClass
+        from rubicon.objc.runtime import autoreleasepool
 
         self.framework = ctypes.CDLL(
             "/System/Library/Frameworks/PDFKit.framework/PDFKit"
         )
-        self.document = (
-            ObjCClass("PDFDocument")
-            .alloc()
-            .initWithData(ObjCClass("NSData").dataWithBytes(data, length=len(data)))
-        )
+        # Neighbor prefetch runs on a long-lived Python worker thread.
+        with autoreleasepool():
+            self.document = (
+                ObjCClass("PDFDocument")
+                .alloc()
+                .initWithData(ObjCClass("NSData").dataWithBytes(data, length=len(data)))
+            )
         if self.document is None or self.document.isLocked:
             raise ValueError(
                 "Cannot open PDF. It may be damaged or password protected."
@@ -37,13 +40,15 @@ class ApplePDF:
         import ctypes
         from rubicon.objc import CGSize
         from rubicon.objc.runtime import load_library
+        from rubicon.objc.runtime import autoreleasepool
         from rubicon.objc import objc_id, ObjCInstance
 
-        image = self.document.pageAtIndex(index).thumbnailOfSize(
-            CGSize(edge, edge), forBox=1
-        )
-        ui = load_library("UIKit")
-        ui.UIImagePNGRepresentation.restype = objc_id
-        ui.UIImagePNGRepresentation.argtypes = [objc_id]
-        data = ObjCInstance(ui.UIImagePNGRepresentation(image))
-        return ctypes.string_at(data.bytes, data.length)
+        with autoreleasepool():
+            image = self.document.pageAtIndex(index).thumbnailOfSize(
+                CGSize(edge, edge), forBox=1
+            )
+            ui = load_library("UIKit")
+            ui.UIImagePNGRepresentation.restype = objc_id
+            ui.UIImagePNGRepresentation.argtypes = [objc_id]
+            data = ObjCInstance(ui.UIImagePNGRepresentation(image))
+            return ctypes.string_at(data.bytes, data.length)

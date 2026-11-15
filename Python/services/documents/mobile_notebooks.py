@@ -120,7 +120,10 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
                 if binding and not binding.get('dirty'):
                     raise FileNotFoundError('The notebook moved or was deleted. Open it from its current folder.')
                 book = recovery.open(key) if key else Notebook.new(name or 'Untitled notebook')
-            document = NotebookDocument(book, resource=active_resource, recovery=recovery, key=key,
+            draft_key = key
+            if recovery is not None and draft_key is None and active_resource is not None:
+                draft_key = recovery.create(book, source_bytes=source_bytes)
+            document = NotebookDocument(book, resource=active_resource, recovery=recovery, key=draft_key,
                                          changed=remember_notebook_resource)
             document.dirty = bool(binding and binding.get('dirty'))
             document.source_unavailable = bool(binding and active_resource is None)

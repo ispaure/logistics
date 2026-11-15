@@ -45,11 +45,8 @@ class Editor:
         from features.pdf.document import PDFDocument
 
         data, index = key
-        pdf = PDFDocument(data, max_bytes=DESKTOP_MAX_ARCHIVE)
-        try:
-            return 'data:image/png;base64,' + b64encode(pdf.page(index)).decode('ascii')
-        finally:
-            pdf.close()
+        return 'data:image/png;base64,' + b64encode(
+            PDFDocument.render_page(data, index, max_bytes=DESKTOP_MAX_ARCHIVE)).decode('ascii')
 
     def cached_background(self, key):
         return self._backgrounds.get(key)
@@ -176,6 +173,11 @@ class Editor:
             self._pdf_links = (source, self._pdf_link_index.safe_page_links(source))
         return [dict(rect=link['rect'], index=targets[link['index']])
                 for link in self._pdf_links[1] if link['index'] in targets]
+
+    def prepare_pdf(self):
+        """Warm the current page's PDF metadata before mounting the canvas."""
+        self.pdf_data()
+        self.page_links()
 
     def page_height(self):
         bounds = self.pdf_bounds()

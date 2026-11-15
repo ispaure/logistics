@@ -46,11 +46,13 @@ class Repository:
                 continue
         return sorted(result, key=lambda row: row[1].casefold())
 
-    def create(self, notebook):
+    def create(self, notebook, *, source_bytes=None):
         key = uuid4().hex
         directory = self.root / key
         directory.mkdir()
-        atomic_write_bytes(directory / 'base.rmdoc', notebook.to_bytes())
+        # Callers opening a validated source already hold its exact ZIP bytes.
+        # Avoid recompressing a large PDF just to start its recovery draft.
+        atomic_write_bytes(directory / 'base.rmdoc', notebook.to_bytes() if source_bytes is None else source_bytes)
         # A new recovery identity has no previous manifest, even when its model
         # was copied from another saved notebook.
         self.save(key, notebook)

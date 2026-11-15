@@ -209,7 +209,7 @@ class NotebookPanel:
         if editor is None or self.closed or not self.app.active_host:
             return False
         if editor.notebook.content.get('fileType') == 'pdf':
-            await asyncio.to_thread(editor.pdf_data)
+            await asyncio.to_thread(editor.prepare_pdf)
             if (self.closed or not self.app.active_host or self.editor is not editor
                     or getattr(self, 'document', None) is not document
                     or getattr(document, 'resource', None) is not resource):

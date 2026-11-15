@@ -55,9 +55,28 @@ class PDFDocument:
         data = self.data
         if not data:
             raise ValueError('PDF is closed.')
-        backend = ApplePDF if sys.platform == 'ios' else AndroidPDF if sys.platform == 'android' or hasattr(sys, 'getandroidapilevel') else QtPDF
-        with backend(data) as document:
+        with self.backend(data) as document:
             yield document
+
+    @staticmethod
+    def backend(data):
+        if sys.platform == 'ios':
+            return ApplePDF(data)
+        if sys.platform == 'android' or hasattr(sys, 'getandroidapilevel'):
+            return AndroidPDF(data)
+        return QtPDF(data)
+
+    @classmethod
+    def render_page(cls, data, index, *, max_bytes=MAX_PDF):
+        """Open one native renderer for a self-contained page request."""
+        if not data or len(data) > max_bytes:
+            raise ValueError(f'PDF reading is limited to {max_bytes // (1024 * 1024)} MiB.')
+        with cls.backend(data) as document:
+            if not 1 <= document.count <= MAX_PAGES:
+                raise ValueError('PDF must contain between 1 and 10,000 pages.')
+            if not 0 <= index < document.count:
+                raise ValueError('Page does not exist.')
+            return document.render(index)
 
     def page(self, index):
         if not 0 <= index < self.count:

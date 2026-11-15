@@ -28,6 +28,21 @@ def linked_pdf(rotation=0):
 
 
 class PDFLinkTests(unittest.TestCase):
+    def test_notebook_background_uses_one_native_pdf_open(self):
+        from contextlib import nullcontext
+        from types import SimpleNamespace
+        from unittest.mock import Mock, patch
+        from features.notebooks.editor import Editor
+        from features.pdf.document import PDFDocument
+
+        render = Mock(return_value=b'synthetic raster')
+        data = linked_pdf()
+        with patch.object(PDFDocument, 'backend', return_value=nullcontext(
+                SimpleNamespace(count=3, render=render))) as open_renderer:
+            self.assertTrue(Editor.render_background((data, 2)).startswith('data:image/png;base64,'))
+        open_renderer.assert_called_once_with(data)
+        render.assert_called_once_with(2)
+
     def test_explicit_named_and_rotation(self):
         expected = {0: [.1,.1,.5,.3], 90: [.7,.1,.9,.5], 180: [.5,.7,.9,.9], 270: [.1,.5,.3,.9]}
         for rotation, rect in expected.items():

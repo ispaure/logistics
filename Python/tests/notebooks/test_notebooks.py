@@ -56,6 +56,19 @@ class NotebookTests(unittest.TestCase):
             self.assertEqual(reopened.members['opaque.bin'], members['opaque.bin'])
             self.assertLessEqual(len(reopened.to_bytes()), len(data))
 
+    def test_recovery_can_use_the_already_validated_source_archive(self):
+        book = Notebook.new('Recovery source fixture')
+        members = read_archive(book.to_bytes())
+        members['opaque.bin'] = b'synthetic preserved member'
+        data = archive(members)
+        opened = Notebook.read(data)
+        with TemporaryDirectory() as directory:
+            repository = Repository(directory)
+            with patch.object(opened, 'to_bytes', side_effect=AssertionError('source already encoded')):
+                key = repository.create(opened, source_bytes=data)
+            self.assertEqual((repository.root / key / 'base.rmdoc').read_bytes(), data)
+            self.assertEqual(repository.open(key).members['opaque.bin'], members['opaque.bin'])
+
     def test_move_template_recovers_without_valid_display_settings(self):
         from features.notebooks.templates import settings, background
         self.editor.apply(dict(op='template', name='Logistics Restaurant review', format='move', visible=True))
