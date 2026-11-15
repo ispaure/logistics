@@ -123,7 +123,7 @@ class PreferenceState:
                     store.save({key: str('text_editor' not in disabled).lower()})
         migration_ledger(store).run('notes-library-feature-v1', migrate)
 
-    def _save_feature_preferences(self, changes=None):
+    def save(self, changes=None):
         if self.layered:
             store = self.feature_settings_store()
             fields = ({('FeatureOverrides', name + '_bool'): None if enabled is None else str(enabled).lower()

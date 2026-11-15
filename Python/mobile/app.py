@@ -1,10 +1,9 @@
 """Mobile composition root, host navigation and aggregate lifecycle guards."""
 import asyncio
 from pathlib import Path
-import weakref
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN, ROW
+from toga.style.pack import COLUMN
 from .documents import DocumentStore
 from .preferences import Preferences
 from .reader_sessions import ReaderWorkspace
@@ -19,9 +18,6 @@ from services.workflow_host import OwnedAttribute
 from .composition.assembly import composed_workflow
 from .provider_ui import ProviderUI
 from .reader_lifecycle import ReaderLifecycle
-
-_active_hosts = weakref.WeakValueDictionary()
-
 
 from features.comics.mobile.collection.workflows import ComicBatchController
 from features.lm.mobile.controller import ChatController
@@ -183,48 +179,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             return
         from .startup import load_startup_models
         from .application_lifecycle import lifecycle
-        root = self.private_root
-        identity = str(root.resolve()) + ':' + getattr(self, 'window_id', 'primary')
-        own = lifecycle(self)
-        if own.replaced or own.startup_aborted or '_startup_claim' in self.__dict__:
-            raise asyncio.CancelledError
-        previous = _active_hosts.get(identity)
-        try:
-            if previous is not None and previous is not self:
-                predecessor = lifecycle(previous)
-                attempt = predecessor.replacement_attempt = object()
-                def valid():
-                    return (predecessor.replacement_attempt is attempt and _active_hosts.get(identity) is previous
-                            and not own.startup_aborted and not own.replaced)
-                readers = getattr(previous, 'readers', None)
-                if readers is not None:
-                    tasks = readers.flush_progress()
-                    if tasks:
-                        if any(task.get_loop() is not asyncio.get_running_loop() for task in tasks):
-                            raise OSError('Finish saving reading progress in the previous workspace.')
-                        await asyncio.wait(tasks)
-                    if not valid():
-                        raise asyncio.CancelledError
-                private = getattr(previous, 'private_sessions', None)
-                receipt = await private.prepare_replacement(valid=valid) if private is not None else None
-                if not valid():
-                    raise asyncio.CancelledError
-                if private is not getattr(previous, 'private_sessions', None):
-                    raise OSError('The private workspace changed during replacement.')
-                predecessor.retire_for_replacement(receipt, incoming=self, identity=identity, attempt=attempt)
-            else:
-                self.active_host = False
-                self._startup_claim = identity
-                _active_hosts[identity] = self
-            if _active_hosts.get(identity) is not self or own.replaced or own.startup_aborted:
-                raise asyncio.CancelledError
-            models = await asyncio.to_thread(load_startup_models, root, getattr(self, 'workspace_root', root))
-            if _active_hosts.get(identity) is not self or own.replaced or own.startup_aborted:
-                raise asyncio.CancelledError
-            self._startup_models = models
-        except BaseException:
-            own.abort_startup()
-            raise
+        self._startup_models = await lifecycle(self).prepare_startup_models(load_startup_models)
 
     def _start_background_cloud(self):
         from .startup import restore_cloud_in_background
@@ -284,33 +239,18 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         return lambda report: root
 
     def _prepare_startup_preferences(self, root):
-        host_identity = str(root.resolve()) + ':' + getattr(self, 'window_id', 'primary')
         from .application_lifecycle import lifecycle
-        own = lifecycle(self)
-        if own.replaced or own.startup_aborted:
-            raise asyncio.CancelledError
-        if getattr(self, '_async_startup', False):
-            if self.__dict__.get('_startup_claim') != host_identity or _active_hosts.get(host_identity) is not self:
-                raise asyncio.CancelledError
-        else:
-            previous_host = _active_hosts.get(host_identity)
-            if previous_host is not None and previous_host is not self:
-                predecessor = lifecycle(previous_host)
-                attempt = predecessor.replacement_attempt = object()
-                predecessor.retire_for_replacement(incoming=self, identity=host_identity, attempt=attempt)
-            else:
-                self.active_host = False
-                self._startup_claim = host_identity
-                _active_hosts[host_identity] = self
-        if _active_hosts.get(host_identity) is not self or own.replaced or own.startup_aborted:
-            raise asyncio.CancelledError
+        owner = lifecycle(self)
+        identity = owner.startup_identity()
+        if not getattr(self, '_async_startup', False):
+            owner.claim_startup_sync(identity)
+        owner.require_startup_claim(identity)
         self.active_host = True
         self.navigation_generation = 0
         workspace_root = getattr(self, 'workspace_root', root)
         models = self.__dict__.pop('_startup_models', None)
         preferences = models['preferences'] if models is not None else Preferences(workspace_root)
-        if _active_hosts.get(host_identity) is not self or own.replaced or own.startup_aborted:
-            raise asyncio.CancelledError
+        owner.require_startup_claim(identity)
         self.preferences = preferences
         from .palette import set_accent
         set_accent(self.preferences.values['accent_hue'], self.preferences.values['accent_saturation'])
@@ -383,29 +323,29 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
     def _restore_startup_documents(self, restored_document):
         self.refresh_documents()
         self.loading = False
+        active = self.workspace.sessions.get(self.workspace.active)
         if self.preferences.values['clear_unmodified_documents_on_restart'] == 'true':
-            active = self.workspace.sessions.get(self.workspace.active)
-            if active is not None and active.provider == 'managed-text':
-                if getattr(self, '_async_startup', False):
-                    self._pending_managed_restore = active.resource
-                else:
-                    self.open_document(active.resource)
+            if active is None or active.provider != 'managed-text':
+                return
+            key = active.resource
         elif self.labels and (restored_document is None or restored_document.provider == 'managed-text'):
             key = self.preferences.values['last_document']
-            active = self.workspace.sessions.get(self.workspace.active)
             if active is not None and active.provider == 'managed-text':
                 key = active.resource
             if self.preferences.values['restore_last_document'] != 'true' or key not in self.labels.values():
                 key = next(iter(self.labels.values()))
-            if getattr(self, '_async_startup', False):
-                self._pending_managed_restore = key
-            else:
-                self.open_document(key)
+        else:
+            return
+
+        if getattr(self, '_async_startup', False):
+            self._pending_managed_restore = key
+        else:
+            self.open_document(key)
 
     def _prepare_startup_workspace(self):
         if not getattr(self, '_async_startup', False):
             self.show_documents_hub()
-            self.show_folder_picker(initialize=False)
+            self.folder_controller().show_folder_picker(initialize=False)
         self.show_home()
         self.save_workspace(capture=False)
 
@@ -504,7 +444,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
                 self.routes.trim(origin, transfer)
                 self.routes.render(origin)
         if destination != 'files':
-            self.retire_private_comic_batch()
+            self.comic_batch_controller().retire_private_comic_batch()
         self.mark_navigation()
         self.save_workspace()
         adaptive = getattr(self, 'adaptive', None)
@@ -517,12 +457,14 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
                 self.pending_reader_restore = None
                 self.show_documents_hub()
                 return True
-            cancel = getattr(self, '_cancel_transfer_review', None)
+            cancel = getattr(self.transfer_controller(), '_cancel_transfer_review', None)
             if destination == 'files' and cancel is not None:
                 cancel()
-            if (destination == 'chat' and getattr(self, 'chat_drawer_open', False)
-                    and adaptive is not None and adaptive.width() < 640):
-                self.toggle_chat_conversations()
+            if destination == 'chat':
+                chat = self.chat_controller()
+                if (getattr(chat, 'chat_drawer_open', False)
+                        and adaptive is not None and adaptive.width() < 640):
+                    chat.toggle_chat_conversations()
             if destination == 'settings' and hasattr(self, 'settings_navigation'):
                 self.settings_navigation.detail_requested = False
                 for child in list(self.settings_navigation.detail.children):
@@ -530,13 +472,13 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             self.routes.trim(destination, 0)
             self.routes.render(destination)
         if destination == 'chat' and not self.routes.screens['chat']:
-            self.show_chat(present=False)
+            self.chat_controller().show_chat(present=False)
         if destination == 'settings':
             if not hasattr(self, 'settings_navigation'):
                 self.show_settings(present=False)
             else:
                 self.settings_navigation.reflow()
-        self.refresh_hub(destination)
+        self.hub_controller().refresh_hub(destination)
         if (destination == 'documents' and adaptive is not None and adaptive.split is not None
                 and adaptive.in_detail and adaptive.detail_routes):
             self.body = adaptive.detail_routes[-1][1]
@@ -563,13 +505,16 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         from .reading.epub_resume import resume_visible_epub
         self.loop.call_soon(resume_visible_epub, self)
 
-    def mark_navigation(self):
+    def _flush_reader_progress(self):
         private = getattr(self, 'private_sessions', None)
         if private is not None:
             private.flush_visible_progress()
         readers = getattr(self, 'readers', None)
         if readers is not None:
             readers.flush_progress()
+
+    def mark_navigation(self):
+        self._flush_reader_progress()
         from .markdown_speech import stop_markdown_speech
         stop_markdown_speech(self)
         self.navigation_generation += 1
@@ -587,9 +532,10 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         sync_browser_population(self, body)
         if self.native_host.state.destination == 'settings' and hasattr(self, 'settings_navigation'):
             self.settings_navigation.reflow()
-        batch = getattr(self, 'private_comic_batch', None)
+        comics = self.comic_batch_controller()
+        batch = getattr(comics, 'private_comic_batch', None)
         if batch is not None and batch.view is not None and batch.view not in body.children:
-            self.retire_private_comic_batch()
+            comics.retire_private_comic_batch()
         # UIKit Back/swipe callbacks also need to restore the retained toolbar.
         self.loop.call_soon(self.adaptive.render)
         private = getattr(self, 'private_sessions', None)
@@ -661,7 +607,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         target = destination or self.native_host.state.destination
         if target == 'settings' and not root and not hasattr(self, 'settings_navigation'):
             self.show_settings(present=False)
-        self.retire_private_comic_batch(view=view)
+        self.comic_batch_controller().retire_private_comic_batch(view=view)
         privacy = getattr(self, 'screen_privacy', None)
         if privacy is not None:
             privacy.refresh()
@@ -709,10 +655,10 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         return True
 
     def show_home(self, widget=None, **kwargs):
-        self.show_view(self.build_home(), destination='home', root=True)
+        self.show_view(self.hub_controller().build_home(), destination='home', root=True)
 
     def show_locations(self, widget=None, **kwargs):
-        self.show_folder_picker()
+        self.folder_controller().show_folder_picker()
 
     async def show_local_location(self, widget=None, **kwargs):
         return await self.show_files()
@@ -723,13 +669,14 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         self.show_locations()
 
     def show_documents_hub(self, widget=None, *, collection=None, **kwargs):
+        if collection is not None and not self.checkpoint():
+            return False
+        hub = self.hub_controller()
         if collection is not None:
-            if not self.checkpoint():
-                return False
-            self.documents_query = ''
-            self.documents_search_open = False
-            self.documents_view = collection
-        return self.show_view(self.build_documents_hub(), checkpoint=collection is None,
+            hub.documents_query = ''
+            hub.documents_search_open = False
+            hub.documents_view = collection
+        return self.show_view(hub.build_documents_hub(), checkpoint=collection is None,
                               destination='documents', root=True)
 
     def stored_document_opener(self, resource):
@@ -915,7 +862,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         # Presenting a new root route would discard the editor's navigation.
         self.refresh_documents()
         root = self.routes.roots['documents']
-        view = self.build_documents_hub()
+        view = self.hub_controller().build_documents_hub()
         view = self.adaptive.prepare(view, 'documents', root=True)
         for child in list(root.children):
             root.remove(child)
@@ -991,7 +938,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         from .appearance import configure_android_eink
         configure_android_eink(self)
         self.refresh_native_theme()
-        self.refresh_folder_visibility()
+        self.folder_controller().refresh_folder_visibility()
         from .font_scaling import refresh
         refresh(self)
         self.refresh_document_overview()
@@ -1001,19 +948,15 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         picker = getattr(self, '_editor_picker', None)
         if picker is not None and picker.moving():
             return False
-        private = getattr(self, 'private_sessions', None)
-        if private is not None:
-            private.flush_visible_progress()
-        readers = getattr(self, 'readers', None)
-        if readers is not None:
-            readers.flush_progress()
+        self._flush_reader_progress()
         if getattr(self, '_startup_in_progress', False) and not hasattr(self, 'current'):
             return True
         if getattr(self, '_reset_scheduled', False):
             return True
         if not self.active_host:
             return False
-        if hasattr(self, 'chat_current') and not self.checkpoint_chat():
+        chat = self.chat_controller()
+        if hasattr(chat, 'chat_current') and not chat.checkpoint_chat():
             return False
         try:
             self.store.flush_checkpoints()
@@ -1131,8 +1074,10 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         return for_app(self)
 
     async def open_crypt(self, widget=None, *, copies=None, key=None, prepared=None, destination=None, privacy_gate=None, edit=False, **kwargs):
-        copies = copies or self.crypt_copies
-        key = key if key is not None else self.crypt_labels.get(self.crypt_selector.value)
+        copies = copies or self.cloud_controller().crypt_copies
+        if key is None:
+            cloud = self.cloud_controller()
+            key = cloud.crypt_labels.get(cloud.crypt_selector.value)
         if key is None:
             return False
         from .document_sources import opening_status, opening_ready
@@ -1187,7 +1132,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
 
     def request_provider_close(self, owner):
         async def save():
-            if owner.session.id not in self.workspace.sessions or self.cloud_busy:
+            if owner.session.id not in self.workspace.sessions or self.cloud_controller().cloud_busy:
                 return
             if owner.crypt_metadata_fields:
                 await owner.save_crypt_metadata()

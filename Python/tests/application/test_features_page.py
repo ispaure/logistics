@@ -39,9 +39,13 @@ class FeaturesPageTests(QtTestCase):
         self.store = register_settings(defaults, Path(temporary.name) / 'personal.ini')
         store_patch = patch.object(registry, 'feature_settings_store', return_value=self.store)
         store_patch.start(); self.addCleanup(store_patch.stop)
-        for target, value in [('_disabled_features', set()), ('_initialized_features', set()),
-                              ('_layered_preferences', True), ('_preferences_path', None)]:
-            patcher = patch.object(registry, target, value)
+        for owner, attribute, value in (
+            (registry.preferences, 'disabled', set()),
+            (registry.preferences, 'layered', True),
+            (registry.preferences, 'path', None),
+            (registry.activation, 'initialized', set()),
+        ):
+            patcher = patch.object(owner, attribute, value)
             patcher.start()
             self.addCleanup(patcher.stop)
         self.feature_patch = patch.object(registry, 'load_features', return_value=[self.base, self.child, self.missing])

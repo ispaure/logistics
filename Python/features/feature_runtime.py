@@ -5,10 +5,8 @@ Feature discovery, dependency handling, initialization, and contribution aggrega
 import json
 import weakref
 from dataclasses import dataclass
-from collections.abc import Callable
 from pathlib import Path
 from types import ModuleType
-from typing import TypeVar
 
 from commonUtils.runtime.diagnostics import Severity, log
 from commonUtils.ui.features import Feature as CommonFeature
@@ -16,7 +14,6 @@ from features.contributions import (
     BrowserExtensionContribution,
     DebugActionContribution,
     DocumentLauncherContribution,
-    FeatureContributions,
     FolderFeatureContribution,
     LocalFolderSourceContribution,
     PageContribution,
@@ -28,12 +25,11 @@ from features.contributions import (
 )
 
 
-from .runtime.preferences import PreferenceState
+from .discovery import get_feature_names as discover_feature_names, load_named_features
+from .runtime import dependencies
 from .runtime.activation import FeatureActivation
 from .runtime.catalog import ContributionCatalog
-from .discovery import get_feature_names as discover_feature_names, load_named_features
-
-T = TypeVar('T')
+from .runtime.preferences import PreferenceState
 
 
 @dataclass(frozen=True)
@@ -71,54 +67,6 @@ class FeatureRegistry:
         """Physical application feature root used for discovery and owned guides."""
         return Path(self._features_path())
 
-    @property
-    def _disabled_features(self):
-        return self.preferences.disabled
-
-    @_disabled_features.setter
-    def _disabled_features(self, value):
-        self.preferences.disabled = value
-
-    @_disabled_features.deleter
-    def _disabled_features(self):
-        del self.preferences.disabled
-
-    @property
-    def _preferences_path(self):
-        return self.preferences.path
-
-    @_preferences_path.setter
-    def _preferences_path(self, value):
-        self.preferences.path = value
-
-    @_preferences_path.deleter
-    def _preferences_path(self):
-        del self.preferences.path
-
-    @property
-    def _layered_preferences(self):
-        return self.preferences.layered
-
-    @_layered_preferences.setter
-    def _layered_preferences(self, value):
-        self.preferences.layered = value
-
-    @_layered_preferences.deleter
-    def _layered_preferences(self):
-        del self.preferences.layered
-
-    @property
-    def _initialized_features(self):
-        return self.activation.initialized
-
-    @_initialized_features.setter
-    def _initialized_features(self, value):
-        self.activation.initialized = value
-
-    @_initialized_features.deleter
-    def _initialized_features(self):
-        del self.activation.initialized
-
     def feature_settings_store(self):
         if self._settings_provider is not None:
             return self._settings_provider()
@@ -130,70 +78,40 @@ class FeatureRegistry:
 
     def set_feature_default(self, name, enabled):
         feature_map = self._get_feature_map()
-        if name not in feature_map:
-            raise ValueError(f'Unknown feature: {name}')
-        leaders, groups = self._feature_groups(feature_map)
-        members = groups[leaders[name]]
+        members = self._group_members(name, feature_map)
         disabled = self.default_disabled_features()
         if enabled:
-            required = set()
-            def visit(current):
-                if current in required:
-                    return
-                required.add(current)
-                for dependency in self.get_feature_dependencies(feature_map[current]):
-                    visit(dependency)
-            for member in members:
-                visit(member)
-            disabled.difference_update(required)
+            disabled.difference_update(self._required_features(members, feature_map))
         else:
-            dependents = [other for other, module in feature_map.items() if other not in members
-                          and other not in disabled and any(member in self.get_feature_dependencies(module) for member in members)]
+            dependents = self._dependent_features(members, feature_map, feature_map.keys() - disabled)
             if dependents:
                 raise ValueError('Disable these default dependent features first: ' + ', '.join(dependents))
             disabled.update(members)
-        self.feature_settings_store().save({('FeatureDefaults', 'disabled_list-str'): json.dumps(sorted(disabled))}, scope='application')
+        self.feature_settings_store().save(
+            {('FeatureDefaults', 'disabled_list-str'): json.dumps(sorted(disabled))},
+            scope='application',
+        )
         self._notify_changed()
 
     def load_feature_preferences(self, path=None):
-        return self.preferences.load_feature_preferences(path)
+        self.preferences.load_feature_preferences(path)
 
     def feature_overrides(self):
         return self.preferences.feature_overrides()
 
-    def _effective_disabled_features(self, store):
-        return self.preferences._effective_disabled_features(store)
-
-    def _migrate_feature_overrides(self, store):
-        return self.preferences._migrate_feature_overrides(store)
-
-    def _save_feature_preferences(self, changes=None):
-        return self.preferences._save_feature_preferences(changes)
-
     def reset_feature_defaults(self):
         """Remove personal choices and restore software defaults atomically."""
-        before = set(self._disabled_features)
         feature_map = self._get_feature_map()
-        from commonUtils.formats.registry import file_types
-        def activate(name, enabled):
-            definition = self.get_feature_definition(feature_map[name])
-            if definition is not None:
-                definition.set_enabled(enabled)
-            else:
-                file_types.set_owner_enabled(name, enabled)
+        before = self.preferences.disabled.copy()
+        defaults = self.default_disabled_features() if self.preferences.layered else set()
         try:
-            self._disabled_features.clear()
-            if self._layered_preferences:
-                self._disabled_features.update(self.default_disabled_features())
-            for name in feature_map:
-                activate(name, name not in self._disabled_features and self._is_feature_available(name, feature_map))
-            self.initialize_features()
-            self._save_feature_preferences()
+            self.preferences.disabled.clear()
+            self.preferences.disabled.update(defaults)
+            self._sync_registrations(feature_map)
+            self._initialize_discovered_features(feature_map)
+            self.preferences.save()
         except Exception:
-            self._disabled_features.clear()
-            self._disabled_features.update(before)
-            for name in feature_map:
-                activate(name, name not in before and self._is_feature_available(name, feature_map))
+            self._restore_feature_selection(before, feature_map)
             raise
         self._notify_changed()
 
@@ -287,10 +205,8 @@ class FeatureRegistry:
 
         return feature_map
 
-    def _is_feature_available(self, feature_name: str, feature_map: dict[str, ModuleType],
-                              resolving: tuple[str, ...] = ()) -> bool:
-        from .runtime.dependencies import available
-        return available(feature_name, feature_map, self.get_feature_dependencies, resolving)
+    def _is_feature_available(self, feature_name, feature_map):
+        return dependencies.is_available(feature_name, feature_map, self.get_feature_dependencies)
 
     def is_feature_available(self, feature_name: str) -> bool:
         """
@@ -315,11 +231,8 @@ class FeatureRegistry:
             if self._is_feature_available(self._get_feature_name(feature), feature_map)
         ]
 
-    def _log_unavailable_features(self) -> None:
+    def _log_unavailable_features(self, feature_map) -> None:
         """Log features skipped because one or more hard dependencies are unavailable."""
-
-        feature_map = self._get_feature_map()
-
         for feature_name, feature in feature_map.items():
             if self._is_feature_available(feature_name, feature_map):
                 continue
@@ -338,13 +251,16 @@ class FeatureRegistry:
             )
 
     def _get_initialization_order(self, features: list[ModuleType]) -> list[ModuleType]:
-        from .runtime.dependencies import initialization_order
-        return initialization_order(features, self._get_feature_name, self.get_feature_dependencies)
+        return dependencies.initialization_order(features, self._get_feature_name, self.get_feature_dependencies)
 
     def initialize_features(self) -> list[ModuleType]:
         """Register enabled types before initializing dependencies, once per session."""
-        self._log_unavailable_features()
-        features = self._get_initialization_order(self.get_enabled_features())
+        return self._initialize_discovered_features(self._get_feature_map())
+
+    def _initialize_discovered_features(self, feature_map):
+        self._log_unavailable_features(feature_map)
+        available = self._get_available_features(feature_map)
+        features = self._get_initialization_order(self._get_enabled_features(available))
         self._activate_features(features)
         return features
 
@@ -358,7 +274,7 @@ class FeatureRegistry:
     def _get_enabled_features(self, available):
         """Filter one available roster by preferences and enabled dependencies."""
         feature_map = {self._get_feature_name(feature): feature for feature in available}
-        enabled = set(feature_map) - self._disabled_features
+        enabled = set(feature_map) - self.preferences.disabled
         # Remove consumers of disabled dependencies, including transitive consumers.
         while True:
             filtered = {name for name in enabled if all(dep in enabled for dep in
@@ -395,9 +311,9 @@ class FeatureRegistry:
             dependencies = tuple(dict.fromkeys(leaders.get(dependency, dependency)
                 for member in members for dependency in self.get_feature_dependencies(feature_map[member])
                 if dependency not in members))
-            dependents = tuple(dict.fromkeys(leaders[other] for other, module in feature_map.items()
-                if other in enabled and other not in members
-                and any(member in self.get_feature_dependencies(module) for member in members)))
+            dependents = tuple(dict.fromkeys(
+                leaders[other] for other in self._dependent_features(members, feature_map, enabled)
+            ))
             states.append(FeatureState(name, self._get_feature_label(feature_map[name]),
                 all(self._is_feature_available(member, feature_map) for member in members),
                 all(member in enabled for member in members), dependencies, dependents, tuple(members),
@@ -427,87 +343,100 @@ class FeatureRegistry:
 
     def set_feature_enabled(self, name, enabled):
         """Persist an explicit choice, even when it matches the software default."""
-        self._set_feature_enabled(name, enabled)
-
-    def _set_feature_enabled(self, name, enabled, *, _inherit=False):
-        """Enable dependencies and refuse disabling required features."""
         feature_map = self._get_feature_map()
-        if name not in feature_map:
-            raise ValueError(f'Unknown feature: {name}')
-        leaders, groups = self._feature_groups(feature_map)
-        members = groups[leaders[name]]
-        if not self._layered_preferences and all(self.is_feature_enabled(member) == enabled for member in members):
+        members = self._group_members(name, feature_map)
+        self._apply_feature_choice(name, enabled, feature_map, members)
+
+    def _apply_feature_choice(self, name, enabled, feature_map, members, *, defaults=None):
+        inherit = defaults is not None
+        available = self._get_available_features(feature_map)
+        available_names = {self._get_feature_name(feature) for feature in available}
+        enabled_names = {self._get_feature_name(feature) for feature in self._get_enabled_features(available)}
+        if not self.preferences.layered and all((member in enabled_names) == enabled for member in members):
             return
-        from commonUtils.formats.registry import file_types
-        before = set(self._disabled_features)
-        changes = {member: None if _inherit else enabled for member in members}
-        def activate(current, value):
-            definition = self.get_feature_definition(feature_map[current])
-            if definition is not None:
-                definition.set_enabled(value)
-            else:
-                file_types.set_owner_enabled(current, value)
-        if enabled and not (_inherit and not all(self._is_feature_available(member, feature_map) for member in members)):
-            if not all(self._is_feature_available(member, feature_map) for member in members):
+
+        before = self.preferences.disabled.copy()
+        changes = dict.fromkeys(members, None if inherit else enabled)
+        next_disabled = before.copy()
+        activation_plan = []
+        available_group = all(member in available_names for member in members)
+        if enabled and not (inherit and not available_group):
+            if not available_group:
                 raise ValueError(f'{name} has missing required dependencies')
-            required = set()
-            def visit(current):
-                if current in required:
-                    return
-                required.add(current)
-                for dependency in self.get_feature_dependencies(feature_map[current]):
-                    visit(dependency)
-            for member in members:
-                visit(member)
-            plan = self._get_initialization_order([feature_map[item] for item in feature_map if item in required])
-            self._disabled_features.difference_update(required)
+            required = self._required_features(members, feature_map)
+            activation_plan = self._get_initialization_order(
+                [feature for item, feature in feature_map.items() if item in required])
+            next_disabled.difference_update(required)
             changes.update({item: True for item in required & before if item not in members})
-            for item in required:
-                activate(item, True)
-            try:
-                self._activate_features(plan)
-            except Exception:
-                self._disabled_features.clear()
-                self._disabled_features.update(before)
-                for item in required:
-                    activate(item, item not in before)
-                raise
+            affected = required
         else:
-            dependents = list(dict.fromkeys(self._get_feature_label(feature_map[leaders[other]])
-                for other, module in feature_map.items() if other not in members and self.is_feature_enabled(other)
-                and any(member in self.get_feature_dependencies(module) for member in members)))
+            dependents = self._dependent_features(members, feature_map, enabled_names)
             if dependents:
-                raise ValueError(f'Disable these dependent features first: {", ".join(dependents)}')
-            for member in members:
-                if _inherit and member not in self.default_disabled_features():
-                    self._disabled_features.discard(member)
-                else:
-                    self._disabled_features.add(member)
-                activate(member, member not in self._disabled_features and self._is_feature_available(member, feature_map))
+                leaders, _ = self._feature_groups(feature_map)
+                labels = dict.fromkeys(self._get_feature_label(feature_map[leaders[item]]) for item in dependents)
+                raise ValueError(f'Disable these dependent features first: {", ".join(labels)}')
+            next_disabled.update(members)
+            if inherit:
+                next_disabled.difference_update(set(members) - defaults)
+            affected = members
+
         try:
-            if _inherit:
-                self.initialize_features()
-            self._save_feature_preferences(changes)
+            self.preferences.disabled.clear()
+            self.preferences.disabled.update(next_disabled)
+            for item in affected:
+                self._set_registration_enabled(item, feature_map[item],
+                                               item not in next_disabled and item in available_names)
+            if activation_plan:
+                self._activate_features(activation_plan)
+            if inherit:
+                self._initialize_discovered_features(feature_map)
+            self.preferences.save(changes)
         except Exception:
-            self._disabled_features.clear()
-            self._disabled_features.update(before)
-            for current in feature_map:
-                activate(current, current not in before and self._is_feature_available(current, feature_map))
+            self._restore_feature_selection(before, feature_map)
             raise
         self._notify_changed()
 
     def reset_feature_override(self, name):
         """Remove this visible feature's explicit choices; keep other overrides."""
         feature_map = self._get_feature_map()
+        members = self._group_members(name, feature_map)
+        defaults = self.default_disabled_features()
+        enabled = all(member not in defaults for member in members)
+        self._apply_feature_choice(name, enabled, feature_map, members, defaults=defaults)
+
+    def _group_members(self, name, feature_map):
         if name not in feature_map:
             raise ValueError(f'Unknown feature: {name}')
         leaders, groups = self._feature_groups(feature_map)
-        members = groups[leaders[name]]
-        defaults = self.default_disabled_features()
-        self._set_feature_enabled(name, all(member not in defaults for member in members), _inherit=True)
+        return groups[leaders[name]]
 
-    def _get_startup_hooks(self, features, name):
-        return self.activation.hooks(features, self.get_feature_definition, name)
+    def _required_features(self, members, feature_map):
+        return dependencies.required_names(members, feature_map, self.get_feature_dependencies)
+
+    def _dependent_features(self, members, feature_map, candidates):
+        return [
+            name for name, feature in feature_map.items()
+            if name in candidates and name not in members
+            and any(dependency in members for dependency in self.get_feature_dependencies(feature))
+        ]
+
+    def _set_registration_enabled(self, name, feature, enabled):
+        definition = self.get_feature_definition(feature)
+        if definition is not None:
+            definition.set_enabled(enabled)
+        else:
+            from commonUtils.formats.registry import file_types
+            file_types.set_owner_enabled(name, enabled)
+
+    def _sync_registrations(self, feature_map):
+        for name, feature in feature_map.items():
+            enabled = name not in self.preferences.disabled and self._is_feature_available(name, feature_map)
+            self._set_registration_enabled(name, feature, enabled)
+
+    def _restore_feature_selection(self, disabled, feature_map):
+        self.preferences.disabled.clear()
+        self.preferences.disabled.update(disabled)
+        self._sync_registrations(feature_map)
 
     def get_feature_contributions(self):
         return self.catalog.get(self.get_enabled_features(), self.get_feature_definition)

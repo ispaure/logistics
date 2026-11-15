@@ -33,6 +33,7 @@
     "composition/__init__.py",
     "composition/assembly.py",
     "composition/locations.py",
+    "composition/notes.py",
     "composition/presentation.py",
     "control_icons.py",
     "creation_layout.py",

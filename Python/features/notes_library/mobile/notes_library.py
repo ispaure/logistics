@@ -73,35 +73,11 @@ class NotesHost:
     playlist_speech: Callable = None
 
 
-from .library_panels import ENTRY_ICON_SIZE, FILENAME_SIZE, PATH_SIZE, TAB_SIZE, LibraryPanels
+from .library_panels import FILENAME_SIZE, PATH_SIZE, TAB_SIZE, LibraryPanels
 from .library_opening import LibraryDocuments
-
-
-def underline_folder_link(button):
-    """Underline the native title without changing its filename or hit target."""
-    button.notes_folder_link = True
-    backend = type(button._impl).__module__
-    if backend.startswith('toga_iOS.'):
-        from rubicon.objc import ObjCClass
-        native = button._impl.native
-        title = ObjCClass('NSAttributedString').alloc().initWithString(button.text,
-            attributes={'NSUnderline': 1, 'NSFont': native.titleLabel.font,
-                        'NSColor': native.titleColorForState(0)})
-        native.setAttributedTitle(title, forState=0)
-    elif backend.startswith('toga_android.'):
-        native = button._impl.native
-        native.setPaintFlags(native.getPaintFlags() | 8)  # UNDERLINE_TEXT_FLAG
-    return button
-
-
-def compact_file_row_padding(button):
-    """Reduce native horizontal gutters as well as the row's layout slots."""
-    inset = 0 if getattr(button, 'control_icon', None) else 2
-    button._impl._content_inset = button._impl._content_trailing_inset = inset
-    if type(button._impl).__module__.startswith('toga_android.'):
-        native = button._impl.native
-        padding = button._impl.scale_in(2)
-        native.setPaddingRelative(padding, native.getPaddingTop(), padding, native.getPaddingBottom())
+from .library_tree import (
+    batched_tree_updates, run_tree_updates, underline_folder_link, update_tree_rows,
+)
 
 
 class VaultBrowser(LibraryPanels):
@@ -716,9 +692,7 @@ class VaultBrowser(LibraryPanels):
                 and search_terms(self.search.value or '')):
             self.select_panel_tab('Search')
             return
-        tree_task = getattr(self, 'tree_task', None)
-        if tree_task is not None and not tree_task.done():
-            tree_task.cancel()
+        self.cancel_tree_render()
         self.search_generation += 1
         self.search_query = None
         if self.search_task is not None:
@@ -860,239 +834,28 @@ class VaultBrowser(LibraryPanels):
     def render_tree(self, *, reveal=None, preserve_viewport=False):
         if not self.valid():
             return
-        task = getattr(self, 'tree_task', None)
-        if task is not None and not task.done():
-            task.cancel()
+        self.cancel_tree_render()
         if getattr(self, 'panel_tab', 'Files') not in ('Files', 'Search'):
             return
         from commonUtils.ui.native.text_size import native_backend
         row_updates = self.tree_updates(reveal=reveal, preserve_viewport=preserve_viewport)
-        def batched_updates():
-            try:
-                while True:
-                    # Native controls acquire several provisional styles during
-                    # construction. Paint each control's final style once.
-                    with self.host.batch_rows():
-                        try:
-                            next(row_updates)
-                        except StopIteration:
-                            return
-                    yield
-            finally:
-                row_updates.close()
-        updates = batched_updates()
+        updates = batched_tree_updates(row_updates, self.host.batch_rows)
         if getattr(self.rows, 'recycled', False) or native_backend(self.rows).startswith('toga_dummy.'):
             for _ in updates:
                 pass
             return
-        async def render():
-            deadline, count = monotonic() + .008, 0
-            try:
-                for _ in updates:
-                    if not self.valid():
-                        break
-                    count += 1
-                    # Keep expensive native rows cooperative without imposing a
-                    # timer round trip on every cached row or cleanup step.
-                    if count >= 8 or monotonic() >= deadline:
-                        await asyncio.sleep(.001)
-                        deadline, count = monotonic() + .008, 0
-            finally:
-                updates.close()
-        self.tree_task = self.host.loop.create_task(render())
+        self.tree_task = self.host.loop.create_task(
+            run_tree_updates(updates, valid=self.valid, clock=monotonic)
+        )
+
+    def cancel_tree_render(self):
+        task = getattr(self, 'tree_task', None)
+        if task is not None and not task.done():
+            task.cancel()
 
     def tree_updates(self, *, reveal=None, preserve_viewport=False):
-        if not self.valid():
-            return
-        old_rows = dict(getattr(self, '_row_cache', {}))
-        self._row_cache = dict(old_rows)
-        new_rows, desired = {}, []
-        flattened = []
-
-        searching = getattr(self, 'panel_tab', 'Files') == 'Search'
-
-        def add(folder, depth=0):
-            for entry in self.folders.get(folder, ()):
-                if not self.host.folder_visible(
-                    entry["path"], directory=entry["directory"]
-                ):
-                    continue
-                flattened.append((entry, depth))
-                if entry["directory"] and entry["path"] in self.expanded:
-                    add(entry["path"], depth + 1)
-
-        if searching:
-            flattened = [(entry, 0) for entry in self.search_rows
-                         if self.host.folder_visible(entry["path"], directory=entry["directory"])]
-        else:
-            add(self.root)
-        reveal_index = next((index for index, (entry, _) in enumerate(flattened)
-                             if entry['path'] == reveal), None) if reveal is not None else None
-        def landing_page(entry):
-            if not entry['directory']:
-                return None
-            return entry.get('page') if searching else self.folder_pages.get(entry['path'])
-
-        counts = Counter(PurePosixPath(entry['path']).name.casefold() for entry, _ in flattened) if searching else {}
-        def row_label(entry):
-            path = entry['path']
-            label = PurePosixPath(path).name if searching else entry['name']
-            if counts.get(label.casefold(), 0) > 1:
-                parent = posixpath.dirname(posixpath.relpath(path, self.root or "."))
-                label += " · " + (parent or "Library root")
-            return label
-
-        message = ('Search file names or document contents.' if searching and not search_terms(self.search.value or '') else
-            self.search_status if searching and self.search_status else
-            'No matching notes or folders.' if searching and not flattened else
-            'No documents in this folder.' if not flattened else '')
-        if getattr(self.rows, 'recycled', False):
-            records = [dict(title=row_label(entry), subtitle='', folder=entry['directory'], icon=None,
-                path=entry['path'], page=landing_page(entry),
-                searching=searching, tree_depth=depth,
-                tree_expanded=(entry['path'] in self.expanded) if entry['directory'] and not searching else None,
-                tree_landing=landing_page(entry) is not None)
-                for entry, depth in flattened]
-            self.rows.message(message)
-            position = self.search_position() if preserve_viewport else None
-            self.rows.add(*records)
-            if reveal_index is not None:
-                self.rows.native_list.scroll_to_row(reveal_index)
-            elif position is not None:
-                self.restore_search_position(position)
-            self.sidebar.refresh_gestures()
-            yield
-            return
-        if reveal_index is not None:
-            self.shown = max(self.shown, reveal_index + 1)
-        for entry, depth in flattened[: self.shown]:
-            path, directory = entry["path"], entry["directory"]
-            page = landing_page(entry)
-
-            async def choose(widget=None, path=path, directory=directory, page=page, **kwargs):
-                if page is not None:
-                    await self.open_selected_note(page, row_path=path)
-                elif searching and directory:
-                    await self.reveal_folder(path)
-                elif directory:
-                    await self.toggle_folder(path)
-                else:
-                    await self.open_selected_note(path)
-
-            label = row_label(entry)
-            key = (searching, path, directory, page, depth, label, path in self.expanded)
-            row = old_rows.get(key)
-            if row is None:
-                button = self.host.list_button(
-                    toga.Button(label, on_press=choose,
-                        style=Pack(height=48, flex=1, font_size=self.host.style_font(FILENAME_SIZE)))
-                )
-                self.host.middle_filename(button)
-                # Reserve the row's width for names, keeping its vertical size.
-                compact_file_row_padding(button)
-                button.vault_path = path
-                self.bind_file_hold(button, path, directory=directory)
-                async def expand(widget=None, path=path, **kwargs):
-                    await self.toggle_folder(path)
-                toggle_label = ('Collapse ' if path in self.expanded else 'Expand ') + entry['name']
-                if directory and not searching:
-                    icon_name = 'folder_document' if page is not None else 'folder_hub'
-                    entry_icon = self.host.presentation.icon_button(icon_name, toggle_label, on_press=expand)
-                    self.host.presentation.apply_icon(entry_icon, icon_name, toggle_label, size=ENTRY_ICON_SIZE)
-                    entry_icon.browser_entry_kind = 'folder_document' if page is not None else 'folder'
-                    entry_icon.style.width = 32
-                    entry_icon.style.height = 48
-                    compact_file_row_padding(entry_icon)
-                    self.host.presentation.surface(entry_icon, radius=0, background='transparent',
-                        foreground='file_icon', outlined=False)
-                else:
-                    entry_icon = self.host.entry_icon(directory, landing_page=page is not None)
-                    entry_icon.style.width = entry_icon.style.height = ENTRY_ICON_SIZE
-                    entry_icon.style.margin_left = entry_icon.style.margin_right = 2
-                if hasattr(self, 'file_drag') and self.library.supports('rename'):
-                    self.file_drag.bind(entry_icon, path, target=directory)
-                    button._notes_drag_icon = entry_icon
-                row = toga.Box(
-                    children=[
-                        toga.Box(style=Pack(width=depth * 12)),
-                        entry_icon,
-                        button,
-                    ],
-                    style=Pack(direction=ROW, align_items=CENTER),
-                )
-                if directory and not searching:
-                    disclosure = self.host.presentation.icon_button(
-                        'down' if path in self.expanded else 'forward',
-                        ('Collapse ' if path in self.expanded else 'Expand ') + entry['name'],
-                        on_press=expand,
-                    )
-                    self.host.presentation.apply_icon(disclosure, 'down' if path in self.expanded else 'forward',
-                        ('Collapse ' if path in self.expanded else 'Expand ') + entry['name'], size=16)
-                    disclosure.style.width = 44
-                    disclosure.style.height = 48
-                    compact_file_row_padding(disclosure)
-                    self.host.presentation.surface(disclosure, radius=0, background='transparent', foreground='muted', outlined=False)
-                    row.insert(2, disclosure)
-                async def file_actions(widget=None, path=path, **kwargs):
-                    await self.file_actions(path)
-                if (not directory and document_kind(path) == 'markdown'
-                        or any(self.library.supports(action) for action in ('rename', 'delete'))):
-                    actions = self.host.presentation.icon_button('more', 'Actions for ' + PurePosixPath(path).name, on_press=file_actions)
-                    actions.style.width = 48
-                    compact_file_row_padding(actions)
-                    self.host.presentation.surface(actions, radius=0, background='transparent', foreground='muted', outlined=False)
-                    row.add(actions)
-            new_rows[key] = row
-            self._row_cache[key] = row
-            button = next(child for child in row.children if hasattr(child, 'vault_path'))
-            selected = path == self.selected_path
-            if getattr(row, '_notes_selected', None) != selected:
-                self.style_tree_selection(row, button, selected)
-            if page is not None:
-                underline_folder_link(button)
-            desired.append(row)
-            yield
-        if len(flattened) > self.shown:
-            if not hasattr(self, '_more_rows'):
-                panel = self._row_panel
-                def more(widget=None, **kwargs):
-                    if self._row_panel != panel:
-                        return
-                    self.shown += 50
-                    self.render_tree()
-                self._more_rows = toga.Button('Show more notes', on_press=more, style=Pack(height=48))
-            desired.append(self._more_rows)
-        if message:
-            if not hasattr(self, '_rows_message'):
-                self._rows_message = toga.Label(message)
-            elif self._rows_message.text != message:
-                self._rows_message.text = message
-            desired.append(self._rows_message)
-        changed = list(self.rows.children) != desired
-        if changed:
-            # Build controls cooperatively offscreen, then replace the visible
-            # batch without yielding between removals/insertions. Toga refreshes
-            # once for each bulk call rather than laying out every row in turn.
-            position = self.search_position() if preserve_viewport else None
-            self.rows.clear()
-            self.rows.add(*desired)
-            if position is not None:
-                self.restore_search_position(position)
-        if reveal_index is not None:
-            self.rows_scroll.vertical_position = min(
-                reveal_index * 48, self.rows_scroll.max_vertical_position)
-        for key, row in list(self._row_cache.items()):
-            if key not in new_rows:
-                # A cancelled cleanup must not expose an unbound cached row.
-                self._row_cache.pop(key, None)
-                for button in row.children:
-                    if hasattr(button, 'vault_path'):
-                        self.release_file_hold(button)
-                yield
-        self._row_cache = new_rows
-        if changed:
-            self.sidebar.refresh_gestures()
-
+        if self.valid():
+            yield from update_tree_rows(self, reveal=reveal, preserve_viewport=preserve_viewport)
 
     def back_action(self):
         """Close floating panels before retracing note links."""
@@ -1551,9 +1314,7 @@ class VaultBrowser(LibraryPanels):
         self._search_return = self._document_return_side = None
         if hasattr(self, 'file_drag'):
             self.file_drag.dispose()
-        task = getattr(self, 'tree_task', None)
-        if task is not None:
-            task.cancel()
+        self.cancel_tree_render()
         self.dispose_panel_rows()
         self.dispose_panels()
         self.document.dispose()

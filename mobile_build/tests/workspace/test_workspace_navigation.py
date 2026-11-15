@@ -206,6 +206,53 @@ class WorkspaceNavigationTests(unittest.TestCase):
         self.assertIs(app._reader_toolbar_controller, reader)
         self.assertIs(app._reader_title_controller, reader)
 
+    def test_notebook_warning_moves_between_inline_label_and_native_prompt(self):
+        from types import SimpleNamespace as NS
+        from unittest.mock import Mock
+        import toga
+        from mobile.workspace_navigation import sync_reader_toolbar
+
+        navigation_item = NS(title='Notebook', titleView=None, prompt=None)
+        controller = NS(ptr=NS(value=101), navigationItem=navigation_item)
+        app = NS(refresh_reader_exit=Mock(), routes=NS(apple=True), native_host=NS(
+            state=NS(destination='documents'),
+            adapter=NS(content_controller=lambda destination: controller)))
+        header, canvas, toolbar = toga.Box(), toga.Box(), toga.Box()
+        view = toga.Box(children=[header, canvas, toolbar])
+        status = toga.Label('Save failed: storage is unavailable')
+        wide = Mock(return_value=True)
+        view._native_reader_buttons = lambda: []
+        view._native_reader_status = status
+        view._native_reader_toolbar = toolbar
+        view._native_drawing_tools = NS(wide_landscape=wide)
+        view._notebook_canvas = canvas
+        view._document_title_header = header
+
+        with patch('mobile.ios_toolbar.mount_actions') as mount:
+            sync_reader_toolbar(app, view)
+            self.assertEqual(list(view.children), [header, status, canvas])
+            self.assertIs(view._notebook_inline_notice, status)
+            self.assertIsNone(navigation_item.prompt)
+
+            wide.return_value = False
+            sync_reader_toolbar(app, view)
+            self.assertEqual(list(view.children), [header, canvas])
+            self.assertIsNone(view._notebook_inline_notice)
+            self.assertIsNone(status.parent)
+            self.assertEqual(navigation_item.prompt, status.text)
+
+            wide.return_value = True
+            sync_reader_toolbar(app, view)
+            self.assertEqual(list(view.children), [header, status, canvas])
+            self.assertIsNone(navigation_item.prompt)
+
+            status.text = 'Saved'
+            sync_reader_toolbar(app, view)
+            self.assertEqual(list(view.children), [header, canvas])
+            self.assertIsNone(view._notebook_inline_notice)
+            self.assertIsNone(navigation_item.prompt)
+            mount.assert_called_once_with(controller, view, [])
+
     def setUp(self):
         self.directory = TemporaryDirectory()
         self.addCleanup(self.directory.cleanup)

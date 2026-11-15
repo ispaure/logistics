@@ -82,6 +82,24 @@ class FeatureRuntimeTests(unittest.TestCase):
             self.assertEqual(load_disabled(second), set())
             self.assertFalse(second.exists())
 
+    def test_toggle_checks_dependents_and_applies_enablement_from_one_snapshot(self):
+        base = ModuleType('features.base')
+        consumer = ModuleType('features.snapshot_consumer')
+        consumer.FEATURE_DEPENDENCIES = ('base',)
+        loader = Mock(side_effect=[[consumer, base], [consumer, base]])
+        runtime = FeatureRegistry(feature_loader=loader)
+        from commonUtils.formats.registry import file_types
+        self.addCleanup(file_types.set_owner_enabled, 'snapshot_consumer', True)
+
+        with self.assertRaisesRegex(ValueError, 'Snapshot Consumer'):
+            runtime.set_feature_enabled('base', False)
+        loader.assert_called_once_with()
+        self.assertEqual(runtime.preferences.disabled, set())
+
+        runtime.set_feature_enabled('snapshot_consumer', False)
+        self.assertEqual(loader.call_count, 2)
+        self.assertEqual(runtime.preferences.disabled, {'snapshot_consumer'})
+
     def test_declarations_and_once_only_initialization_are_per_registry(self):
         initialized = Mock()
         module = ModuleType('features.isolated_runtime')

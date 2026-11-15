@@ -4,12 +4,13 @@ from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+from contextlib import nullcontext
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, Mock, call, patch
 
 from mobile.app import LogisticsMobile
 from features.lm.mobile.ui import ChatUI
@@ -71,6 +72,35 @@ class WorkflowOwnershipTests(unittest.TestCase):
         app.chat_busy = False
         app.chat_current = None
 
+    def test_failed_chat_checkpoint_blocks_navigation_after_flushing_readers(self):
+        app = self.app
+        events = Mock()
+        events.save_chat.return_value = False
+        generation = app.navigation_generation
+        with patch.object(app.provider_sessions(), 'flush_visible_progress', events.flush_private), \
+                patch.object(app.reader_manager(), 'flush_progress', events.flush_library), \
+                patch.object(app.chat_controller(), 'checkpoint_chat', events.save_chat), \
+                patch.object(app.store, 'flush_checkpoints', events.flush_documents):
+            self.assertFalse(app.select_destination('files'))
+        self.assertEqual(events.mock_calls, [call.flush_private(), call.flush_library(), call.save_chat()])
+        self.assertEqual(app.navigation_generation, generation)
+
+    def test_opening_explicit_provider_document_skips_cloud_defaults(self):
+        app = self.app
+        copies = object()
+
+        async def exercise():
+            with patch('mobile.document_sources.opening_status', return_value=nullcontext()), \
+                    patch('mobile.document_sources.opening_ready', return_value=True), \
+                    patch.object(app.provider_sessions(), 'open', return_value=True) as open_document, \
+                    patch.object(app, 'cloud_controller') as cloud:
+                self.assertTrue(await app.open_crypt(copies=copies, key='Note.md'))
+            cloud.assert_not_called()
+            open_document.assert_awaited_once_with(
+                copies, 'Note.md', prepared=None, destination=None, privacy_gate=None, edit=False)
+
+        app.loop.run_until_complete(exercise())
+
     def test_transfer_cancel_does_not_cancel_an_independent_file_operation(self):
         app = self.app
         file_cancel, transfer_cancel = Event(), Event()
@@ -103,8 +133,6 @@ class WorkflowOwnershipTests(unittest.TestCase):
             self.assertIs(cache.vault, vault)
 
     def test_import_controls_use_the_credential_owner_and_keep_app_compatibility(self):
-        from unittest.mock import AsyncMock
-
         app = self.app
         app.cloud_client = SimpleNamespace(vault=None, generation=0, cancel=lambda: None)
         app.show_cloud_connections()

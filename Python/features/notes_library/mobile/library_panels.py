@@ -23,6 +23,22 @@ PATH_SIZE = 12
 ENTRY_ICON_SIZE = 18
 CAPTION_FONT = 10
 
+_FILE_NAMES_SCOPE = 'Search in File Names'
+_DOCUMENTS_SCOPE = 'Search within Documents'
+_SEARCH_FIELDS = ('search_rows', 'search_status', 'search_paused', 'search_query')
+_ROW_FIELDS = ('_row_cache', 'shown', '_rows_message', '_more_rows')
+_CALENDAR_LOADING = 'Finding daily notes…'
+
+
+def _row_panel_state(rows, scroll):
+    return dict(rows=rows, scroll=scroll, _row_cache={}, shown=50,
+                _rows_message=None, _more_rows=None)
+
+
+def _search_interface_state(control):
+    return dict(control=control, search_rows=[], search_status='',
+                search_paused=False, search_query=None)
+
 
 @dataclass(frozen=True)
 class SearchReturn:
@@ -43,6 +59,27 @@ class LibraryPanels:
         self._resume_calendar = False
         self.file_command_busy = False
         self.daily_opening = False
+
+        self._build_files_panel()
+        self._build_search_panel()
+        self.tree.clear()
+        self.tree.style.margin = 0
+        self.host.presentation.surface(self.tree, radius=0, background='alternate', outlined=False)
+        tabs = self._build_panel_tabs()
+        self.calendar_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
+        self.calendar_scroll = toga.ScrollContainer(
+            content=self.calendar_content, horizontal=False, style=Pack(flex=1))
+        self.playlist_panel = PlaylistPanel(self)
+        self.sidebar.set_files_scrolls(self.calendar_scroll, self.playlist_panel.scroll, *(
+            getattr(state['rows'], 'native_list', state['scroll']) for state in self._row_panels.values()
+        ))
+        self._mount_panel_layout(tabs)
+        self.search_mode.items = [_DOCUMENTS_SCOPE, _FILE_NAMES_SCOPE]
+        self.search_mode.value = _FILE_NAMES_SCOPE
+        self.search_mode.on_change = self.search_scope_changed
+        self.sync_search_scope()
+
+    def _build_files_panel(self):
         children = list(self.tree.children)
         self.files_content = toga.Box(children=[], style=Pack(direction=COLUMN, flex=1))
         for child in children[2:]:
@@ -50,42 +87,36 @@ class LibraryPanels:
             if child not in (self.search, self.search_mode):
                 self.files_content.add(child)
         self.rows_scroll = self.files_content.children[0]
-        search_rows = self.new_panel_rows()
-        search_scroll = self.panel_rows_view(search_rows)
         self._row_panel = 'Files'
-        self._row_panels = {
-            'Files': dict(rows=self.rows, scroll=self.rows_scroll, _row_cache={}, shown=50,
-                          _rows_message=None, _more_rows=None),
-            'Search in File Names': dict(rows=search_rows, scroll=search_scroll, _row_cache={}, shown=50,
-                           _rows_message=None, _more_rows=None),
-        }
-        self._search_scope = 'Search in File Names'
+        self._row_panels = {'Files': _row_panel_state(self.rows, self.rows_scroll)}
+
+    def _build_search_panel(self):
+        filename_rows = self.new_panel_rows()
+        filename_scroll = self.panel_rows_view(filename_rows)
+        self._row_panels[_FILE_NAMES_SCOPE] = _row_panel_state(filename_rows, filename_scroll)
+        self._search_scope = _FILE_NAMES_SCOPE
         document_rows = self.new_panel_rows()
-        self._row_panels['Search within Documents'] = dict(rows=document_rows,
-            scroll=self.panel_rows_view(document_rows),
-            _row_cache={}, shown=50, _rows_message=None, _more_rows=None)
+        self._row_panels[_DOCUMENTS_SCOPE] = _row_panel_state(document_rows, self.panel_rows_view(document_rows))
         self.search_query = None
         self._search_interfaces = {
-            'Search in File Names': dict(control=self.search, search_rows=[], search_status='',
-                search_paused=False, search_query=None),
-            'Search within Documents': dict(control=toga.TextInput(placeholder='Search in documents',
-                on_change=self.search_changed, style=Pack(height=48)), search_rows=[], search_status='',
-                search_paused=False, search_query=None),
+            _FILE_NAMES_SCOPE: _search_interface_state(self.search),
+            _DOCUMENTS_SCOPE: _search_interface_state(toga.TextInput(
+                placeholder='Search in documents', on_change=self.search_changed, style=Pack(height=48))),
         }
         self.search.placeholder = 'Search file names'
         self.search_scope = toga.Box(style=Pack(direction=ROW))
         self.search_scope_buttons = {}
-        for label, value in (('In documents', 'Search within Documents'), ('File names', 'Search in File Names')):
+        for label, value in (('In documents', _DOCUMENTS_SCOPE), ('File names', _FILE_NAMES_SCOPE)):
             def choose(widget=None, value=value, **kwargs):
                 self.search_mode.value = value
-            button = toga.Button(label, on_press=choose, style=Pack(flex=1, height=44, font_size=self.host.style_font(TAB_SIZE)))
+            button = toga.Button(label, on_press=choose,
+                style=Pack(flex=1, height=44, font_size=self.host.style_font(TAB_SIZE)))
             self.search_scope_buttons[value] = button
             self.search_scope.add(button)
-        self.search_content = toga.Box(children=[self.search, self.search_scope, search_scroll],
+        self.search_content = toga.Box(children=[self.search, self.search_scope, filename_scroll],
             style=Pack(direction=COLUMN, flex=1, gap=4))
-        self.tree.clear()
-        self.tree.style.margin = 0
-        self.host.presentation.surface(self.tree, radius=0, background='alternate', outlined=False)
+
+    def _build_panel_tabs(self):
         self.panel_tabs = {}
         self.panel_tab_indicators = {}
         tabs = self.host.presentation.surface(toga.Box(style=Pack(direction=ROW)),
@@ -101,12 +132,9 @@ class LibraryPanels:
             self.panel_tab_indicators[name] = indicator
             tabs.add(toga.Box(children=[button, indicator], style=Pack(direction=COLUMN, flex=1)))
             self.style_panel_tab(name, name == self.panel_tab)
-        self.calendar_content = toga.Box(style=Pack(direction=COLUMN, flex=1))
-        self.calendar_scroll = toga.ScrollContainer(content=self.calendar_content, horizontal=False, style=Pack(flex=1))
-        self.playlist_panel = PlaylistPanel(self)
-        self.sidebar.set_files_scrolls(self.calendar_scroll, self.playlist_panel.scroll, *(
-            getattr(state['rows'], 'native_list', state['scroll']) for state in self._row_panels.values()
-        ))
+        return tabs
+
+    def _mount_panel_layout(self, tabs):
         # Keep the tab strip mounted while changing panels. The commands move
         # with Files, so switching tabs only replaces content below the strip.
         self.panel_body = toga.Box(children=[self.files_content], style=Pack(direction=COLUMN, flex=1))
@@ -119,14 +147,10 @@ class LibraryPanels:
             style=Pack(direction=ROW, gap=4, justify_content='center'))
         self.files_content.insert(0, self.panel_actions)
         self.tree.add(tabs, self.panel_body)
-        self.search_mode.items = ['Search within Documents', 'Search in File Names']
-        self.search_mode.value = 'Search in File Names'
-        self.search_mode.on_change = self.search_scope_changed
-        self.sync_search_scope()
 
     def remember_search_interface(self):
         state = self._search_interfaces[self._search_scope]
-        for field in ('search_rows', 'search_status', 'search_paused', 'search_query'):
+        for field in _SEARCH_FIELDS:
             state[field] = getattr(self, field)
 
     def search_scope_changed(self, widget=None, **kwargs):
@@ -136,17 +160,12 @@ class LibraryPanels:
         if scope == self._search_scope:
             return
         self.release_search_focus()
-        self.search_generation += 1
-        if self.search_task is not None:
-            if not self.search_task.done():
-                self.search_paused = True
-                self.search_task.cancel()
-            self.search_task = None
+        self._retire_search_task()
         self.remember_search_interface()
         self._search_scope = scope
         state = self._search_interfaces[scope]
         self.search = state['control']
-        for field in ('search_rows', 'search_status', 'search_paused', 'search_query'):
+        for field in _SEARCH_FIELDS:
             setattr(self, field, state[field])
         if self.panel_tab == 'Search':
             self.select_panel_rows(scope)
@@ -162,16 +181,19 @@ class LibraryPanels:
         if not self._index_work_suspended and (self.search_paused or self.search_query != (self.search.value or '')):
             self.search_changed()
 
-    def pause_index_work(self):
-        if self._index_work_suspended or self.cancelled.is_set():
-            return
-        self._index_work_suspended = True
-        library_files.clear_focus(self.library)
+    def _retire_search_task(self):
         self.search_generation += 1
         if self.search_task is not None and not self.search_task.done():
             self.search_paused = True
             self.search_task.cancel()
         self.search_task = None
+
+    def pause_index_work(self):
+        if self._index_work_suspended or self.cancelled.is_set():
+            return
+        self._index_work_suspended = True
+        library_files.clear_focus(self.library)
+        self._retire_search_task()
         tree_task = getattr(self, 'tree_task', None)
         if self.panel_tab == 'Search' and tree_task is not None and not tree_task.done():
             self.search_paused = True
@@ -211,8 +233,8 @@ class LibraryPanels:
 
     def remember_panel_rows(self):
         state = self._row_panels[self._row_panel]
-        for name in ('_row_cache', 'shown', '_rows_message', '_more_rows'):
-            state[name] = getattr(self, name, state[name])
+        for field in _ROW_FIELDS:
+            state[field] = getattr(self, field, state[field])
 
     def select_panel_rows(self, name):
         if name == self._row_panel:
@@ -224,7 +246,7 @@ class LibraryPanels:
         self._row_panel = name
         state = self._row_panels[name]
         self.rows, self.rows_scroll = state['rows'], state['scroll']
-        for field in ('_row_cache', 'shown', '_rows_message', '_more_rows'):
+        for field in _ROW_FIELDS:
             if state[field] is not None:
                 setattr(self, field, state[field])
             elif hasattr(self, field):
@@ -292,35 +314,37 @@ class LibraryPanels:
         if name in ('Files', 'Search'):
             self.select_panel_rows(self._search_scope if name == 'Search' else name)
         self.panel_tab = name
-        selected = {'Files': self.files_content, 'Search': self.search_content,
-                    'Calendar': self.calendar_scroll, 'Playlist': self.playlist_panel.widget}[name]
-        self.playlist_panel.sync_pick_prompt(name)
-        if self.panel_body.children != [selected]:
-            self.panel_body.clear()
-            self.panel_body.add(selected)
-        for key, button in self.panel_tabs.items():
-            self.style_panel_tab(key, key == name)
+        self._mount_panel_tab(name)
+
         if name != 'Search':
-            self.search_generation += 1
-            if self.search_task is not None:
-                if not self.search_task.done():
-                    self.search_paused = True
-                    self.search_task.cancel()
-                self.search_task = None
-        if name == 'Calendar':
-            self.render_tree()  # Cancel unfinished work for the unmounted tab.
-            self.refresh_calendar()
-        else:
+            self._retire_search_task()
+        if name != 'Calendar':
             self.calendar_generation += 1
             self._resume_calendar = False
             if self.calendar_task is not None:
                 self.calendar_task.cancel()
-            self.render_tree()
-            if name == 'Search':
-                self.resume_search_interface()
-        if name == 'Playlist':
+        self.render_tree()  # Cancel unfinished row rendering even for tabs without rows.
+        if name == 'Calendar':
+            self.refresh_calendar()
+        elif name == 'Search':
+            self.resume_search_interface()
+        elif name == 'Playlist':
             self.playlist_panel.activate()
         self.sidebar.refresh_gestures()
+
+    def _mount_panel_tab(self, name):
+        content = {
+            'Files': self.files_content,
+            'Search': self.search_content,
+            'Calendar': self.calendar_scroll,
+            'Playlist': self.playlist_panel.widget,
+        }[name]
+        self.playlist_panel.sync_pick_prompt(name)
+        if self.panel_body.children != [content]:
+            self.panel_body.clear()
+            self.panel_body.add(content)
+        for tab in self.panel_tabs:
+            self.style_panel_tab(tab, tab == name)
 
     async def open_selected_note(self, path, *, row_path=None):
         context = None
@@ -363,39 +387,55 @@ class LibraryPanels:
         if self.calendar_task is not None:
             self.calendar_task.cancel()
         self.calendar_entries = None
-        self.render_calendar('Finding daily notes…')
-        async def scan():
-            cancelled = lambda: not self.valid() or generation != self.calendar_generation
-            try:
-                entries = await asyncio.to_thread(library_files.daily_notes, self.library,
-                    visible=self.host.folder_visible, cancelled=cancelled)
-                if not cancelled():
-                    self.calendar_entries = entries
-                    self.render_calendar()
-            except (OperationCancelled, asyncio.CancelledError):
-                return
-            except (OSError, ValueError) as error:
-                if not cancelled():
-                    self.render_calendar('Could not find daily notes: ' + str(error)[:120])
-        self.calendar_task = self.host.loop.create_task(scan())
+        self.render_calendar(_CALENDAR_LOADING)
+        self.calendar_task = self.host.loop.create_task(self._scan_daily_notes(generation))
+
+    async def _scan_daily_notes(self, generation):
+        def cancelled():
+            return not self.valid() or generation != self.calendar_generation
+
+        try:
+            entries = await asyncio.to_thread(library_files.daily_notes, self.library,
+                visible=self.host.folder_visible, cancelled=cancelled)
+            if not cancelled():
+                self.calendar_entries = entries
+                self.render_calendar()
+        except (OperationCancelled, asyncio.CancelledError):
+            return
+        except (OSError, ValueError) as error:
+            if not cancelled():
+                self.render_calendar('Could not find daily notes: ' + str(error)[:120])
 
     def render_calendar(self, status=''):
         if not self.valid() or self.panel_tab != 'Calendar':
             return
         self.calendar_content.clear()
         month = self.calendar_month
+        self.calendar_content.add(self._calendar_navigation(month))
+        grid = self._calendar_grid(month)
+        message = _CALENDAR_LOADING if self.calendar_entries is None else '• Daily note exists · tap to open'
+        self.calendar_content.add(grid,
+            toga.Label(status or message, style=Pack(font_size=CAPTION_FONT)),
+            toga.Button('Refresh daily notes', on_press=self.refresh_calendar, style=Pack(height=48)))
+        self.sidebar.refresh_gestures()
+
+    def _calendar_navigation(self, month):
         title = toga.Label(month.strftime('%B %Y'), style=Pack(flex=1, text_align='center'))
+
         def move(offset):
             if not self.valid() or self.panel_tab != 'Calendar':
                 return
-            value = month.year * 12 + month.month - 1 + offset
-            if 1 <= value // 12 <= 9999:
-                self.calendar_month = date(value // 12, value % 12 + 1, 1)
+            year, month_index = divmod(month.year * 12 + month.month - 1 + offset, 12)
+            if 1 <= year <= 9999:
+                self.calendar_month = date(year, month_index + 1, 1)
                 self.render_calendar()
-        self.calendar_content.add(toga.Box(children=[
+
+        return toga.Box(children=[
             toga.Button('‹', on_press=lambda w: move(-1), style=Pack(width=44, height=44)),
             title, toga.Button('›', on_press=lambda w: move(1), style=Pack(width=44, height=44))],
-            style=Pack(direction=ROW, align_items='center')))
+            style=Pack(direction=ROW, align_items='center'))
+
+    def _calendar_grid(self, month):
         grid = toga.Box(style=Pack(direction=COLUMN))
         grid.add(toga.Box(children=[toga.Label(day, style=Pack(flex=1, text_align='center',
             font_size=CAPTION_FONT)) for day in ('M', 'T', 'W', 'T', 'F', 'S', 'S')],
@@ -403,25 +443,24 @@ class LibraryPanels:
         for week in calendar.monthcalendar(month.year, month.month):
             row = toga.Box(style=Pack(direction=ROW))
             for day in week:
-                if not day:
-                    row.add(toga.Box(style=Pack(flex=1)))
-                    continue
-                key = date(month.year, month.month, day).isoformat()
-                exists = bool((self.calendar_entries or {}).get(key))
-                async def choose(widget=None, key=key, **kw):
-                    await self.open_daily_note(key)
-                button = toga.Button(str(day) + ('•' if exists else ''), on_press=choose,
-                    enabled=self.calendar_entries is not None and not self.file_command_busy,
-                    style=Pack(flex=1, height=44, font_size=CAPTION_FONT,
-                               font_weight='bold' if key == date.today().isoformat() else 'normal'))
-                button.daily_date = key
-                row.add(button)
+                cell = self._calendar_day(month, day) if day else toga.Box(style=Pack(flex=1))
+                row.add(cell)
             grid.add(row)
-        self.calendar_content.add(grid,
-            toga.Label(status or ('Finding daily notes…' if self.calendar_entries is None else '• Daily note exists · tap to open'),
-                style=Pack(font_size=CAPTION_FONT)),
-            toga.Button('Refresh daily notes', on_press=self.refresh_calendar, style=Pack(height=48)))
-        self.sidebar.refresh_gestures()
+        return grid
+
+    def _calendar_day(self, month, day):
+        key = date(month.year, month.month, day).isoformat()
+        exists = bool((self.calendar_entries or {}).get(key))
+
+        async def choose(widget=None, key=key, **kw):
+            await self.open_daily_note(key)
+
+        button = toga.Button(str(day) + ('•' if exists else ''), on_press=choose,
+            enabled=self.calendar_entries is not None and not self.file_command_busy,
+            style=Pack(flex=1, height=44, font_size=CAPTION_FONT,
+                       font_weight='bold' if key == date.today().isoformat() else 'normal'))
+        button.daily_date = key
+        return button
 
     async def open_daily_note(self, key):
         if self.daily_opening:

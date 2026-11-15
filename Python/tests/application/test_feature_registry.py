@@ -36,8 +36,8 @@ class FeatureRegistryTests(unittest.TestCase):
                 self.assertEqual(set(mobile.names), set(desktop[mobile.name].members))
 
     def setUp(self):
-        disabled = patch.object(registry, '_disabled_features', set())
-        initialized = patch.object(registry, '_initialized_features', set())
+        disabled = patch.object(registry.preferences, 'disabled', set())
+        initialized = patch.object(registry.activation, 'initialized', set())
         disabled.start()
         initialized.start()
         self.addCleanup(disabled.stop)
@@ -63,7 +63,7 @@ class FeatureRegistryTests(unittest.TestCase):
         middle = tracked('middle', ('base',))
         base = tracked('base')
         with patch.object(registry, '_log_unavailable_features'), patch.object(
-                registry, 'get_available_features', return_value=[consumer, unrelated, middle, base]):
+                registry, 'load_features', return_value=[consumer, unrelated, middle, base]):
             initialized = registry.initialize_features()
         self.assertEqual([item.FEATURE_NAME for item in initialized], ['base', 'middle', 'consumer', 'unrelated'])
         self.assertEqual(events, [(kind, name) for kind in ('register', 'initialize')
@@ -92,7 +92,7 @@ class FeatureRegistryTests(unittest.TestCase):
         first = feature('first', ('second',), register_file_types=hook, initialize=hook)
         second = feature('second', ('first',), register_file_types=hook, initialize=hook)
         with patch.object(registry, '_log_unavailable_features'), patch.object(
-                registry, 'get_available_features', return_value=[first, second]):
+                registry, 'load_features', return_value=[first, second]):
             with self.assertRaisesRegex(RuntimeError, 'first -> second -> first'):
                 registry.initialize_features()
         hook.assert_not_called()
@@ -104,7 +104,7 @@ class FeatureRegistryTests(unittest.TestCase):
                 good = feature('good', initialize=callback, register_file_types=callback)
                 bad = feature('bad', **{hook_name: 'not callable'})
                 with patch.object(registry, '_log_unavailable_features'), patch.object(
-                        registry, 'get_available_features', return_value=[good, bad]), patch(
+                        registry, 'load_features', return_value=[good, bad]), patch(
                         'commonUtils.formats.registry.register_builtin_file_types') as builtins:
                     with self.assertRaisesRegex(TypeError, 'callable'):
                         registry.initialize_features()
@@ -154,7 +154,7 @@ class FeatureRegistryTests(unittest.TestCase):
         optional = feature('optional', optional_dependencies=('missing',))
         broken = feature('broken', FEATURE_LOAD_ERROR='Cannot load')
         modules = [consumer, owner, engine, middle, base, optional, broken]
-        registry._disabled_features.add('base')
+        registry.preferences.disabled.add('base')
         with patch.object(registry, 'load_features', return_value=modules):
             states = {state.name: state for state in registry.get_feature_states()}
             self.assertEqual(list(states), ['consumer', 'owner', 'middle', 'base', 'optional', 'broken'])
@@ -168,7 +168,7 @@ class FeatureRegistryTests(unittest.TestCase):
             self.assertEqual(states['owner'].dependencies, ('middle',))
             self.assertEqual(states['consumer'].dependencies, ('owner',))
             self.assertEqual(states['owner'].dependents, ())
-            registry._disabled_features.clear()
+            registry.preferences.disabled.clear()
             refreshed = {state.name: state for state in registry.get_feature_states()}
             self.assertTrue(refreshed['owner'].enabled)
             self.assertEqual(refreshed['owner'].dependents, ('consumer',))
@@ -191,7 +191,7 @@ class FeatureRegistryTests(unittest.TestCase):
         install = Mock()
         extension = BrowserExtensionContribution(install)
         def contributions():
-            registry._disabled_features.add('modern')
+            registry.preferences.disabled.add('modern')
             return FeatureContributions(browser_extensions=[extension])
         legacy = feature('legacy', get_contributions=contributions)
         definition = Feature(id='modern', label='Modern', browser=BrowserExtension())
@@ -260,7 +260,7 @@ class FeatureRegistryTests(unittest.TestCase):
         handles = []
         bad = feature('toggle_bad', register_file_types=lambda: handles.append(register_file_type(File, 'toggle_bad')),
                       initialize=Mock(side_effect=RuntimeError('cannot initialize')))
-        registry._disabled_features.add('toggle_bad')
+        registry.preferences.disabled.add('toggle_bad')
         file_types.set_owner_enabled('toggle_bad', False)
         with patch.object(registry, 'load_features', return_value=[bad]):
             with self.assertRaisesRegex(RuntimeError, 'cannot initialize'):
@@ -281,7 +281,7 @@ class FeatureRegistryTests(unittest.TestCase):
         module = feature('toggle_first',
             register_file_types=lambda: handles.append(register_file_type(OwnedFile, 'toggle_first')),
             initialize=lambda: seen.append(type(file_from_path('item.toggle_first'))))
-        registry._disabled_features.add('toggle_first')
+        registry.preferences.disabled.add('toggle_first')
         file_types.set_owner_enabled('toggle_first', False)
         with patch.object(registry, 'load_features', return_value=[module]):
             registry.set_feature_enabled('toggle_first', True)
@@ -351,6 +351,6 @@ class FeatureRegistryTests(unittest.TestCase):
         features = [SimpleNamespace(__name__='early', initialize=lambda: events.append('initialize early')),
                     SimpleNamespace(__name__='later', register_file_types=lambda: events.append('register later'),
                                     initialize=lambda: events.append('initialize later'))]
-        with patch.object(registry, '_log_unavailable_features'), patch.object(registry, 'get_available_features', return_value=features):
+        with patch.object(registry, '_log_unavailable_features'), patch.object(registry, 'load_features', return_value=features):
             registry.initialize_features()
         self.assertEqual(events, ['register later', 'initialize early', 'initialize later'])

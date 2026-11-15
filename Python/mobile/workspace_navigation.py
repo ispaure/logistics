@@ -68,7 +68,6 @@ def sync_reader_toolbar(app, view, destination=None):
             from .android_reader_chrome import sync
             sync(app, view, destination or app.native_host.state.destination)
         return
-    from .ios_toolbar import mount_actions, mount_leading, clear_actions, action_state, layout_geometry
     adapter = app.native_host.adapter
     destination = destination or app.native_host.state.destination
     controller = adapter.content_controller(destination)
@@ -81,34 +80,12 @@ def sync_reader_toolbar(app, view, destination=None):
         projections = app._reader_toolbar_projections = {}
     from .reader_top_band import project, release_other
     release_other(app, view)
-    controls = getattr(view, '_native_reader_buttons', None)
-    if controls is None:
-        # Tabs retain their controllers. Clear reader-owned chrome even when a
-        # different tab was the most recent reader toolbar to be rendered.
+    if getattr(view, '_native_reader_buttons', None) is None:
         if key in owned:
-            clear_actions(controller.navigationItem)
-            controller.navigationItem.prompt = None
-            controller.navigationItem.titleView = None
-            owned.discard(key)
-            projections.pop(key, None)
-            projections.pop((key, 'leading'), None)
-            if getattr(app, '_reader_toolbar_controller', None) == controller:
-                app._reader_toolbar_controller = None
-                app._reader_toolbar_state = None
-                app._reader_toolbar_prompt = None
-            if getattr(app, '_reader_title_controller', None) == controller:
-                app._reader_title_controller = None
-                app._reader_title_state = None
+            _clear_reader_toolbar(app, controller, key, owned, projections)
         return
-    status = getattr(view, '_native_reader_status', None)
-    message = status.text if status is not None else ''
-    prompt = message if message.lower().startswith(('save failed', 'cannot ', 'unsaved changes:',
-        'book import failed', 'could not ')) else None
-    drawing_tools = getattr(view, '_native_drawing_tools', None)
-    inline_notice = (drawing_tools is not None and getattr(view, '_notebook_canvas', None) is not None
-                     and prompt is not None and not getattr(view, '_reader_fullscreen', False)
-                     and drawing_tools.wide_landscape(controller))
-    if getattr(view, '_notebook_inline_notice', None) is not None and not inline_notice:
+    prompt, inline_notice = _reader_toolbar_notice(view, controller)
+    if getattr(view, '_notebook_inline_notice', None) is not None and inline_notice is None:
         detach(view._notebook_inline_notice)
         view._notebook_inline_notice = None
     if project(app, view, destination, controller):
@@ -117,38 +94,87 @@ def sync_reader_toolbar(app, view, destination=None):
         title = str(title() if callable(title) else title or '').replace('\n', ' ')
         if str(controller.navigationItem.title or '') != title:
             controller.navigationItem.title = title
-        projections.pop(key, None)
-        projections.pop((key, 'leading'), None)
+        _forget_reader_toolbar_projection(projections, key)
         owned.add(key)
         app._reader_toolbar_controller = controller
         app._reader_toolbar_state = band['signature']
         app._reader_toolbar_prompt = (key, None)
         app._reader_title_controller = controller
         return
-    toolbar = view._native_reader_toolbar
-    detach(toolbar)
+    geometry = _mount_reader_trailing(app, view, controller, key, projections)
+    if getattr(app, '_reader_toolbar_prompt', None) != (controller.ptr.value, prompt):
+        controller.navigationItem.prompt = prompt
+        app._reader_toolbar_prompt = (controller.ptr.value, prompt)
+    owned.add(key)
+    app._reader_toolbar_controller = controller
+    _mount_reader_title(view, controller, inline_notice)
+    app._reader_title_controller = controller
+    # Mounting the title can move Close between the title row and the bar.
+    _mount_reader_leading(app, view, controller, key, projections, geometry)
+
+
+def _forget_reader_toolbar_projection(projections, key):
+    projections.pop(key, None)
+    projections.pop((key, 'leading'), None)
+
+
+def _clear_reader_toolbar(app, controller, key, owned, projections):
+    """Release this retained tab's reader actions, prompt and title."""
+    from .ios_toolbar import clear_actions
+    clear_actions(controller.navigationItem)
+    controller.navigationItem.prompt = None
+    controller.navigationItem.titleView = None
+    owned.discard(key)
+    _forget_reader_toolbar_projection(projections, key)
+    if getattr(app, '_reader_toolbar_controller', None) == controller:
+        app._reader_toolbar_controller = None
+        app._reader_toolbar_state = None
+        app._reader_toolbar_prompt = None
+    if getattr(app, '_reader_title_controller', None) == controller:
+        app._reader_title_controller = None
+        app._reader_title_state = None
+
+
+def _reader_toolbar_notice(view, controller):
+    """Choose between a navigation prompt and the notebook's inline label."""
+    status = getattr(view, '_native_reader_status', None)
+    message = status.text if status is not None else ''
+    warning_prefixes = ('save failed', 'cannot ', 'unsaved changes:', 'book import failed', 'could not ')
+    prompt = message if message.lower().startswith(warning_prefixes) else None
+    drawing_tools = getattr(view, '_native_drawing_tools', None)
+    if (drawing_tools is not None and getattr(view, '_notebook_canvas', None) is not None
+            and prompt is not None and not getattr(view, '_reader_fullscreen', False)
+            and drawing_tools.wide_landscape(controller)):
+        return None, status
+    return prompt, None
+
+
+def _bind_reader_toolbar_buttons(app, buttons):
+    for button in buttons:
+        detach(button)
+        button.app, button.window = app, app.main_window
+
+
+def _mount_reader_trailing(app, view, controller, key, projections):
+    from .ios_toolbar import action_state, layout_geometry, mount_actions
+    detach(view._native_reader_toolbar)
     for control in getattr(view, '_native_reader_hidden', ()):
         detach(control)
     from .reader_chrome import reader_buttons
     buttons = [] if getattr(view, '_reader_fullscreen', False) else reader_buttons(app, view)
     geometry = layout_geometry(controller)
     state = (action_state(buttons), geometry)
-    for button in buttons:
-        detach(button)
-        button.app, button.window = app, app.main_window
+    _bind_reader_toolbar_buttons(app, buttons)
     # Replacing identical native groups during keyboard/layout notifications
     # cancels UIKit's in-progress menu presentation. Refresh only changed data.
     if projections.get(key) != state:
         mount_actions(controller, view, buttons)
         projections[key] = state
     app._reader_toolbar_state = state
-    if inline_notice:
-        prompt = None
-    if getattr(app, '_reader_toolbar_prompt', None) != (controller.ptr.value, prompt):
-        controller.navigationItem.prompt = prompt
-        app._reader_toolbar_prompt = (controller.ptr.value, prompt)
-    owned.add(key)
-    app._reader_toolbar_controller = controller
+    return geometry
+
+
+def _mount_reader_title(view, controller, inline_notice):
     title = getattr(view, '_native_reader_title', None)
     text = str(title() if callable(title) else title or controller.navigationItem.title or '').replace('\n', ' ')
     # UIKit sizes the title inside the actual container, including vertical bars
@@ -156,27 +182,30 @@ def sync_reader_toolbar(app, view, destination=None):
     controller.navigationItem.title = text
     from .document_location import mount_apple_title
     mount_apple_title(view, controller, text)
-    if inline_notice and status.parent is not view:
+    if inline_notice is not None and inline_notice.parent is not view:
         from features.notebooks.mobile.native_tools import LANDSCAPE_INSET
         header = view._document_title_header
-        status.style.update(font_size=13, text_align='center', margin=(0, LANDSCAPE_INSET, 6, LANDSCAPE_INSET))
-        view.insert(list(view.children).index(header) + 1, status)
-        view._notebook_inline_notice = status
-    app._reader_title_controller = controller
+        inline_notice.style.update(font_size=13, text_align='center', margin=(0, LANDSCAPE_INSET, 6, LANDSCAPE_INSET))
+        view.insert(list(view.children).index(header) + 1, inline_notice)
+        view._notebook_inline_notice = inline_notice
+
+
+def _mount_reader_leading(app, view, controller, key, projections, geometry):
     close = getattr(view, '_reader_close_button', None)
-    if close is not None:
-        frame = getattr(view, '_workspace_frame', None)
-        menu = frame.menu if frame is not None else getattr(view, '_workspace_menu_button', None)
-        title_controls = getattr(view, '_document_title_controls', ())
-        leading = [button for button in (close, menu) if button is not None and button not in title_controls]
-        for button in leading:
-            detach(button)
-            button.app, button.window = app, app.main_window
-        leading_state = (action_state(leading), geometry)
-        if projections.get((key, 'leading')) != leading_state:
-            mount_leading(controller, leading, replaces_back=True)
-            projections[key, 'leading'] = leading_state
-        close._native_reader_close_item = close._ios_action_item if close in leading else None
+    if close is None:
+        return
+    from .ios_toolbar import action_state, mount_leading
+    frame = getattr(view, '_workspace_frame', None)
+    menu = frame.menu if frame is not None else getattr(view, '_workspace_menu_button', None)
+    title_controls = getattr(view, '_document_title_controls', ())
+    leading = [button for button in (close, menu) if button is not None and button not in title_controls]
+    _bind_reader_toolbar_buttons(app, leading)
+    state = (action_state(leading), geometry)
+    leading_key = (key, 'leading')
+    if projections.get(leading_key) != state:
+        mount_leading(controller, leading, replaces_back=True)
+        projections[leading_key] = state
+    close._native_reader_close_item = close._ios_action_item if close in leading else None
 
 
 class WorkspaceNavigation(AdaptiveWorkspace):

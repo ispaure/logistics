@@ -6,6 +6,7 @@ native publication tokens together. Failed reads retain the published document.
 import asyncio
 import posixpath
 import re
+from dataclasses import dataclass
 from html import unescape
 from json import dumps
 from pathlib import PurePosixPath
@@ -19,7 +20,7 @@ from toga.style.pack import COLUMN
 from commonUtils.runtime.operations import OperationCancelled, check_cancelled
 from commonUtils.ui.native.inline_html import set_inline_html
 from ..notes import MAX_PREVIEW_HTML, MARKDOWN, document_kind
-from ..dataview import view_plan
+from ..dataview import ViewPlan, view_plan
 from ..dataview_script import worker_policy
 from .library_panels import LibraryOpening
 from .inline_video import install_controls, video_embed
@@ -27,6 +28,15 @@ from .inline_video import install_controls, video_embed
 
 PREPARING_VIDEO = 'Preparing video…'
 READER_BASE = 'https://markdown.invalid/vault/'
+
+
+@dataclass(frozen=True)
+class _PreparedMarkdown:
+    path: str
+    base: str
+    html: str
+    videos: dict[str, str]
+    plan: ViewPlan
 
 
 class LibraryDocuments:
@@ -151,19 +161,19 @@ class LibraryDocuments:
             if editor.busy:
                 browser.notice.text = 'Wait for the document operation to finish.'
                 return False
-            if editor.dirty:
-                if save or getattr(editor, 'autosave_on_leave', False):
-                    return await editor.save() and current()
-                confirm = confirm or browser.host.confirm
-                if confirm is None:
-                    return False
-                choice = await confirm()
-                if not current():
-                    return False
-                if choice == 'save':
-                    return await editor.save() and current()
-                return choice == 'discard'
-            return True
+            if not editor.dirty:
+                return True
+            if save or getattr(editor, 'autosave_on_leave', False):
+                return await editor.save() and current()
+            confirm = confirm or browser.host.confirm
+            if confirm is None:
+                return False
+            choice = await confirm()
+            if not current():
+                return False
+            if choice == 'save':
+                return await editor.save() and current()
+            return choice == 'discard'
         except (OSError, ValueError) as error:
             if current():
                 browser.notice.text = str(error)
@@ -225,16 +235,24 @@ class LibraryDocuments:
         started = perf_counter()
         if not await self.prepare_leave(epoch=epoch):
             return False
+        if not resolve_link:
+            kind = document_kind(path)
+            if kind != 'markdown':
+                return await self._open_other_document(path, kind, epoch=epoch, remember=remember)
+        return await self._open_markdown_or_link(path, epoch=epoch, remember=remember,
+                                                fragment=fragment, resolve_link=resolve_link, started=started)
+
+    async def _open_other_document(self, path, kind, *, epoch, remember):
         from services.documents.file_preview import is_video_file
-        if not resolve_link and is_video_file(path):
+        if is_video_file(path):
             return await self.open_video_file(path, epoch=epoch)
-        if not resolve_link and document_kind(path) is None:
+        if kind is None:
             from .file_preview import LibraryFilePreview
             return await self.open_embedded(path, LibraryFilePreview.open, remember=remember, epoch=epoch)
-        if not resolve_link and document_kind(path) == 'text':
-            return await self.open_text(path, remember=remember, epoch=epoch)
-        if not resolve_link and PurePosixPath(path).suffix.lower() == '.rmdoc':
-            return await self.open_canvas(path, remember=remember, epoch=epoch)
+        opener = self.open_text if kind == 'text' else self.open_canvas
+        return await opener(path, remember=remember, epoch=epoch)
+
+    async def _open_markdown_or_link(self, path, *, epoch, remember, fragment, resolve_link, started):
         self._media_open_epoch = epoch
         self._media_open_path, self._media_open_pending = path, True
         if self.browser.host.open_timing is not None:
@@ -244,29 +262,13 @@ class LibraryDocuments:
         current = self.path
         cancelled = lambda: not self.accepts(epoch)
         try:
-            try:
-                await asyncio.wait_for(self.browser.remember_position(), timeout=.25)
-            except asyncio.TimeoutError:
-                pass
-            if cancelled():
+            if not await self._begin_markdown_open(path, epoch=epoch, resolve_link=resolve_link):
                 return False
-            self.browser.sidebar.show_detail()
-            self.browser.notice.text = ''
-            self.page_loading.start(path, finding=resolve_link)
-            self.speech.close()
             if not resolve_link:
                 path = self.browser.contained(path)
-            if not resolve_link and PurePosixPath(path).suffix.lower() not in MARKDOWN:
-                raise ValueError("Choose a Markdown note.")
-            def stage(message):
-                def publish():
-                    if not cancelled() and self.page_loading.active:
-                        self.page_loading.status.text = message
-                        if resolve_link and message == 'Finding file…':
-                            self.mark_open_timing('finding', epoch)
-                        elif resolve_link and message.startswith('Reading '):
-                            self.mark_open_timing('found', epoch)
-                self.browser.host.loop.call_soon_threadsafe(publish)
+                if PurePosixPath(path).suffix.lower() not in MARKDOWN:
+                    raise ValueError("Choose a Markdown note.")
+            stage = self._open_stage_reporter(epoch, resolve_link=resolve_link)
             path, found_fragment, data = await asyncio.to_thread(self.browser.library.load_note, path,
                 current=current, resolve_link=resolve_link, cancelled=cancelled, stage=stage)
             pages = await self.browser.breadcrumb_pages(path, cancelled)
@@ -277,49 +279,18 @@ class LibraryDocuments:
             fragment = found_fragment or fragment
             if resolve_link:
                 self.page_loading.opening(path)
-                if document_kind(path) != 'markdown':
+                kind = document_kind(path)
+                if kind != 'markdown':
                     self.page_loading.finish()
-                    if is_video_file(path):
-                        return await self.open_video_file(path, epoch=epoch)
-                    if document_kind(path) is None:
-                        from .file_preview import LibraryFilePreview
-                        return await self.open_embedded(path, LibraryFilePreview.open, remember=remember, epoch=epoch)
-                    opener = self.open_text if document_kind(path) == 'text' else self.open_canvas
-                    return await opener(path, remember=remember, epoch=epoch)
+                    return await self._open_other_document(path, kind, epoch=epoch, remember=remember)
 
             base = READER_BASE + uuid4().hex + '/'
-            def read():
-                stage('Preparing Markdown preview…')
-                plan = view_plan(data.decode("utf-8-sig"))
-                html, videos = self.note_preview(plan.render() if plan.scripts else plan.source,
-                    path, base, active=bool(plan.scripts), cancelled=cancelled)
-                return html, videos, plan
-
-            html, videos, plan = await asyncio.to_thread(read)
+            prepared = await asyncio.to_thread(self._prepare_markdown, path, base, data,
+                                               cancelled=cancelled, stage=stage)
             if cancelled():
                 return False
             self.mark_open_timing('prepared', epoch)
-            # Native admission can still reject the styled page. Do not retire
-            # the current editor or advance history until it has succeeded.
-            self.publish_html(base, html)
-            self.clear_video_actions()
-            self.cancel_data_views()
-            self.browser.cancel_links()
-            self.retire_editor()
-            self.article.clear()
-            self.article.add(self.web)
-            self.path = path
-            self.base = base
-            self.set_video_actions(videos)
-            if self._open_timing is not None:
-                self._open_timing['published_epoch'] = epoch
-            self.data_view_plan = plan if plan.scripts else None
-            self.data_views_loading = bool(plan.scripts)
-            self.pending_fragment = fragment
-            self.page_search.loading()
-            self.browser.edit.enabled = self.browser.library.writable
-            self.speech.button.enabled = True
-            self.browser.publish_document(path, pages, remember=remember)
+            self._adopt_markdown(prepared, pages, fragment=fragment, remember=remember, epoch=epoch)
             self.mark_open_timing('published', epoch)
             return True
         except OperationCancelled:
@@ -337,6 +308,63 @@ class LibraryDocuments:
             await self.release_media(path)
             if epoch == self.epoch:
                 self.page_loading.finish()
+
+    async def _begin_markdown_open(self, path, *, epoch, resolve_link):
+        try:
+            await asyncio.wait_for(self.browser.remember_position(), timeout=.25)
+        except asyncio.TimeoutError:
+            pass
+        if not self.accepts(epoch):
+            return False
+        self.browser.sidebar.show_detail()
+        self.browser.notice.text = ''
+        self.page_loading.start(path, finding=resolve_link)
+        self.speech.close()
+        return True
+
+    def _open_stage_reporter(self, epoch, *, resolve_link):
+        def stage(message):
+            def publish():
+                if not self.accepts(epoch) or not self.page_loading.active:
+                    return
+                self.page_loading.status.text = message
+                if resolve_link and message == 'Finding file…':
+                    self.mark_open_timing('finding', epoch)
+                elif resolve_link and message.startswith('Reading '):
+                    self.mark_open_timing('found', epoch)
+            self.browser.host.loop.call_soon_threadsafe(publish)
+        return stage
+
+    def _prepare_markdown(self, path, base, data, *, cancelled, stage):
+        stage('Preparing Markdown preview…')
+        plan = view_plan(data.decode("utf-8-sig"))
+        active = bool(plan.scripts)
+        text = plan.render() if active else plan.source
+        html, videos = self.note_preview(text, path, base, active=active, cancelled=cancelled)
+        return _PreparedMarkdown(path, base, html, videos, plan)
+
+    def _adopt_markdown(self, prepared, pages, *, fragment, remember, epoch):
+        # Native admission can still reject the styled page. Keep the current
+        # editor and history until admission succeeds.
+        self.publish_html(prepared.base, prepared.html)
+        self.clear_video_actions()
+        self.cancel_data_views()
+        self.browser.cancel_links()
+        self.retire_editor()
+        self.article.clear()
+        self.article.add(self.web)
+        self.path = prepared.path
+        self.base = prepared.base
+        self.set_video_actions(prepared.videos)
+        if self._open_timing is not None:
+            self._open_timing['published_epoch'] = epoch
+        self.data_view_plan = prepared.plan if prepared.plan.scripts else None
+        self.data_views_loading = bool(prepared.plan.scripts)
+        self.pending_fragment = fragment
+        self.page_search.loading()
+        self.browser.edit.enabled = self.browser.library.writable
+        self.speech.button.enabled = True
+        self.browser.publish_document(prepared.path, pages, remember=remember)
 
 
     def follow_link(self, widget, url, **kwargs):
@@ -592,14 +620,16 @@ class LibraryDocuments:
                 return
             html, videos = await asyncio.to_thread(self.note_preview, text, path, base,
                                                   cancelled=lambda: not valid())
-            if valid():
-                await self.browser.remember_position()
-                if valid():
-                    self.page_search.loading()
-                    self.data_views_loading = False
-                    self.publish_html(base, html)
-                    self.clear_video_actions()
-                    self.set_video_actions(videos)
+            if not valid():
+                return
+            await self.browser.remember_position()
+            if not valid():
+                return
+            self.page_search.loading()
+            self.data_views_loading = False
+            self.publish_html(base, html)
+            self.clear_video_actions()
+            self.set_video_actions(videos)
         except OperationCancelled:
             return
         except (OSError, ValueError, TypeError, KeyError, RuntimeError, asyncio.TimeoutError) as error:
@@ -631,7 +661,7 @@ class LibraryDocuments:
 
 
     async def open_embedded(self, path, opener, *, remember=True, epoch=None):
-        """One navigation/lifetime path for source editors and notebook canvases."""
+        """Prepare and adopt a source editor, notebook canvas, or file preview."""
         epoch = self.cancel_open() if epoch is None else epoch
         if not self.accepts(epoch):
             return False
@@ -654,6 +684,12 @@ class LibraryDocuments:
         if not self.accepts(epoch):
             editor.dispose()
             return False
+        self._adopt_embedded(path, editor, pages, remember=remember)
+        await asyncio.to_thread(self.browser.library.release_media, path,
+                                active=lambda: self.accepts(epoch))
+        return True
+
+    def _adopt_embedded(self, path, editor, pages, *, remember):
         self.browser.cancel_links()
         self.cancel_data_views()
         self.retire_editor()
@@ -670,9 +706,6 @@ class LibraryDocuments:
         self.article.add(editor.view)
         self.browser.edit.enabled = False
         self.browser.publish_document(path, pages, remember=remember)
-        await asyncio.to_thread(self.browser.library.release_media, path,
-                                active=lambda: self.accepts(epoch))
-        return True
 
 
     async def open_editor(self, widget=None, **kwargs):
@@ -680,7 +713,6 @@ class LibraryDocuments:
             return False
         if self.editing:
             return await self.browser.open_note(self.path, remember=False)
-        from .library_document import LibraryMarkdown
         path = self.path
         epoch = self.cancel_open()
         self.browser.sidebar.show_detail()
@@ -691,40 +723,51 @@ class LibraryDocuments:
             await self.browser.remember_position()
             if not self.accepts(epoch):
                 return False
-            try:
-                editor = await LibraryMarkdown.open(self.browser, path)
-            except (OSError, ValueError, UnicodeError, OperationCancelled) as error:
-                if self.accepts(epoch):
-                    if not isinstance(error, OperationCancelled):
-                        await self.document_error('Could not edit document', error)
+            editor = await self._prepare_markdown_editor(path, epoch)
+            if editor is None:
                 return False
-            if not self.accepts(epoch):
-                editor.dispose()
-                return False
-            if editor.open_warning is not None:
-                try:
-                    await self.document_error('Formatted editing unavailable', editor.open_warning)
-                except BaseException:
-                    editor.dispose()
-                    raise
-                if not self.accepts(epoch):
-                    editor.dispose()
-                    return False
-            self.cancel_data_views()
-            self.clear_video_actions()
-            self.speech.close()
-            self.cancel_page_load()
-            self.page_search.loading()
-            self.embedded, self.editing = editor, True
-            self.article.clear()
-            self.article.add(editor.view)
-            self.browser.refresh_reader_actions()
-            self.browser.refresh_chrome()
-            self.browser.host.render()
+            self._adopt_markdown_editor(editor)
             return True
         finally:
             if epoch == self.epoch:
                 opening.finish()
+
+    async def _prepare_markdown_editor(self, path, epoch):
+        from .library_document import LibraryMarkdown
+        try:
+            editor = await LibraryMarkdown.open(self.browser, path)
+        except OperationCancelled:
+            return None
+        except (OSError, ValueError, UnicodeError) as error:
+            if self.accepts(epoch):
+                await self.document_error('Could not edit document', error)
+            return None
+        if not self.accepts(epoch):
+            editor.dispose()
+            return None
+        if editor.open_warning is not None:
+            try:
+                await self.document_error('Formatted editing unavailable', editor.open_warning)
+            except BaseException:
+                editor.dispose()
+                raise
+            if not self.accepts(epoch):
+                editor.dispose()
+                return None
+        return editor
+
+    def _adopt_markdown_editor(self, editor):
+        self.cancel_data_views()
+        self.clear_video_actions()
+        self.speech.close()
+        self.cancel_page_load()
+        self.page_search.loading()
+        self.embedded, self.editing = editor, True
+        self.article.clear()
+        self.article.add(editor.view)
+        self.browser.refresh_reader_actions()
+        self.browser.refresh_chrome()
+        self.browser.host.render()
 
 
     async def open_text(self, path, *, remember=True, epoch=None):

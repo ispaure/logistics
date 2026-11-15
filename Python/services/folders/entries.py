@@ -37,45 +37,35 @@ def get_folder_entries(
 
     if local_folders is None:
         local_folders = folder_discovery.get_local_folders()
-    else:
-        local_folders = list(local_folders)
 
     exclusions = read_exclusions(config.get_config_file_path())
 
-    local_folders_by_name = {}
+    locals_by_name = {}
     for folder in local_folders:
-        # A local root can have an empty name and still belongs in the listing.
+        # An unnamed local root still belongs in the listing.
         if not folder.name or visible_name(folder.name, exclusions):
-            matches = local_folders_by_name.setdefault(folder.name, [])
-            if all(existing.path != folder.path for existing in matches):
-                matches.append(folder)
+            locals_by_name.setdefault(folder.name, {}).setdefault(folder.path, folder)
 
-    remote_names_by_name = {}
+    visible_remotes = set()
+    for name in remote_names:
+        if name:
+            normalized_name = str(name).strip()
+            if visible_name(normalized_name, exclusions, remote=True):
+                visible_remotes.add(normalized_name)
 
-    for remote_name in remote_names:
-        if not remote_name:
-            continue
-
-        remote_name = str(remote_name).strip()
-
-        if visible_name(remote_name, exclusions, remote=True):
-            remote_names_by_name.setdefault(remote_name, remote_name)
-
-    if include_local_only:
-        folder_names = set(local_folders_by_name) | set(remote_names_by_name)
-    else:
-        folder_names = set(remote_names_by_name)
-
+    names = visible_remotes | locals_by_name.keys() if include_local_only else visible_remotes
     entries = []
-    for name in sorted(folder_names):
-        matches = local_folders_by_name.get(name, [])
-        if name in remote_names_by_name and len(matches) > 1:
+    for name in sorted(names):
+        local_matches = locals_by_name.get(name, {})
+        has_remote = name in visible_remotes
+        if has_remote and len(local_matches) > 1:
             raise ValueError(f'Multiple local folders named {name!r}; select a specific local source before matching a remote.')
-        for local in matches or [None]:
+        for folder in local_matches.values() if local_matches else (None,):
             entries.append(FolderEntry(
-                name=name, local=local,
-                remote_name=remote_names_by_name.get(name),
-                remote_source=remote_source if name in remote_names_by_name else None,
-                remote_context=remote_context if name in remote_names_by_name else None,
+                name=name,
+                local=folder,
+                remote_name=name if has_remote else None,
+                remote_source=remote_source if has_remote else None,
+                remote_context=remote_context if has_remote else None,
             ))
     return entries

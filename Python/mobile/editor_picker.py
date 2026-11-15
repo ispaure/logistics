@@ -1167,112 +1167,136 @@ class EditorPicker:
 
 
     async def save_text_destination(self, widget=None, **kwargs):
-        from services.documents.storage import DocumentResource
-        from services.documents.destinations import DestinationRequest
-        from .workspace import MAX_SESSIONS
         if self.cloud_busy or self.operation.data is None or self.entering_creation_folder():
             return
-        target, label = self.save_as_name.value, self.save_as_storage.value
-        folder = self.picker_folder.value
+        label, folder = self.save_as_storage.value, self.picker_folder.value
         if not self.app.require_document_feature(self.operation.filename):
             return
         work = self._begin_work()
-        operation = work.presentation
-        data, creation = operation.data, operation.creation
-        origin = operation.origin
+        origin = work.presentation.origin
+        creating = work.presentation.creation is not None
         try:
             if not self._accepts(work) or (origin is not None and not self.app.workspace.accepts(origin.token)):
                 return
-            notebook = self.creating_notebook()
-            if creation is not None and notebook and self.notebook_templates is not None:
-                operation.notebook_template, operation.notebook_format = self.notebook_templates.selection()
-            extensions = self.picker_extensions()
-            target = self.destination_filename()
-            self.save_as_name.value = target
-            provider = self.editor_provider(label)
-            if (provider.private or getattr(provider, 'remote_storage', False)) and not self.app.require_feature('rclone'):
+            request = self._capture_save_request(work.presentation, label, folder)
+            if request is None:
                 return
-            source_document = operation.source_document
-            privacy_gate = operation.privacy_gate
-            request = DestinationRequest.capture(provider, folder, target, data, extensions,
-                notebook=notebook, creating=creation is not None,
-                session_count=len(self.app.workspace.sessions), session_limit=MAX_SESSIONS, store=self.store,
-                source_document=source_document, notebook_template=operation.notebook_template,
-                notebook_format=operation.notebook_format)
-            source_policy = operation.source_policy
-            confirm_plaintext = source_policy is not None and source_policy.confirm_plaintext(
-                DocumentPolicy.for_provider(provider))
-            if confirm_plaintext:
-                confirmed = await self.app.main_window.dialog(toga.ConfirmDialog(
-                    'Save to unencrypted storage?', 'The destination will contain a decrypted copy. Continue?'))
-                if not self._accepts(work) or not confirmed:
-                    return
-            destination, revision = await asyncio.to_thread(request.resolve, cancelled=work.cancel.is_set)
-            if not self._accepts(work):
-                return
-            if revision is not None:
-                confirmed = await self.app.main_window.dialog(toga.ConfirmDialog(
-                    f'Replace “{Path(target).name}”?',
-                    f'A file with this name already exists in {folder or label}. '
-                    'Replacing it will overwrite its contents.'))
-                if not self._accepts(work) or not confirmed:
-                    return
-            if (confirm_plaintext or revision is not None) and target != self.save_as_name.value:
-                self.save_as_status.value = 'Destination changed. Save again to confirm the new destination.'
+            resolved = await self._confirm_save_destination(work, request, label)
+            if resolved is None:
                 return
             if origin is not None and not self.app.workspace.accepts(origin.token):
                 return
+            destination, revision = resolved
             publication = await asyncio.to_thread(request.publish, destination, revision,
                                                    cancelled=work.cancel.is_set)
             if not self._accepts(work):
                 return
-            copies, destination, prepared = publication.require_reopened()
-            epoch = self._epoch
-            self._finish_work(work)
-            if creation is not None:
-                route_destination, count, details = creation
-                if route_destination == 'documents' and self.app.adaptive.split is not None:
-                    self.app.adaptive.trim_details(details)
-                else:
-                    self.app.routes.trim(route_destination, count)
-            if notebook:
-                from features.notebooks.mobile.documents import open_notebook
-                resource = DocumentResource(provider, destination, max_bytes=request.max_bytes)
-                if operation.binary_owner is not None:
-                    from features.notebooks.mobile.documents import retarget_notebook
-                    opened = await retarget_notebook(self.app, operation.binary_owner, resource)
-                else:
-                    opened = await open_notebook(self.app, resource=resource)
-            else:
-                opened = await self.open_crypt(copies=copies, key=destination, prepared=prepared,
-                                        privacy_gate=privacy_gate, edit=creation is not None)
-            if not self.active_host or epoch != self._epoch:
-                return
-            if opened:
-                self.operation.origin = self.panel = None
-                self.operation.binary_owner = None
-                self.operation.creation = None
-                self.operation.data = None
-                self.operation.privacy_gate = None
-                if source_document is not None and getattr(source_document, 'private', False):
-                    source_document.text = source_document.snapshot.text
-                    self.app.finish_save_as_source(source_document)
-                self.operation.source_document = None
-                self.operation.source_policy = None
-            else:
-                self.save_as_status.value = ('The file was created in the chosen folder, but its editor could not be opened.'
-                    if creation is not None else 'The file was saved, but its editor could not be opened. The Save As draft is retained.')
-                self.show_view(self.creation_layout if creation is not None else self.panel, route='text-destination',
-                               title='New document' if creation is not None else 'Save As')
+            await self._open_saved_destination(work, request, publication)
         except MutationIncomplete as error:
             if not self._accepts(work):
                 return
-            self.save_as_status.value = str(error) + ('\nRefresh the folder before retrying.' if creation is not None
+            self.save_as_status.value = str(error) + ('\nRefresh the folder before retrying.' if creating
                 else '\nRefresh before retrying; your draft remains available.')
         except Exception as error:
             if not self.active_host or work.epoch != self._epoch or work.cancel.is_set():
                 return
-            self.save_as_status.value = ('Creation failed: ' if creation is not None else 'Save As failed; draft retained: ') + str(error)[:200]
+            self.save_as_status.value = ('Creation failed: ' if creating else 'Save As failed; draft retained: ') + str(error)[:200]
         finally:
             self._finish_work(work)
+
+    def _capture_save_request(self, operation, label, folder):
+        from services.documents.destinations import DestinationRequest
+        from .workspace import MAX_SESSIONS
+
+        creating = operation.creation is not None
+        notebook = self.creating_notebook()
+        if creating and notebook and self.notebook_templates is not None:
+            operation.notebook_template, operation.notebook_format = self.notebook_templates.selection()
+        extensions = self.picker_extensions()
+        target = self.destination_filename()
+        self.save_as_name.value = target
+        provider = self.editor_provider(label)
+        if (provider.private or getattr(provider, 'remote_storage', False)) and not self.app.require_feature('rclone'):
+            return None
+        return DestinationRequest.capture(
+            provider, folder, target, operation.data, extensions,
+            notebook=notebook, creating=creating, session_count=len(self.app.workspace.sessions),
+            session_limit=MAX_SESSIONS, store=self.store, source_document=operation.source_document,
+            notebook_template=operation.notebook_template, notebook_format=operation.notebook_format,
+        )
+
+    async def _confirm_save_destination(self, work, request, label):
+        source_policy = work.presentation.source_policy
+        confirm_plaintext = source_policy is not None and source_policy.confirm_plaintext(
+            DocumentPolicy.for_provider(request.provider))
+        if confirm_plaintext:
+            confirmed = await self.app.main_window.dialog(toga.ConfirmDialog(
+                'Save to unencrypted storage?', 'The destination will contain a decrypted copy. Continue?'))
+            if not self._accepts(work) or not confirmed:
+                return None
+
+        destination, revision = await asyncio.to_thread(request.resolve, cancelled=work.cancel.is_set)
+        if not self._accepts(work):
+            return None
+        if revision is not None:
+            confirmed = await self.app.main_window.dialog(toga.ConfirmDialog(
+                f'Replace “{Path(request.filename).name}”?',
+                f'A file with this name already exists in {request.folder or label}. '
+                'Replacing it will overwrite its contents.'))
+            if not self._accepts(work) or not confirmed:
+                return None
+
+        if (confirm_plaintext or revision is not None) and request.filename != self.save_as_name.value:
+            self.save_as_status.value = 'Destination changed. Save again to confirm the new destination.'
+            return None
+        return destination, revision
+
+    async def _open_saved_destination(self, work, request, publication):
+        from services.documents.storage import DocumentResource
+
+        copies, destination, prepared = publication.require_reopened()
+        operation = work.presentation
+        creation = operation.creation
+        epoch = self._epoch
+        # Release the busy state before opening the editor. The epoch still guards the draft.
+        self._finish_work(work)
+        if creation is not None:
+            route_destination, count, details = creation
+            if route_destination == 'documents' and self.app.adaptive.split is not None:
+                self.app.adaptive.trim_details(details)
+            else:
+                self.app.routes.trim(route_destination, count)
+        if request.notebook:
+            from features.notebooks.mobile.documents import open_notebook, retarget_notebook
+            resource = DocumentResource(request.provider, destination, max_bytes=request.max_bytes)
+            if operation.binary_owner is not None:
+                opened = await retarget_notebook(self.app, operation.binary_owner, resource)
+            else:
+                opened = await open_notebook(self.app, resource=resource)
+        else:
+            opened = await self.open_crypt(copies=copies, key=destination, prepared=prepared,
+                                           privacy_gate=operation.privacy_gate, edit=creation is not None)
+        if not self.active_host or epoch != self._epoch:
+            return
+        if not opened:
+            if creation is not None:
+                self.save_as_status.value = 'The file was created in the chosen folder, but its editor could not be opened.'
+                self.show_view(self.creation_layout, route='text-destination', title='New document')
+            else:
+                self.save_as_status.value = ('The file was saved, but its editor could not be opened. '
+                                             'The Save As draft is retained.')
+                self.show_view(self.panel, route='text-destination', title='Save As')
+            return
+
+        self.operation.origin = self.panel = None
+        self.operation.binary_owner = None
+        self.operation.creation = None
+        self.operation.data = None
+        self.operation.privacy_gate = None
+        source_document = operation.source_document
+        if source_document is not None and getattr(source_document, 'private', False):
+            source_document.text = source_document.snapshot.text
+            self.app.finish_save_as_source(source_document)
+        self.operation.source_document = None
+        self.operation.source_policy = None
 

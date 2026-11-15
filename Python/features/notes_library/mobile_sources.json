@@ -22,6 +22,7 @@
     "mobile/library_opening.py",
     "mobile/library_text.py",
     "mobile/library_tools.py",
+    "mobile/library_tree.py",
     "mobile/notes_library.py",
     "mobile/playlist_panel.py",
     "mobile/playlist_speech.py",

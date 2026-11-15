@@ -19,7 +19,7 @@ import sys
 class SceneRetirementTests(unittest.TestCase):
     def setUp(self):
         self.registrations = {}
-        self.enterContext(patch('mobile.app._active_hosts', self.registrations))
+        self.enterContext(patch('mobile.application_lifecycle._active_hosts', self.registrations))
         self.picker = self.enterContext(patch('commonUtils.ui.native.documents.cancel_document_picker'))
         self.manager = object.__new__(SceneManager)
         self.manager.app = SimpleNamespace(windows=[], factory=SimpleNamespace(), active_host=True)
@@ -46,7 +46,8 @@ class SceneRetirementTests(unittest.TestCase):
         self.manager.owners.claim(host.window_id, ('managed-text', 'doc'))
         self.manager.scenes['native-scene'] = host
         self.manager.app.windows.append(host.main_window)
-        self.registrations[str(host.private_root.resolve()) + ':' + host.window_id] = host
+        host._startup_claim = str(host.private_root.resolve()) + ':' + host.window_id
+        self.registrations[host._startup_claim] = host
         return host
 
     def install_delegate(self):
@@ -196,7 +197,7 @@ class SceneRetirementTests(unittest.TestCase):
 class WindowOwnerTests(unittest.TestCase):
     def test_failed_secondary_startup_releases_its_identity_and_leaves_primary_live(self):
         from unittest.mock import patch
-        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import _active_hosts
         from mobile_build.tests.support.app import mobile_app
         with mobile_app() as app:
             manager = app.scene_manager

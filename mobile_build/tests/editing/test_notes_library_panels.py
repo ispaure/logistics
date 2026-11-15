@@ -1040,25 +1040,29 @@ class NotesLibraryPanelTests(unittest.TestCase):
         self.run_async(exercise())
 
     def test_calendar_indexes_nested_names_without_reading_documents(self):
-        (self.vault / 'Projects/2026-10-15.md').write_text('Daily note')
+        (self.vault / 'Projects/2026-12-15.md').write_text('Daily note')
         (self.vault / '2026-02-30.md').write_text('Invalid date')
-        (self.vault / '.obsidian/2026-10-14.md').write_text('Hidden')
+        (self.vault / '.obsidian/2026-12-14.md').write_text('Hidden')
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            owner.calendar_month = date(2027, 1, 1)
             with patch.object(owner.library, 'read', side_effect=AssertionError('Calendar read a body')):
                 owner.select_panel_tab('Calendar')
-                await owner.calendar_task
-            self.assertEqual(owner.calendar_entries, {'2026-10-15': ['Vault/Projects/2026-10-15.md']})
-            owner.calendar_month = date(2026, 10, 1)
-            owner.render_calendar()
+                scan = owner.calendar_task
+                await scan
+            self.assertEqual(owner.calendar_entries, {'2026-12-15': ['Vault/Projects/2026-12-15.md']})
+            owner.calendar_content.children[0].children[0].on_press()
+            self.assertEqual(owner.calendar_month, date(2026, 12, 1))
+            self.assertIs(owner.calendar_task, scan)
             grid = owner.calendar_content.children[1]
             buttons = [button for row in grid.children for button in row.children if hasattr(button, 'daily_date')]
             self.assertEqual(len(buttons), 31)
-            self.assertEqual(next(button.text for button in buttons if button.daily_date == '2026-10-15'), '15•')
+            daily_note = next(button for button in buttons if button.daily_date == '2026-12-15')
+            self.assertEqual(daily_note.text, '15•')
             with patch.object(self.app.main_window, 'dialog', new=AsyncMock()) as dialog:
-                self.assertTrue(await owner.open_daily_note('2026-10-15'))
+                await daily_note.on_press()
                 dialog.assert_not_awaited()
-            self.assertEqual(owner.path, 'Vault/Projects/2026-10-15.md')
+            self.assertEqual(owner.path, 'Vault/Projects/2026-12-15.md')
         self.run_async(exercise())
 
     def test_missing_day_requires_confirmation_and_creates_only_in_root(self):

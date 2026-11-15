@@ -15,7 +15,7 @@ async def prepare_document_mutation(app, request, *, progress=None):
     for owner in list(manager.controllers.values()):
         reader = owner.crypt_reader
         copies = getattr(owner, '_crypt_reader_store', None)
-        if reader is not None and binding_relative(copies, reader, request) is not None:
+        if reader is not None and _affected_text_path(copies, reader, request) is not None:
             if owner.operation_busy or owner._crypt_cancel is not None:
                 raise ValueError('Wait for the affected document operation to finish.')
             workflow = getattr(owner, '_provider_markdown', None)
@@ -27,7 +27,7 @@ async def prepare_document_mutation(app, request, *, progress=None):
     return DocumentMutation(app, request, progress=progress)
 
 
-def relative_document(provider, key, source, path):
+def path_relative_to_mutation(provider, key, source, path):
     """Match ordinary aliases by physical path; private views by namespace."""
     if provider is None:
         return None
@@ -48,24 +48,41 @@ def relative_document(provider, key, source, path):
         return None
 
 
-def binding_relative(copies, reader, request):
+def _affected_text_path(copies, reader, request):
     downloaded = getattr(request.provider, 'copies', None)
     if (downloaded is not None and getattr(copies, 'provider', None) is None
             and Path(copies.root).resolve() == Path(downloaded.root).resolve()
             and reader.key == request.provider.key):
         return ''
-    return relative_document(getattr(copies, 'provider', None), reader.key,
+    return path_relative_to_mutation(getattr(copies, 'provider', None), reader.key,
                              request.provider, request.path)
 
 
 @dataclass(frozen=True)
-class Binding:
+class TextDocumentBinding:
     owner: object
     reader: object
     copies: object
     relative: str
     token: tuple
     readonly: bool
+
+
+@dataclass(frozen=True)
+class ReopenedTextDocument:
+    binding: TextDocumentBinding
+    copies: object
+    reader: object
+    check_access: object
+    progress: object
+
+
+@dataclass(frozen=True)
+class DocumentMutationHandoff:
+    text_documents: tuple[ReopenedTextDocument, ...]
+    notebooks: tuple
+    reference_error: OSError | ValueError | None
+    progress_error: OSError | ValueError | None
 
 
 class DocumentMutation:
@@ -92,7 +109,7 @@ class DocumentMutation:
                     copies = getattr(owner, '_crypt_reader_store', None)
                     if reader is None:
                         continue
-                    relative = binding_relative(copies, reader, request)
+                    relative = _affected_text_path(copies, reader, request)
                     if relative is None:
                         continue
                     if host is not app:
@@ -102,7 +119,7 @@ class DocumentMutation:
                         raise ValueError('Wait for the affected document operation to finish or unlock it again.')
                     if not reader.editable or getattr(reader, 'read_only', False):
                         raise ValueError('Close the affected reader before moving or renaming its file or folder.')
-                    self.bindings.append(Binding(owner, reader, copies, relative,
+                    self.bindings.append(TextDocumentBinding(owner, reader, copies, relative,
                         app.workspace.token(owner.session.id), owner.crypt_text.readonly))
             for binding in self.bindings:
                 binding.owner.set_cloud_busy(True)
@@ -126,15 +143,7 @@ class DocumentMutation:
             raise ValueError('Use Move to confirm moving private content to unencrypted storage.')
         copies, destination_key = document_source(destination, target) if self.bindings else (None, target)
         with mutation_lock:
-            for binding in self.bindings:
-                key = '/'.join(p for p in (target, binding.relative) if p)
-                suffix = Path(key).suffix.lower()
-                if (suffix not in SOURCE_EXTENSIONS
-                        or (suffix in {'.md', '.markdown'}) != (binding.reader.kind in {'.md', '.markdown'})):
-                    raise ValueError('Close the affected document before changing its editor type.')
-                current = binding.copies.open(binding.reader.key, cancelled=cancelled)
-                if current.data != binding.reader.data or current.revision != binding.reader.revision:
-                    raise ValueError('An open document changed on disk. Reload or use Save As before moving it.')
+            self._verify_text_bindings(target, cancelled)
             self.notebooks.prepare(destination, target, cancelled)
             reference_error = progress_error = None
             relocate_progress = None
@@ -157,7 +166,7 @@ class DocumentMutation:
                     relocate(self.app, request.provider, request.path, target)
                 except (OSError, ValueError, PermissionError) as error:
                     reference_error = error
-            updated = []
+            text_documents = []
             try:
                 notebooks = self.notebooks.reopen(destination)
                 for binding in self.bindings:
@@ -179,91 +188,109 @@ class DocumentMutation:
                             progress.load()
                         except (OSError, ValueError) as error:
                             progress_error = error
-                    updated.append((binding, copies, reader, access, progress))
+                    text_documents.append(ReopenedTextDocument(binding, copies, reader, access, progress))
             except Exception as error:
                 raise MutationIncomplete('The file was moved, but the editor could not follow it. '
                     'Edits are retained; use Save As and inspect the destination before retrying.',
                     MutationResult(destination_published=True, source_state='removed')) from error
-        return result, updated, notebooks, reference_error, progress_error
+        return DocumentMutationHandoff(
+            tuple(text_documents), tuple(notebooks), reference_error, progress_error,
+        )
 
-    def apply(self, result):
+    def _verify_text_bindings(self, target, cancelled):
+        for binding in self.bindings:
+            key = '/'.join(p for p in (target, binding.relative) if p)
+            suffix = Path(key).suffix.lower()
+            if (suffix not in SOURCE_EXTENSIONS
+                    or (suffix in {'.md', '.markdown'}) != (binding.reader.kind in {'.md', '.markdown'})):
+                raise ValueError('Close the affected document before changing its editor type.')
+            current = binding.copies.open(binding.reader.key, cancelled=cancelled)
+            if current.data != binding.reader.data or current.revision != binding.reader.revision:
+                raise ValueError('An open document changed on disk. Reload or use Save As before moving it.')
+
+    def apply(self, handoff: DocumentMutationHandoff):
+        for document in handoff.text_documents:
+            self._adopt_text_document(document)
+        self.notebooks.apply(handoff.notebooks)
+        self.app.save_workspace()
+        if handoff.progress_error is not None:
+            self.app.recovery_notice.text = 'Files moved. Some reading progress could not be carried forward.'
+        if handoff.reference_error is not None:
+            raise ValueError('Files changed; some saved references could not be updated.') from handoff.reference_error
+
+    def _adopt_text_document(self, document: ReopenedTextDocument):
         from .provider_ui import private_label
         from .document_sources import file_source
         app = self.app
-        for binding, copies, reader, access, progress in result[1]:
-            from services.documents.mobile_reading import reading_capabilities
-            private = reading_capabilities(copies).private
-            owner, session = binding.owner, binding.owner.session
-            if (not app.active_host or not app.workspace.accepts(binding.token)
-                    or owner.crypt_reader is not binding.reader
-                    or not app.private_sessions.available(session.id)):
-                if progress is not None:
-                    progress.close()
-                continue
-            old_identity = session.identity
-            previous_source = getattr(session, 'history_source', None)
-            try:
-                app.credential_document_lists.relocated(session)
-                if previous_source is not None:
-                    from .recent_documents import RecentDocuments
-                    app.recent_documents.forget('file-reference', RecentDocuments.reference_id(previous_source))
-            except (OSError, ValueError):
-                app.credential_document_lists.notice()
-            owner.crypt_reader, owner._crypt_reader_store = reader, copies
-            owner.document_access = access
-            owner.credential_client = app.cloud_client
-            owner.credential_generation = getattr(app.cloud_client, 'generation', None)
-            session.resource = app.private_sessions.identity(copies, reader.key)
-            session.title = Path(reader.name).name
-            owners = getattr(app.workspace, 'window_owners', None)
-            if owners is not None and session.identity != old_identity:
-                owners.claim(app.workspace.window_id, session.identity, private=session.private_access)
-                owners.release(app.workspace.window_id, old_identity)
-            app.workspace.invalidate(session.id)
-            owner.crypt_text.set_filename(reader.name)
-            owner.crypt_title.text = private_label(session.title)
-            owner.crypt_page.items = reader.labels
-            owner.crypt_page.value = reader.labels[0]
-            owner.crypt_save.text = 'Save'
-            previous = getattr(owner, '_provider_progress', None)
-            if previous is not None:
-                # The verified move already relocated durable local state.
-                # Install a new handle instead of replaying stale observations
-                # or carrying a private locator into a different trust domain.
-                previous.close()
-                owner._provider_progress = progress
-                if progress is not None:
-                    progress.live = True
-                    progress.capture(initial=True)
-            workflow = getattr(owner, '_provider_markdown', None)
-            if workflow is not None:
-                workflow.relocated(private=private)
-            # Keep an existing session-only privacy gate across plaintext moves.
-            # New encrypted locations adopt their current credential gate too.
-            if private:
-                if owner.privacy_gate is None:
-                    gate_for = getattr(copies, 'privacy_gate_for', None)
-                    owner.privacy_gate = (gate_for(reader.key) if gate_for is not None
-                                          else getattr(copies, 'privacy_gate', None))
-            session.history_source = None
-            for name in ('cache_id', 'cache_source'):
-                session.__dict__.pop(name, None)
-            app.private_sessions.update_session(owner)
-            try:
-                if owner.privacy_gate is None:
-                    session.history_source = file_source(app, copies, reader.key)
-                if owner.privacy_gate is None or private:
-                    app.credential_document_lists.remember(session, file_source(app, copies, reader.key, session_only=True))
-                if session.history_source is not None:
-                    app.recent_documents.remember_file(session, session.history_source)
-            except (OSError, ValueError):
-                app.credential_document_lists.notice()
-        self.notebooks.apply(result[2])
-        app.save_workspace()
-        if result[4] is not None:
-            app.recovery_notice.text = 'Files moved. Some reading progress could not be carried forward.'
-        if result[3] is not None:
-            raise ValueError('Files changed; some saved references could not be updated.') from result[3]
+        binding = document.binding
+        copies, reader, progress = document.copies, document.reader, document.progress
+        from services.documents.mobile_reading import reading_capabilities
+        private = reading_capabilities(copies).private
+        owner, session = binding.owner, binding.owner.session
+        if (not app.active_host or not app.workspace.accepts(binding.token)
+                or owner.crypt_reader is not binding.reader
+                or not app.private_sessions.available(session.id)):
+            if progress is not None:
+                progress.close()
+            return
+        old_identity = session.identity
+        previous_source = getattr(session, 'history_source', None)
+        try:
+            app.credential_document_lists.relocated(session)
+            if previous_source is not None:
+                from .recent_documents import RecentDocuments
+                app.recent_documents.forget('file-reference', RecentDocuments.reference_id(previous_source))
+        except (OSError, ValueError):
+            app.credential_document_lists.notice()
+        owner.crypt_reader, owner._crypt_reader_store = reader, copies
+        owner.document_access = document.check_access
+        owner.credential_client = app.cloud_client
+        owner.credential_generation = getattr(app.cloud_client, 'generation', None)
+        session.resource = app.private_sessions.identity(copies, reader.key)
+        session.title = Path(reader.name).name
+        owners = getattr(app.workspace, 'window_owners', None)
+        if owners is not None and session.identity != old_identity:
+            owners.claim(app.workspace.window_id, session.identity, private=session.private_access)
+            owners.release(app.workspace.window_id, old_identity)
+        app.workspace.invalidate(session.id)
+        owner.crypt_text.set_filename(reader.name)
+        owner.crypt_title.text = private_label(session.title)
+        owner.crypt_page.items = reader.labels
+        owner.crypt_page.value = reader.labels[0]
+        owner.crypt_save.text = 'Save'
+        previous = getattr(owner, '_provider_progress', None)
+        if previous is not None:
+            # The verified move already relocated durable local state.
+            # Install a new handle instead of replaying stale observations
+            # or carrying a private locator into a different trust domain.
+            previous.close()
+            owner._provider_progress = progress
+            if progress is not None:
+                progress.live = True
+                progress.capture(initial=True)
+        workflow = getattr(owner, '_provider_markdown', None)
+        if workflow is not None:
+            workflow.relocated(private=private)
+        # Keep an existing session-only privacy gate across plaintext moves.
+        # New encrypted locations adopt their current credential gate too.
+        if private:
+            if owner.privacy_gate is None:
+                gate_for = getattr(copies, 'privacy_gate_for', None)
+                owner.privacy_gate = (gate_for(reader.key) if gate_for is not None
+                                      else getattr(copies, 'privacy_gate', None))
+        session.history_source = None
+        for name in ('cache_id', 'cache_source'):
+            session.__dict__.pop(name, None)
+        app.private_sessions.update_session(owner)
+        try:
+            if owner.privacy_gate is None:
+                session.history_source = file_source(app, copies, reader.key)
+            if owner.privacy_gate is None or private:
+                app.credential_document_lists.remember(session, file_source(app, copies, reader.key, session_only=True))
+            if session.history_source is not None:
+                app.recent_documents.remember_file(session, session.history_source)
+        except (OSError, ValueError):
+            app.credential_document_lists.notice()
 
     def release(self):
         self.notebooks.release()

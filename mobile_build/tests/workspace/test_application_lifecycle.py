@@ -139,7 +139,7 @@ class HostLifecycleTests(unittest.TestCase):
         host._startup_claim = 'exit-veto:primary'
         registered = {host._startup_claim: host}
         owner = lifecycle(host)
-        with patch('mobile.app._active_hosts', registered), \
+        with patch('mobile.application_lifecycle._active_hosts', registered), \
                 patch('mobile.markdown_speech.stop_markdown_speech'), \
                 patch('features.books.mobile.media_controls.stop_media'):
             self.assertFalse(owner.request_exit())
@@ -203,7 +203,7 @@ class HostLifecycleTests(unittest.TestCase):
             self.assertNotIn(host._startup_claim, registered)
             registered[host._startup_claim] = successor
         host.native_host.dispose.side_effect = restart
-        with patch('mobile.app._active_hosts', registered):
+        with patch('mobile.application_lifecycle._active_hosts', registered):
             self.assertTrue(owner.request_exit())
             self.assertTrue(owner.request_exit())
             self.assertIs(registered[host._startup_claim], successor)
@@ -226,7 +226,7 @@ class HostLifecycleTests(unittest.TestCase):
         host.native_host, host.incoming_task = Mock(), Mock()
         host._startup_claim = 'checkpoint-veto:primary'
         registered = {host._startup_claim: host}
-        with patch('mobile.app._active_hosts', registered):
+        with patch('mobile.application_lifecycle._active_hosts', registered):
             self.assertFalse(lifecycle(host).request_exit())
             self.assertIs(registered[host._startup_claim], host)
         self.assertTrue(host.active_host)

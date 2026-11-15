@@ -294,7 +294,7 @@ class SceneManager:
         self.delegate_class = LogisticsSceneAppDelegate
 
     def make_host(self, identifier):
-        from .app import LogisticsMobile, _active_hosts
+        from .app import LogisticsMobile
         host = object.__new__(workspace_class())
         # Only application infrastructure is shared. Feature state, callbacks,
         # routes, native containers, preferences and drafts belong to this host.
@@ -319,9 +319,6 @@ class SceneManager:
             # after bind_workspace but before returning a usable window.
             if self.owners.hosts.get(identifier) is host:
                 self.owners.detach(identifier)
-            identity = str(host.storage_root.resolve()) + ':' + identifier
-            if _active_hosts.get(identity) is host:
-                _active_hosts.pop(identity)
             window = host._main_window
             if window is not None and window in self.app.windows:
                 try:
@@ -364,10 +361,7 @@ class SceneManager:
             if self.owners.hosts.get(host.window_id) is host:
                 self.owners.detach(host.window_id)
                 detached = True
-            from .app import _active_hosts
-            identity = str(host.private_root.resolve()) + ':' + host.window_id
-            if _active_hosts.get(identity) is host:
-                _active_hosts.pop(identity)
+            owner.release_startup_claim()
             self.scenes = {key: value for key, value in self.scenes.items() if value is not host}
             if host.main_window in self.app.windows:
                 self.app.windows.remove(host.main_window)

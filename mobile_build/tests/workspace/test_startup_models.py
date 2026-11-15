@@ -29,7 +29,7 @@ class AsyncStartupApp(LogisticsMobile):
 
 class StartupModelTests(TestCase):
     def test_confirmed_exit_with_private_manager_allows_sync_and_async_restart(self):
-        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import _active_hosts
         from mobile.application_lifecycle import lifecycle
         for app_type in (LogisticsMobile, AsyncStartupApp):
             with self.subTest(startup=app_type.__name__), TemporaryDirectory() as directory:
@@ -161,7 +161,7 @@ class StartupModelTests(TestCase):
 
 class ReplacementAdmissionTests(TestCase):
     def test_overlapping_model_loads_keep_newest_pending_claim_in_both_orders(self):
-        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import _active_hosts
         from mobile.application_lifecycle import lifecycle
         from mobile.startup import StartupPhase
         from types import SimpleNamespace as NS
@@ -187,7 +187,7 @@ class ReplacementAdmissionTests(TestCase):
                     await gates[index].wait()
                 return {'preferences': NS(values={'accent_hue': 1, 'accent_saturation': 1})}
             key = str(root.resolve()) + ':primary'
-            with patch('mobile.app.asyncio.to_thread', side_effect=load):
+            with patch('mobile.application_lifecycle.asyncio.to_thread', side_effect=load):
                 tasks = []
                 try:
                     for index, host in enumerate(hosts):
@@ -255,7 +255,7 @@ class ReplacementAdmissionTests(TestCase):
         return host
 
     def test_overlapping_flushes_newest_attempt_wins_including_newer_failure(self):
-        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import _active_hosts
         from mobile.application_lifecycle import lifecycle
         from mobile.startup import StartupPhase
         from unittest.mock import AsyncMock
@@ -282,7 +282,7 @@ class ReplacementAdmissionTests(TestCase):
             editor.flush = flush
             tasks = []
             with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_iOS.test'), \
-                    patch('mobile.app.asyncio.to_thread', new=AsyncMock(return_value={})) as load:
+                    patch('mobile.application_lifecycle.asyncio.to_thread', new=AsyncMock(return_value={})) as load:
                 try:
                     for index, host in enumerate(incoming):
                         host.startup_task = asyncio.create_task(LogisticsMobile._prepare_startup_phase(host, StartupPhase.PREFERENCES))
@@ -319,7 +319,7 @@ class ReplacementAdmissionTests(TestCase):
                         asyncio.run(exercise(Path(directory), order, failure))
 
     def test_preservation_and_disposal_reentrancy_do_not_overwrite_successor(self):
-        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import _active_hosts
         from mobile.application_lifecycle import lifecycle
         from unittest.mock import Mock
         from types import SimpleNamespace as NS
@@ -349,7 +349,7 @@ class ReplacementAdmissionTests(TestCase):
                     _active_hosts.pop(key, None)
 
     def test_failed_model_load_releases_only_own_claim_and_other_windows_survive(self):
-        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import _active_hosts
         from mobile.application_lifecycle import lifecycle
         from mobile.startup import StartupPhase
         from unittest.mock import AsyncMock
@@ -360,7 +360,7 @@ class ReplacementAdmissionTests(TestCase):
             other_key = str(root.resolve()) + ':secondary'
             _active_hosts[key], _active_hosts[other_key] = old, unrelated
             try:
-                with patch('mobile.app.asyncio.to_thread', new=AsyncMock(side_effect=OSError('Synthetic load failure'))):
+                with patch('mobile.application_lifecycle.asyncio.to_thread', new=AsyncMock(side_effect=OSError('Synthetic load failure'))):
                     with self.assertRaises(OSError):
                         await LogisticsMobile._prepare_startup_phase(incoming, StartupPhase.PREFERENCES)
                 self.assertNotIn(key, _active_hosts)
@@ -376,7 +376,7 @@ class ReplacementAdmissionTests(TestCase):
             asyncio.run(exercise(Path(directory)))
 
     def test_preservation_callback_aborting_incoming_keeps_old_host_in_both_startup_routes(self):
-        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import _active_hosts
         from mobile.application_lifecycle import lifecycle
         from mobile.startup import StartupPhase
         from unittest.mock import AsyncMock
@@ -399,7 +399,7 @@ class ReplacementAdmissionTests(TestCase):
             old.store.flush_checkpoints.side_effect = lambda: lifecycle(incoming).abort_startup()
             try:
                 with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_iOS.test'), \
-                        patch('mobile.app.asyncio.to_thread', new=AsyncMock()) as load:
+                        patch('mobile.application_lifecycle.asyncio.to_thread', new=AsyncMock()) as load:
                     with self.assertRaises(asyncio.CancelledError):
                         if asynchronous:
                             await LogisticsMobile._prepare_startup_phase(incoming, StartupPhase.PREFERENCES)
@@ -457,7 +457,7 @@ class NotebookReplacementTests(TestCase):
         self.assertTrue(self.panel.editor.checkpoint_unconfirmed)
 
     def assert_replacement_veto(self, *, synchronous=False):
-        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import _active_hosts
         from mobile.application_lifecycle import lifecycle
         from mobile.startup import StartupPhase
         panel, editor, document = self.panel, self.panel.editor, self.panel.document
@@ -518,7 +518,7 @@ class NotebookReplacementTests(TestCase):
         private.retire.assert_not_called()
 
     def test_successful_notebook_save_allows_replacement_despite_stale_editor_flag(self):
-        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import _active_hosts
         from mobile.application_lifecycle import lifecycle
         from mobile.startup import StartupPhase
         self.unconfirm_checkpoint()

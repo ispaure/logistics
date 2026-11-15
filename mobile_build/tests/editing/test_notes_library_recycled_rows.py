@@ -94,6 +94,37 @@ class RecycledNotesRowsTests(unittest.TestCase):
             owner.dispose()
         self.run_async(exercise())
 
+    def test_search_reprojects_visible_duplicate_names_and_preserves_the_viewport(self):
+        async def exercise():
+            (self.vault / 'Plan.md').write_text('# Also named Plan')
+            owner = await self.library()
+            owner.search.value = 'Plan'
+            await owner.search_task
+            rows = owner.rows
+            first, second = 'Vault/Plan.md', 'Vault/Projects/Plan.MD'
+            self.assertEqual({row.path: row.title for row in rows.children}, {
+                first: 'Plan.md · Library root', second: 'Plan.MD · Projects',
+            })
+
+            visible = owner.host.folder_visible
+            def show(path, *, directory):
+                return path != first and visible(path, directory=directory)
+
+            with patch.object(owner, 'host', replace(owner.host, folder_visible=show)), \
+                    patch.object(owner, 'search_position', return_value=125), \
+                    patch.object(owner, 'restore_search_position') as restore, \
+                    patch.object(rows.native_list, 'scroll_to_row') as reveal:
+                owner.render_tree(preserve_viewport=True)
+                self.assertEqual([(row.path, row.title) for row in rows.children], [(second, 'Plan.MD')])
+                restore.assert_called_once_with(125)
+                reveal.assert_not_called()
+
+                owner.render_tree(reveal=second, preserve_viewport=True)
+                self.assertEqual(restore.call_count, 1)
+                reveal.assert_called_once_with(0)
+            owner.dispose()
+        self.run_async(exercise())
+
     def test_replaced_or_hidden_rows_cannot_activate_or_open_actions(self):
         async def exercise():
             owner = await self.library()

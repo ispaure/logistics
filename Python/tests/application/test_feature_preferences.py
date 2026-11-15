@@ -16,8 +16,15 @@ class FeaturePreferencesTests(unittest.TestCase):
     def setUp(self):
         self.temporary = TemporaryDirectory(); self.addCleanup(self.temporary.cleanup)
         self.path = Path(self.temporary.name) / 'preferences.ini'
-        for name, value in [('_disabled_features', set()), ('_initialized_features', set()), ('_preferences_path', None), ('_layered_preferences', False)]:
-            replacement = patch.object(registry, name, value); replacement.start(); self.addCleanup(replacement.stop)
+        for owner, attribute, value in (
+            (registry.preferences, 'disabled', set()),
+            (registry.preferences, 'layered', False),
+            (registry.preferences, 'path', None),
+            (registry.activation, 'initialized', set()),
+        ):
+            patcher = patch.object(owner, attribute, value)
+            patcher.start()
+            self.addCleanup(patcher.stop)
         self.base = ModuleType('features.pref_base'); self.base.FEATURE_NAME = 'pref_base'
         self.child = ModuleType('features.pref_child'); self.child.FEATURE_NAME = 'pref_child'
         self.child.FEATURE_DEPENDENCIES = ('pref_base',)
@@ -31,8 +38,8 @@ class FeaturePreferencesTests(unittest.TestCase):
         self.assertEqual(load_disabled(self.path), {'text_editor', 'notes_library'})
         save_disabled(self.path, {'text_editor'})
         registry.load_feature_preferences(self.path)
-        self.assertNotIn('notes_library', registry._disabled_features)
-        self.assertIn('text_editor', registry._disabled_features)
+        self.assertNotIn('notes_library', registry.preferences.disabled)
+        self.assertIn('text_editor', registry.preferences.disabled)
 
     def test_notes_library_migration_respects_explicit_layered_choice(self):
         from commonUtils.configuration.layered import register_settings
@@ -42,18 +49,18 @@ class FeaturePreferencesTests(unittest.TestCase):
         with patch.object(registry, 'feature_settings_store', return_value=store), patch(
                 'features.preferences.preferences_path', return_value=self.path):
             registry.load_feature_preferences()
-            self.assertIn('notes_library', registry._disabled_features)
+            self.assertIn('notes_library', registry.preferences.disabled)
             store.save({('FeatureOverrides', 'notes_library_bool'): 'true'})
             registry.load_feature_preferences()
-            self.assertNotIn('notes_library', registry._disabled_features)
-            self.assertIn('text_editor', registry._disabled_features)
+            self.assertNotIn('notes_library', registry.preferences.disabled)
+            self.assertIn('text_editor', registry.preferences.disabled)
 
     def test_saved_choices_load_before_startup_hooks_and_dependencies_reenable(self):
         registry.load_feature_preferences(self.path)
         registry.set_feature_enabled('pref_child', False)
         registry.set_feature_enabled('pref_base', False)
         self.assertEqual(load_disabled(self.path), {'pref_base', 'pref_child'})
-        registry._disabled_features.clear()
+        registry.preferences.disabled.clear()
         registry.load_feature_preferences(self.path)
         self.assertEqual(registry.initialize_features(), [])
         self.base.initialize.assert_not_called(); self.child.initialize.assert_not_called()
@@ -277,7 +284,7 @@ class FeaturePreferencesTests(unittest.TestCase):
                 return save(changes, **kwargs)
             with patch.object(store, 'save', side_effect=fail_first):
                 registry.load_feature_preferences()
-            self.assertIn('pref_child', registry._disabled_features)
+            self.assertIn('pref_child', registry.preferences.disabled)
             ledger = migration_ledger(store)
             self.assertEqual(ledger.state('feature-enable-v1'), 'pending')
             self.assertIsNone(ledger.state('feature-overrides-v2'))

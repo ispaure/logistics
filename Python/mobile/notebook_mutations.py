@@ -8,7 +8,7 @@ from features.notebooks.notebook import Notebook, MAX_ARCHIVE
 
 class NotebookMutations:
     def __init__(self, app, request):
-        from .document_mutations import relative_document
+        from .document_mutations import path_relative_to_mutation
         self.app, self.bindings = app, []
         owners = getattr(app.workspace, 'window_owners', None)
         hosts = list(owners.hosts.values()) if owners else [app]
@@ -18,7 +18,7 @@ class NotebookMutations:
                 resource = document.resource if document else None
                 if resource is None:
                     continue
-                relative = relative_document(resource.provider, resource.path, request.provider, request.path)
+                relative = path_relative_to_mutation(resource.provider, resource.path, request.provider, request.path)
                 if relative is None:
                     continue
                 if host is not app or panel.busy:

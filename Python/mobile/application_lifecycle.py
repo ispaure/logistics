@@ -5,9 +5,11 @@ order stable: a veto must leave the active document and native controls usable.
 """
 import asyncio
 import logging
+from weakref import WeakValueDictionary
 
 
 logger = logging.getLogger(__name__)
+_active_hosts = WeakValueDictionary()
 
 
 class HostLifecycle:
@@ -64,6 +66,81 @@ class HostLifecycle:
             if stop is not None:
                 stop(value)
 
+    def startup_identity(self):
+        host = self.host
+        return f"{host.private_root.resolve()}:{getattr(host, 'window_id', 'primary')}"
+
+    def _claim_startup(self, identity):
+        self.host.active_host = False
+        self.host._startup_claim = identity
+        _active_hosts[identity] = self.host
+
+    def require_startup_claim(self, identity):
+        if (vars(self.host).get('_startup_claim') != identity or _active_hosts.get(identity) is not self.host
+                or self.replaced or self.startup_aborted):
+            raise asyncio.CancelledError
+
+    def claim_startup_sync(self, identity):
+        """Admit a synchronously constructed host after predecessor preflight."""
+        if self.replaced or self.startup_aborted:
+            raise asyncio.CancelledError
+        previous = _active_hosts.get(identity)
+        if previous is None or previous is self.host:
+            self._claim_startup(identity)
+            return
+        predecessor = lifecycle(previous)
+        attempt = predecessor.replacement_attempt = object()
+        predecessor.retire_for_replacement(incoming=self.host, identity=identity, attempt=attempt)
+
+    async def prepare_startup_models(self, load_models):
+        """Load models under a startup claim that survives concurrent replacement."""
+        host = self.host
+        if self.replaced or self.startup_aborted or '_startup_claim' in vars(host):
+            raise asyncio.CancelledError
+        identity = self.startup_identity()
+        root = host.private_root
+        try:
+            await self._claim_startup_after_preservation(identity)
+            self.require_startup_claim(identity)
+            models = await asyncio.to_thread(load_models, root, getattr(host, 'workspace_root', root))
+            self.require_startup_claim(identity)
+            return models
+        except BaseException:
+            self.abort_startup()
+            raise
+
+    async def _claim_startup_after_preservation(self, identity):
+        """Flush pending native edits and reading progress before taking ownership."""
+        previous = _active_hosts.get(identity)
+        if previous is None or previous is self.host:
+            self._claim_startup(identity)
+            return
+
+        predecessor = lifecycle(previous)
+        attempt = predecessor.replacement_attempt = object()
+
+        def valid():
+            return (predecessor.replacement_attempt is attempt and _active_hosts.get(identity) is previous
+                    and not self.startup_aborted and not self.replaced)
+
+        readers = getattr(previous, 'readers', None)
+        if readers is not None:
+            tasks = readers.flush_progress()
+            if tasks:
+                if any(task.get_loop() is not asyncio.get_running_loop() for task in tasks):
+                    raise OSError('Finish saving reading progress in the previous workspace.')
+                await asyncio.wait(tasks)
+            if not valid():
+                raise asyncio.CancelledError
+
+        private = getattr(previous, 'private_sessions', None)
+        receipt = await private.prepare_replacement(valid=valid) if private is not None else None
+        if not valid():
+            raise asyncio.CancelledError
+        if private is not getattr(previous, 'private_sessions', None):
+            raise OSError('The private workspace changed during replacement.')
+        predecessor.retire_for_replacement(receipt, incoming=self.host, identity=identity, attempt=attempt)
+
     def prepare_replacement(self, receipt=None):
         """Preservation is a preflight; the predecessor stays active until claim."""
         from .session_workflows.transitions import transitions_for
@@ -90,7 +167,6 @@ class HostLifecycle:
             from .session_workflows.transitions import transitions_for
             transitions_for(host).require_notebook_replacement_safe()
             if incoming is not None:
-                from .app import _active_hosts
                 own = lifecycle(incoming)
                 if (self.replacement_attempt is not attempt or _active_hosts.get(identity) is not host
                         or own.replaced or own.startup_aborted):
@@ -102,25 +178,21 @@ class HostLifecycle:
             host.active_host = False
             self.replacement_prepared = self.replaced = True
             if incoming is not None:
-                incoming.active_host = False
-                incoming._startup_claim = identity
-                _active_hosts[identity] = incoming
+                own._claim_startup(identity)
         if private is not None:
             self._retire(private, 'retire')
         self._retire_resources()
 
-    def _release_startup_claim(self):
+    def release_startup_claim(self):
         """Forget this host without disturbing a successor's registration."""
-        identity = self.host.__dict__.get('_startup_claim')
-        if identity is not None:
-            from .app import _active_hosts
-            if _active_hosts.get(identity) is self.host:
-                del _active_hosts[identity]
+        identity = vars(self.host).get('_startup_claim')
+        if identity is not None and _active_hosts.get(identity) is self.host:
+            del _active_hosts[identity]
 
     def abort_startup(self):
         """Retire only initialized resources, without checkpointing partial state."""
         self.startup_aborted = True
-        self._release_startup_claim()
+        self.release_startup_claim()
         screen = getattr(self.host, 'startup_screen', None)
         self._retire(getattr(screen, 'cover', None), 'dispose')
         self._retire_resources()
@@ -250,7 +322,7 @@ class HostLifecycle:
     def request_exit(self):
         host = self.host
         if self.exited:
-            self._release_startup_claim()
+            self.release_startup_claim()
             self._retire_resources()
             return True
         if self.startup_aborted or getattr(host, '_startup_in_progress', False):
@@ -287,7 +359,7 @@ class HostLifecycle:
             self.exited = True
             # Preservation already succeeded. A later startup must not ask this
             # exited host's unavailable private manager to preserve it again.
-            self._release_startup_claim()
+            self.release_startup_claim()
             self._retire_resources()
         return saved
 

@@ -16,12 +16,35 @@ class FolderRenderingTests(unittest.TestCase):
     setUp = fixtures.set_up_vault
     run_async = fixtures.run_async
 
-    async def library(self):
+    async def library(self, count=40):
         folder = self.vault / 'Many'
         folder.mkdir()
-        for index in range(40):
+        for index in range(count):
             (folder / f'Note {index}.md').write_text('# Fixture')
         return await open_vault(self.app, self.provider, 'Vault', 'documents')
+
+    def test_reveal_extends_the_widget_page_and_reuses_mounted_rows(self):
+        async def exercise():
+            owner = await self.library(count=80)
+            await owner.toggle_folder('Vault/Many')
+            mounted = list(owner.rows.children[:-1])
+            more = owner.rows.children[-1]
+            expected = ['Vault/Many', *sorted(f'Vault/Many/Note {i}.md' for i in range(80))]
+            self.assertEqual(len(mounted), 50)
+            self.assertEqual(more.text, 'Show more notes')
+
+            owner.selected_path = expected[-1]
+            owner.render_tree(reveal=owner.selected_path)
+
+            self.assertEqual(owner.shown, len(expected))
+            self.assertEqual(owner.rows.children[:len(mounted)], mounted)
+            self.assertIs(owner.rows.children[-1], more)
+            paths = [button.vault_path for row in owner.rows.children[:-1]
+                     for button in row.children if hasattr(button, 'vault_path')]
+            self.assertEqual(paths, expected)
+            self.assertTrue(owner.rows.children[-2]._notes_selected)
+            owner.dispose()
+        self.run_async(exercise())
 
     def test_new_folder_controls_paint_only_their_final_surface_style(self):
         async def exercise():

@@ -563,7 +563,7 @@ class PrivateSessionTests(unittest.TestCase):
 
     def test_replacement_veto_retains_dirty_text_metadata_and_source(self):
         from mobile.application_lifecycle import lifecycle
-        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import _active_hosts
         from types import SimpleNamespace as NS
         owner = self.open('draft.txt')
         manager, reader = self.app.private_sessions, owner.crypt_reader
@@ -811,7 +811,7 @@ class PrivateSessionTests(unittest.TestCase):
 
     def test_provider_receipt_rechecked_after_preservation_callbacks_and_veto_keeps_host(self):
         from mobile.application_lifecycle import lifecycle
-        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import _active_hosts
         owner = self.open('preserved.txt')
         manager = self.app.private_sessions
         _, _ = self.native_editor(owner, AsyncMock())
@@ -830,7 +830,7 @@ class PrivateSessionTests(unittest.TestCase):
 
     def test_startup_veto_and_shell_abort_preserve_exact_private_owner(self):
         from mobile.application_lifecycle import lifecycle
-        from mobile.app import _active_hosts
+        from mobile.application_lifecycle import _active_hosts
         from mobile.startup import StartupPhase
         owner = self.open('startup-draft.txt')
         owner.crypt_text.value = 'RAM only synthetic draft'

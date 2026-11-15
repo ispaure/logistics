@@ -102,114 +102,155 @@ class SessionTransitions:
                               _notebook_unflushed=False, _progress_flushed=False):
         host = self.host
         library = getattr(host, 'vault_browser', None)
-        if (not _markdown_flushed and library is not None and library.session is not None
-                and library.session.id == key and library.embedded is not None):
-            if not getattr(library, '_close_task', None):
-                async def close_library():
-                    try:
-                        if await library.prepare_leave() and host.active_host:
-                            library._approved_close = library.embedded
-                            try:
-                                self.request_close_session(key, _markdown_flushed=True)
-                            finally:
-                                library._approved_close = None
-                    finally:
-                        library._close_task = None
-                library._close_task = host.loop.create_task(close_library())
-            return True
         if not _markdown_flushed:
-            owner = host.text_views.get(key) or host.provider_sessions().controllers.get(key)
-            formatted = getattr(owner, 'formatted', None)
-            area = getattr(owner, 'editor_area', None)
-            workflow = getattr(owner, '_provider_markdown', None)
-            if workflow is not None:
-                formatted, area = workflow.formatted, workflow.content
-            if formatted is not None and area is not None and formatted.view in area.children:
-                from commonUtils.ui.native.text_size import native_backend
-                if native_backend(formatted.view).startswith(('toga_iOS.', 'toga_android.')):
-                    if getattr(owner, '_markdown_close_task', None) is None:
-                        async def flush_then_close():
-                            try:
-                                await formatted.flush()
-                                if host.active_host and key in host.workspace.sessions:
-                                    self.request_close_session(key, _markdown_flushed=True)
-                            except ValueError as error:
-                                target = getattr(owner, 'status', None) or getattr(owner, 'crypt_title', None)
-                                if target is not None:
-                                    target.text = str(error)
-                            finally:
-                                owner._markdown_close_task = None
-                        owner._markdown_close_task = host.loop.create_task(flush_then_close())
-                    return True
+            if self._defer_notes_library_close(key, library) or self._defer_markdown_close(key):
+                return True
+
         if host.visible_reader() == key:
             host.__dict__.setdefault('_reader_closing', set()).add(key)
-        readers = getattr(host, 'readers', None)
-        book = readers.controllers.get(key) if readers is not None else None
+        book = self._book_controller(key)
         if book is not None and host.book_edits_dirty(book):
             return host.request_book_close(book)
+
         notebook = getattr(host, '_notebook_views', {}).get(key)
-        if notebook is not None and not _notebook_flushed and (getattr(notebook, 'native_transport', False)
-                or getattr(notebook, 'has_native_canvas', False)):
-            if getattr(notebook, '_native_close_task', None) is None:
-                token = host.workspace.token(key)
-                async def flush_notebook_then_close():
-                    try:
-                        await notebook.flush_input()
-                        if host.active_host and host.workspace.accepts(token):
-                            self.request_close_session(key, _notebook_flushed=True)
-                    except (OSError, ValueError, TimeoutError):
-                        if not notebook.closed and host.active_host and host.workspace.accepts(token):
-                            # A stalled WebView must not trap the user before the
-                            # explicit Save/Discard/Cancel decision.
-                            self.request_close_session(key, _notebook_flushed=True, _notebook_unflushed=True)
-                    finally:
-                        notebook._native_close_task = None
-                notebook._native_close_task = host.loop.create_task(flush_notebook_then_close())
-            return True
-        if notebook is not None and notebook.document is not None and (notebook.document.dirty
-                or _notebook_unflushed or getattr(notebook, 'native_input_pending', False)):
-            async def save_notebook():
-                try:
-                    if getattr(notebook, 'native_transport', False) or getattr(notebook, 'has_native_canvas', False):
-                        if not await notebook.save_from_view():
-                            return
-                    else:
-                        await notebook.perform({'op': 'save'})
-                    if not notebook.document.dirty and not getattr(notebook, 'native_input_pending', False):
-                        host.close_session(key)
-                except (OSError, ValueError, TimeoutError) as error:
-                    from services.documents.mobile_notebooks import show_notebook_close_error
-                    show_notebook_close_error(host, notebook, error)
-            from services.documents.mobile_notebooks import notebook_title
-            return host.document_close_dialog(key, notebook_title(notebook),
-                lambda: host.loop.create_task(save_notebook()),
-                lambda: host.close_session(key, choice='discard'))
+        if notebook is not None:
+            if not _notebook_flushed and _uses_native_notebook_input(notebook):
+                return self._defer_notebook_close(key, notebook)
+            if notebook.document is not None and (notebook.document.dirty or _notebook_unflushed
+                    or getattr(notebook, 'native_input_pending', False)):
+                return self._prompt_notebook_close(key, notebook)
+
         private = host.provider_sessions().controllers.get(key)
         if private is not None and private.private_dirty():
             return host.request_provider_close(private)
         progress = getattr(private, '_provider_progress', None)
         if progress is not None and not _progress_flushed:
-            progress.sample_surface()
-            if progress.schedule(immediate=True) is not None:
-                if getattr(private, '_progress_close_task', None) is None:
-                    token = host.workspace.token(key)
-
-                    async def close_after_progress():
-                        try:
-                            await progress.flush()
-                            if progress.pending is None and host.active_host and host.workspace.accepts(token):
-                                self.request_close_session(key, _markdown_flushed=True, _progress_flushed=True)
-                        finally:
-                            private._progress_close_task = None
-
-                    private._progress_close_task = host.loop.create_task(close_after_progress())
+            if self._defer_provider_progress_close(key, private, progress):
                 return True
+
         owner = host.text_views.get(key)
         if owner is None or not owner.document.modified:
             return host.close_session(key)
         return host.document_close_dialog(key, owner.document.name,
             lambda: host.close_session(key, choice='save'),
             lambda: host.close_session(key, choice='discard'))
+
+    def _defer_notes_library_close(self, key, library):
+        if (library is None or library.session is None or library.session.id != key
+                or library.embedded is None):
+            return False
+        if getattr(library, '_close_task', None):
+            return True
+        host = self.host
+
+        async def close_library():
+            try:
+                if await library.prepare_leave() and host.active_host:
+                    library._approved_close = library.embedded
+                    try:
+                        self.request_close_session(key, _markdown_flushed=True)
+                    finally:
+                        library._approved_close = None
+            finally:
+                library._close_task = None
+
+        library._close_task = host.loop.create_task(close_library())
+        return True
+
+    def _defer_markdown_close(self, key):
+        host = self.host
+        owner = host.text_views.get(key) or host.provider_sessions().controllers.get(key)
+        formatted = getattr(owner, 'formatted', None)
+        area = getattr(owner, 'editor_area', None)
+        workflow = getattr(owner, '_provider_markdown', None)
+        if workflow is not None:
+            formatted, area = workflow.formatted, workflow.content
+        if formatted is None or area is None or formatted.view not in area.children:
+            return False
+
+        from commonUtils.ui.native.text_size import native_backend
+        if not native_backend(formatted.view).startswith(('toga_iOS.', 'toga_android.')):
+            return False
+        if getattr(owner, '_markdown_close_task', None) is not None:
+            return True
+
+        async def flush_then_close():
+            try:
+                await formatted.flush()
+                if host.active_host and key in host.workspace.sessions:
+                    self.request_close_session(key, _markdown_flushed=True)
+            except ValueError as error:
+                target = getattr(owner, 'status', None) or getattr(owner, 'crypt_title', None)
+                if target is not None:
+                    target.text = str(error)
+            finally:
+                owner._markdown_close_task = None
+
+        owner._markdown_close_task = host.loop.create_task(flush_then_close())
+        return True
+
+    def _defer_notebook_close(self, key, notebook):
+        if getattr(notebook, '_native_close_task', None) is not None:
+            return True
+        host = self.host
+        token = host.workspace.token(key)
+
+        async def flush_notebook_then_close():
+            try:
+                await notebook.flush_input()
+                if host.active_host and host.workspace.accepts(token):
+                    self.request_close_session(key, _notebook_flushed=True)
+            except (OSError, ValueError, TimeoutError):
+                if not notebook.closed and host.active_host and host.workspace.accepts(token):
+                    # A stalled WebView must not trap the user before the
+                    # explicit Save/Discard/Cancel decision.
+                    self.request_close_session(key, _notebook_flushed=True, _notebook_unflushed=True)
+            finally:
+                notebook._native_close_task = None
+
+        notebook._native_close_task = host.loop.create_task(flush_notebook_then_close())
+        return True
+
+    def _prompt_notebook_close(self, key, notebook):
+        from services.documents.mobile_notebooks import notebook_title
+        host = self.host
+
+        async def save_notebook():
+            try:
+                if _uses_native_notebook_input(notebook):
+                    if not await notebook.save_from_view():
+                        return
+                else:
+                    await notebook.perform({'op': 'save'})
+                if not notebook.document.dirty and not getattr(notebook, 'native_input_pending', False):
+                    host.close_session(key)
+            except (OSError, ValueError, TimeoutError) as error:
+                from services.documents.mobile_notebooks import show_notebook_close_error
+                show_notebook_close_error(host, notebook, error)
+
+        return host.document_close_dialog(key, notebook_title(notebook),
+            lambda: host.loop.create_task(save_notebook()),
+            lambda: host.close_session(key, choice='discard'))
+
+    def _defer_provider_progress_close(self, key, owner, progress):
+        progress.sample_surface()
+        if progress.schedule(immediate=True) is None:
+            return False
+        if getattr(owner, '_progress_close_task', None) is not None:
+            return True
+        host = self.host
+        token = host.workspace.token(key)
+
+        async def close_after_progress():
+            try:
+                await progress.flush()
+                if progress.pending is None and host.active_host and host.workspace.accepts(token):
+                    self.request_close_session(key, _markdown_flushed=True, _progress_flushed=True)
+            finally:
+                owner._progress_close_task = None
+
+        owner._progress_close_task = host.loop.create_task(close_after_progress())
+        return True
 
 
     def cancel_close_session(self, key):
@@ -228,65 +269,72 @@ class SessionTransitions:
             return False
         token = host.workspace.token(key)
         host.__dict__.setdefault('_reader_closing', set()).add(key)
-        readers = getattr(host, 'readers', None)
-        owner = readers.controllers.get(key) if readers is not None else None
-        pending = None
-        if owner is not None:
-            if getattr(owner, '_exit_task', None) is not None:
-                return True
-            if owner.book_busy or owner.request_position_flush() is not None:
-                async def wait_for_book_close():
-                    while host.active_host and host.workspace.accepts(token):
-                        if owner.book_busy:
-                            await owner._book_idle.wait()
-                            continue
-                        progress = getattr(owner, '_book_progress', None)
-                        if progress is None:
-                            return True
-                        await progress.flush()
-                        if progress.pending is not None:
-                            return False
-                        if not owner.book_busy:
-                            return True
-                    return False
 
-                pending = wait_for_book_close()
+        book = self._book_controller(key)
+        if book is not None:
+            if getattr(book, '_exit_task', None) is not None:
+                return True
+            if book.book_busy or book.request_position_flush() is not None:
+                return self._defer_reader_close(key, token, book, self._wait_for_book_close)
         else:
             private = host.provider_sessions().controllers.get(key)
             progress = getattr(private, '_provider_progress', None)
             if private is not None and (private.operation_busy
                                         or getattr(progress, 'worker', None) is not None):
-                owner = private
-                if getattr(owner, '_exit_task', None) is not None:
+                if getattr(private, '_exit_task', None) is not None:
                     return True
-
-                async def wait_for_private_close():
-                    import asyncio
-                    while host.active_host and host.workspace.accepts(token):
-                        if private.operation_busy:
-                            await private.operation_idle.wait()
-                            continue
-                        progress = getattr(private, '_provider_progress', None)
-                        if getattr(progress, 'worker', None) is None:
-                            break
-                        await asyncio.wait({progress.task})
-
-                pending = wait_for_private_close()
-        if pending is not None:
-            if getattr(owner, '_exit_task', None) is None:
-                async def finish():
-                    try:
-                        ready = await pending
-                        if ready is not False and host.active_host and host.workspace.accepts(token):
-                            host.request_close_session(key)
-                        elif ready is False:
-                            host._reader_closing.discard(key)
-                    finally:
-                        owner._exit_task = None
-                owner._exit_task = host.loop.create_task(finish())
-            return True
+                return self._defer_reader_close(key, token, private, self._wait_for_provider_close)
         return host.request_close_session(key)
 
+    def _book_controller(self, key):
+        readers = getattr(self.host, 'readers', None)
+        return readers.controllers.get(key) if readers is not None else None
+
+    def _defer_reader_close(self, key, token, owner, wait_until_ready):
+        if getattr(owner, '_exit_task', None) is not None:
+            return True
+        host = self.host
+
+        async def finish():
+            try:
+                ready = await wait_until_ready(owner, token)
+                if ready is not False and host.active_host and host.workspace.accepts(token):
+                    host.request_close_session(key)
+                elif ready is False:
+                    host._reader_closing.discard(key)
+            finally:
+                owner._exit_task = None
+
+        owner._exit_task = host.loop.create_task(finish())
+        return True
+
+    async def _wait_for_book_close(self, book, token):
+        host = self.host
+        while host.active_host and host.workspace.accepts(token):
+            if book.book_busy:
+                await book._book_idle.wait()
+                continue
+            progress = getattr(book, '_book_progress', None)
+            if progress is None:
+                return True
+            await progress.flush()
+            if progress.pending is not None:
+                return False
+            if not book.book_busy:
+                return True
+        return False
+
+    async def _wait_for_provider_close(self, private, token):
+        import asyncio
+        host = self.host
+        while host.active_host and host.workspace.accepts(token):
+            if private.operation_busy:
+                await private.operation_idle.wait()
+                continue
+            progress = getattr(private, '_provider_progress', None)
+            if getattr(progress, 'worker', None) is None:
+                break
+            await asyncio.wait({progress.task})
 
     def keep_reader_editing(self, key):
         host = self.host
@@ -295,8 +343,7 @@ class SessionTransitions:
         if owner is not None:
             owner.resume_crypt()
         else:
-            readers = getattr(host, 'readers', None)
-            book = readers.controllers.get(key) if readers is not None else None
+            book = self._book_controller(key)
             if book is not None:
                 book.show_view(book.book_metadata_view, reader_route='metadata', title='Edit metadata')
             else:
@@ -400,6 +447,9 @@ class SessionTransitions:
         if route is not None:
             host.loop.call_soon(host.routes.folders.restore_viewport, destination, route)
 
+
+def _uses_native_notebook_input(notebook):
+    return getattr(notebook, 'native_transport', False) or getattr(notebook, 'has_native_canvas', False)
 
 
 def transitions_for(host):

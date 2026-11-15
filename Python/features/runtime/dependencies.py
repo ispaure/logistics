@@ -3,7 +3,7 @@ from collections.abc import Callable, Sequence, Mapping
 from types import ModuleType
 
 
-def available(feature_name: str, feature_map: Mapping[str, ModuleType],
+def is_available(feature_name: str, feature_map: Mapping[str, ModuleType],
               dependencies: Callable, resolving: tuple[str, ...] = ()) -> bool:
     feature = feature_map.get(feature_name)
     if feature is None or getattr(feature, 'FEATURE_LOAD_ERROR', None):
@@ -11,8 +11,20 @@ def available(feature_name: str, feature_map: Mapping[str, ModuleType],
     if feature_name in resolving:
         chain = ' -> '.join((*resolving, feature_name))
         raise RuntimeError(f'Circular Logistics feature dependency: {chain}')
-    return all(available(name, feature_map, dependencies, (*resolving, feature_name))
+    return all(is_available(name, feature_map, dependencies, (*resolving, feature_name))
                for name in dependencies(feature))
+
+
+def required_names(roots, feature_map, dependencies):
+    """Collect each root and every hard dependency reachable from it."""
+    required = set()
+    pending = list(roots)
+    while pending:
+        name = pending.pop()
+        if name not in required:
+            required.add(name)
+            pending.extend(dependencies(feature_map[name]))
+    return required
 
 
 def initialization_order(features: Sequence[ModuleType], name_of: Callable,
