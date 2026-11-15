@@ -29,9 +29,7 @@ class CredentialPanels:
 
         splitter = pyside.QSplitter(pyside.Qt.Orientation.Horizontal)
         splitter.addWidget(self._create_packages_panel())
-        details_scroll = pyside.QScrollArea()
-        details_scroll.setWidgetResizable(True)
-        details_scroll.setFrameShape(pyside.QFrame.Shape.NoFrame)
+        details_scroll = pyside.resizable_scroll_area(framed=False)
         details_scroll.setWidget(self._create_details_panel())
         splitter.addWidget(details_scroll)
         splitter.setStretchFactor(0, 0)

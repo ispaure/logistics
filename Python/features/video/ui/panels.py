@@ -41,11 +41,10 @@ class PlaybackPanels:
         self.panel_close = self.button('Close settings', 'close', self.close_settings)
         header.addWidget(self.panel_close)
         layout.addLayout(header)
-        self.settings_scroll = qt.QScrollArea()
-        self.settings_scroll.setFrameShape(qt.QFrame.Shape.NoFrame)
-        self.settings_scroll.setWidgetResizable(True)
+        self.settings_scroll = qt.resizable_scroll_area(
+            framed=False, horizontal_policy=qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff,
+        )
         self.settings_scroll.setMinimumSize(0, 0)
-        self.settings_scroll.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         layout.addWidget(self.settings_scroll, 1)
         self.audio_tracks, self.subtitle_tracks = qt.QComboBox(self.settings_pane), qt.QComboBox(self.settings_pane)
         for combo, label in ((self.audio_tracks, 'Audio track'), (self.subtitle_tracks, 'Subtitles')):

@@ -94,13 +94,8 @@ class FoldersPage(pyside.QWidget):
         self.selected_entry_name = None
         self._entry_items = {}
 
-        self.detail_scroll = pyside.QScrollArea()
-        self.detail_scroll.setWidgetResizable(True)
-        self.detail_scroll.setFrameShape(pyside.QFrame.Shape.NoFrame)
-
-        self.info_scroll = pyside.QScrollArea()
-        self.info_scroll.setWidgetResizable(True)
-        self.info_scroll.setFrameShape(pyside.QFrame.Shape.NoFrame)
+        self.detail_scroll = pyside.resizable_scroll_area(framed=False)
+        self.info_scroll = pyside.resizable_scroll_area(framed=False)
         self.details_tabs = pyside.QTabWidget()
         self.details_tabs.setAccessibleName('Workspace details')
         self.details_tabs.addTab(self.info_scroll, 'Info')

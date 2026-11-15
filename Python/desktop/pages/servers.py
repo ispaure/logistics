@@ -19,9 +19,7 @@ class ServersPage(pyside.QWidget):
         self.server_tree.setMinimumWidth(220)
         self.server_tree.setMaximumWidth(340)
 
-        self.detail_scroll = pyside.QScrollArea()
-        self.detail_scroll.setWidgetResizable(True)
-        self.detail_scroll.setFrameShape(pyside.QFrame.Shape.NoFrame)
+        self.detail_scroll = pyside.resizable_scroll_area(framed=False)
 
         self.selected_server_key = None
         self._server_items = {}

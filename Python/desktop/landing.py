@@ -73,13 +73,13 @@ class LandingPage(qt.QWidget):
         ''' % ('15px' if documents_only else f'{point_size(19.5)}pt'))
         outer = qt.QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
-        scroll = self.scroll = qt.QScrollArea(self)
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(qt.QFrame.Shape.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         # Reserve a stable gutter before the first layout. Native Windows
         # scrollbar admission otherwise changes wrapping after cards paint.
-        scroll.setVerticalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+        scroll = self.scroll = qt.resizable_scroll_area(
+            self, framed=False,
+            horizontal_policy=qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff,
+            vertical_policy=qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOn,
+        )
         outer.addWidget(scroll)
         canvas = qt.QWidget()
         scroll.setWidget(canvas)

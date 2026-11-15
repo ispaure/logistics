@@ -139,6 +139,8 @@ class LandingAppearanceTests(QtTestCase):
             for width, height in ((920, 800), (1250, 800), (850, 550)):
                 with self.subTest(theme=colors.window, width=width, height=height):
                     page = self.page(colors)
+                    self.assertEqual(page.scroll.verticalScrollBarPolicy(), qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOn)
+                    self.assertEqual(page.scroll.horizontalScrollBarPolicy(), qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
                     page.resize(width, height)
                     widgets = [page.content, *page.content.findChildren(qt.QWidget)]
                     def geometry():

@@ -236,8 +236,7 @@ class MetadataForm(qt.QTabWidget):
         return box
 
     def _details_tab(self):
-        scroll = qt.QScrollArea()
-        scroll.setWidgetResizable(True)
+        scroll = qt.resizable_scroll_area()
         page = qt.QWidget()
         grid = qt.QGridLayout(page)
         grid.setContentsMargins(18, 18, 18, 18)

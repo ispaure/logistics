@@ -41,9 +41,7 @@ class SmartHomePage(pyside.QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.scroll = pyside.QScrollArea()
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setFrameShape(pyside.QFrame.Shape.NoFrame)
+        self.scroll = pyside.resizable_scroll_area(framed=False)
 
         self.task = OperationProgress(self)
         self.task.completed.connect(self._finished)

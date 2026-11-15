@@ -143,6 +143,8 @@ class FeaturesPageTests(QtTestCase):
         self.page.refresh()
         self.page.resize(650, 450); self.page.show(); self.app.processEvents()
         self.page.activateWindow(); self.app.processEvents()
+        self.assertEqual(self.page.scroll.verticalScrollBarPolicy(), qt.Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        self.assertEqual(self.page.scroll.horizontalScrollBarPolicy(), qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scrollbar = self.page.scroll.verticalScrollBar()
         scrollbar.setValue(scrollbar.maximum() - 50)
         toggle = self.item('scroll_29')

@@ -232,11 +232,10 @@ class DestinationRail(qt.QWidget):
         outer = qt.QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
-        icon_scroll = qt.QScrollArea(self)
-        icon_scroll.setWidgetResizable(True)
+        icon_scroll = qt.resizable_scroll_area(
+            self, framed=False, horizontal_policy=qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff,
+        )
         icon_scroll.setFixedWidth(46)
-        icon_scroll.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        icon_scroll.setFrameShape(qt.QFrame.Shape.NoFrame)
         icons = qt.QWidget()
         icon_scroll.setWidget(icons)
         outer.addWidget(icon_scroll, 1)

@@ -35,8 +35,7 @@ class GitPreferencesForm(qt.QWidget):
         layout.addWidget(self.error)
 
     def page(self, title):
-        scroll = qt.QScrollArea()
-        scroll.setWidgetResizable(True)
+        scroll = qt.resizable_scroll_area()
         body = qt.QWidget()
         box = qt.QVBoxLayout(body)
         box.setContentsMargins(16, 16, 16, 16)

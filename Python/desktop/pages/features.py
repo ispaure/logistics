@@ -10,10 +10,9 @@ class FeaturesPage(qt.QWidget):
         self.scope = scope or 'personal'
         self.controlled_scope = scope is not None
         layout = qt.QVBoxLayout(self)
-        self.scroll = qt.QScrollArea()
-        self.scroll.setFrameShape(qt.QFrame.Shape.NoFrame)
-        self.scroll.setWidgetResizable(True)
-        self.scroll.setHorizontalScrollBarPolicy(qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.scroll = qt.resizable_scroll_area(
+            framed=False, horizontal_policy=qt.Qt.ScrollBarPolicy.ScrollBarAlwaysOff,
+        )
         self.scroll.setAlignment(qt.Qt.AlignmentFlag.AlignHCenter | qt.Qt.AlignmentFlag.AlignTop)
         self.content = qt.QWidget()
         self.content.setMaximumWidth(820)
