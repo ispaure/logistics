@@ -106,8 +106,8 @@ class LMAppearanceTests(QtTestCase):
         QTest.mouseClick(picker, qt.Qt.MouseButton.LeftButton, pos=label.center())
         # Native styles can animate popup visibility across event-loop turns.
         self.wait_until(picker.view().isVisible, message='Model choices did not open from the label')
-        # Qt briefly ignores the release that opened the popup.
-        QTest.qWait(200)
+        # Qt guards the opening release for the platform's double-click interval.
+        QTest.qWait(self.app.doubleClickInterval())
         index = picker.model().index(picker.findText('second-model'), 0)
         QTest.mouseMove(picker.view().viewport(), picker.view().visualRect(index).center())
         QTest.qWait(50)
