@@ -10,8 +10,9 @@ from tempfile import TemporaryDirectory
 import unittest
 from unittest.mock import patch
 
+from commonUtils.persistence.publication import rename_exclusive
 from features.obsidian import actions
-from features.obsidian.actions import _write_registry
+from features.obsidian.registry import _write_registry
 
 
 class RegistryWrites(unittest.TestCase):
@@ -74,6 +75,42 @@ class VaultRegistration(unittest.TestCase):
                 self.launch.assert_not_called()
                 self.assertIn('registry changed', self.show_error.call_args.args[0])
                 self.assertEqual(list(self.registry_path.parent.iterdir()), [self.registry_path])
+
+    def test_first_registration_preserves_registry_created_at_publication(self):
+        external = b'{"vaults":{},"external":true}\n'
+
+        def create_before_publish(source, destination):
+            self.registry_path.write_bytes(external)
+            rename_exclusive(source, destination)
+
+        with patch('commonUtils.persistence.publication.rename_exclusive', side_effect=create_before_publish):
+            self.assertFalse(actions.open_vault(self.vault))
+
+        self.assertEqual(self.registry_path.read_bytes(), external)
+        self.assertEqual(list(self.registry_path.parent.iterdir()), [self.registry_path])
+        self.launch.assert_not_called()
+        self.assertIn('Could not write Obsidian registry', self.show_error.call_args.args[0])
+
+    def test_running_app_can_open_canonical_match_but_cannot_register_new_vault(self):
+        self.running.return_value = True
+        with patch.object(actions.ui, 'display_msg_box_ok') as dialog:
+            self.assertFalse(actions.open_vault(self.vault))
+        self.assertFalse(self.registry_path.exists())
+        self.launch.assert_not_called()
+        self.assertEqual(dialog.call_args.args[0], 'Obsidian - Close Application')
+
+        alias = self.vault.path.with_name('alias')
+        alias.mkdir()
+        registered_path = alias / '..' / self.vault.path.name
+        existing = json.dumps({'vaults': {'existing id': {'path': str(registered_path)}}}).encode()
+        self.registry_path.parent.mkdir()
+        self.registry_path.write_bytes(existing)
+
+        self.running.reset_mock()
+        self.assertTrue(actions.open_vault(self.vault))
+        self.running.assert_not_called()
+        self.launch.assert_called_once_with('obsidian://open?vault=existing%20id')
+        self.assertEqual(self.registry_path.read_bytes(), existing)
 
     def test_launch_failure_keeps_registration_and_retry_reuses_it(self):
         self.registry_path.parent.mkdir()

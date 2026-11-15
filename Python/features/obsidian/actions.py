@@ -5,32 +5,45 @@ Actions for the Logistics Obsidian feature.
 # ----------------------------------------------------------------------------------------------------------------------
 # IMPORTS
 
-import json
 import os
-import secrets
 import shutil
 import subprocess
-import time
 from pathlib import Path
-from typing import Any
 from urllib.parse import quote
 
 from commonUtils import ui
-from commonUtils.persistence import atomic_write_bytes
-from commonUtils.runtime.diagnostics import Severity, log
 from commonUtils.filesystem.directories import Directory
+from commonUtils.runtime.diagnostics import Severity, log
 from commonUtils.runtime.platform import OS, get_os
+
+from features.obsidian.registry import RegistrySnapshot
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-# CONSTANTS
+# SHARED PLATFORM HELPERS
 
 _OBSIDIAN_FLATPAK_ID = 'md.obsidian.Obsidian'
 _OBSIDIAN_URI_SCHEME = 'x-scheme-handler/obsidian'
 
 
+def _command_succeeds(command: list[str]) -> bool:
+    """Run a quiet installation or process probe."""
+
+    try:
+        result = subprocess.run(
+            command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False
+        )
+    except OSError:
+        return False
+
+    return result.returncode == 0
+
+
 # ----------------------------------------------------------------------------------------------------------------------
-# REGISTRY LOCATION
+# LINUX HANDLER AND PACKAGE PROBES
 
 def _get_linux_protocol_handler() -> str | None:
     """Return the desktop entry registered for obsidian:// URIs on Linux."""
@@ -58,17 +71,7 @@ def _is_flatpak_installed() -> bool:
     if shutil.which('flatpak') is None:
         return False
 
-    try:
-        result = subprocess.run(
-            ['flatpak', 'info', _OBSIDIAN_FLATPAK_ID],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False
-        )
-    except OSError:
-        return False
-
-    return result.returncode == 0
+    return _command_succeeds(['flatpak', 'info', _OBSIDIAN_FLATPAK_ID])
 
 
 def _is_snap_installed() -> bool:
@@ -77,18 +80,11 @@ def _is_snap_installed() -> bool:
     if shutil.which('snap') is None:
         return False
 
-    try:
-        result = subprocess.run(
-            ['snap', 'list', 'obsidian'],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False
-        )
-    except OSError:
-        return False
+    return _command_succeeds(['snap', 'list', 'obsidian'])
 
-    return result.returncode == 0
 
+# ----------------------------------------------------------------------------------------------------------------------
+# REGISTRY LOCATION
 
 def _get_linux_registry_path() -> Path:
     """Return the registry path belonging to the Obsidian install handling obsidian:// URIs."""
@@ -156,106 +152,6 @@ def get_registry_path() -> Path:
 
 
 # ----------------------------------------------------------------------------------------------------------------------
-# REGISTRY HELPERS
-
-def _normalize_path(path: Path) -> str:
-    """Return a normalized absolute path suitable for comparing vault registry entries."""
-
-    try:
-        resolved_path = path.expanduser().resolve(strict=False)
-    except (OSError, RuntimeError):
-        resolved_path = path.expanduser().absolute()
-
-    return os.path.normcase(os.path.normpath(str(resolved_path)))
-
-
-def _read_registry_bytes(registry_path: Path) -> bytes | None:
-    """Read the registry's current bytes if it is a regular file."""
-
-    if not registry_path.is_file():
-        return None
-    try:
-        return registry_path.read_bytes()
-    except FileNotFoundError:
-        return None
-
-
-def _load_registry(registry_path: Path) -> tuple[dict[str, Any], bytes | None]:
-    """Load the registry and capture the exact revision used to parse it."""
-
-    try:
-        original = _read_registry_bytes(registry_path)
-        if original is None:
-            return {'vaults': {}}, None
-        registry = json.loads(original.decode('utf-8'))
-    except (OSError, UnicodeError, json.JSONDecodeError) as error:
-        raise RuntimeError(f'Could not read Obsidian registry "{registry_path}": {error}') from error
-
-    if not isinstance(registry, dict):
-        raise RuntimeError(f'Obsidian registry "{registry_path}" does not contain a JSON object.')
-
-    vaults = registry.setdefault('vaults', {})
-
-    if not isinstance(vaults, dict):
-        raise RuntimeError(f'Obsidian registry "{registry_path}" has an invalid "vaults" value.')
-
-    return registry, original
-
-
-def _write_registry(registry_path: Path, registry: dict[str, Any], *, validate=None, overwrite=True) -> None:
-    """Atomically write an Obsidian registry, preserving existing file permissions when possible."""
-
-    try:
-        registry_path.parent.mkdir(parents=True, exist_ok=True)
-        content = json.dumps(registry, separators=(',', ':'), ensure_ascii=False) + '\n'
-        atomic_write_bytes(registry_path, content.encode('utf-8'), validate=validate, overwrite=overwrite)
-    except OSError as error:
-        raise RuntimeError(f'Could not write Obsidian registry "{registry_path}": {error}') from error
-
-
-def _find_registered_vault_id(registry: dict[str, Any], vault_path: Path) -> str | None:
-    """Return the registered vault ID matching a filesystem path, if present."""
-
-    normalized_vault_path = _normalize_path(vault_path)
-
-    for vault_id, vault_data in registry.get('vaults', {}).items():
-        if not isinstance(vault_data, dict):
-            continue
-
-        registered_path = vault_data.get('path')
-        if not isinstance(registered_path, str):
-            continue
-
-        if _normalize_path(Path(registered_path)) == normalized_vault_path:
-            return str(vault_id)
-
-    return None
-
-
-def _register_vault(registry_path: Path, registry: dict[str, Any], vault_path: Path, *, original: bytes | None) -> str:
-    """Add a vault to Obsidian's registry and return its newly generated vault ID."""
-
-    vaults = registry['vaults']
-
-    while True:
-        vault_id = secrets.token_hex(8)
-        if vault_id not in vaults:
-            break
-
-    vaults[vault_id] = {
-        'path': str(vault_path.expanduser().resolve(strict=False)),
-        'ts': int(time.time() * 1000)
-    }
-
-    def unchanged():
-        if _read_registry_bytes(registry_path) != original:
-            raise RuntimeError(f'Obsidian registry changed during registration: "{registry_path}"')
-
-    _write_registry(registry_path, registry, validate=unchanged, overwrite=original is not None)
-    return vault_id
-
-
-# ----------------------------------------------------------------------------------------------------------------------
 # INSTALLATION DETECTION
 
 def _is_obsidian_installed_windows() -> bool:
@@ -274,17 +170,7 @@ def _is_obsidian_installed_windows() -> bool:
 def _is_obsidian_installed_macos() -> bool:
     """Return whether macOS can resolve the Obsidian application."""
 
-    try:
-        result = subprocess.run(
-            ['open', '-Ra', 'Obsidian'],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False
-        )
-    except OSError:
-        return False
-
-    return result.returncode == 0
+    return _command_succeeds(['open', '-Ra', 'Obsidian'])
 
 
 def _is_obsidian_installed_linux() -> bool:
@@ -331,17 +217,7 @@ def _is_obsidian_running_windows() -> bool:
 
 
 def _is_obsidian_running_macos() -> bool:
-    try:
-        result = subprocess.run(
-            ['pgrep', '-x', 'Obsidian'],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False
-        )
-    except OSError:
-        return False
-
-    return result.returncode == 0
+    return _command_succeeds(['pgrep', '-x', 'Obsidian'])
 
 
 def _is_obsidian_running_linux() -> bool:
@@ -368,17 +244,7 @@ def _is_obsidian_running_linux() -> bool:
 
         return False
 
-    try:
-        result = subprocess.run(
-            ['pgrep', '-x', 'obsidian'],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False
-        )
-    except OSError:
-        return False
-
-    return result.returncode == 0
+    return _command_succeeds(['pgrep', '-x', 'obsidian'])
 
 
 def is_obsidian_running() -> bool:
@@ -433,6 +299,15 @@ def _show_error(message: str) -> None:
     ui.display_msg_box_ok('Obsidian', message)
 
 
+def _ask_to_close_obsidian(vault_name: str) -> None:
+    ui.display_msg_box_ok(
+        'Obsidian - Close Application',
+        f'The vault "{vault_name}" has not been opened by Obsidian on this computer yet.\n\n'
+        'Close Obsidian completely, then try again. Logistics needs to add this vault to Obsidian\'s known '
+        'vaults list before launching it for the first time.'
+    )
+
+
 def open_vault(vault: Directory) -> bool:
     """
     Open an Obsidian vault.
@@ -459,25 +334,19 @@ def open_vault(vault: Directory) -> bool:
     registry_path = get_registry_path()
 
     try:
-        registry, original = _load_registry(registry_path)
+        registry = RegistrySnapshot.read(registry_path)
     except RuntimeError as error:
         _show_error(str(error))
         return False
 
-    vault_id = _find_registered_vault_id(registry, vault.path)
-
+    vault_id = registry.find_vault_id(vault.path)
     if vault_id is None:
         if is_obsidian_running():
-            ui.display_msg_box_ok(
-                'Obsidian - Close Application',
-                f'The vault "{vault.name}" has not been opened by Obsidian on this computer yet.\n\n'
-                'Close Obsidian completely, then try again. Logistics needs to add this vault to Obsidian\'s known '
-                'vaults list before launching it for the first time.'
-            )
+            _ask_to_close_obsidian(vault.name)
             return False
 
         try:
-            vault_id = _register_vault(registry_path, registry, vault.path, original=original)
+            vault_id = registry.register(vault.path)
         except RuntimeError as error:
             _show_error(str(error))
             return False
