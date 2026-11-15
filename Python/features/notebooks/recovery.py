@@ -8,6 +8,7 @@ from weakref import WeakKeyDictionary
 from commonUtils.persistence import atomic_write_json
 from commonUtils.persistence.publication import serialize_mutation
 from commonUtils.persistence.atomic import atomic_write_bytes
+from commonUtils.runtime.streams import read_up_to
 from .notebook import MAX_ARCHIVE, Notebook, Page, identifier
 from .ink import InkPage
 from .protocol import RecoveryIncomplete
@@ -163,7 +164,7 @@ class Repository:
         if Path(base).name != base or not base.endswith('.rmdoc'):
             raise ValueError('Invalid notebook recovery base.')
         with (directory / base).open('rb') as stream:
-            notebook = Notebook.read(stream.read(self.max_bytes + 1), max_bytes=self.max_bytes)
+            notebook = Notebook.read(read_up_to(stream, self.max_bytes + 1), max_bytes=self.max_bytes)
         pages = []
         for item in state['pages']:
             digest = item['ink']
