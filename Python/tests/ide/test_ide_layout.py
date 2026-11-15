@@ -253,6 +253,34 @@ class IDELayoutTests(QtTestCase):
         self.assertAlmostEqual(sizes[1]/sizes[0],2,delta=.15)
         view.prepare_close()
 
+    def test_delayed_restore_uses_decoded_checkpoint(self):
+        first, second = self.root / 'first.py', self.root / 'second.py'
+        for path in (first, second):
+            path.write_text('value = 1\n' * 300)
+        first_record = {'path': str(first), 'cursor': 5, 'scroll': 20}
+        group = {'files': [first_record, {'path': str(second)}], 'active': str(first)}
+        layout = {'groups': [group, {}], 'active_group': 0, 'editors': [0, 300, 0, 600]}
+        view = ProjectWorkspace(Project('test', str(self.root), autosave='off', layout=layout))
+        try:
+            self.assertTrue(view.restoring)
+            first_record['scroll'] = 90
+            group['active'] = str(second)
+            layout['active_group'] = 1
+            layout['editors'][:] = [600, 300]
+            view.resize(1200, 700)
+            view.show()
+            self.wait(view)
+            self.assertIs(view.active_group, view.groups[0])
+            self.assertEqual(view.current.path, first)
+            self.assertEqual(view.current.textCursor().position(), 5)
+            self.assertEqual(view.current.verticalScrollBar().value(), 20)
+            left, right = view.editors.sizes()
+            self.assertAlmostEqual(right / left, 2, delta=.15)
+        finally:
+            self.wait(view)
+            view.prepare_close()
+            view.close()
+
     def test_side_drop_into_empty_group_reuses_it_at_group_limit(self):
         view = ProjectWorkspace(Project('empty target',str(self.root), autosave='off'))
         view.resize(1100,650)

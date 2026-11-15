@@ -4,7 +4,9 @@ Start with the [worked contribution](development.md#try-a-column-guide-change).
 
 ## Implemented contracts
 
-`ProjectWorkspace` keeps one buffer per resolved file per project. Splits share source, undo and modified state. Cursor, selection and scroll belong to views. Detach the closing editor before Qt deletes it. Prompt once per buffer on close. Opens retain requested group and cursor, fall back to a surviving group and place the cursor before callbacks. Restore applies positions after queued opens and retains missing paths. See [checkpoint admission](development.md#workspace-checkpoint-admission).
+`ProjectWorkspace` keeps one buffer per resolved file per project. Splits share source, undo and modified state. Cursor, selection and scroll belong to views. Detach the closing editor before Qt deletes it. Prompt once per buffer on close. Opens retain requested group and cursor, fall back to a surviving group and place the cursor before callbacks.
+
+`ui/workspace.py` decodes the saved layout once at the start of restore. It queues opens with their saved cursor positions, then uses the decoded plan to apply scroll positions, tab selection, and splitter widths against the live groups. Unavailable file records keep their saved data for a future restore. See [checkpoint admission](development.md#workspace-checkpoint-admission).
 
 Git validates the working path before routing. IDE chooses the deepest registered root. Text Editor can serve as fallback. Historical Git previews remain selected.
 

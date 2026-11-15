@@ -33,6 +33,72 @@ class _OpenTarget(NamedTuple):
     on_open: Callable[[qt.QWidget], object] | None
 
 
+class _RestoreFile(NamedTuple):
+    path: Path
+    cursor: int
+    scroll: int | None
+    record: dict
+
+    @classmethod
+    def decode(cls, record, group=None):
+        if not isinstance(record, dict) or not isinstance(record.get('path'), str):
+            return None
+        cursor = record.get('cursor', 0)
+        scroll = record.get('scroll', 0)
+        retained = dict(record) if group is None else dict(record, group=group)
+        return cls(Path(record['path']), max(0, cursor) if isinstance(cursor, int) else 0,
+                   scroll if isinstance(scroll, int) else None, retained)
+
+
+class _RestoreGroup(NamedTuple):
+    active: Path | None
+    files: tuple[_RestoreFile | None, ...]
+
+
+class _RestorePlan(NamedTuple):
+    """Decoded workspace state shared by file opens and delayed layout restore."""
+
+    browser: object
+    groups: tuple[_RestoreGroup, ...]
+    unavailable: tuple[tuple[int, _RestoreFile], ...]
+    active_group: int
+    splitter: tuple[int, ...]
+    editors: tuple[int, ...]
+
+    @classmethod
+    def decode(cls, state):
+        def records(value):
+            return value if isinstance(value, list) else []
+
+        def group_index(value):
+            return value if isinstance(value, int) and 0 <= value < 3 else 0
+
+        def widths(key):
+            sizes = records(state.get(key))
+            if all(isinstance(n, int) and n >= 0 for n in sizes) and any(sizes):
+                return tuple(sizes)
+            return ()
+
+        groups = []
+        for index, entry in enumerate(records(state.get('groups'))[:3]):
+            if not isinstance(entry, dict):
+                entry = {}
+            active = entry.get('active')
+            # Keep slots for the open limit. Later entries can still supply scroll
+            # positions for a file already open in this group.
+            files = tuple(_RestoreFile.decode(record, index) for record in records(entry.get('files')))
+            groups.append(_RestoreGroup(Path(active) if isinstance(active, str) else None, files))
+
+        unavailable = []
+        for record in records(state.get('unavailable'))[:1500]:
+            file = _RestoreFile.decode(record)
+            if file is not None:
+                unavailable.append((group_index(file.record.get('group')), file))
+
+        return cls(state.get('browser', {}), tuple(groups), tuple(unavailable),
+                   group_index(state.get('active_group')), widths('splitter'), widths('editors'))
+
+
 class ProjectWorkspace(Navigation, qt.QMainWindow):
     title_changed = qt.Signal(str)
     changed = qt.Signal()
@@ -589,74 +655,62 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         return [1] * splitter.count()
 
     def restore(self, state):
-        self.browser.restore(state.get('browser', {}))
-        groups = state.get('groups', [])
-        if not isinstance(groups, list):
-            groups = []
-        for index, entry in enumerate(groups[:3]):
+        plan = _RestorePlan.decode(state)
+        self.browser.restore(plan.browser)
+        for index, entry in enumerate(plan.groups):
             group = self.groups[0] if index == 0 else self.add_group()
-            if not isinstance(entry, dict):
-                continue
-            files = entry.get('files', [])
-            if not isinstance(files, list):
-                continue
-            for record in files[:500]:
-                if isinstance(record, dict) and isinstance(record.get('path'), str):
-                    position = record.get('cursor', 0)
-                    position = max(0, position) if isinstance(position, int) else 0
-                    if Path(record['path']).is_file():
-                        self.open_path(record['path'], group, position, restored_record=dict(record, group=index))
-                    else:
-                        self.unavailable.append(dict(record, group=index))
+            for file in entry.files[:500]:
+                if file is not None and not self._retain_if_missing(file):
+                    self.open_path(file.path, group, file.cursor, restored_record=file.record)
+
         returned = []
-        for record in (state.get('unavailable', []) if isinstance(state.get('unavailable', []), list) else [])[:1500]:
-            if isinstance(record, dict) and isinstance(record.get('path'), str):
-                if Path(record['path']).is_file():
-                    index = record.get('group', 0)
-                    index = index if isinstance(index, int) and 0 <= index < 3 else 0
-                    while len(self.groups) <= index:
-                        self.add_group()
-                    position = record.get('cursor', 0)
-                    self.open_path(record['path'], self.groups[index], max(0, position) if isinstance(position, int) else 0,
-                                   restored_record=record)
-                    returned.append(record)
-                else:
-                    self.unavailable.append(record)
+        for index, file in plan.unavailable:
+            if self._retain_if_missing(file):
+                continue
+            while len(self.groups) <= index:
+                self.add_group()
+            self.open_path(file.path, self.groups[index], file.cursor, restored_record=file.record)
+            returned.append((index, file))
+
         def restored(_):
-            self._finish_restore(state, groups, returned)
+            self._finish_restore(plan, returned)
         self.run(lambda: None, restored)
 
-    def _finish_restore(self, state, groups, returned):
-        """Restore positions/selection/splitters after the queued reads have retired."""
+    def _retain_if_missing(self, file):
+        if file.path.is_file():
+            return False
+        self.unavailable.append(file.record)
+        return True
+
+    def _finish_restore(self, plan, returned):
+        """Apply scroll positions, selection and widths after the queued reads."""
+        def place_scroll(group, file):
+            if file is not None and file.scroll is not None:
+                doc = self.view_for(file.path.resolve(), group)
+                if doc:
+                    self.place_view(doc, scroll=file.scroll)
+
         self.restoring = False
-        for record in returned:
-            index = record.get('group', 0)
-            group = self.groups[index] if isinstance(index, int) and 0 <= index < len(self.groups) else self.groups[0]
-            doc = self.view_for(Path(record['path']).resolve(), group)
-            if doc and isinstance(record.get('scroll', 0), int):
-                self.place_view(doc, scroll=record.get('scroll', 0))
-        for group, entry in zip(self.groups, groups):
-            if not isinstance(entry, dict):
-                continue
-            active_path = entry.get('active')
-            doc = self.view_for(Path(active_path).resolve(), group) if isinstance(active_path, str) else None
-            for record in entry.get('files', []) if isinstance(entry.get('files', []), list) else []:
-                if isinstance(record, dict) and isinstance(record.get('path'), str) and isinstance(record.get('scroll', 0), int):
-                    opened = self.view_for(Path(record['path']).resolve(), group)
-                    if opened:
-                        self.place_view(opened, scroll=record.get('scroll', 0))
+        for index, file in returned:
+            group = self.groups[index] if index < len(self.groups) else self.groups[0]
+            place_scroll(group, file)
+        for group, entry in zip(self.groups, plan.groups):
+            doc = self.view_for(entry.active.resolve(), group) if entry.active is not None else None
+            for file in entry.files:
+                place_scroll(group, file)
             if doc and self.group_for(doc) is group:
                 group.setCurrentWidget(doc)
-        active = state.get('active_group', 0)
-        self.activate(self.groups[active] if isinstance(active, int) and 0 <= active < len(self.groups) else self.groups[0])
-        for key, splitter in [('splitter', self.splitter), ('editors', self.editors)]:
-            sizes = state.get(key)
-            if isinstance(sizes, list) and all(isinstance(n, int) and n >= 0 for n in sizes) and any(sizes):
-                # Earlier drag previews were accidentally QSplitter children.
-                # Recover the real widths from those alternating hidden panes.
-                if key == 'editors' and len(sizes) == 2 * splitter.count() and not any(sizes[::2]):
-                    sizes = sizes[1::2]
-                splitter.setSizes(sizes)
+        active = plan.active_group
+        self.activate(self.groups[active] if active < len(self.groups) else self.groups[0])
+        if plan.splitter:
+            self.splitter.setSizes(plan.splitter)
+        if plan.editors:
+            sizes = plan.editors
+            # Earlier drag previews were accidentally QSplitter children.
+            # Recover the real widths from those alternating hidden panes.
+            if len(sizes) == 2 * self.editors.count() and not any(sizes[::2]):
+                sizes = sizes[1::2]
+            self.editors.setSizes(sizes)
 
     @pause_autosave
     def can_close(self):
