@@ -1,14 +1,26 @@
 """Mobile video lifetime, credential policy and encrypted resume checkpoints."""
 import asyncio
 from contextlib import ExitStack
+from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Event
+from typing import TYPE_CHECKING
 
 from features.video.playback import VideoContent, SubtitleContent
 from services.documents.video_progress import VideoProgress
 from features.video.transport import VideoTransport
 from services.worker_retirement import drain_worker
 from services.access_policy import display_allowed
+
+if TYPE_CHECKING:
+    from .mkv import MKVStream
+
+
+@dataclass
+class _AirPlayPreparation:
+    """Resources owned by one preparation until native accepts its stream."""
+    cancel: Event = field(default_factory=Event)
+    stream: 'MKVStream | None' = None
 
 
 class MobileVideo:
@@ -118,6 +130,8 @@ class MobileVideo:
         return self.retirement
 
     async def _finish_retirement(self, disposal):
+        # Native teardown and tracked commands may still use the source or a
+        # provisional AirPlay stream. Drain them before releasing retained media.
         if disposal is not None:
             await asyncio.shield(disposal)
         if self.discovery is not None:
@@ -125,6 +139,8 @@ class MobileVideo:
         await self.controls.finish()
         await self.release_airplay_stream()
         self.native = None
+        # Checkpoints need the provider and protection scopes until the last
+        # write finishes, even after playback and its streams have stopped.
         for worker in tuple(self.progress_workers):
             await drain_worker(worker)
         try:
@@ -136,6 +152,7 @@ class MobileVideo:
         for subtitle in self.subtitles:
             subtitle.close()
         self.content.close()
+        # Release protection only after every source consumer has retired.
         self._release_protection()
         self._release_retirement()
         if getattr(self.app, 'video_player', None) is self:
@@ -236,7 +253,6 @@ class MobileVideo:
 
     async def prepare_airplay(self):
         from .ios import airplay_file
-        from .mkv import MKVStream, UnsupportedAirPlayMedia
 
         if self.closed or self.switching_player:
             return
@@ -244,7 +260,7 @@ class MobileVideo:
             self.native.airplay_preparation_failed('AirPlay is unavailable for this video.')
             return
         self.switching_player = True
-        stream = None
+        provisional = _AirPlayPreparation()
         try:
             if self.native.airplay_active():
                 return
@@ -254,32 +270,16 @@ class MobileVideo:
             path = airplay_file(self)
             if path is None:
                 raise ValueError('AirPlay is unavailable for this video.')
-            if path.suffix.lower() in {'.mkv', '.mp4', '.m4v', '.mov'}:
-                self.native.status('Preparing AirPlay…')
-                self.cancel_remux = Event()
-                preparation = self.app.loop.create_task(asyncio.to_thread(
-                    MKVStream, self, path, self.cancel_remux))
-                try:
-                    stream = await asyncio.shield(preparation)
-                except UnsupportedAirPlayMedia:
-                    # Keep AVFoundation's wider MP4/MOV codec support when the
-                    # bounded HLS adapter cannot represent the source. Embedded
-                    # native text tracks remain selectable on that path.
-                    if path.suffix.lower() == '.mkv':
-                        raise
-                except asyncio.CancelledError:
-                    self.cancel_remux.set()
-                    await drain_worker(preparation)
-                    if not preparation.cancelled() and preparation.exception() is None:
-                        stream = preparation.result()
-                    raise
+            await self._prepare_airplay_stream(path, provisional)
+            # Remux preparation can outlive access or this presentation. Native
+            # acceptance is the ownership boundary, after fresh authorization.
             if self.closed:
                 return
             if not self.allowed(external=True):
                 raise ValueError('AirPlay is unavailable for this video.')
             self.content.check()
-            if self.native.start_airplay(path, stream):
-                self.mkv_stream, stream = stream, None
+            if self.native.start_airplay(path, provisional.stream):
+                self.mkv_stream, provisional.stream = provisional.stream, None
             else:
                 self.native.airplay_preparation_failed('Choose a TV in AirPlay to start streaming.')
         except (OSError, ValueError, NameError) as error:
@@ -287,13 +287,49 @@ class MobileVideo:
                 self.native.airplay_preparation_failed(str(error) or 'AirPlay could not prepare this video.')
         finally:
             try:
-                if stream is not None:
-                    await asyncio.to_thread(stream.close)
+                if provisional.stream is not None:
+                    await self._discard_airplay_stream(provisional.stream)
             finally:
                 self.cancel_remux = None
                 self.switching_player = False
 
+    async def _prepare_airplay_stream(self, path: Path, provisional: _AirPlayPreparation):
+        """Recover every worker result into the caller's cleanup scope."""
+        from .mkv import MKVStream, UnsupportedAirPlayMedia
+
+        if path.suffix.lower() not in {'.mkv', '.mp4', '.m4v', '.mov'}:
+            return None
+        self.native.status('Preparing AirPlay…')
+        self.cancel_remux = provisional.cancel
+        preparation = self.app.loop.create_task(asyncio.to_thread(
+            MKVStream, self, path, provisional.cancel))
+        try:
+            provisional.stream = await asyncio.shield(preparation)
+        except UnsupportedAirPlayMedia:
+            # AVFoundation can play wider MP4/MOV profiles with embedded text
+            # tracks. MKV requires remuxing; other failures never opt into fallback.
+            if path.suffix.lower() == '.mkv':
+                raise
+            return None
+        except asyncio.CancelledError:
+            provisional.cancel.set()
+            await drain_worker(preparation)
+            if not preparation.cancelled() and preparation.exception() is None:
+                provisional.stream = preparation.result()
+            raise
+
+    async def _discard_airplay_stream(self, stream):
+        """Finish provisional cleanup before propagating preparation cancellation."""
+        worker = self.app.loop.create_task(asyncio.to_thread(stream.close))
+        try:
+            await asyncio.shield(worker)
+        except asyncio.CancelledError:
+            await drain_worker(worker)
+            worker.result()
+            raise
+
     async def release_airplay_stream(self):
+        # Detach the retained stream once; this coroutine owns its close barrier.
         stream, self.mkv_stream = self.mkv_stream, None
         if stream is not None:
             worker = self.app.loop.create_task(asyncio.to_thread(stream.close))

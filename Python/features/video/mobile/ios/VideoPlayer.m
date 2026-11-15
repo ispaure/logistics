@@ -224,6 +224,22 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 - (void)clearPausePresentation;
 @end
 
+typedef struct {
+    CGRect safeArea;
+    CGRect controlsArea;
+    CGRect movieArea;
+    BOOL tabletop;
+    BOOL portraitTabletop;
+} LGVideoLayout;
+
+@interface LGVideoController (VideoChrome)
+- (void)configureVideoView;
+- (void)installVideoChrome;
+- (LGVideoLayout)resolveVideoLayoutInSafeArea:(CGRect)safe;
+- (void)layoutInlineMovieInArea:(CGRect)movieArea;
+- (void)layoutControlDeck:(LGVideoLayout)layout margin:(CGFloat)margin poseChanged:(BOOL)poseChanged;
+@end
+
 #import "DuoDeck.m"
 
 @implementation LGVideoController
@@ -245,232 +261,27 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 }
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.view.backgroundColor = UIColor.blackColor;
-    self.edgesForExtendedLayout = UIRectEdgeAll;
-    self.extendedLayoutIncludesOpaqueBars = YES;
-    self.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
+    [self configureVideoView];
+    [self initializePlaybackClock];
+    [self installVideoChrome];
+    [self configureDecoder];
+
+    // Finish installing controls before applying settings or polling the player.
+    [self installPlaybackTools];
+    [self installPortraitDeck];
+    [self applyPlaybackOptions];
+    [self startPlaybackMonitoring];
+    [self observePlaybackPolicy];
+}
+
+- (void)initializePlaybackClock {
     self.lastPosition = self.startMilliseconds;
     self.progressSeek = -1;
     self.observedClock = -1;
     self.lastPlaybackProgress = self.lastFrameProgress = NSProcessInfo.processInfo.systemUptime;
-    self.inlineMovie = [[UIView alloc] init];
-    self.inlineMovie.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:self.inlineMovie];
-    self.movie = [[UIView alloc] initWithFrame:self.inlineMovie.bounds];
-    self.movie.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    self.movie.clipsToBounds = YES;
-    // VLC installs rendering subviews after presentation. Keep them out of hit
-    // testing so the controller tap recognizer always receives video touches.
-    self.movie.userInteractionEnabled = NO;
-    self.inlineMovie.userInteractionEnabled = NO;
-    self.inlineMovie.isAccessibilityElement = YES;
-    self.inlineMovie.accessibilityLabel = @"Video";
-    self.inlineMovie.accessibilityCustomActions = @[
-        [[UIAccessibilityCustomAction alloc] initWithName:@"Show video controls" target:self selector:@selector(showControlsForAccessibility)]
-    ];
-    [self.inlineMovie addSubview:self.movie];
-    self.controls = [[UIStackView alloc] init];
-    self.controls.insetsLayoutMarginsFromSafeArea = NO;
-    self.controls.axis = UILayoutConstraintAxisVertical;
-    self.controls.spacing = 4;
-    self.controlsVisible = YES;
-    self.fullscreen = YES;
-    self.controls.translatesAutoresizingMaskIntoConstraints = NO;
-    self.controlsScroll = [[UIScrollView alloc] init];
-    // Constraints already handle safe regions; automatic scroll insets would
-    // reserve the native rail twice and push the deck off center.
-    self.controlsScroll.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
-    self.controlsScroll.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.view addSubview:self.controlsScroll];
-    [self.controlsScroll addSubview:self.controls];
-    if (@available(iOS 26.0, *)) {
-        self.controlsMaterial = [UIGlassEffect effectWithStyle:UIGlassEffectStyleRegular];
-    } else {
-        self.controlsMaterial = [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemThinMaterialDark];
-    }
-    // Keep the effect behind the scroll view at full alpha while controls fade.
-    self.controlsBackdrop = [[UIVisualEffectView alloc] initWithEffect:self.controlsMaterial];
-    self.controlsBackdrop.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
-    self.controlsBackdrop.userInteractionEnabled = NO;
-    self.controlsBackdrop.translatesAutoresizingMaskIntoConstraints = NO;
-    if (@available(iOS 26.0, *)) {
-        self.controlsBackdrop.cornerConfiguration =
-            [UICornerConfiguration configurationWithUniformRadius:[UICornerRadius fixedRadius:20]];
-    } else {
-        self.controlsBackdrop.layer.cornerRadius = 20;
-        self.controlsBackdrop.clipsToBounds = YES;
-    }
-    [self.view insertSubview:self.controlsBackdrop belowSubview:self.controlsScroll];
-    self.message = [[UILabel alloc] init];
-    self.message.textColor = UIColor.whiteColor;
-    self.message.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
-    self.message.adjustsFontForContentSizeCategory = YES;
-    self.message.numberOfLines = 2;
-    self.message.text = @"";
-    self.message.hidden = YES;
-    [self.controls addArrangedSubview:self.message];
-    self.timeLabel = [[UILabel alloc] init];
-    self.timeLabel.textColor = UIColor.whiteColor;
-    self.timeLabel.font = [UIFont monospacedDigitSystemFontOfSize:13 weight:UIFontWeightRegular];
-    self.timeLabel.adjustsFontSizeToFitWidth = YES;
-    self.timeLabel.text = @"0:00 / 0:00";
-    self.timeLabel.accessibilityLabel = @"Playback time";
-    [self.controls addArrangedSubview:self.timeLabel];
-    self.seek = [[UISlider alloc] init];
-    self.seek.minimumTrackTintColor = UIColor.whiteColor;
-    self.seek.maximumTrackTintColor = [UIColor colorWithWhite:.65 alpha:1];
-    self.seek.thumbTintColor = UIColor.whiteColor;
-    self.seek.accessibilityLabel = @"Video position";
-    NSNumber *seekExtent = [self playbackOptions][@"reader_layout"][@"extent"];
-    [self.seek.heightAnchor constraintGreaterThanOrEqualToConstant:seekExtent ? seekExtent.doubleValue : 48].active = YES;
-    [self.seek addTarget:self action:@selector(seekChanged:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside];
-    [self.controls addArrangedSubview:self.seek];
-    UIBarButtonItem *close = [self item:@"Done" selector:@selector(done:)];
-    self.pictureButton = [self item:@"Fill view" selector:@selector(togglePictureSize:)];
-    UIBarButtonItem *picture = self.pictureButton;
-    UIBarButtonItem *chapters = [self item:@"Chapters" selector:@selector(chapters:)];
-    UIBarButtonItem *audio = [self item:@"Audio tracks" selector:@selector(audioTracks:)];
-    UIBarButtonItem *subtitles = [self item:@"Subtitles" selector:@selector(subtitleTracks:)];
-    UIBarButtonItem *tools = [self item:@"Playback" selector:@selector(playbackTools:)];
-    NSMutableArray<UIBarButtonItem *> *utilities = [NSMutableArray arrayWithArray:@[picture, audio, subtitles, chapters, tools]];
-    if (!self.restricted) {
-        UIBarButtonItem *more = [self item:@"More playback options" selector:NULL];
-        __weak LGVideoController *owner = self;
-        __weak UIBarButtonItem *anchor = more;
-        more.menu = [UIMenu menuWithChildren:@[
-            [UIAction actionWithTitle:@"Show in folder" image:[UIImage systemImageNamed:@"folder"] identifier:nil handler:^(UIAction *action) { [owner emitCommand:@"showInFolder" value:@""]; }],
-            [UIAction actionWithTitle:@"Favourite file" image:[UIImage systemImageNamed:@"star"] identifier:nil handler:^(UIAction *action) { [owner emitCommand:@"favourite" value:@""]; }],
-            [UIAction actionWithTitle:@"Picture in picture" image:[UIImage systemImageNamed:@"pip"] identifier:nil handler:^(UIAction *action) { [owner pip:anchor]; }],
-            [UIAction actionWithTitle:@"VLC Cast…" image:[UIImage systemImageNamed:@"tv"] identifier:nil handler:^(UIAction *action) { [owner cast:anchor]; }]
-        ]];
-        [utilities addObject:more];
-    }
-    if (@available(iOS 16.0, *)) {
-        self.navigationItem.leadingItemGroups = @[[[UIBarButtonItemGroup alloc] initWithBarButtonItems:@[close] representativeItem:nil]];
-        self.navigationItem.trailingItemGroups = @[
-            [[UIBarButtonItemGroup alloc] initWithBarButtonItems:@[picture, tools, audio, subtitles, chapters] representativeItem:nil]
-        ];
-        if (!self.restricted) {
-            UIMenu *externalMenu = utilities.lastObject.menu;
-            self.navigationItem.additionalOverflowItems = [UIDeferredMenuElement elementWithUncachedProvider:^(void (^completion)(NSArray<UIMenuElement *> *)) {
-                completion(externalMenu.children);
-            }];
-        }
-    } else {
-        self.navigationItem.leftBarButtonItem = close;
-        self.navigationItem.rightBarButtonItems = utilities;
-    }
-    self.transport = [[UIStackView alloc] init];
-    self.transport.axis = UILayoutConstraintAxisHorizontal;
-    self.transport.alignment = UIStackViewAlignmentCenter;
-    self.transport.distribution = UIStackViewDistributionEqualCentering;
-    self.transport.spacing = 28;
-    [self.transport addArrangedSubview:[self deckButton:@"Back 10 seconds" symbol:@"gobackward.10" selector:@selector(back:) primary:NO]];
-    self.playButton = [self deckButton:@"Play" symbol:@"play.fill" selector:@selector(togglePlay:) primary:YES];
-    [self.transport addArrangedSubview:self.playButton];
-    [self.transport addArrangedSubview:[self deckButton:@"Forward 10 seconds" symbol:@"goforward.10" selector:@selector(forward:) primary:NO]];
-    [self.controls addArrangedSubview:self.transport];
-    if (self.airPlayAvailable) [self installAirPlayControls];
-    self.tabletopUtilities = [[UIStackView alloc] init];
-    self.tabletopUtilities.axis = UILayoutConstraintAxisVertical;
-    self.tabletopUtilities.spacing = 4;
-    UIStackView *utilityRow = nil;
-    NSUInteger utilityIndex = 0;
-    for (NSArray *entry in @[@[@"Speed", @"speedometer", @"speedOptions:"],
-                            @[@"Fill view", @"arrow.up.left.and.arrow.down.right", @"togglePictureSize:"],
-                            @[@"Audio", @"speaker.wave.2", @"audioTracks:"],
-                            @[@"Subtitles", @"captions.bubble", @"subtitleTracks:"],
-                            @[@"Chapters", @"list.bullet", @"chapters:"],
-                            @[@"Go to time", @"clock", @"goToTime:"],
-                            @[@"Playback", @"slider.horizontal.3", @"playbackTools:"],
-                            @[@"Done", @"xmark", @"done:"]]) {
-        if (utilityIndex++ % 4 == 0) {
-            utilityRow = [[UIStackView alloc] init];
-            utilityRow.distribution = UIStackViewDistributionFillEqually;
-            [self.tabletopUtilities addArrangedSubview:utilityRow];
-        }
-        UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-        UIButtonConfiguration *config = [UIButtonConfiguration plainButtonConfiguration];
-        config.image = [UIImage systemImageNamed:entry[1]];
-        config.title = entry[0]; config.imagePlacement = NSDirectionalRectEdgeTop;
-        config.imagePadding = 3;
-        config.contentInsets = NSDirectionalEdgeInsetsMake(2, 2, 2, 2); config.baseForegroundColor = UIColor.whiteColor;
-        config.titleLineBreakMode = NSLineBreakByTruncatingTail;
-        config.titleTextAttributesTransformer = ^NSDictionary<NSAttributedStringKey,id> *(NSDictionary<NSAttributedStringKey,id> *attributes) {
-            NSMutableDictionary *result = [attributes mutableCopy];
-            result[NSFontAttributeName] = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
-            return result;
-        };
-        button.configuration = config;
-        if ([entry[2] isEqualToString:@"togglePictureSize:"]) self.tabletopPictureButton = button;
-        button.accessibilityLabel = entry[0];
-        [button addTarget:self action:NSSelectorFromString(entry[2]) forControlEvents:UIControlEventTouchUpInside];
-        [button.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
-        [utilityRow addArrangedSubview:button];
-    }
-    [self.controls addArrangedSubview:self.tabletopUtilities];
-    self.tabletopUtilities.hidden = YES;
-    self.bufferSpinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
-    self.bufferSpinner.color = UIColor.whiteColor;
-    self.bufferLabel = [[UILabel alloc] init];
-    self.bufferLabel.textColor = UIColor.whiteColor;
-    self.bufferLabel.hidden = YES;
-    self.bufferSpinner.accessibilityLabel = @"Buffering video";
-    self.bufferLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
-    self.bufferOverlay = [[UIStackView alloc] initWithArrangedSubviews:@[self.bufferSpinner, self.bufferLabel]];
-    self.bufferOverlay.axis = UILayoutConstraintAxisVertical;
-    self.bufferOverlay.alignment = UIStackViewAlignmentCenter;
-    self.bufferOverlay.spacing = 8;
-    self.bufferOverlay.userInteractionEnabled = NO;
-    self.bufferOverlay.translatesAutoresizingMaskIntoConstraints = NO;
-    self.bufferOverlay.hidden = YES;
-    [self.view addSubview:self.bufferOverlay];
-    UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
-    NSLayoutConstraint *naturalHeight = [self.controlsScroll.heightAnchor constraintEqualToAnchor:self.controls.heightAnchor];
-    naturalHeight.priority = UILayoutPriorityDefaultHigh;
-    self.controlsLeading = [self.controlsScroll.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:12];
-    self.controlsTrailing = [self.controlsScroll.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-12];
-    self.controlsBottom = [self.controlsScroll.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor];
-    self.controlsTop = [self.controlsScroll.topAnchor constraintGreaterThanOrEqualToAnchor:safe.topAnchor constant:8];
-    self.deckCenterY = [self.controlsScroll.centerYAnchor constraintEqualToAnchor:safe.centerYAnchor];
-    self.controlsHeightLimit = [self.controlsScroll.heightAnchor constraintLessThanOrEqualToConstant:10000];
-    self.controlsHeightLimit.active = YES;
-    self.bufferCenterX = [self.bufferOverlay.centerXAnchor constraintEqualToAnchor:safe.centerXAnchor];
-    self.bufferCenterY = [self.bufferOverlay.centerYAnchor constraintEqualToAnchor:safe.centerYAnchor];
-    // Size VLC's drawable to the fitted picture, rather than asking VLC to
-    // letterbox internally (where it can draw subtitles outside the image).
-    self.movieWidth = [self.inlineMovie.widthAnchor constraintEqualToConstant:0];
-    self.movieHeight = [self.inlineMovie.heightAnchor constraintEqualToConstant:0];
-    self.movieCenterY = [self.inlineMovie.centerYAnchor constraintEqualToAnchor:self.view.topAnchor];
-    [NSLayoutConstraint activateConstraints:@[
-        [self.inlineMovie.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
-        self.movieCenterY, self.movieWidth, self.movieHeight,
-        self.controlsLeading, self.controlsTrailing, self.controlsBottom, self.controlsTop,
-        naturalHeight,
-        [self.controlsBackdrop.leadingAnchor constraintEqualToAnchor:self.controlsScroll.leadingAnchor],
-        [self.controlsBackdrop.trailingAnchor constraintEqualToAnchor:self.controlsScroll.trailingAnchor],
-        [self.controlsBackdrop.topAnchor constraintEqualToAnchor:self.controlsScroll.topAnchor],
-        [self.controlsBackdrop.bottomAnchor constraintEqualToAnchor:self.controlsScroll.bottomAnchor],
-        self.bufferCenterX, self.bufferCenterY,
-        [self.controls.leadingAnchor constraintEqualToAnchor:self.controlsScroll.contentLayoutGuide.leadingAnchor],
-        [self.controls.trailingAnchor constraintEqualToAnchor:self.controlsScroll.contentLayoutGuide.trailingAnchor],
-        [self.controls.topAnchor constraintEqualToAnchor:self.controlsScroll.contentLayoutGuide.topAnchor],
-        [self.controls.bottomAnchor constraintEqualToAnchor:self.controlsScroll.contentLayoutGuide.bottomAnchor],
-        [self.controls.widthAnchor constraintEqualToAnchor:self.controlsScroll.frameLayoutGuide.widthAnchor]
-    ]];
-    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapVideo:)];
-    tap.delegate = self;
-    tap.cancelsTouchesInView = NO;
-    [self.view addGestureRecognizer:tap];
-#if __has_include(<UIKit/UIHingeInteraction.h>)
-    if (@available(iOS 27.1, *)) {
-        __weak LGVideoController *owner = self;
-        [self.view addInteraction:[[UIHingeInteraction alloc] initWithUpdateHandler:^(UIHingeInteraction *interaction, UIHingeInteractionUpdate *update) {
-            owner.hingePartiallyOpen = update.hinge && update.hinge.status == UIHingeStatusPartiallyOpen;
-            [owner.view setNeedsLayout];
-        }]];
-    }
-#endif
+}
+
+- (void)configureDecoder {
     // Keep 10-bit frames and their color attachments in Apple's native renderer.
     // Retain automatic fallback for formats the sample-buffer output cannot use.
     self.player = [[VLCMediaPlayer alloc] initWithOptions:@[@"--quiet", @"--no-video-title-show", @"--stats",
@@ -487,11 +298,14 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     self.player.delegate = self;
     self.player.media = [self playbackMedia];
     self.discoverers = [NSMutableArray array];
-    [self installPlaybackTools];
-    [self installPortraitDeck];
-    [self applyPlaybackOptions];
+}
+
+- (void)startPlaybackMonitoring {
     self.timer = [NSTimer scheduledTimerWithTimeInterval:.5 target:self selector:@selector(tick:) userInfo:nil repeats:YES];
     [self tick:nil];
+}
+
+- (void)observePlaybackPolicy {
     NSNotificationCenter *center = NSNotificationCenter.defaultCenter;
     [center addObserver:self selector:@selector(backgroundNotification:) name:UIApplicationDidEnterBackgroundNotification object:nil];
     [center addObserver:self selector:@selector(protectedData:) name:UIApplicationProtectedDataWillBecomeUnavailable object:nil];
@@ -701,128 +515,19 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 }
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
-    // VLCKit installs its surface through VLCDrawable, not a UIView drawable.
-    // Explicitly resize that surface after rotations, folds and bar changes.
     CGRect safe = self.view.safeAreaLayoutGuide.layoutFrame;
-    NSDictionary *layout = [self playbackOptions][@"reader_layout"];
-    CGFloat margin = layout[@"margin"] ? [layout[@"margin"] doubleValue] : 12;
-    CGRect available = safe;
-    if (self.view.window) {
-        // Adaptive navigation bars can contribute a bottom safe-area inset even
-        // when their controls are on the side. Only the physical window inset
-        // belongs below the timeline; retain the controller's side/top guards.
-        UIWindow *window = self.view.window;
-        CGRect physical = [self.view convertRect:UIEdgeInsetsInsetRect(window.bounds, window.safeAreaInsets)
-                                       fromView:window];
-        CGFloat bottom = MIN(CGRectGetMaxY(self.view.bounds), CGRectGetMaxY(physical));
-        available.size.height = MAX(0, bottom - CGRectGetMinY(available));
-    }
-    CGRect movieArea = self.view.bounds;
-    BOOL tabletop = NO;
-#if __has_include(<UIKit/UIHingeInteraction.h>)
-    if (@available(iOS 27.1, *)) {
-        for (UIViewReservedRegion *region in [self.view reservedRegionsOfKind:UIViewReservedRegionKind.divisionRegionKind]) {
-            CGRect fold = CGRectIntersection(available, region.frame);
-            if (CGRectIsNull(fold) || CGRectIsEmpty(fold)) continue;
-            if (fold.size.height > fold.size.width) {
-                CGFloat left = CGRectGetMinX(fold) - CGRectGetMinX(available);
-                CGFloat right = CGRectGetMaxX(available) - CGRectGetMaxX(fold);
-                if (right >= left) { available.origin.x = CGRectGetMaxX(fold); available.size.width = right; }
-                else available.size.width = left;
-            } else {
-                if (self.hingePartiallyOpen && CGRectGetMinY(fold) > 150 &&
-                    CGRectGetMaxY(safe) - CGRectGetMaxY(fold) > 220) {
-                    tabletop = YES;
-                    movieArea.size.height = CGRectGetMinY(fold);
-                }
-                CGFloat bottom = CGRectGetMaxY(available) - CGRectGetMaxY(fold);
-                // Keep the timeline below a horizontal crease when it fits.
-                if (bottom >= 112) { available.origin.y = CGRectGetMaxY(fold); available.size.height = bottom; }
-                else available.size.height = CGRectGetMinY(fold) - CGRectGetMinY(available);
-            }
-        }
-    }
-#endif
-    BOOL portrait = tabletop && self.view.bounds.size.height > self.view.bounds.size.width;
-    BOOL poseChanged = self.tabletop != tabletop || self.portraitTabletop != portrait;
-    self.tabletop = tabletop;
-    self.portraitTabletop = portrait;
-    // Fit the drawable itself to the decoded image, with letterboxing supplied
-    // by our black parent view. VLC subtitles then have the image's bounds as
-    // their layout surface. Fill keeps the viewport bounds for cropping;
-    // unsupported legacy modes use Fit.
-    CGSize viewport = movieArea.size;
-    CGSize decoded = self.player.videoSize;
-    NSString *pictureMode = [self playbackOptions][@"aspect"] ?: @"fit";
-    BOOL fit = ![pictureMode isEqualToString:@"fill"];
-    if (fit && decoded.width > 0 && decoded.height > 0 &&
-        isfinite(decoded.width) && isfinite(decoded.height) &&
-        viewport.width > 0 && viewport.height > 0) {
-        CGFloat factor = MIN(viewport.width / decoded.width, viewport.height / decoded.height);
-        viewport = CGSizeMake(decoded.width * factor, decoded.height * factor);
-    }
-    CGFloat centerY = CGRectGetMidY(movieArea);
-    if (fabs(self.movieWidth.constant - viewport.width) > 0.5 ||
-        fabs(self.movieHeight.constant - viewport.height) > 0.5 ||
-        fabs(self.movieCenterY.constant - centerY) > 0.5) {
-        self.movieWidth.constant = viewport.width;
-        self.movieHeight.constant = viewport.height;
-        self.movieCenterY.constant = centerY;
-        // VLC's drawable subviews are managed by the VLCDrawable callback.
-        // The next layout pass updates them after Auto Layout sizes movie.
-        [self.view setNeedsLayout];
-    }
+    NSDictionary *readerLayout = [self playbackOptions][@"reader_layout"];
+    CGFloat margin = readerLayout[@"margin"] ? [readerLayout[@"margin"] doubleValue] : 12;
+    LGVideoLayout layout = [self resolveVideoLayoutInSafeArea:safe];
+
+    BOOL poseChanged = self.tabletop != layout.tabletop || self.portraitTabletop != layout.portraitTabletop;
+    self.tabletop = layout.tabletop;
+    self.portraitTabletop = layout.portraitTabletop;
+    [self layoutInlineMovieInArea:layout.movieArea];
+    // VLCKit installs its surface through VLCDrawable. Resize it explicitly
+    // after rotations, folds and bar changes.
     [self layoutVideoDrawable];
-    self.tabletopUtilities.hidden = !tabletop || portrait;
-    self.timeLabel.textAlignment = tabletop ? NSTextAlignmentNatural : NSTextAlignmentCenter;
-    self.controls.spacing = portrait ? (available.size.height >= 380 ? 10 : 4) : tabletop ? 2 : 4;
-    self.controls.layoutMarginsRelativeArrangement = YES;
-    self.controls.layoutMargins = portrait ? UIEdgeInsetsMake(8, 16, 8, 16) : UIEdgeInsetsMake(4, 12, 6, 12);
-    CGFloat transportInset = tabletop ? 0 : MAX(0, (available.size.width - 2 * margin - 24 - 260) / 2);
-    self.transport.spacing = tabletop ? 28 : 12;
-    self.transport.layoutMarginsRelativeArrangement = !tabletop;
-    self.transport.layoutMargins = UIEdgeInsetsMake(0, transportInset, 0, transportInset);
-    if (tabletop && self.view.window) {
-        // A hidden navigation rail may retain controller safe-area insets.
-        // The lower deck uses physical window insets, not that retired rail.
-        available.origin.x = CGRectGetMinX(self.view.bounds);
-        available.size.width = self.view.bounds.size.width;
-#if __has_include(<UIKit/UIHingeInteraction.h>)
-        if (@available(iOS 27.1, *)) {
-            for (UIViewReservedRegion *region in [self.view reservedRegionsOfKind:UIViewReservedRegionKind.occlusionRegionKind]) {
-                CGRect obstacle = CGRectIntersection(available, region.frame);
-                if (CGRectIsNull(obstacle) || CGRectIsEmpty(obstacle)) continue;
-                if (CGRectGetMinX(obstacle) <= CGRectGetMinX(available)) {
-                    CGFloat right = CGRectGetMaxX(available);
-                    available.origin.x = CGRectGetMaxX(obstacle);
-                    available.size.width = right - available.origin.x;
-                } else if (CGRectGetMaxX(obstacle) >= CGRectGetMaxX(available)) {
-                    available.size.width = CGRectGetMinX(obstacle) - available.origin.x;
-                }
-            }
-        }
-#endif
-    }
-    self.tabletopArea = available;
-    self.portraitDeckHeight.active = portrait;
-    self.portraitDeckHeight.constant = MAX(44, available.size.height - 16);
-    [self layoutPortraitDeck];
-    self.controlsScroll.backgroundColor = tabletop ? [UIColor colorWithWhite:.08 alpha:1] : UIColor.clearColor;
-    self.controlsScroll.layer.cornerRadius = portrait ? 0 : 20;
-    if (poseChanged) [self setControlsShown:YES];
-    // In laptop posture the upper panel owns the movie and the lower panel
-    // owns persistent controls. The movie never spans the horizontal hinge.
-    CGRect spinnerArea = tabletop ? movieArea : available;
-    self.controlsBottom.active = !tabletop;
-    self.deckCenterY.active = tabletop;
-    self.deckCenterY.constant = CGRectGetMidY(available) - CGRectGetMidY(safe);
-    self.controlsHeightLimit.constant = MAX(44, available.size.height - (tabletop ? 8 : 24));
-    self.controlsLeading.constant = margin + CGRectGetMinX(available) - CGRectGetMinX(safe);
-    self.controlsTrailing.constant = -margin + CGRectGetMaxX(available) - CGRectGetMaxX(safe);
-    self.controlsTop.constant = 8 + CGRectGetMinY(available) - CGRectGetMinY(safe);
-    self.controlsBottom.constant = CGRectGetMaxY(available) - CGRectGetMaxY(safe) - 6;
-    self.bufferCenterX.constant = CGRectGetMidX(spinnerArea) - CGRectGetMidX(safe);
-    self.bufferCenterY.constant = CGRectGetMidY(spinnerArea) - CGRectGetMidY(safe);
+    [self layoutControlDeck:layout margin:margin poseChanged:poseChanged];
     [self layoutPlaybackTools];
 }
 
@@ -1672,6 +1377,406 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
         });
     });
 }
+@end
+
+@implementation LGVideoController (VideoChrome)
+
+- (void)configureVideoView {
+    self.view.backgroundColor = UIColor.blackColor;
+    self.edgesForExtendedLayout = UIRectEdgeAll;
+    self.extendedLayoutIncludesOpaqueBars = YES;
+    self.navigationItem.largeTitleDisplayMode = UINavigationItemLargeTitleDisplayModeNever;
+}
+
+- (void)installVideoChrome {
+    [self installInlineMovie];
+    [self installControlsContainer];
+    [self installTimeline];
+    [self installNavigationItems];
+    [self installTransport];
+    [self installTabletopUtilities];
+    [self installBufferOverlay];
+    [self activateChromeConstraints];
+    [self installChromeInteractions];
+}
+
+- (void)installInlineMovie {
+    self.inlineMovie = [[UIView alloc] init];
+    self.inlineMovie.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:self.inlineMovie];
+    self.movie = [[UIView alloc] initWithFrame:self.inlineMovie.bounds];
+    self.movie.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    self.movie.clipsToBounds = YES;
+    // VLC installs rendering subviews after presentation. Keep them out of hit
+    // testing so the controller tap recognizer always receives video touches.
+    self.movie.userInteractionEnabled = NO;
+    self.inlineMovie.userInteractionEnabled = NO;
+    self.inlineMovie.isAccessibilityElement = YES;
+    self.inlineMovie.accessibilityLabel = @"Video";
+    self.inlineMovie.accessibilityCustomActions = @[
+        [[UIAccessibilityCustomAction alloc] initWithName:@"Show video controls" target:self selector:@selector(showControlsForAccessibility)]
+    ];
+    [self.inlineMovie addSubview:self.movie];
+}
+
+- (void)installControlsContainer {
+    self.controls = [[UIStackView alloc] init];
+    self.controls.insetsLayoutMarginsFromSafeArea = NO;
+    self.controls.axis = UILayoutConstraintAxisVertical;
+    self.controls.spacing = 4;
+    self.controlsVisible = YES;
+    self.fullscreen = YES;
+    self.controls.translatesAutoresizingMaskIntoConstraints = NO;
+    self.controlsScroll = [[UIScrollView alloc] init];
+    // Constraints already handle safe regions; automatic scroll insets would
+    // reserve the native rail twice and push the deck off center.
+    self.controlsScroll.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+    self.controlsScroll.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:self.controlsScroll];
+    [self.controlsScroll addSubview:self.controls];
+    if (@available(iOS 26.0, *)) {
+        self.controlsMaterial = [UIGlassEffect effectWithStyle:UIGlassEffectStyleRegular];
+    } else {
+        self.controlsMaterial = [UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemThinMaterialDark];
+    }
+    // Keep the effect behind the scroll view at full alpha while controls fade.
+    self.controlsBackdrop = [[UIVisualEffectView alloc] initWithEffect:self.controlsMaterial];
+    self.controlsBackdrop.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
+    self.controlsBackdrop.userInteractionEnabled = NO;
+    self.controlsBackdrop.translatesAutoresizingMaskIntoConstraints = NO;
+    if (@available(iOS 26.0, *)) {
+        self.controlsBackdrop.cornerConfiguration =
+            [UICornerConfiguration configurationWithUniformRadius:[UICornerRadius fixedRadius:20]];
+    } else {
+        self.controlsBackdrop.layer.cornerRadius = 20;
+        self.controlsBackdrop.clipsToBounds = YES;
+    }
+    [self.view insertSubview:self.controlsBackdrop belowSubview:self.controlsScroll];
+}
+
+- (void)installTimeline {
+    self.message = [[UILabel alloc] init];
+    self.message.textColor = UIColor.whiteColor;
+    self.message.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
+    self.message.adjustsFontForContentSizeCategory = YES;
+    self.message.numberOfLines = 2;
+    self.message.text = @"";
+    self.message.hidden = YES;
+    [self.controls addArrangedSubview:self.message];
+    self.timeLabel = [[UILabel alloc] init];
+    self.timeLabel.textColor = UIColor.whiteColor;
+    self.timeLabel.font = [UIFont monospacedDigitSystemFontOfSize:13 weight:UIFontWeightRegular];
+    self.timeLabel.adjustsFontSizeToFitWidth = YES;
+    self.timeLabel.text = @"0:00 / 0:00";
+    self.timeLabel.accessibilityLabel = @"Playback time";
+    [self.controls addArrangedSubview:self.timeLabel];
+    self.seek = [[UISlider alloc] init];
+    self.seek.minimumTrackTintColor = UIColor.whiteColor;
+    self.seek.maximumTrackTintColor = [UIColor colorWithWhite:.65 alpha:1];
+    self.seek.thumbTintColor = UIColor.whiteColor;
+    self.seek.accessibilityLabel = @"Video position";
+    NSNumber *seekExtent = [self playbackOptions][@"reader_layout"][@"extent"];
+    [self.seek.heightAnchor constraintGreaterThanOrEqualToConstant:seekExtent ? seekExtent.doubleValue : 48].active = YES;
+    [self.seek addTarget:self action:@selector(seekChanged:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside];
+    [self.controls addArrangedSubview:self.seek];
+}
+
+- (void)installNavigationItems {
+    UIBarButtonItem *close = [self item:@"Done" selector:@selector(done:)];
+    self.pictureButton = [self item:@"Fill view" selector:@selector(togglePictureSize:)];
+    UIBarButtonItem *picture = self.pictureButton;
+    UIBarButtonItem *chapters = [self item:@"Chapters" selector:@selector(chapters:)];
+    UIBarButtonItem *audio = [self item:@"Audio tracks" selector:@selector(audioTracks:)];
+    UIBarButtonItem *subtitles = [self item:@"Subtitles" selector:@selector(subtitleTracks:)];
+    UIBarButtonItem *tools = [self item:@"Playback" selector:@selector(playbackTools:)];
+    NSMutableArray<UIBarButtonItem *> *utilities = [NSMutableArray arrayWithArray:@[picture, audio, subtitles, chapters, tools]];
+    if (!self.restricted) {
+        UIBarButtonItem *more = [self item:@"More playback options" selector:NULL];
+        __weak LGVideoController *owner = self;
+        __weak UIBarButtonItem *anchor = more;
+        more.menu = [UIMenu menuWithChildren:@[
+            [UIAction actionWithTitle:@"Show in folder" image:[UIImage systemImageNamed:@"folder"] identifier:nil handler:^(UIAction *action) { [owner emitCommand:@"showInFolder" value:@""]; }],
+            [UIAction actionWithTitle:@"Favourite file" image:[UIImage systemImageNamed:@"star"] identifier:nil handler:^(UIAction *action) { [owner emitCommand:@"favourite" value:@""]; }],
+            [UIAction actionWithTitle:@"Picture in picture" image:[UIImage systemImageNamed:@"pip"] identifier:nil handler:^(UIAction *action) { [owner pip:anchor]; }],
+            [UIAction actionWithTitle:@"VLC Cast…" image:[UIImage systemImageNamed:@"tv"] identifier:nil handler:^(UIAction *action) { [owner cast:anchor]; }]
+        ]];
+        [utilities addObject:more];
+    }
+    if (@available(iOS 16.0, *)) {
+        self.navigationItem.leadingItemGroups = @[[[UIBarButtonItemGroup alloc] initWithBarButtonItems:@[close] representativeItem:nil]];
+        self.navigationItem.trailingItemGroups = @[
+            [[UIBarButtonItemGroup alloc] initWithBarButtonItems:@[picture, tools, audio, subtitles, chapters] representativeItem:nil]
+        ];
+        if (!self.restricted) {
+            UIMenu *externalMenu = utilities.lastObject.menu;
+            self.navigationItem.additionalOverflowItems = [UIDeferredMenuElement elementWithUncachedProvider:^(void (^completion)(NSArray<UIMenuElement *> *)) {
+                completion(externalMenu.children);
+            }];
+        }
+    } else {
+        self.navigationItem.leftBarButtonItem = close;
+        self.navigationItem.rightBarButtonItems = utilities;
+    }
+}
+
+- (void)installTransport {
+    self.transport = [[UIStackView alloc] init];
+    self.transport.axis = UILayoutConstraintAxisHorizontal;
+    self.transport.alignment = UIStackViewAlignmentCenter;
+    self.transport.distribution = UIStackViewDistributionEqualCentering;
+    self.transport.spacing = 28;
+    [self.transport addArrangedSubview:[self deckButton:@"Back 10 seconds" symbol:@"gobackward.10" selector:@selector(back:) primary:NO]];
+    self.playButton = [self deckButton:@"Play" symbol:@"play.fill" selector:@selector(togglePlay:) primary:YES];
+    [self.transport addArrangedSubview:self.playButton];
+    [self.transport addArrangedSubview:[self deckButton:@"Forward 10 seconds" symbol:@"goforward.10" selector:@selector(forward:) primary:NO]];
+    [self.controls addArrangedSubview:self.transport];
+    if (self.airPlayAvailable) [self installAirPlayControls];
+}
+
+- (void)installTabletopUtilities {
+    self.tabletopUtilities = [[UIStackView alloc] init];
+    self.tabletopUtilities.axis = UILayoutConstraintAxisVertical;
+    self.tabletopUtilities.spacing = 4;
+    UIStackView *utilityRow = nil;
+    NSUInteger utilityIndex = 0;
+    for (NSArray *entry in @[@[@"Speed", @"speedometer", @"speedOptions:"],
+                            @[@"Fill view", @"arrow.up.left.and.arrow.down.right", @"togglePictureSize:"],
+                            @[@"Audio", @"speaker.wave.2", @"audioTracks:"],
+                            @[@"Subtitles", @"captions.bubble", @"subtitleTracks:"],
+                            @[@"Chapters", @"list.bullet", @"chapters:"],
+                            @[@"Go to time", @"clock", @"goToTime:"],
+                            @[@"Playback", @"slider.horizontal.3", @"playbackTools:"],
+                            @[@"Done", @"xmark", @"done:"]]) {
+        if (utilityIndex++ % 4 == 0) {
+            utilityRow = [[UIStackView alloc] init];
+            utilityRow.distribution = UIStackViewDistributionFillEqually;
+            [self.tabletopUtilities addArrangedSubview:utilityRow];
+        }
+        UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
+        UIButtonConfiguration *config = [UIButtonConfiguration plainButtonConfiguration];
+        config.image = [UIImage systemImageNamed:entry[1]];
+        config.title = entry[0]; config.imagePlacement = NSDirectionalRectEdgeTop;
+        config.imagePadding = 3;
+        config.contentInsets = NSDirectionalEdgeInsetsMake(2, 2, 2, 2); config.baseForegroundColor = UIColor.whiteColor;
+        config.titleLineBreakMode = NSLineBreakByTruncatingTail;
+        config.titleTextAttributesTransformer = ^NSDictionary<NSAttributedStringKey,id> *(NSDictionary<NSAttributedStringKey,id> *attributes) {
+            NSMutableDictionary *result = [attributes mutableCopy];
+            result[NSFontAttributeName] = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
+            return result;
+        };
+        button.configuration = config;
+        if ([entry[2] isEqualToString:@"togglePictureSize:"]) self.tabletopPictureButton = button;
+        button.accessibilityLabel = entry[0];
+        [button addTarget:self action:NSSelectorFromString(entry[2]) forControlEvents:UIControlEventTouchUpInside];
+        [button.heightAnchor constraintGreaterThanOrEqualToConstant:44].active = YES;
+        [utilityRow addArrangedSubview:button];
+    }
+    [self.controls addArrangedSubview:self.tabletopUtilities];
+    self.tabletopUtilities.hidden = YES;
+}
+
+- (void)installBufferOverlay {
+    self.bufferSpinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
+    self.bufferSpinner.color = UIColor.whiteColor;
+    self.bufferLabel = [[UILabel alloc] init];
+    self.bufferLabel.textColor = UIColor.whiteColor;
+    self.bufferLabel.hidden = YES;
+    self.bufferSpinner.accessibilityLabel = @"Buffering video";
+    self.bufferLabel.font = [UIFont preferredFontForTextStyle:UIFontTextStyleCaption1];
+    self.bufferOverlay = [[UIStackView alloc] initWithArrangedSubviews:@[self.bufferSpinner, self.bufferLabel]];
+    self.bufferOverlay.axis = UILayoutConstraintAxisVertical;
+    self.bufferOverlay.alignment = UIStackViewAlignmentCenter;
+    self.bufferOverlay.spacing = 8;
+    self.bufferOverlay.userInteractionEnabled = NO;
+    self.bufferOverlay.translatesAutoresizingMaskIntoConstraints = NO;
+    self.bufferOverlay.hidden = YES;
+    [self.view addSubview:self.bufferOverlay];
+}
+
+- (void)activateChromeConstraints {
+    UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
+    NSLayoutConstraint *naturalHeight = [self.controlsScroll.heightAnchor constraintEqualToAnchor:self.controls.heightAnchor];
+    naturalHeight.priority = UILayoutPriorityDefaultHigh;
+    self.controlsLeading = [self.controlsScroll.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:12];
+    self.controlsTrailing = [self.controlsScroll.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-12];
+    self.controlsBottom = [self.controlsScroll.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor];
+    self.controlsTop = [self.controlsScroll.topAnchor constraintGreaterThanOrEqualToAnchor:safe.topAnchor constant:8];
+    self.deckCenterY = [self.controlsScroll.centerYAnchor constraintEqualToAnchor:safe.centerYAnchor];
+    self.controlsHeightLimit = [self.controlsScroll.heightAnchor constraintLessThanOrEqualToConstant:10000];
+    self.controlsHeightLimit.active = YES;
+    self.bufferCenterX = [self.bufferOverlay.centerXAnchor constraintEqualToAnchor:safe.centerXAnchor];
+    self.bufferCenterY = [self.bufferOverlay.centerYAnchor constraintEqualToAnchor:safe.centerYAnchor];
+    // Size VLC's drawable to the fitted picture, rather than asking VLC to
+    // letterbox internally (where it can draw subtitles outside the image).
+    self.movieWidth = [self.inlineMovie.widthAnchor constraintEqualToConstant:0];
+    self.movieHeight = [self.inlineMovie.heightAnchor constraintEqualToConstant:0];
+    self.movieCenterY = [self.inlineMovie.centerYAnchor constraintEqualToAnchor:self.view.topAnchor];
+    [NSLayoutConstraint activateConstraints:@[
+        [self.inlineMovie.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
+        self.movieCenterY, self.movieWidth, self.movieHeight,
+        self.controlsLeading, self.controlsTrailing, self.controlsBottom, self.controlsTop,
+        naturalHeight,
+        [self.controlsBackdrop.leadingAnchor constraintEqualToAnchor:self.controlsScroll.leadingAnchor],
+        [self.controlsBackdrop.trailingAnchor constraintEqualToAnchor:self.controlsScroll.trailingAnchor],
+        [self.controlsBackdrop.topAnchor constraintEqualToAnchor:self.controlsScroll.topAnchor],
+        [self.controlsBackdrop.bottomAnchor constraintEqualToAnchor:self.controlsScroll.bottomAnchor],
+        self.bufferCenterX, self.bufferCenterY,
+        [self.controls.leadingAnchor constraintEqualToAnchor:self.controlsScroll.contentLayoutGuide.leadingAnchor],
+        [self.controls.trailingAnchor constraintEqualToAnchor:self.controlsScroll.contentLayoutGuide.trailingAnchor],
+        [self.controls.topAnchor constraintEqualToAnchor:self.controlsScroll.contentLayoutGuide.topAnchor],
+        [self.controls.bottomAnchor constraintEqualToAnchor:self.controlsScroll.contentLayoutGuide.bottomAnchor],
+        [self.controls.widthAnchor constraintEqualToAnchor:self.controlsScroll.frameLayoutGuide.widthAnchor]
+    ]];
+}
+
+- (void)installChromeInteractions {
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(tapVideo:)];
+    tap.delegate = self;
+    tap.cancelsTouchesInView = NO;
+    [self.view addGestureRecognizer:tap];
+#if __has_include(<UIKit/UIHingeInteraction.h>)
+    if (@available(iOS 27.1, *)) {
+        __weak LGVideoController *owner = self;
+        [self.view addInteraction:[[UIHingeInteraction alloc] initWithUpdateHandler:^(UIHingeInteraction *interaction, UIHingeInteractionUpdate *update) {
+            owner.hingePartiallyOpen = update.hinge && update.hinge.status == UIHingeStatusPartiallyOpen;
+            [owner.view setNeedsLayout];
+        }]];
+    }
+#endif
+}
+
+- (LGVideoLayout)resolveVideoLayoutInSafeArea:(CGRect)safe {
+    CGRect available = safe;
+    if (self.view.window) {
+        // Adaptive navigation bars can contribute a bottom safe-area inset even
+        // when their controls are on the side. Only the physical window inset
+        // belongs below the timeline; retain the controller's side/top guards.
+        UIWindow *window = self.view.window;
+        CGRect physical = [self.view convertRect:UIEdgeInsetsInsetRect(window.bounds, window.safeAreaInsets)
+                                       fromView:window];
+        CGFloat bottom = MIN(CGRectGetMaxY(self.view.bounds), CGRectGetMaxY(physical));
+        available.size.height = MAX(0, bottom - CGRectGetMinY(available));
+    }
+    CGRect movieArea = self.view.bounds;
+    BOOL tabletop = NO;
+#if __has_include(<UIKit/UIHingeInteraction.h>)
+    if (@available(iOS 27.1, *)) {
+        for (UIViewReservedRegion *region in [self.view reservedRegionsOfKind:UIViewReservedRegionKind.divisionRegionKind]) {
+            CGRect fold = CGRectIntersection(available, region.frame);
+            if (CGRectIsNull(fold) || CGRectIsEmpty(fold)) continue;
+            if (fold.size.height > fold.size.width) {
+                CGFloat left = CGRectGetMinX(fold) - CGRectGetMinX(available);
+                CGFloat right = CGRectGetMaxX(available) - CGRectGetMaxX(fold);
+                if (right >= left) { available.origin.x = CGRectGetMaxX(fold); available.size.width = right; }
+                else available.size.width = left;
+            } else {
+                if (self.hingePartiallyOpen && CGRectGetMinY(fold) > 150 &&
+                    CGRectGetMaxY(safe) - CGRectGetMaxY(fold) > 220) {
+                    tabletop = YES;
+                    movieArea.size.height = CGRectGetMinY(fold);
+                }
+                CGFloat bottom = CGRectGetMaxY(available) - CGRectGetMaxY(fold);
+                // Keep the timeline below a horizontal crease when it fits.
+                if (bottom >= 112) { available.origin.y = CGRectGetMaxY(fold); available.size.height = bottom; }
+                else available.size.height = CGRectGetMinY(fold) - CGRectGetMinY(available);
+            }
+        }
+    }
+#endif
+    BOOL portrait = tabletop && self.view.bounds.size.height > self.view.bounds.size.width;
+    return (LGVideoLayout){.safeArea = safe, .controlsArea = available, .movieArea = movieArea,
+                           .tabletop = tabletop, .portraitTabletop = portrait};
+}
+
+- (void)layoutInlineMovieInArea:(CGRect)movieArea {
+    // Fit the drawable itself to the decoded image, with letterboxing supplied
+    // by our black parent view. VLC subtitles then have the image's bounds as
+    // their layout surface. Fill keeps the viewport bounds for cropping;
+    // unsupported legacy modes use Fit.
+    CGSize viewport = movieArea.size;
+    CGSize decoded = self.player.videoSize;
+    NSString *pictureMode = [self playbackOptions][@"aspect"] ?: @"fit";
+    BOOL fit = ![pictureMode isEqualToString:@"fill"];
+    if (fit && decoded.width > 0 && decoded.height > 0 &&
+        isfinite(decoded.width) && isfinite(decoded.height) &&
+        viewport.width > 0 && viewport.height > 0) {
+        CGFloat factor = MIN(viewport.width / decoded.width, viewport.height / decoded.height);
+        viewport = CGSizeMake(decoded.width * factor, decoded.height * factor);
+    }
+    CGFloat centerY = CGRectGetMidY(movieArea);
+    if (fabs(self.movieWidth.constant - viewport.width) > 0.5 ||
+        fabs(self.movieHeight.constant - viewport.height) > 0.5 ||
+        fabs(self.movieCenterY.constant - centerY) > 0.5) {
+        self.movieWidth.constant = viewport.width;
+        self.movieHeight.constant = viewport.height;
+        self.movieCenterY.constant = centerY;
+        // VLC's drawable subviews are managed by the VLCDrawable callback.
+        // The next layout pass updates them after Auto Layout sizes movie.
+        [self.view setNeedsLayout];
+    }
+}
+
+- (CGRect)tabletopControlsAreaFromArea:(CGRect)available {
+    if (!self.view.window) return available;
+    // A hidden navigation rail may retain controller safe-area insets.
+    // The lower deck uses physical window insets, not that retired rail.
+    available.origin.x = CGRectGetMinX(self.view.bounds);
+    available.size.width = self.view.bounds.size.width;
+#if __has_include(<UIKit/UIHingeInteraction.h>)
+    if (@available(iOS 27.1, *)) {
+        for (UIViewReservedRegion *region in [self.view reservedRegionsOfKind:UIViewReservedRegionKind.occlusionRegionKind]) {
+            CGRect obstacle = CGRectIntersection(available, region.frame);
+            if (CGRectIsNull(obstacle) || CGRectIsEmpty(obstacle)) continue;
+            if (CGRectGetMinX(obstacle) <= CGRectGetMinX(available)) {
+                CGFloat right = CGRectGetMaxX(available);
+                available.origin.x = CGRectGetMaxX(obstacle);
+                available.size.width = right - available.origin.x;
+            } else if (CGRectGetMaxX(obstacle) >= CGRectGetMaxX(available)) {
+                available.size.width = CGRectGetMinX(obstacle) - available.origin.x;
+            }
+        }
+    }
+#endif
+    return available;
+}
+
+- (void)layoutControlDeck:(LGVideoLayout)layout margin:(CGFloat)margin poseChanged:(BOOL)poseChanged {
+    BOOL tabletop = layout.tabletop;
+    BOOL portrait = layout.portraitTabletop;
+    CGRect safe = layout.safeArea;
+    CGRect available = layout.controlsArea;
+    self.tabletopUtilities.hidden = !tabletop || portrait;
+    self.timeLabel.textAlignment = tabletop ? NSTextAlignmentNatural : NSTextAlignmentCenter;
+    self.controls.spacing = portrait ? (available.size.height >= 380 ? 10 : 4) : tabletop ? 2 : 4;
+    self.controls.layoutMarginsRelativeArrangement = YES;
+    self.controls.layoutMargins = portrait ? UIEdgeInsetsMake(8, 16, 8, 16) : UIEdgeInsetsMake(4, 12, 6, 12);
+    CGFloat transportInset = tabletop ? 0 : MAX(0, (available.size.width - 2 * margin - 24 - 260) / 2);
+    self.transport.spacing = tabletop ? 28 : 12;
+    self.transport.layoutMarginsRelativeArrangement = !tabletop;
+    self.transport.layoutMargins = UIEdgeInsetsMake(0, transportInset, 0, transportInset);
+    if (tabletop) available = [self tabletopControlsAreaFromArea:available];
+    self.tabletopArea = available;
+    self.portraitDeckHeight.active = portrait;
+    self.portraitDeckHeight.constant = MAX(44, available.size.height - 16);
+    [self layoutPortraitDeck];
+    self.controlsScroll.backgroundColor = tabletop ? [UIColor colorWithWhite:.08 alpha:1] : UIColor.clearColor;
+    self.controlsScroll.layer.cornerRadius = portrait ? 0 : 20;
+    if (poseChanged) [self setControlsShown:YES];
+    // In laptop posture the upper panel owns the movie and the lower panel
+    // owns persistent controls. The movie never spans the horizontal hinge.
+    CGRect spinnerArea = tabletop ? layout.movieArea : available;
+    self.controlsBottom.active = !tabletop;
+    self.deckCenterY.active = tabletop;
+    self.deckCenterY.constant = CGRectGetMidY(available) - CGRectGetMidY(safe);
+    self.controlsHeightLimit.constant = MAX(44, available.size.height - (tabletop ? 8 : 24));
+    self.controlsLeading.constant = margin + CGRectGetMinX(available) - CGRectGetMinX(safe);
+    self.controlsTrailing.constant = -margin + CGRectGetMaxX(available) - CGRectGetMaxX(safe);
+    self.controlsTop.constant = 8 + CGRectGetMinY(available) - CGRectGetMinY(safe);
+    self.controlsBottom.constant = CGRectGetMaxY(available) - CGRectGetMaxY(safe) - 6;
+    self.bufferCenterX.constant = CGRectGetMidX(spinnerArea) - CGRectGetMidX(safe);
+    self.bufferCenterY.constant = CGRectGetMidY(spinnerArea) - CGRectGetMidY(safe);
+}
+
 @end
 
 #import "PlaybackControls.m"

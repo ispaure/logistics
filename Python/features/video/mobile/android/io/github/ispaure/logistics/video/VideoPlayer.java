@@ -144,22 +144,54 @@ public final class VideoPlayer {
         activity.setVolumeControlStream(android.media.AudioManager.STREAM_MUSIC);
         this.listener = listener;
         this.restricted = restricted;
-        if (restricted && Build.VERSION.SDK_INT >= 29) {
-            previousCapturePolicy = audio.getAllowedCapturePolicy();
-            audio.setAllowedCapturePolicy(AudioAttributes.ALLOW_CAPTURE_BY_NONE);
-        }
+        restrictAudioCapture();
         this.resume = start;
         this.lastPosition = start;
         try { this.subtitles = new JSONArray(subtitles); }
         catch (Exception error) { throw new IllegalArgumentException("Invalid subtitle list", error); }
+        vlc = createVlc();
+        player = new MediaPlayer(vlc);
+
+        root = createRoot();
+        video = new VLCVideoLayout(activity);
+        root.addView(video, new FrameLayout.LayoutParams(-1, -1));
+        View tapSurface = addTapSurface();
+        bufferingOverlay = new LinearLayout(activity);
+        bufferingLabel = addBufferingOverlay();
+        controls = new LinearLayout(activity);
+        controlsScroll = addControlDeck();
+        videoHeader = createHeaderContainer();
+        videoTitle = new TextView(activity);
+        sourceLabel = addVideoHeader();
+        root.setOnApplyWindowInsetsListener(this::applyControlInsets);
+
+        message = addStatusMessage();
+        timeLabel = new TextView(activity);
+        seek = addTimeline();
+        addControlRows();
+        play = addTransportButtons();
+        fullscreenButton = addUtilityButtons();
+        arrangeControls(activity.getResources().getDisplayMetrics().widthPixels);
+
+        player.setEventListener(this::onPlayerEvent);
+        pausePresentation = new PausePresentation(this);
+        tools = new PlaybackControls(this, tapSurface);
+        installMedia();
+        registerPlaybackCallbacks();
+        handler.post(tick);
+    }
+
+    private LibVLC createVlc() {
         ArrayList<String> options = new ArrayList<>();
         options.add("--no-video-title-show");
         options.add("--no-snapshot-preview");
         options.add("--stats");
         options.add("--quiet");
-        vlc = new LibVLC(activity, options);
-        player = new MediaPlayer(vlc);
-        root = new FrameLayout(activity) {
+        return new LibVLC(activity, options);
+    }
+
+    private FrameLayout createRoot() {
+        FrameLayout root = new FrameLayout(activity) {
             @Override public void onWindowFocusChanged(boolean focused) {
                 super.onWindowFocusChanged(focused);
                 if (focused && fullscreen) updateChrome();
@@ -181,8 +213,10 @@ public final class VideoPlayer {
         };
         root.setBackgroundColor(Color.BLACK);
         root.setClickable(true);
-        video = new VLCVideoLayout(activity);
-        root.addView(video, new FrameLayout.LayoutParams(-1, -1));
+        return root;
+    }
+
+    private View addTapSurface() {
         View tapSurface = new View(activity);
         tapSurface.setContentDescription("Show or hide video controls");
         tapSurface.setOnClickListener(view -> {
@@ -190,22 +224,28 @@ public final class VideoPlayer {
             else setControlsVisible(!controlsVisible);
         });
         root.addView(tapSurface, new FrameLayout.LayoutParams(-1, -1));
-        bufferingOverlay = new LinearLayout(activity);
+        return tapSurface;
+    }
+
+    private TextView addBufferingOverlay() {
         bufferingOverlay.setOrientation(LinearLayout.VERTICAL);
         bufferingOverlay.setGravity(Gravity.CENTER);
         bufferingOverlay.addView(new android.widget.ProgressBar(activity));
-        bufferingLabel = new TextView(activity);
+        TextView bufferingLabel = new TextView(activity);
         bufferingLabel.setTextColor(Color.WHITE);
         bufferingLabel.setVisibility(View.GONE);
         bufferingOverlay.setContentDescription("Buffering video");
         bufferingOverlay.addView(bufferingLabel);
         bufferingOverlay.setVisibility(View.GONE);
         root.addView(bufferingOverlay, new FrameLayout.LayoutParams(-2, -2, Gravity.CENTER));
-        controls = new LinearLayout(activity);
+        return bufferingLabel;
+    }
+
+    private ScrollView addControlDeck() {
         controls.setOrientation(LinearLayout.VERTICAL);
         controls.setBackground(rounded(0xed181818, 20));
         controls.setPadding(dp(8), dp(6), dp(8), dp(4));
-        controlsScroll = new ScrollView(activity);
+        ScrollView controlsScroll = new ScrollView(activity);
         controlsScroll.setFillViewport(false);
         controlsScroll.setOnTouchListener((view, event) -> {
             if (event.getActionMasked() == android.view.MotionEvent.ACTION_DOWN) handler.removeCallbacks(hideControls);
@@ -216,77 +256,92 @@ public final class VideoPlayer {
         controlsScroll.addView(controls, new ScrollView.LayoutParams(-1, -2));
         FrameLayout.LayoutParams bottom = new FrameLayout.LayoutParams(-1, -2, Gravity.BOTTOM);
         root.addView(controlsScroll, bottom);
-        videoHeader = new LinearLayout(activity);
+        return controlsScroll;
+    }
+
+    private LinearLayout createHeaderContainer() {
+        LinearLayout videoHeader = new LinearLayout(activity);
         videoHeader.setOrientation(LinearLayout.VERTICAL);
         videoHeader.setBackgroundColor(0xa6000000);
         videoHeader.setPadding(dp(12), dp(8), dp(12), dp(8));
-        videoTitle = new TextView(activity);
+        return videoHeader;
+    }
+
+    private TextView addVideoHeader() {
         videoTitle.setTextColor(Color.WHITE);
         videoTitle.setTextSize(18);
         videoTitle.setTypeface(null, android.graphics.Typeface.BOLD);
         videoTitle.setSingleLine(true);
         videoTitle.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
         videoHeader.addView(videoTitle);
-        sourceLabel = new TextView(activity);
+        TextView sourceLabel = new TextView(activity);
         sourceLabel.setTextColor(Color.WHITE);
         sourceLabel.setTextSize(12);
         videoHeader.addView(sourceLabel);
         root.addView(videoHeader, new FrameLayout.LayoutParams(-1, -2, Gravity.TOP));
-        root.setOnApplyWindowInsetsListener((view, insets) -> {
-            // AppCompat can consume insets before they reach this decor overlay.
-            // Read the window's insets so a transient bar or tablet taskbar still
-            // reserves space for the controls even when the video runs behind it.
-            WindowInsets windowInsets = view.getRootWindowInsets();
-            if (windowInsets == null) windowInsets = insets;
-            FrameLayout.LayoutParams frame = (FrameLayout.LayoutParams) controlsScroll.getLayoutParams();
-            int margin = dp(12), extent = dp(48);
-            JSONObject layout = tools == null ? null : tools.settings.optJSONObject("reader_layout");
-            if (layout != null) { margin = dp(layout.optInt("margin", 12)); extent = dp(layout.optInt("extent", 48)); }
-            int left = windowInsets.getSystemWindowInsetLeft(), top = windowInsets.getSystemWindowInsetTop();
-            int right = windowInsets.getSystemWindowInsetRight(), bottomInset = windowInsets.getSystemWindowInsetBottom();
-            if (Build.VERSION.SDK_INT >= 30) {
-                int types = WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()
-                    | WindowInsets.Type.tappableElement() | WindowInsets.Type.mandatorySystemGestures();
-                Insets safe = fullscreen ? windowInsets.getInsetsIgnoringVisibility(types) : windowInsets.getInsets(types);
-                left = safe.left; top = safe.top; right = safe.right; bottomInset = safe.bottom;
-            } else if (fullscreen) {
-                left = Math.max(left, windowInsets.getStableInsetLeft());
-                top = Math.max(top, windowInsets.getStableInsetTop());
-                right = Math.max(right, windowInsets.getStableInsetRight());
-                bottomInset = Math.max(bottomInset, windowInsets.getStableInsetBottom());
-            }
-            frame.setMargins(left + margin, top + margin, right + margin, bottomInset + dp(6));
-            try {
-                JSONObject metrics = new JSONObject();
-                metrics.put("width", root.getWidth()); metrics.put("height", root.getHeight());
-                metrics.put("safe", new JSONArray(new int[]{left, top, right, bottomInset + dp(6)}));
-                metrics.put("margin", margin); metrics.put("extent", extent);
-                JSONArray corners = new JSONArray();
-                if (Build.VERSION.SDK_INT >= 31) {
-                    for (int position = 0; position < 4; position++) {
-                        android.view.RoundedCorner corner = windowInsets.getRoundedCorner(position);
-                        if (corner == null) continue;
-                        corners.put(new JSONArray().put(position == 1 || position == 2).put(position >= 2)
-                            .put(corner.getCenter().x).put(corner.getCenter().y).put(corner.getRadius()));
-                    }
+        return sourceLabel;
+    }
+
+    private WindowInsets applyControlInsets(View view, WindowInsets insets) {
+        // AppCompat can consume insets before they reach this decor overlay.
+        // Read the window's insets so a transient bar or tablet taskbar still
+        // reserves space for the controls even when the video runs behind it.
+        WindowInsets windowInsets = view.getRootWindowInsets();
+        if (windowInsets == null) windowInsets = insets;
+        FrameLayout.LayoutParams frame = (FrameLayout.LayoutParams) controlsScroll.getLayoutParams();
+        int margin = dp(12), extent = dp(48);
+        JSONObject layout = tools == null ? null : tools.settings.optJSONObject("reader_layout");
+        if (layout != null) { margin = dp(layout.optInt("margin", 12)); extent = dp(layout.optInt("extent", 48)); }
+        int left = windowInsets.getSystemWindowInsetLeft(), top = windowInsets.getSystemWindowInsetTop();
+        int right = windowInsets.getSystemWindowInsetRight(), bottomInset = windowInsets.getSystemWindowInsetBottom();
+        if (Build.VERSION.SDK_INT >= 30) {
+            int types = WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()
+                | WindowInsets.Type.tappableElement() | WindowInsets.Type.mandatorySystemGestures();
+            Insets safe = fullscreen ? windowInsets.getInsetsIgnoringVisibility(types) : windowInsets.getInsets(types);
+            left = safe.left; top = safe.top; right = safe.right; bottomInset = safe.bottom;
+        } else if (fullscreen) {
+            left = Math.max(left, windowInsets.getStableInsetLeft());
+            top = Math.max(top, windowInsets.getStableInsetTop());
+            right = Math.max(right, windowInsets.getStableInsetRight());
+            bottomInset = Math.max(bottomInset, windowInsets.getStableInsetBottom());
+        }
+        frame.setMargins(left + margin, top + margin, right + margin, bottomInset + dp(6));
+        try {
+            JSONObject metrics = new JSONObject();
+            metrics.put("width", root.getWidth()); metrics.put("height", root.getHeight());
+            metrics.put("safe", new JSONArray(new int[]{left, top, right, bottomInset + dp(6)}));
+            metrics.put("margin", margin); metrics.put("extent", extent);
+            JSONArray corners = new JSONArray();
+            if (Build.VERSION.SDK_INT >= 31) {
+                for (int position = 0; position < 4; position++) {
+                    android.view.RoundedCorner corner = windowInsets.getRoundedCorner(position);
+                    if (corner == null) continue;
+                    corners.put(new JSONArray().put(position == 1 || position == 2).put(position >= 2)
+                        .put(corner.getCenter().x).put(corner.getCenter().y).put(corner.getRadius()));
                 }
-                metrics.put("corners", corners);
-                JSONArray fitted = new JSONArray(listener.controlInsets(metrics.toString()));
-                frame.setMargins((int)Math.ceil(fitted.getDouble(0)), (int)Math.ceil(fitted.getDouble(1)),
-                    (int)Math.ceil(fitted.getDouble(2)), (int)Math.ceil(fitted.getDouble(3)));
-            } catch (Exception ignored) { /* System safe insets remain the fallback. */ }
-            controlsScroll.setLayoutParams(frame);
-            if (tools != null) tools.layoutUnlock(frame);
-            FrameLayout.LayoutParams header = (FrameLayout.LayoutParams) videoHeader.getLayoutParams();
-            header.setMargins(frame.leftMargin, frame.topMargin, frame.rightMargin, 0);
-            videoHeader.setLayoutParams(header);
-            return insets;
-        });
-        message = new TextView(activity);
+            }
+            metrics.put("corners", corners);
+            JSONArray fitted = new JSONArray(listener.controlInsets(metrics.toString()));
+            frame.setMargins((int)Math.ceil(fitted.getDouble(0)), (int)Math.ceil(fitted.getDouble(1)),
+                (int)Math.ceil(fitted.getDouble(2)), (int)Math.ceil(fitted.getDouble(3)));
+        } catch (Exception ignored) { /* System safe insets remain the fallback. */ }
+        controlsScroll.setLayoutParams(frame);
+        if (tools != null) tools.layoutUnlock(frame);
+        FrameLayout.LayoutParams header = (FrameLayout.LayoutParams) videoHeader.getLayoutParams();
+        header.setMargins(frame.leftMargin, frame.topMargin, frame.rightMargin, 0);
+        videoHeader.setLayoutParams(header);
+        return insets;
+    }
+
+    private TextView addStatusMessage() {
+        TextView message = new TextView(activity);
         message.setTextColor(Color.WHITE);
         message.setVisibility(View.GONE);
         controls.addView(message);
-        timeLabel = new TextView(activity);
+        return message;
+    }
+
+    private SeekBar addTimeline() {
         timeLabel.setTextColor(Color.WHITE);
         // Keep contrast local to the label, including bright HDR frames.
         timeLabel.setGravity(Gravity.CENTER);
@@ -295,7 +350,7 @@ public final class VideoPlayer {
         timeLabel.setText("0:00 / 0:00");
         timeLabel.setContentDescription("Playback time");
         controls.addView(timeLabel);
-        seek = new SeekBar(activity);
+        SeekBar seek = new SeekBar(activity);
         seek.setMax(10000);
         seek.setContentDescription("Video position");
         seek.setMinimumHeight(dp(48));
@@ -311,6 +366,10 @@ public final class VideoPlayer {
             }
         });
         controls.addView(seek);
+        return seek;
+    }
+
+    private void addControlRows() {
         buttonGroups = new LinearLayout(activity);
         buttonGroups.setBaselineAligned(false);
         controls.addView(buttonGroups, new LinearLayout.LayoutParams(-1, -2));
@@ -320,85 +379,38 @@ public final class VideoPlayer {
         utilityButtons.setGravity(Gravity.CENTER_VERTICAL);
         buttonGroups.addView(transportButtons);
         buttonGroups.addView(utilityButtons);
+    }
+
+    private ImageButton addTransportButtons() {
         button(transportButtons, "back", "Back 10 seconds", () -> seekTo(position() - 10000), 48);
-        play = button(transportButtons, "play", "Play", this::togglePlayback, 56);
+        ImageButton play = button(transportButtons, "play", "Play", this::togglePlayback, 56);
         button(transportButtons, "forward", "Forward 10 seconds", () -> seekTo(position() + 10000), 48);
+        return play;
+    }
+
+    private ImageButton addUtilityButtons() {
         button(utilityButtons, "audio", "Audio tracks", () -> tracks(false), 0);
         button(utilityButtons, "captions", "Subtitles", () -> tracks(true), 0);
         button(utilityButtons, "chapters", "Chapters", this::chapters, 0);
-        fullscreenButton = button(utilityButtons, "fullscreen", "Fullscreen", () -> setFullscreen(!fullscreen), 0);
-        {
-            ImageButton more = button(utilityButtons, "options", "More playback options", () -> { }, 0);
-            more.setOnClickListener(view -> {
-                PopupMenu menu = optionsMenu = new PopupMenu(activity, more);
-                menu.getMenu().add("Show in folder").setOnMenuItemClickListener(item -> { tools.emit("showInFolder", ""); return true; });
-                menu.getMenu().add("Favourite file").setOnMenuItemClickListener(item -> { tools.emit("favourite", ""); return true; });
-                menu.getMenu().add("Playback…").setOnMenuItemClickListener(item -> { tools.show(); return true; });
-                if (!restricted) menu.getMenu().add("Picture in picture").setOnMenuItemClickListener(item -> { pip(); return true; });
-                if (!restricted) menu.getMenu().add("Cast…").setOnMenuItemClickListener(item -> { cast(); return true; });
-                menu.setOnDismissListener(value -> { optionsMenu = null; scheduleControls(); });
-                handler.removeCallbacks(hideControls);
-                menu.show();
-            });
-        }
+        ImageButton fullscreenButton = button(utilityButtons, "fullscreen", "Fullscreen", () -> setFullscreen(!fullscreen), 0);
+        addOptionsButton();
         button(utilityButtons, "close", "Close video player", listener::closed, 0);
-        arrangeControls(activity.getResources().getDisplayMetrics().widthPixels);
-        player.setEventListener(event -> {
-            if (done) return;
-            if (event.type == MediaPlayer.Event.Stopped && optionsReloadPending) return;
-            // Native buffering percentages also describe prefetch while video
-            // is flowing. updatePlaybackProgress owns the stall indicator.
-            if (event.type == MediaPlayer.Event.Paused || event.type == MediaPlayer.Event.Stopped)
-                pausePending = false;
-            if (event.type == MediaPlayer.Event.Paused && playRequested && !manualResumeRequired
-                    && !networkResumePending && focusHeld && allowed(casting ||
-                    (Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode()))) player.play();
-            if (event.type == MediaPlayer.Event.Playing) {
-                optionsReloadPending = false;
-                playbackActive = true;
-                if (tools != null) tools.apply();
-                ended = false;
-                if (manualResumeRequired || !focusHeld || !allowed(false)) { pause(); return; }
-                if (resume >= 0) {
-                    if (Math.abs(player.getTime() - resume) >= 1500) player.setTime(resume);
-                    mediaStartsAtResume = false;
-                    resumeSeekSubmitted = true;
-                }
-                scheduleControls();
-            }
-            if (event.type == MediaPlayer.Event.ESAdded && tools != null) tools.apply();
-            if (event.type == MediaPlayer.Event.TimeChanged && progressSeek >= 0) confirmProgressSeek();
-            if (event.type == MediaPlayer.Event.EndReached) { ended = true; playRequested = false; lastPosition = 0; setControlsVisible(true); if (tools != null) tools.emit("ended", ""); }
-            if (event.type == MediaPlayer.Event.EncounteredError ||
-                    (event.type == MediaPlayer.Event.Stopped && playbackActive && playRequested && !ended)) {
-                playbackFailed = true;
-                long position = Math.max(0, lastPosition);
-                pause();
-                resume = position;
-                status(transportFailure != null ? transportFailure :
-                    "Playback stopped unexpectedly. Press Play to retry from this position.");
-            }
-            if (event.type == MediaPlayer.Event.Playing) updateScreenAwake();
-            else if (event.type == MediaPlayer.Event.Paused || event.type == MediaPlayer.Event.Stopped
-                    || event.type == MediaPlayer.Event.EndReached || event.type == MediaPlayer.Event.EncounteredError) {
-                playbackActive = false;
-                if (!playRequested || event.type != MediaPlayer.Event.Paused) {
-                    buffering = false;
-                    bufferingOverlay.setVisibility(View.GONE);
-                }
-                root.setKeepScreenOn(false);
-            }
+        return fullscreenButton;
+    }
+
+    private void addOptionsButton() {
+        ImageButton more = button(utilityButtons, "options", "More playback options", () -> { }, 0);
+        more.setOnClickListener(view -> {
+            PopupMenu menu = optionsMenu = new PopupMenu(activity, more);
+            menu.getMenu().add("Show in folder").setOnMenuItemClickListener(item -> { tools.emit("showInFolder", ""); return true; });
+            menu.getMenu().add("Favourite file").setOnMenuItemClickListener(item -> { tools.emit("favourite", ""); return true; });
+            menu.getMenu().add("Playback…").setOnMenuItemClickListener(item -> { tools.show(); return true; });
+            if (!restricted) menu.getMenu().add("Picture in picture").setOnMenuItemClickListener(item -> { pip(); return true; });
+            if (!restricted) menu.getMenu().add("Cast…").setOnMenuItemClickListener(item -> { cast(); return true; });
+            menu.setOnDismissListener(value -> { optionsMenu = null; scheduleControls(); });
+            handler.removeCallbacks(hideControls);
+            menu.show();
         });
-        pausePresentation = new PausePresentation(this);
-        tools = new PlaybackControls(this, tapSurface);
-        installMedia();
-        activity.registerReceiver(screenOff, new IntentFilter(Intent.ACTION_SCREEN_OFF));
-        activity.registerReceiver(noisy, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
-        if (Build.VERSION.SDK_INT >= 33)
-            activity.registerReceiver(pipControls, new IntentFilter(pipAction), Context.RECEIVER_NOT_EXPORTED);
-        else activity.registerReceiver(pipControls, new IntentFilter(pipAction));
-        audio.registerAudioDeviceCallback(deviceCallback, handler);
-        handler.post(tick);
     }
 
     boolean allowed(boolean external) {
@@ -603,6 +615,36 @@ public final class VideoPlayer {
         @Override public void onReceive(Context context, Intent intent) { pause(); }
     };
 
+    private void registerPlaybackCallbacks() {
+        activity.registerReceiver(screenOff, new IntentFilter(Intent.ACTION_SCREEN_OFF));
+        activity.registerReceiver(noisy, new IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY));
+        if (Build.VERSION.SDK_INT >= 33)
+            activity.registerReceiver(pipControls, new IntentFilter(pipAction), Context.RECEIVER_NOT_EXPORTED);
+        else activity.registerReceiver(pipControls, new IntentFilter(pipAction));
+        audio.registerAudioDeviceCallback(deviceCallback, handler);
+    }
+
+    private void unregisterPlaybackCallbacks() {
+        activity.unregisterReceiver(screenOff);
+        activity.unregisterReceiver(noisy);
+        activity.unregisterReceiver(pipControls);
+        audio.unregisterAudioDeviceCallback(deviceCallback);
+    }
+
+    private void restrictAudioCapture() {
+        if (restricted && Build.VERSION.SDK_INT >= 29) {
+            previousCapturePolicy = audio.getAllowedCapturePolicy();
+            audio.setAllowedCapturePolicy(AudioAttributes.ALLOW_CAPTURE_BY_NONE);
+        }
+    }
+
+    private void restoreAudioCapturePolicy() {
+        if (Build.VERSION.SDK_INT >= 29 && previousCapturePolicy != -1 &&
+                audio.getAllowedCapturePolicy() == AudioAttributes.ALLOW_CAPTURE_BY_NONE) {
+            audio.setAllowedCapturePolicy(previousCapturePolicy);
+        }
+    }
+
     private boolean requestFocus() {
         if (Build.VERSION.SDK_INT >= 26) {
             if (focusRequest == null) focusRequest = new AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
@@ -661,6 +703,62 @@ public final class VideoPlayer {
         optionsReloadPending = true;
         player.stop(); resume = position; installMedia();
         if (requested && !manualResumeRequired && allowed(false)) startByUser();
+    }
+
+    private void onPlayerEvent(MediaPlayer.Event event) {
+        if (done) return;
+        if (event.type == MediaPlayer.Event.Stopped && optionsReloadPending) return;
+        // Native buffering percentages also describe prefetch while video
+        // is flowing. updatePlaybackProgress owns the stall indicator.
+        if (event.type == MediaPlayer.Event.Paused || event.type == MediaPlayer.Event.Stopped)
+            pausePending = false;
+        if (event.type == MediaPlayer.Event.Paused && playRequested && !manualResumeRequired
+                && !networkResumePending && focusHeld && allowed(casting ||
+                (Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode()))) player.play();
+        if (event.type == MediaPlayer.Event.Playing) {
+            optionsReloadPending = false;
+            playbackActive = true;
+            if (tools != null) tools.apply();
+            ended = false;
+            if (manualResumeRequired || !focusHeld || !allowed(false)) {
+                pause();
+                return;
+            }
+            if (resume >= 0) {
+                if (Math.abs(player.getTime() - resume) >= 1500) player.setTime(resume);
+                mediaStartsAtResume = false;
+                resumeSeekSubmitted = true;
+            }
+            scheduleControls();
+        }
+        if (event.type == MediaPlayer.Event.ESAdded && tools != null) tools.apply();
+        if (event.type == MediaPlayer.Event.TimeChanged && progressSeek >= 0) confirmProgressSeek();
+        if (event.type == MediaPlayer.Event.EndReached) {
+            ended = true;
+            playRequested = false;
+            lastPosition = 0;
+            setControlsVisible(true);
+            if (tools != null) tools.emit("ended", "");
+        }
+        if (event.type == MediaPlayer.Event.EncounteredError ||
+                (event.type == MediaPlayer.Event.Stopped && playbackActive && playRequested && !ended)) {
+            playbackFailed = true;
+            long position = Math.max(0, lastPosition);
+            pause();
+            resume = position;
+            status(transportFailure != null ? transportFailure :
+                "Playback stopped unexpectedly. Press Play to retry from this position.");
+        }
+        if (event.type == MediaPlayer.Event.Playing) updateScreenAwake();
+        else if (event.type == MediaPlayer.Event.Paused || event.type == MediaPlayer.Event.Stopped
+                || event.type == MediaPlayer.Event.EndReached || event.type == MediaPlayer.Event.EncounteredError) {
+            playbackActive = false;
+            if (!playRequested || event.type != MediaPlayer.Event.Paused) {
+                buffering = false;
+                bufferingOverlay.setVisibility(View.GONE);
+            }
+            root.setKeepScreenOn(false);
+        }
     }
 
     private void installMedia() {
@@ -1036,6 +1134,15 @@ public final class VideoPlayer {
     public void show() {
         if (done || attached) return;
         lockHidden = false;
+        attachRootToWindow();
+        // MediaCodec must render directly to SurfaceView to preserve HDR buffers
+        // and their color metadata. TextureView composites through an SDR path
+        // on older Android versions and has limited HDR support on newer ones.
+        player.attachViews(video, null, true, false);
+        setControlsVisible(true);
+    }
+
+    private void attachRootToWindow() {
         FrameLayout decor = (FrameLayout) activity.getWindow().getDecorView();
         previousSystemUi = decor.getSystemUiVisibility();
         if (Build.VERSION.SDK_INT >= 30) previousVisibleBars = WindowInsets.Type.systemBars();
@@ -1051,11 +1158,6 @@ public final class VideoPlayer {
         root.requestApplyInsets();
         wasSecure = (activity.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0;
         if (restricted) activity.getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
-        // MediaCodec must render directly to SurfaceView to preserve HDR buffers
-        // and their color metadata. TextureView composites through an SDR path
-        // on older Android versions and has limited HDR support on newer ones.
-        player.attachViews(video, null, true, false);
-        setControlsVisible(true);
     }
 
     public void hide() {
@@ -1159,14 +1261,8 @@ public final class VideoPlayer {
         hide();
         done = true;
         handler.removeCallbacks(tick);
-        activity.unregisterReceiver(screenOff);
-        activity.unregisterReceiver(noisy);
-        activity.unregisterReceiver(pipControls);
-        audio.unregisterAudioDeviceCallback(deviceCallback);
-        if (Build.VERSION.SDK_INT >= 29 && previousCapturePolicy != -1 &&
-                audio.getAllowedCapturePolicy() == AudioAttributes.ALLOW_CAPTURE_BY_NONE) {
-            audio.setAllowedCapturePolicy(previousCapturePolicy);
-        }
+        unregisterPlaybackCallbacks();
+        restoreAudioCapturePolicy();
         if (Build.VERSION.SDK_INT >= 26 && focusRequest != null) audio.abandonAudioFocusRequest(focusRequest);
         else audio.abandonAudioFocus(focusListener);
         for (RendererDiscoverer discoverer : discoverers) { discoverer.stop(); discoverer.release(); }

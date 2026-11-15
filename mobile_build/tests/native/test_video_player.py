@@ -93,6 +93,259 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
                 else:
                     owner.native.start_airplay.assert_called_once_with(path, None)
 
+    async def test_airplay_fallback_is_limited_to_unsupported_non_mkv_profiles(self):
+        from features.video.mobile.mkv import UnsupportedAirPlayMedia
+        for suffix, error, fallback in (
+                ('.mov', UnsupportedAirPlayMedia('Unsupported codec'), True),
+                ('.m4v', UnsupportedAirPlayMedia('Unsupported codec'), True),
+                ('.mkv', UnsupportedAirPlayMedia('Unsupported codec'), False),
+                ('.mp4', OSError('Read failed'), False)):
+            with self.subTest(suffix=suffix, error=type(error)):
+                owner = self.player(restricted=False)
+                owner.native.airplay_active.return_value = False
+                owner.content.check = Mock()
+                path = Path('/unused/movie' + suffix)
+                with patch('features.video.mobile.ios.airplay_file', return_value=path), patch(
+                        'features.video.mobile.mkv.MKVStream', side_effect=error):
+                    await owner.prepare_airplay()
+                if fallback:
+                    owner.native.start_airplay.assert_called_once_with(path, None)
+                else:
+                    owner.native.start_airplay.assert_not_called()
+                    owner.native.airplay_preparation_failed.assert_called_once_with(str(error))
+                self.assertIsNone(owner.cancel_remux)
+                self.assertFalse(owner.switching_player)
+
+    async def test_provisional_airplay_stream_closes_on_failed_handoff_and_can_retry(self):
+        for failure in ('rejected', 'revoked', 'changed', 'native_error'):
+            with self.subTest(failure=failure):
+                owner = self.player(restricted=False)
+                native = owner.native
+                native.airplay_active.return_value = False
+                owner.content.check = Mock()
+                stream, retry_stream = Mock(), Mock()
+
+                def prepare(*args):
+                    if failure == 'revoked':
+                        owner.content.require_external.side_effect = PermissionError('Revoked')
+                    elif failure == 'changed':
+                        owner.content.check.side_effect = ValueError('Changed')
+                    return stream
+
+                native.start_airplay.return_value = failure != 'rejected'
+                if failure == 'native_error':
+                    native.start_airplay.side_effect = OSError('Native failed')
+                with patch('features.video.mobile.ios.airplay_file', return_value=Path('/unused/movie.mkv')), patch(
+                        'features.video.mobile.mkv.MKVStream', side_effect=prepare) as remux:
+                    await owner.prepare_airplay()
+                    stream.close.assert_called_once_with()
+                    self.assertIsNone(owner.mkv_stream)
+                    self.assertIsNone(owner.cancel_remux)
+                    self.assertFalse(owner.switching_player)
+                    if failure in ('revoked', 'changed'):
+                        native.start_airplay.assert_not_called()
+                    native.airplay_preparation_failed.assert_called_once()
+                    owner.content.require_external.side_effect = None
+                    owner.content.check.side_effect = None
+                    native.start_airplay.side_effect = None
+                    native.start_airplay.return_value = True
+                    remux.side_effect = None
+                    remux.return_value = retry_stream
+                    await owner.prepare_airplay()
+                self.assertIs(owner.mkv_stream, retry_stream)
+                retry_stream.close.assert_not_called()
+                await owner.close()
+                retry_stream.close.assert_called_once_with()
+
+    async def test_cancelled_remux_keeps_retirement_waiting_for_worker_and_provisional_close(self):
+        from threading import Event
+        owner = self.player(restricted=False)
+        native = owner.native
+        native.airplay_active.return_value = False
+        entered, release, closing, finish_close = (Event() for _ in range(4))
+        stream = Mock()
+        events = []
+
+        def prepare(*args):
+            entered.set()
+            if not release.wait(3):
+                raise TimeoutError('Controlled remux timed out')
+            return stream
+
+        def close_stream():
+            closing.set()
+            if not finish_close.wait(3):
+                raise TimeoutError('Controlled stream close timed out')
+            events.append('stream')
+
+        stream.close.side_effect = close_stream
+        owner.content.close.side_effect = lambda: events.append('content')
+        release_protection = owner._release_protection
+        owner._release_protection = Mock(side_effect=lambda: (events.append('protection'), release_protection()))
+        with patch('features.video.mobile.ios.airplay_file', return_value=Path('/unused/movie.mkv')), patch(
+                'features.video.mobile.mkv.MKVStream', side_effect=prepare):
+            owner.controls.dispatch('airplay')
+            try:
+                self.assertTrue(await asyncio.to_thread(entered.wait, 1))
+                command, = owner.controls.jobs
+                command.cancel()
+                await asyncio.sleep(0)
+                self.assertTrue(owner.cancel_remux.is_set())
+                retirement = owner.retire()
+                owner.content.close.assert_not_called()
+                self.assertFalse(retirement.done())
+                release.set()
+                self.assertTrue(await asyncio.to_thread(closing.wait, 1))
+                command.cancel()  # Repeated cancellation cannot abandon close.
+                await asyncio.sleep(0)
+                self.assertFalse(command.done())
+                self.assertFalse(retirement.done())
+                owner.content.close.assert_not_called()
+                owner._release_protection.assert_not_called()
+            finally:
+                release.set()
+                finish_close.set()
+                await asyncio.wait_for(owner.close(), 2)
+        self.assertTrue(command.cancelled())
+        self.assertEqual(events, ['stream', 'content', 'protection'])
+        stream.close.assert_called_once_with()
+        native.start_airplay.assert_not_called()
+        self.assertIsNone(owner.cancel_remux)
+        self.assertFalse(owner.switching_player)
+
+    async def test_retirement_waits_for_uncancelled_preparation_to_discard_its_stream(self):
+        from threading import Event
+        owner = self.player(restricted=False)
+        native = owner.native
+        native.airplay_active.return_value = False
+        entered, release = Event(), Event()
+        stream = Mock()
+
+        def prepare(*args):
+            entered.set()
+            if not release.wait(3):
+                raise TimeoutError('Controlled remux timed out')
+            return stream
+
+        with patch('features.video.mobile.ios.airplay_file', return_value=Path('/unused/movie.mkv')), patch(
+                'features.video.mobile.mkv.MKVStream', side_effect=prepare):
+            owner.controls.dispatch('airplay')
+            try:
+                self.assertTrue(await asyncio.to_thread(entered.wait, 1))
+                retirement = owner.retire()
+                self.assertTrue(owner.cancel_remux.is_set())
+                await asyncio.sleep(0)
+                self.assertFalse(retirement.done())
+                owner.content.close.assert_not_called()
+            finally:
+                release.set()
+                await asyncio.wait_for(owner.close(), 2)
+        native.start_airplay.assert_not_called()
+        stream.close.assert_called_once_with()
+        owner.content.close.assert_called_once_with()
+
+    async def test_cancellation_during_rejected_handoff_close_waits_before_retiring_source(self):
+        from threading import Event
+        owner = self.player(restricted=False)
+        owner.native.airplay_active.return_value = False
+        owner.native.start_airplay.return_value = False
+        owner.content.check = Mock()
+        entered, release = Event(), Event()
+        stream = Mock()
+        events = []
+
+        def close_stream():
+            entered.set()
+            if not release.wait(3):
+                raise TimeoutError('Controlled stream close timed out')
+            events.append('stream')
+
+        stream.close.side_effect = close_stream
+        owner.content.close.side_effect = lambda: events.append('content')
+        release_protection = owner._release_protection
+        owner._release_protection = Mock(side_effect=lambda: (events.append('protection'), release_protection()))
+        with patch('features.video.mobile.ios.airplay_file', return_value=Path('/unused/movie.mkv')), patch(
+                'features.video.mobile.mkv.MKVStream', return_value=stream):
+            owner.controls.dispatch('airplay')
+            try:
+                self.assertTrue(await asyncio.to_thread(entered.wait, 1))
+                command, = owner.controls.jobs
+                command.cancel()
+                await asyncio.sleep(0)
+                command.cancel()
+                retirement = owner.retire()
+                await asyncio.sleep(0)
+                self.assertFalse(command.done())
+                self.assertFalse(retirement.done())
+                owner.content.close.assert_not_called()
+                owner._release_protection.assert_not_called()
+            finally:
+                release.set()
+                await asyncio.wait_for(owner.close(), 2)
+        self.assertTrue(command.cancelled())
+        self.assertEqual(events, ['stream', 'content', 'protection'])
+        stream.close.assert_called_once_with()
+        self.assertIsNone(owner.cancel_remux)
+        self.assertFalse(owner.switching_player)
+
+    async def test_retained_stream_release_drains_close_and_propagates_failure(self):
+        from threading import Event
+        owner = self.player(restricted=False)
+        stream = Mock()
+        entered, release = Event(), Event()
+
+        def close_stream():
+            entered.set()
+            if not release.wait(3):
+                raise TimeoutError('Controlled stream close timed out')
+            raise OSError('Stream close failed')
+
+        stream.close.side_effect = close_stream
+        owner.mkv_stream = stream
+        closing = asyncio.create_task(owner.release_airplay_stream())
+        try:
+            self.assertTrue(await asyncio.to_thread(entered.wait, 1))
+            self.assertIsNone(owner.mkv_stream)
+            closing.cancel()
+            await asyncio.sleep(0)
+            self.assertFalse(closing.done())
+            await owner.release_airplay_stream()
+            stream.close.assert_called_once_with()
+        finally:
+            release.set()
+            with self.assertRaisesRegex(OSError, 'Stream close failed'):
+                await closing
+
+    async def test_provisional_stream_close_failure_propagates_after_cancelled_preparation(self):
+        from threading import Event
+        owner = self.player(restricted=False)
+        owner.native.airplay_active.return_value = False
+        entered, release = Event(), Event()
+        stream = Mock()
+        stream.close.side_effect = OSError('Provisional close failed')
+
+        def prepare(*args):
+            entered.set()
+            if not release.wait(3):
+                raise TimeoutError('Controlled remux timed out')
+            return stream
+
+        with patch('features.video.mobile.ios.airplay_file', return_value=Path('/unused/movie.mkv')), patch(
+                'features.video.mobile.mkv.MKVStream', side_effect=prepare):
+            preparation = asyncio.create_task(owner.prepare_airplay())
+            try:
+                self.assertTrue(await asyncio.to_thread(entered.wait, 1))
+                preparation.cancel()
+                await asyncio.sleep(0)
+            finally:
+                release.set()
+                with self.assertRaisesRegex(OSError, 'Provisional close failed'):
+                    await preparation
+        owner.native.airplay_preparation_failed.assert_not_called()
+        stream.close.assert_called_once_with()
+        self.assertIsNone(owner.cancel_remux)
+        self.assertFalse(owner.switching_player)
+
     def player(self, *, restricted=True):
         from features.video.mobile.player import MobileVideo
         app = SimpleNamespace(audio_output=Mock(), active_host=True, private_root=Path('/unused'), loop=asyncio.get_running_loop())

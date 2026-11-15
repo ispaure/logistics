@@ -35,6 +35,8 @@ changing a renderer.
 | Enable, open or activate a video | `__init__.py` declares Video Player and `formats.py` owns recognized types. The legacy mobile Media disable preference migrates to Video. |
 | Desktop surface or controls | `ui/backend.py`, `ui/player.py`, `ui/chrome.py`, `ui/panels.py`, `ui/presentation.py` |
 | Mobile playback or controls | `mobile/player.py`, `mobile/controls.py`, `mobile/ios.py`, `mobile/android.py`; native `PlaybackControls`, `PausePresentation` and iOS `DuoDeck.m` |
+| Android video view hierarchy and native events | In Android `VideoPlayer.java`, the view setup builds the overlay and controls, `applyControlInsets()` fits the controls to the safe area, `show()` attaches VLC to the mounted view, and `onPlayerEvent()` handles VLC events. |
+| iOS video view hierarchy and layout | The `VideoChrome` category in `mobile/ios/VideoPlayer.m` builds the inline surface and controls, resolves the fold and safe-area geometry, and sizes the inline picture and control deck. |
 | Provider admission, read-ahead or errors | `playback.py`, `transport.py`, `buffering.py` |
 | Chapters and folder queue | `chapters.py` reads Matroska ChapterAtoms and MP4 chpl data. `session.py` orders the queue. |
 | Resume or privacy | [Playback tool ownership](#playback-tool-ownership) and [storage policy](video-player.md) |
@@ -232,6 +234,14 @@ end-of-file clamping while the receiver loads or has a pending seek.
 Failure diagnostics record fragment indices and track IDs or native error
 domains/codes, without logging source filenames or capability URLs.
 Closing the player stops the server and releases its file descriptor.
+In `mobile/player.py`, remux preparation recovers its worker result into a
+provisional cleanup scope. Only an authorized, revision-checked native handoff moves
+that stream into the player's retained `mkv_stream`. Rejected or cancelled
+preparation drains provisional cleanup; detach drains retained-stream cleanup.
+Retirement waits for native disposal, discovery and tracked control commands
+before releasing streams, then finishes progress writes before closing content
+and releasing protection. Host lifecycle tests cover cancellation during remux
+and close, failed handoff/retry, and authorization checks on file fallback.
 Selecting the phone in the same picker returns to
 VLC within the same presentation. At open HEVC GOP boundaries, a fragment can
 hold its final frame briefly across the gap left by dropping leading pictures
