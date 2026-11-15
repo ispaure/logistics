@@ -137,12 +137,11 @@ proposal for the coordinator to present for approval is:
 Allow only discovery, scoped sidecar reads and streamed exports. No upload,
 import, rename, move, trash, deletion, direct SSH publication, service stop/start,
 firmware change or credential/configuration modification belongs to this scope.
-Current export and sidecar APIs accept an owned `ssh_connection` to reuse approved
-authentication; `list_snapshot` currently makes its own read connection. This
-helper must not be opened until the session is separately authorized. Its lifetime
+Inventory, export and sidecar APIs accept an owned `ssh_connection` to reuse
+approved authentication. Open the connection after the session is authorized. Its lifetime
 ends with that session; it grants no permission to use writer APIs.
 
-The native picker remains a separate acceptance item. Coordinate all physical
+The native picker is a separate check from corpus validation. Coordinate all physical
 work with the owning executor; a prior disposable-device authorization does not
 extend to personal notebooks. Public reports contain redacted totals and fixture
 IDs only. Personal stable IDs, titles, paths, originals and derived visuals remain

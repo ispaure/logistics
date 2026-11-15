@@ -287,12 +287,13 @@ exec tar --no-recursion -cf - "$@"'''
     return result
 
 
-def _read_metadata(host, cancelled, *, port):
+def _read_metadata(host, cancelled, *, port, connection=None):
     command = '''set -- ./*.metadata
 if [ -e "$1" ] || [ -L "$1" ]; then exec tar --no-recursion -cf - "$@"; fi'''
     entries = {}
     observations = []
-    with ssh_stream(host, command, cancelled, port=port) as stream:
+    session = {'connection': connection} if connection is not None else {}
+    with ssh_stream(host, command, cancelled, port=port, **session) as stream:
         if stream.peek(1):
             with tarfile.open(fileobj=stream, mode='r|') as archive:
                 for member in archive:
@@ -323,9 +324,10 @@ def list_metadata(host, cancelled=lambda: False, *, port=DEFAULT_PORT):
     return _read_metadata(host, cancelled, port=port)[0]
 
 
-def list_snapshot(host, cancelled=lambda: False, *, port=DEFAULT_PORT):
+def list_snapshot(host, cancelled=lambda: False, *, port=DEFAULT_PORT, connection=None):
+    """Read the inventory, optionally through the caller's owned SSH session."""
     from .remarkable_store import TabletSnapshot
-    metadata, observations = _read_metadata(host, cancelled, port=port)
+    metadata, observations = _read_metadata(host, cancelled, port=port, connection=connection)
     return TabletSnapshot.from_metadata(metadata, observations=observations, cancelled=cancelled)
 
 

@@ -177,6 +177,7 @@ class RemarkableSSHTests(unittest.TestCase):
             remarkable_ssh.list_snapshot('synthetic.invalid')
 
     def test_browse_uses_folder_metadata_and_omits_trash(self):
+        owned_connection = object()
         entries = {
             './' + DOC + '.metadata': json.dumps(dict(
                 type='DocumentType', parent=FOLDER, visibleName='Journal')).encode(),
@@ -185,18 +186,21 @@ class RemarkableSSHTests(unittest.TestCase):
         }
 
         @contextmanager
-        def stream(*_, port):
+        def stream(*_, port, connection=None):
             self.assertEqual(port, 2222)
+            connections.append(connection)
             with tar_stream(entries) as data:
                 yield data
 
+        connections = []
         with patch.object(remarkable_ssh, 'ssh_stream', stream):
             self.assertEqual(remarkable_ssh.list_documents('tablet', port=2222),
                              [remarkable_ssh.TabletDocument(DOC, 'Journal', 'Personal')])
-            snapshot = remarkable_ssh.list_snapshot('tablet', port=2222)
+            snapshot = remarkable_ssh.list_snapshot('tablet', port=2222, connection=owned_connection)
             self.assertEqual(snapshot.children[FOLDER], (DOC,))
             self.assertEqual(snapshot.entries[FOLDER].title, 'Personal')
             self.assertNotIn(PAGE, snapshot.entries)
+        self.assertEqual(connections, [None, owned_connection])
 
     def test_export_preserves_nested_images_and_checks_ssh_before_publishing(self):
         entries = {
