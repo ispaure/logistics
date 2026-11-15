@@ -3,6 +3,7 @@ from commonUtils.ui.appearance.typography import point_size
 import math
 from datetime import datetime
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.appearance.colors import black_or_white_text
 from commonUtils.ui.appearance.styling import styling
 from commonUtils.ui.markdown.presentation import ACCENT, MarkdownBrowser, style_document, monospace_family, blend
 from .image_view import ScreenshotView
@@ -16,10 +17,7 @@ def message_palette(user=False):
     role = qt.QPalette.ColorRole
     if user:
         accent = palette.color(role.Link)
-        channels = [value / 12.92 if value <= .04045 else ((value + .055) / 1.055) ** 2.4
-                    for value in accent.getRgbF()[:3]]
-        luminance = sum(value * weight for value, weight in zip(channels, (.2126, .7152, .0722)))
-        text = qt.QColor('#000000' if luminance > .179 else '#ffffff')
+        text = qt.QColor(black_or_white_text(accent.getRgbF()[:3]))
         for key, color in ((role.Base, accent), (role.Window, accent),
                            (role.Text, text), (role.WindowText, text),
                            (role.PlaceholderText, blend(accent, text, .8))):
