@@ -3,6 +3,7 @@ from pathlib import Path
 import os
 import re
 from threading import Lock
+from features.ide.projects import is_excluded
 
 # Jedi's caches are process-global; different projects must serialize requests.
 _analysis_lock = Lock()
@@ -54,26 +55,24 @@ def usage_in_project(project, path):
         relative = Path(path).resolve().relative_to(project.root.resolve())
     except ValueError:
         return False
-    return not any(part in project.excluded_paths for part in relative.parts) and not any(
-        relative.as_posix() == excluded or relative.as_posix().startswith(excluded + '/')
-        for excluded in project.excluded_paths)
+    return not is_excluded(relative, project.excluded_paths, project.excluded_patterns)
 
 
 def project_files(project, query='', *, cancelled=lambda: False, limit=500):
     results = []
     visited = 0
+    exclusions = project.excluded_paths, project.excluded_patterns
     for root, directories, files in os.walk(project.root, followlinks=False):
         visited += 1
         if visited >= 100000 or cancelled():
             break
         relative = Path(root).relative_to(project.root)
-        directories[:] = [name for name in directories if name not in project.excluded_paths
-                          and (relative / name).as_posix() not in project.excluded_paths
+        directories[:] = [name for name in directories if not is_excluded(relative / name, *exclusions)
                           and not (Path(root) / name).is_symlink()]
         for name in files:
             visited += 1
             path = relative / name
-            if name not in project.excluded_paths and path.as_posix() not in project.excluded_paths and query.casefold() in str(path).casefold():
+            if not is_excluded(path, *exclusions) and query.casefold() in str(path).casefold():
                 results.append(str(path))
                 if len(results) >= limit:
                     return results

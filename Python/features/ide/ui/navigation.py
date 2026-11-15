@@ -48,7 +48,8 @@ class Navigation:
                     and doc.path == token[0] and doc.document().revision() == token[1]
                     and doc.isVisible() and self.isVisible()
                     and all(getattr(self.project, key) == getattr(project, key)
-                            for key in ('root_path', 'source_paths', 'python_interpreter', 'excluded_paths')))
+                            for key in ('root_path', 'source_paths', 'python_interpreter',
+                                        'excluded_paths', 'excluded_patterns')))
         def done(result):
             if doc not in self.views():
                 return
@@ -149,7 +150,8 @@ class Navigation:
             return (doc not in self.views() or doc.document().revision() != revision
                     or self.current is not doc or doc.textCursor().position() != position or not self.isVisible()
                     or any(getattr(self.project, key) != getattr(project, key)
-                           for key in ('root_path', 'source_paths', 'python_interpreter', 'excluded_paths')))
+                           for key in ('root_path', 'source_paths', 'python_interpreter',
+                                       'excluded_paths', 'excluded_patterns')))
         def done(result):
             if stale():
                 self.status.setText('Analysis result superseded by edits or focus changes.')

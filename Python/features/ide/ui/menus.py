@@ -63,6 +63,6 @@ def install_project_menu(view, page):
         return dock.workspace if dock else page.workspace
     add(view, 'File', 'Open Project…', lambda: page.register_project(destination()))
     add(view, 'File', 'Close Project', lambda: page.close_project(view), 'Ctrl+Shift+W')
-    add(view, 'Project', 'Project Settings / Source Paths…', lambda: page.settings(view))
+    add(view, 'Project', 'Project Settings…', lambda: page.settings(view))
     add(view, 'Project', 'Reopen Project…', lambda: page.reopen(destination()))
     add(view, 'Project', 'Remove Registration…', lambda: page.remove_registration(view))

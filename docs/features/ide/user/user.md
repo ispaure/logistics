@@ -6,10 +6,28 @@ See [mobile support](../user_mobile/user_mobile.md) for Android and iOS.
 ## Projects
 
 Choose **+ → Register / Open existing project**, select a folder and name it.
-Enter one source path per line, such as `.` for a flat Python project or `src`
-for a src-layout package. Set exclusions and an optional Python executable or
-environment under **Project → Project Settings / Source Paths**. Paths can be
-absolute or relative to the project.
+Open **Project → Project Settings…** to edit an existing project.
+
+- In **Project Structure**, select a folder and choose **Mark as Source** (blue)
+  or **Mark as Excluded** (orange). Excluded folders stay visible in this tree so
+  you can inspect them. Use **Add Path…**, **Remove**, or double-click a list
+  entry to edit it. A source folder can be absolute or relative to the project
+  root. Use `.` for the root itself. An exclusion such as `build` matches
+  that name anywhere in the project. Use a path such as `mobile/build` for a
+  particular nested folder.
+- Use **Exclude files** below the folder tree for patterns such as
+  `*.xcarchive; *.dSYM`. Separate patterns with semicolons. Matching is
+  case-sensitive and applies to file and folder names at any depth. `*`
+  matches any number of characters, and `?` matches one. Matching folders
+  appear orange in Project Structure. The IDE file tree, **Go to file**,
+  and **Find in Files** skip matching items and the contents of matching folders.
+- In **Python Interpreter**, browse to a Python executable or an environment
+  folder, or enter its path. Clear the field to use automatic interpreter
+  selection. The tab loads installed packages from a configured Python 3.8+
+  environment when you open it. Use **Refresh Packages** to update the list,
+  or **Load Packages** with an empty field to inspect the Logistics runtime.
+
+Click **OK** to save both tabs or **Cancel** to discard edits.
 
 Use **+ → Reopen project** to restore a project’s layout and cursor positions.
 Drag project tabs out to detach them. **Remove registration** deletes only IDE

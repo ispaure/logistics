@@ -6,6 +6,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui import desktop_actions
 from commonUtils.ui.file_browser.model import BrowserFileSystemModel, ByteSortModel
 from commonUtils.filesystem.transfers import validate_name
+from features.ide.projects import is_excluded
 
 
 class ProjectFilter(ByteSortModel):
@@ -81,7 +82,7 @@ class ProjectFilter(ByteSortModel):
             return True
         if path == self.project.root:
             return True
-        if any(part in self.project.excluded_paths for part in relative.parts) or relative.as_posix() in self.project.excluded_paths:
+        if is_excluded(relative, self.project.excluded_paths, self.project.excluded_patterns):
             return False
         return self.sourceModel().isDir(index) or self.query.casefold() in path.name.casefold()
 

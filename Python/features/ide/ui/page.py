@@ -116,37 +116,16 @@ class IDEPage(qt.QWidget):
         return view
 
     def edit_project(self, project, parent=None):
-        dialog = qt.QDialog(parent or self)
-        dialog.setWindowTitle('IDE project settings')
-        layout = qt.QFormLayout(dialog)
-        fields = {}
-        for label, key, value in [('Display name', 'name', project.name), ('Root directory', 'root_path', str(project.root)),
-                                  ('Source paths (one per line)', 'source_paths', '\n'.join(project.source_paths)),
-                                  ('Excluded names/relative paths (one per line)', 'excluded_paths', '\n'.join(project.excluded_paths)),
-                                  ('Python interpreter/environment (optional)', 'python_interpreter', project.python_interpreter or '')]:
-            widget = qt.QPlainTextEdit(value) if key.endswith('_paths') else qt.QLineEdit(value)
-            fields[key] = widget
-            layout.addRow(label, widget)
-        column_guide = qt.QSpinBox(dialog)
-        column_guide.setRange(0, 1000)
-        column_guide.setSpecialValueText('Off')
-        column_guide.setValue(project.column_guide)
-        column_guide.setToolTip('Visual line-length guide for all source editors in this project; does not wrap or limit text.')
-        layout.addRow('Column guide (0 = off)', column_guide)
-        buttons = qt.QDialogButtonBox(qt.QDialogButtonBox.StandardButton.Ok | qt.QDialogButtonBox.StandardButton.Cancel)
-        buttons.accepted.connect(dialog.accept)
-        buttons.rejected.connect(dialog.reject)
-        layout.addRow(buttons)
-        if dialog.exec() != qt.QDialog.DialogCode.Accepted:
-            return False
-        if not fields['name'].text().strip() or not fields['root_path'].text().strip():
-            return False
-        for key, widget in fields.items():
-            value = widget.toPlainText().splitlines() if key.endswith('_paths') else widget.text().strip()
-            setattr(project, key, value if key != 'python_interpreter' else value or None)
-        project.root_path = str(project.root)
-        project.column_guide = column_guide.value()
-        return True
+        from features.ide.ui.project_settings import ProjectSettings
+
+        dialog = ProjectSettings(project, parent or self)
+        try:
+            if dialog.exec() != qt.QDialog.DialogCode.Accepted:
+                return False
+            dialog.apply_to(project)
+            return True
+        finally:
+            dialog.deleteLater()
 
     def register_project(self, destination=None):
         from pathlib import Path

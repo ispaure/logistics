@@ -7,7 +7,8 @@ from threading import Event
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.code_editor import CodeEdit
 from commonUtils.ui.code_editor.syntax import SyntaxHighlighter, detect_language
-from commonUtils.search.files import search_files, preview_text
+from commonUtils.search.files import preview_text
+from features.ide.search import search_files
 from features.ide.ui.usages import position_editor_popup
 
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='ide-find-files')
@@ -200,6 +201,7 @@ class FindFiles(qt.QFrame):
         try:
             self.search_future = _executor.submit(search_files, roots, tuple(project.excluded_paths),
                 self.query.text(), self.masks.text(), buffers=buffers,
+                project_root=project.root, excluded_patterns=tuple(project.excluded_patterns),
                 cancelled=self.search_cancel.is_set,
                 **{key: button.isChecked() for key, button in self.options.items()})
         except (OSError, RuntimeError) as error:

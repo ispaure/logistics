@@ -1,6 +1,8 @@
 """Versioned project registrations outside source repositories."""
 from dataclasses import dataclass, field, asdict
+from fnmatch import fnmatchcase
 import json
+import os
 from pathlib import Path
 from uuid import uuid4
 from commonUtils.persistence import atomic_write_bytes
@@ -8,6 +10,18 @@ from commonUtils.runtime.streams import read_up_to
 from features.preferences import preferences_path
 
 MAX_WORKSPACE_BYTES = 4 * 1024 * 1024
+
+
+def matches_exclusion_pattern(relative, patterns):
+    """Match a glob against any file or ancestor directory name."""
+    return any(fnmatchcase(part, pattern) for part in relative.parts for pattern in patterns)
+
+
+def is_excluded(relative, rules, patterns=()):
+    """Match a name anywhere or a slash-separated path from the project root."""
+    return (any(part in rules for part in relative.parts) or any(
+        path.as_posix() in rules for path in (relative, *relative.parents) if path.parts)
+        or matches_exclusion_pattern(relative, patterns))
 
 
 @dataclass
@@ -21,6 +35,7 @@ class Project:
     layout: dict = field(default_factory=dict)
     autosave: str = 'after_delay'
     column_guide: int = 120
+    excluded_patterns: list[str] = field(default_factory=list)
 
     @property
     def root(self):
@@ -32,7 +47,9 @@ class Project:
     def environment(self):
         if not self.python_interpreter:
             return None
-        return str((self.root / Path(self.python_interpreter).expanduser()).resolve())
+        # A virtualenv's Python often links to the base interpreter. Keep the
+        # executable's location so Python can find the environment beside it.
+        return os.path.abspath(self.root / Path(self.python_interpreter).expanduser())
 
     @classmethod
     def from_dict(cls, data):
@@ -41,7 +58,7 @@ class Project:
         for key in ('name', 'root_path', 'id'):
             if not isinstance(data.get(key), str) or not data[key]:
                 raise ValueError(f'Invalid project {key}')
-        for key in ('source_paths', 'excluded_paths'):
+        for key in ('source_paths', 'excluded_paths', 'excluded_patterns'):
             if key in data and (not isinstance(data[key], list) or not all(isinstance(p, str) for p in data[key])):
                 raise ValueError(f'Invalid project {key}')
         if data.get('autosave', 'after_delay') not in ('off', 'after_delay', 'focus_change'):

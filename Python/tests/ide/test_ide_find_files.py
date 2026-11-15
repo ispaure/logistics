@@ -76,6 +76,51 @@ class FindFilesTests(QtTestCase):
                                 and dialog.preview_future is None)
                 self.assertEqual(dialog.preview.toPlainText(), 'old\n')
 
+    def test_project_patterns_prune_files_and_subtrees_in_nested_scopes(self):
+        bundle = self.root / 'Example.dSYM' / 'Contents'
+        bundle.mkdir(parents=True)
+        (bundle / 'inside.py').write_text('old\n')
+        (self.root / 'result.xcarchive').write_text('old\n')
+        self.workspace.project.excluded_patterns = ['*.xcarchive', '*.dSYM']
+        self.workspace.project.source_paths = ['.', 'Example.dSYM/Contents']
+        self.workspace.find_project()
+        dialog = self.workspace.project_find
+        dialog.scope.setCurrentIndex(1)
+        dialog.query.setText('old')
+        self.wait_until(lambda: dialog.summary.text() == '1 matches in 1 files')
+        self.assertEqual(dialog.results.topLevelItem(0).text(1), 'file.py')
+        dialog.scope.setCurrentIndex(2)
+        dialog.directory.setText(str(bundle))
+        self.wait_until(lambda: dialog.summary.text() == '0 matches in 0 files')
+
+    def test_project_worker_borrows_shared_index_without_a_new_scan(self):
+        from commonUtils.filesystem.index import DirectoryCache
+        from features.ide.search import search_files as project_search
+        database = Path(self.temporary_directory().name) / 'index.sqlite3'
+        with DirectoryCache(database=database) as cache:
+            cache.get(self.root).close()
+        with patch('features.ide.search.cache_for', side_effect=lambda: DirectoryCache(database=database)) as factory, \
+                patch('os.scandir', side_effect=AssertionError('Warm project was scanned')):
+            result = project_search([self.root], [], 'draft', buffers={self.path: 'unsaved draft'})
+        factory.assert_called_once_with()
+        self.assertEqual([hit.path for hit in result.hits], [self.path])
+        self.assertEqual(self.path.read_text(), 'old\n')
+
+    def test_exact_exclusion_stays_project_relative_in_nested_scopes(self):
+        from features.ide.search import search_files as project_search
+
+        source = self.root / 'src'
+        excluded = source / 'generated'
+        included = source / 'src' / 'generated'
+        for directory in (excluded, included):
+            directory.mkdir(parents=True)
+            (directory / 'example.py').write_text('SearchTag')
+        rules = ['src/generated']
+        result = project_search([source], rules, 'SearchTag', project_root=self.root)
+        self.assertEqual([hit.path for hit in result.hits], [included / 'example.py'])
+        result = project_search([excluded], rules, 'SearchTag', project_root=self.root)
+        self.assertEqual(result.hits, ())
+
     def test_preview_worker_start_failure_is_visible_and_retryable(self):
         from features.ide.ui import find_files
         self.workspace.find_project()

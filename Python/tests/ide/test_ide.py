@@ -18,6 +18,112 @@ class IDEQtTests(QtTestCase):
         cls.app = qt.QApplication.instance() or qt.QApplication([])
 
 
+class ProjectSettingsTests(IDEQtTests):
+    def test_folder_actions_preserve_saved_rules_until_confirmed(self):
+        from unittest.mock import patch
+        from commonUtils.ui import pyside as qt
+        from features.ide.analysis import project_files
+        from features.ide.projects import Project, ProjectStore
+        from features.ide.ui.page import IDEPage
+
+        with self.temporary_directory() as directory:
+            root = Path(directory).resolve()
+            source = root / 'src'
+            excluded = source / 'generated'
+            excluded.mkdir(parents=True)
+            archive = source / 'Example.xcarchive'
+            archive.mkdir()
+            (archive / 'hidden.py').touch()
+            (source / 'build1.py').touch()
+            (source / 'main.py').touch()
+            (excluded / 'copy.py').touch()
+            project = Project('Example', str(root), excluded_paths=['build', 'missing/output'])
+            page = IDEPage(store_path=root / 'workspace.json')
+            page.store.projects[project.id] = project
+            view = page.open_project(project)
+
+            def mark(dialog):
+                structure = dialog.structure
+                self.assertEqual(dialog.tabs.tabText(0), 'Project Structure')
+                self.assertEqual(dialog.tabs.tabText(1), 'Python Interpreter')
+                structure.tree.setCurrentIndex(structure.model.index(str(source)))
+                structure.mark_source.click()
+                structure.tree.setCurrentIndex(structure.model.index(str(excluded)))
+                structure.mark_excluded.click()
+                structure.pattern_field.setText(' *.xcarchive; build?.py; ; *.xcarchive ')
+                self.assertEqual(structure.status_for(source), 'Source')
+                self.assertEqual(structure.status_for(excluded), 'Excluded')
+                self.assertEqual(structure.status_for(archive), 'Excluded')
+                structure.tree.setCurrentIndex(structure.model.index(str(archive)))
+                self.assertFalse(structure.mark_source.isEnabled())
+                self.assertNotEqual(
+                    structure.model.index(str(source)).data(qt.Qt.ItemDataRole.ForegroundRole),
+                    structure.model.index(str(excluded)).data(qt.Qt.ItemDataRole.ForegroundRole))
+                self.assertEqual(project.source_paths, ['.'])
+                self.assertEqual(project.excluded_paths, ['build', 'missing/output'])
+
+            def cancel(dialog):
+                mark(dialog)
+                return qt.QDialog.DialogCode.Rejected
+
+            def confirm(dialog):
+                mark(dialog)
+                return qt.QDialog.DialogCode.Accepted
+
+            with patch.object(qt.QDialog, 'exec', cancel):
+                page.settings(view)
+            self.assertEqual(project.source_paths, ['.'])
+            self.assertEqual(project.excluded_patterns, [])
+            with patch.object(qt.QDialog, 'exec', confirm):
+                page.settings(view)
+            self.assertEqual(project.source_paths, ['.', 'src'])
+            self.assertEqual(project.excluded_paths, ['build', 'missing/output', 'src/generated'])
+            self.assertEqual(project.excluded_patterns, ['*.xcarchive', 'build?.py'])
+            self.assertEqual(project_files(project, '.py'), ['src/main.py'])
+            self.assertTrue(page.persist())
+            restored = ProjectStore(page.store.path).projects[project.id]
+            self.assertEqual(restored.excluded_paths, project.excluded_paths)
+            self.assertEqual(restored.excluded_patterns, project.excluded_patterns)
+
+    def test_interpreter_inspects_the_selected_virtual_environment(self):
+        import os
+        import sys
+        import venv
+        from features.ide.projects import Project
+        from features.ide.ui.project_settings import ProjectSettings
+
+        with self.temporary_directory() as directory:
+            root = Path(directory).resolve()
+            environment = root / 'env'
+            venv.EnvBuilder(symlinks=os.name != 'nt').create(environment)
+            executable = environment / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
+            version = f'python{sys.version_info.major}.{sys.version_info.minor}'
+            library = environment / ('Lib' if os.name == 'nt' else f'lib/{version}')
+            dist = library / 'site-packages' / 'ide_fixture-2.3.dist-info'
+            dist.mkdir(parents=True)
+            (dist / 'METADATA').write_text('Name: ide-fixture\nVersion: 2.3\n')
+            project = Project('Example', str(root), python_interpreter=str(executable.relative_to(root)))
+            self.assertEqual(project.environment(), str(executable))
+            dialog = ProjectSettings(project)
+            panel = dialog.interpreter
+            self.assertEqual(panel.table.topLevelItemCount(), 0)
+            self.assertTrue(panel.load.isEnabled())
+            dialog.tabs.setCurrentWidget(panel)
+            self.assertFalse(panel.load.isEnabled())
+            self.wait_until(panel.load.isEnabled, timeout=10)
+            row = panel.table.topLevelItem(0)
+            self.assertIsNotNone(row, panel.status.text())
+            self.assertEqual([row.text(0), row.text(1)], ['ide-fixture', '2.3'])
+            dialog.tabs.setCurrentWidget(dialog.structure)
+            dialog.tabs.setCurrentWidget(panel)
+            self.assertEqual(panel.table.topLevelItemCount(), 1)
+            self.assertEqual(panel.load.text(), 'Refresh Packages')
+            panel.path.setText('missing')
+            self.assertEqual(panel.table.topLevelItemCount(), 0)
+            panel.load.click()
+            self.assertIn('unavailable', panel.status.text())
+
+
 class DocumentTests(IDEQtTests):
     def test_theme_switch_preserves_unsaved_shared_buffer_and_finishes_highlighting(self):
         self.check_theme_switch(80)
