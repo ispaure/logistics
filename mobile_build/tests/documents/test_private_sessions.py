@@ -1,6 +1,5 @@
 """Independent memory-only owners, bounded resources and atomic lock guards."""
 
-from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
@@ -12,18 +11,13 @@ from toga_dummy.utils import EventLog
 from commonUtils.runtime.resources.local import LocalFiles
 from mobile.app import LogisticsMobile
 from features.text_editor.resources import LocalTextCopies
+from mobile_build.tests.support.app import create_app
 
 
 class PrivateSessionTests(unittest.TestCase):
     def setUp(self):
-        self.directory = TemporaryDirectory()
-        self.addCleanup(self.directory.cleanup)
-        self.root = Path(self.directory.name)
-        LogisticsMobile.storage_root = self.root
-        self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
-        self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.addCleanup(close_loop, self.app.loop)
-        self.addCleanup(self.app.main_window.close)
+        self.root = Path(self.enterContext(TemporaryDirectory()))
+        self.app = create_app(self, root=self.root)
         self.app.show_cloud()
         self.local = self.root / 'LocalFiles'
         self.local.mkdir(exist_ok=True)
