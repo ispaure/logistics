@@ -28,7 +28,7 @@ shown in a standalone window; the chooser and rail are shell presentation.
 | Visible label or entry point | Current owner and next edit point | Desktop check |
 | --- | --- | --- |
 | Home, File Browser | `desktop/{landing,sidebar,file_browser}.py`; core entries in `LaunchCatalog.CORE` | `test_main_window_navigation.py`, `test_file_browser_window.py` |
-| Workspaces → Sources, Info, Actions; Bulk Rename | `desktop/pages/folders.py`, `desktop/pages/workspace_panes.py` and `desktop/folder_controller.py` mount provider and action contributions; `desktop/folder_actions.py` owns the workflow host and `desktop/bulk_rename/` owns the rename UI | `test_folder_sources_ui.py`, `test_main_window_navigation.py` |
+| Workspaces → Sources, Info, Actions; Bulk Rename | `desktop/pages/{folders,workspace_panes,folder_controller}.py` mount provider and action contributions; `desktop/folder_actions.py` owns the workflow host and `desktop/bulk_rename/` owns the rename UI | `test_folder_sources_ui.py`, `test_main_window_navigation.py` |
 | New / Open Document, Read & edit, Open Documents | `desktop/landing.py:DocumentChooser` and the rail use `catalog.py:document_launchers` (built-in Markdown and registered `DocumentLauncherContribution` entries). `desktop/documents.py` owns retained docks; the selected feature owns the document and its controls | `test_document_launchers.py`, `test_document_hosting.py` |
 | Settings → Features, Appearance & shared controls, Configuration, Feature settings, Reader history, Workspaces, File indexing, Open-source licenses | `desktop/pages/settings.py:SettingsPage` → `desktop/settings/{appearance,configuration,feature_settings}.py`. `desktop/pages/features.py` owns Features; settings sibling modules own the other built-in panels. A registered `SettingsContribution` owns its feature widget and scope | `test_settings_page.py` |
 | Logistics → Tool Settings; Help / Guides | `desktop/header_menus.py` routes to `SettingsPage.show_feature` or `services/documentation.py:open_guide` | `test_settings_page.py`, `test_documentation_viewer.py` |
@@ -38,8 +38,10 @@ shown in a standalone window; the chooser and rail are shell presentation.
 | Aviation Tools → Aircraft / Airports | `features/aviation_tools/__init__.py:register` → `ui/page.py:AviationToolsPage.open_tool` → `ui/dataset_browser.py:DatasetBrowser` | `test_aviation_tools.py` |
 | Workspaces → Cloud → Pull; transfer progress and credential packages | rclone contributes actions and views. Follow the [transfer path](../../features/rclone/development/transfers.md#find-desktop-transfer-controls) to `features/rclone/transfers/ui/progress.py`; package controls live in `features/rclone/ui/credential_panels.py` | `test_transfer_adapters.py` |
 | Markdown, Notebook (.rmdoc), Notes Library | Markdown enters via `services/documents/ui/markdown.py` and commonUtils `ui/markdown/window.py`. Notebook enters via `services/documents/ui/notebooks.py` → `features/notebooks/ui/workspace.py:CanvasPage` (Qt WebEngine and feature `assets/`). Notes Library uses `features/notes_library/ui/{page,document,dataview}.py` (Qt and isolated script worker) | `test_document_launchers.py`, `test_notes_library_desktop.py` |
-| EPUB Reader, Comic Reader, PDF Reader, Video Player | `features/{books,comics,pdf}/ui/reader.py` (comics opens through `ui/reader_opening.py`) and `features/video/ui/player.py`. Desktop EPUB uses Qt rich text | `test_books_reader.py`, `test_comic_reader.py`, `test_pdf_reader.py` |
-| Text Editor, Image Viewer, Archives; LM Chat | Openers are in `features/{text_editor,images,archives}/`; LM Chat registers in `features/lm/__init__.py` and uses `ui/{page,conversation_view}.py` (Qt rich text) | `test_document_launchers.py`, `test_lm_appearance.py` |
+| EPUB Reader, Comic Reader, PDF Reader | `features/{books,comics,pdf}/ui/reader.py` (comics opens through `ui/reader_opening.py`). Desktop EPUB uses Qt rich text | `test_books_reader.py`, `test_comic_reader.py`, `test_pdf_reader.py` |
+| Video Player → Subtitles | `features/video/ui/player.py` mounts `ui/chrome.py` and delegates the subtitle dialog to `ui/panels.py` | `test_video_player.py` |
+| Open in Text Editor, Save As…, Find…, Replace… | `features/text_editor/contributions.py` opens `ui/service.py` and `ui/window.py`; `ui/file_operations.py` owns saving and `ui/editing.py` owns search and replacement | `test_text_editor.py`, `test_text_editor_extensions.py` |
+| Image Viewer, Archives, LM Chat | Image routes start in `features/images/ui_contributions.py` and mount `ui/viewer.py`. Archives and LM Chat declare routes in their feature `__init__.py`, then mount `features/archives/ui/{page,browser,window}.py` and `features/lm/ui/{page,conversation_view}.py` | `test_document_launchers.py`, `test_lm_appearance.py` |
 
 ### Mobile
 
@@ -64,7 +66,8 @@ its own lazy category declarations in `mobile/settings/categories.py`.
 | PDF opened from a file or provider; Contents / Search | `mobile/provider_opening.py` → `mobile/provider_view.py` supplies host artwork to `features/pdf/mobile/canvas.py`; `contents.py` and `search.py` own dialogs, `continuous.py` and `scroll_script.py` the continuous WebView | `test_pdf_reader.py`, `test_pdf_scroll.py` |
 | Books & Comics → Refresh / Import…; EPUB and comic readers | `mobile/{reader_ui,reader_sessions}.py` mounts `features/books/mobile/library/{catalog_panel,catalog}.py`. EPUB content uses `features/books/mobile/{content,provider_reader,text_reader}.py`; comics use `features/comics/mobile/reader_controller.py` | `test_library_catalog.py`, `test_reader_cohesion.py` |
 | Notebook; Burst camera | `features/notebooks/mobile/documents.py` opens `panel.py:NotebookPanel` and `surface.py` loads its embedded `features/notebooks/assets/`. `features/images/mobile/burst_camera.py` owns capture | `test_notebook_native_tools.py`, `test_navigation.py` |
-| Text editor → Edit / Preview; video playback | `mobile/managed_documents.py` mounts `features/text_editor/mobile/ui.py`. `mobile/preview.py` uses `services/documents/authoring/markdown_*.py` for Markdown. `mobile/document_sources.py` routes video to `features/video/mobile/{player,ios,android}.py` | `test_markdown_editor.py`; native `video_ui_probe.py` |
+| Text Editor → View document, Find and replace…, Formatted editing, Source editing, Save As… | `features/text_editor/mobile/ui.py:TextEditorView` owns the controls. `mobile/managed_documents.py:show_preview` and `mobile/preview.py` mount the Markdown WebView; `mobile/editor_picker.py` owns Save As | `test_markdown_editor.py`, `test_editor_picker.py` |
+| Video Player → Subtitles and audio…, Current folder… | `mobile/document_sources.py` routes to `features/video/mobile/player.py:open_video`. The native controls live in the feature's `mobile/ios/PlaybackControls.m` and `mobile/android/io/github/ispaure/logistics/video/PlaybackControls.java` | `test_video_player.py`; native `video_ui_probe.py` |
 
 For a label outside these routes, use the [feature catalog](../../features/features.md)
 and the [extension points](extension-points.md) to find its declaration. For
@@ -83,6 +86,17 @@ For new mobile Python or embedded assets, update the owning
 | Mobile | Feature panel | **Chat → Model & server settings**: find the action in `ChatUI` and its form in `ChatSettingsPanel`. `test_chat_ui.py` and native `chat_settings_probe.py` exercise the panel and return path. |
 | Mobile | Shell screen | **Workspaces**: follow the `files` destination to `WorkspacesScreen` and the frame in `workspace_navigation.py`. `test_workspace_navigation.py` checks retained browsing and Back. |
 | Mobile | Shared widget | **API key (session only)** in Chat settings: follow `ChatSettingsPanel` to commonUtils `ui/native/password_input.py:PasswordInput`, also used by the mobile credential forms. Run shared `test_native_password_input.py` for the control contract. |
+
+For **Workspaces → Cloud → Pull** on desktop, **Confirm Pull…** is in
+`features/rclone/transfers/ui/review.py:ReviewDialog`. Follow the
+[desktop transfer controls](../../features/rclone/development/transfers.md#find-desktop-transfer-controls)
+to the Qt window and run `test_rclone_review.py` and `test_rclone_progress.py`.
+On mobile, **Open transfers** (`mobile/transfer_status.py:SyncButton`) calls
+`MirrorUI.show_transfers` in `features/rclone/transfers/mobile/ui.py`.
+`TransferSurface` renders **Stop transfer** and **Continue browsing** through
+`transfers/assets/surface.js`. `NativeTransferFallback` presents the same
+actions. `test_native_transfer_service.py` covers renderer recovery and the
+managed `rclone-transfer` probe checks WebView layout at larger text sizes.
 
 ## Add or change a Settings panel
 
@@ -169,7 +183,7 @@ for the open, Back and disposal paths.
 
 ## Desktop Folder Hub requests
 
-`folder_controller.py` captures source/detail request generations. `FoldersPage`
+`desktop/pages/folder_controller.py` captures source/detail request generations. `FoldersPage`
 resolves declarations on the GUI thread, runs I/O and availability in workers,
 and rejects stale/revoked results before mounting. Private tools must declare
 backend-aware support. Info and Actions retain separate content under Sources.

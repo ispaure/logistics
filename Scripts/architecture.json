@@ -261,6 +261,7 @@
     "features.rclone.mobile.bridge_protocol",
     "features.rclone.transfers.launch",
     "features.rclone.transfers.presentation",
+    "features.rclone.transfers.remote_download",
     "features.rclone.transfers.review",
     "features.rclone.transfers.service",
     "features.rclone.transfers.mobile.models",
