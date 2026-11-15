@@ -1,4 +1,4 @@
-"""Session-scoped HLS access to the iOS Matroska stream-copy adapter."""
+"""Session-scoped HLS access to the iOS Matroska/MP4 stream-copy adapter."""
 from base64 import b64decode
 from bisect import bisect_left, bisect_right
 from html import escape, unescape
@@ -7,7 +7,7 @@ import logging
 from math import ceil, isfinite
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler
-from re import fullmatch
+from re import fullmatch, sub
 from secrets import token_urlsafe
 from threading import BoundedSemaphore, Event, Lock, Thread
 from time import monotonic
@@ -20,6 +20,10 @@ from features.video.tracks import audio_label
 PLAYLIST_MIME = 'application/vnd.apple.mpegurl'
 MEDIA_RESOURCE = r'(video|audio-[0-9]{1,10})/(init\.mp4|segment-([0-9]{1,6})\.m4s)'
 SUBTITLE_RESOURCE = r'(text-[0-9]{1,10}|sidecar-[0-9]{1,3})/segment-([0-9]{1,6})\.vtt'
+
+
+class UnsupportedAirPlayMedia(ValueError):
+    """The native HLS adapter cannot represent this file's tracks/index."""
 
 
 def playlist(boundaries, extension, *, initialization=False):
@@ -70,7 +74,7 @@ def codec_string(track):
             object_type = 32 + ((config[0] & 7) << 3) + (config[1] >> 5)
         if object_type:
             return f'mp4a.40.{object_type}'
-    raise ValueError('The MKV codec configuration could not be prepared for AirPlay.')
+    raise ValueError('The video codec configuration could not be prepared for AirPlay.')
 
 
 def rendition_language(track):
@@ -115,12 +119,14 @@ def master_playlist(audio, subtitles, default_audio, bandwidth, video):
             lines.append(f'#EXT-X-MEDIA:TYPE={kind},GROUP-ID="{group}",NAME="{rendition_name(track, number, audio=kind == "AUDIO", default=default)}",'
                          f'{flags},URI="{route}/index.m3u8"')
     codecs = list(dict.fromkeys([codec_string(video), *(codec_string(track) for track in audio.values())]))
+    if subtitles:
+        codecs.append('wvtt')
     width, height = video['width'], video['height']
     if width <= 0 or height <= 0:
-        raise ValueError('The MKV video dimensions could not be prepared for AirPlay.')
+        raise ValueError('The video dimensions could not be prepared for AirPlay.')
     frame_rate = video['frameRate']
     if not isfinite(frame_rate) or frame_rate <= 0:
-        raise ValueError('The MKV frame rate could not be prepared for AirPlay.')
+        raise ValueError('The video frame rate could not be prepared for AirPlay.')
     attributes = f'BANDWIDTH={bandwidth},CODECS="{",".join(codecs)}",RESOLUTION={width}x{height},AUDIO="audio"'
     attributes += f',FRAME-RATE={frame_rate:.3f}'
     if video.get('range') in {'PQ', 'HLG'}:
@@ -131,18 +137,18 @@ def master_playlist(audio, subtitles, default_audio, bandwidth, video):
     return ('\n'.join(lines) + '\n').encode('utf-8')
 
 
-def webvtt_segment(cues, start, end):
+def webvtt_segment(cues, start, end, *, timestamp_offset=0):
     def time(milliseconds):
         seconds, millis = divmod(max(0, milliseconds), 1000)
         minutes, seconds = divmod(seconds, 60)
         hours, minutes = divmod(minutes, 60)
         return f'{hours:02d}:{minutes:02d}:{seconds:02d}.{millis:03d}'
 
-    lines = ['WEBVTT', 'X-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:0', '']
+    lines = ['WEBVTT', f'X-TIMESTAMP-MAP=LOCAL:00:00:00.000,MPEGTS:{round(timestamp_offset * 90)}', '']
     for first, last, cue in cues:
         if first >= end or last <= start:
             continue
-        clean = escape(unescape(cue), quote=False).replace('\r', '')
+        clean = escape(unescape(sub(r'<[^>]*>', '', cue)), quote=False).replace('\r', '')
         clean = '\n'.join(line for line in clean.splitlines() if line.strip())
         if clean:
             lines.extend((f'{time(first)} --> {time(last)}', clean, ''))
@@ -166,28 +172,37 @@ class MKVStream:
             remux = ObjCClass('LGMKVRemux')
             address = remux.streamAddress()
             if address is None:
-                raise ValueError('AirPlay for MKV requires Wi-Fi.')
+                raise UnsupportedAirPlayMedia('AirPlay subtitles and MKV playback require Wi-Fi.')
             self.remux = remux.alloc().initWithPath(str(path))
-            if self.remux is None or not self.allowed():
-                raise ValueError('This MKV’s tracks or seek index could not be prepared for AirPlay.')
+            if self.remux is None:
+                raise UnsupportedAirPlayMedia('This video’s tracks or seek index could not be prepared for AirPlay.')
+            if not self.allowed():
+                raise ValueError('AirPlay is unavailable for this video.')
             metadata = json.loads(str(self.remux.renditionsJSON()))
             self.boundaries = metadata['boundaries']
+            self.subtitle_timestamp_offset = metadata.get('subtitleTimestampOffset', 0)
             if len(self.boundaries) < 2 or any(start >= end for start, end in zip(self.boundaries, self.boundaries[1:])):
-                raise ValueError('The MKV seek index could not be prepared for AirPlay.')
+                raise UnsupportedAirPlayMedia('The video seek index could not be prepared for AirPlay.')
             self.audio = {f'audio-{track["id"]}': track for track in metadata['audio']}
             default_audio = metadata['defaultAudio']
             self.subtitles = {f'text-{track["id"]}': track for track in metadata['text']}
+        self.load_sidecars(tuple(owner.subtitles))
+        if path.suffix.lower() != '.mkv' and not self.subtitles:
+            raise UnsupportedAirPlayMedia('This file can use native playback without subtitle renditions.')
+        with autoreleasepool():
             for route in ('video', f'audio-{default_audio}'):
                 header = self.remux.initializationForTrack(-1 if route == 'video' else default_audio)
                 if header is None:
-                    raise ValueError('The opening MKV segment could not be prepared for AirPlay.')
+                    raise UnsupportedAirPlayMedia('The opening video segment could not be prepared for AirPlay.')
                 self.headers[route] = py_from_ns(header)
-        self.load_sidecars(tuple(owner.subtitles))
-        # A single video variant. Use a generous estimate when the MKV has no
+        # A single video variant. Use a generous estimate when the file has no
         # per-track peak bitrate metadata.
         average = owner.content.size * 8000 // max(1, self.boundaries[-1])
-        self.playlist = master_playlist(self.audio, self.subtitles, default_audio,
-                                        max(2_000_000, 3 * average), metadata['video'])
+        try:
+            self.playlist = master_playlist(self.audio, self.subtitles, default_audio,
+                                            max(2_000_000, 3 * average), metadata['video'])
+        except ValueError as error:
+            raise UnsupportedAirPlayMedia(str(error)) from error
         self.media_playlist = playlist(self.boundaries, 'm4s', initialization=True)
         self.subtitle_playlist = playlist(self.boundaries, 'vtt')
         stream = self
@@ -219,7 +234,7 @@ class MKVStream:
                         self.send_error(404)
                         return
                     if monotonic() >= deadline:
-                        logging.getLogger(__name__).warning('AirPlay MKV request slots stayed busy for ten seconds.')
+                        logging.getLogger(__name__).warning('AirPlay request slots stayed busy for ten seconds.')
                         self.send_error(503)
                         return
                 try:
@@ -339,7 +354,7 @@ class MKVStream:
                 if not self.allowed():
                     return None, None
                 if media is None:
-                    logging.getLogger(__name__).warning('AirPlay MKV fragment unavailable: index=%d track=%d', index, track)
+                    logging.getLogger(__name__).warning('AirPlay fragment unavailable: index=%d track=%d', index, track)
                     return None, None
                 self.cached[key[0]] = previous = key, py_from_ns(media)
             return previous[1], 'video/iso.segment' if track < 0 else 'audio/mp4'
@@ -368,7 +383,7 @@ class MKVStream:
                 if data is None:
                     return None, None
                 cues = json.loads(str(data))
-        return webvtt_segment(cues, start, end), 'text/vtt; charset=utf-8'
+        return webvtt_segment(cues, start, end, timestamp_offset=self.subtitle_timestamp_offset), 'text/vtt; charset=utf-8'
 
     def close(self):
         self.stopped.set()

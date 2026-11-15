@@ -17,7 +17,7 @@ typedef struct {
     float *pcm;
     int channels, used, outputIndex;
     double gain;
-    int64_t first, end, cursor, inputCursor;
+    int64_t first, end, cursor, inputCursor, timestampOffset;
     const uint8_t *order;
 } LGMKVOpus;
 
@@ -88,6 +88,7 @@ static BOOL LGOpusOpen(LGMKVOpus *audio, AVCodecParameters *input, AVStream *out
     // output on a global sample grid so adjacent fragments join after seeks.
     audio->cursor = audio->first - 1024;
     audio->inputCursor = AV_NOPTS_VALUE;
+    audio->timestampOffset = 4800;
     return YES;
 }
 
@@ -97,8 +98,8 @@ static BOOL LGOpusEncode(LGMKVOpus *audio, AVFormatContext *output, AVFrame *fra
     while ((status = avcodec_receive_packet(audio->encoder, audio->packet)) >= 0) {
         AVPacket *packet = audio->packet;
         if (packet->pts >= audio->first && packet->pts < audio->end) {
-            packet->pts += 4800;
-            packet->dts += 4800;
+            packet->pts += audio->timestampOffset;
+            packet->dts += audio->timestampOffset;
             packet->stream_index = audio->outputIndex;
             av_packet_rescale_ts(packet, LGOpusClock, output->streams[audio->outputIndex]->time_base);
             if (av_interleaved_write_frame(output, packet) < 0) return NO;

@@ -86,6 +86,7 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic, strong) AVPlayerViewController *airPlayController;
 @property(nonatomic, strong) AVRoutePickerView *airPlayPicker;
 @property(nonatomic, strong) AVPlayer *airPlayPlayer;
+@property(nonatomic, strong) AVPlayer *airPlayRoutePlayer;
 @property(nonatomic, copy) BOOL (^allowed)(BOOL external);
 @property(nonatomic, copy) BOOL (^requestPlay)(void);
 @property(nonatomic, copy) void (^closed)(void);
@@ -175,6 +176,7 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 - (NSString *)trackKey:(VLCMediaPlayerTrack *)track;
 - (void)revokeExternalVideo;
 - (BOOL)isExternalAudioPort:(NSString *)type;
+- (BOOL)protectedDataAvailable;
 @end
 
 static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoController *owner);
@@ -183,6 +185,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 - (void)installAirPlayControls;
 - (BOOL)beginAirPlay:(AVPlayer *)player URL:(NSURL *)url title:(NSString *)title;
 - (BOOL)hasAirPlay;
+- (BOOL)hasEstablishedAirPlay;
 - (BOOL)allowsAirPlay;
 - (void)startAirPlayPlayback;
 - (void)seekAirPlay:(int64_t)target;
@@ -884,10 +887,12 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
     return button;
 }
 
+- (BOOL)protectedDataAvailable { return UIApplication.sharedApplication.protectedDataAvailable; }
+
 - (BOOL)canPlay:(BOOL)external {
     if (self.retired || self.interrupted || [self hasActiveCall] || (external && self.restricted)) return NO;
     if (self.restricted && (self.lockHidden || UIApplication.sharedApplication.applicationState == UIApplicationStateBackground)) return NO;
-    if (!UIApplication.sharedApplication.protectedDataAvailable) return NO;
+    if (![self protectedDataAvailable] && !([self hasEstablishedAirPlay] && [self allowsAirPlay])) return NO;
     if (self.restricted && (self.view.window.screen.isCaptured || [self hasExternalAudio])) return NO;
     return self.allowed && self.allowed(external);
 }
@@ -1175,6 +1180,12 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 - (void)protectedData:(NSNotification *)notification {
     if (self.restricted) [self suspendForLock];
     else if ([self hasAirPlay]) {
+        // Device lock does not revoke an ordinary movie already playing on TV.
+        // Keep checking the source grant; do not start a new handoff while locked.
+        if ([self hasEstablishedAirPlay] && [self allowsAirPlay] && [self canPlay:NO]) {
+            [self setScreenAwake:NO];
+            return;
+        }
         [self detachAirPlayKeepingRoute:NO];
         [self revealSurface];
     } else [self pause];

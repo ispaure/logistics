@@ -59,6 +59,40 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
         owner.native.pause.assert_not_called()
         self.assertFalse(owner.switching_player)
 
+    async def test_mp4_airplay_uses_the_same_subtitle_renditions_as_mkv(self):
+        owner = self.player(restricted=False)
+        owner.native.airplay_active.return_value = False
+        owner.content.check = Mock()
+        stream = Mock()
+        path = Path('/unused/movie.mp4')
+        with patch('features.video.mobile.ios.airplay_file', return_value=path), patch(
+                'features.video.mobile.mkv.MKVStream', return_value=stream):
+            await owner.prepare_airplay()
+        owner.native.start_airplay.assert_called_once_with(path, stream)
+        await owner.close()
+        stream.close.assert_called_once_with()
+        self.assertIsNone(owner.mkv_stream)
+
+    async def test_mp4_native_fallback_does_not_bypass_revocation(self):
+        from features.video.mobile.mkv import UnsupportedAirPlayMedia
+        for revoked in (False, True):
+            with self.subTest(revoked=revoked):
+                owner = self.player(restricted=False)
+                owner.native.airplay_active.return_value = False
+                owner.content.check = Mock()
+                path = Path('/unused/movie.mp4')
+                def unsupported(*args):
+                    if revoked:
+                        owner.content.require_external.side_effect = ValueError('Revoked')
+                    raise UnsupportedAirPlayMedia('Unsupported codec')
+                with patch('features.video.mobile.ios.airplay_file', return_value=path), patch(
+                        'features.video.mobile.mkv.MKVStream', side_effect=unsupported):
+                    await owner.prepare_airplay()
+                if revoked:
+                    owner.native.start_airplay.assert_not_called()
+                else:
+                    owner.native.start_airplay.assert_called_once_with(path, None)
+
     def player(self, *, restricted=True):
         from features.video.mobile.player import MobileVideo
         app = SimpleNamespace(audio_output=Mock(), active_host=True, private_root=Path('/unused'), loop=asyncio.get_running_loop())
@@ -962,7 +996,7 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
         self.assertIn('LANGUAGE="und"', unknown)
         self.assertNotIn('#EXT-X-ENDLIST', master)
         variant = next(row for row in rows if row.startswith('#EXT-X-STREAM-INF:'))
-        self.assertIn('CODECS="hvc1.2.4.L153.B0,mp4a.40.2,ec-3,ac-3"', variant)
+        self.assertIn('CODECS="hvc1.2.4.L153.B0,mp4a.40.2,ec-3,ac-3,wvtt"', variant)
         self.assertIn('RESOLUTION=3840x2160', variant)
         self.assertIn('VIDEO-RANGE=PQ', variant)
         self.assertIn('FRAME-RATE=23.976', variant)
@@ -972,21 +1006,33 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
         self.assertIn('AUDIO="audio"', variant)
         self.assertIn('SUBTITLES="text"', variant)
 
+    def test_webvtt_preserves_overlapping_cues_and_maps_the_video_clock(self):
+        from features.video.mobile.mkv import webvtt_segment
+        cues = [(5900, 6400, '<i>Hello &amp; goodbye</i>\nSecond line'),
+                (6000, 8000, '&lt;literal&gt;'), (12000, 13000, 'Next segment')]
+        segment = webvtt_segment(cues, 6000, 12000, timestamp_offset=267).decode()
+        self.assertIn('MPEGTS:24030\n\n', segment)
+        self.assertIn('00:00:05.900 --> 00:00:06.400\nHello &amp; goodbye\nSecond line', segment)
+        self.assertIn('&lt;literal&gt;', segment)
+        self.assertNotIn('<i>', segment)
+        self.assertNotIn('Next segment', segment)
+        self.assertTrue(webvtt_segment([], 0, 6000).endswith(b'\n\n'))
+
     @contextmanager
-    def mkv_stream(self):
+    def mkv_stream(self, *, sidecars=(), path=Path('/movie.mkv'), embedded=True):
         from contextlib import nullcontext
         from threading import Event
         from features.video.mobile.mkv import MKVStream
 
         allowed = Mock(return_value=True)
-        owner = SimpleNamespace(allowed=allowed, content=Mock(size=200_000), subtitles=[])
+        owner = SimpleNamespace(allowed=allowed, content=Mock(size=200_000), subtitles=list(sidecars))
         import json
         engine = SimpleNamespace(
             renditionsJSON=lambda: json.dumps(dict(boundaries=[0, 6000, 12000, 18000],
                 video=dict(codec='h264', configuration='AWQAKA==', width=1920, height=1080, frameRate=24),
                 defaultAudio=1, audio=[dict(id=1, name='Main', language='eng', channels=6, codec='ac3'),
                                        dict(id=2, name='Commentary', language='eng', channels=2, codec='opus')],
-                text=[dict(id=3, name='Spanish', language='spa')])),
+                text=[dict(id=3, name='Spanish', language='spa')] if embedded else [])),
             initializationForTrack=Mock(return_value=SimpleNamespace(payload=b'init')),
             fragment=Mock(return_value=SimpleNamespace(payload=b'abcdef')),
             textSegment=Mock(return_value='[[11900, 12500, "Hello & goodbye"]]'))
@@ -1003,11 +1049,38 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
         }
         with patch.dict('sys.modules', modules):
             cancelled = Event()
-            stream = MKVStream(owner, Path('/movie.mkv'), cancelled)
+            stream = MKVStream(owner, path, cancelled)
             try:
                 yield stream, engine, allowed
             finally:
                 stream.close()
+
+    def test_mp4_and_mkv_sidecars_are_selectable_and_recheck_access(self):
+        from io import BytesIO
+        from urllib.error import HTTPError
+        from urllib.request import urlopen
+
+        data = b'1\n00:00:11,900 --> 00:00:12,500\nSidecar caption\n'
+        for extension in ('mp4', 'mkv'):
+            with self.subTest(container=extension):
+                subtitle = Mock(path='movie.en.srt', size=len(data), restricted=False)
+                subtitle.open.side_effect = lambda: BytesIO(data)
+                with self.mkv_stream(sidecars=[subtitle], path=Path('/movie.' + extension), embedded=False) as (stream, engine, _):
+                    with urlopen(stream.url, timeout=2) as response:
+                        self.assertIn(b'TYPE=SUBTITLES', response.read())
+                    uri = stream.url.replace('video.m3u8', 'sidecar-0/segment-2.vtt')
+                    with urlopen(uri, timeout=2) as response:
+                        self.assertIn(b'00:00:11.900 --> 00:00:12.500\nSidecar caption', response.read())
+                    engine.textSegment.assert_not_called()
+                    subtitle.require_external.side_effect = ValueError('Revoked')
+                    with self.assertRaises(HTTPError) as denied:
+                        urlopen(uri, timeout=2)
+                    self.assertEqual(denied.exception.code, 404)
+
+    def test_mp4_without_text_tracks_keeps_native_delivery(self):
+        from features.video.mobile.mkv import UnsupportedAirPlayMedia
+        with self.assertRaises(UnsupportedAirPlayMedia), self.mkv_stream(path=Path('/movie.mp4'), embedded=False):
+            self.fail('An MP4 without subtitles should retain native delivery.')
 
     def test_mkv_hls_range_and_revocation(self):
         from urllib.error import HTTPError

@@ -27,15 +27,19 @@
 @end
 @interface LGVideoRouteProbe : LGVideoController
 @property(nonatomic) BOOL fixtureRoute;
+@property(nonatomic) BOOL fixtureDataUnavailable;
 @end
 @implementation LGVideoRouteProbe
 - (BOOL)hasAirPlayAudioRoute { return self.fixtureRoute; }
+- (BOOL)protectedDataAvailable { return !self.fixtureDataUnavailable; }
 @end
-@interface LGVideoAirPlayChecks : UIResponder <UIApplicationDelegate, UIWindowSceneDelegate>
+@interface LGVideoAirPlayChecks : UIResponder <UIApplicationDelegate, UIWindowSceneDelegate, AVPlayerItemLegibleOutputPushDelegate>
 @property(nonatomic, strong) UIWindow *window;
 @property(nonatomic, strong) LGVideoRouteProbe *video;
 @property(nonatomic, strong) NSMutableArray *samples;
 @property(nonatomic) BOOL completed;
+@property(nonatomic, strong) AVPlayer *hlsPlayer;
+@property(nonatomic, copy) NSString *lastCaption;
 @end
 @implementation LGVideoAirPlayChecks
 - (void)finish:(NSString *)error {
@@ -49,7 +53,7 @@
     }];
     [UIImagePNGRepresentation(image) writeToFile:[directory stringByAppendingPathComponent:@"airplay-controls.png"] atomically:YES];
     NSDictionary *report = @{@"success": @(!error), @"error": error ?: @"", @"samples": self.samples,
-        @"scope": @"Real UIKit/VLC audio state; simulated AVPlayer loading, seek completions and routes; no physical Apple TV"};
+        @"scope": @"Real UIKit/VLC audio, native MP4/MKV remux and AVKit HLS subtitle selection/seek; simulated receiver events; no physical Apple TV"};
     [[NSJSONSerialization dataWithJSONObject:report options:NSJSONWritingPrettyPrinted error:nil]
         writeToFile:[directory stringByAppendingPathComponent:@"result.json"] atomically:YES];
 }
@@ -94,6 +98,76 @@
         });
     });
 }
+- (LGReceiverPlayer *)attachReceiver {
+    LGReceiverPlayer *player = [LGReceiverPlayer new];
+    player.seeks = [NSMutableArray array];
+    player.fixtureItem = [[LGReceiverItem alloc] initWithURL:[NSBundle.mainBundle URLForResource:@"fixture" withExtension:@"mp4"]];
+    LGVideoRouteProbe *v = self.video;
+    v.airPlayPlayer = v.airPlayRoutePlayer = player;
+    v.fixtureRoute = YES;
+    v.airPlayWasExternal = NO;
+    v.airPlaySeekTarget = -1;
+    player.allowsExternalPlayback = YES;
+    return player;
+}
+- (BOOL)checkLockPolicy {
+    LGVideoRouteProbe *v = self.video;
+    v.fixtureDataUnavailable = YES;
+    if ([v canPlay:NO] || [v allowsAirPlay]) { [self finish:@"Locked device admitted new playback"]; return NO; }
+    LGReceiverPlayer *player = [self attachReceiver];
+    [v protectedData:nil];
+    if ([v hasAirPlay] || player.allowsExternalPlayback) { [self finish:@"Lock retained an unestablished handoff"]; return NO; }
+
+    v.fixtureDataUnavailable = NO;
+    player = [self attachReceiver];
+    player.fixtureItem.fixtureStatus = AVPlayerItemStatusReadyToPlay;
+    player.fixtureExternal = YES;
+    v.airPlayWasExternal = YES;
+    [v startAirPlayPlayback];
+    v.fixtureDataUnavailable = YES;
+    [v protectedData:nil]; [v background]; [v tick:nil];
+    if (v.airPlayPlayer != player || !v.playRequested || ![v canPlay:NO] || ![v allowsAirPlay]) {
+        [self finish:@"Screen lock stopped authorized AirPlay"]; return NO;
+    }
+    // A receiver pause and a resume on the locked phone keep the same item.
+    [player pause]; [v updateAirPlay];
+    if (v.playRequested || v.airPlayPlayer != player) { [self finish:@"Locked receiver pause lost the session"]; return NO; }
+    [v startAirPlayPlayback];
+    if (!v.playRequested || player.playCalls != 2) { [self finish:@"Locked AirPlay could not resume"]; return NO; }
+    v.interrupted = YES;
+    if ([v canPlay:NO]) { [self finish:@"Locked AirPlay bypassed an interruption"]; return NO; }
+    v.interrupted = NO;
+    v.airPlayAllowed = ^BOOL { return NO; };
+    [v updateAirPlay];
+    if ([v hasAirPlay] || player.allowsExternalPlayback || [v canPlay:NO]) {
+        [self finish:@"Lock exemption bypassed source revocation"]; return NO;
+    }
+    v.airPlayAllowed = ^BOOL { return YES; };
+
+    player = [self attachReceiver];
+    v.airPlayWasExternal = YES;
+    v.playRequested = YES;
+    v.fixtureRoute = NO; player.fixtureExternal = NO;
+    [v updateAirPlay];
+    if ([v hasAirPlay] || v.playRequested || [v canPlay:NO]) {
+        [self finish:@"Route loss resumed local video while locked"]; return NO;
+    }
+
+    player = [self attachReceiver];
+    player.fixtureExternal = YES;
+    v.airPlayWasExternal = YES;
+    v.restricted = YES;
+    [v protectedData:nil];
+    if ([v hasAirPlay] || !v.lockHidden || [v canPlay:NO] || player.allowsExternalPlayback) {
+        [self finish:@"Session-protected video survived lock"]; return NO;
+    }
+    v.restricted = NO;
+    v.fixtureDataUnavailable = NO;
+    [v revealSurface];
+    [self.samples addObject:@{@"event": @"airplay-lock", @"continued": @YES, @"pauseResume": @YES,
+        @"newHandoffDenied": @YES, @"revocation": @YES, @"routeLoss": @YES, @"protectedStopped": @YES}];
+    return YES;
+}
 - (BOOL)checkRemuxMetadata {
     LGMKVRemux *remux = [[LGMKVRemux alloc] initWithPath:[NSBundle.mainBundle pathForResource:@"airplay" ofType:@"mkv"]];
     NSData *data = [[remux renditionsJSON] dataUsingEncoding:NSUTF8StringEncoding];
@@ -111,6 +185,110 @@
         }
     }
     return YES;
+}
+- (BOOL)exportSubtitleFixtures {
+    NSString *documents = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents"];
+    NSMutableDictionary *fixtures = [NSMutableDictionary dictionary];
+    for (NSString *extension in @[@"mkv", @"mp4"]) {
+        LGMKVRemux *remux = [[LGMKVRemux alloc] initWithPath:[NSBundle.mainBundle pathForResource:@"captions" ofType:extension]];
+        NSData *json = [[remux renditionsJSON] dataUsingEncoding:NSUTF8StringEncoding];
+        NSDictionary *metadata = json ? [NSJSONSerialization JSONObjectWithData:json options:0 error:nil] : nil;
+        if ([metadata[@"text"] count] != 2) { [self finish:[extension stringByAppendingString:@" subtitle tracks missing"]]; return NO; }
+        fixtures[extension] = metadata;
+        NSString *root = [documents stringByAppendingPathComponent:[@"hls/" stringByAppendingString:extension]];
+        NSMutableDictionary *routes = [NSMutableDictionary dictionaryWithObject:@-1 forKey:@"video"];
+        for (NSDictionary *track in metadata[@"audio"]) routes[[NSString stringWithFormat:@"audio-%@", track[@"id"]]] = track[@"id"];
+        for (NSDictionary *track in metadata[@"text"]) routes[[NSString stringWithFormat:@"text-%@", track[@"id"]]] = track[@"id"];
+        for (NSString *route in routes) {
+            NSString *directory = [root stringByAppendingPathComponent:route];
+            [NSFileManager.defaultManager createDirectoryAtPath:directory withIntermediateDirectories:YES attributes:nil error:nil];
+            int track = [routes[route] intValue];
+            BOOL text = [route hasPrefix:@"text-"];
+            if (!text && ![[remux initializationForTrack:track] writeToFile:[directory stringByAppendingPathComponent:@"init.mp4"] atomically:YES]) {
+                [self finish:[NSString stringWithFormat:@"%@ %@ initialization failed", extension, route]]; return NO;
+            }
+            NSUInteger count = [metadata[@"boundaries"] count] - 1;
+            // Read backwards first so subtitle extraction cannot depend on the
+            // demuxer's previous cursor or a sequential video request.
+            for (NSUInteger reverse = count; reverse; reverse--) {
+                NSUInteger index = reverse - 1;
+                NSData *data = text ? [[remux textSegment:index track:track] dataUsingEncoding:NSUTF8StringEncoding] : [remux fragment:index track:track];
+                NSString *file = [NSString stringWithFormat:@"segment-%lu.%@", (unsigned long)index, text ? @"json" : @"m4s"];
+                if (!data.length || ![data writeToFile:[directory stringByAppendingPathComponent:file] atomically:YES]) {
+                    [self finish:[NSString stringWithFormat:@"%@ %@ fragment %lu failed", extension, route, (unsigned long)index]]; return NO;
+                }
+                if (text && index == 2) {
+                    NSString *cues = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+                    if (![cues containsString:@"CROSSING AIRPLAY CAPTION"] || [cues containsString:@"Default,"]) {
+                        [self finish:[extension stringByAppendingString:@" lost overlapping subtitle text"]]; return NO;
+                    }
+                }
+            }
+        }
+    }
+    [[NSJSONSerialization dataWithJSONObject:fixtures options:0 error:nil]
+        writeToFile:[documents stringByAppendingPathComponent:@"hls-fixtures.json"] atomically:YES];
+    [self awaitHLSFixtures:100];
+    return YES;
+}
+- (void)awaitHLSFixtures:(NSUInteger)attempts {
+    NSData *data = [NSData dataWithContentsOfFile:[NSHomeDirectory() stringByAppendingPathComponent:@"Documents/hls-urls.json"]];
+    if (data) { [self checkHLS:[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]]; return; }
+    if (!attempts) { [self finish:@"Host did not serve subtitle fixtures"]; return; }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 10), dispatch_get_main_queue(), ^{ [self awaitHLSFixtures:attempts - 1]; });
+}
+- (void)checkHLS:(NSArray<NSString *> *)urls {
+    if (!urls.count) { [self finish:nil]; return; }
+    AVURLAsset *asset = [AVURLAsset URLAssetWithURL:[NSURL URLWithString:urls.firstObject] options:nil];
+    [asset loadMediaSelectionGroupForMediaCharacteristic:AVMediaCharacteristicLegible completionHandler:^(AVMediaSelectionGroup *group, NSError *error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSArray *options = [AVMediaSelectionGroup playableMediaSelectionOptionsFromArray:group.options ?: @[]];
+            if (error || options.count != 2 || !group.allowsEmptySelection) {
+                [self finish:[NSString stringWithFormat:@"AVKit subtitles unavailable: %lu options, %@", (unsigned long)options.count, error]]; return;
+            }
+            AVPlayerItem *item = [AVPlayerItem playerItemWithAsset:asset];
+            AVPlayerItemLegibleOutput *captions = [[AVPlayerItemLegibleOutput alloc] initWithMediaSubtypesForNativeRepresentation:nil];
+            [captions setDelegate:self queue:dispatch_get_main_queue()];
+            [item addOutput:captions];
+            self.lastCaption = @"";
+            self.hlsPlayer = [AVPlayer playerWithPlayerItem:item];
+            [item selectMediaOption:options.lastObject inMediaSelectionGroup:group];
+            [self.hlsPlayer play];
+            [self checkHLSReady:urls group:group attempts:100];
+        });
+    }];
+}
+- (void)checkHLSReady:(NSArray *)urls group:(AVMediaSelectionGroup *)group attempts:(NSUInteger)attempts {
+    AVPlayerItem *item = self.hlsPlayer.currentItem;
+    if (item.status == AVPlayerItemStatusFailed || !attempts) { [self finish:[NSString stringWithFormat:@"HLS playback failed: %@", item.error]]; return; }
+    if (item.status != AVPlayerItemStatusReadyToPlay) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 10), dispatch_get_main_queue(), ^{ [self checkHLSReady:urls group:group attempts:attempts - 1]; });
+        return;
+    }
+    if (![[item.currentMediaSelection selectedMediaOptionInMediaSelectionGroup:group] isEqual:group.options.lastObject]) { [self finish:@"AVKit did not select the requested subtitles"]; return; }
+    [self.hlsPlayer seekToTime:CMTimeMakeWithSeconds(12.5, 1000) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero completionHandler:^(BOOL finished) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (!finished || item.status == AVPlayerItemStatusFailed) { [self finish:@"Captioned HLS seek failed"]; return; }
+            [self checkHLSCaption:urls group:group attempts:30];
+        });
+    }];
+}
+- (void)legibleOutput:(AVPlayerItemLegibleOutput *)output didOutputAttributedStrings:(NSArray<NSAttributedString *> *)strings nativeSampleBuffers:(NSArray *)buffers forItemTime:(CMTime)time {
+    for (NSAttributedString *string in strings) if (string.length) self.lastCaption = string.string;
+}
+- (void)checkHLSCaption:(NSArray *)urls group:(AVMediaSelectionGroup *)group attempts:(NSUInteger)attempts {
+    if (![self.lastCaption containsString:@"CROSSING AIRPLAY CAPTION"]) {
+        if (!attempts) { [self finish:@"AVKit did not deliver the subtitle spanning the seek"]; return; }
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC / 10), dispatch_get_main_queue(), ^{ [self checkHLSCaption:urls group:group attempts:attempts - 1]; });
+        return;
+    }
+    AVPlayerItem *item = self.hlsPlayer.currentItem;
+    [item selectMediaOption:nil inMediaSelectionGroup:group];
+    if ([item.currentMediaSelection selectedMediaOptionInMediaSelectionGroup:group]) { [self finish:@"AVKit could not turn subtitles off"]; return; }
+    [self.samples addObject:@{@"event": @"hls-subtitles", @"container": [[NSURL URLWithString:urls.firstObject] URLByDeletingLastPathComponent].lastPathComponent,
+        @"options": @(group.options.count), @"selected": @YES, @"off": @YES, @"seek": @YES, @"caption": self.lastCaption}];
+    [self.hlsPlayer pause]; self.hlsPlayer = nil;
+    [self checkHLS:[urls subarrayWithRange:NSMakeRange(1, urls.count - 1)]];
 }
 - (void)checkReceiver {
     LGVideoRouteProbe *v = self.video;
@@ -146,10 +324,12 @@
         [self finish:@"AirPlay is not reachable beside forward 10 seconds"]; return;
     }
     [v pause];
+    if (![self checkLockPolicy]) return;
     LGReceiverPlayer *player = [LGReceiverPlayer new];
     player.seeks = [NSMutableArray array];
     player.fixtureItem = [[LGReceiverItem alloc] initWithURL:[NSBundle.mainBundle URLForResource:@"fixture" withExtension:@"mp4"]];
-    v.airPlayPlayer = player; v.fixtureRoute = YES;
+    v.airPlayPlayer = v.airPlayRoutePlayer = player; v.fixtureRoute = YES;
+    player.allowsExternalPlayback = YES;
     v.airPlaySeekTarget = v.airPlayStartPosition = 12000;
     [v startAirPlayPlayback];
     [v updateTimeline];
@@ -181,19 +361,62 @@
             ((void (^)(BOOL))player.seeks.lastObject)(YES);
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (player.playCalls != 2 || v.playRequested) { [self finish:@"Seek completion undid explicit Pause"]; return; }
-                [v startAirPlayPlayback]; [v seekAirPlay:17000];
-                v.airPlaySeekDeadline = NSProcessInfo.processInfo.systemUptime - 1;
-                [v updateAirPlay];
-                if ([v hasAirPlay] || !v.localAudioNeedsRefresh || [v positionMilliseconds] != 17000) {
-                    [self finish:@"Seek timeout failed to detach at requested position"]; return;
-                }
-                [self.samples addObject:@{@"event": @"receiver", @"loadingSeek": @YES, @"staleCompletion": @YES,
-                    @"interruptedSeek": @YES, @"pausedSeek": @YES, @"timeout": @YES,
-                    @"forwardSkip": @YES, @"directionChange": @YES, @"endClamp": @YES}];
-                if ([self checkRemuxMetadata]) [self finish:nil];
+                [self checkReceiverPause:player iteration:0];
             });
         });
     });
+}
+- (void)checkReceiverPause:(LGReceiverPlayer *)player iteration:(NSUInteger)iteration {
+    LGVideoRouteProbe *v = self.video;
+    if (iteration < 3) {
+        [v startAirPlayPlayback];
+        [v seekAirPlay:15000 + iteration * 1000];
+        NSUInteger calls = player.playCalls;
+        // AVKit/Apple TV pauses AVPlayer directly, bypassing the phone's pause
+        // method. Cover both a timer tick during the seek and completion first.
+        [player pause];
+        if (iteration == 0) [v updateAirPlay];
+        ((void (^)(BOOL))player.seeks.lastObject)(iteration != 2);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (player.playCalls != calls || v.playRequested || player.timeControlStatus != AVPlayerTimeControlStatusPaused) {
+                [self finish:@"Seek completion undid receiver Pause"]; return;
+            }
+            [self checkReceiverPause:player iteration:iteration + 1];
+        });
+        return;
+    }
+    [self.samples addObject:@{@"event": @"receiver-pause", @"duringSeek": @YES,
+        @"beforeTick": @YES, @"interruptedSeek": @YES}];
+    player.fixtureExternal = YES;
+    v.airPlayWasExternal = YES;
+    for (NSUInteger cycle = 0; cycle < 6; cycle++) {
+        [player play]; [v updateAirPlay];
+        [v backgroundNotification:nil];
+        if (!v.playRequested || v.airPlayPlayer != player) { [self finish:@"App switching lost the receiver session"]; return; }
+        [player pause];
+        [v applyAirPlayPlaybackOptions]; [v updateAirPlay];
+        if (v.playRequested || player.timeControlStatus != AVPlayerTimeControlStatusPaused) {
+            [self finish:@"Receiver Pause was lost after app switching"]; return;
+        }
+    }
+    [self.samples addObject:@{@"event": @"receiver-background", @"cycles": @6}];
+    [v startAirPlayPlayback]; [v seekAirPlay:17000];
+    v.airPlaySeekDeadline = NSProcessInfo.processInfo.systemUptime - 1;
+    [v updateAirPlay];
+    if ([v hasAirPlay] || !v.localAudioNeedsRefresh || [v positionMilliseconds] != 17000) {
+        [self finish:@"Seek timeout failed to detach at requested position"]; return;
+    }
+    [self.samples addObject:@{@"event": @"receiver", @"loadingSeek": @YES, @"staleCompletion": @YES,
+        @"interruptedSeek": @YES, @"pausedSeek": @YES, @"timeout": @YES,
+        @"forwardSkip": @YES, @"directionChange": @YES, @"endClamp": @YES}];
+    if (!player.allowsExternalPlayback || player.currentItem) { [self finish:@"Timeout did not preserve an empty reusable route"]; return; }
+    [v retireWithCompletion:^{
+        if (player.allowsExternalPlayback || player.currentItem || v.airPlayRoutePlayer) {
+            [self finish:@"Closing after detach left AirPlay enabled"]; return;
+        }
+        [self.samples addObject:@{@"event": @"airplay-close", @"externalPlaybackDisabled": @YES, @"itemReleased": @YES}];
+        if ([self checkRemuxMetadata]) [self exportSubtitleFixtures];
+    }];
 }
 @end
 int main(int argc, char **argv) { @autoreleasepool { return UIApplicationMain(argc, argv, nil, @"LGVideoAirPlayChecks"); } }

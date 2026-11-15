@@ -38,7 +38,8 @@ class VideoStreamLatencyTests(unittest.TestCase):
         transport.failed = failures.append
         held = 4
         for _ in range(held):
-            self.assertTrue(transport.slots.acquire(False))
+            # The HTTP handler releases its slot after the client reads the response.
+            self.assertTrue(transport.slots.acquire(timeout=2), 'Initial range request did not release its slot')
         slots = transport.slots
         class ObservedSlots:
             def acquire(self, *args, **kwargs):

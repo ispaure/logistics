@@ -236,7 +236,7 @@ class MobileVideo:
 
     async def prepare_airplay(self):
         from .ios import airplay_file
-        from .mkv import MKVStream
+        from .mkv import MKVStream, UnsupportedAirPlayMedia
 
         if self.closed or self.switching_player:
             return
@@ -254,13 +254,19 @@ class MobileVideo:
             path = airplay_file(self)
             if path is None:
                 raise ValueError('AirPlay is unavailable for this video.')
-            if path.suffix.lower() == '.mkv':
+            if path.suffix.lower() in {'.mkv', '.mp4', '.m4v', '.mov'}:
                 self.native.status('Preparing AirPlay…')
                 self.cancel_remux = Event()
                 preparation = self.app.loop.create_task(asyncio.to_thread(
                     MKVStream, self, path, self.cancel_remux))
                 try:
                     stream = await asyncio.shield(preparation)
+                except UnsupportedAirPlayMedia:
+                    # Keep AVFoundation's wider MP4/MOV codec support when the
+                    # bounded HLS adapter cannot represent the source. Embedded
+                    # native text tracks remain selectable on that path.
+                    if path.suffix.lower() == '.mkv':
+                        raise
                 except asyncio.CancelledError:
                     self.cancel_remux.set()
                     await drain_worker(preparation)

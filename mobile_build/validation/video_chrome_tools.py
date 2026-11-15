@@ -5,6 +5,8 @@ are removed through build_manager even when the probe fails. No personal app or
 simulator is modified. Results cover UIKit/decoder behavior, not physical touch.
 """
 import argparse
+from functools import partial
+from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 from hashlib import sha256
 from pathlib import Path
@@ -12,6 +14,7 @@ import plistlib
 import shutil
 import subprocess
 import time
+from threading import Thread
 from uuid import uuid4
 
 from build_manager.apple_simulators import AppleSimulators
@@ -72,11 +75,27 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
                 '-disposition:s:0', 'default', str(muxed)], check=True)
             shutil.move(muxed, app / 'fixture.mp4')
         if airplay_controls:
+            captions = workspace / 'airplay.srt'
+            captions.write_text('1\n00:00:00,000 --> 00:00:05,000\nFIRST AIRPLAY CAPTION\n\n'
+                                '2\n00:00:11,900 --> 00:00:13,500\n<i>CROSSING AIRPLAY CAPTION</i>\n')
+            ass = workspace / 'airplay.ass'
+            subprocess.run(['ffmpeg', '-v', 'error', '-i', str(captions), str(ass)], check=True)
             subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:size=160x90:rate=24000/1001',
-                '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-t', '19', '-c:v', 'libx265',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-i', str(captions), '-i', str(ass),
+                '-map', '0:v', '-map', '1:a', '-map', '2:s', '-map', '3:s', '-t', '19', '-c:v', 'libx265',
                 '-preset', 'ultrafast', '-pix_fmt', 'yuv420p10le', '-g', '48', '-bf', '2',
                 '-x265-params', 'pools=1:frame-threads=1:log-level=error:hdr10=1:colorprim=9:transfer=16:colormatrix=9',
-                '-c:a', 'libopus', '-ac', '6', str(app / 'airplay.mkv')], check=True)
+                '-c:a', 'libopus', '-ac', '6', '-c:s', 'copy', '-metadata:s:s:0', 'language=eng',
+                '-metadata:s:s:1', 'language=fra', str(app / 'airplay.mkv')], check=True)
+            subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=24000/1001',
+                '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-i', str(captions), '-i', str(ass),
+                '-map', '0:v', '-map', '1:a', '-map', '2:s', '-map', '3:s', '-t', '19',
+                '-c:v', 'libx264', '-preset', 'fast', '-g', '48', '-bf', '2', '-pix_fmt', 'yuv420p',
+                '-c:a', 'libopus', '-ac', '6', '-c:s', 'copy', '-metadata:s:s:0', 'language=eng',
+                '-metadata:s:s:1', 'language=fra', str(app / 'captions.mkv')], check=True)
+            subprocess.run(['ffmpeg', '-v', 'error', '-i', str(app / 'captions.mkv'),
+                '-map', '0:v', '-map', '0:a', '-map', '0:s', '-c:v', 'copy',
+                '-c:a', 'aac', '-c:s', 'mov_text', str(app / 'captions.mp4')], check=True)
         metadata = subprocess.check_output(['ffprobe', '-v', 'error', '-select_streams', 'v:0',
             '-show_streams', '-of', 'json', str(app / 'fixture.mp4')], text=True)
         (output / 'fixture.json').write_text(metadata)
@@ -96,6 +115,7 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
             UISupportedInterfaceOrientations=['UIInterfaceOrientationPortrait', 'UIInterfaceOrientationLandscapeLeft',
                                               'UIInterfaceOrientationLandscapeRight'])))
         subprocess.run(['codesign', '--force', '--deep', '--sign', '-', str(app)], check=True, capture_output=True)
+        hls_server = None
         try:
             runtimes = json.loads(client.invoke('list', 'runtimes', '--json'))['runtimes']
             supported = sorted((r for r in runtimes if r.get('isAvailable') and r['name'].startswith('iOS')),
@@ -112,6 +132,11 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
             deadline = time.monotonic() + (100 if url or pip_subtitles else 50)
             backgrounded = False
             while time.monotonic() < deadline:
+                if airplay_controls and hls_server is None and cache.with_name('hls-fixtures.json').exists():
+                    hls_server = serve_airplay_fixtures(cache.parent)
+                    shutil.copyfile(cache.with_name('hls-fixtures.json'), output / 'hls-fixtures.json')
+                    shutil.copytree(cache.with_name('hls'), output / 'hls')
+                    verify_airplay_fragments(output)
                 if pip_subtitles and not backgrounded and cache.with_name('pip-ready.json').exists():
                     client.invoke('launch', device, 'com.apple.Preferences')
                     backgrounded = True
@@ -130,6 +155,9 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
                 time.sleep(.2)
             raise TimeoutError('Video chrome probe did not produce a result')
         finally:
+            if hls_server is not None:
+                hls_server.shutdown()
+                hls_server.server_close()
             if device is not None:
                 try:
                     if 'cache' in locals() and cache.with_name('pip-progress.plist').exists():
@@ -142,6 +170,48 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
                 finally:
                     client.remove(device, name)
                     (output / 'cleanup.json').write_text(json.dumps(dict(simulator_removed=True, device=device)))
+
+
+def verify_airplay_fragments(output):
+    """Decode each native fragment alone, as a receiver does after a seek."""
+    checked = []
+    for fragment in sorted((output / 'hls').glob('*/*/segment-*.m4s')):
+        data = (fragment.parent / 'init.mp4').read_bytes() + fragment.read_bytes()
+        result = subprocess.run(['ffmpeg', '-v', 'error', '-xerror', '-nostdin', '-i', 'pipe:0',
+                                 '-f', 'null', '-'], input=data, capture_output=True, timeout=30)
+        if result.returncode:
+            raise RuntimeError(f'Native fragment failed to decode: {fragment.relative_to(output)}: {result.stderr.decode()}')
+        checked.append(str(fragment.relative_to(output)))
+    (output / 'fragment-decode.json').write_text(json.dumps(dict(success=True, fragments=checked), indent=2))
+
+
+def serve_airplay_fixtures(documents):
+    """Serve production playlists and native fragments to real simulator AVKit."""
+    from features.video.mobile.mkv import master_playlist, playlist, webvtt_segment
+
+    fixtures = json.loads((documents / 'hls-fixtures.json').read_text())
+    for name, metadata in fixtures.items():
+        root = documents / 'hls' / name
+        audio = {f'audio-{track["id"]}': track for track in metadata['audio']}
+        subtitles = {f'text-{track["id"]}': track for track in metadata['text']}
+        boundaries = metadata['boundaries']
+        (root / 'index.m3u8').write_bytes(master_playlist(audio, subtitles, metadata['defaultAudio'], 2_000_000, metadata['video']))
+        for route in ('video', *audio):
+            (root / route / 'index.m3u8').write_bytes(playlist(boundaries, 'm4s', initialization=True))
+        for route in subtitles:
+            (root / route / 'index.m3u8').write_bytes(playlist(boundaries, 'vtt'))
+            for index, (start, end) in enumerate(zip(boundaries, boundaries[1:])):
+                cues = json.loads((root / route / f'segment-{index}.json').read_text())
+                (root / route / f'segment-{index}.vtt').write_bytes(webvtt_segment(
+                    cues, start, end, timestamp_offset=metadata['subtitleTimestampOffset']))
+    class Handler(SimpleHTTPRequestHandler):
+        def log_message(self, *args):
+            pass
+    server = ThreadingHTTPServer(('127.0.0.1', 0), partial(Handler, directory=str(documents / 'hls')))
+    Thread(target=server.serve_forever, daemon=True).start()
+    (documents / 'hls-urls.json').write_text(json.dumps([
+        f'http://127.0.0.1:{server.server_port}/{name}/index.m3u8' for name in fixtures]))
+    return server
 
 
 def main():

@@ -1,4 +1,4 @@
-// Stream-copy indexed Matroska into independently requested fMP4 fragments.
+// Stream-copy indexed Matroska/MP4 into independently requested fMP4 fragments.
 // The build supplies FFmpeg headers matching the pinned VLCKit binary.
 #if __has_include(<libavformat/avformat.h>)
 #import <math.h>
@@ -98,6 +98,50 @@ static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     return -1;
 }
 
+static NSString *LGMKVSubtitleText(AVPacket *packet, enum AVCodecID codec) {
+    const uint8_t *bytes = packet->data;
+    NSUInteger length = packet->size;
+    NSStringEncoding encoding = NSUTF8StringEncoding;
+    if (codec == AV_CODEC_ID_MOV_TEXT) {
+        // tx3g has a big-endian byte count followed by text and optional style
+        // boxes. Only the counted text belongs in the WebVTT cue.
+        if (length < 2) return nil;
+        NSUInteger count = AV_RB16(bytes);
+        if (count > length - 2) return nil;
+        bytes += 2; length = count;
+        if (length >= 2 && (AV_RB16(bytes) == 0xFEFF || AV_RB16(bytes) == 0xFFFE))
+            encoding = NSUTF16StringEncoding;
+    }
+    NSString *text = [[NSString alloc] initWithBytes:bytes length:length encoding:encoding];
+    if (codec == AV_CODEC_ID_ASS || codec == AV_CODEC_ID_SSA) {
+        // FFmpeg's ASS packet: ReadOrder,Layer,Style,Name,MarginL,MarginR,
+        // MarginV,Effect,Text. Commas inside the dialogue are literal text.
+        for (NSUInteger field = 0; field < 8; field++) {
+            NSRange comma = [text rangeOfString:@","];
+            if (!text || comma.location == NSNotFound) return nil;
+            text = [text substringFromIndex:NSMaxRange(comma)];
+        }
+        // Drawing commands are not dialogue. Drop drawing spans, strip style
+        // overrides and keep only text (TV owns font, size and placement).
+        NSMutableString *plain = [NSMutableString string];
+        BOOL drawing = NO;
+        NSRegularExpression *tags = [NSRegularExpression regularExpressionWithPattern:@"\\{[^}]*\\}" options:0 error:nil];
+        NSRegularExpression *pen = [NSRegularExpression regularExpressionWithPattern:@"\\\\p([0-9]+)(?![0-9])" options:0 error:nil];
+        NSUInteger cursor = 0;
+        for (NSTextCheckingResult *tag in [tags matchesInString:text options:0 range:NSMakeRange(0, text.length)]) {
+            if (!drawing) [plain appendString:[text substringWithRange:NSMakeRange(cursor, tag.range.location - cursor)]];
+            for (NSTextCheckingResult *mode in [pen matchesInString:text options:0 range:tag.range])
+                drawing = [[text substringWithRange:[mode rangeAtIndex:1]] integerValue] != 0;
+            cursor = NSMaxRange(tag.range);
+        }
+        if (!drawing) [plain appendString:[text substringFromIndex:cursor]];
+        text = [[[[plain stringByReplacingOccurrencesOfString:@"\\N" withString:@"\n"]
+            stringByReplacingOccurrencesOfString:@"\\n" withString:@"\n"]
+            stringByReplacingOccurrencesOfString:@"\\h" withString:@"\u00a0"] copy];
+    }
+    return text;
+}
+
 @implementation LGMKVRemux {
     int _file;
     int _video, _audio;
@@ -105,6 +149,8 @@ static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     AVIOContext *_input;
     LGMKVIO _reader;
     NSArray<NSNumber *> *_starts;
+    NSArray<NSNumber *> *_seekStarts;
+    int64_t _mp4TimestampOffset;
     int64_t _duration;
     NSData *_initialization;
     NSData *_firstFragment;
@@ -149,8 +195,15 @@ static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     _source->flags |= AVFMT_FLAG_CUSTOM_IO;
     _source->max_index_size = 8 * 1024 * 1024;
     _source->interrupt_callback = (AVIOInterruptCB){LGMKVInterrupt, &_reader};
-    const AVInputFormat *matroska = av_find_input_format("matroska");
-    if (!matroska || avformat_open_input(&_source, NULL, matroska, NULL) < 0) return nil;
+    BOOL mp4 = [@[@"mp4", @"m4v", @"mov"] containsObject:path.pathExtension.lowercaseString];
+    const AVInputFormat *format = av_find_input_format(mp4 ? "mov" : "matroska");
+    AVDictionary *inputOptions = NULL;
+    // Never follow external QuickTime data references outside the admitted file.
+    av_dict_set(&inputOptions, "enable_drefs", "0", 0);
+    av_dict_set(&inputOptions, "use_absolute_path", "0", 0);
+    int opened = format ? avformat_open_input(&_source, NULL, format, &inputOptions) : -1;
+    av_dict_free(&inputOptions);
+    if (opened < 0) return nil;
     // Matroska's container header may omit color and cadence carried in HEVC's
     // parameter sets. Resolve those before advertising an HLS variant: Apple
     // rejects an HDR stream labelled SDR, and HDR variants require FRAME-RATE.
@@ -180,7 +233,9 @@ static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
             opus = i;
         if (copyAudio && (_audio < 0 || (preferred && !(_source->streams[_audio]->disposition & AV_DISPOSITION_DEFAULT))))
             _audio = i;
-        if (!copyAudio && !opusAudio && codec != AV_CODEC_ID_SUBRIP && codec != AV_CODEC_ID_WEBVTT) continue;
+        BOOL textCodec = codec == AV_CODEC_ID_SUBRIP || codec == AV_CODEC_ID_WEBVTT ||
+            codec == AV_CODEC_ID_ASS || codec == AV_CODEC_ID_SSA || codec == AV_CODEC_ID_MOV_TEXT;
+        if (!copyAudio && !opusAudio && !textCodec) continue;
         const AVDictionaryEntry *language = av_dict_get(stream->metadata, "language", NULL, 0);
         const AVDictionaryEntry *title = av_dict_get(stream->metadata, "title", NULL, 0);
         NSString *lang = language ? ([NSString stringWithUTF8String:language->value] ?: @"und") : @"und";
@@ -205,22 +260,49 @@ static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     // Build a compact playlist from cues. Media packets are read only when a
     // client asks for the corresponding segment.
     int count = avformat_index_get_entries_count(video);
-    if (count < 1 || count > 150000 || _duration <= 0) return nil;
-    NSMutableArray<NSNumber *> *starts = [NSMutableArray array];
+    // MOV indexes every sample; Matroska indexes only cues.
+    if (count < 1 || count > (mp4 ? 12 * 3600 * 240 : 150000) || _duration <= 0) return nil;
+    NSMutableArray<NSNumber *> *starts = [NSMutableArray array], *seeks = [NSMutableArray array];
     int64_t target = av_rescale_q(6, (AVRational){1, 1}, video->time_base);
     int64_t maximum = av_rescale_q(30, (AVRational){1, 1}, video->time_base);
     for (int i = 0; i < count; i++) {
         const AVIndexEntry *entry = avformat_index_get_entry(video, i);
         int64_t time = entry->timestamp;
-        if (!(entry->flags & AVINDEX_KEYFRAME) || time < 0 || time >= _duration) continue;
+        if (!(entry->flags & AVINDEX_KEYFRAME) || (!mp4 && time < 0) || time >= _duration) continue;
+        int64_t seek = time;
+        if (mp4) {
+            // MOV indexes decode time, whereas HLS boundaries use presentation
+            // time. Resolve only candidate boundaries, including negative DTS
+            // at the first sync sample of a movie with B-frames/edit lists.
+            if (seeks.count && seek - seeks.lastObject.longLongValue < target) continue;
+            _reader.bytes = 0;  // Each seek stays bounded; the opening deadline still applies.
+            if (av_seek_frame(_source, _video, seek, AVSEEK_FLAG_BACKWARD) < 0) return nil;
+            AVPacket *packet = av_packet_alloc();
+            if (!packet) return nil;
+            BOOL found = NO;
+            while (av_read_frame(_source, packet) >= 0) {
+                if (packet->stream_index == _video) {
+                    found = (packet->flags & AV_PKT_FLAG_KEY) && packet->pts != AV_NOPTS_VALUE;
+                    time = packet->pts;
+                    if (!starts.count && packet->dts != AV_NOPTS_VALUE)
+                        _mp4TimestampOffset = MAX(100, 100 - av_rescale_q(packet->dts, video->time_base, (AVRational){1, 1000}));
+                    break;
+                }
+                av_packet_unref(packet);
+            }
+            av_packet_free(&packet);
+            if (!found || time < 0 || !_mp4TimestampOffset) return nil;
+        }
         if (!starts.count || time - starts.lastObject.longLongValue >= target) {
             if (time - starts.lastObject.longLongValue > maximum) return nil;
             [starts addObject:@(time)];
+            [seeks addObject:@(seek)];
         }
     }
     if (!starts.count || starts.firstObject.longLongValue > av_rescale_q(1, (AVRational){1, 1}, video->time_base) ||
         _duration - starts.lastObject.longLongValue > maximum) return nil;
     _starts = [starts copy];
+    _seekStarts = mp4 ? [seeks copy] : nil;
     NSMutableArray *boundaries = [NSMutableArray arrayWithObject:@0];
     for (NSUInteger i = 1; i < _starts.count; i++)
         [boundaries addObject:@(av_rescale_q(_starts[i].longLongValue, video->time_base, (AVRational){1, 1000}))];
@@ -234,6 +316,7 @@ static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     if (video->codecpar->color_trc == AVCOL_TRC_SMPTE2084) videoInfo[@"range"] = @"PQ";
     else if (video->codecpar->color_trc == AVCOL_TRC_ARIB_STD_B67) videoInfo[@"range"] = @"HLG";
     _renditions = @{@"audio": audio, @"text": text, @"video": videoInfo,
+        @"subtitleTimestampOffset": @(_mp4TimestampOffset ?: 100 + av_rescale_q(4, av_inv_q(frameRate), (AVRational){1, 1000})),
         @"defaultAudio": @(_audio), @"boundaries": boundaries};
     NSMutableString *entries = [NSMutableString string];
     double longest = 0;
@@ -276,7 +359,7 @@ static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
     _reader.deadline = sink.deadline;
     // Seek to the previous cue so audio interleaved before the target video
     // packet is available up to the exact segment boundary.
-    int64_t preroll = start > 0 ? start - 1 : 0;
+    int64_t preroll = _seekStarts ? _seekStarts[index ? index - 1 : 0].longLongValue : (start > 0 ? start - 1 : 0);
     if (av_seek_frame(_source, _video, preroll, AVSEEK_FLAG_BACKWARD) < 0) goto done;
     if (avformat_alloc_output_context2(&output, NULL, "mp4", NULL) < 0 || !output) goto done;
     buffer = av_malloc(65536);
@@ -293,6 +376,7 @@ static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
         if (i == 1 && convertOpus) {
             if (!LGOpusOpen(&opus, in->codecpar, out, av_rescale_q(start, video->time_base, LGOpusClock),
                             av_rescale_q(end, video->time_base, LGOpusClock))) goto done;
+            if (_mp4TimestampOffset) opus.timestampOffset = _mp4TimestampOffset * 48;
             continue;
         }
         if (avcodec_parameters_copy(out->codecpar, in->codecpar) < 0) goto done;
@@ -348,20 +432,29 @@ static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
             if (!hasVideo && (pts != start || !(packet->flags & AV_PKT_FLAG_KEY) ||
                 LGMKVVideoSync(packet, in->codecpar) < 0)) goto done;
             hasVideo = YES;
-            // Cue-based reads can leave initial DTS unset. Carry decode order
-            // across fragments using the declared constant frame cadence.
-            packet->dts = start + timelineOffset + av_rescale_q(frameCount, frame, video->time_base);
-            packet->pts += timelineOffset + compositionDelay;
-            packet->duration = start + timelineOffset + av_rescale_q(++frameCount, frame, video->time_base) - packet->dts;
-            if (packet->duration <= 0 || packet->pts < packet->dts ||
-                packet->pts - packet->dts > compositionDelay * 3) goto done;
+            if (_seekStarts) {
+                // MOV already supplies decode times and sample durations. Keep
+                // them exactly, including variable cadence and composition time.
+                if (packet->dts == AV_NOPTS_VALUE || packet->duration <= 0) goto done;
+                int64_t offset = av_rescale_q(_mp4TimestampOffset, (AVRational){1, 1000}, in->time_base);
+                packet->pts += offset; packet->dts += offset;
+                if (packet->dts < 0) goto done;
+            } else {
+                // Cue-based reads can leave initial DTS unset. Carry decode order
+                // across fragments using the declared constant frame cadence.
+                packet->dts = start + timelineOffset + av_rescale_q(frameCount, frame, video->time_base);
+                packet->pts += timelineOffset + compositionDelay;
+                packet->duration = start + timelineOffset + av_rescale_q(++frameCount, frame, video->time_base) - packet->dts;
+                if (packet->duration <= 0 || packet->pts < packet->dts ||
+                    packet->pts - packet->dts > compositionDelay * 3) goto done;
+            }
         } else {
             hasAudio = YES;
         }
         if (packet->dts == AV_NOPTS_VALUE) packet->dts = packet->pts;
         if (track == 1) {
             // Keep priming packets and the same timeline offset in every fragment.
-            int64_t offset = av_rescale_q(100, (AVRational){1, 1000}, in->time_base);
+            int64_t offset = av_rescale_q(_mp4TimestampOffset ?: 100, (AVRational){1, 1000}, in->time_base);
             packet->pts += offset;
             packet->dts += offset;
             if (packet->dts < 0) goto done;
@@ -374,7 +467,7 @@ static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
         } else if (av_interleaved_write_frame(output, packet) < 0) goto done;
     }
     if ((status < 0 && status != AVERROR_EOF) || (writeVideo && !hasVideo)) goto done;
-    if (writeVideo && index + 1 < _starts.count) {
+    if (writeVideo && !_seekStarts && index + 1 < _starts.count) {
         int64_t gap = (end - start) - av_rescale_q(frameCount, frame, video->time_base);
         // An open HEVC GOP may put leading pictures for this interval after
         // the next CRA in decode order. They require both sides of the
@@ -459,7 +552,7 @@ done:
     return [self mux:index track:track initialization:NULL];
 }
 
-// Matroska stores UTF-8 text in each SubRip/WebVTT block. Read around
+// Read text packets around
 // the requested segment, including preceding cues that still overlap it.
 - (NSString *)textSegment:(NSUInteger)index track:(int)track {
     if (index >= _starts.count || ![self includesTrack:track inGroup:@"text"]) return nil;
@@ -485,7 +578,7 @@ done:
             int64_t first = av_rescale_q(packet->pts, stream->time_base, clock);
             int64_t length = av_rescale_q(packet->duration, stream->time_base, clock);
             if (first < end && length > 0 && length <= 30000 && first + length > start) {
-                NSString *text = [[NSString alloc] initWithBytes:packet->data length:packet->size encoding:NSUTF8StringEncoding];
+                NSString *text = LGMKVSubtitleText(packet, stream->codecpar->codec_id);
                 if (text.length) [cues addObject:@[@(first), @(first + length), text]];
             }
         }
