@@ -175,6 +175,23 @@ subprocess.run(['uv','venv','--python',json.loads(sys.argv[2])['python'],'--seed
         code = execute(setup, env, 600)
         if code:
             raise RuntimeError('Guest external-manager setup failed; verify the exact pinned source is available.')
+        benchmark_workers = os.environ.get('LOGISTICS_FEDORA_BENCHMARK_WORKERS')
+        if benchmark_workers:
+            if benchmark_workers not in ('1', '4') or args.pattern or args.distribution != 'fedora':
+                raise ValueError('The Fedora benchmark requires a complete run and a 1 or 4 worker limit.')
+            env['XDG_CONFIG_HOME'] = workspace + '/benchmark-config'
+            settings = '''import json,os,sys
+from build_manager.test_workers import configure
+count = int(sys.argv[1])
+cpus = len(os.sched_getaffinity(0))
+if cpus < 4:
+    raise ValueError('The Fedora benchmark requires four available CPUs.')
+configure(dict(per_platform=count, host=count))
+print(json.dumps(dict(worker_limit=count, available_cpus=cpus)), flush=True)
+'''
+            if execute([guest_python, '-c', settings, benchmark_workers], env, 40):
+                raise RuntimeError('Could not configure the isolated Fedora benchmark budget.')
+            result['benchmark_workers'] = int(benchmark_workers)
         reports = workspace + '/reports'
         if args.pattern:
             from logistics_build.guest_manager import focused_command

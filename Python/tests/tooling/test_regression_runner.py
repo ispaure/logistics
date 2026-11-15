@@ -188,7 +188,7 @@ class Cases(unittest.TestCase):
             execution = self.run_modules(root, *selection, '--report', str(report))
             self.assertEqual(execution.returncode, 0, execution.stdout + execution.stderr)
             data = json.loads(report.read_text())
-            files = [str(Path(folder) / 'test_same.py') for folder in ('first', 'third')]
+            files = [f'{folder}/test_same.py' for folder in ('first', 'third')]
             self.assertEqual([row['file'] for row in rows], files)
             self.assertEqual(data['classified_files'],
                              [dict(path=row['file'], **{k: v for k, v in row.items() if k != 'file'}) for row in rows])

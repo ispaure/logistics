@@ -204,16 +204,16 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
             if (not isinstance(row.get('path'), str) or not isinstance(seconds, (int, float))
                     or not math.isfinite(seconds) or seconds < 0):
                 raise ValueError('Invalid successful module duration in timing report.')
-            durations[row['path'], row.get('stage')] = seconds
+            durations[Path(row['path']).as_posix(), row.get('stage')] = seconds
     plan = [(level, row) for level in stages for row in reordered(
                 sorted((r for r, levels in selected if level in levels), key=lambda r: (
-                    durations.get((str(r.path.relative_to(directory)), level.value), 0), str(r.path))),
+                    durations.get((r.path.relative_to(directory).as_posix(), level.value), 0), str(r.path))),
                 order, seed)]
     if report is not None:
         report.data.update(stages=[s.value for s in stages], mode=mode, fail_fast=fail_fast,
                            order=order, seed=seed,
-                           planned_modules=[dict(path=str(r.path.relative_to(directory)), stage=s.value) for s, r in plan],
-                           classified_files=[dict(path=str(r.path.relative_to(directory)), **source_inventory(r, levels))
+                           planned_modules=[dict(path=r.path.relative_to(directory).as_posix(), stage=s.value) for s, r in plan],
+                           classified_files=[dict(path=r.path.relative_to(directory).as_posix(), **source_inventory(r, levels))
                                              for r, levels in selected], not_run=[], coverage_complete=True)
     if workers > 1:
         from parallel_regressions import cancellation, eligible, schedule
@@ -223,13 +223,14 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
                 local = TimingReport(Path(temporary) / f'{index}.json', directory, pattern, True)
                 code = run_isolated(directory, pattern, interval, report=local, stages=(level,),
                     mode=mode, fail_fast=fail_fast, order=order, seed=seed,
-                    exact_files=[str(row.path.relative_to(directory))],
+                    exact_files=[row.path.relative_to(directory).as_posix()],
                     cancelled=cancel_event if eligible(row.path) else None)
                 local.save(complete=True, exit_code=code)
                 return code, local.data
             with cancellation() as cancel_event:
                 return schedule(plan, execute, report, directory, workers=workers,
-                    mode=mode, fail_fast=fail_fast, cancelled=cancel_event)
+                    mode=mode, fail_fast=fail_fast, cancelled=cancel_event,
+                    group_eligible=mode == 'diagnostic' and not fail_fast and timings is None and order == 'default')
     failed, stop_reason, active_stage, stage_failed = [], '', None, False
     for index, (level, row) in enumerate(plan):
         if active_stage is not None and level is not active_stage:
@@ -239,7 +240,7 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
         active_stage = level
         if stop_reason:
             if report is not None:
-                report.data['not_run'].extend(dict(file=str(p.path.relative_to(directory)), stage=s.value,
+                report.data['not_run'].extend(dict(file=p.path.relative_to(directory).as_posix(), stage=s.value,
                                                    cases=[case for case in p.inventory() if case['stage'] == s.value],
                                                    reason=stop_reason) for s, p in plan[index:])
                 report.data.update(stopped_early=True, coverage_complete=False)
@@ -248,7 +249,7 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
         path = row.path
         started_at = timestamp()
         started = monotonic()
-        relative_file = str(path.relative_to(directory))
+        relative_file = path.relative_to(directory).as_posix()
         print(f'Running isolated test file: {relative_file} [stage={level.value}]', flush=True)
         emit_progress('file_started', name=relative_file, stage=level.value)
         command = [sys.executable, str(Path(__file__).resolve()), str(path.parent),
@@ -258,7 +259,10 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
             command.extend(['--seed', str(seed)])
         if fail_fast:
             command.append('--fail-fast')
-        with TemporaryDirectory(prefix='logistics-test-timing-') as temporary:
+        windows_worker = cancelled is not None and os.name == 'nt'
+        # A pooled child adds temp path components. Leave Windows fixtures
+        # enough room for nested cache directories and atomic-write filenames.
+        with TemporaryDirectory(prefix='lt-' if windows_worker else 'logistics-test-timing-') as temporary:
             child_report = Path(temporary) / 'timing.json'
             command.extend(['--report', str(child_report), '--timing-child'])
             expected = child_context(path, level.value, order, seed)
@@ -269,7 +273,7 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
                     code = subprocess.run(command, timeout=ISOLATED_FILE_TIMEOUT, env=environment).returncode
                 else:
                     from parallel_regressions import child
-                    runtime = Path(temporary) / 'runtime'
+                    runtime = Path(temporary) / ('t' if windows_worker else 'runtime')
                     runtime.mkdir()
                     environment.update(TMPDIR=str(runtime), TMP=str(runtime), TEMP=str(runtime))
                     environment['LOGISTICS_TEST_CANCEL_FILE'] = str(Path(temporary) / 'cancel')
@@ -349,7 +353,7 @@ def main():
     parser.add_argument('--seed', type=int, help='Required reproducible seed for --order random')
     parser.add_argument('--single-file', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--workers', type=int, choices=(1, 2, 4, 8), default=None,
-                        help='Opt in to up to eight workers for reviewed macOS offscreen files; other files stay exclusive')
+                        help='Opt in to up to eight workers for reviewed file stages; other files run exclusively')
     parser.add_argument('--isolate-modules', action='store_true',
                         help='Run each matching test file in a fresh process, including nested directories')
     parser.add_argument('--traceback-after', type=float, default=PROGRESS_INTERVAL,
@@ -398,7 +402,7 @@ def main():
             rows = select_sources(paths, args.stages)
         except (ValueError, OSError, SyntaxError) as error:
             parser.error(str(error))
-        print(json.dumps([dict(file=str(r.path.relative_to(args.directory)), **source_inventory(r, levels))
+        print(json.dumps([dict(file=r.path.relative_to(args.directory).as_posix(), **source_inventory(r, levels))
                           for r, levels in rows], indent=2))
         return 0
     report = TimingReport(args.report or default_report(args.directory), args.directory,
@@ -417,7 +421,7 @@ def main():
     try:
         code = run_with_report(args, report)
     except ValueError as error:
-        requested = exact_files or [str(p.relative_to(args.directory))
+        requested = exact_files or [p.relative_to(args.directory).as_posix()
                                        for p in matching_sources(args.directory, args.pattern, args.include_pattern)]
         report.data.update(preflight_error=str(error), coverage_complete=False,
                            not_run=[dict(file=name, reason='Preflight failed') for name in requested])
@@ -443,7 +447,9 @@ def run_with_report(args, report):
     # Keep default storage and preferences away from the contributor's live data,
     # including during test discovery. Children running isolated modules create
     # their own scope; ordinary helper subprocesses inherit private cache roots.
-    with TemporaryDirectory(prefix='logistics-test-storage-') as temporary:
+    marker = os.environ.get('LOGISTICS_TEST_CANCEL_FILE') if args.timing_child else None
+    prefix = 'ls-' if os.name == 'nt' and marker else 'logistics-test-storage-'
+    with TemporaryDirectory(prefix=prefix) as temporary:
         root = Path(temporary)
         home = root / 'home'
         home.mkdir()
@@ -458,7 +464,7 @@ def run_with_report(args, report):
             'LOCALAPPDATA': str(home / 'AppData' / 'Local'),
         }
         with patch.dict(os.environ, environment), patch.object(Path, 'home', return_value=home):
-            if args.timing_child and os.environ.get('LOGISTICS_TEST_CANCEL_FILE'):
+            if marker:
                 from parallel_regressions import cooperate
                 with cooperate():
                     return run_suite(args, report, rows)
