@@ -455,30 +455,32 @@ class RotationWidthFailureTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(stage=stage):
                 await self.check_original_failure(stage)
 
-    async def test_provider_epub_samples_after_transient_portrait_width(self):
+    async def test_ios_samples_after_transient_portrait_width(self):
         from mobile_build.native_tests.tests.logisticsmobile import rotation_screens
 
-        async def visit(app, check, *, panels):
-            await check('provider-epub')
+        for panel in ('epub', 'provider-epub'):
+            with self.subTest(panel=panel):
+                async def visit(app, check, *, panels):
+                    await check(panel)
 
-        stale = AssertionError('landscape width retained')
-        fitted = {'view_width': 402}
-        with patch.object(rotation_checks.sys, 'platform', 'ios'), \
-                patch.object(rotation_screens, 'visit_screens', side_effect=visit), \
-                patch.object(rotation_checks.asyncio, 'sleep', new_callable=AsyncMock), \
-                patch.object(rotation_checks, 'panel_state', return_value='unchanged'), \
-                patch.object(rotation_checks, 'rotate_panel', new_callable=AsyncMock, return_value=4), \
-                patch.object(rotation_checks, 'pose_snapshot', return_value={}), \
-                patch.object(rotation_checks, 'safe_geometry',
-                             side_effect=[stale, fitted, fitted, fitted, fitted, fitted]), \
-                patch.object(rotation_checks, 'capture_epub_width_failure', new_callable=AsyncMock) as capture:
-            result = await rotation_checks.exercise_rotation(object(), cycles=1, panels={'provider-epub'})
+                stale = AssertionError('landscape width retained')
+                fitted = {'view_width': 402}
+                with patch.object(rotation_checks.sys, 'platform', 'ios'), \
+                        patch.object(rotation_screens, 'visit_screens', side_effect=visit), \
+                        patch.object(rotation_checks.asyncio, 'sleep', new_callable=AsyncMock), \
+                        patch.object(rotation_checks, 'panel_state', return_value='unchanged'), \
+                        patch.object(rotation_checks, 'rotate_panel', new_callable=AsyncMock, return_value=4), \
+                        patch.object(rotation_checks, 'pose_snapshot', return_value={}), \
+                        patch.object(rotation_checks, 'safe_geometry',
+                                     side_effect=[stale, fitted, fitted, fitted, fitted, fitted]), \
+                        patch.object(rotation_checks, 'capture_epub_width_failure', new_callable=AsyncMock) as capture:
+                    result = await rotation_checks.exercise_rotation(object(), cycles=1, panels={panel})
 
-        samples = result['rotation_samples']
-        self.assertEqual(len(samples), 5)
-        self.assertEqual(samples[0]['view_width'], 402)
-        self.assertEqual(samples[0]['fixed_controls'], 4)
-        capture.assert_not_awaited()
+                samples = result['rotation_samples']
+                self.assertEqual(len(samples), 5)
+                self.assertEqual(samples[0]['view_width'], 402)
+                self.assertEqual(samples[0]['fixed_controls'], 4)
+                capture.assert_not_awaited()
 
     async def test_observer_error_or_cancellation_never_replaces_either_failure(self):
         for stage in ('controls', 'final'):

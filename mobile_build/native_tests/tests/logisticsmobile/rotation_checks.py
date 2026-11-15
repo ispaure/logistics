@@ -329,7 +329,7 @@ async def observe_epub_width_failure(app, *, panel, cycle, orientation, native=N
 
 async def capture_epub_width_failure(app, *, panel, cycle, orientation, **details):
     """Observation failures/cancellation must not replace the latched assertion."""
-    if sys.platform == 'ios' and panel == 'provider-epub':
+    if sys.platform == 'ios' and panel in ('epub', 'provider-epub', 'provider-epub-find'):
         try:
             await observe_epub_width_failure(app, panel=panel, cycle=cycle, orientation=orientation, **details)
         except BaseException as error:
@@ -746,11 +746,11 @@ async def exercise_rotation(app, *, record=None, cycles=2, panels=None):
                 assert actual == expected, (name, orientation, expected, actual)
                 try:
                     with section(app, 'rotation-geometry', panel=name, orientation=orientation, cycle=cycle):
-                        if sys.platform == 'ios' and name == 'provider-epub':
-                            # The reader's resize can arrive on a later UIKit layout turn,
-                            # after the scene and visible controls already fit portrait.
-                            geometry = await wait_for_assertion(lambda: safe_geometry(app),
-                                                                timeout=CONTROL_SETTLE_TIMEOUT, interval=.1)
+                        if sys.platform == 'ios':
+                            # Content can resize on a later UIKit layout turn than the
+                            # scene and its controls. Measure it after it fits that scene.
+                            geometry = await wait_for_assertion(
+                                lambda: safe_geometry(app), timeout=CONTROL_SETTLE_TIMEOUT, interval=.1)
                         else:
                             geometry = safe_geometry(app)
                         sample = dict(panel=name, cycle=cycle, orientation=orientation,
