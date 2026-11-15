@@ -100,13 +100,12 @@ class LMAppearanceTests(QtTestCase):
         self.assertIsNone(picker.lineEdit())
         self.assertEqual(picker.currentText(), long_name)
         self.assertEqual(picker.toolTip(), long_name)
-        _, text_layout, height = picker.name_layout()
+        label, text_layout, height = picker.name_layout()
         self.assertGreater(text_layout.lineCount(), 1)
         self.assertGreaterEqual(picker.height(), height)
-        # Clicking the displayed name, rather than just the arrow, opens the list.
-        QTest.mouseClick(picker, qt.Qt.MouseButton.LeftButton, pos=qt.QPoint(12, picker.height() // 2))
-        self.app.processEvents()
-        self.assertTrue(picker.view().isVisible())
+        QTest.mouseClick(picker, qt.Qt.MouseButton.LeftButton, pos=label.center())
+        # Native styles can animate popup visibility across event-loop turns.
+        self.wait_until(picker.view().isVisible, message='Model choices did not open from the label')
         # Qt briefly ignores the release that opened the popup.
         QTest.qWait(200)
         index = picker.model().index(picker.findText('second-model'), 0)
@@ -119,6 +118,22 @@ class LMAppearanceTests(QtTestCase):
         page.persist()
         self.assertEqual(page.store.load(page.data['id'])['model'], 'second-model')
         self.assertEqual(page.composer.placeholderText(), 'Enter Message')
+
+        picker.setFocus()
+        QTest.keyClick(picker, qt.Qt.Key.Key_Space)
+        self.wait_until(picker.view().isVisible, message='Model choices did not open with Space')
+        QTest.keyClick(picker.view(), qt.Qt.Key.Key_Escape)
+        self.wait_until(lambda: not picker.view().isVisible(), message='Escape did not close the model choices')
+
+        option = qt.QStyleOptionComboBox()
+        picker.initStyleOption(option)
+        arrow = picker.style().subControlRect(qt.QStyle.ComplexControl.CC_ComboBox, option,
+                                               qt.QStyle.SubControl.SC_ComboBoxArrow, picker)
+        QTest.mouseClick(picker, qt.Qt.MouseButton.LeftButton, pos=arrow.center())
+        self.wait_until(picker.view().isVisible, message='Model choices did not open from the arrow')
+        QTest.keyClick(picker.view(), qt.Qt.Key.Key_Escape)
+        self.wait_until(lambda: not picker.view().isVisible(), message='Escape did not close the model choices')
+        self.assertEqual(picker.currentText(), 'second-model')
 
     def test_floating_composer_clears_last_message_and_keeps_scrollbar_accessible(self):
         from commonUtils.ui.appearance.theme import apply_theme
