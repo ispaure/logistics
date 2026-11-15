@@ -35,6 +35,11 @@ Use the magnifying glass to search and **×** to clear the filter. Local and
 LocalCrypt search includes subfolders. Cloud and Home Server search filters the
 current folder.
 
+Ordinary local search shows saved matches with **Checking…** while validating
+them in the background. Tapping a saved result checks that item independently;
+missing or inaccessible items show a message and leave the result list. Updates
+keep your selection and scroll position where possible.
+
 Use the **…** beside an item for **Details**, **Rename**, **Move** and other
 eligible actions. Keep the app open during a long move. Switching apps or
 locking the device interrupts the move. Check the result before retrying.

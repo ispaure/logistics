@@ -24,6 +24,7 @@ class LocalSearch(IndexedLocalSearch):
             return super().search(provider, directory, query, **kwargs)
         from services.directory_index import foreground
         with foreground(self.cache.database, provider._locate(directory)):
+            kwargs.setdefault('cached_progress', True)
             return super().search(provider, directory, query, **kwargs)
 
     @staticmethod

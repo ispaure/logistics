@@ -187,7 +187,7 @@ class SavedSearchPublicationTests(unittest.TestCase):
         entry = provider.entry
 
         def validate(path):
-            if path == self.matches[50]:
+            if path == self.matches[0]:
                 blocked.set()
                 if not release.wait(5):
                     raise AssertionError('The test did not release later validations')
@@ -202,15 +202,57 @@ class SavedSearchPublicationTests(unittest.TestCase):
                 try:
                     await wait_until(lambda: blocked.is_set() and bool(self.visible_paths()),
                                      message='Saved results did not publish before later validation')
-                    self.assertEqual(self.visible_paths(), self.matches[1:50])
-                    self.assertIn('Searching', browser.page_label.text)
+                    self.assertEqual(self.visible_paths(), self.matches)
+                    self.assertIn('Checking', browser.page_label.text)
+                    browser.selected = provider.root / self.matches[20]
                 finally:
                     release.set()
                 await wait_until(lambda: self.visible_paths() == self.matches[1:]
                                  and not browser.searching,
                                  message='Warm search did not finish while the writer was held')
+                self.assertEqual(browser.selected, provider.root / self.matches[20])
                 browser.close_search()
             await self.finish_tasks()
+
+        with patch.object(provider, 'entry', side_effect=validate), \
+                patch('commonUtils.search.indexed.monotonic', return_value=0):
+            self.loop.run_until_complete(check())
+
+    def test_cached_click_validates_independently_of_the_blocked_background_pass(self):
+        browser, provider = self.browser, self.provider
+        self.show_folder('')
+        blocked, release = Event(), Event()
+        entry = provider.entry
+        (provider.root / self.matches[0]).unlink()
+        opened = []
+        browser.on_open_file = lambda row: opened.append(dict(row))
+
+        def validate(path):
+            if path == self.matches[0] and not blocked.is_set():
+                blocked.set()
+                if not release.wait(5):
+                    raise AssertionError('Later validation was not released')
+            return entry(path)
+
+        async def check():
+            browser.search.value = 'Match'
+            try:
+                await wait_until(lambda: blocked.is_set() and bool(self.visible_paths()),
+                                 message='Slow cached hits waited for a full page')
+                self.assertEqual(self.visible_paths(), self.matches)
+                self.assertTrue(browser.searching)
+                await browser.activate_entry(browser.tree.entries[provider.root / self.matches[0]])
+                self.assertEqual(opened, [])
+                self.assertNotIn(self.matches[0], self.visible_paths())
+                self.assertIn('no longer available', browser.page_label.text)
+                await browser.activate_entry(browser.tree.entries[provider.root / self.matches[1]])
+                self.assertEqual([row['path'] for row in opened], [self.matches[1]])
+                self.assertNotIn('cached', opened[0])
+                self.assertTrue(browser.searching)
+            finally:
+                release.set()
+            await self.finish_tasks()
+            self.assertEqual(self.visible_paths(), self.matches[1:])
 
         with patch.object(provider, 'entry', side_effect=validate):
             self.loop.run_until_complete(check())
@@ -260,6 +302,33 @@ class SavedSearchPublicationTests(unittest.TestCase):
                     self.assertEqual(self.visible_paths(), ['Books/Keep.md'] if action == 'query' else [])
 
                 self.loop.run_until_complete(check())
+
+    def test_cached_link_or_changed_type_cannot_reach_context_actions(self):
+        browser, provider = self.browser, self.provider
+        path = self.matches[0]
+        file = provider.root / path
+        actions = []
+        browser.on_item_actions = lambda row: actions.append(row)
+        for replacement in ('link', 'folder'):
+            with self.subTest(replacement=replacement):
+                if file.is_dir():
+                    file.rmdir()
+                else:
+                    file.unlink(missing_ok=True)
+                file.write_text('original')
+                row = dict(provider.entry(path), cached=True)
+                file.unlink()
+                if replacement == 'folder':
+                    file.mkdir()
+                else:
+                    try:
+                        file.symlink_to(provider.root / self.matches[1])
+                    except OSError as error:
+                        self.skipTest(str(error))
+                browser.set_entries(provider, 'Books', [row], location=('Local', 'Books'))
+                self.loop.run_until_complete(browser._select_row(browser.native_list.data[0]))
+                self.assertEqual(actions, [])
+                self.assertNotIn(path, self.visible_paths())
 
     def test_same_location_refresh_replays_recursive_search_without_an_index(self):
         from commonUtils.runtime.resources.selection import ResourceSelection
