@@ -28,7 +28,8 @@ class Editor:
         self._unlocked_pdf = None
         self._locked_pdf = None  # Encrypted source bytes only; never a password.
         self._pdf_geometry = (None, None)
-        self._pdf_links = (None, None, [])
+        self._pdf_link_index = None
+        self._pdf_links = (None, [])
 
     def background_key(self, page_index):
         book = self.notebook
@@ -157,7 +158,7 @@ class Editor:
         return self._unlocked_pdf[1]
 
     def page_links(self):
-        from features.pdf.links import safe_page_links
+        from features.pdf.links import PDFLinkIndex
         data = self.pdf_data()
         if data is None:
             return []
@@ -168,10 +169,13 @@ class Editor:
         targets = {}
         for i, page in enumerate(pages):
             targets.setdefault(page.record.get('redir', {}).get('value', -1), i)
-        if self._pdf_links[0] is not data or self._pdf_links[1] != source:
-            self._pdf_links = (data, source, safe_page_links(data, source))
+        if self._pdf_link_index is None or self._pdf_link_index.data is not data:
+            self._pdf_link_index = PDFLinkIndex(data)
+            self._pdf_links = (None, [])
+        if self._pdf_links[0] != source:
+            self._pdf_links = (source, self._pdf_link_index.safe_page_links(source))
         return [dict(rect=link['rect'], index=targets[link['index']])
-                for link in self._pdf_links[2] if link['index'] in targets]
+                for link in self._pdf_links[1] if link['index'] in targets]
 
     def page_height(self):
         bounds = self.pdf_bounds()

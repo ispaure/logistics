@@ -73,6 +73,28 @@ class PDFLinkTests(unittest.TestCase):
         self.assertEqual(len(editor.undo), 1)  # link inspection/navigation never edits ink history
         self.assertTrue(original)
 
+    def test_notebook_page_jumps_reuse_link_index_and_invalidate_on_pdf_change(self):
+        from unittest.mock import patch
+        from pypdf import PdfReader
+        from features.pdf.annotation import notebook_from_pdf
+        from features.notebooks.editor import Editor
+
+        book = notebook_from_pdf(linked_pdf(), 'Linked')
+        editor = Editor(book)
+        editor.pdf_data()
+        with patch('pypdf.PdfReader', wraps=PdfReader) as parse:
+            self.assertEqual([link['index'] for link in editor.page_links()], [2, 1])
+            editor.apply(dict(op='page', index=2))
+            self.assertEqual(editor.page_links(), [])
+            editor.apply(dict(op='page', index=0))
+            self.assertEqual([link['index'] for link in editor.page_links()], [2, 1])
+            self.assertEqual(parse.call_count, 1)
+
+        book.members[book.id + '.pdf'] = linked_pdf(90)
+        rotated = editor.page_links()[0]['rect']
+        for actual, expected in zip(rotated, [.7, .1, .9, .5]):
+            self.assertAlmostEqual(actual, expected)
+
 
 class PDFDesktopLinkTests(QtTestCase):
     def test_desktop_real_plain_click_and_undo(self):
