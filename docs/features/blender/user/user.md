@@ -91,9 +91,10 @@ Close Blender before switching branches. **Apply Changes** can write
 `keymaps/deluxe-defaults.json` in the linked checkout. Switching to GitHub
 replaces the link on launch. A GitHub update replaces the installed keymap catalog.
 
-On Blender **5.2.2 and newer**, use **Blue Hole → Updates & Deluxe → Enable
-Deluxe Keymaps** and save preferences. Back up and review existing Deluxe
-keymaps before switching to the built-in **Blender** preset.
+On Blender **5.2.2 and newer**, select the built-in **Blender** keymap preset and
+use **Blue Hole → Keymaps & Pie Menus → Enable Blue Hole Keymaps & Pie Menus**.
+The switch applies directly. Save preferences if Blender’s automatic preference
+saving is off.
 On older versions, **Deluxe: Yes** replaces preset preferences and installs
 `BH_Keymaps.py` when the payload changes. The prior preferences are retained as
 `config/userpref.before-bluehole-deluxe.blend`. Turning Deluxe off stops applying
