@@ -49,6 +49,16 @@ class LandingAppearanceTests(QtTestCase):
             description='Read and edit documents in this format.') for i in range(6)})
         return page
 
+    def show_pointer_page(self, page, width):
+        # Global pointer targets must stay on screen after Qt applies display scaling.
+        work_area = page.screen().availableGeometry().adjusted(20, 40, -20, -20)
+        page.resize(min(width, work_area.width()), min(600, work_area.height()))
+        page.move(work_area.topLeft())
+        page.show()
+        page.raise_()
+        page.activateWindow()
+        self.wait_until(page.windowHandle().isExposed, message='Home window was not exposed')
+
     def test_section_headers_align_and_share_the_large_font(self):
         page = self.page(SLATE_LIGHT)
         page.resize(1250, 800)
@@ -152,29 +162,26 @@ class LandingAppearanceTests(QtTestCase):
         for colors in (SLATE_LIGHT, SLATE_DARK):
             with self.subTest(theme=colors.window):
                 page = self.page(colors)
-                page.resize(1100, 600)
-                page.move(20, 40)
-                page.show()
-                page.raise_()
-                page.activateWindow()
-                self.app.processEvents()
+                self.show_pointer_page(page, 1100)
                 for card in (page._tool_cards[0], page._document_cards[0]):
                     page.scroll.ensureWidgetVisible(card)
                     self.app.processEvents()
-                    QTest.mouseMove(page.scroll.viewport(), qt.QPoint(1, 1))
+                    handle = page.windowHandle()
+                    clear = page.scroll.viewport().mapTo(page, qt.QPoint(1, 1))
+                    QTest.mouseMove(handle, clear)
                     self.wait_until(lambda: card.grab().toImage().pixelColor(10, 10) == qt.QColor(colors.surface),
                                     message='Card did not clear its initial hover')
                     before = card.grab().toImage()
                     geometry = card.geometry()
                     label = card.findChild(qt.QLabel, 'launchTitle')
-                    QTest.mouseMove(label, label.rect().center())
+                    QTest.mouseMove(handle, label.mapTo(page, label.rect().center()))
                     self.wait_until(lambda: card.grab().toImage().pixelColor(10, 10) == qt.QColor(colors.hover),
                                     message='Card did not highlight under the pointer')
                     hovered = card.grab().toImage()
                     self.assertNotEqual(before.pixelColor(10, 10), hovered.pixelColor(10, 10))
                     self.assertEqual(hovered.pixelColor(10, 10), qt.QColor(colors.hover))
                     self.assertEqual(card.geometry(), geometry)
-                    QTest.mouseMove(page.scroll.viewport(), qt.QPoint(1, 1))
+                    QTest.mouseMove(handle, clear)
                     self.wait_until(lambda: card.grab().toImage().pixelColor(10, 10) == before.pixelColor(10, 10),
                                     message='Card did not clear its hover when the pointer left')
                 page.hide()
@@ -182,13 +189,7 @@ class LandingAppearanceTests(QtTestCase):
     def test_missing_native_entry_recovers_home_card_hover(self):
         from commonUtils.ui.pyside.pointer_entry import PointerEntryRecovery
         page = self.page(SLATE_LIGHT)
-        # Keep both card columns inside the offscreen backend's 800px screen;
-        # recovery deliberately requires real global hit testing.
-        page.resize(750, 600)
-        page.move(20, 40)
-        page.show()
-        page.activateWindow()
-        self.app.processEvents()
+        self.show_pointer_page(page, 750)
         helper = PointerEntryRecovery(self.app)
         self.addCleanup(helper.deleteLater)
         self.addCleanup(self.app.removeEventFilter, helper)
@@ -200,7 +201,9 @@ class LandingAppearanceTests(QtTestCase):
             label = card.findChild(qt.QLabel, 'launchTitle')
             position = label.mapToGlobal(label.rect().center())
             self.assertTrue(helper.eligible(page))
-            self.assertIs(self.app.widgetAt(position).window(), page)
+            target = self.app.widgetAt(position)
+            self.assertIsNotNone(target, f'Home pointer target at {position} was outside the visible window')
+            self.assertIs(target.window(), page)
             self.app.sendEvent(handle, qt.QMouseEvent(
                 qt.QEvent.Type.MouseMove, qt.QPointF(page.mapFromGlobal(position)),
                 qt.QPointF(position), qt.Qt.MouseButton.NoButton,
