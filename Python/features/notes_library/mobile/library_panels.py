@@ -11,7 +11,6 @@ from toga.style.pack import COLUMN, ROW
 from commonUtils.runtime.operations import OperationCancelled
 from features.notes_library import library_files
 from ..navigation import PathChange
-from ..notes import document_kind
 from .playlist_panel import PlaylistPanel
 from services.documents.authoring.document_dialogs import DocumentDialog, DocumentTypeDialog
 
@@ -347,6 +346,8 @@ class LibraryPanels:
             self.style_panel_tab(tab, tab == name)
 
     async def open_selected_note(self, path, *, row_path=None):
+        if not await self.validate_search_entry(row_path or path):
+            return
         context = None
         if self.panel_tab == 'Search' and self.sidebar.side == 'files' and not self.sidebar.expanded:
             context = SearchReturn(self._search_scope, self.search.value or '', row_path or path,
@@ -358,6 +359,32 @@ class LibraryPanels:
             await self.open_note(path, search_return=context)
         else:
             await self.open_note(path)
+
+    async def validate_search_entry(self, path):
+        """Check a clicked cached row independently of the background search."""
+        action = self._search_action_generation = getattr(self, '_search_action_generation', 0) + 1
+        row = next((row for row in self.search_rows if row['path'] == path), None)
+        if row is None or not row.get('cached'):
+            return True
+        generation = self.search_generation
+        try:
+            current = await asyncio.to_thread(self.library.entry, path)
+        except (OSError, ValueError) as error:
+            current, message = None, 'This result is no longer available: ' + str(error)[:120]
+        else:
+            message = 'This item changed. The search results are being updated.'
+        if (not self.valid() or generation != self.search_generation
+                or action != self._search_action_generation):
+            return False
+        if current is None or current['directory'] != row['directory']:
+            self._dismissed_cached_paths.add(path)
+            self.search_rows = [entry for entry in self.search_rows if entry['path'] != path]
+            self.search_status = message
+            self.render_tree(preserve_viewport=True)
+            return False
+        row.update(current)
+        row.pop('cached', None)
+        return True
 
     def search_position(self):
         return self.rows.vertical_position if getattr(self.rows, 'recycled', False) else self.rows_scroll.vertical_position
@@ -591,9 +618,21 @@ class LibraryPanels:
     async def file_actions(self, path):
         if not self.valid() or self.file_command_busy or self.sidebar.action_choice is not None:
             return
+        if not await self.validate_search_entry(path):
+            return
+        request = self.file_action_request = getattr(self, 'file_action_request', 0) + 1
+        side, epoch, destination = self.sidebar.side, self.epoch, self.host.destination()
+        try:
+            playlist_note = await asyncio.to_thread(self.library.playlist_note, path)
+        except (OSError, ValueError):
+            playlist_note = None
+        if (not self.valid() or self.epoch != epoch or self.file_action_request != request
+                or self.host.destination() != destination or self.file_command_busy
+                or self.sidebar.action_choice is not None):
+            return
         self.selected_path = path
         choices = []
-        if document_kind(path) == 'markdown':
+        if playlist_note is not None:
             choices.append(('Add to playlist…', 'playlist'))
         if self.library.supports('rename'):
             choices.extend([('Rename…', 'rename'), ('Move…', 'move')])
@@ -605,8 +644,6 @@ class LibraryPanels:
             return
         dialog = DocumentTypeDialog(choices=choices)
         dialog.title, dialog.message = PurePosixPath(path).name, 'Choose a file action.'
-        request = self.file_action_request = getattr(self, 'file_action_request', 0) + 1
-        side, epoch, destination = self.sidebar.side, self.epoch, self.host.destination()
         action = await self.sidebar.choose_action(dialog, self.view.window)
         if (not self.valid() or self.epoch != epoch or self.file_action_request != request
                 or self.host.destination() != destination):
@@ -621,7 +658,7 @@ class LibraryPanels:
         elif action == 'delete':
             await self.delete_entry(path)
         elif action == 'playlist':
-            await self.playlist_panel.add_note(path)
+            await self.playlist_panel.add_note(playlist_note)
 
     def show_file_action(self, view, *, route, title, return_side=None):
         if not self.valid() or self.file_command_busy:

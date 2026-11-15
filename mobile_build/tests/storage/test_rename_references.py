@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import unittest
 from threading import Event
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 from mobile_build.tests.support import notes as fixtures
 from mobile.favourites import catalog, resource_reference
@@ -85,6 +85,133 @@ class MobileRenameReferenceTests(unittest.TestCase):
             self.assertTrue((self.root / source).exists())
             self.assertFalse((self.root / target).exists())
             self.assertEqual(store.entries()[0]['source'], reference)
+        app.loop.run_until_complete(exercise())
+
+    def test_cancel_during_notes_rename_reload_keeps_committed_reader_and_tree(self):
+        app = self.app
+        source, target = 'Vault/Home.md', 'Vault/Renamed.md'
+
+        async def exercise():
+            owner = await open_vault(app, self.provider, 'Vault', 'documents')
+            other = 'Vault/Projects/Plan.MD'
+            self.assertTrue(await owner.open_note(other))
+            self.assertTrue(await owner.open_note(source))
+            owner.positions[source] = 120
+            owner.sidebar.show_sidebar()
+            entered, release = asyncio.Event(), asyncio.Event()
+            load_folder = owner.load_folder
+
+            async def paused_reload(path):
+                entered.set()
+                await release.wait()
+                return await load_folder(path)
+
+            with patch.object(owner, 'load_folder', new=paused_reload):
+                task = asyncio.create_task(owner.move_entry_to(source, target))
+                try:
+                    await asyncio.wait_for(entered.wait(), 5)
+                    self.assertTrue((self.root / target).is_file())
+                    task.cancel()
+                    await asyncio.sleep(0)
+                    self.assertTrue(owner.file_command_busy)
+                finally:
+                    release.set()
+                    await asyncio.gather(task, return_exceptions=True)
+
+            self.assertTrue(task.cancelled())
+            self.assertFalse(owner.file_command_busy)
+            self.assertEqual(owner.path, target)
+            self.assertEqual(owner.title.text, 'Renamed.md')
+            self.assertEqual(owner.history, [other, target])
+            self.assertEqual(owner.history_index, 1)
+            self.assertEqual(owner.positions, {target: 120})
+            self.assertEqual(owner.sidebar.side, 'files')
+            self.assertIn(target, [row['path'] for row in owner.folders['Vault']])
+            self.assertFalse((self.root / source).exists())
+
+        app.loop.run_until_complete(exercise())
+
+    def test_tab_switch_during_notes_rename_reload_keeps_retained_reader_usable(self):
+        app = self.app
+        source, target = 'Vault/attachment.txt', 'Vault/Renamed.txt'
+
+        async def exercise():
+            owner = await open_vault(app, self.provider, 'Vault', 'files')
+            self.assertTrue(await owner.open_note(source))
+            self.assertIsNotNone(owner.embedded)
+            owner.sidebar.show_sidebar()
+            entered, release = asyncio.Event(), asyncio.Event()
+            load_folder = owner.load_folder
+
+            async def paused_reload(path):
+                entered.set()
+                await release.wait()
+                return await load_folder(path)
+
+            with patch.object(owner, 'load_folder', new=paused_reload):
+                task = asyncio.create_task(owner.move_entry_to(source, target))
+                try:
+                    await asyncio.wait_for(entered.wait(), 5)
+                    self.assertTrue((self.root / target).is_file())
+                    app.routes.return_to('home')
+                finally:
+                    release.set()
+                    moved = await task
+
+            self.assertTrue(moved)
+            self.assertEqual(app.native_host.state.destination, 'home')
+            self.assertIsNone(owner.sidebar.side)
+            app.routes.return_to('files')
+            self.assertEqual(app.native_host.state.destination, 'files')
+            self.assertEqual(owner.path, target)
+            self.assertIn(owner.embedded.view, owner.article.children)
+            owner.embedded.source.value = 'Edited after returning to Notes'
+            self.assertTrue(await owner.embedded.save())
+            self.assertEqual((self.root / target).read_text(), 'Edited after returning to Notes')
+
+        app.loop.run_until_complete(exercise())
+
+    def test_dispose_after_notes_rename_commit_retires_provider_after_references(self):
+        app = self.app
+        source, target = 'Vault/Home.md', 'Vault/Renamed.md'
+        store = catalog(app)
+        reference, _ = resource_reference(app, self.provider, source)
+        renamed_reference, _ = resource_reference(app, self.provider, target)
+        store.remember(reference, 'Home.md', dict(kind='notes', root=str(self.vault)), favourite=True)
+        committed, release = Event(), Event()
+
+        async def exercise():
+            owner = await open_vault(app, self.provider, 'Vault', 'documents')
+            self.assertTrue(await owner.open_note(source))
+            references_at_close = []
+            close_provider = owner.release_provider = Mock(
+                side_effect=lambda: references_at_close.append(store.entries()[0]['source']))
+            move = owner.library.move_with_change
+
+            def committed_move(*args, **kwargs):
+                result = move(*args, **kwargs)
+                committed.set()
+                if not release.wait(5):
+                    raise TimeoutError('Rename test worker was not released')
+                return result
+
+            with patch.object(owner.library, 'move_with_change', new=committed_move):
+                task = asyncio.create_task(owner.move_entry_to(source, target))
+                try:
+                    self.assertTrue(await asyncio.to_thread(committed.wait, 3))
+                    owner.dispose()
+                    close_provider.assert_not_called()
+                finally:
+                    release.set()
+                    moved = await task
+
+            self.assertFalse(moved)
+            self.assertIsNone(owner.path)
+            self.assertEqual(owner.folders, {})
+            owner.dispose()
+            close_provider.assert_called_once_with()
+            self.assertEqual(references_at_close, [renamed_reference])
+
         app.loop.run_until_complete(exercise())
 
     async def exercise(self, provider, *, notes):

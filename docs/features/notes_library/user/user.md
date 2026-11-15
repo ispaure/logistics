@@ -17,7 +17,9 @@ In writable libraries, use **New folder**, **F2** to rename, or right-click for 
 
 ### Playlists
 
-In **Playlist → New playlist**, name the queue and use **Add Markdown**, or choose **Add to playlist** from a note. Drag entries or use **Move up/down**. Use **Repair reference** for a missing note. **Read aloud** resumes this queue's saved place, and **Play selected** starts another entry. Time skips cross entries. Removing entries or deleting the playlist keeps source notes. **This session** queues stay in memory.
+In **Playlist**, use the **New playlist** icon to name a queue. Choose **Add to playlist** from a Markdown note's actions. For a folder note, this adds only `Folder/Folder.md`. Entries show filenames; click one to open it in the document pane. Drag an entry to the line between notes to reorder it, or use its trailing **…** menu for **Move up/down**, **Repair reference** and **Remove entry**. The top **Playlist actions (…)** menu renames or deletes the queue. Removing entries or deleting the playlist keeps source notes. **This session** queues stay in memory.
+
+The speaker at the top resumes the whole playlist from its saved place. Playback opens each note in the reader and highlights the spoken words; time skips can cross entries. While the playlist is playing or paused, the document's **Playlist read aloud…** option opens the same controls. Stop the playlist to use ordinary document read-aloud again. The playlist pane has no transcript or playback-status field.
 
 For cleanup across libraries, see [Notes Library playlists in Reader history](../../../user/reader-history.md#notes-library-playlists).
 

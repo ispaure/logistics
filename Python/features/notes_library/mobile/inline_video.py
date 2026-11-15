@@ -1,6 +1,124 @@
 """Notes-owned inline controls. The host authorizes Play before the DOM plays."""
 
+import asyncio
 from html import escape
+from json import dumps
+from threading import Event
+
+from commonUtils.runtime.operations import OperationCancelled
+
+
+PREPARING_VIDEO = 'Preparing video…'
+PAUSE_VIDEOS = "document.querySelectorAll('video').forEach(video => video.pause())"
+
+
+async def open_native_video(browser, path, *, pause, close_speech, current, fullscreen=False):
+    path = browser.contained(path)
+    if browser.host.open_resource is None:
+        browser.notice.text = 'Video playback is unavailable in this host.'
+        return False
+    try:
+        if not current():
+            return False
+        # Leave the source view and its provider in place for the return from playback.
+        await pause()
+        if not current():
+            return False
+        close_speech()
+        if fullscreen:
+            return bool(await browser.host.open_resource(browser.provider, path, fullscreen=True))
+        return bool(await browser.host.open_resource(browser.provider, path))
+    except (OSError, ValueError) as error:
+        if current():
+            browser.notice.text = str(error)
+        return False
+
+
+class PageVideos:
+    """Playback and audio registration for one admitted HTML version."""
+
+    def __init__(self, browser, web, speech, targets, *, current, in_dom):
+        self.browser, self.web, self.speech = browser, web, speech
+        self.targets = targets
+        self._current, self._in_dom = current, in_dom
+        self.task = None
+        self.closed = False
+        self.audio = browser.host.audio_output()
+        if self.audio is not None:
+            self.audio.register(self, self.pause)
+
+    def pause(self):
+        if not self.closed:
+            self._pause_inline()
+
+    def _pause_inline(self):
+        return self.web.evaluate_javascript(self._in_dom(
+            "document.querySelectorAll('.note-video video').forEach(video => video.pause())"))
+
+    def _pause_for_handoff(self):
+        return self.web.evaluate_javascript(self._in_dom(PAUSE_VIDEOS))
+
+    def close(self):
+        self.closed = True
+        if self.task is not None:
+            self.task.cancel()
+            self.task = None
+            if self.browser.notice.text == PREPARING_VIDEO:
+                self.browser.notice.text = ''
+        if self.audio is not None:
+            self._pause_inline()
+            self.audio.unregister(self)
+            self.audio = None
+
+    def start(self, key, path, *, inline):
+        if self.closed or not self._current(path) or key not in self.targets:
+            return
+        if self.task is not None and not self.task.done():
+            return
+        audio = self.audio if inline else None
+        if inline:
+            if audio is None or not audio.interactive():
+                return
+            self.speech.close()
+            if not audio.request_play():
+                return
+        self.task = self.browser.host.loop.create_task(self._play(path, key, self.targets[key], audio))
+
+    async def _play(self, document, key, target, audio):
+        stopped = Event()
+
+        def current():
+            return not self.closed and self._current(document)
+
+        def cancelled():
+            return stopped.is_set() or not current()
+
+        if not current():
+            return False
+        self.browser.notice.text = PREPARING_VIDEO
+        try:
+            if audio is None:
+                path, _ = await asyncio.to_thread(self.browser.library.link, document, target, cancelled=cancelled)
+                return current() and await open_native_video(self.browser, path, pause=self._pause_for_handoff,
+                    close_speech=self.speech.close, current=current, fullscreen=True)
+            url = await asyncio.to_thread(self.browser.library.open_embedded_video, document, target, cancelled=cancelled)
+            if not current() or not audio.interactive() or not audio.permitted():
+                return False
+            if url is None:
+                raise ValueError('Video unavailable.')
+            await self.web.evaluate_javascript(
+                self._in_dom('window.logisticsPlayVideo?.(' + dumps(key) + ',' + dumps(url) + ')'))
+            return True
+        except OperationCancelled:
+            return False
+        except (OSError, RuntimeError, ValueError):
+            if current():
+                self.browser.notice.text = 'Video unavailable.'
+            return False
+        finally:
+            stopped.set()
+            if current() and self.browser.notice.text == PREPARING_VIDEO:
+                self.browser.notice.text = ''
 
 
 def video_embed(video, base, key, filename):

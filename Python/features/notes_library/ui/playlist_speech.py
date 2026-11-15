@@ -1,7 +1,9 @@
 """Qt playback controls for an ordered Notes Library playlist."""
 
 from concurrent.futures import ThreadPoolExecutor
+from bisect import bisect_right
 from pathlib import Path
+from time import monotonic
 
 from commonUtils.runtime.operations import OperationCancelled
 from commonUtils.ui import pyside as qt
@@ -25,9 +27,9 @@ class PlaylistReadAloud(ReadAloud):
     def _range_changed(self, start, end):
         snapshot = self.playlist.snapshot
         if start >= 0 and snapshot is not None:
-            path, revision = snapshot
-            owner = self.playlist.owner
-            if owner.storage.path != path or owner.viewer.browser.document().revision() != revision:
+            document, path, revision = snapshot
+            if (document is not self.playlist.document() or document.storage.path != path
+                    or document.viewer.browser.document().revision() != revision):
                 self._clear_highlight()
         super()._range_changed(start, end)
         self.playlist.follow(start, end)
@@ -48,17 +50,19 @@ class PlaylistSpeech(qt.QObject):
 
     def __init__(self, owner, catalog, changed):
         super().__init__(owner)
-        self.owner, self.catalog, self.changed = owner, catalog, changed
+        self.owner, self.catalog, self.on_changed = owner, catalog, changed
         self.queue = PlaylistQueue(catalog)
         self.controls = PlaylistReadAloud(self)
         self.worker = ThreadPoolExecutor(max_workers=1, thread_name_prefix='playlist')
         self.epoch = 0
         self.initial = self.snapshot = self.task = None
         self.pending_skips = []
-        self.spoken_line = ''
-        self.caption_at = -1
         self.resume_position = None
         self.closed = False
+        self.opening = None
+        self.open_timer = qt.QTimer(self)
+        self.open_timer.setInterval(20)
+        self.open_timer.timeout.connect(self.finish_open)
         self.delivered.connect(self.complete, qt.Qt.ConnectionType.QueuedConnection)
         self.edited.connect(self.refresh, qt.Qt.ConnectionType.QueuedConnection)
         self.unsubscribe = catalog.subscribe(self.edited.emit)
@@ -83,6 +87,21 @@ class PlaylistSpeech(qt.QObject):
     def state(self):
         return self.controls.session.state if self.controls.session is not None else 'stopped'
 
+    @property
+    def active(self):
+        return self.playlist_id is not None and (self.state in ('speaking', 'paused')
+            or self.task is not None or self.opening is not None)
+
+    def document(self):
+        tabs = getattr(self.owner, 'document_tabs', None)
+        return tabs.current if tabs is not None and tabs.current is not None else self.owner
+
+    def changed(self):
+        tabs = getattr(self.owner, 'document_tabs', None)
+        for document in [self.owner, *(tabs.documents if tabs is not None else ())]:
+            document.sync_speech_action()
+        self.on_changed()
+
     def valid(self):
         return not self.closed and not self.owner.locked and not self.owner.closing and not self.catalog.revoked()
 
@@ -95,11 +114,11 @@ class PlaylistSpeech(qt.QObject):
         if self.controls.session is None:
             return
         if playlist_id == self.playlist_id and entry_id in (None, self.active_id, getattr(self.initial, 'id', None)):
-            if self.state == 'stopped' and self.task is None:
+            if self.state == 'stopped' and self.task is None and self.opening is None:
                 self.start()
             return
         self.controls.stop()
-        self.owner.viewer.speech.stop()
+        self.document().viewer.speech.stop()
         try:
             record = self.catalog.get(playlist_id)
         except (OSError, ValueError):
@@ -114,7 +133,7 @@ class PlaylistSpeech(qt.QObject):
         self.changed()
 
     def start(self):
-        if not self.valid() or self.task is not None:
+        if not self.valid() or self.task is not None or self.opening is not None:
             return
         entry = self.queue.current.entry if self.queue.current is not None else self.initial
         if entry is None:
@@ -124,19 +143,22 @@ class PlaylistSpeech(qt.QObject):
 
     def invalidate(self):
         self.epoch += 1
+        self.opening = None
+        self.open_timer.stop()
         if self.task is not None:
             self.task.cancel()
             self.task = None
         self.pending_skips.clear()
 
     def rendered(self):
-        storage = self.owner.storage
-        if storage.path is not None and not self.owner.viewer.edit_button.isChecked():
+        document = self.document()
+        storage = document.storage
+        if storage.path is not None and not document.viewer.edit_button.isChecked():
             try:
                 path = Path(storage.path).relative_to(self.owner.provider.root.resolve()).as_posix()
             except ValueError:
                 return None
-            browser = self.owner.viewer.browser
+            browser = document.viewer.browser
             return path, prepare_document(browser, selection=False), browser.document().revision()
 
     def move(self, entry, index=None, *, paused=False, position=None):
@@ -170,6 +192,7 @@ class PlaylistSpeech(qt.QObject):
 
         future = self.worker.submit(work)
         self.task = future
+        self.changed()
         future.add_done_callback(lambda result: self.deliver(
             (epoch, record, entry, index, position, paused, rendered), result))
 
@@ -197,7 +220,42 @@ class PlaylistSpeech(qt.QObject):
             self.controls.stop()
             self.controls.message.setText('Finished playlist.' if active else 'This playlist has no available spoken text.')
         else:
-            passage, offset = result
+            self.opening = (context, result, monotonic() + 15)
+            self.controls.session.pause()
+            self.owner.open_note(result[0].entry.path)
+            if not self.valid() or self.opening is None:
+                return
+            self.open_timer.start()
+            self.finish_open()
+        self.changed()
+
+    def finish_open(self):
+        if self.opening is None or not self.valid():
+            self.open_timer.stop()
+            return
+        context, result, deadline = self.opening
+        epoch, record, entry, index, position, paused, _ = context
+        if epoch != self.epoch or record != self.queue.record:
+            self.opening = None
+            self.open_timer.stop()
+            return
+        document = self.document()
+        if (document.progress.busy or document.document_saving
+                or getattr(document.viewer, 'data_views', None) is not None
+                and document.viewer.data_views.progress.busy) and monotonic() < deadline:
+            return
+        self.opening = None
+        self.open_timer.stop()
+        rendered = self.rendered()
+        passage, offset = result
+        if rendered is None or rendered[0] != passage.entry.path or not rendered[1].text:
+            self.controls.message.setText('Playlist paused · Open the note, then press Play to continue.')
+        else:
+            displayed = prepare_passage(passage.entry, '', rendered[1])
+            if index is not None and displayed.revision != passage.revision:
+                word = max(0, bisect_right(passage.words, offset) - 1)
+                offset = displayed.words[min(word, len(displayed.words) - 1)]
+            passage = displayed
             self.queue.unavailable.discard(passage.entry.id)
             if index is None:
                 offset = position if passage.entry == entry else 0
@@ -208,11 +266,10 @@ class PlaylistSpeech(qt.QObject):
                 offset = passage.words[-1]
             self.flush()
             self.queue.activate(passage, offset)
-            self.caption_at = -1
-            self.snapshot = (self.owner.storage.path, rendered[2]) if rendered is not None and (
-                passage.entry.path == rendered[0] and passage.prepared is rendered[1]) else None
-            self.controls._highlight_widget = self.owner.viewer.browser if self.snapshot is not None else None
-            self.controls._prepared = passage.prepared if self.snapshot is not None else None
+            self.controls._clear_highlight()
+            self.snapshot = document, document.storage.path, rendered[2]
+            self.controls._highlight_widget = document.viewer.browser
+            self.controls._prepared = passage.prepared
             self.controls.play_passage(passage.text, self.queue.position, paused=paused, breaks=passage.breaks)
             self.flush()
             self.apply_skip()
@@ -223,14 +280,14 @@ class PlaylistSpeech(qt.QObject):
         self.apply_skip()
 
     def apply_skip(self):
-        if self.task is not None or not self.pending_skips or self.queue.current is None:
+        if self.task is not None or self.opening is not None or not self.pending_skips or self.queue.current is None:
             return
         index = self.controls.session.seek_position(self.pending_skips.pop(0))
         if index is not None:
             self.move(self.queue.current.entry, index, paused=self.state == 'paused')
 
     def exhausted(self):
-        if self.task is not None:
+        if self.task is not None or self.opening is not None:
             return True
         if not self.valid() or self.queue.current is None:
             return False
@@ -268,10 +325,6 @@ class PlaylistSpeech(qt.QObject):
     def follow(self, start, end):
         if start >= 0:
             self.queue.observe(start)
-            if self.caption_at < 0 or abs(start - self.caption_at) > 38:
-                self.caption_at = start
-                self.spoken_line = self.queue.spoken_line(start, end)
-                self.changed()
             if not self.checkpoint_timer.isActive():
                 self.checkpoint_timer.start()
 
@@ -292,7 +345,6 @@ class PlaylistSpeech(qt.QObject):
                 self.initial = self.queue.current.entry
                 self.resume_position = self.queue.current.revision, self.queue.position
             self.queue.current = self.snapshot = None
-            self.spoken_line = ''
         self.changed()
 
     def close(self):

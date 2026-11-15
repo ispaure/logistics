@@ -30,6 +30,22 @@ class PlaylistTests(unittest.TestCase):
         self.catalog = self.store.for_library(self.library)
         self.addCleanup(self.library.close)
 
+    def test_folder_note_action_resolves_only_its_same_named_markdown(self):
+        (self.notes / 'Topic').mkdir()
+        (self.notes / 'Topic/Topic.md').write_text('# Topic')
+        (self.notes / 'Topic/Other.md').write_text('# Other')
+        (self.notes / 'Empty.md').mkdir()
+        (self.notes / 'Plain').mkdir()
+        (self.notes / 'Plain/Other.md').write_text('# Other')
+        with patch.object(self.library.provider, 'list', side_effect=AssertionError('Listed descendants')):
+            self.assertEqual(self.library.playlist_note('Topic'), 'Topic/Topic.md')
+            self.assertEqual(self.library.playlist_note('Topic/Other.md'), 'Topic/Other.md')
+            self.assertIsNone(self.library.playlist_note('Empty.md'))
+            self.assertIsNone(self.library.playlist_note('Plain'))
+        record = self.catalog.create('Folder landing')
+        record = self.catalog.add(record.id, self.library.playlist_note('Topic'))
+        self.assertEqual([entry.path for entry in record.entries], ['Topic/Topic.md'])
+
     def test_restore_two_positions_and_fence_deleted_playlist(self):
         first = self.catalog.create('First')
         second = self.catalog.create('Second')

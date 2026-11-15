@@ -72,7 +72,33 @@ class LibraryFolderTests(unittest.TestCase):
 
 
 class LibrarySearchTests(unittest.TestCase):
-    def test_warm_search_stops_saved_validation_after_first_page(self):
+    def test_filtered_saved_prefix_still_publishes_visible_hits_before_refresh(self):
+        from commonUtils.search.indexed import IndexedLocalSearch
+        with TemporaryDirectory() as directory:
+            base = Path(directory)
+            root = base / 'library'
+            root.mkdir()
+            for number in range(60):
+                (root / f'Note-{number:03}.md').write_text('# Note')
+            library = NotesLibrary(LocalFiles(root), index_database=base / 'index.sqlite3')
+            self.addCleanup(library.close)
+            library_files.search(library, 'Note', include_text=False)
+            updates = []
+            prepare = IndexedLocalSearch.prepare
+
+            def refresh(searcher, *args, **kwargs):
+                self.assertTrue(updates, 'Visible cached hits waited for refresh')
+                self.assertEqual(len(updates[-1].rows), 10)
+                self.assertTrue(updates[-1].cached)
+                return prepare(searcher, *args, **kwargs)
+
+            with patch('commonUtils.search.indexed.monotonic', return_value=0), \
+                    patch.object(IndexedLocalSearch, 'prepare', refresh):
+                result = library_files.search(library, 'Note', include_text=False,
+                    visible=lambda path, **kwargs: path >= 'Note-050.md', progress=updates.append)
+            self.assertEqual([row['path'] for row in result.rows], [row['path'] for row in updates[-1].rows])
+
+    def test_warm_search_publishes_cached_names_without_duplicate_validation(self):
         with TemporaryDirectory() as directory:
             base = Path(directory)
             root = base / 'library'
@@ -83,13 +109,15 @@ class LibrarySearchTests(unittest.TestCase):
             library = NotesLibrary(provider, index_database=base / 'index.sqlite3')
             self.addCleanup(library.close)
             expected = library_files.search(library, 'Note', include_text=False).rows
-            with patch.object(provider, 'entry', wraps=provider.entry) as entry:
+            with patch.object(provider, 'entry', wraps=provider.entry) as entry, \
+                    patch('commonUtils.search.indexed.monotonic', return_value=0):
                 updates = []
                 result = library_files.search(library, 'Note', include_text=False, progress=updates.append)
                 self.assertEqual(result.rows, expected)
-                self.assertEqual([len(update.rows) for update in updates], [50])
+                self.assertEqual([len(update.rows) for update in updates], [50, 125])
                 self.assertFalse(updates[0].complete)
-                self.assertEqual(entry.call_count, 50 + 125)
+                self.assertTrue(all(update.cached for update in updates))
+                self.assertEqual(entry.call_count, 125)
                 entry.reset_mock()
                 result = library_files.search(library, 'Note', include_text=False)
                 self.assertEqual(result.rows, expected)

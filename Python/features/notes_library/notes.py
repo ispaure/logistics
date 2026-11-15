@@ -259,6 +259,13 @@ class NotesLibrary:
                 raise
             return None
 
+    def playlist_note(self, path):
+        """Resolve a file action to one Markdown note, including folder landings."""
+        path = self.contained(path)
+        if self.entry(path)['directory']:
+            return self.folder_page(path)
+        return path if document_kind(path) == 'markdown' else None
+
     def read(self, path, *, cancelled=lambda: False, limit=None):
         path = self.contained(path)
         if PurePosixPath(path).suffix.lower() not in MARKDOWN:

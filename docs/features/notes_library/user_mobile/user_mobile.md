@@ -21,6 +21,7 @@ Discovery checks the storage root and two levels down for `.noteslibrary` or `.o
 Open **Files** or swipe right across a note. Open **Links** or swipe left. Tap outside a floating panel to dismiss it. Wide layouts show Files beside the document.
 
 - **Search** offers **File names** and **In documents**, including unopened folders. Use **Show more notes** for additional results. Unlocked LocalCrypt filenames use the [protected search cache](../../rclone/user_mobile/localcrypt.md).
+- Local filename results can appear with **Cached results · Checking…** while the library updates them. Tapping a cached result checks it immediately; a missing or changed item shows a message instead of opening stale information.
 - **Calendar** finds `YYYY-MM-DD.md` across the library. Tap a day and choose a path if needed. A missing day offers to create one in a writable library. Refresh after outside changes.
 - **Links → Out / Back** lists outgoing links and backlinks. Scans stay in memory and stop at 5,000 notes, 10,000 entries or 64 MiB. `[[Tech]]` checks the note folder and root, then tries a unique match. Use `[[Topics/Tech]]` for duplicates.
 
@@ -28,6 +29,6 @@ Recent reopens a document in its library. Session-only visits disappear when the
 
 ### Playlists
 
-Choose **Playlist → New playlist**, name it and tap **Add Markdown**. You can also choose **Add to playlist** in a note's actions. Drag or use **Move up/down**. Use **Repair reference** for moved or unavailable notes. **Remove entry** keeps the note.
+In **Playlist**, tap the **New playlist** icon and name the queue. Choose **Add to playlist** in a Markdown note's **…** menu. A folder note's menu adds only `Folder/Folder.md`. Entries show filenames. Tap one to open it in the regular document reader, beside the playlist on wide layouts. Hold and drag an entry to the line between notes to reorder it. Each entry's trailing **…** menu offers **Move up/down**, **Repair reference** and **Remove entry**. The top **Playlist actions (…)** menu renames the queue. Removing an entry keeps the note.
 
-**Read aloud** resumes the queue, and **Play selected** starts another note. Time skips can cross entries. **This session** queues stay in memory. See [mobile Settings](../../../user_mobile/settings/settings.md) for lock-screen speech and playlist data clearing.
+The speaker icon at the top resumes the whole playlist from its saved place. Playback opens each note and highlights its spoken words. While playing or paused, the document's **Playlist read aloud…** option opens the same controls; stop the playlist to read a single document on its own. The playlist pane has no transcript or playback-status field. Time skips can cross entries. **This session** queues stay in memory. See [mobile Settings](../../../user_mobile/settings/settings.md) for lock-screen speech and playlist data clearing.

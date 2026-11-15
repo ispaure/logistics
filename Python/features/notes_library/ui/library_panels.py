@@ -5,7 +5,6 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.tasks.operation_progress import OperationProgress
 from commonUtils.search.names import search_terms
 from features.notes_library import library_files
-from features.notes_library.notes import document_kind
 from .library_icons import entry_icon
 from .library_connections import LibraryConnections
 from .playlist_panel import PlaylistPanel
@@ -300,9 +299,14 @@ class LibraryPanels(LibraryConnections):
         if generation != self.aux_generation or self.closing or self.locked:
             return
         self.search_rows = library_files.ranked_search_rows(result.rows)
+        if result.cached:
+            self.search_notice.setText('Cached results · Checking…')
         self.render_results()
 
     def render_results(self):
+        current = self.search_results.currentItem()
+        selected = current.data(0, qt.Qt.ItemDataRole.UserRole) if current is not None else None
+        position = self.search_results.verticalScrollBar().value()
         self.search_results.clear()
         for row in self.search_rows[:self.search_shown]:
             from commonUtils.filesystem import format_size
@@ -317,6 +321,9 @@ class LibraryPanels(LibraryConnections):
             item.setData(0, qt.Qt.ItemDataRole.UserRole, (row['path'], row['directory']))
             self.decorate_entry(item, row['path'], row['directory'])
             self.search_results.addTopLevelItem(item)
+            if item.data(0, qt.Qt.ItemDataRole.UserRole) == selected:
+                self.search_results.setCurrentItem(item)
+        self.search_results.verticalScrollBar().setValue(position)
         self.search_more.setVisible(len(self.search_rows) > self.search_shown)
         self.sync_search_footer()
 
@@ -426,11 +433,15 @@ class LibraryPanels(LibraryConnections):
             self.viewer.status.setText('The library root is a drop destination. Select one of its files or folders for actions.')
             return
         menu = qt.QMenu(self)
-        if not directory and document_kind(path) == 'markdown':
+        try:
+            playlist_note = self.library.playlist_note(path)
+        except (OSError, ValueError):
+            playlist_note = None
+        if playlist_note is not None:
             def add():
                 if self.playlist_panel.catalog is None:
                     self.playlist_panel.connect_library()
-                self.playlist_panel.add_note(path)
+                self.playlist_panel.add_note(playlist_note)
             menu.addAction('Add to playlist…', add)
         if not directory and getattr(self, 'document_tabs', None) is not None:
             menu.addAction('Open in new tab', lambda: self.open_note(path, new_tab=True))

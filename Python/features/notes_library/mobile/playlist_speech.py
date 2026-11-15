@@ -1,6 +1,7 @@
 """Mobile Notes Library playback through the retained native speech session."""
 
 import asyncio
+from bisect import bisect_right
 from uuid import uuid4
 
 from commonUtils.runtime.operations import OperationCancelled
@@ -87,8 +88,6 @@ class PlaylistSpeech:
         self.initial = None
         self.resume_position = None
         self.snapshot = None
-        self.spoken_line = ''
-        self.caption_at = -1
         self.unsubscribe = catalog.subscribe(lambda: app.loop.call_soon_threadsafe(self.edited))
 
     @property
@@ -106,6 +105,12 @@ class PlaylistSpeech:
     @property
     def state(self):
         return self.panel.session.state if self.panel is not None else 'stopped'
+
+    @property
+    def active(self):
+        return self.playlist_id is not None and (self.state in ('speaking', 'paused')
+            or self.in_transition is not None or self.waiting is not None
+            or self.work is not None and not self.work.done())
 
     def document_title(self):
         return self.queue.record.name if self.queue.record is not None else ''
@@ -152,7 +157,6 @@ class PlaylistSpeech:
                 self.panel.stop_playback()
             self.queue.prepared.clear()
             self.clear_snapshot()
-            self.spoken_line = ''
             self.panel.set_status('Play to continue when the app is active.')
             self.changed()
         elif not self.can_read():
@@ -161,7 +165,6 @@ class PlaylistSpeech:
                 self.preload.cancel()
                 self.preload = None
             self.clear_snapshot()
-            self.spoken_line = ''
             self.changed()
         else:
             if self.waiting is not None:
@@ -303,6 +306,43 @@ class PlaylistSpeech:
                 self.changed()
                 return
             passage, offset = done.value
+            if self.can_read():
+                read_epoch = self.read_epoch
+                current = lambda: self.can_read() and self.epoch == epoch and self.read_epoch == read_epoch
+                if not await self.owner.open_for_speech(passage.entry.path, current):
+                    if current():
+                        self.waiting = (entry, word_index, paused)
+                        self.panel.session.pause()
+                        self.panel.set_status('Playlist paused · Open the note, then press Play to continue.')
+                        self.changed()
+                    return
+                if not current():
+                    return
+                # Rebuild the mapping for the newly displayed DOM, including
+                # passages admitted earlier for locked/background continuation.
+                key = 'logisticsPlaylistSpeech-' + uuid4().hex
+                base = self.owner.base
+                prepared = await self.prepare_view(self.owner.web, selection=False, key=key)
+                if not current() or self.owner.base != base:
+                    self.clear_view(self.owner.web, key=key)
+                    return
+                if not prepared.text:
+                    self.clear_view(self.owner.web, key=key)
+                    self.panel.session.pause()
+                    self.waiting = (entry, word_index, paused)
+                    self.panel.set_status('Playlist paused · The displayed note is not ready for read-aloud.')
+                    self.changed()
+                    return
+                displayed = await asyncio.to_thread(prepare_passage, passage.entry, '', prepared)
+                if not current() or self.owner.base != base:
+                    self.clear_view(self.owner.web, key=key)
+                    return
+                if word_index is not None and displayed.revision != passage.revision:
+                    word = max(0, bisect_right(passage.words, offset) - 1)
+                    offset = displayed.words[min(word, len(displayed.words) - 1)]
+                self.clear_snapshot()
+                self.snapshot = passage.entry, base, prepared, key
+                passage = displayed
             if word_index is None:
                 offset = position if passage.entry == entry else 0
             if isinstance(offset, tuple):
@@ -315,7 +355,6 @@ class PlaylistSpeech:
             self.flush()
             previous = self.queue.current
             self.queue.activate(passage, offset)
-            self.caption_at = -1
             if previous is not None and previous.entry != passage.entry:
                 self.queue.keep(previous)
             if not await self.panel.play_passage(passage, self.queue.position, paused=paused,
@@ -337,6 +376,7 @@ class PlaylistSpeech:
             scanning.close()
             if self.in_transition is transition:
                 self.in_transition = None
+            self.changed()
 
     def continue_waiting(self):
         entry, index, _ = self.waiting
@@ -443,10 +483,6 @@ class PlaylistSpeech:
             entry, base, prepared, key = self.snapshot
             if self.owner.base == base and entry == self.queue.current.entry:
                 self.highlight_view(self.owner.web, prepared, start, end, key=key)
-        if self.can_read() and (self.caption_at < 0 or abs(start - self.caption_at) > 38):
-            self.caption_at = start
-            self.spoken_line = self.queue.spoken_line(start, end)
-            self.changed()
         if self.checkpoint_task is None:
             self.checkpoint_task = self.app.loop.call_later(2, self.flush)
 
@@ -480,7 +516,6 @@ class PlaylistSpeech:
                 self.initial = self.queue.current.entry
                 self.resume_position = (self.queue.current.revision, self.queue.position)
             self.queue.current = None
-            self.spoken_line = ''
         self.changed()
 
     def clear_snapshot(self):
@@ -497,7 +532,6 @@ class PlaylistSpeech:
             panel.dispose()
         self.initial = self.waiting = None
         self.resume_position = None
-        self.spoken_line = ''
         self.queue.clear()
 
     def close(self, *args, **kwargs):

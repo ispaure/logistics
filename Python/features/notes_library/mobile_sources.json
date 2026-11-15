@@ -18,6 +18,7 @@
     "mobile/library_document.py",
     "mobile/library_drag.py",
     "mobile/library_editing.py",
+    "mobile/library_file_forms.py",
     "mobile/library_panels.py",
     "mobile/library_opening.py",
     "mobile/library_text.py",

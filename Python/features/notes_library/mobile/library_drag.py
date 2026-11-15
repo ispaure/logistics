@@ -9,6 +9,13 @@ _ios_classes = None
 class NativeRowDrag:
     """Attach the platform's local-only drag interactions to one row owner."""
 
+    def hover(self, widget, path, y, height):
+        self.highlight(widget if self.destination(path) is not None else None)
+        return self.destination(path) is not None
+
+    def drop_at(self, path, y, height):
+        return self.drop(path)
+
     def bind(self, widget, path, *, source=True, target=False):
         self.unbind(widget)
         backend = type(widget._impl).__module__
@@ -49,9 +56,9 @@ class NativeRowDrag:
                     if action == DragEvent.ACTION_DRAG_STARTED:
                         return owner.source is not None
                     if action in (DragEvent.ACTION_DRAG_ENTERED, DragEvent.ACTION_DRAG_LOCATION):
-                        owner.highlight(widget if owner.destination(path) is not None else None)
+                        owner.hover(widget, path, float(event.getY()), float(view.getHeight()))
                     elif action == DragEvent.ACTION_DROP:
-                        return owner.drop(path)
+                        return owner.drop_at(path, float(event.getY()), float(view.getHeight()))
                     elif action == DragEvent.ACTION_DRAG_EXITED:
                         owner.highlight(None)
                     elif action == DragEvent.ACTION_DRAG_ENDED:
@@ -94,15 +101,18 @@ class NativeRowDrag:
 
                 @objc_method
                 def dropInteraction_sessionDidUpdate_(self, interaction, session) -> objc_id:
-                    allowed = self.drag is not None and self.drag.destination(self.path) is not None
-                    if self.drag is not None:
-                        self.drag.highlight(self.widget if allowed else None)
+                    view = interaction.view
+                    point = session.locationInView(view)
+                    allowed = self.drag is not None and self.drag.hover(
+                        self.widget, self.path, float(point.y), float(view.bounds.size.height))
                     return ObjCClass('UIDropProposal').alloc().initWithDropOperation(3 if allowed else 1)
 
                 @objc_method
                 def dropInteraction_performDrop_(self, interaction, session) -> None:
                     if self.drag is not None:
-                        self.drag.drop(self.path)
+                        view = interaction.view
+                        point = session.locationInView(view)
+                        self.drag.drop_at(self.path, float(point.y), float(view.bounds.size.height))
 
                 @objc_method
                 def dropInteraction_sessionDidExit_(self, interaction, session) -> None:

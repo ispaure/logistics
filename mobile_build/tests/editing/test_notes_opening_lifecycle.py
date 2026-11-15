@@ -88,3 +88,91 @@ class NotesOpeningLifecycleTests(unittest.TestCase):
             self.assertFalse(library.page_loading.active)
 
         self.run_async(exercise())
+
+    def test_generated_html_retires_only_the_previous_dom_with_the_same_video_key(self):
+        (self.vault / 'Home.md').write_text(
+            '![[old.mp4]]\n\n```dataviewjs\ndv.paragraph("Loading");\n```\n', encoding='utf-8')
+
+        async def exercise():
+            library = await open_vault(self.app, self.provider, 'Vault', 'files')
+            document = library.document
+            original_preview = document.note_preview
+            key = 'shared-video-key'
+
+            def reuse_key(text, path, base, **options):
+                html, videos = original_preview(text, path, base, **options)
+                generated_key, target = next(iter(videos.items()))
+                return html.replace(generated_key, key), {key: target}
+
+            old_started, release_old, old_done = Event(), Event(), Event()
+            old_cancelled = []
+
+            def open_media(path, target, *, cancelled):
+                if target == 'old.mp4':
+                    old_started.set()
+                    if not release_old.wait(5):
+                        raise RuntimeError('Test did not release the old video')
+                    old_cancelled.append(cancelled())
+                    old_done.set()
+                return 'http://127.0.0.1/' + target
+
+            with patch.object(document, 'note_preview', side_effect=reuse_key), patch(
+                    'features.notes_library.mobile.dataview.execute_views',
+                    new=AsyncMock(return_value='# Updated\n\n![[new.mp4]]')), patch.object(
+                    library.library, 'open_embedded_video', side_effect=open_media):
+                self.assertTrue(await library.open_note('Vault/Home.md'))
+                page = document._page
+                base, old_marker = library.base, document._load_marker
+                old_videos = page.videos
+                audio = old_videos.audio
+                old_pause = audio.players[old_videos][0]
+                scripts = []
+
+                def evaluate(script):
+                    scripts.append(script)
+                    result = self.app.loop.create_future()
+                    result.set_result('logistics-note:' + old_marker if 'document.readyState' in script else None)
+                    return result
+
+                with patch.object(audio, 'request_play', return_value=True), patch.object(
+                        audio, 'permitted', return_value=True), patch.object(
+                        library.web, 'evaluate_javascript', side_effect=evaluate):
+                    url = base + '?inline-video=' + key
+                    library.follow_link(library.web, url)
+                    old_task = old_videos.task
+                    try:
+                        self.assertTrue(await asyncio.to_thread(old_started.wait, 3))
+                        library.page_loaded()
+                        await page.views.task
+                        new_marker = document._load_marker
+                        replacement = page.videos
+                        self.assertIs(document._page, page)
+                        self.assertEqual(library.base, base)
+                        self.assertNotEqual(new_marker, old_marker)
+                        self.assertEqual(set(replacement.targets), {key})
+                        self.assertNotIn(old_videos, audio.players)
+                        self.assertIn(replacement, audio.players)
+                        with self.assertRaises(asyncio.CancelledError):
+                            await old_task
+                        queued_pause = next(script for script in scripts if 'video.pause()' in script)
+                        self.assertIn('logistics-note:' + old_marker, queued_pause)
+                        self.assertNotIn('logistics-note:' + new_marker, queued_pause)
+                        script_count = len(scripts)
+                        old_pause()
+                        self.assertEqual(len(scripts), script_count)
+                        await document.verify_page_load(base, old_marker)
+                        self.assertFalse(document._loaded)
+                        library.follow_link(library.web, url)
+                        self.assertTrue(await replacement.task)
+                        self.assertIn('logistics-note:' + new_marker, scripts[-1])
+                        self.assertIn('window.logisticsPlayVideo?.("' + key + '"', scripts[-1])
+                        self.assertIn('/new.mp4"', scripts[-1])
+                    finally:
+                        release_old.set()
+                        if old_started.is_set():
+                            self.assertTrue(await asyncio.to_thread(old_done.wait, 3))
+                self.assertEqual(old_cancelled, [True])
+                self.assertTrue(all('/old.mp4"' not in script for script in scripts))
+                library.dispose()
+
+        self.run_async(exercise())

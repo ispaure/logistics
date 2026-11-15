@@ -70,7 +70,7 @@ class NotesLibraryTests(unittest.TestCase):
 
         self.run_async(exercise())
 
-    def test_filename_index_reuses_cached_rows_then_reports_a_rename(self):
+    def test_filename_index_publishes_provisional_rows_before_revalidating_a_rename(self):
         from features.notes_library.library_files import search
 
         library = NotesLibrary(LocalFiles(self.root), 'Vault',
@@ -81,12 +81,21 @@ class NotesLibraryTests(unittest.TestCase):
                              ['Vault/Projects/Plan.MD', 'Vault/Projects/Stable Plan.MD'])
             (self.vault / 'Projects/Plan.MD').rename(self.vault / 'Projects/New Plan.MD')
             updates = []
-            with patch.object(library, 'folders', side_effect=AssertionError('Expected the shared index')):
-                result = search(library, 'Plan', include_text=False, progress=updates.append)
-            self.assertEqual([row['path'] for row in updates[0].rows], ['Vault/Projects/Stable Plan.MD'])
-            self.assertFalse(updates[0].complete)
-            self.assertTrue(all('Vault/Projects/Plan.MD' not in {row['path'] for row in update.rows}
-                                for update in updates))
+            with patch.object(library, 'folders', side_effect=AssertionError('Expected the shared index')), \
+                    patch.object(library.provider, 'entry', wraps=library.provider.entry) as entry:
+                def check_cached(update):
+                    updates.append(update)
+                    entry.assert_not_called()
+                    self.assertTrue(update.cached)
+                    self.assertFalse(update.complete)
+                    self.assertEqual([row['path'] for row in update.rows],
+                                     ['Vault/Projects/Plan.MD', 'Vault/Projects/Stable Plan.MD'])
+
+                result = search(library, 'Plan', include_text=False, progress=check_cached)
+                self.assertEqual(len(updates), 1)
+                entry.assert_any_call('Vault/Projects/New Plan.MD')
+            self.assertFalse(result.cached)
+            self.assertTrue(result.complete)
             self.assertEqual([row['path'] for row in result.rows],
                              ['Vault/Projects/New Plan.MD', 'Vault/Projects/Stable Plan.MD'])
         finally:
@@ -448,7 +457,7 @@ class NotesLibraryTests(unittest.TestCase):
             with patch.object(owner.web, 'set_content', wraps=owner.web.set_content) as publish:
                 self.assertTrue(await owner.open_note('LICENSE', resolve_link=True), owner.notice.text)
             self.assertTrue(all(transport.closed.is_set() for transport in transports))
-            self.assertFalse(owner.document._page_videos)
+            self.assertIsNone(owner.document._page)
             self.assertNotIn('<video', publish.call_args.args[1])
             self.assertEqual(owner.path, 'Vault/LICENSE')
             owner.dispose()
@@ -537,6 +546,7 @@ class NotesLibraryTests(unittest.TestCase):
             self.assertIn('![[potato.mp4]]', blocks[0]['source'])
             from unittest.mock import AsyncMock
             self.app.set_feature_enabled('video', True, refresh=False)
+            videos = owner.document._page.videos
             with patch.object(owner.web, 'evaluate_javascript', new_callable=AsyncMock) as pause, patch(
                     'features.video.mobile.player.open_video', new_callable=AsyncMock, return_value=True) as native:
                 for video in ('Vault/Media/potato.mp4', 'potato.mp4'):
@@ -546,26 +556,28 @@ class NotesLibraryTests(unittest.TestCase):
                 self.assertEqual(native.await_count, 2)
                 for link, filename in zip(links, ('potato.mp4', 'second.mp4')):
                     self.assertFalse(owner.follow_link(owner.web, link))
-                    self.assertTrue(await owner.document._video_opening)
+                    self.assertTrue(await videos.task)
                     native.assert_awaited_with(self.app, self.provider, 'Vault/Media/' + filename, fullscreen=True)
                 self.assertFalse(owner.follow_link(owner.web, links[0].replace(owner.base, owner.base + 'old/')))
                 self.assertEqual(pause.await_count, 4)
                 self.assertFalse(media.videos)  # Fullscreen owns its own playback transport.
             inline = links[0].replace('?video=', '?inline-video=')
             with patch.object(owner.web, 'evaluate_javascript', new_callable=AsyncMock) as javascript, patch.object(
-                    owner.document._inline_audio, 'request_play', side_effect=[False, True]) as consent, patch.object(
-                    owner.document._inline_audio, 'permitted', return_value=True):
+                    videos.audio, 'request_play', side_effect=[False, True]) as consent, patch.object(
+                    videos.audio, 'permitted', return_value=True):
                 self.assertFalse(owner.follow_link(owner.web, inline))
                 javascript.assert_not_called()
                 self.assertFalse(media.videos)
                 self.assertFalse(owner.follow_link(owner.web, inline))
-                self.assertTrue(await owner.document._video_opening)
+                self.assertTrue(await videos.task)
                 transport = media.videos['Vault/Media/potato.mp4'][1]
-                javascript.assert_awaited_once_with(
-                    'window.logisticsPlayVideo?.("' + inline.split('=')[-1] + '","' + transport.url + '")')
+                javascript.assert_awaited_once()
+                self.assertIn(
+                    'window.logisticsPlayVideo?.("' + inline.split('=')[-1] + '","' + transport.url + '")',
+                    javascript.await_args.args[0])
                 self.assertEqual(consent.call_count, 2)
             with patch.object(owner.web, 'evaluate_javascript') as javascript:
-                owner.document._inline_audio.pause()
+                videos.audio.pause()
                 self.assertIn('video.pause()', javascript.call_args.args[0])
             self.assertEqual(native.await_count, 4)
             self.assertEqual(owner.path, 'Vault/Home.md')
@@ -594,11 +606,12 @@ class NotesLibraryTests(unittest.TestCase):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'documents')
             self.assertTrue(await owner.open_note('Vault/Home.md'))
+            videos = owner.document._page.videos
             with patch.object(owner.library, 'open_embedded_video', side_effect=open_video), \
-                    patch.object(owner.document._inline_audio, 'request_play', return_value=True):
-                key = next(iter(owner.document._page_videos))
+                    patch.object(videos.audio, 'request_play', return_value=True):
+                key = next(iter(videos.targets))
                 owner.follow_link(owner.web, owner.base + '?inline-video=' + key)
-                task = owner.document._video_opening
+                task = videos.task
                 try:
                     self.assertTrue(await asyncio.to_thread(started.wait, 2))
                     self.assertTrue(await owner.open_note('Vault/Projects/Plan.MD'))
@@ -608,7 +621,7 @@ class NotesLibraryTests(unittest.TestCase):
                     release.set()
                     self.assertTrue(await asyncio.to_thread(finished.wait, 2))
                 self.assertEqual(cancellations, [True])
-                self.assertFalse(owner.document._page_videos)
+                self.assertIsNone(owner.document._page.videos)
             owner.dispose()
 
         self.run_async(exercise())
@@ -673,6 +686,7 @@ class NotesLibraryTests(unittest.TestCase):
         class Native:
             def setOnLongClickListener(self, value): self.long_click = value
             def setOnDragListener(self, value): self.drag = value
+            def getHeight(self): return 40
             def startDragAndDrop(self, clip, shadow, state, flags):
                 self.clip = clip
                 return True
@@ -696,7 +710,7 @@ class NotesLibraryTests(unittest.TestCase):
                 drag.bind_android(target, owner.root, False, True)
                 self.assertTrue(source._impl.native.long_click.onLongClick(source._impl.native))
                 self.assertEqual(source._impl.native.clip, (drag.token, ''))
-                event = SimpleNamespace(getAction=lambda: events.ACTION_DROP,
+                event = SimpleNamespace(getAction=lambda: events.ACTION_DROP, getY=lambda: 20,
                     getClipDescription=lambda: SimpleNamespace(getLabel=lambda: drag.token))
                 self.assertTrue(target._impl.native.drag.onDrag(target._impl.native, event))
                 self.assertTrue(await drag.task)
@@ -958,13 +972,14 @@ class NotesLibraryTests(unittest.TestCase):
             with patch.object(owner.document, 'scroll_fragment') as scroll, \
                     patch('features.notes_library.mobile.dataview.execute_views', new=AsyncMock(return_value='## Generated target\n')):
                 self.assertTrue(await owner.open_note('Vault/Home.md', fragment='generated-target'))
+                page = owner.document._page
                 owner.page_loaded()
                 scroll.assert_not_called()
-                self.assertEqual(owner.document.pending_fragment, 'generated-target')
-                await owner.document.data_view_task
+                self.assertEqual(page.fragment, 'generated-target')
+                await page.views.task
                 owner.page_loaded()
                 scroll.assert_called_once_with('generated-target')
-                self.assertEqual(owner.document.pending_fragment, '')
+                self.assertEqual(page.fragment, '')
         self.run_async(exercise())
 
     def test_data_view_output_does_not_change_authored_source_and_stale_output_is_discarded(self):
@@ -979,8 +994,8 @@ class NotesLibraryTests(unittest.TestCase):
                 initial = publish.call_args.args[1]
                 self.assertIn('Loading data view', initial)
                 self.assertIn('worker-src blob:', initial)
-                plan = owner.document.data_view_plan
-                owner.document.data_view_plan = None
+                views = owner.document._page.views
+                plan, views.plan = views.plan, None
                 with patch('features.notes_library.mobile.dataview.execute_views',
                            new=AsyncMock(return_value='# Dashboard\n\n| Name |\n| --- |\n| Mobile result |\n')):
                     await owner.render_data_views(plan, owner.base, owner.path)
@@ -1244,13 +1259,14 @@ class NotesLibraryTests(unittest.TestCase):
                     lookup.assert_not_called()
                     media = discovered.library.image_source('Home.md')
                     self.assertFalse(media.videos)
-                    key = next(iter(discovered.document._page_videos))
+                    videos = discovered.document._page.videos
+                    key = next(iter(videos.targets))
                     from unittest.mock import AsyncMock
-                    with patch.object(discovered.document._inline_audio, 'request_play', return_value=True), \
-                            patch.object(discovered.document._inline_audio, 'permitted', return_value=True), \
+                    with patch.object(videos.audio, 'request_play', return_value=True), \
+                            patch.object(videos.audio, 'permitted', return_value=True), \
                             patch.object(discovered.web, 'evaluate_javascript', new_callable=AsyncMock):
                         discovered.follow_link(discovered.web, discovered.base + '?inline-video=' + key)
-                        self.assertTrue(await discovered.document._video_opening, discovered.notice.text)
+                        self.assertTrue(await videos.task, discovered.notice.text)
                     lookup.assert_called_once()
                     self.assertEqual(list(media.videos), ['Nested/clip.mp4'])
                     transport = media.videos['Nested/clip.mp4'][1]

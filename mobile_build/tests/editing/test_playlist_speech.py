@@ -1,12 +1,13 @@
 """Playlist sequencing through the mobile speech panel and media commands."""
 
 import asyncio
+import json
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event
 from types import SimpleNamespace
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 import toga
 from commonUtils.runtime.resources.local import LocalFiles
@@ -33,7 +34,21 @@ class PlaylistSpeechTests(unittest.TestCase):
                 provider = LocalFiles(root)
                 provider.private = protected
                 owner = SimpleNamespace(cancelled=Event(), valid=lambda: not privacy.resume_locked,
-                                        path=None, view=toga.Box())
+                                        path=None, base=None, editing=False, view=toga.Box())
+                def evaluate(script):
+                    result = asyncio.get_running_loop().create_future()
+                    result.set_result(json.dumps([[owner.visible_text, 0, '', '']])
+                                      if 'return JSON.stringify(runs)' in script else None)
+                    return result
+                owner.web = SimpleNamespace(evaluate_javascript=Mock(side_effect=evaluate))
+                async def open_for_speech(path, current):
+                    if not current():
+                        return False
+                    if owner.path != path:
+                        owner.path, owner.base = path, 'note-' + path
+                        owner.visible_text = (root / path).read_text()
+                    return True
+                owner.open_for_speech = AsyncMock(side_effect=open_for_speech)
                 privacy = SimpleNamespace(inactive=False, interrupted=False, captured=False,
                                           resume_locked=False, sensitive=lambda: protected)
                 app = SimpleNamespace(private_root=root, loop=asyncio.get_running_loop(),
@@ -101,11 +116,14 @@ class PlaylistSpeechTests(unittest.TestCase):
             panel = speech.panel
             media = panel.playback.media
             self.assertEqual(speech.active_id, record.entries[0].id)
+            self.assertEqual(speech.owner.path, 'a.md')
+            self.assertIsNotNone(speech.snapshot)
             self.assertTrue(panel.playback.command('pause'))
             self.assertTrue(panel.playback.command('forward'))
             self.assertTrue(panel.playback.command('forward'))
             await self.idle(speech)
             self.assertEqual(speech.active_id, record.entries[3].id)
+            self.assertEqual(speech.owner.path, 'c.md')
             self.assertEqual(speech.state, 'paused')
             self.assertTrue(panel.playback.command('back'))
             await self.idle(speech)
@@ -120,6 +138,17 @@ class PlaylistSpeechTests(unittest.TestCase):
             self.assertTrue(media.closed)
             self.assertFalse(panel.playback.command('play'))
             self.assertIsNone(speech.catalog.get(record.id))
+        self.exercise(fixture)
+
+    def test_cancelled_document_open_pauses_before_speaking_hidden_text(self):
+        async def fixture(speech, record, library, app, privacy):
+            speech.owner.open_for_speech = AsyncMock(return_value=False)
+            speech.play(record.id)
+            await self.idle(speech)
+            self.assertNotEqual(speech.state, 'speaking')
+            self.assertIsNotNone(speech.waiting)
+            self.assertIsNone(speech.snapshot)
+            self.assertIn('Open the note', speech.panel.status.text)
         self.exercise(fixture)
 
     def test_opt_in_allows_prepared_text_only_and_revocation_retires_media(self):

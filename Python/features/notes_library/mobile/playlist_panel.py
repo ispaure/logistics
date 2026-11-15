@@ -27,14 +27,18 @@ class PlaylistDrag(NativeRowDrag):
         self.source = identity
         return True
 
-    def destination(self, identity):
-        if (self.source is not None and identity != self.source
+    def destination(self, identity, *, after=False):
+        if (self.source is not None
                 and self.panel.owner.panel_tab == 'Playlist' and self.panel.can_edit()):
-            return self.panel.entry_index(identity)
+            source, target = self.panel.entry_index(self.source), self.panel.entry_index(identity)
+            if source is not None and target is not None:
+                slot = target + int(after)
+                index = slot - int(slot > source)
+                return index if index != source else None
         return None
 
-    def drop(self, identity):
-        target = self.destination(identity)
+    def drop(self, identity, *, after=False):
+        target = self.destination(identity, after=after)
         source = self.source
         self.end()
         if target is None:
@@ -43,13 +47,19 @@ class PlaylistDrag(NativeRowDrag):
         return True
 
     def highlight(self, widget):
-        if self.highlighted is not widget:
-            paint = self.panel.owner.host.highlight_entry
-            if self.highlighted is not None:
-                paint(self.highlighted, False)
-            self.highlighted = widget
-            if widget is not None:
-                paint(widget, True)
+        self.highlighted = widget
+        if widget is None:
+            self.panel.show_drop_line(None)
+
+    def hover(self, widget, identity, y, height):
+        after = y >= height / 2
+        allowed = self.destination(identity, after=after) is not None
+        self.highlighted = widget if allowed else None
+        self.panel.show_drop_line(self.panel.entry_index(identity) + int(after) if allowed else None)
+        return allowed
+
+    def drop_at(self, identity, y, height):
+        return self.drop(identity, after=y >= height / 2)
 
     def end(self):
         self.source = None
@@ -73,32 +83,35 @@ class PlaylistPanel:
         self.reload_pending = False
         self.choice = None
         self.buttons = {}
+        self.entry_buttons = {}
+        self.drop_lines = []
+        self.drop_slot = None
         self.drag = PlaylistDrag(self)
         self.header = toga.Label('', style=Pack(font_weight='bold', display=NONE))
         self.notice = toga.Label('', style=Pack(font_size=12, display=NONE))
-        self.spoken = toga.Label('', style=Pack(font_size=12, display=NONE))
         self.rows = toga.Box(style=Pack(direction=COLUMN))
         self.commands = toga.Box(style=Pack(direction=COLUMN))
         self.content = toga.Box(children=[self.commands, self.rows], style=Pack(direction=COLUMN))
         self.scroll = toga.ScrollContainer(content=self.content, horizontal=False, style=Pack(flex=1))
-        self.play_button = self.button('Read aloud…', self.play, flex=1)
-        self.selected_play_button = self.button('Play selected', self.play_selected, flex=1)
-        self.play_actions = toga.Box(children=[self.play_button, self.selected_play_button],
-                                     style=Pack(direction=ROW, gap=4, display=NONE))
-        self.widget = toga.Box(children=[self.header, self.notice, self.spoken, self.scroll, self.play_actions],
+        self.new_button = self.icon_button('edit', 'New playlist…', self.name)
+        self.back_button = self.icon_button('back', 'All playlists', self.back)
+        self.play_button = self.icon_button('speaker', 'Read aloud playlist', self.play)
+        self.more_button = self.icon_button('more', 'Playlist actions', self.actions)
+        self.toolbar = toga.Box(style=Pack(direction=ROW))
+        self.widget = toga.Box(children=[self.toolbar, self.header, self.notice, self.scroll],
                                style=Pack(direction=COLUMN, flex=1, margin=4))
-        self.up_button = self.button('Move up', self.move_up, flex=1)
-        self.down_button = self.button('Move down', self.move_down, flex=1)
-        self.repair_button = self.button('Repair reference…', self.repair, flex=1)
-        self.remove_button = self.button('Remove entry', self.remove, flex=1)
-        self.move_actions = toga.Box(children=[self.up_button, self.down_button], style=Pack(direction=ROW, gap=4))
-        self.entry_actions = toga.Box(children=[self.repair_button, self.remove_button], style=Pack(direction=ROW, gap=4))
         self.pick_notice = toga.Label('Choose a Markdown note in Files or Search.', style=Pack(font_size=12, flex=1))
         self.pick_prompt = toga.Box(children=[self.pick_notice, self.button('Cancel', self.finish_pick)],
                                     style=Pack(direction=ROW))
 
     def button(self, label, handler, *, flex=0):
         return toga.Button(label, on_press=handler, style=Pack(height=44, flex=flex))
+
+    def icon_button(self, icon, label, handler):
+        presentation = self.owner.host.presentation
+        button = presentation.icon_button(icon, label, on_press=handler)
+        presentation.surface(button, radius=0, background='transparent', foreground='muted', outlined=False)
+        return button
 
     @staticmethod
     def message(label, value):
@@ -178,16 +191,19 @@ class PlaylistPanel:
         self.playlist_id = self.selected = self.picking = None
         self.naming = False
         self.hide_pick_prompt()
-        for label in (self.header, self.notice, self.spoken):
+        for label in (self.header, self.notice):
             self.message(label, '')
-        self.play_actions.style.display = NONE
-        for row in self.rows.children:
-            row.text = ''
-            self.owner.host.presentation.accessible_name(row, '')
+        self.toolbar.clear()
+        for button in [*self.buttons.values(), *self.entry_buttons.values(),
+                       *(row for row in self.rows.children if isinstance(row, toga.Button))]:
+            button.text = ''
+            self.owner.host.presentation.accessible_name(button, '')
         for control in self.commands.children:
             if isinstance(control, toga.TextInput):
                 control.value = ''
         self.buttons.clear()
+        self.entry_buttons.clear()
+        self.drop_lines.clear()
         self.rows.clear()
         self.commands.clear()
         if self.choice is not None:
@@ -227,38 +243,60 @@ class PlaylistPanel:
             return
         self.drag.clear()
         self.buttons.clear()
+        self.entry_buttons.clear()
+        self.drop_lines.clear()
         self.rows.clear()
         self.commands.clear()
         playlist = self.playlist
         self.message(self.header, playlist.name if playlist else '')
-        self.play_actions.style.display = PACK if playlist else NONE
+        self.toolbar.clear()
+        if playlist:
+            self.toolbar.add(self.back_button, toga.Box(style=Pack(flex=1)), self.play_button, self.more_button)
+        else:
+            self.toolbar.add(self.new_button, toga.Box(style=Pack(flex=1)))
         if playlist is None:
-            self.message(self.spoken, '')
             self.message(self.notice, '' if self.records else 'Create a playlist to arrange notes for read-aloud.')
             for record in self.records:
                 def open_playlist(widget, identity=record.id, **kwargs):
                     self.open(identity)
                 self.rows.add(self.button(record.name + (' · This session' if record.session_only else ''), open_playlist))
-            self.commands.add(self.button('New playlist…', self.name))
             return
         if self.entry_index(self.selected) is None:
             self.selected = playlist.active_id
         for entry in playlist.entries:
-            def select(widget, identity=entry.id, **kwargs):
+            async def select(widget, identity=entry.id, path=entry.path, **kwargs):
                 if self.can_edit():
                     self.selected = identity
                     self.refresh_state()
-            button = self.button(entry.path, select)
+                    await self.owner.open_selected_note(path)
+            button = self.button(PurePosixPath(entry.path).name, select, flex=1)
             self.owner.host.middle_filename(button)
             self.buttons[entry.id] = button
-            self.rows.add(button)
-            self.drag.bind(button, entry.id, target=True)
-        self.commands.add(
-            self.button_row(('All playlists', self.back), ('Rename…', self.name)),
-            self.button('Add Markdown…', self.begin_pick),
-            self.move_actions, self.entry_actions,
-        )
+            async def actions(widget, identity=entry.id, **kwargs):
+                await self.entry_actions(identity)
+            more = self.icon_button('more', 'Actions for ' + PurePosixPath(entry.path).name, actions)
+            self.entry_buttons[entry.id] = more
+            line = toga.Box(style=Pack(height=2))
+            self.drop_lines.append(line)
+            contents = toga.Box(children=[button, more], style=Pack(direction=ROW))
+            row = toga.Box(children=[line, contents], style=Pack(direction=COLUMN))
+            self.rows.add(row)
+            self.drag.bind(button, entry.id, target=False)
+            self.drag.bind(row, entry.id, source=False, target=True)
+        line = toga.Box(style=Pack(height=2))
+        self.drop_lines.append(line)
+        if playlist.entries:
+            row.add(line)  # Include the final gap in the last native drop target.
+        else:
+            self.rows.add(line)
+        self.show_drop_line(None)
         self.refresh_state()
+
+    def show_drop_line(self, slot):
+        self.drop_slot = slot
+        for index, line in enumerate(self.drop_lines):
+            self.owner.host.presentation.surface(line, radius=0,
+                background='text' if index == slot else 'transparent', outlined=False)
 
     def button_row(self, *specs):
         return toga.Box(children=[self.button(label, handler, flex=1) for label, handler in specs],
@@ -269,20 +307,19 @@ class PlaylistPanel:
             self.clear_display()
             return
         playlist, speech = self.playlist, self.speech
+        active_controls = speech is not None and speech.active
+        if getattr(self, '_speech_controls_active', False) != active_controls:
+            self._speech_controls_active = active_controls
+            self.owner.host.presentation.accessible_name(self.owner.speech.button,
+                'Playlist read aloud' if active_controls else 'Read aloud')
+            self.owner.refresh_reader_actions()
         if playlist is None or speech is None:
             return
-        current = speech.playlist_id == playlist.id
-        active = (speech.active_id if current else None) or playlist.active_id
-        state = speech.state if current else 'stopped'
-        status = {'speaking': 'Playing', 'paused': 'Paused', 'stopped': 'Ready',
-                  'unavailable': 'Read-aloud unavailable'}.get(state, state.capitalize())
         for entry in playlist.entries:
             button = self.buttons.get(entry.id)
             if button is None:
                 continue
-            parts = [entry.path]
-            if entry.id == active:
-                parts.append(status)
+            parts = [PurePosixPath(entry.path).name]
             if entry.id in speech.unavailable:
                 parts.append('Missing or inaccessible')
             title = ' · '.join(parts)
@@ -296,18 +333,11 @@ class PlaylistPanel:
             if title_changed or getattr(button, '_playlist_accessible_selected', None) != selected:
                 button._playlist_accessible_selected = selected
                 self.owner.host.presentation.accessible_name(button, title + (' selected' if selected else ''))
-        detail = status if playlist.entries else 'Add Markdown notes to start listening.'
+        detail = '' if playlist.entries else 'Use a note’s or folder note’s actions to add it to this playlist.'
         if playlist.session_only:
             detail += ' This playlist lasts for the current session.'
         self.message(self.notice, detail)
-        line = getattr(speech, 'spoken_line', '') if current else ''
-        self.message(self.spoken, line)
-        index = self.entry_index(self.selected)
-        self.up_button.enabled = index is not None and index > 0
-        self.down_button.enabled = index is not None and index < len(playlist.entries) - 1
-        self.repair_button.enabled = self.remove_button.enabled = index is not None
         self.play_button.enabled = bool(playlist.entries)
-        self.selected_play_button.enabled = index is not None
 
     def entry_index(self, identity):
         if self.playlist is not None:
@@ -323,6 +353,53 @@ class PlaylistPanel:
 
     def back(self, widget=None, **kwargs):
         self.open(None)
+
+    async def actions(self, widget=None, **kwargs):
+        await self.choose_action([('Rename playlist…', 'rename')])
+
+    async def entry_actions(self, identity):
+        if not self.can_edit() or self.entry_index(identity) is None:
+            return
+        self.selected = identity
+        self.refresh_state()
+        choices = []
+        index = self.entry_index(identity)
+        if index > 0:
+            choices.append(('Move up', 'up'))
+        if index < len(self.playlist.entries) - 1:
+            choices.append(('Move down', 'down'))
+        choices.extend([('Repair reference…', 'repair'), ('Remove entry', 'remove')])
+        await self.choose_action(choices, entry=self.playlist.entries[index])
+
+    async def choose_action(self, choices, *, entry=None):
+        if not self.can_edit() or self.choice is not None:
+            return
+        identity, selected = self.playlist_id, self.selected
+        dialog = DocumentTypeDialog(choices=choices)
+        dialog.title = PurePosixPath(entry.path).name if entry else self.playlist.name
+        dialog.message = entry.path if entry else 'Choose a playlist action.'
+        choice = self.choice = self.owner.host.loop.create_task(
+            self.owner.sidebar.choose_action(dialog, self.owner.view.window))
+        try:
+            action = await choice
+        except asyncio.CancelledError:
+            if asyncio.current_task().cancelling():
+                raise
+            return
+        finally:
+            self.choice = None
+        if not self.can_edit() or (self.playlist_id, self.selected) != (identity, selected):
+            return
+        if action == 'rename':
+            self.name()
+        elif action == 'up':
+            await self.move_up()
+        elif action == 'down':
+            await self.move_down()
+        elif action == 'repair':
+            self.repair()
+        elif action == 'remove':
+            await self.remove()
 
     async def change(self, method, *args):
         if not self.usable() or self.busy:
@@ -364,12 +441,12 @@ class PlaylistPanel:
         self.commands.add(field, self.button_row(('Save name', save), ('Cancel', cancel)))
         field.focus()
 
-    def begin_pick(self, widget=None, *, replace=False, **kwargs):
+    def repair(self, widget=None, **kwargs):
         if not self.can_edit():
             return
-        if replace and self.selected is None:
+        if self.selected is None:
             return
-        self.picking = self.playlist.id, self.selected if replace else None
+        self.picking = self.playlist.id, self.selected
         self.pick_notice.text = 'Choose a Markdown note in Files or Search.'
         self.owner.select_panel_tab('Files')
 
@@ -408,14 +485,13 @@ class PlaylistPanel:
             self.pick_notice.text = 'Choose a Markdown note ending in .md or .markdown.'
             return True
         identity, entry = self.picking
-        record = await (self.change('replace', identity, entry, path) if entry
-                        else self.change('add', identity, path))
+        record = await self.change('replace', identity, entry, path)
         if self.picking != (identity, entry):
             return True
         if record is not None:
             self.finish_pick()
         elif self.usable():
-            self.pick_notice.text = 'Could not add this note. Choose another note or cancel.'
+            self.pick_notice.text = 'Could not repair this reference. Choose another note or cancel.'
         return True
 
     async def add_note(self, path):
@@ -449,9 +525,6 @@ class PlaylistPanel:
                 self.open(record.id)
                 self.owner.select_panel_tab('Playlist')
 
-    def repair(self, widget=None, **kwargs):
-        self.begin_pick(replace=True)
-
     async def remove(self, widget=None, **kwargs):
         if self.can_edit() and self.selected is not None:
             await self.change('remove', self.playlist.id, self.selected)
@@ -474,7 +547,3 @@ class PlaylistPanel:
     def play(self, widget=None, **kwargs):
         if self.can_edit() and self.playlist.entries:
             self.speech.play(self.playlist.id, anchor=self.play_button)
-
-    def play_selected(self, widget=None, **kwargs):
-        if self.can_edit() and self.selected is not None:
-            self.speech.play(self.playlist.id, self.selected, anchor=self.play_button)

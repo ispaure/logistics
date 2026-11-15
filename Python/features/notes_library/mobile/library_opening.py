@@ -1,16 +1,12 @@
-"""Mobile document admission, preparation, publication and retirement.
-
-The browser owns library navigation; this owner keeps document transitions and
-native publication tokens together. Failed reads retain the published document.
-"""
+"""Mobile Notes document transitions and accepted reader publications."""
 import asyncio
 import posixpath
 import re
 from dataclasses import dataclass
+from functools import partial
 from html import unescape
 from json import dumps
 from pathlib import PurePosixPath
-from threading import Event
 from time import perf_counter
 from urllib.parse import parse_qs, quote, unquote, urlsplit
 from uuid import uuid4
@@ -22,12 +18,18 @@ from commonUtils.ui.native.inline_html import set_inline_html
 from ..notes import MAX_PREVIEW_HTML, MARKDOWN, document_kind
 from ..dataview import ViewPlan, view_plan
 from ..dataview_script import worker_policy
+from .dataview import PageDataViews
+from .inline_video import PAUSE_VIDEOS, PageVideos, install_controls, open_native_video, video_embed
 from .library_panels import LibraryOpening
-from .inline_video import install_controls, video_embed
 
 
-PREPARING_VIDEO = 'Preparing video…'
 READER_BASE = 'https://markdown.invalid/vault/'
+_DOM_MARKER = ("Array.from(document.childNodes)"
+               ".find(node => node.nodeType === 8 && node.data.startsWith('logistics-note:'))?.data")
+
+
+def _script_on_dom(marker, script):
+    return f'if ({_DOM_MARKER} === {dumps("logistics-note:" + marker)}) {{ {script} }}'
 
 
 @dataclass(frozen=True)
@@ -39,19 +41,24 @@ class _PreparedMarkdown:
     plan: ViewPlan
 
 
+@dataclass(eq=False)
+class _ReaderPage:
+    """An accepted note, retained across generated-content DOM replacements."""
+
+    base: str
+    views: PageDataViews
+    fragment: str = ''
+    videos: PageVideos | None = None
+
+
 class LibraryDocuments:
     def __init__(self, browser):
         self.browser = browser
         self.epoch = 0
         self.path = self.embedded = None
-        self.base = READER_BASE
+        self._page = None
         self.editing = False
         self.positions = {}
-        self.pending_fragment = ''
-        self.data_view_plan = self.data_view_task = None
-        self.data_views_loading = False
-        self._page_videos = {}
-        self._video_opening = self._inline_audio = None
         self._open_timing = None
         self._media_open_epoch = self._media_open_path = None
         self._media_open_pending = False
@@ -70,9 +77,38 @@ class LibraryDocuments:
             document_title=lambda: browser.access.title(self.path),
             privacy_gate=browser.access.speech_gate, valid=self.reading)
         self.speech.button.enabled = False
+        self.speech.button.on_press = browser.show_read_aloud
 
     def reading(self):
         return self.browser.valid() and self.path is not None and not self.editing
+
+    @property
+    def base(self):
+        return self._page.base if self._page is not None else READER_BASE
+
+    @property
+    def data_views_loading(self):
+        return self._page is not None and self._page.views.loading
+
+    def _has_page(self, page):
+        return page is not None and page is self._page and self.reading()
+
+    def _has_dom(self, page, marker):
+        return self._has_page(page) and self._load_marker == marker
+
+    async def wait_readable(self, path, current):
+        """Wait for the admitted DOM and generated content before mapping speech."""
+        from commonUtils.ui.native.text_size import native_backend
+        native = native_backend(self.web).startswith(('toga_iOS.', 'toga_android.'))
+        deadline = self.browser.host.loop.time() + 10
+        page = self._page
+        while current() and self._has_page(page) and self.path == path:
+            if (self._loaded or not native) and not page.views.loading:
+                return True
+            if self.browser.host.loop.time() >= deadline:
+                return False
+            await asyncio.sleep(.02)
+        return False
 
     def accepts(self, epoch):
         return self.browser.valid() and self.epoch == epoch
@@ -98,7 +134,7 @@ class LibraryDocuments:
 
     def blank_reader(self):
         self.cancel_page_load()
-        self.base = READER_BASE
+        self._page = None
         self._load_marker = None
         self._loaded = False
         self.page_search.loading()
@@ -116,14 +152,14 @@ class LibraryDocuments:
         self.cancel_open()
         self.cancel_page_load()
         self.browser.cancel_links()
-        self.clear_video_actions()
-        self.cancel_data_views()
+        self._clear_page_videos()
+        if self._page is not None:
+            self._page.views.close()
         self.speech.close()
         self.speech.button.enabled = False
         self.retire_editor()
         self.path = None
-        self.base, self._load_marker = READER_BASE, None
-        self.pending_fragment = ''
+        self._page, self._load_marker = None, None
         self._open_timing = None
 
     async def release_media(self, path):
@@ -199,36 +235,20 @@ class LibraryDocuments:
             self.browser.host.open_timing({key: value for key, value in timing.items() if key != 'started'})
 
 
-    async def open_video_file(self, path, *, page=None, epoch=None):
+    async def open_video_file(self, path, *, epoch=None):
         def current():
-            return self.browser.valid() and (epoch is None or self.accepts(epoch)) and (
-                page is None or self.reading() and self.base == page)
+            return self.browser.valid() if epoch is None else self.accepts(epoch)
 
-        path = self.browser.contained(path)
-        if self.browser.host.open_resource is None:
-            self.browser.notice.text = 'Video playback is unavailable in this host.'
-            return False
-        try:
-            if not current():
-                return False
-            # Pause page media before handing audio to the native player. Keep
-            # the page and provider alive so returning from playback is immediate.
+        async def pause():
             surfaces = [self.web]
             formatted = getattr(self.embedded, 'formatted', None)
             if formatted is not None:
                 surfaces.append(formatted.view)
             for surface in surfaces:
-                await surface.evaluate_javascript("document.querySelectorAll('video').forEach(video => video.pause())")
-            if not current():
-                return False
-            self.speech.close()
-            if page is not None:
-                return bool(await self.browser.host.open_resource(self.browser.provider, path, fullscreen=True))
-            return bool(await self.browser.host.open_resource(self.browser.provider, path))
-        except (OSError, ValueError, PermissionError) as error:
-            if current():
-                self.browser.notice.text = str(error)
-            return False
+                await surface.evaluate_javascript(PAUSE_VIDEOS)
+
+        return await open_native_video(self.browser, path, pause=pause, close_speech=self.speech.close,
+                                       current=current)
 
 
     async def open_note(self, path, *, epoch, remember=True, fragment="", resolve_link=False):
@@ -347,20 +367,20 @@ class LibraryDocuments:
         # Native admission can still reject the styled page. Keep the current
         # editor and history until admission succeeds.
         self.publish_html(prepared.base, prepared.html)
-        self.clear_video_actions()
-        self.cancel_data_views()
+        self._clear_page_videos()
+        if self._page is not None:
+            self._page.views.close()
         self.browser.cancel_links()
         self.retire_editor()
         self.article.clear()
         self.article.add(self.web)
         self.path = prepared.path
-        self.base = prepared.base
-        self.set_video_actions(prepared.videos)
+        plan = prepared.plan if prepared.plan.scripts else None
+        views = PageDataViews(self.web, self.browser.library, plan)
+        page = self._page = _ReaderPage(prepared.base, views, fragment)
+        self._set_page_videos(page, prepared.videos)
         if self._open_timing is not None:
             self._open_timing['published_epoch'] = epoch
-        self.data_view_plan = prepared.plan if prepared.plan.scripts else None
-        self.data_views_loading = bool(prepared.plan.scripts)
-        self.pending_fragment = fragment
         self.page_search.loading()
         self.browser.edit.enabled = self.browser.library.writable
         self.speech.button.enabled = True
@@ -368,35 +388,37 @@ class LibraryDocuments:
 
 
     def follow_link(self, widget, url, **kwargs):
-        if not self.reading() or self.web.parent is not self.article:
+        page = self._page
+        if not self._has_page(page) or self.web.parent is not self.article:
             return False
-        base = self.base
-        if url == self.base + '?drawer=files':
+        base = page.base
+        if url == base + '?drawer=files':
             self.browser.sidebar.show_sidebar()
             return False
-        if url == self.base + '?drawer=links':
+        if url == base + '?drawer=links':
             async def show_links():
-                if self.reading() and self.base == base:
+                if self._has_page(page):
                     await self.browser.show_links(toggle=False)
             self.browser.host.loop.create_task(show_links())
             return False
         parsed = urlsplit(url)
         if not parsed.scheme and not parsed.netloc:
             target = url
-        elif url.split("?", 1)[0] == self.base:
+        elif url.split("?", 1)[0] == base:
             query = parse_qs(parsed.query)
             inline = 'inline-video' in query
             if inline or 'video' in query:
                 key = query['inline-video' if inline else 'video'][0]
-                self.start_embedded_video(key, inline=inline)
+                if page.videos is not None:
+                    page.videos.start(key, self.path, inline=inline)
                 return False
             target = query.get("target", [""])[0]
         else:
             return False
         link = urlsplit(target)
         if not link.path and link.fragment:
-            if getattr(self, 'data_views_loading', False):
-                self.pending_fragment = link.fragment
+            if page.views.loading:
+                page.fragment = link.fragment
             self.scroll_fragment(link.fragment)
             return False
         if (
@@ -416,26 +438,24 @@ class LibraryDocuments:
         except ValueError:
             return False
         async def open_link():
-            if self.reading() and self.base == base:
+            if self._has_page(page):
                 await self.browser.open_note(target, resolve_link=True)
         self.browser.host.loop.create_task(open_link())
         return False
 
 
     def scroll_fragment(self, fragment):
-        import json
-
-        self.web.evaluate_javascript(
+        self.web.evaluate_javascript(_script_on_dom(self._load_marker,
             "(function(){const h=document.getElementById("
-            + json.dumps(unquote(fragment))
-            + ");if(h)h.scrollIntoView();})()"
-        )
+            + dumps(unquote(fragment))
+            + ");if(h)h.scrollIntoView();})()"))
 
 
     def page_loaded(self, widget=None, url=None, **kwargs):
-        if not self.reading() or self._loaded:
+        page = self._page
+        if not self._has_page(page) or self._loaded:
             return
-        base = self.base
+        base = page.base
         if url is not None and url.replace('app-document:', 'https:', 1) != base:
             return
         from commonUtils.ui.native.text_size import native_backend
@@ -448,12 +468,12 @@ class LibraryDocuments:
         self.finish_page_load(base)
 
     async def verify_page_load(self, base, marker):
+        page = self._page
         try:
             result = await asyncio.wait_for(self.web.evaluate_javascript(
-                "document.readyState === 'complete' && Array.from(document.childNodes)"
-                ".find(node => node.nodeType === 8 && node.data.startsWith('logistics-note:'))?.data"
+                "document.readyState === 'complete' && " + _DOM_MARKER
             ), timeout=2)
-            if marker is not None and result == 'logistics-note:' + marker and self._load_marker == marker:
+            if marker is not None and self._has_dom(page, marker) and result == 'logistics-note:' + marker:
                 self.finish_page_load(base)
         except (OSError, RuntimeError, ValueError, TimeoutError):
             pass
@@ -462,96 +482,37 @@ class LibraryDocuments:
                 self._load_task = None
 
     def finish_page_load(self, base):
-        if not self.reading() or self.base != base or self._loaded:
+        page = self._page
+        if not self._has_page(page) or page.base != base or self._loaded:
             return
         self._loaded = True
         if (self._open_timing is not None and self._open_timing.get('published_epoch') == self.epoch
                 and 'dom_ready' not in self._open_timing['stages_ms']):
             self.mark_open_timing('dom_ready', self.epoch)
-        plan = getattr(self, 'data_view_plan', None)
-        if plan is not None:
-            self.data_view_plan = None
-            self.data_view_task = self.browser.host.loop.create_task(self.render_data_views(plan, self.base, self.path))
+        path, marker = self.path, self._load_marker
+        page.views.start(self.browser.host.loop, lambda plan: self._render_data_view(page, plan, path, marker))
         from .notes_swipe import document_swipes
-        self.web.evaluate_javascript(document_swipes(self.base))
-        self.page_search.loaded(reveal=not bool(self.pending_fragment))
-        if self.pending_fragment and not getattr(self, 'data_views_loading', False):
-            fragment, self.pending_fragment = self.pending_fragment, ""
+        self.web.evaluate_javascript(_script_on_dom(marker, document_swipes(page.base)))
+        self.page_search.loaded(reveal=not bool(page.fragment))
+        if page.fragment and not page.views.loading:
+            fragment, page.fragment = page.fragment, ''
             self.scroll_fragment(fragment)
-        elif not self.pending_fragment and self.path in self.positions:
-            self.web.evaluate_javascript('window.scrollTo(0,' + str(self.positions[self.path]) + ')')
+        elif not page.fragment and path in self.positions:
+            self.web.evaluate_javascript(_script_on_dom(marker, f'window.scrollTo(0,{self.positions[path]})'))
 
 
-    def clear_video_actions(self):
-        if self._video_opening is not None:
-            self._video_opening.cancel()
-            self._video_opening = None
-            if self.browser.notice.text == PREPARING_VIDEO:
-                self.browser.notice.text = ''
-        audio = getattr(self, '_inline_audio', None)
-        if audio is not None:
-            self.pause_inline_videos()
-            audio.unregister(self)
-            self._inline_audio = None
-        self._page_videos.clear()
+    def _clear_page_videos(self):
+        page = self._page
+        if page is not None and page.videos is not None:
+            page.videos.close()
+            page.videos = None
 
-    def set_video_actions(self, videos):
-        self._page_videos = videos
+    def _set_page_videos(self, page, videos):
         if videos:
-            self._inline_audio = self.browser.host.audio_output()
-            if self._inline_audio is not None:
-                self._inline_audio.register(self, self.pause_inline_videos)
-
-    def pause_inline_videos(self):
-        if getattr(self, '_inline_audio', None) is not None:
-            self.web.evaluate_javascript("document.querySelectorAll('.note-video video').forEach(video => video.pause())")
-
-    def start_embedded_video(self, key, *, inline):
-        videos = self._page_videos
-        if key not in videos or self.editing or (
-                self._video_opening is not None and not self._video_opening.done()):
-            return
-        audio = getattr(self, '_inline_audio', None)
-        if inline:
-            if audio is None or not audio.interactive():
-                return
-            self.speech.close()
-            if not audio.request_play():
-                return
-        self._video_opening = self.browser.host.loop.create_task(
-            self.play_embedded_video(key, videos[key], self.path, self.base, videos, audio if inline else None))
-
-    async def play_embedded_video(self, key, target, document, base, videos, audio):
-        def current():
-            return (self.browser.valid() and not self.editing and self.path == document
-                    and self.base == base and self._page_videos is videos and key in videos)
-
-        def cancelled():
-            return not current() or stopped.is_set()
-
-        stopped = Event()
-        self.browser.notice.text = PREPARING_VIDEO
-        try:
-            if audio is None:
-                path, _ = await asyncio.to_thread(self.browser.library.link, document, target, cancelled=cancelled)
-                return current() and await self.open_video_file(path, page=base)
-            url = await asyncio.to_thread(self.browser.library.open_embedded_video, document, target, cancelled=cancelled)
-            if not current() or not audio.interactive() or not audio.permitted():
-                return False
-            if url is None:
-                raise ValueError('Video unavailable.')
-            await self.web.evaluate_javascript('window.logisticsPlayVideo?.(' + dumps(key) + ',' + dumps(url) + ')')
-            return True
-        except OperationCancelled:
-            return False
-        except (OSError, RuntimeError, ValueError):
-            if current():
-                self.browser.notice.text = 'Video unavailable.'
-            return False
-        finally:
-            stopped.set()
-            if current() and self.browser.notice.text == PREPARING_VIDEO:
-                self.browser.notice.text = ''
+            marker = self._load_marker
+            page.videos = PageVideos(self.browser, self.web, self.speech, videos,
+                current=lambda path: self._has_dom(page, marker) and self.path == path,
+                in_dom=partial(_script_on_dom, marker))
 
     def note_preview(self, text, path, base, *, active=False, cancelled=lambda: False):
         from commonUtils.ui.native.markdown_preview import VideoPlaceholder
@@ -592,61 +553,34 @@ class LibraryDocuments:
         return html
 
 
-    def cancel_data_views(self):
-        self.data_view_plan = None
-        self.data_views_loading = False
-        task = getattr(self, 'data_view_task', None)
-        running = task is not None and not task.done()
-        if running:
-            task.cancel()
-        self.data_view_task = None
-        # Navigation/retirement replaces the document as well; terminate promptly
-        # while an opening worker or an editor transition is still pending.
-        if running:
-            from ..dataview_script import STOP
-            self.web.evaluate_javascript(STOP)
-
-
     async def render_data_views(self, plan, base, path):
-        from .dataview import execute_views
-        # Opening attempts may fail while this document remains visible. Its
-        # publication token changes only after a replacement is ready.
-        def valid():
-            return self.browser.valid() and self.base == base and self.path == path and not self.editing
-        try:
-            text = await asyncio.wait_for(execute_views(self.web, self.browser.library, path, plan,
-                valid=valid, marker=base), timeout=35)
-            if text is None or not valid():
-                return
-            html, videos = await asyncio.to_thread(self.note_preview, text, path, base,
-                                                  cancelled=lambda: not valid())
-            if not valid():
-                return
-            await self.browser.remember_position()
-            if not valid():
-                return
-            self.page_search.loading()
-            self.data_views_loading = False
-            self.publish_html(base, html)
-            self.clear_video_actions()
-            self.set_video_actions(videos)
-        except OperationCancelled:
-            return
-        except (OSError, ValueError, TypeError, KeyError, RuntimeError, asyncio.TimeoutError) as error:
-            if valid():
-                self.data_views_loading = False
-                await self.document_error('Could not update data view',
-                    str(error) or 'Execution exceeded 35 seconds.')
+        page = self._page
+        if self._has_page(page) and page.base == base and self.path == path:
+            await self._render_data_view(page, plan, path, self._load_marker)
 
+    async def _render_data_view(self, page, plan, path, marker):
+        await page.views.render(plan, path, marker,
+            current=lambda: self._has_dom(page, marker) and self.path == path,
+            preview=partial(self.note_preview, path=path, base=page.base),
+            remember_position=self.browser.remember_position,
+            publish=partial(self._publish_data_view, page), show_error=self.document_error)
+
+    def _publish_data_view(self, page, html, videos):
+        self.page_search.loading()
+        page.views.loading = False
+        self.publish_html(page.base, html)
+        self._clear_page_videos()
+        self._set_page_videos(page, videos)
 
     async def remember_position(self):
         from commonUtils.ui.native.text_size import native_backend
-        if self.path is None or self.editing or not native_backend(self.web).startswith(('toga_iOS.', 'toga_android.')):
+        page = self._page
+        if not self._has_page(page) or not native_backend(self.web).startswith(('toga_iOS.', 'toga_android.')):
             return
-        path, base = self.path, self.base
+        path, marker = self.path, self._load_marker
         try:
             position = await asyncio.wait_for(self.web.evaluate_javascript('window.scrollY'), timeout=.25)
-            if self.reading() and self.base == base and isinstance(position, (int, float)):
+            if self._has_dom(page, marker) and self.path == path and isinstance(position, (int, float)):
                 self.positions[path] = max(0, int(position))
         except Exception:
             # A retired page has no position to retain. Reading still owns the
@@ -691,14 +625,14 @@ class LibraryDocuments:
 
     def _adopt_embedded(self, path, editor, pages, *, remember):
         self.browser.cancel_links()
-        self.cancel_data_views()
+        if self._page is not None:
+            self._page.views.close()
         self.retire_editor()
         self.embedded = editor
         self.editing = True
         # Retain the reusable reader, but retire its old DOM and media when a
         # source editor, drawing or file preview replaces the Markdown page.
-        self.clear_video_actions()
-        self.pending_fragment = ''
+        self._clear_page_videos()
         self.blank_reader()
         self.path = path
         self.speech.close()
@@ -757,8 +691,9 @@ class LibraryDocuments:
         return editor
 
     def _adopt_markdown_editor(self, editor):
-        self.cancel_data_views()
-        self.clear_video_actions()
+        if self._page is not None:
+            self._page.views.close()
+        self._clear_page_videos()
         self.speech.close()
         self.cancel_page_load()
         self.page_search.loading()

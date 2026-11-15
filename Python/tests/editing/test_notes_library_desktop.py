@@ -328,6 +328,7 @@ class NotesLibraryDesktopTests(QtTestCase):
             self.wait_until(lambda: not window.aux.busy)
 
     def test_playlist_crud_picker_and_keyboard_reorder_keep_source_notes(self):
+        from PySide6.QtTest import QTest
         from types import SimpleNamespace
         from unittest.mock import Mock
         from commonUtils.runtime.resources.selection import ResourceChoice
@@ -346,22 +347,36 @@ class NotesLibraryDesktopTests(QtTestCase):
             with patch.object(qt.QInputDialog, 'getText', return_value=('Morning', True)):
                 panel.new_button.click()
             self.assertEqual(panel.header.text(), 'Morning')
-            self.assertIn('Add Markdown', panel.notice.text())
+            self.assertIn('actions', panel.notice.text())
             for path in ('Home.md', 'Plan.MD'):
-                with patch.object(picker, 'choose_resource', return_value=ResourceChoice(
-                    window.provider, path, lambda: None
-                )):
-                    panel.pick()
+                with patch.object(qt.QInputDialog, 'getItem', return_value=('1. Morning', True)):
+                    panel.add_note(path)
             self.wait_until(lambda: panel.rows.count() == 2)
-            panel.rows.setCurrentRow(1)
             with patch.object(panel.speech, 'play') as play:
+                QTest.mouseClick(panel.rows.viewport(), qt.Qt.MouseButton.LeftButton,
+                                 pos=panel.rows.visualItemRect(panel.rows.item(1)).center())
+                self.wait_until(lambda: not window.progress.busy)
+                self.assertEqual(window.history[window.index], 'Plan.MD')
+                play.assert_not_called()
                 panel.play_button.click()
                 play.assert_called_once_with(panel.playlist.id, anchor=panel.play_button)
-                play.reset_mock()
-                panel.selected_play_button.click()
-                play.assert_called_once_with(panel.playlist.id, panel.selected, anchor=panel.play_button)
-            panel.up_button.setFocus()
-            panel.up_button.click()
+            self.assertLess(panel.detail_actions.geometry().bottom(), panel.rows.geometry().top())
+            self.assertFalse(panel.play_button.icon().isNull())
+            self.assertFalse(hasattr(panel, 'selected_play_button'))
+            self.assertFalse(hasattr(panel, 'spoken'))
+            self.assertEqual(panel.notice.text(), '')
+            panel.rows.drop_slot = 1
+            panel.rows.viewport().update()
+            self.wait_until(lambda: panel.rows.drop_indicator.isVisible())
+            self.assertLessEqual(abs(panel.rows.drop_indicator.y() -
+                                     panel.rows.visualItemRect(panel.rows.item(1)).top()), 1)
+            panel.rows.drop_slot = None
+            panel.rows.viewport().update()
+            menu = panel.entry_buttons[panel.selected].menu()
+            panel.entry_menu(panel.selected, menu)
+            self.assertEqual([action.text() for action in menu.actions()],
+                             ['Move up', 'Move down', 'Repair reference…', 'Remove entry'])
+            menu.actions()[0].trigger()
             self.wait_until(lambda: panel.rows.item(0).text() == 'Plan.MD')
             self.assertEqual(panel.rows.currentRow(), 0)
             target = panel.rows.visualItemRect(panel.rows.item(1)).bottomLeft()
@@ -374,9 +389,13 @@ class NotesLibraryDesktopTests(QtTestCase):
             with patch.object(picker, 'choose_resource', return_value=ResourceChoice(
                 window.provider, 'Moved.md', lambda: None
             )):
-                panel.repair_button.click()
+                menu = panel.entry_buttons[panel.selected].menu()
+                panel.entry_menu(panel.selected, menu)
+                menu.actions()[2].trigger()
             self.wait_until(lambda: panel.rows.item(1).text() == 'Moved.md')
-            panel.remove_button.click()
+            menu = panel.entry_buttons[panel.selected].menu()
+            panel.entry_menu(panel.selected, menu)
+            menu.actions()[3].trigger()
             self.wait_until(lambda: panel.rows.count() == 1)
             with patch.object(qt.QInputDialog, 'getText', return_value=('Evening', True)):
                 panel.rename()
@@ -389,6 +408,7 @@ class NotesLibraryDesktopTests(QtTestCase):
 
     def test_playlist_speech_follows_file_boundaries_and_yields_to_standalone(self):
         from commonUtils.tests.appearance.test_read_aloud import SilentEngine
+        from features.notes_library.ui.library_workspace import TabbedNotesLibrary
         with self.temporary_directory() as directory:
             root = Path(directory)
             for name, source in (
@@ -397,7 +417,10 @@ class NotesLibraryDesktopTests(QtTestCase):
                     ('End.md', ' '.join('last' + str(i) for i in range(70)))):
                 (root / name).write_text(source)
             with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'app'):
-                window = self.open_library(root)
+                window = TabbedNotesLibrary(lambda: LocalFiles(root), 'Playlist speech')
+                window.show()
+                self.wait_until(lambda: not window.progress.busy)
+                window.library.index_database = root / 'index.sqlite3'
                 panel = window.playlist_panel
                 window.panel_tabs.setCurrentWidget(panel)
             record = panel.catalog.create('Spoken notes')
@@ -410,20 +433,34 @@ class NotesLibraryDesktopTests(QtTestCase):
                 playback.play(record.id, anchor=panel.play_button)
                 self.wait_until(lambda: playback.state == 'speaking', message=lambda: playback.controls.message.text())
                 self.assertEqual(playback.active_id, record.entries[0].id)
+                document = window.document_tabs.current
+                self.assertEqual(window.document_tabs.path(document), 'Start.md')
+                playback.controls._range_changed(0, 5)
+                self.assertTrue(document.viewer.browser.extraSelections())
+                self.assertEqual(document.viewer.speech.action.text(), 'Playlist read aloud…')
+                self.assertEqual(panel.notice.text(), '')
+                with patch.object(playback, 'play') as show:
+                    document.viewer.speech.action.trigger()
+                    show.assert_called_once_with(record.id, anchor=document.viewer.speech.anchor)
+                self.assertIsNone(document.viewer.speech.session)
                 playback.controls.toggle_pause()
                 playback.controls.skip(15)
                 self.wait_until(lambda: playback.active_id == record.entries[2].id)
                 self.assertEqual(playback.state, 'paused')
+                self.assertEqual(window.document_tabs.path(window.document_tabs.current), 'End.md')
                 self.assertEqual(playback.queue.position, playback.queue.current.words[15])
                 playback.controls.skip(-15)
                 self.wait_until(lambda: playback.active_id == record.entries[0].id)
                 self.assertEqual(playback.queue.position, 0)
-                window.open_note('Start.md')
-                self.wait_until(lambda: not window.progress.busy)
-                window.viewer.speech.show()
-                window.viewer.speech.start()
+                self.assertEqual(window.document_tabs.path(window.document_tabs.current), 'Start.md')
+                playback.controls.stop()
+                document = window.document_tabs.current
+                self.assertEqual(document.viewer.speech.action.text(), 'Read aloud…')
+                document.viewer.speech.engine_factory = SilentEngine
+                document.viewer.speech.action.trigger()
+                document.viewer.speech.start()
                 self.assertEqual(playback.state, 'stopped')
-                self.assertEqual(window.viewer.speech.session.state, 'speaking')
+                self.assertEqual(document.viewer.speech.session.state, 'speaking')
 
     def test_breadcrumb_centers_between_buttons_and_wraps_at_larger_fonts(self):
         with self.temporary_directory() as directory:

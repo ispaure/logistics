@@ -23,6 +23,7 @@ from commonUtils.search.names import search_terms
 from commonUtils.search.providers import SearchResult
 from commonUtils.ui.native.adaptive import allocated_width
 from commonUtils.ui.native.appearance import accessible_name
+from services.worker_retirement import drain_worker
 
 from .drawers import DrawerHost, NotesDrawers
 
@@ -73,6 +74,7 @@ class NotesHost:
     playlist_speech: Callable = None
 
 
+from .library_file_forms import LibraryFileForms
 from .library_panels import FILENAME_SIZE, PATH_SIZE, TAB_SIZE, LibraryPanels
 from .library_opening import LibraryDocuments
 from .library_tree import (
@@ -80,10 +82,12 @@ from .library_tree import (
 )
 
 
-class VaultBrowser(LibraryPanels):
+class VaultBrowser(LibraryFileForms, LibraryPanels):
     def __init__(self, host, provider, root, destination, *, index_database=None):
         self.host, self.provider, self.destination = host, provider, destination
         self.release_provider = lambda: None
+        self._move_worker = None
+        self._moving_entry = False
         self.library = NotesLibrary(provider, root, index_database=index_database)
         self.root = self.library.root
         from features.notes_library.notes import library_name
@@ -366,7 +370,13 @@ class VaultBrowser(LibraryPanels):
         return await self.document.open_editor(widget, **kwargs)
 
     async def open_note(self, path, *, remember=True, fragment='', resolve_link=False, search_return=None):
-        if not self.valid() or (getattr(self, '_moving_entry', False) and not getattr(self, '_reopening_after_move', False)):
+        if self._moving_entry:
+            return False
+        return await self._open_note(path, remember=remember, fragment=fragment,
+                                     resolve_link=resolve_link, search_return=search_return)
+
+    async def _open_note(self, path, *, remember, fragment='', resolve_link=False, search_return=None):
+        if not self.valid():
             return False
         side = self.sidebar.side
         epoch = self.document.cancel_open()
@@ -577,6 +587,21 @@ class VaultBrowser(LibraryPanels):
                 state['rows'].style.width = max(0, self.sidebar.policy.sidebar_width - 24)
         self.refresh_chrome()
 
+    async def open_for_speech(self, path, current):
+        if not current():
+            return False
+        if self.path != path or self.editing:
+            if not await self.open_note(path):
+                return False
+        return await self.document.wait_readable(path, current)
+
+    def show_read_aloud(self, widget=None, **kwargs):
+        speech = self.playlist_panel.speech
+        if speech is not None and speech.active:
+            speech.play(speech.playlist_id, anchor=self.speech.button)
+        else:
+            self.speech.show(widget, **kwargs)
+
     def refresh_reader_actions(self):
         if hasattr(self, "reader_actions"):
             self.reader_actions.dispose()
@@ -611,7 +636,9 @@ class VaultBrowser(LibraryPanels):
             actions.append(('Contents…', contents))
         if self.path is not None and not self.editing and PurePosixPath(self.path).suffix.lower() in MARKDOWN:
             actions.append(("Find in this page…", self.show_page_search))
-            actions.append(("Read aloud…", self.speech.show))
+            speech = self.playlist_panel.speech
+            active = speech is not None and speech.active
+            actions.append(('Playlist read aloud…' if active else 'Read aloud…', self.show_read_aloud))
             async def add_to_playlist(widget=None, path=self.path, **kwargs):
                 await self.playlist_panel.add_note(path)
             actions.append(('Add to playlist…', add_to_playlist))
@@ -694,6 +721,7 @@ class VaultBrowser(LibraryPanels):
             return
         self.cancel_tree_render()
         self.search_generation += 1
+        self._dismissed_cached_paths = set()
         self.search_query = None
         if self.search_task is not None:
             self.search_task.cancel()
@@ -729,14 +757,19 @@ class VaultBrowser(LibraryPanels):
             nonlocal last_progress_size
             if cancelled():
                 return
-            if not finished and (preserve_viewport or len(result.rows) == last_progress_size):
+            rows = [row for row in result.rows if not result.cached
+                    or row['path'] not in getattr(self, '_dismissed_cached_paths', ())]
+            if not finished and (preserve_viewport or len(rows) == last_progress_size):
                 return
-            last_progress_size = len(result.rows)
-            self.search_rows = result.rows
+            keep_position = preserve_viewport or last_progress_size >= 0
+            last_progress_size = len(rows)
+            self.search_rows = rows
             if finished:
                 self.search_status = "" if result.complete else "Some items could not be searched."
                 self.search_query = query
-            if preserve_viewport:
+            elif result.cached:
+                self.search_status = 'Cached results · Checking…'
+            if keep_position:
                 self.render_tree(preserve_viewport=True)
             else:
                 self.render_tree()
@@ -744,7 +777,7 @@ class VaultBrowser(LibraryPanels):
         def project(result):
             rows = [dict(row, name=posixpath.basename(row['path']))
                     for row in library_files.ranked_search_rows(result.rows)]
-            return SearchResult(rows, result.scanned, result.complete, result.errors)
+            return SearchResult(rows, result.scanned, result.complete, result.errors, cached=result.cached)
 
         await asyncio.sleep(SEARCH_DEBOUNCE_SECONDS)
         if cancelled():
@@ -778,7 +811,7 @@ class VaultBrowser(LibraryPanels):
         def progress(result):
             nonlocal last_publish, pending_progress, progress_queued
             now = monotonic()
-            if not cancelled() and now - last_publish >= .3:
+            if not cancelled() and (result.cached or now - last_publish >= .3):
                 last_publish = now
                 pending_progress = project(result)
                 if not progress_queued:
@@ -802,6 +835,8 @@ class VaultBrowser(LibraryPanels):
             publish(result, finished=True)
 
     async def reveal_folder(self, path):
+        if not await self.validate_search_entry(path):
+            return
         self.search.value = ""
         self.select_panel_tab('Files')
         folder = self.root
@@ -1068,87 +1103,6 @@ class VaultBrowser(LibraryPanels):
             spinner.stop()
             self.sidebar.refresh_gestures()
 
-
-    def new_note(self, widget=None, **kwargs):
-        async def choose():
-            if not self.valid() or not self.library.supports('create'):
-                return False
-            extension = await self.host.choose_type() if self.host.choose_type else 'md'
-            if self.valid() and extension in ('md', 'rmdoc'):
-                self.name_document(extension)
-        return self.host.loop.create_task(choose())
-
-    def name_document(self, extension, filename=''):
-        suffix = PurePosixPath(filename).suffix
-        suffix = suffix if suffix.lower() in (MARKDOWN if extension == 'md' else {'.' + extension}) else '.' + extension
-        name = self.host.presentation.filename_input(value=filename, extension=suffix, placeholder='Untitled', style=Pack(height=48))
-        status = toga.Label('')
-        async def next_step(widget=None, **kwargs):
-            try:
-                from services.documents.names import document_name
-                filename = document_name(name.value or 'Untitled.' + extension)
-                suffixes = MARKDOWN if extension == 'md' else {'.' + extension}
-                if PurePosixPath(filename).suffix.lower() not in suffixes:
-                    filename += '.' + extension
-                await self.choose_location(filename, extension, self.selected_parent())
-            except (OSError, ValueError) as error:
-                status.text = str(error)
-        form = toga.Box(children=[toga.Label('Name your document', style=Pack(font_size=20)),
-            toga.Label('Remarkable Document' if extension == 'rmdoc' else 'Markdown'), name, status,
-            toga.Button('Choose location', on_press=next_step, style=Pack(height=48)),
-            toga.Button('Cancel', on_press=lambda widget: self.present(), style=Pack(height=48))],
-            style=Pack(direction=COLUMN, margin=16))
-        return self.host.show_view(form, destination=self.destination, route='notes-new', title='New document')
-
-    async def choose_location(self, name, extension, parent):
-        if not self.valid():
-            return
-        parent = self.contained(parent)
-        rows = await asyncio.to_thread(self.library.folders, parent, cancelled=lambda: not self.valid())
-        if not self.valid():
-            return
-        status = toga.Label('')
-        create = toga.Button('Create here', style=Pack(height=48))
-        async def submit(widget=None, **kwargs):
-            if not self.valid() or not create.enabled:
-                return
-            create.enabled = False
-            try:
-                path = await asyncio.to_thread(self.library.create, name, parent, extension=extension,
-                                              cancelled=lambda: not self.valid())
-                if not self.valid():
-                    return
-                await self.load_folder(parent)
-                self.invalidate_search_interfaces()
-                if self.search.value:
-                    self.search_changed()
-                self.present()
-                if await self.open_note(path) and extension == 'md':
-                    await self.open_editor()
-            except (OSError, ValueError) as error:
-                if self.valid():
-                    status.text = str(error)
-            finally:
-                create.enabled = True
-        create.on_press = submit
-        folders = toga.Box(style=Pack(direction=COLUMN))
-        if parent != self.root:
-            async def up(widget=None, **kwargs):
-                await self.choose_location(name, extension, posixpath.dirname(parent))
-            folders.add(toga.Button('Parent folder', on_press=up, style=Pack(height=48)))
-        for row in rows:
-            if row['directory']:
-                async def enter(widget=None, path=row['path'], **kwargs):
-                    await self.choose_location(name, extension, path)
-                folders.add(toga.Button(row['name'], on_press=enter, style=Pack(height=48)))
-        form = toga.Box(children=[toga.Label('Save inside Notes Library', style=Pack(font_size=20)),
-            toga.Label(parent or 'Library root'), toga.Label(name),
-            toga.ScrollContainer(content=folders, horizontal=False, style=Pack(flex=1)), status, create,
-            toga.Button('Back to name', on_press=lambda widget: self.name_document(extension, name), style=Pack(height=48)),
-            toga.Button('Cancel', on_press=lambda widget: self.present(), style=Pack(height=48))],
-            style=Pack(direction=COLUMN, flex=1, margin=16))
-        self.host.show_view(form, destination=self.destination, route='notes-new', title='Choose location')
-
     def selected_parent(self):
         selected = self.selected_path
         if selected in self.folders or selected in self.expanded:
@@ -1159,147 +1113,130 @@ class VaultBrowser(LibraryPanels):
             return selected
         return posixpath.dirname(selected) if selected else self.root
 
+    async def _create_document(self, name, extension, parent):
+        path = await asyncio.to_thread(self.library.create, name, parent, extension=extension,
+                                      cancelled=lambda: not self.valid())
+        if not self.valid():
+            return
+        await self.load_folder(parent)
+        if not self.valid():
+            return
+        self.invalidate_search_interfaces()
+        if self.search.value:
+            self.search_changed()
+        self.present()
+        if await self.open_note(path) and extension == 'md':
+            await self.open_editor()
+
+    async def _create_folder(self, name, parent):
+        self.file_command_busy = True
+        try:
+            await asyncio.to_thread(self.library.create_folder, name, parent,
+                                    cancelled=lambda: not self.valid())
+            if not self.valid():
+                return False
+            self.document.cancel_open()
+            paths = set(self.folders) | {parent, self.root}
+            self.folders.clear()
+            for path in sorted(paths):
+                await self.load_folder(path)
+            if not self.valid():
+                return False
+            self.refresh_library_indexes()
+            return True
+        finally:
+            self.file_command_busy = False
+
     async def move_entry_to(self, source, destination):
         if not self.valid() or self.file_command_busy or not self.library.supports('rename'):
             return False
         self.file_command_busy = True
-        task_cancelled = False
-        mutation_cancelled = Event()
-        side = self.sidebar.side
         article_enabled = self.article.enabled
+        side = self.sidebar.side
+        origin = self.host.destination()
+        action_view = getattr(self, 'file_action_view', None)
+
+        def current_view():
+            return self.valid() and self.host.destination() == origin and (
+                action_view is None or self.file_action_current(action_view))
+
         try:
             source, destination = self.contained(source), self.contained(destination)
             moving_open = bool(self.path and (self.path == source or self.path.startswith(source + '/')))
             if moving_open and not await self.prepare_leave():
                 return False
+            if not current_view():
+                return False
             self._moving_entry = True
             self.article.enabled = False
             self.document.cancel_open()
-            def move():
-                change = self.library.move_with_change(source, destination,
-                    cancelled=lambda: mutation_cancelled.is_set() or not self.valid())
-                mutation = MutationResult(change)
-                for before, after in change.reference_moves():
-                    try:
-                        self.host.relocate_references(self.provider, before, after)
-                    except (OSError, ValueError, PermissionError):
-                        mutation.reference_errors.append('Some saved references could not be updated.')
-                return mutation
-            worker = asyncio.create_task(asyncio.to_thread(move))
-            # Retire the worker before releasing its guard. A cancellation after
-            # commit must still reconcile saved references and the current note.
-            while True:
-                try:
-                    mutation = await asyncio.shield(worker)
-                    break
-                except asyncio.CancelledError:
-                    if worker.cancelled():
-                        raise
-                    task_cancelled = True
-                    mutation_cancelled.set()
-            if not self.valid():
-                return False
-            if moving_open:
-                self.document.retire_editor()
-            change = mutation.change
-            self.history, self.history_index = change.history(self.history, self.history_index)
-            self.document.positions = change.positions(self.positions)
-            self.document.path, self.selected_path = change.remap(self.path), destination
-            self.expanded = {change.remap(path) for path in self.expanded} | {posixpath.dirname(destination)}
-            paths = {change.remap(path) for path in self.folders} | {
-                self.root, posixpath.dirname(source), posixpath.dirname(destination)}
-            self.folders.clear()
-            self.folder_pages.clear()
-            for path in sorted(paths):
-                await self.load_folder(path)
-            if moving_open:
-                self._reopening_after_move = True
-                try:
-                    await self.open_note(self.path, remember=False)
-                finally:
-                    self._reopening_after_move = False
-            if side is not None:
-                self.sidebar.show(side)
-            self.refresh_library_indexes()
-            self.refresh_reader_actions()
-            self.notice.text = ('Moved ' + PurePosixPath(destination).name
-                               + ('; some saved references could not be updated.' if mutation.reference_errors else ''))
-            return True
+            cancel = Event()
+            worker = self._move_worker = asyncio.create_task(self._move_and_reconcile(
+                source, destination, moving_open=moving_open, side=side, current_view=current_view,
+                cancelled=lambda: cancel.is_set() or not self.valid()))
+            try:
+                return await asyncio.shield(worker)
+            except asyncio.CancelledError:
+                # The worker may have committed already. Keep the guard until
+                # the provider and browser have finished applying its result.
+                cancel.set()
+                await drain_worker(worker)
+                raise
         except OperationCancelled:
             return False
         except (OSError, ValueError) as error:
-            if self.valid():
+            if current_view():
                 self.notice.text = fill(str(error)[:180], width=28)
             return False
         finally:
+            self._move_worker = None
             self._moving_entry = False
             self.article.enabled = article_enabled
             self.file_command_busy = False
-            if task_cancelled:
-                raise asyncio.CancelledError
 
-    def manage_entry(self, *, folder=False, move=False, return_side=None):
-        if not self.valid() or not self.library.supports('rename' if move else 'create'):
-            return False
-        source = self.selected_path if move else None
-        if move and source is None:
-            return False
-        title = 'Rename' if move else 'New folder'
-        initial = PurePosixPath(source).name if move else ''
-        name = self.host.presentation.filename_input(value=initial, directory=not move or self.library.provider.entry(source)['directory'],
-                             style=Pack(height=48))
-        status = toga.Label('Links are not rewritten.' if move else '')
-        submit_button = toga.Button('Rename' if move else 'Create folder', style=Pack(height=48))
-        cancel = toga.Button('Cancel', on_press=lambda widget: self.return_from_file_action(view=action_view), style=Pack(height=48))
-        parent = self.selected_parent()
-        async def submit(widget=None, **kwargs):
-            if self.file_command_busy or not self.file_action_current(action_view):
-                return
-            if move:
-                submit_button.enabled = cancel.enabled = False
-                try:
-                    from ..library_files import renamed_path
-                    target = renamed_path(source, name.value)
-                    if await self.move_entry_to(source, target):
-                        self.return_from_file_action(view=action_view)
-                    else:
-                        status.text = self.notice.text
-                except ValueError as error:
-                    status.text = str(error)
-                finally:
-                    submit_button.enabled = cancel.enabled = True
-                return
-            self.file_command_busy = True
-            submit_button.enabled = cancel.enabled = False
+    def _publish_entry_move(self, source, destination, *, cancelled):
+        change = self.library.move_with_change(source, destination, cancelled=cancelled)
+        mutation = MutationResult(change)
+        for before, after in change.reference_moves():
             try:
-                await asyncio.to_thread(self.library.create_folder, name.value, parent,
-                                        cancelled=lambda: not self.valid())
-                if not self.valid():
-                    return
-                self.document.cancel_open()
-                paths = set(self.folders) | {parent, self.root}
-                self.folders.clear()
-                for path in sorted(paths):
-                    await self.load_folder(path)
-                self.refresh_library_indexes()
-                self.file_command_busy = False
-                self.return_from_file_action(view=action_view)
-                self.refresh_reader_actions()
-            except OperationCancelled:
-                return
-            except (OSError, ValueError) as error:
-                if self.valid():
-                    status.text = fill(str(error)[:180], width=28)
-            finally:
-                self.file_command_busy = False
-                submit_button.enabled = cancel.enabled = True
-        submit_button.on_press = submit
-        form = toga.Box(children=[toga.Label(title, style=Pack(font_size=20)),
-            toga.Label('Name' if move else 'Folder name'),
-            name, status, submit_button, cancel], style=Pack(direction=COLUMN, margin=16))
-        action_view = toga.ScrollContainer(content=form, horizontal=False, style=Pack(flex=1))
-        return self.show_file_action(action_view,
-                                     route='notes-manage', title=title, return_side=return_side)
+                self.host.relocate_references(self.provider, before, after)
+            except (OSError, ValueError):
+                mutation.reference_errors.append('Some saved references could not be updated.')
+        return mutation
+
+    async def _move_and_reconcile(self, source, destination, *, moving_open, side, current_view, cancelled):
+        mutation = await asyncio.to_thread(self._publish_entry_move, source, destination, cancelled=cancelled)
+        if not self.valid():
+            return False
+
+        change = mutation.change
+        if moving_open:
+            self.document.retire_editor()
+        self.history, self.history_index = change.history(self.history, self.history_index)
+        self.document.positions = change.positions(self.positions)
+        self.document.path, self.selected_path = change.remap(self.path), change.destination
+        new_parent = posixpath.dirname(change.destination)
+        self.expanded = {change.remap(path) for path in self.expanded} | {new_parent}
+        paths = {change.remap(path) for path in self.folders} | {
+            self.root, posixpath.dirname(change.source), new_parent}
+        self.folders.clear()
+        self.folder_pages.clear()
+        for path in sorted(paths):
+            await self.load_folder(path)
+            if not self.valid():
+                return False
+
+        if moving_open:
+            await self._open_note(self.path, remember=False)
+        if not self.valid():
+            return False
+        if side is not None and current_view():
+            self.sidebar.show(side)
+        self.refresh_library_indexes()
+        self.refresh_reader_actions()
+        self.notice.text = ('Moved ' + PurePosixPath(change.destination).name
+                            + ('; some saved references could not be updated.' if mutation.reference_errors else ''))
+        return True
 
     def show_page_search(self, widget=None, **kwargs):
         if self.valid() and self.path is not None:
@@ -1343,5 +1280,9 @@ class VaultBrowser(LibraryPanels):
         if self.session is not None and self.session.id in self.host.workspace.sessions:
             self.host.workspace.close(self.session.id, guard=lambda session: True)
         self.session = None
-        self.release_provider()
-        self.release_provider = lambda: None
+        release, self.release_provider = self.release_provider, lambda: None
+        if self._move_worker is None or self._move_worker.done():
+            release()
+        else:
+            # A committed provider move may still be updating references.
+            self._move_worker.add_done_callback(lambda worker: release())

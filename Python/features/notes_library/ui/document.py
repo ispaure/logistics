@@ -281,6 +281,9 @@ class DocumentPresentation:
             self.viewer.find_action.setShortcuts([])
         self.viewer.new_action.triggered.disconnect()
         self.viewer.new_action.triggered.connect(self.new_note)
+        self.viewer.speech.action.triggered.disconnect(self.viewer.speech.show)
+        self.viewer.speech.action.triggered.connect(self.show_read_aloud)
+        self.idle.connect(self.sync_speech_action)
         self.viewer.open_action.setEnabled(False)
         self.viewer.save_as_action.setEnabled(False)
         self.navigation = MarkdownNavigation(self, up=True)
@@ -357,6 +360,24 @@ class DocumentPresentation:
         else:
             self.document_controls.insertWidget(0, self.navigation, 1)
 
+
+    def playlist_speech(self):
+        panel = getattr(getattr(self, 'workspace', self), 'playlist_panel', None)
+        return panel.speech if panel is not None else None
+
+    def sync_speech_action(self):
+        speech = self.playlist_speech()
+        active = speech is not None and speech.active
+        self.viewer.speech.action.setText('Playlist read aloud…' if active else 'Read aloud…')
+        self.viewer.speech.action.setToolTip('Control the active playlist. Stop it to read this note on its own.'
+                                           if active else 'Read selected text, or this document')
+
+    def show_read_aloud(self):
+        speech = self.playlist_speech()
+        if speech is not None and speech.active:
+            speech.play(speech.playlist_id, anchor=self.viewer.speech.anchor)
+        else:
+            self.viewer.speech.show()
 
     def open_note(self, path, *, remember=True, fragment='', index=None, resolve_link=False):
         if self.progress.busy or self.library is None or self.locked:

@@ -41,13 +41,11 @@ def directory_index(library):
 def _indexed_filename_search(library, cache, root, query, *, visible, cancelled, progress, folder_pages):
     from commonUtils.search.indexed import IndexedLocalSearch
     from services.directory_index import foreground
-    class SavedPageReady(Exception):
-        """Release the provisional SQL cursor after its first useful page."""
-
     searcher = IndexedLocalSearch(cache.database, eligible=lambda provider: True, cache=cache)
     allowed = {}
     def project(result):
         rows = []
+        cached_files = {row['path'] for row in result.rows if not row['directory']} if result.cached else set()
         for row in result.rows:
             check_cancelled(cancelled)
             try:
@@ -68,10 +66,14 @@ def _indexed_filename_search(library, cache, root, query, *, visible, cancelled,
                     parent = str(PurePosixPath(parent).parent)
                 if not permitted:
                     continue
-            if folder_pages is not None and row['directory'] and path not in folder_pages:
-                folder_pages[path] = library.folder_page(path, cancelled=cancelled)
+            if folder_pages is not None and row['directory']:
+                if result.cached:
+                    page = str(PurePosixPath(path) / (PurePosixPath(path).name + '.md'))
+                    folder_pages[path] = page if page in cached_files else None
+                elif path not in folder_pages:
+                    folder_pages[path] = library.folder_page(path, cancelled=cancelled)
             rows.append(row)
-        return SearchResult(rows, result.scanned, result.complete, result.errors)
+        return SearchResult(rows, result.scanned, result.complete, result.errors, cached=result.cached)
     with cache, foreground(cache.database, root):
         saved = cache.peek(root, cancelled=cancelled)
         warm = saved is not None
@@ -79,19 +81,8 @@ def _indexed_filename_search(library, cache, root, query, *, visible, cancelled,
             saved.close()
         if warm:
             if progress is not None:
-                def saved_page(result):
-                    result = project(result)
-                    if result.rows:
-                        progress(result)
-                        raise SavedPageReady()
-                try:
-                    # Validate only the first useful saved page. The refreshed
-                    # pass below checks every final hit; finishing both complete
-                    # passes would double provider work for a large warm query.
-                    searcher.search(library.provider, library.root, query,
-                                    cancelled=cancelled, progress=saved_page)
-                except SavedPageReady:
-                    pass
+                searcher.cached(library.provider, library.root, query, cancelled=cancelled,
+                                progress=lambda result: progress(project(result)))
             # Retain saved rows while refreshing; do not replace them with the
             # smaller prefix of a second traversal. Final reconciliation wins.
             searcher.prepare(library.provider, library.root, cancelled=cancelled)
@@ -132,7 +123,7 @@ def search(library, query, *, include_text, visible=None, cancelled=lambda: Fals
         represented = set(pages.values())
         rows = [dict(row, page=pages[row['path']]) if row['path'] in pages else row
                 for row in result.rows if row['path'] not in represented]
-        return SearchResult(rows, result.scanned, result.complete, result.errors)
+        return SearchResult(rows, result.scanned, result.complete, result.errors, cached=result.cached)
 
     notify = progress
     if collapse_folder_notes and progress is not None:

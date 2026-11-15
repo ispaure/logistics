@@ -412,15 +412,18 @@ class NotesLibraryPanelTests(unittest.TestCase):
             for stale_result in ('move', 'cancel'):
                 owner.sidebar.show_sidebar()
                 answers = []
+                shown = asyncio.Event()
                 async def dialog(choice):
                     answer = self.app.loop.create_future()
                     answers.append(answer)
+                    shown.set()
                     return await answer
                 with patch.object(self.app.main_window, 'dialog', new=dialog):
                     first = asyncio.create_task(owner.file_actions('Vault/Home.md'))
-                    await asyncio.sleep(0)
+                    await asyncio.wait_for(shown.wait(), 5)
+                    shown.clear()
                     second = asyncio.create_task(owner.file_actions('Vault/Projects/Plan.MD'))
-                    await asyncio.sleep(0)
+                    await asyncio.wait_for(shown.wait(), 5)
                     answers[1].set_result('rename')
                     await second
                     form = owner.file_action_view
@@ -870,10 +873,10 @@ class NotesLibraryPanelTests(unittest.TestCase):
             entered, release = Event(), Event()
             published = asyncio.Event()
             original_render = owner.render_tree
-            def render():
+            def render(**kwargs):
                 if owner.search_rows and owner.search_rows[0]['path'] == 'Vault/Projects/Plan.MD':
                     published.set()
-                original_render()
+                original_render(**kwargs)
             owner.render_tree = render
             def scan(*args, progress, **kwargs):
                 result = SearchResult([dict(path='Vault/Projects/Plan.MD', name='Plan.MD', directory=False)], 1, False, [])
@@ -890,6 +893,49 @@ class NotesLibraryPanelTests(unittest.TestCase):
                 finally:
                     release.set()
                     await owner.search_task
+        self.run_async(exercise())
+
+    def test_cached_notes_show_and_click_safely_while_refresh_is_blocked(self):
+        from commonUtils.search.indexed import IndexedLocalSearch
+        from commonUtils.testing.waiting import wait_until
+
+        async def exercise():
+            for name in ('Cached A.md', 'Cached B.md'):
+                (self.vault / name).write_text('# Cached note')
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            await asyncio.to_thread(library_files.search, owner.library, 'Cached', include_text=False)
+            (self.vault / 'Cached A.md').unlink()
+            entered, release = Event(), Event()
+            prepare = IndexedLocalSearch.prepare
+
+            def refresh(searcher, *args, **kwargs):
+                entered.set()
+                if not release.wait(5):
+                    raise AssertionError('Test did not release the refresh')
+                return prepare(searcher, *args, **kwargs)
+
+            owner.select_panel_tab('Search')
+            with patch.object(IndexedLocalSearch, 'prepare', refresh), \
+                    patch.object(owner, 'open_note', new_callable=AsyncMock, return_value=True) as open_note:
+                owner.search.value = 'Cached'
+                try:
+                    await wait_until(lambda: entered.is_set() and len(owner.search_rows) == 2,
+                                     message='Cached notes waited for refresh')
+                    self.assertTrue(all(row.get('cached') for row in owner.search_rows))
+                    self.assertIn('Checking', owner.search_status)
+                    await owner.open_selected_note('Vault/Cached A.md')
+                    open_note.assert_not_called()
+                    self.assertEqual([row['path'] for row in owner.search_rows], ['Vault/Cached B.md'])
+                    self.assertIn('no longer available', owner.search_status)
+                    await owner.open_selected_note('Vault/Cached B.md')
+                    self.assertEqual(open_note.call_args.args[0], 'Vault/Cached B.md')
+                    self.assertFalse(owner.search_task.done())
+                finally:
+                    release.set()
+                    await owner.search_task
+            self.assertEqual([row['path'] for row in owner.search_rows], ['Vault/Cached B.md'])
+            self.assertFalse(owner.search_rows[0].get('cached'))
+
         self.run_async(exercise())
 
     def test_background_fences_notes_search_and_calendar_until_visible(self):
@@ -980,43 +1026,55 @@ class NotesLibraryPanelTests(unittest.TestCase):
             field.value = 'Morning'
             await commands.children[0].on_press()
             self.assertEqual(panel.header.text, 'Morning')
-            self.assertIn('Add Markdown', panel.notice.text)
+            self.assertIn('actions', panel.notice.text)
+            self.assertIs(panel.widget.children[0], panel.toolbar)
+            self.assertIs(panel.play_button.parent, panel.toolbar)
+            self.assertFalse(panel.commands.children)
+            self.assertFalse(hasattr(panel, 'selected_play_button'))
 
-            panel.begin_pick()
-            self.assertEqual(owner.panel_tab, 'Files')
-            self.assertIs(panel.pick_prompt.parent, owner.files_content)
-            owner.select_panel_tab('Search')
-            self.assertIs(panel.pick_prompt.parent, owner.search_content)
-            await owner.open_selected_note('Vault/Home.md')
+            for path in ('Vault/Home.md', 'Vault/Projects/Plan.MD'):
+                with patch.object(owner.sidebar, 'choose_action', new=AsyncMock(return_value=panel.playlist.id)):
+                    await panel.add_note(path)
+                await panel.reload()
             self.assertIsNone(owner.path)
             self.assertEqual(owner.panel_tab, 'Playlist')
-            await panel.reload()
-            panel.begin_pick()
-            await owner.open_selected_note('Vault/Projects/Plan.MD')
-            await panel.reload()
             first, second = panel.playlist.entries
+            self.assertEqual(panel.buttons[second.id].text, 'Plan.MD')
+            self.assertEqual(panel.notice.text, '')
+            self.assertFalse(hasattr(panel, 'spoken'))
 
             self.assertTrue(panel.drag.start(second.id))
+            self.assertTrue(panel.drag.hover(panel.buttons[first.id], first.id, 1, 44))
+            self.assertEqual(panel.drop_slot, 0)
+            self.assertFalse(panel.drag.hover(panel.buttons[first.id], first.id, 43, 44))
+            self.assertIsNone(panel.drop_slot)
             self.assertTrue(panel.drag.drop(first.id))
+            self.assertIsNone(panel.drop_slot)
             await asyncio.sleep(0)
             for _ in range(100):
                 if panel.playlist.entries[0] == second:
                     break
                 await asyncio.sleep(.01)
             self.assertEqual(panel.playlist.entries[0], second)
-            panel.buttons[second.id].on_press()
-            self.assertEqual(panel.selected, second.id)
             with patch.object(panel.speech, 'play') as play:
+                owner.reflow(1200)
+                await panel.buttons[second.id].on_press()
+                self.assertEqual(panel.selected, second.id)
+                self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
+                self.assertEqual(owner.panel_tab, 'Playlist')
+                play.assert_not_called()
                 panel.play_button.on_press()
                 play.assert_called_once_with(panel.playlist.id, anchor=panel.play_button)
-                play.reset_mock()
-                panel.selected_play_button.on_press()
-                play.assert_called_once_with(panel.playlist.id, second.id, anchor=panel.play_button)
-            await panel.move_down()
+            with patch.object(owner.sidebar, 'choose_action', new=AsyncMock(return_value='down')):
+                await panel.entry_buttons[second.id].on_press()
             await panel.reload()
             self.assertEqual(panel.playlist.entries[1], second)
 
             panel.repair()
+            self.assertEqual(owner.panel_tab, 'Files')
+            self.assertIs(panel.pick_prompt.parent, owner.files_content)
+            owner.select_panel_tab('Search')
+            self.assertIs(panel.pick_prompt.parent, owner.search_content)
             await owner.open_selected_note('Vault/Home.md')
             await panel.reload()
             self.assertEqual(panel.playlist.entries[1].id, second.id)
@@ -1037,6 +1095,80 @@ class NotesLibraryPanelTests(unittest.TestCase):
             owner.dispose()
             self.assertFalse(panel.rows.children)
             self.assertEqual(panel.header.text, '')
+        self.run_async(exercise())
+
+    def test_playlist_speech_opens_note_and_document_action_uses_the_same_controls(self):
+        from commonUtils.formats.markdown.speech import RenderedRun, prepare_rendered
+        from mobile_build.tests.editing.test_markdown_speech import Engine
+
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            panel = owner.playlist_panel
+            owner.select_panel_tab('Playlist')
+            await panel.loading
+            record = await panel.change('create', 'Listening')
+            await panel.change('add', record.id, 'Vault/Projects/Plan.MD')
+            await panel.reload()
+            panel.open(record.id)
+            speech = panel.speech
+            speech.prepare_view = AsyncMock(return_value=prepare_rendered([RenderedRun('Nested note', 0)]))
+            with patch('features.books.mobile.speech_view.NativeSpeech', Engine):
+                panel.play_button.on_press()
+                await speech.work
+                self.assertEqual(owner.path, 'Vault/Projects/Plan.MD')
+                self.assertEqual(speech.state, 'speaking')
+                self.assertIsNotNone(speech.snapshot)
+                self.assertEqual(panel.notice.text, '')
+                with patch.object(speech, 'play') as show, patch.object(owner.speech, 'show') as standalone:
+                    owner.show_read_aloud()
+                    show.assert_called_once_with(record.id, anchor=owner.speech.button)
+                    standalone.assert_not_called()
+                    speech.panel.stop_playback()
+                    owner.show_read_aloud()
+                    standalone.assert_called_once()
+        self.run_async(exercise())
+
+    def test_playlist_waits_for_current_native_document_before_mapping_words(self):
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            await owner.open_note('Vault/Home.md')
+            document = owner.document
+            with patch('commonUtils.ui.native.text_size.native_backend', return_value='toga_android.widgets.webview'):
+                document._loaded = False
+                ready = asyncio.create_task(document.wait_readable('Vault/Home.md', owner.valid))
+                await asyncio.sleep(0)
+                self.assertFalse(ready.done())
+                document.finish_page_load(owner.base)
+                self.assertTrue(await ready)
+                document._loaded = False
+                stale = asyncio.create_task(document.wait_readable('Vault/Home.md', owner.valid))
+                await asyncio.sleep(0)
+                await owner.open_note('Vault/Projects/Plan.MD')
+                self.assertFalse(await stale)
+        self.run_async(exercise())
+
+    def test_folder_note_menu_adds_landing_note_only_and_plain_folder_has_no_playlist_action(self):
+        (self.vault / 'Projects/Projects.md').write_text('# Projects')
+        (self.vault / 'Plain').mkdir()
+        (self.vault / 'Plain/Other.md').write_text('# Other')
+
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            panel = owner.playlist_panel
+            owner.select_panel_tab('Playlist')
+            await panel.loading
+            record = await panel.change('create', 'Folder notes')
+            await panel.reload()
+            owner.select_panel_tab('Files')
+            with patch.object(owner.sidebar, 'choose_action', new=AsyncMock(side_effect=['playlist', record.id])) as choose:
+                await owner.file_actions('Vault/Projects')
+                self.assertIn('playlist', [choice[1] for choice in choose.call_args_list[0].args[0].choices])
+            await panel.reload()
+            self.assertEqual([entry.path for entry in panel.playlist.entries], ['Vault/Projects/Projects.md'])
+            owner.select_panel_tab('Files')
+            with patch.object(owner.sidebar, 'choose_action', new=AsyncMock(return_value='cancel')) as choose:
+                await owner.file_actions('Vault/Plain')
+                self.assertNotIn('playlist', [choice[1] for choice in choose.call_args.args[0].choices])
         self.run_async(exercise())
 
     def test_calendar_indexes_nested_names_without_reading_documents(self):
