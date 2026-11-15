@@ -339,13 +339,35 @@ class RotationFailureEvidenceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_success_does_not_run_failure_observer(self):
         acknowledged = Mock(return_value=True)
-        with patch.object(rotation_checks, 'acknowledge_rotation', new=AsyncMock(return_value=acknowledged)), \
+        with patch.object(rotation_checks.sys, 'platform', 'android'), \
+                patch.object(rotation_checks, 'acknowledge_rotation', new=AsyncMock(return_value=acknowledged)), \
                 patch.object(rotation_checks, 'settled_rotation_layout', new=AsyncMock(return_value=4)) as settle, \
                 patch.object(rotation_checks,'rotation_failure_snapshot') as capture:
             app = object()
             self.assertEqual(await rotation_checks.rotate_panel(app,panel='folder',cycle=0,orientation='portrait'), 4)
             settle.assert_awaited_once_with(app, acknowledged, {})
             capture.assert_not_called()
+
+    async def test_ios_starts_bounded_control_audit_after_settle(self):
+        steps = []
+
+        async def settle(delay):
+            self.assertEqual(delay, rotation_checks.ROTATION_SETTLE)
+            steps.append('settled')
+
+        async def audit(app):
+            steps.append('audited')
+            return 4
+
+        with patch.object(rotation_checks.sys, 'platform', 'ios'), \
+                patch.object(rotation_checks, 'acknowledge_rotation', new_callable=AsyncMock), \
+                patch.object(rotation_checks.asyncio, 'sleep', side_effect=settle), \
+                patch.object(rotation_checks, 'settled_visible_controls', side_effect=audit), \
+                patch.object(rotation_checks, 'settled_rotation_layout', new_callable=AsyncMock) as sample:
+            self.assertEqual(await rotation_checks.rotate_panel(
+                object(), panel='folder', cycle=0, orientation='portrait'), 4)
+        self.assertEqual(steps, ['settled', 'audited'])
+        sample.assert_not_awaited()
 
     async def test_android_timeout_attaches_bounded_diagnostics_to_the_native_result(self):
         import json
@@ -414,8 +436,8 @@ class RotationWidthFailureTests(unittest.IsolatedAsyncioTestCase):
                 patch.object(rotation_checks, 'acknowledge_rotation', new_callable=AsyncMock), \
                 patch.object(rotation_checks, 'rotation_failure_snapshot', return_value={'schema': 1}), \
                 patch.object(rotation_checks, 'pose_snapshot', return_value={}), \
-                patch.object(rotation_checks, 'settled_rotation_layout', new_callable=AsyncMock,
-                             side_effect=failure if stage == 'joint' else None, return_value=4), \
+                patch.object(rotation_checks, 'settled_visible_controls', new_callable=AsyncMock,
+                             side_effect=failure if stage == 'controls' else None, return_value=4), \
                 patch.object(rotation_checks, 'safe_geometry', side_effect=failure), \
                 patch.object(rotation_checks, 'observe_epub_width_failure', new_callable=AsyncMock,
                              side_effect=observer_error) as observe:
@@ -423,17 +445,17 @@ class RotationWidthFailureTests(unittest.IsolatedAsyncioTestCase):
                 await rotation_checks.exercise_rotation(app, panels={'provider-epub'})
         self.assertIs(caught.exception, failure)
         context = dict(panel='provider-epub', cycle=0, orientation='portrait')
-        if stage == 'joint':
+        if stage == 'controls':
             context['native'] = {'schema': 1}
         observe.assert_awaited_once_with(app, **context)
 
     async def test_joint_and_final_failures_preserve_original_assertion(self):
-        for stage in ('joint', 'final'):
+        for stage in ('controls', 'final'):
             with self.subTest(stage=stage):
                 await self.check_original_failure(stage)
 
     async def test_observer_error_or_cancellation_never_replaces_either_failure(self):
-        for stage in ('joint', 'final'):
+        for stage in ('controls', 'final'):
             for error in (RuntimeError('observer'), asyncio.CancelledError()):
                 with self.subTest(stage=stage, error=type(error).__name__):
                     await self.check_original_failure(stage, error)

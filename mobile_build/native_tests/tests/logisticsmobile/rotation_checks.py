@@ -505,7 +505,7 @@ async def settled_rotation_layout(app, acknowledged, diagnostics):
     """Require four consecutive matching native samples within one deadline."""
     required = 4
     started = monotonic()
-    # Hosted simulators and emulators can delay layout and event-loop turns.
+    # Hosted emulators can delay layout and event-loop turns.
     # Keep the same sample and geometry requirements under a bounded budget.
     timeout = INVENTORY_LAYOUT_TIMEOUT
     deadline = started + timeout
@@ -694,15 +694,25 @@ async def rotate_panel(app, *, panel, cycle, orientation):
                     pass  # Preserve the acknowledgement failure.
             raise
     try:
+        if sys.platform == 'ios':
+            # A hosted simulator can suspend the event loop after an otherwise
+            # valid sample. Let UIKit settle before starting the control audit.
+            await measure(app, 'rotation-post-ack-settle', asyncio.sleep(ROTATION_SETTLE), **context)
+            return await measure(app, 'rotation-control-settle', settled_visible_controls(app), **context)
         return await measure(app, 'rotation-post-ack-settle',
                              settled_rotation_layout(app, acknowledged, readiness), **context)
     except AssertionError:
         native = None
-        try:
-            if sys.platform == 'ios':
+        if sys.platform == 'ios':
+            try:
+                _, reason = rotation_native_geometry(app)
+                readiness['native_geometry'] = reason or 'Geometry observed'
+            except Exception:
+                pass  # Preserve the original control assertion.
+            try:
                 native = rotation_failure_snapshot(app, **context, readiness=readiness)
-        except Exception:
-            pass
+            except Exception:
+                pass
         if native is None and readiness:
             native = dict(schema=1, panel=panel, cycle=cycle, requested_orientation=orientation,
                           readiness=readiness)
