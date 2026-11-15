@@ -3,18 +3,22 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from io import BytesIO
 import json
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 import re
 import stat
 import sys
 import time
+from tempfile import TemporaryDirectory
 from uuid import uuid4
 from zipfile import ZipFile, ZIP_DEFLATED, BadZipFile
 
 from .ink import InkPage
+from commonUtils.runtime.streams import iter_chunks
 
 # Android and some Android Python builds identify themselves differently.
-MAX_ARCHIVE = (256 if sys.platform == 'android' or hasattr(sys, 'getandroidapilevel') else 512) * 1024 * 1024
+IS_ANDROID = sys.platform == 'android' or hasattr(sys, 'getandroidapilevel')
+MAX_ARCHIVE = (256 if IS_ANDROID else 512) * 1024 * 1024
+ANDROID_PDF_VIEW_LIMIT = 512 * 1024 * 1024
 TABLET_MAX_ARCHIVE = 128 * 1024 * 1024
 DESKTOP_MAX_ARCHIVE = 2 * 1024 * 1024 * 1024
 MAX_EXPANDED = 256 * 1024 * 1024
@@ -53,13 +57,26 @@ def page_index(index, count, *, insertion=False):
 def read_archive(data, *, max_bytes=MAX_ARCHIVE):
     if len(data) > max_bytes:
         raise ValueError(f'RMDOC imports are limited to {max_bytes // (1024 * 1024)} MiB compressed.')
+    return _read_zip_members(BytesIO(data), max_bytes)
+
+
+def _read_zip_members(stream, max_bytes, *, pdf_path=None):
     members = {}
     seen = set()
     try:
-        with ZipFile(BytesIO(data)) as archive:
+        with ZipFile(stream) as archive:
             infos = archive.infolist()
             if len(infos) > MAX_MEMBERS or sum(i.file_size for i in infos) > max(MAX_EXPANDED, max_bytes):
                 raise ValueError('RMDOC archive exceeds the expanded size/member limit.')
+            pdf_name = None
+            if pdf_path is not None:
+                roots = [info.filename[:-8] for info in infos if '/' not in info.filename
+                         and info.filename.endswith('.content')]
+                if len(roots) != 1:
+                    raise ValueError('Choose an archive containing exactly one reMarkable document.')
+                pdf_name = roots[0] + '.pdf'
+                if sum(info.file_size for info in infos if info.filename != pdf_name) > 64 * 1024 * 1024:
+                    raise ValueError('Large PDF notebooks may contain up to 64 MiB of other expanded data.')
             for info in infos:
                 # ZipInfo.filename normalizes Windows separators and truncates
                 # NULs; validate the original entry before that transformation.
@@ -75,7 +92,13 @@ def read_archive(data, *, max_bytes=MAX_ARCHIVE):
                 if info.compress_type not in (0, 8):
                     raise ValueError('RMDOC archives must use stored or deflated ZIP entries.')
                 if not info.is_dir():
-                    members[name] = archive.read(info)
+                    if name == pdf_name:
+                        with archive.open(info) as source, pdf_path.open('xb') as output:
+                            for chunk in iter_chunks(source):
+                                output.write(chunk)
+                        members[name] = pdf_path
+                    else:
+                        members[name] = archive.read(info)
     except (BadZipFile, RuntimeError, EOFError) as error:
         raise ValueError('Invalid RMDOC ZIP archive.') from error
     return members
@@ -97,6 +120,15 @@ class Notebook:
         self.content, self.metadata, self.pages = content, metadata, pages
         self.structure_dirty = False
         self.metadata_dirty = False
+        self._pdf_workspace = None
+
+    @property
+    def large_pdf_view(self):
+        return self._pdf_workspace is not None
+
+    def close_large_pdf(self):
+        if self._pdf_workspace is not None:
+            self._pdf_workspace.cleanup()
 
     @classmethod
     def new(cls, name='Notebook', *, template=None, paper_format='pro', max_bytes=MAX_ARCHIVE):
@@ -115,7 +147,33 @@ class Notebook:
 
     @classmethod
     def read(cls, data, *, max_bytes=MAX_ARCHIVE):
-        members = read_archive(data, max_bytes=max_bytes)
+        return cls._from_members(read_archive(data, max_bytes=max_bytes), max_bytes=max_bytes)
+
+    @classmethod
+    def read_large_pdf(cls, stream, directory):
+        """Extract the dominant PDF member of a local archive in bounded reads."""
+        if stream.seek(0, 2) > ANDROID_PDF_VIEW_LIMIT:
+            raise ValueError('Large PDF notebook viewing is limited to 512 MiB compressed.')
+        stream.seek(0)
+        workspace = TemporaryDirectory(prefix='notebook-pdf-', dir=directory)
+        try:
+            target = Path(workspace.name) / 'background.pdf'
+            members = _read_zip_members(stream, ANDROID_PDF_VIEW_LIMIT, pdf_path=target)
+            book = cls._from_members(members, max_bytes=ANDROID_PDF_VIEW_LIMIT)
+            if book.content.get('fileType') != 'pdf' or not target.is_file():
+                raise ValueError('Android viewing above 256 MiB requires an embedded PDF.')
+            from pypdf import PdfReader
+            with target.open('rb') as source:
+                if PdfReader(source).is_encrypted:
+                    raise ValueError('Large password-protected PDF notebooks cannot open in Android viewing mode.')
+            book._pdf_workspace = workspace
+            return book
+        except BaseException:
+            workspace.cleanup()
+            raise
+
+    @classmethod
+    def _from_members(cls, members, *, max_bytes):
         roots = [name[:-8] for name in members if '/' not in name and name.endswith('.content')]
         if len(roots) != 1:
             raise ValueError('Choose an archive containing exactly one reMarkable document.')
@@ -247,6 +305,8 @@ class Notebook:
         return page
 
     def to_bytes(self):
+        if self.large_pdf_view:
+            raise ValueError('Large PDF notebooks are view-only on Android.')
         members = dict(self.members)
         content, metadata = deepcopy(self.content), deepcopy(self.metadata)
         changed = self.structure_dirty or self.metadata_dirty

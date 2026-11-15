@@ -36,6 +36,8 @@ Use **⋯ → Duplicate as .rmdoc to annotate** in a PDF Reader to create an edi
 
 The compressed and expanded RMDOC limits are 2 GiB each on desktop, 512 MiB each on iOS, and 256 MiB each on Android. All three allow up to 65,536 entries. Storage providers can impose additional limits. See the [development guide](../development/development.md).
 
+Android can also open local, unencrypted PDF-backed RMDOC files up to 512 MiB compressed and expanded in view-only mode. Other archive members can use up to 64 MiB expanded. The app streams the PDF to its private cache and removes the temporary copy when you close the notebook.
+
 ## Page templates and paper sizes
 
 Use **Page → Page Template…** or the toolbar's **Page template** to change the current page. **Template format** selects Pro or Move on supported layouts. **Show template** hides the background only. These edits support Undo and are inherited by inserted pages. PDF backgrounds are fixed.

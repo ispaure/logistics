@@ -13,6 +13,23 @@ def panels(app):
     return app.__dict__.setdefault('_notebook_views', {})
 
 
+def _read_large_local_notebook(resource, cache):
+    from features.notebooks.notebook import Notebook
+    from features.notebooks.storage import NotebookDocument
+
+    before = resource.check()['revision']
+    with resource.provider.open(resource.path) as stream:
+        book = Notebook.read_large_pdf(stream, cache)
+    try:
+        if resource.check()['revision'] != before:
+            raise ValueError('The document changed while opening; reopen it.')
+        resource.revision = before
+        return NotebookDocument(book, resource=resource)
+    except BaseException:
+        book.close_large_pdf()
+        raise
+
+
 async def open_notebook(app, *, path=None, resource=None, key=None, name=None, destination=None):
     import asyncio
 
@@ -24,7 +41,7 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
         if resource is not None:
             resource.close()
         return False
-    from features.notebooks.notebook import Notebook, MAX_ARCHIVE
+    from features.notebooks.notebook import IS_ANDROID, MAX_ARCHIVE, Notebook
     from features.notebooks.storage import NotebookDocument
     from services.documents.storage import DocumentResource
     from services.documents.mobile_storage import restore_notebook_resource, remember_notebook_resource
@@ -68,7 +85,12 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
         recovery = repository(app) if resource is None or resource.policy.persistent else None
         if resource is None and key is not None:
             resource, binding = restore_notebook_resource(recovery, key)
-        if resource is not None and resource.policy.persistent:
+        large_view = False
+        if IS_ANDROID and resource is not None and resource.policy.persistent:
+            from services.documents.locations import ordinary_index_provider
+            large_view = (ordinary_index_provider(resource.provider)
+                          and resource.check()['size'] > MAX_ARCHIVE)
+        if resource is not None and resource.policy.persistent and not large_view:
             from mobile.resource_imports import ResourceImports
             from services.documents.locations import collection_path
             source_path = resource.provider.root / resource.path
@@ -92,6 +114,13 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
                 if previous is not None:
                     previous.close()
         def load():
+            if large_view:
+                document = _read_large_local_notebook(resource, Path(app.paths.cache))
+                try:
+                    return document, panel.load_progress(document.book, document.key, resource)
+                except BaseException:
+                    document.close()
+                    raise
             active_resource = resource
             if resource is not None:
                 try:
@@ -166,7 +195,7 @@ async def open_notebook(app, *, path=None, resource=None, key=None, name=None, d
         app.show_view(panel.view, destination=destination, route='notebook-error', title='Notebook')
         return False
     session = app.workspace.open('notebook', document.key, 'notebook', document.book.name,
-                                 transient=not (resource is None or resource.policy.persistent))
+                                 transient=large_view or not (resource is None or resource.policy.persistent))
     panel.session = session
     panel.view._reader_session_id = session.id
     panels(app)[session.id] = panel

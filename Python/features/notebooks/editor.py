@@ -1,6 +1,9 @@
 """Reversible notebook commands independent of hosts and storage backends."""
 from collections import OrderedDict
+from contextlib import contextmanager
 from copy import copy, deepcopy
+from io import BytesIO
+from pathlib import Path
 
 from .protocol import validate_action, RecoveryIncomplete
 from .ink import WIDTH, HEIGHT, TOOLS, COLORS, notebook_ink_height
@@ -10,6 +13,14 @@ from .brushes import BRUSHES, EXPANDED_BRUSHES, EXPANDED_INK_SCALE, PALETTE, HIG
 
 PDF_BACKGROUND_BYTES = 12 * 1024 * 1024
 PDF_BACKGROUND_PAGES = 3
+
+
+@contextmanager
+def _pdf_reader(data):
+    from pypdf import PdfReader
+    stream = data.open('rb') if isinstance(data, Path) else BytesIO(data)
+    with stream:
+        yield PdfReader(stream)
 
 
 class Editor:
@@ -102,9 +113,8 @@ class Editor:
             import math
             from .remarkable_export import PDF_SCALE
             if reader is None:
-                from io import BytesIO
-                from pypdf import PdfReader
-                reader = PdfReader(BytesIO(data))
+                with _pdf_reader(data) as opened:
+                    return self.pdf_bounds(page_index, reader=opened)
             marked_export = reader.metadata and reader.metadata.get('/LogisticsNativeUnits') == '226'
             if not marked_export and not self.expanded_pdf_layout():
                 self._pdf_geometry = (key, None)
@@ -127,6 +137,8 @@ class Editor:
             self._locked_pdf = None
             return None
         data = self.notebook.members[self.notebook.id + '.pdf']
+        if isinstance(data, Path):
+            return data  # Large views validate encryption at extraction.
         if self._locked_pdf is not None and self._locked_pdf != data:
             self._locked_pdf = None
         if password is None and self._locked_pdf is not None:
@@ -157,7 +169,7 @@ class Editor:
     def page_links(self):
         from features.pdf.links import PDFLinkIndex
         data = self.pdf_data()
-        if data is None:
+        if data is None or isinstance(data, Path):
             return []
         pages = self.notebook.pages
         source = pages[self.index].record.get('redir', {}).get('value', -1)
@@ -220,15 +232,12 @@ class Editor:
         if data is None:
             return page_previews(self.notebook, start)
         from base64 import b64encode
-        from io import BytesIO
-        from pypdf import PdfReader
         from features.pdf.document import PDFDocument
         from .previews import THUMBNAIL_EDGE
 
-        reader = PdfReader(BytesIO(data))
         pdf = PDFDocument(data, max_bytes=DESKTOP_MAX_ARCHIVE)
         try:
-            with pdf.open() as renderer:
+            with _pdf_reader(data) as reader, pdf.open() as renderer:
                 def artwork(index):
                     if 0 <= index < renderer.count:
                         try:

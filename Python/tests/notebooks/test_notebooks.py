@@ -40,6 +40,42 @@ def archive(members):
 
 
 class NotebookTests(unittest.TestCase):
+    def test_large_android_pdf_streams_to_view_only_backing_and_releases_it(self):
+        import hashlib
+        from pypdf import PdfWriter
+        from features.notebooks.storage import NotebookDocument
+        from features.pdf.backends.android import _pdf_source
+
+        writer = PdfWriter()
+        writer.add_blank_page(300, 600)
+        writer.add_metadata({'/LogisticsNativeUnits': '226'})
+        pdf = BytesIO()
+        writer.write(pdf)
+        original = Notebook.new('Synthetic streamed PDF')
+        original.content['fileType'] = 'pdf'
+        original.pages[0].record['redir'] = {'value': 0}
+        original.members[original.id + '.pdf'] = pdf.getvalue()
+        with TemporaryDirectory() as directory:
+            source = Path(directory) / 'source.rmdoc'
+            source.write_bytes(original.to_bytes())
+            baseline = hashlib.sha256(source.read_bytes()).digest()
+            with source.open('rb') as stream:
+                book = Notebook.read_large_pdf(stream, directory)
+            document = NotebookDocument(book)
+            background = Editor(book).pdf_data()
+            try:
+                self.assertIsInstance(background, Path)
+                self.assertIsNotNone(Editor(book).pdf_bounds())
+                self.assertFalse(document.writable)
+                with _pdf_source(background) as backing:
+                    self.assertEqual(backing.read(), pdf.getvalue())
+                with self.assertRaisesRegex(ValueError, 'view-only'):
+                    document.save()
+                self.assertEqual(hashlib.sha256(source.read_bytes()).digest(), baseline)
+            finally:
+                document.close()
+            self.assertFalse(background.exists())
+
     def test_larger_archive_budget_is_preserved_in_desktop_recovery(self):
         book = Notebook.new()
         members = read_archive(book.to_bytes())

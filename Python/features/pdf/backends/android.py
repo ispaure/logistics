@@ -1,51 +1,63 @@
 """Platform PDF rendering adapter; document lifetime stays in the feature facade."""
 
-from contextlib import suppress
+from contextlib import contextmanager, suppress
+from pathlib import Path
 
 from ..limits import PAGE_EDGE
 
 
+@contextmanager
+def _pdf_source(data):
+    import os
+
+    if isinstance(data, Path):
+        with data.open('rb') as stream:
+            yield stream
+        return
+
+    # Keep byte-backed private inputs in anonymous Linux memory.
+    if hasattr(os, "memfd_create"):
+        fd = os.memfd_create("logistics-pdf", 0)
+    else:
+        import ctypes
+        import platform
+
+        libc = ctypes.CDLL(None, use_errno=True)
+        # memfd_create syscall numbers for Android's supported ABIs.
+        number = {
+            "aarch64": 279,
+            "arm64": 279,
+            "armv7l": 385,
+            "x86_64": 319,
+            "i686": 356,
+        }.get(platform.machine())
+        if number is None:
+            raise ValueError("Anonymous PDF memory is unavailable on this device.")
+        libc.syscall.restype = ctypes.c_long
+        fd = libc.syscall(
+            ctypes.c_long(number),
+            ctypes.c_char_p(b"logistics-pdf"),
+            ctypes.c_uint(0),
+        )
+        if fd < 0:
+            raise OSError(
+                ctypes.get_errno(), "Cannot allocate anonymous PDF memory"
+            )
+    with os.fdopen(fd, 'w+b') as stream:
+        stream.write(data)
+        stream.flush()
+        stream.seek(0)
+        yield stream
+
+
 class AndroidPDF:
     def __init__(self, data):
-        # Anonymous Linux memory, never an app-cache plaintext file. PdfRenderer
-        # owns the duplicated descriptor; the original is closed on every path.
-        import os
         from java import jclass
 
-        if hasattr(os, "memfd_create"):
-            fd = os.memfd_create("logistics-pdf", 0)
-        else:
-            import ctypes
-            import platform
-
-            libc = ctypes.CDLL(None, use_errno=True)
-            # memfd_create syscall numbers for Android's supported ABIs.
-            number = {
-                "aarch64": 279,
-                "arm64": 279,
-                "armv7l": 385,
-                "x86_64": 319,
-                "i686": 356,
-            }.get(platform.machine())
-            if number is None:
-                raise ValueError("Anonymous PDF memory is unavailable on this device.")
-            libc.syscall.restype = ctypes.c_long
-            fd = libc.syscall(
-                ctypes.c_long(number),
-                ctypes.c_char_p(b"logistics-pdf"),
-                ctypes.c_uint(0),
-            )
-            if fd < 0:
-                raise OSError(
-                    ctypes.get_errno(), "Cannot allocate anonymous PDF memory"
-                )
         self.document = None
         descriptor = None
         try:
-            with os.fdopen(fd, "w+b") as stream:
-                stream.write(data)
-                stream.flush()
-                stream.seek(0)
+            with _pdf_source(data) as stream:
                 descriptor = jclass("android.os.ParcelFileDescriptor").fromFd(
                     stream.fileno()
                 )

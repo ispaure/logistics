@@ -1,5 +1,6 @@
-"""Bounded, memory-only PDF input and platform page rasterization."""
+"""Bounded PDF input and platform page rasterization."""
 from contextlib import contextmanager
+from pathlib import Path
 import sys
 
 MAX_PDF = 32 * 1024 * 1024
@@ -36,8 +37,7 @@ def read_pdf(stream):
 
 class PDFDocument:
     def __init__(self, data, *, max_bytes=MAX_PDF):
-        if not data or len(data) > max_bytes:
-            raise ValueError(f'PDF reading is limited to {max_bytes // (1024 * 1024)} MiB.')
+        self.check_size(data, max_bytes)
         self.data = data
         with self.open() as document:
             self.count = document.count
@@ -59,6 +59,12 @@ class PDFDocument:
             yield document
 
     @staticmethod
+    def check_size(data, max_bytes):
+        size = data.stat().st_size if isinstance(data, Path) else len(data)
+        if not 0 < size <= max_bytes:
+            raise ValueError(f'PDF reading is limited to {max_bytes // (1024 * 1024)} MiB.')
+
+    @staticmethod
     def backend(data):
         if sys.platform == 'ios':
             return ApplePDF(data)
@@ -69,8 +75,7 @@ class PDFDocument:
     @classmethod
     def render_page(cls, data, index, *, max_bytes=MAX_PDF):
         """Open one native renderer for a self-contained page request."""
-        if not data or len(data) > max_bytes:
-            raise ValueError(f'PDF reading is limited to {max_bytes // (1024 * 1024)} MiB.')
+        cls.check_size(data, max_bytes)
         with cls.backend(data) as document:
             if not 1 <= document.count <= MAX_PAGES:
                 raise ValueError('PDF must contain between 1 and 10,000 pages.')

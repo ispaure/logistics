@@ -18,7 +18,7 @@ class NotebookDocument:
 
     @property
     def writable(self):
-        return self.resource is None or self.resource.policy.writable
+        return not self.book.large_pdf_view and (self.resource is None or self.resource.policy.writable)
 
     @property
     def can_autosave(self):
@@ -29,6 +29,8 @@ class NotebookDocument:
         return self.source_deleted or self.recovery_deleted
 
     def _check_editable(self):
+        if self.book.large_pdf_view:
+            raise ValueError('Large PDF notebooks are view-only on Android.')
         if self.deletion_started:
             raise ValueError('This notebook was deleted. Retry Delete to finish cleanup, or use Save As.')
 
@@ -139,5 +141,8 @@ class NotebookDocument:
                 raise
 
     def close(self):
-        if self.resource is not None:
-            self.resource.close()
+        try:
+            self.book.close_large_pdf()
+        finally:
+            if self.resource is not None:
+                self.resource.close()
