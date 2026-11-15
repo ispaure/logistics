@@ -2,6 +2,7 @@
 from commonUtils.ui.native.icons import IconRenderer, IconSpec
 import toga
 from toga.style import Pack
+from .ui_metrics import TOUCH_TARGET
 
 # Paths use a shared 24-point grid. Keep the fallback readable on desktop/test hosts.
 ICONS = {
@@ -120,5 +121,5 @@ apply_icon = _renderer.apply
 def icon_button(name, label, *, on_press=None, enabled=True):
     from .appearance import surface
     return surface(apply_icon(toga.Button(on_press=on_press, enabled=enabled,
-                                 style=Pack(width=48, height=48)), name, label),
+                                 style=Pack(width=TOUCH_TARGET, height=TOUCH_TARGET)), name, label),
                    background='surface', foreground='text', outlined=False)

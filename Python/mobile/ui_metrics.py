@@ -8,9 +8,9 @@ Android's subsequent system sp scaling remains the backend's responsibility.
 
 from functools import wraps
 
+from commonUtils.ui.native.presentation import TOUCH_TARGET as TOUCH_TARGET
 from commonUtils.ui.native.text_size import native_backend
 
-TOUCH_TARGET = 48
 BODY_TEXT = 17
 CONTROL_TEXT = 16
 CAPTION_TEXT = 13

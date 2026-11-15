@@ -2,6 +2,7 @@
 import json
 
 from services.mobile_features import FEATURES, BY_NAME, enabled, group_enabled, disabled_features, document_feature, selection_preferences
+from .ui_metrics import TOUCH_TARGET
 
 
 def hosts(app):
@@ -112,7 +113,7 @@ def disabled_view(app, name, *, destination=None):
     view = toga.Box(style=Pack(direction=COLUMN, margin=16), children=[
         toga.Label(feature.label + ' is turned off', style=Pack(font_size=20, margin_bottom=12)),
         SettingsLabel('Enable it here or in Settings → Features. Your files and settings are kept.'),
-        toga.Button('Enable ' + feature.label, on_press=enable, style=Pack(height=48, margin_top=12)), status])
+        toga.Button('Enable ' + feature.label, on_press=enable, style=Pack(height=TOUCH_TARGET, margin_top=12)), status])
     fit_section(view, app.adaptive.content_width(destination or app.native_host.state.destination, margin=0))
     return view
 
@@ -150,7 +151,7 @@ def feature_controls(app, box):
             widget.on_change = lambda widget, name=name, **kw: change(widget, name)
             app.settings_status.text = str(error)
     for feature in FEATURES:
-        control = toga.Switch(feature.label, value=group_enabled(app.preferences, feature.name), style=Pack(height=48))
+        control = toga.Switch(feature.label, value=group_enabled(app.preferences, feature.name), style=Pack(height=TOUCH_TARGET))
         control.on_change = lambda widget, name=feature.name, **kw: change(widget, name)
         switches[feature.name] = control
         box.add(switch_row(app, feature.label, control, feature.description))
@@ -165,4 +166,4 @@ def feature_controls(app, box):
             if host.preferences is not preferences:
                 host.preferences.feature_preferences = preferences
             host.loop.call_soon(refresh_features, host)
-    box.add(toga.Button('Enable all features', on_press=reset, style=Pack(height=48)))
+    box.add(toga.Button('Enable all features', on_press=reset, style=Pack(height=TOUCH_TARGET)))

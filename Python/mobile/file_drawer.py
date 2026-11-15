@@ -13,6 +13,7 @@ from toga.style import Pack
 from toga.style.pack import COLUMN
 from commonUtils.runtime.resources.selection import ResourceSelection
 
+from .ui_metrics import TOUCH_TARGET
 from .appearance import list_button
 from .files_ui import local_read_available
 
@@ -41,16 +42,16 @@ class FileDrawer:
             location=lambda: (self.storage.value, self.folder),
             credentials=lambda: (getattr(self.app, 'cloud_client', None),
                 getattr(getattr(self.app, 'cloud_client', None), 'generation', None)))
-        self.storage = toga.Selection(items=['Local files'], style=Pack(height=48))
+        self.storage = toga.Selection(items=['Local files'], style=Pack(height=TOUCH_TARGET))
         self.browser = FileBrowser(folder_visible=self.app.folder_path_visible, contextual_selection=False,
                                    selected=lambda row: None, open_folder=self.open_folder,
                                    navigate=self.navigate, open_file=self.open_file, preview=False)
         self.status = self.browser.status_label('')
         self.parent_button = browser_command(toga.Button('Parent folder', on_press=self.up,
-                                                       enabled=False, style=Pack(height=48)))
+                                                       enabled=False, style=Pack(height=TOUCH_TARGET)))
         header = self.browser.attach_location_header(self.status, self.parent_button)
         self.breadcrumb = header.folder_name
-        self.workspaces_button = toga.Button('Workspaces', on_press=self.app.show_locations, style=Pack(height=48))
+        self.workspaces_button = toga.Button('Workspaces', on_press=self.app.show_locations, style=Pack(height=TOUCH_TARGET))
         self.widget = toga.Box(children=[self.storage, header,
             self.browser.scroll_container(), self.workspaces_button],
             style=Pack(direction=COLUMN, flex=1))
@@ -99,7 +100,7 @@ class FileDrawer:
             if self.workspaces_button in self.browser_widget.children:
                 self.browser_widget.remove(self.workspaces_button)
             self.cancel_button = toga.Button('Cancel', on_press=self.cancel_browser,
-                                            style=Pack(height=48, width=72))
+                                            style=Pack(height=TOUCH_TARGET, width=72))
             self.browser.location_bar.add(self.cancel_button)
         route = ('workspace-browser:' + page._folder_scope if self.destination == 'home' else 'workspace-browser')
         self.app.show_view(page, destination=self.destination, route=route, title=title)
@@ -160,7 +161,7 @@ class FileDrawer:
                     return
                 storage = library['source'] if provider.private else 'Local files'
                 await self.show_main_browser(storage, folder=library['folder'], provider=provider)
-            button = list_button(toga.Button(record['name'], on_press=browse_library, style=Pack(height=48)))
+            button = list_button(toga.Button(record['name'], on_press=browse_library, style=Pack(height=TOUCH_TARGET)))
             self.library_buttons.append(button)
             self.menu_content.add(button)
         if not self.library_buttons:
