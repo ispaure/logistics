@@ -93,6 +93,9 @@ def _run_guest(args, client, cancelled, result, lifecycle):
                        UV_PYTHON_INSTALL_DIR=str(root / 'python'), UV_CACHE_DIR=str(root / 'cache'),
                        UV_PYTHON_ARCH='aarch64' if architecture == 'arm64' else 'x86_64',
                        LOGISTICS_WINDOWS_VM_PYTHON=version, BROWSER_TEST_ARTIFACTS=str(root / reports / 'browser-diagnostics'))
+    webengine = args.source_identity.get('windows_python', {}).get('webengine')
+    if architecture == 'arm64' and webengine:
+        environment['LOGISTICS_WINDOWS_ARM64_WEBENGINE'] = json.dumps(webengine)
     if getattr(args, 'manager_working_tree', None):
         environment['LOGISTICS_MANAGER_LOCAL_TEST_SOURCE'] = args.manager_working_tree
     if os.environ.get('LOGISTICS_REUSE_TEST_RESULTS') == 'off':

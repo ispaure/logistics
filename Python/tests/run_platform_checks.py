@@ -33,6 +33,13 @@ def main():
                             '--output-file', str(requirements)], check=True)
             subprocess.run([sys.executable, '-m', 'uv', 'pip', 'sync', '--python', sys.executable,
                             str(requirements)], check=True)
+    webengine = json.loads(os.environ.pop('LOGISTICS_WINDOWS_ARM64_WEBENGINE', 'null'))
+    if webengine:
+        if not args.install:
+            parser.error('A local WebEngine wheel requires --install.')
+        sys.path.insert(0, str(REPO))
+        from logistics_build.local_desktop import install_windows_webengine
+        install_windows_webengine(**webengine)
     if args.install and os.environ.get('LOGISTICS_MANAGER_CHECKOUT'):
         subprocess.run([sys.executable, '-m', 'logistics_build.guest_manager', '--checkout', os.environ['LOGISTICS_MANAGER_CHECKOUT'],
                         '--project', str(REPO)], cwd=REPO, check=True, timeout=180)
@@ -40,6 +47,8 @@ def main():
     results.mkdir(parents=True, exist_ok=True)
     report = {'platform': platform.platform(), 'python': sys.version,
               'dependencies': {name: version(name) for name in ('Pillow', 'PySide6', 'pyzipper', 'yt-dlp')}, 'checks': []}
+    if webengine:
+        report['windows_arm64_webengine_sha256'] = webengine['sha256']
     env = dict(os.environ, PYTHONPATH=os.pathsep.join((str(REPO / 'Python'), str(REPO))),
                QT_QPA_PLATFORM='offscreen', PYTHONUNBUFFERED='1', PYTHONUTF8='1')
     # Qt expands Windows 8.3 aliases; give fixtures matching native long paths.

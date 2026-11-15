@@ -3,7 +3,7 @@ import argparse
 import json
 import platform
 import sys
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -103,6 +103,22 @@ def outputs(values, target='all'):
     return dict(values, desktop_matrix=json.dumps({'include': [dict(target=p, runner=values[p + '_runner']) for p in platforms]}),
                 android_device=json.dumps(dict(avd='LogisticsValidation', device_type=values['android_model'],
                     skin=None, system_image=android_image(values, hosted=True))))
+
+
+def windows_webengine(path, sha256):
+    """Validate the local guest artifact reference without accessing the VM."""
+    if path == sha256 == '':
+        return None
+    if not isinstance(path, str) or not isinstance(sha256, str):
+        raise ValueError('Set the Windows VM WebEngine wheel path and SHA-256 as text.')
+    wheel = PureWindowsPath(path)
+    if (not wheel.is_absolute() or not re.fullmatch(r'[A-Za-z]:', wheel.drive)
+            or '..' in wheel.parts
+            or not re.fullmatch(r'pyside6_webengine-[0-9.]+-(?:[0-9]+-)?cp310-abi3-win_arm64\.whl', wheel.name)):
+        raise ValueError('Set an absolute guest path to a PySide6 WebEngine Windows ARM64 wheel.')
+    if not re.fullmatch(r'[0-9a-f]{64}', sha256):
+        raise ValueError('Set the 64-character lowercase SHA-256 of the Windows VM WebEngine wheel.')
+    return dict(path=str(wheel), sha256=sha256)
 
 
 def windows_python(values, architecture='x86_64', version=''):

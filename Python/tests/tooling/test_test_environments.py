@@ -43,16 +43,22 @@ class TestEnvironmentTests(unittest.TestCase):
             for name in ('testflight-distribution.json', 'firebase-distribution.json'):
                 (mobile / name).write_bytes((ROOT / 'mobile_build' / name).read_bytes())
             profile = root / 'private.json'
+            wheel = 'C:/Build tools/pyside6_webengine-6.12.0.140-1-cp310-abi3-win_arm64.whl'
+            digest = 'a' * 64
             with patch.dict('os.environ', {'LOGISTICS_MANAGER_PROFILE': str(profile)}):
                 manager_settings.save(mobile, {'testing.macos_runner': 'macos-26', 'testing.android_api': '37',
                                                'vm.windows_python_architecture': 'arm64',
-                                               'vm.windows_python_version': '3.12.11'})
+                                               'vm.windows_python_version': '3.12.11',
+                                               'vm.windows_webengine_wheel': wheel,
+                                               'vm.windows_webengine_sha256': digest})
                 values, sources = manager_settings.settings(mobile)
             self.assertEqual(values['testing.android_api'], '37')
             self.assertIn('android-37', values['android.image'])
             self.assertIn('tracked', sources['testing.macos_runner'])
             self.assertEqual(values['vm.windows_python_architecture'], 'arm64')
             self.assertEqual(values['vm.windows_python_version'], '3.12.11')
+            self.assertEqual(values['vm.windows_webengine_wheel'], wheel)
+            self.assertEqual(values['vm.windows_webengine_sha256'], digest)
             self.assertEqual(load(root)['python_version'], DEFAULTS['python_version'])
             self.assertFalse(any(key.startswith('testing.') for key in json.loads(profile.read_text())))
             rows = describe_settings({'testing.' + key: dict(value=value) for key, value in DEFAULTS.items()})
@@ -67,6 +73,18 @@ class TestEnvironmentTests(unittest.TestCase):
         for architecture, version in (('arm64', '3.12.2'), ('x86_64', '3.12'), ('x86', '')):
             with self.subTest(architecture=architecture, version=version), self.assertRaises(ValueError):
                 windows_python(DEFAULTS, architecture, version)
+
+    def test_windows_webengine_requires_an_absolute_arm64_wheel_and_digest(self):
+        from logistics_build.test_environments import windows_webengine
+
+        wheel = 'C:/Build tools/pyside6_webengine-6.12.0.140-1-cp310-abi3-win_arm64.whl'
+        digest = 'a' * 64
+        self.assertIsNone(windows_webengine('', ''))
+        self.assertEqual(windows_webengine(wheel, digest)['sha256'], digest)
+        for path, sha in ((wheel, ''), ('', digest), (wheel[3:], digest),
+                          (wheel.replace('arm64', 'amd64'), digest)):
+            with self.subTest(path=path, sha=sha), self.assertRaises(ValueError):
+                windows_webengine(path, sha)
 
     def test_windows_arm64_requires_webengine_for_full_desktop_validation(self):
         from logistics_build import local_desktop

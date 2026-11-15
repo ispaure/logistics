@@ -40,6 +40,7 @@ def defaults(root):
         'android.image': 'system-images;android-36;google_apis;arm64-v8a', 'android.model': 'pixel_9',
         'vm.fedora': '', 'vm.windows': '',
         'vm.windows_python_architecture': 'x86_64', 'vm.windows_python_version': '',
+        'vm.windows_webengine_wheel': '', 'vm.windows_webengine_sha256': '',
         'vm.fedora_mode': 'guest', 'vm.fedora_container_host': '',
         'vm.windows_prepared_reference': str(root / '.tools/build-manager/windows-prepared.json'),
         'vm.shared_host': '', 'vm.shared_guest': '', 'vm.shutdown_after_run': False,
@@ -137,10 +138,11 @@ def resolve_settings(root, configured, profile, *, overrides=None):
 
 
 def validate(values, configured):
-    from logistics_build.test_environments import windows_python
+    from logistics_build.test_environments import windows_python, windows_webengine
     windows_python({'python_version': configured['testing.python_version']},
                    values.get('vm.windows_python_architecture', 'x86_64'),
                    values.get('vm.windows_python_version', ''))
+    windows_webengine(values.get('vm.windows_webengine_wheel', ''), values.get('vm.windows_webengine_sha256', ''))
     if values['auth.github_kind'] not in {'auto','environment-name','credential-helper'}:
         raise ValueError('Unsupported GitHub account reference kind.')
     if values['auth.github_kind']=='environment-name' and not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*',values['auth.github_reference']):

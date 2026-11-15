@@ -66,6 +66,8 @@ On Apple Silicon choose **This Mac — Android Emulator**. Configure the complet
 
 `test-environments.json` is the tracked source of runner labels, Python, iOS runtime families and Android API/model/ABI. Edit it in **Test environments (local and GitHub)**. Private machine paths and signing stay in the profile. Local ARM64 and hosted x86_64 Android results carry their actual identities. A changed toolchain invalidates affected evidence.
 
+For a dedicated Windows VM, **Project settings** can select ARM64 Python and record the absolute guest path and SHA-256 of a locally built PySide6 WebEngine wheel. The wheel must match the locked WebEngine version. GitHub continues to use x64 Python.
+
 ## Guided manager suites and tester acceptance
 
 `build-tests.json` owns suite roots and predecessors. The descriptor declares selectables such as `portable.contracts`, `desktop.ui`, platform `.native`, `.runtime`, `.incoming` and `release.acceptance`. See [suite file responsibilities](../testing/adding-tests.md#decide-which-files-to-update). Host patterns intersect named host suites. Native/release suites reject focused patterns. Named selection is local. `python3 dev.py test-map` distinguishes discovered files, declared sources/drivers and registered case IDs.

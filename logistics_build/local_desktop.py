@@ -9,6 +9,34 @@ import sysconfig
 import time
 
 
+def install_windows_webengine(path, sha256):
+    """Install the reviewed guest wheel over the locked Windows placeholder."""
+    from hashlib import file_digest
+    from importlib.metadata import version
+    import shutil
+    from tempfile import TemporaryDirectory
+
+    from logistics_build.test_environments import windows_webengine
+
+    if sysconfig.get_platform() != 'win-arm64':
+        raise ValueError('The configured WebEngine wheel requires native Windows ARM64 Python.')
+    wheel = windows_webengine(path, sha256)
+    if not wheel:
+        raise ValueError('Set the Windows VM WebEngine wheel path and SHA-256.')
+    source = Path(wheel['path'])
+    if source.name.split('-')[1] != version('pyside6-webengine'):
+        raise ValueError('The local WebEngine wheel version must match the locked PySide6 WebEngine version.')
+    with TemporaryDirectory(prefix='logistics-webengine-') as work:
+        staged = Path(work) / source.name
+        shutil.copyfile(source, staged)
+        with staged.open('rb') as stream:
+            if file_digest(stream, 'sha256').hexdigest() != wheel['sha256']:
+                raise ValueError('The local Windows ARM64 WebEngine wheel SHA-256 does not match the reviewed plan.')
+        subprocess.run([sys.executable, '-m', 'uv', 'pip', 'install', '--python', sys.executable,
+                        '--reinstall', '--no-deps', str(staged)], check=True, timeout=300)
+    print('Installed Windows ARM64 WebEngine wheel SHA-256 ' + wheel['sha256'], flush=True)
+
+
 def verify_qt(*, focused=False):
     try:
         import PySide6.QtWebEngineCore
@@ -19,8 +47,8 @@ def verify_qt(*, focused=False):
             if focused:
                 print(message + ' Tests that require it can still fail.', file=sys.stderr, flush=True)
                 return
-            raise RuntimeError(message + ' Choose x86_64 for Windows VM Python architecture '
-                               'in Logistics Project Settings.') from error
+            raise RuntimeError(message + ' Configure a compatible ARM64 WebEngine wheel or x86_64 '
+                               'Python in Logistics Project Settings.') from error
         if sys.platform.startswith('linux'):
             import PySide6
             for library in Path(PySide6.__file__).parent.rglob('libQt6WebEngineCore.so.6'):
