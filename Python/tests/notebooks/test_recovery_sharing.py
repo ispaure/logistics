@@ -407,7 +407,7 @@ class RecoverySharingTests(unittest.TestCase):
             self.assertEqual(len(strokes), 60)
             self.assertEqual(len(blocks), 60)
             expected = [book.page(i).to_bytes() for i in range(4)]
-            for _ in range(50):
+            for _ in range(51):
                 editor.apply(dict(op='undo'))
             self.assertEqual(sum(len(book.page(i).strokes) for i in range(4)), 10)
             for _ in range(50):

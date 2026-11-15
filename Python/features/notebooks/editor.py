@@ -278,234 +278,271 @@ class Editor:
 
     def apply(self, action):
         op = validate_action(action)
-        book = self.notebook
         self._selection_ids = []
         if op == 'copy-strokes':
             self._selection_clipboard = self.copy_selection(action['ids'])
             self._selection_ids = [item.id for item, _ in self._selection_clipboard]
-            return
-        if op == 'unlock-pdf':
+        elif op == 'unlock-pdf':
             self.pdf_data(action['password'])
-            return
-        if op == 'page':
+        elif op == 'page':
             index = action['index']
-            if type(index) is not int or not 0 <= index < len(book.pages):
+            if type(index) is not int or not 0 <= index < len(self.notebook.pages):
                 raise ValueError('Invalid page number.')
             self.index = index
-            return
+        elif op == 'undo':
+            self._apply_history(self.undo, self.redo)
+        elif op == 'redo':
+            self._apply_history(self.redo, self.undo)
+        else:
+            self._apply_edit(op, action)
+
+    @contextmanager
+    def _checkpoint_transaction(self, retain):
         previous = self.snapshot()
-        if op in ('undo', 'redo'):
-            source, target = (self.undo, self.redo) if op == 'undo' else (self.redo, self.undo)
-            if source:
-                self.restore(source[-1])
-                try:
-                    self.checkpoint(book)
-                    self.checkpoint_unconfirmed = False
-                except Exception as error:
-                    if isinstance(error, RecoveryIncomplete):
-                        self.checkpoint_unconfirmed = error.published is not True
-                        source.pop()
-                        target.append(previous)
-                        raise
-                    self.restore(previous)
-                    raise
-                source.pop()
-                target.append(previous)
+        checkpoint_error = None
+        try:
+            yield
+            self.checkpoint(self.notebook)
+        except RecoveryIncomplete as error:
+            self.checkpoint_unconfirmed = error.published is not True
+            checkpoint_error = error
+        except Exception:
+            self.restore(previous)
+            raise
+        else:
+            self.checkpoint_unconfirmed = False
+
+        # Reconcile retained state before surfacing a recovery error.
+        retain(previous)
+        if checkpoint_error is not None:
+            raise checkpoint_error
+
+    def _apply_history(self, source, target):
+        if not source:
             return
+
+        def retain(previous):
+            source.pop()
+            target.append(previous)
+
+        with self._checkpoint_transaction(retain):
+            self.restore(source[-1])
+
+    def _apply_edit(self, op, action):
         selection_ids = []
         pasted_indexes = []
         clipboard = self._selection_clipboard
-        try:
+
+        def retain(previous):
+            self._selection_clipboard = clipboard
+            if pasted_indexes:
+                # Recovery may reload the page and assign native scene IDs.
+                ink = self.notebook.page(self.index)
+                self._selection_ids = [getattr(ink, group)[i].id for group, i in pasted_indexes]
+            else:
+                self._selection_ids = selection_ids
+            self.undo.append(previous)
+            del self.undo[:-50]
+            self.redo.clear()
+
+        with self._checkpoint_transaction(retain):
             left = self.canvas_left()
             right = WIDTH - left
             height = self.page_height()
             action = self.native_action(action, left)
-            ink = book.page(self.index)
+            ink = self.notebook.page(self.index)
             if op == 'cut-strokes':
                 if ink.warning:
                     raise ValueError(ink.warning)
                 clipboard = self.copy_selection(action['ids'])
                 self.remove_selection(ink, {item.id for item, _ in clipboard})
             elif op == 'paste-strokes':
-                from uuid import uuid4
-                from .images import add_picture
-                from .ink import MAX_PAGE_POINTS
-                if ink.warning:
-                    raise ValueError(ink.warning)
-                visible = [key for key, _, shown in ink.layers if shown]
-                if not visible or not clipboard:
-                    raise ValueError('Copy a selection and choose a visible layer first.')
-                point_count = sum(len(s.points) for s in ink.strokes)
-                point_count += sum(len(item.points) for item, data in clipboard if data is None)
-                if point_count > MAX_PAGE_POINTS:
-                    raise ValueError('Too many points on this page.')
-                for item, data in clipboard:
-                    if data is not None:
-                        add_picture(book, self.index, data, visible[-1], item.corners)
-                        pasted_indexes.append(('images', len(ink.images) - 1))
-                        continue
-                    stroke = deepcopy(item)
-                    if any(not left <= x <= right or not 0 <= y <= height for x, y, _, _ in stroke.points):
-                        raise ValueError('Keep pasted strokes inside the page.')
-                    stroke.id, stroke.layer = uuid4().hex, visible[-1]
-                    ink.strokes.append(stroke)
-                    ink.order = [*ink.order, stroke.id]
-                    pasted_indexes.append(('strokes', len(ink.strokes) - 1))
+                self._paste_selection(ink, clipboard, pasted_indexes, left, right, height)
                 if action.get('single_use') is True:
                     clipboard = []
-                if ink.images:
-                    ink.ordering_dirty = True
-            elif op == 'stroke':
-                ink.add(action['points'], action.get('tool', 17), action.get('color', 0),
-                        action.get('width', 2), action.get('layer'), page_height=height,
-                        x_bounds=(left, right), x_offset=left,
-                        expanded=self.expanded_ink())
-            elif op == 'paste-image':
-                from .images import paste
-                paste(book, self.index, action)
-            elif op == 'image-transform':
-                from .images import validate_corners
-                validate_corners(action['corners'])
-                if ink.warning:
-                    raise ValueError(ink.warning)
-                shown = {key for key, _, visible in ink.layers if visible}
-                if not any(p.id == action['id'] and p.layer in shown for p in ink.images):
-                    raise ValueError('Select a visible image.')
-                ink.images = [type(p)(p.id, p.layer, p.resource, deepcopy(action['corners']))
-                              if p.id == action['id'] else p for p in ink.images]
-            elif op == 'arrange-image':
-                if ink.warning:
-                    raise ValueError(ink.warning)
-                picture = next((p for p in ink.images if p.id == action['id']), None)
-                shown = {key for key, _, visible in ink.layers if visible}
-                if picture is None or picture.layer not in shown:
-                    raise ValueError('Select a visible image.')
-                members = {s.id for s in [*ink.strokes, *ink.images] if s.layer == picture.layer}
-                order = [key for key in ink.order if key in members]
-                order += [s.id for s in [*ink.strokes, *ink.images] if s.id in members and s.id not in order]
-                old = order.index(picture.id)
-                positions = {'front': len(order)-1, 'back': 0, 'forward': min(old+1, len(order)-1), 'backward': max(0, old-1)}
-                if action['direction'] not in positions:
-                    raise ValueError('Unknown image arrangement.')
-                order.insert(positions[action['direction']], order.pop(old))
-                other = [key for key in ink.order if key not in members]
-                ink.order = [*other, *order]
-                ink.ordering_dirty = True
-            elif op == 'delete-image':
-                if ink.warning:
-                    raise ValueError(ink.warning)
-                ink.images = [p for p in ink.images if p.id != action['id']]
-            elif op == 'add-layer':
-                ink.add_layer(action['name'])
-            elif op == 'layer-visible':
-                if ink.warning:
-                    raise ValueError(ink.warning)
-                ink.layers = [(key, name, bool(action['visible']) if key == action['layer'] else shown)
-                              for key, name, shown in ink.layers]
             elif op == 'transform':
-                if ink.warning:
-                    raise ValueError(ink.warning)
-                import math
-                from .images import validate_corners
-                self.selected_items(ink, action['ids'])
-                selected_ids = set(action['ids'])
-                dx, dy = action['dx'], action['dy']
-                scale, angle = action.get('scale', 1), action.get('angle', 0)
-                cx, cy = action.get('cx', 0), action.get('cy', 0)
-                cosine, sine = math.cos(angle), math.sin(angle)
-                def transform(x, y):
-                    return [cx + scale * ((x-cx)*cosine - (y-cy)*sine) + dx,
-                            cy + scale * ((x-cx)*sine + (y-cy)*cosine) + dy]
-
+                self._transform_selection(ink, action, left, right, height)
                 selection_ids = action['ids']
-                for index, stroke in enumerate(ink.strokes):
-                    if stroke.id in selected_ids and (dx, dy, scale, angle) != (0, 0, 1, 0):
-                        moved = deepcopy(stroke)
-                        moved.points = [[*transform(x, y), p, w * scale] for x, y, p, w in moved.points]
-                        moved.scale *= scale
-                        if not math.isfinite(moved.scale) or moved.scale <= 0:
-                            raise ValueError('Invalid native stroke scale.')
-                        if any(not left <= x <= right or not 0 <= y <= height
-                               or not math.isfinite(w) or not 0 <= w <= 65535 / 4
-                               for x, y, p, w in moved.points):
-                            raise ValueError('Keep transformed strokes inside the page and supported width range.')
-                        ink.strokes[index] = moved
-                for index, picture in enumerate(ink.images):
-                    if picture.id in selected_ids and (dx, dy, scale, angle) != (0, 0, 1, 0):
-                        corners = [transform(x, y) for x, y in picture.corners]
-                        validate_corners(corners)
-                        ink.images[index] = type(picture)(picture.id, picture.layer, picture.resource, corners)
-            elif op == 'erase':
-                old_ids = {s.id for s in ink.strokes}
-                if ink.warning:
-                    raise ValueError(ink.warning)
-                if 'points' in action:
-                    if any(not left <= x <= right or y > height for x, y, _ in action['points']):
-                        raise ValueError('Eraser is outside the page.')
-                    from .eraser import erase
-                    ink.strokes = erase(ink.strokes, ink.layers, action['points'],
-                                        action['radius'] * self.eraser_scale(), action.get('kind') == 'whole')
-                else:
-                    ids = set(action['ids'])
-                    shown = {key for key, _, visible in ink.layers if visible}
-                    ids.difference_update(p.id for p in ink.images if p.layer not in shown)
-                    self.remove_selection(ink, ids)
-                fragments, owner = {}, None
-                for stroke in ink.strokes:
-                    if stroke.id in old_ids:
-                        owner = stroke.id
-                    fragments.setdefault(owner, []).append(stroke.id)
-                ink.order = [part for key in ink.order for part in
-                             (fragments.get(key, []) if key in old_ids else [key])]
-                if ink.images:
-                    ink.ordering_dirty = True
-            elif op == 'add-page':
-                from .templates import inherit
-                current = book.pages[self.index]
-                new_page = book.add_page(self.index + 1)
-                self.index += 1
-                if book.content.get('fileType') != 'pdf':
-                    inherit(book, current, new_page)
-            elif op == 'template':
-                from .templates import select
-                select(book, self.index, action['name'], action['format'], action['visible'])
-            elif op == 'duplicate-page':
-                book.copy_page(book, self.index, self.index + 1)
-                self.index += 1
-            elif op == 'delete-page':
-                book.delete_page(self.index)
-                self.index = min(self.index, len(book.pages) - 1)
-            elif op == 'move-page':
-                book.move_page(self.index, action['index'])
-                self.index = action['index']
-            elif op == 'rename':
-                name = action['name'].strip()
-                if not name or len(name) > 120 or any(ord(c) < 32 or c in '/\\' for c in name):
-                    raise ValueError('Choose a notebook name of 1–120 characters without slashes.')
-                book.metadata['visibleName'] = name
-                book.metadata_dirty = True
             else:
-                raise ValueError('Unknown notebook command.')
-            self.checkpoint(book)
-            self.checkpoint_unconfirmed = False
-        except Exception as error:
-            if not isinstance(error, RecoveryIncomplete):
-                self.restore(previous)
-                raise
-            self.checkpoint_unconfirmed = error.published is not True
-            checkpoint_error = error
+                self._edit_document(op, action, ink, left, right, height)
+
+    def _edit_document(self, op, action, ink, left, right, height):
+        if op == 'stroke':
+            ink.add(action['points'], action.get('tool', 17), action.get('color', 0),
+                    action.get('width', 2), action.get('layer'), page_height=height,
+                    x_bounds=(left, right), x_offset=left, expanded=self.expanded_ink())
+        elif op == 'paste-image':
+            from .images import paste
+            paste(self.notebook, self.index, action)
+        elif op == 'image-transform':
+            from .images import validate_corners
+            validate_corners(action['corners'])
+            if ink.warning:
+                raise ValueError(ink.warning)
+            shown = {key for key, _, visible in ink.layers if visible}
+            if not any(p.id == action['id'] and p.layer in shown for p in ink.images):
+                raise ValueError('Select a visible image.')
+            ink.images = [type(p)(p.id, p.layer, p.resource, deepcopy(action['corners']))
+                          if p.id == action['id'] else p for p in ink.images]
+        elif op == 'arrange-image':
+            self._arrange_image(ink, action)
+        elif op == 'delete-image':
+            if ink.warning:
+                raise ValueError(ink.warning)
+            ink.images = [p for p in ink.images if p.id != action['id']]
+        elif op == 'add-layer':
+            ink.add_layer(action['name'])
+        elif op == 'layer-visible':
+            if ink.warning:
+                raise ValueError(ink.warning)
+            ink.layers = [(key, name, bool(action['visible']) if key == action['layer'] else shown)
+                          for key, name, shown in ink.layers]
+        elif op == 'erase':
+            self._erase(ink, action, left, right, height)
         else:
-            checkpoint_error = None
-        self._selection_clipboard = clipboard
-        if pasted_indexes:
-            ink = book.page(self.index)
-            selection_ids = [getattr(ink, group)[i].id for group, i in pasted_indexes]
-        self._selection_ids = selection_ids
-        self.undo.append(previous)
-        del self.undo[:-50]
-        self.redo.clear()
-        if checkpoint_error is not None:
-            raise checkpoint_error
+            self._edit_structure(op, action)
+
+    def _edit_structure(self, op, action):
+        book = self.notebook
+        if op == 'add-page':
+            from .templates import inherit
+            current = book.pages[self.index]
+            new_page = book.add_page(self.index + 1)
+            self.index += 1
+            if book.content.get('fileType') != 'pdf':
+                inherit(book, current, new_page)
+        elif op == 'template':
+            from .templates import select
+            select(book, self.index, action['name'], action['format'], action['visible'])
+        elif op == 'duplicate-page':
+            book.copy_page(book, self.index, self.index + 1)
+            self.index += 1
+        elif op == 'delete-page':
+            book.delete_page(self.index)
+            self.index = min(self.index, len(book.pages) - 1)
+        elif op == 'move-page':
+            book.move_page(self.index, action['index'])
+            self.index = action['index']
+        elif op == 'rename':
+            name = action['name'].strip()
+            if not name or len(name) > 120 or any(ord(c) < 32 or c in '/\\' for c in name):
+                raise ValueError('Choose a notebook name of 1–120 characters without slashes.')
+            book.metadata['visibleName'] = name
+            book.metadata_dirty = True
+        else:
+            raise ValueError('Unknown notebook command.')
+
+    def _paste_selection(self, ink, clipboard, pasted_indexes, left, right, height):
+        from uuid import uuid4
+        from .images import add_picture
+        from .ink import MAX_PAGE_POINTS
+
+        if ink.warning:
+            raise ValueError(ink.warning)
+        visible = [key for key, _, shown in ink.layers if shown]
+        if not visible or not clipboard:
+            raise ValueError('Copy a selection and choose a visible layer first.')
+        point_count = sum(len(s.points) for s in ink.strokes)
+        point_count += sum(len(item.points) for item, data in clipboard if data is None)
+        if point_count > MAX_PAGE_POINTS:
+            raise ValueError('Too many points on this page.')
+        for item, data in clipboard:
+            if data is not None:
+                add_picture(self.notebook, self.index, data, visible[-1], item.corners)
+                pasted_indexes.append(('images', len(ink.images) - 1))
+                continue
+            stroke = deepcopy(item)
+            if any(not left <= x <= right or not 0 <= y <= height for x, y, _, _ in stroke.points):
+                raise ValueError('Keep pasted strokes inside the page.')
+            stroke.id, stroke.layer = uuid4().hex, visible[-1]
+            ink.strokes.append(stroke)
+            ink.order = [*ink.order, stroke.id]
+            pasted_indexes.append(('strokes', len(ink.strokes) - 1))
+        if ink.images:
+            ink.ordering_dirty = True
+
+    def _transform_selection(self, ink, action, left, right, height):
+        import math
+        from .images import validate_corners
+
+        if ink.warning:
+            raise ValueError(ink.warning)
+        self.selected_items(ink, action['ids'])
+        dx, dy = action['dx'], action['dy']
+        scale, angle = action.get('scale', 1), action.get('angle', 0)
+        if (dx, dy, scale, angle) == (0, 0, 1, 0):
+            return
+        selected_ids = set(action['ids'])
+        cx, cy = action.get('cx', 0), action.get('cy', 0)
+        cosine, sine = math.cos(angle), math.sin(angle)
+
+        def transform(x, y):
+            return [cx + scale * ((x-cx)*cosine - (y-cy)*sine) + dx,
+                    cy + scale * ((x-cx)*sine + (y-cy)*cosine) + dy]
+
+        for index, stroke in enumerate(ink.strokes):
+            if stroke.id in selected_ids:
+                moved = deepcopy(stroke)
+                moved.points = [[*transform(x, y), p, w * scale] for x, y, p, w in moved.points]
+                moved.scale *= scale
+                if not math.isfinite(moved.scale) or moved.scale <= 0:
+                    raise ValueError('Invalid native stroke scale.')
+                if any(not left <= x <= right or not 0 <= y <= height
+                       or not math.isfinite(w) or not 0 <= w <= 65535 / 4
+                       for x, y, p, w in moved.points):
+                    raise ValueError('Keep transformed strokes inside the page and supported width range.')
+                ink.strokes[index] = moved
+        for index, picture in enumerate(ink.images):
+            if picture.id in selected_ids:
+                corners = [transform(x, y) for x, y in picture.corners]
+                validate_corners(corners)
+                ink.images[index] = type(picture)(picture.id, picture.layer, picture.resource, corners)
+
+    def _erase(self, ink, action, left, right, height):
+        old_ids = {s.id for s in ink.strokes}
+        if ink.warning:
+            raise ValueError(ink.warning)
+        if 'points' in action:
+            if any(not left <= x <= right or y > height for x, y, _ in action['points']):
+                raise ValueError('Eraser is outside the page.')
+            from .eraser import erase
+            ink.strokes = erase(ink.strokes, ink.layers, action['points'],
+                                action['radius'] * self.eraser_scale(), action.get('kind') == 'whole')
+        else:
+            ids = set(action['ids'])
+            shown = {key for key, _, visible in ink.layers if visible}
+            ids.difference_update(p.id for p in ink.images if p.layer not in shown)
+            self.remove_selection(ink, ids)
+        fragments, owner = {}, None
+        for stroke in ink.strokes:
+            if stroke.id in old_ids:
+                owner = stroke.id
+            fragments.setdefault(owner, []).append(stroke.id)
+        ink.order = [part for key in ink.order for part in
+                     (fragments.get(key, []) if key in old_ids else [key])]
+        if ink.images:
+            ink.ordering_dirty = True
+
+    @staticmethod
+    def _arrange_image(ink, action):
+        if ink.warning:
+            raise ValueError(ink.warning)
+        picture = next((p for p in ink.images if p.id == action['id']), None)
+        shown = {key for key, _, visible in ink.layers if visible}
+        if picture is None or picture.layer not in shown:
+            raise ValueError('Select a visible image.')
+        members = {s.id for s in [*ink.strokes, *ink.images] if s.layer == picture.layer}
+        order = [key for key in ink.order if key in members]
+        order += [s.id for s in [*ink.strokes, *ink.images] if s.id in members and s.id not in order]
+        old = order.index(picture.id)
+        positions = {'front': len(order) - 1, 'back': 0,
+                     'forward': min(old + 1, len(order) - 1), 'backward': max(0, old - 1)}
+        if action['direction'] not in positions:
+            raise ValueError('Unknown image arrangement.')
+        order.insert(positions[action['direction']], order.pop(old))
+        other = [key for key in ink.order if key not in members]
+        ink.order = [*other, *order]
+        ink.ordering_dirty = True
 
     @staticmethod
     def selected_items(ink, ids):

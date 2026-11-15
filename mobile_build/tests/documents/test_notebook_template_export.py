@@ -21,11 +21,12 @@ class NotebookTemplateExportTests(unittest.IsolatedAsyncioTestCase):
         editor.apply(dict(op='template', name='Logistics Restaurant review', format='move', visible=True))
         editor.apply(dict(op='stroke', points=[[700, 180, .5], [850, 180, .5]]))
         original = book.page(0).to_bytes()
-        owner = SimpleNamespace(bridge=Bridge(), web=object(), editor=editor,
-                                document=None, progress=None, view=SimpleNamespace(children=[]),
-                                confirm_export=AsyncMock(return_value=True),
-                                closed=False, busy=False, native_transport=False,
-                                app=SimpleNamespace(active_host=True))
+        owner = NotebookPanel.__new__(NotebookPanel)
+        owner.__dict__.update(bridge=Bridge(), web=object(), editor=editor,
+                              document=None, progress=None, view=SimpleNamespace(children=[]),
+                              confirm_export=AsyncMock(return_value=True),
+                              closed=False, busy=False, pen_input=None,
+                              app=SimpleNamespace(active_host=True))
         copies = []
         async def save(app, name, open_stream):
             self.assertIs(app, owner.app)
@@ -34,7 +35,7 @@ class NotebookTemplateExportTests(unittest.IsolatedAsyncioTestCase):
                 copies.append(stream.read())
             return True
         with patch('commonUtils.ui.native.documents.export_stream', side_effect=save):
-            await NotebookPanel.perform(owner, dict(op='export'))
+            await owner.perform(dict(op='export'))
         owner.confirm_export.assert_awaited_once_with()
         self.assertEqual(len(copies), 1)
         exported = Notebook.read(copies[0])

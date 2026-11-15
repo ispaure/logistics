@@ -7,7 +7,7 @@ import unittest
 from commonUtils.testing.stages import TestStage
 from features.notebooks.editor import Editor
 from features.notebooks.notebook import Notebook
-from features.notebooks.protocol import validate_action
+from features.notebooks.protocol import RecoveryIncomplete, validate_action
 from features.notebooks.recovery import Repository
 from tests.notebooks.test_sampling_native_preservation import imported_book, native_line
 
@@ -176,6 +176,32 @@ class StrokeSelectionTests(unittest.TestCase):
         editor.apply(dict(op='paste-strokes', single_use=True))
         self.assertEqual(len(editor.notebook.page(0).strokes), 2)
         self.assertFalse(editor.state()['stroke_clipboard'])
+
+    def test_unconfirmed_single_use_paste_retains_edit_and_consumes_clipboard(self):
+        editor = self.editor()
+        self.transform(editor, dx=10)
+        editor.apply(dict(op='undo'))
+        editor.apply(dict(op='copy-strokes', ids=[editor.notebook.page(0).strokes[0].id]))
+
+        def unconfirmed(book):
+            self.assertTrue(editor.state()['stroke_clipboard'])
+            self.assertEqual(editor.state()['selection_ids'], [])
+            raise RecoveryIncomplete('Could not verify recovery', published=None)
+
+        editor.checkpoint = unconfirmed
+        with self.assertRaises(RecoveryIncomplete):
+            editor.apply(dict(op='paste-strokes', single_use=True))
+        strokes = editor.notebook.page(0).strokes
+        self.assertEqual(len(strokes), 2)
+        self.assertEqual(editor.state()['selection_ids'], [strokes[-1].id])
+        self.assertFalse(editor.state()['stroke_clipboard'])
+        self.assertTrue(editor.checkpoint_unconfirmed)
+        self.assertEqual((len(editor.undo), len(editor.redo)), (2, 0))
+
+        editor.checkpoint = lambda book: None
+        editor.apply(dict(op='undo'))
+        self.assertEqual(len(editor.notebook.page(0).strokes), 1)
+        self.assertFalse(editor.checkpoint_unconfirmed)
 
     def test_single_use_paste_flag_rejects_nonboolean_values(self):
         for value in ('true', 1, None):

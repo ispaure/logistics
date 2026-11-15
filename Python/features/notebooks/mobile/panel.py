@@ -17,7 +17,7 @@ from ..recovery import Repository
 from ..editor import Editor
 from ..bridge import Bridge, RetiredCanvas
 from ..progress import notebook_progress_state, open_notebook_progress, page_location, restore_notebook_progress
-from ..protocol import brush_color_script, document_state, stroke_script, ink_patch_script, update_script, validate_action
+from ..protocol import MODEL_COMMANDS, brush_color_script, document_state, stroke_script, ink_patch_script, update_script, validate_action
 from .brush_presets import PREFERENCE as BRUSH_PRESETS, TOOLBAR_PRESET_LIMIT, change_preset, read_presets
 from .surface import mobile_editor_html
 
@@ -50,6 +50,31 @@ async def _bounded_input_result(awaitable, timeout):
     finally:
         if not query.done():
             query.add_done_callback(_consume_input_result)
+
+
+class _CanvasCommand:
+    """Owners captured at admission, plus the response state for one JS action."""
+
+    def __init__(self, panel: 'NotebookPanel', action: dict, canvas: Bridge):
+        self.panel = panel
+        self.action = action
+        self.canvas = canvas
+        self.web = panel.web
+        self.editor = panel.editor
+        self.progress = panel.progress
+        self.position_sequence = canvas.sequence
+        self.previous_page = page_location(self.editor)
+        self.previous_ink = (list(self.editor.notebook.page(self.editor.index).strokes)
+                             if action.get('op') == 'erase' and 'points' in action else None)
+        self.error = ''
+        self.ack_dispatched = False
+
+    async def respond(self, script, *, acknowledges=False, release_busy=True):
+        # Record dispatch before awaiting JavaScript: a stalled completion may
+        # already have advanced the queue and admitted its next Python worker.
+        if acknowledges:
+            self.ack_dispatched = True
+        return await self.panel._respond(self.web, script, self.canvas, release_busy=release_busy)
 
 
 class NotebookPanel:
@@ -531,6 +556,8 @@ class NotebookPanel:
 
     async def _respond(self, web, script, canvas, *, timeout=4, release_busy=True):
         """A response-only wait follows completed worker work, never an active write."""
+        if canvas is not self.bridge or not canvas.active or self.closed or self.web is not web:
+            raise RetiredCanvas()
         if release_busy:
             self.busy = False
         try:
@@ -559,178 +586,205 @@ class NotebookPanel:
         if canvas is not self.bridge or not canvas.active:
             return
         self.busy = True
-        error = ''
-        web, editor = self.web, self.editor
-        progress = self.progress
-        position_sequence = canvas.sequence
-        previous_page = page_location(editor)
-        previous_ink = list(editor.notebook.page(editor.index).strokes) if action.get('op') == 'erase' and 'points' in action else None
-        ack_dispatched = False
-        async def respond(script, *, acknowledges=False, release_busy=True):
-            nonlocal ack_dispatched
-            if acknowledges:
-                ack_dispatched = True
-            return await self._respond(web, script, canvas, release_busy=release_busy)
+        command = _CanvasCommand(self, action, canvas)
         try:
-            if action.get('op') in ('add-brush-preset', 'remove-brush-preset', 'update-brush-preset'):
-                try:
-                    presets = change_preset(self.app.preferences, action)
-                    message = ''
-                except (OSError, ValueError) as failure:
-                    presets = read_presets(self.app.preferences.values.get(BRUSH_PRESETS, '[]'))
-                    message = str(failure)
-                raw = self.app.preferences.values.get(BRUSH_PRESETS, '[]')
-                await respond('window.notebookBrushPresetUpdate(' + json.dumps(presets) + ', '
-                              + json.dumps(message) + ')', acknowledges=True)
-                self._brush_presets_sent = raw
+            if await self._perform_brush_preset(command):
                 return
             op = validate_action(action)
-            if editor.notebook.large_pdf_view and op in ('save-as', 'export'):
-                await respond(update_script(self.state(), 'Use Save for streamed PDF notebooks.'),
-                              acknowledges=True)
+            if command.editor.notebook.large_pdf_view and op in ('save-as', 'export'):
+                await command.respond(update_script(self.state(), 'Use Save for streamed PDF notebooks.'),
+                                      acknowledges=True)
                 return
-            if op == 'paper-preview':
-                try:
-                    if self.paper_preview != action['muted']:
-                        self.app.preferences.save(notebook_paper_preview='true' if action['muted'] else 'false')
-                except (OSError, ValueError) as failure:
-                    error = str(failure)
-                preview = self.paper_preview
-                await respond('window.notebookPaperPreviewUpdate(' + json.dumps(preview) + ', '
-                              + json.dumps(error) + ')', acknowledges=True)
-                self._paper_preview_sent = preview
+            if await self._perform_view_command(command, op):
                 return
-            if op in ('brush-color', 'eraser-kind'):
-                if op == 'brush-color':
-                    editor.brush_colors[action['tool']] = action['color']
-                else:
-                    editor.eraser_kind = action['kind']
-                self._position_sequence = position_sequence
-                status = None
-                if progress is not None:
-                    observation = progress.observe(notebook_progress_state(editor))
-                    status = ('fenced' if observation is None else
-                              await canvas.wait(asyncio.to_thread(progress.flush, observation)))
-                await respond(brush_color_script(status, 'eraser type' if op == 'eraser-kind' else 'brush color'),
-                              acknowledges=True)
+            if await self._fence_command_input(command, op):
                 return
-            if op in {'save', 'save-as', 'export'} and self.native_transport:
-                pending = self.native_input_pending
-                if not pending:
-                    try:
-                        pending = await canvas.wait(_bounded_input_result(web.evaluate_javascript(
-                            'queue.slice(1).some(action => action.op === "stroke" || action.op === "erase")'), 1))
-                    except Exception:
-                        pending = True
-                if _input_true(pending) or self.native_input_pending:
-                    # A non-error ack preserves queued strokes; notebookUpdate's
-                    # error path clears the queue and must not be used here.
-                    self.busy = False
-                    script = update_script(self.state(), '') + ";document.getElementById('status').textContent='Finishing pen input; try again.'"
-                    await respond(script, acknowledges=True)
-                    return
-            if op == 'page-previews':
-                previews = await canvas.wait(asyncio.to_thread(editor.page_previews, action['start']))
-                await respond('window.notebookPagePreviews(' + json.dumps(previews, separators=(',', ':')) + ')')
-            if op == 'library':
-                # Release the JS queue before native guards. Cancel/Keep editing
-                # must leave a usable canvas, and queued ink precedes this action.
-                self.busy = False
-                await respond(update_script(self.state(), ''), acknowledges=True)
-            if op == 'document-location':
-                from services.documents.mobile_notebooks import notebook_location
-                window = self.view.window
-                location = notebook_location(self)
-                if window is not None and location:
-                    await canvas.wait(window.dialog(toga.InfoDialog('Document location', location)))
-            if op == 'show-in-folder':
-                self.busy = True
-                from services.documents.mobile_notebooks import show_notebook_in_folder
-                await canvas.wait(show_notebook_in_folder(self))
-            if op == 'delete-file':
-                self.busy = True
-                await canvas.wait(self.delete_document())
-            if op == 'library':
-                if hasattr(self, 'session'):
-                    # The first ACK may already have dispatched a new worker.
-                    # Use the reader's guarded close and its recorded origin.
-                    self.app.request_reader_close(self.session.id)
-                else:
-                    self.library()
+            if await self._perform_document_action(command, op):
                 return
-            if op == 'delete-page':
-                if not await canvas.wait(self.app.main_window.dialog(toga.ConfirmDialog(
-                        'Delete this page?', 'This removes the current page. Undo is available.'))):
-                    self.busy = False
-                    await respond(update_script(self.state(), ''), acknowledges=True)
-                    return
-            if op == 'save':
-                if self.document is not None and self.document.resource is not None:
-                    await canvas.wait(asyncio.to_thread(self.document.save))
-                else:
-                    await respond(update_script(self.state(), ''), acknowledges=True)
-                    picker = self.app.editor_picker()
-                    await canvas.wait(picker.show_notebook_destination(self))
-                    if getattr(self.document, 'source_unavailable', False):
-                        picker.save_as_status.value = 'The original file is unavailable or changed. Choose a new location to save your retained draft.'
-                    return
-            elif op == 'save-as':
-                prepared = await canvas.wait(self.prepare_save_as())
-                await respond(update_script(self.state(), ''), acknowledges=True)
-                await canvas.wait(self.save_as(prepared))
+            if op in MODEL_COMMANDS and await self._perform_editor_update(command, op):
                 return
-            elif op == 'transfer':
-                if not await canvas.wait(self.confirm_export()):
-                    await respond(update_script(self.state(), 'Cancelled.'), acknowledges=True)
-                    return
-                self.transfer_panel()
-                return
-            elif op == 'export':
-                if not await canvas.wait(self.confirm_export()):
-                    await respond(update_script(self.state(), 'Cancelled.'), acknowledges=True)
-                    return
-                from commonUtils.ui.native.documents import export_stream
-                from ..remarkable_export import export_rmdoc
-                data = await canvas.wait(asyncio.to_thread(export_rmdoc, editor.notebook))
-                name = editor.notebook.name.replace('/', '-').replace('\\', '-') + '.rmdoc'
-                saved = await canvas.wait(export_stream(self.app, name, lambda: BytesIO(data)))
-                if not saved:
-                    error = 'Export cancelled. Your notebook remains open.'
-            elif op not in {'save', 'save-as', 'show-in-folder', 'document-location', 'delete-file', 'page-previews'}:
-                await canvas.wait(asyncio.to_thread(editor.apply, action))
-                if hasattr(self, 'session') and op == 'rename':
-                    from services.documents.mobile_notebooks import notebook_title
-                    self.session.title = notebook_title(self)
-                    self.app.refresh_document_list()
-                    self.app.adaptive.render()
         except asyncio.CancelledError:
             if (canvas is self.bridge and canvas.active and not self.closed
-                    and self.app.active_host and self.web is web and not ack_dispatched):
+                    and self.app.active_host and self.web is command.web and not command.ack_dispatched):
                 try:
                     self.busy = False
-                    ack_dispatched = True
+                    command.ack_dispatched = True
                     message = ('Deletion interrupted. Retry Delete or use Save As.'
                                if action.get('op') == 'delete-file' else 'Action interrupted. Your notebook remains open.')
-                    await asyncio.shield(_bounded_input_result(web.evaluate_javascript(update_script(self.state(), message)), 4))
+                    await asyncio.shield(_bounded_input_result(
+                        command.web.evaluate_javascript(update_script(self.state(), message)), 4))
                 except (Exception, asyncio.CancelledError):
                     pass
             raise
         except RetiredCanvas:
             return
         except NotebookResponseTimeout:
-            if canvas is not self.bridge or not canvas.active or self.closed or self.web is not web:
+            if canvas is not self.bridge or not canvas.active or self.closed or self.web is not command.web:
                 return
             self._response_unavailable()
-            if ack_dispatched:
+            if command.ack_dispatched:
                 return
             # Page-preview callbacks do not acknowledge the action queue. Send
             # its one ordinary final ACK below; never duplicate an earlier ACK.
         except Exception as failure:
-            error = str(failure)
+            command.error = str(failure)
         finally:
             # After its ACK, this action no longer owns a later queued worker.
-            if canvas is self.bridge and not ack_dispatched:
+            if canvas is self.bridge and not command.ack_dispatched:
                 self.busy = False
+        await self._publish_command(command)
+
+    async def _perform_brush_preset(self, command: _CanvasCommand):
+        """Preset commands have their own validator and ACK payload."""
+        if command.action.get('op') not in ('add-brush-preset', 'remove-brush-preset', 'update-brush-preset'):
+            return False
+        try:
+            presets = change_preset(self.app.preferences, command.action)
+            message = ''
+        except (OSError, ValueError) as failure:
+            presets = read_presets(self.app.preferences.values.get(BRUSH_PRESETS, '[]'))
+            message = str(failure)
+        raw = self.app.preferences.values.get(BRUSH_PRESETS, '[]')
+        await command.respond('window.notebookBrushPresetUpdate(' + json.dumps(presets) + ', '
+                              + json.dumps(message) + ')', acknowledges=True)
+        self._brush_presets_sent = raw
+        return True
+
+    async def _perform_view_command(self, command: _CanvasCommand, op):
+        """Return true only when the view command has sent its final ACK."""
+        action, editor, progress = command.action, command.editor, command.progress
+        if op == 'paper-preview':
+            try:
+                if self.paper_preview != action['muted']:
+                    self.app.preferences.save(notebook_paper_preview='true' if action['muted'] else 'false')
+            except (OSError, ValueError) as failure:
+                command.error = str(failure)
+            preview = self.paper_preview
+            await command.respond('window.notebookPaperPreviewUpdate(' + json.dumps(preview) + ', '
+                                  + json.dumps(command.error) + ')', acknowledges=True)
+            self._paper_preview_sent = preview
+            return True
+        if op in ('brush-color', 'eraser-kind'):
+            if op == 'brush-color':
+                editor.brush_colors[action['tool']] = action['color']
+            else:
+                editor.eraser_kind = action['kind']
+            self._position_sequence = command.position_sequence
+            status = None
+            if progress is not None:
+                observation = progress.observe(notebook_progress_state(editor))
+                status = ('fenced' if observation is None else
+                          await command.canvas.wait(asyncio.to_thread(progress.flush, observation)))
+            await command.respond(brush_color_script(status, 'eraser type' if op == 'eraser-kind' else 'brush color'),
+                                  acknowledges=True)
+            return True
+        if op == 'page-previews':
+            previews = await command.canvas.wait(asyncio.to_thread(editor.page_previews, action['start']))
+            await command.respond('window.notebookPagePreviews(' + json.dumps(previews, separators=(',', ':')) + ')')
+        return False
+
+    async def _fence_command_input(self, command: _CanvasCommand, op):
+        """Save/export can retry after queued ink; their ACK must preserve it."""
+        if op not in {'save', 'save-as', 'export'} or not self.native_transport:
+            return False
+        pending = self.native_input_pending
+        if not pending:
+            try:
+                pending = await command.canvas.wait(_bounded_input_result(command.web.evaluate_javascript(
+                    'queue.slice(1).some(action => action.op === "stroke" || action.op === "erase")'), 1))
+            except RetiredCanvas:
+                raise
+            except Exception:
+                pending = True
+        if _input_true(pending) or self.native_input_pending:
+            # A non-error ack preserves queued strokes; notebookUpdate's
+            # error path clears the queue and must not be used here.
+            script = update_script(self.state(), '') + ";document.getElementById('status').textContent='Finishing pen input; try again.'"
+            await command.respond(script, acknowledges=True)
+            return True
+        return False
+
+    async def _perform_document_action(self, command: _CanvasCommand, op):
+        """Return true for actions that leave or already released the queue."""
+        canvas, editor = command.canvas, command.editor
+        if op == 'library':
+            # Release the JS queue before native guards. Cancel/Keep editing
+            # must leave a usable canvas, and queued ink precedes this action.
+            self.busy = False
+            await command.respond(update_script(self.state(), ''), acknowledges=True)
+            if hasattr(self, 'session'):
+                # The first ACK may already have dispatched a new worker.
+                # Use the reader's guarded close and its recorded origin.
+                self.app.request_reader_close(self.session.id)
+            else:
+                self.library()
+            return True
+        if op == 'document-location':
+            from services.documents.mobile_notebooks import notebook_location
+            window = self.view.window
+            location = notebook_location(self)
+            if window is not None and location:
+                await canvas.wait(window.dialog(toga.InfoDialog('Document location', location)))
+        elif op == 'show-in-folder':
+            self.busy = True
+            from services.documents.mobile_notebooks import show_notebook_in_folder
+            await canvas.wait(show_notebook_in_folder(self))
+        elif op == 'delete-file':
+            self.busy = True
+            await canvas.wait(self.delete_document())
+        elif op == 'save':
+            if self.document is not None and self.document.resource is not None:
+                await canvas.wait(asyncio.to_thread(self.document.save))
+            else:
+                await command.respond(update_script(self.state(), ''), acknowledges=True)
+                picker = self.app.editor_picker()
+                await canvas.wait(picker.show_notebook_destination(self))
+                if getattr(self.document, 'source_unavailable', False):
+                    picker.save_as_status.value = 'The original file is unavailable or changed. Choose a new location to save your retained draft.'
+                return True
+        elif op == 'save-as':
+            prepared = await canvas.wait(self.prepare_save_as())
+            await command.respond(update_script(self.state(), ''), acknowledges=True)
+            await canvas.wait(self.save_as(prepared))
+            return True
+        elif op == 'transfer':
+            if not await canvas.wait(self.confirm_export()):
+                await command.respond(update_script(self.state(), 'Cancelled.'), acknowledges=True)
+                return True
+            self.transfer_panel()
+            return True
+        elif op == 'export':
+            if not await canvas.wait(self.confirm_export()):
+                await command.respond(update_script(self.state(), 'Cancelled.'), acknowledges=True)
+                return True
+            from commonUtils.ui.native.documents import export_stream
+            from ..remarkable_export import export_rmdoc
+            data = await canvas.wait(asyncio.to_thread(export_rmdoc, editor.notebook))
+            name = editor.notebook.name.replace('/', '-').replace('\\', '-') + '.rmdoc'
+            saved = await canvas.wait(export_stream(self.app, name, lambda: BytesIO(data)))
+            if not saved:
+                command.error = 'Export cancelled. Your notebook remains open.'
+        return False
+
+    async def _perform_editor_update(self, command: _CanvasCommand, op):
+        if op == 'delete-page':
+            if not await command.canvas.wait(self.app.main_window.dialog(toga.ConfirmDialog(
+                    'Delete this page?', 'This removes the current page. Undo is available.'))):
+                self.busy = False
+                await command.respond(update_script(self.state(), ''), acknowledges=True)
+                return True
+        await command.canvas.wait(asyncio.to_thread(command.editor.apply, command.action))
+        if hasattr(self, 'session') and op == 'rename':
+            from services.documents.mobile_notebooks import notebook_title
+            self.session.title = notebook_title(self)
+            self.app.refresh_document_list()
+            self.app.adaptive.render()
+        return False
+
+    async def _publish_command(self, command: _CanvasCommand):
+        """Publish only to the admitted canvas and retain distinct failure paths."""
+        canvas, web, editor = command.canvas, command.web, command.editor
+        action, error, progress = command.action, command.error, command.progress
         if canvas is not self.bridge or not canvas.active:
             return
         if hasattr(self, 'session') and self.document is not None:
@@ -739,8 +793,8 @@ class NotebookPanel:
             try:
                 if action['op'] == 'stroke' and not error:
                     script = stroke_script(editor, self.document)
-                elif previous_ink is not None and not error:
-                    script = ink_patch_script(editor, self.document, previous_ink)
+                elif command.previous_ink is not None and not error:
+                    script = ink_patch_script(editor, self.document, command.previous_ink)
                 elif error and action['op'] in {'save', 'save-as', 'export'}:
                     # These operations do not mutate ink. An error ACK would
                     # clear strokes queued while their I/O was active.
@@ -748,26 +802,26 @@ class NotebookPanel:
                     message = label + error
                     self._native_notice(message)
                     status_script = 'document.getElementById("status").textContent=' + json.dumps(message)
-                    if ack_dispatched:
+                    if command.ack_dispatched:
                         # Save As already released its queue before the picker.
                         # Report the failure without consuming the next stroke
                         # or changing the busy state of its active worker.
-                        await respond(status_script, release_busy=False)
+                        await command.respond(status_script, release_busy=False)
                         return
                     script = update_script(self.state(), '') + ';' + status_script
                 else:
                     script = update_script(self.state(), error)
                 location = page_location(editor)
-                page_changed = not error and location != previous_page
+                page_changed = not error and location != command.previous_page
                 changed = progress is not None and page_changed
                 if changed:
                     script += ';state.page_id === ' + json.dumps(location['page_id']) + ' && state.index === ' + str(location['index'])
-                displayed = await respond(script, acknowledges=True)
+                displayed = await command.respond(script, acknowledges=True)
                 if page_changed or (not error and action['op'] == 'unlock-pdf'):
                     self.prefetch_pdf_neighbors(canvas)
                 if (changed and progress is self.progress and _input_true(displayed)
-                        and position_sequence >= self._position_sequence):
-                    self._position_sequence = position_sequence
+                        and command.position_sequence >= self._position_sequence):
+                    self._position_sequence = command.position_sequence
                     observation = progress.observe(notebook_progress_state(editor, location))
                     if observation is not None:
                         status = await asyncio.to_thread(progress.flush, observation)

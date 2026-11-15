@@ -404,6 +404,95 @@ class NativeNotebookResponseSafetyTests(unittest.IsolatedAsyncioTestCase):
         await asyncio.sleep(0)
         self.assertEqual(panel.web.evaluate_javascript.call_count,2)
 
+    async def test_retirement_during_native_queue_query_cannot_publish_or_release_successor(self):
+        from features.notebooks.bridge import Bridge
+        from unittest.mock import AsyncMock
+        for failed_query in (False, True):
+            with self.subTest(failed_query=failed_query):
+                panel = self.panel()
+                panel.pen_input = NS(owns_native_transport=True, pending=False)
+                panel.document.save = Mock()
+                retired_web, retired_canvas = panel.web, panel.bridge
+                replacement_web = NS(evaluate_javascript=AsyncMock(return_value=True))
+
+                async def query(script):
+                    self.assertTrue(script.startswith('queue.slice(1)'))
+                    retired_canvas.retire()
+                    panel.bridge = Bridge()
+                    panel.web = replacement_web
+                    panel.view.children = [replacement_web]
+                    panel.busy = True  # A command admitted by the new canvas.
+                    if failed_query:
+                        raise RuntimeError('Retired query failed')
+                    return False
+
+                retired_web.evaluate_javascript = AsyncMock(side_effect=query)
+                await panel.perform({'op': 'save'})
+                retired_web.evaluate_javascript.assert_awaited_once()
+                replacement_web.evaluate_javascript.assert_not_awaited()
+                panel.document.save.assert_not_called()
+                self.assertTrue(panel.busy)
+                self.assertEqual(panel.status.text, '')
+
+    async def test_live_native_queue_query_failure_keeps_retry_ack_nonerror(self):
+        from unittest.mock import AsyncMock
+        for error in (RuntimeError('Query unavailable'), TimeoutError('Query timed out')):
+            with self.subTest(error=type(error).__name__):
+                panel = self.panel()
+                panel.pen_input = NS(owns_native_transport=True, pending=False)
+                panel.document.save = Mock()
+                panel.web.evaluate_javascript = AsyncMock(side_effect=[error, True])
+                await panel.perform({'op': 'save'})
+                panel.document.save.assert_not_called()
+                scripts = [call.args[0] for call in panel.web.evaluate_javascript.await_args_list]
+                self.assertEqual(len(scripts), 2)
+                self.assertTrue(scripts[0].startswith('queue.slice(1)'))
+                self.assertTrue(scripts[1].partition(';')[0].endswith(',"")'))
+                self.assertIn('Finishing pen input; try again.', scripts[1])
+                self.assertFalse(panel.busy)
+
+    async def test_delayed_page_ack_cannot_overwrite_newer_published_position(self):
+        import asyncio
+        from features.notebooks.editor import Editor
+        from features.notebooks.notebook import Notebook
+        from unittest.mock import AsyncMock
+        panel = self.panel()
+        book = Notebook.new()
+        book.add_page()
+        book.add_page()
+        panel.editor = Editor(book)
+        panel._position_sequence = -1
+        panel.progress = NS(observe=Mock(return_value=object()), flush=Mock(return_value='saved'))
+        panel.prefetch_pdf_neighbors = Mock()
+        entered, release = asyncio.Event(), asyncio.Event()
+
+        async def evaluate(script):
+            self.assertTrue(script.startswith('window.notebookUpdate('))
+            if not entered.is_set():
+                entered.set()
+                await release.wait()
+            return True
+
+        panel.web.evaluate_javascript = AsyncMock(side_effect=evaluate)
+        panel.bridge.sequence = 1
+        first = asyncio.create_task(panel.perform({'op': 'page', 'index': 1}))
+        try:
+            await asyncio.wait_for(entered.wait(), 1)
+            self.assertFalse(panel.busy)
+            panel.progress.observe.assert_not_called()
+            panel.bridge.sequence = 2
+            await panel.perform({'op': 'page', 'index': 2})
+        finally:
+            release.set()
+            await first
+        panel.progress.observe.assert_called_once()
+        self.assertEqual(panel.progress.observe.call_args.args[0]['page_id'], book.pages[2].id)
+        panel.progress.flush.assert_called_once()
+        self.assertEqual(panel._position_sequence, 2)
+        self.assertEqual(panel.editor.index, 2)
+        self.assertEqual(panel.web.evaluate_javascript.await_count, 2)
+        self.assertFalse(panel.busy)
+
     async def test_active_persistence_worker_keeps_busy_and_vetoes_discard_until_finished(self):
         import asyncio
         import threading
@@ -513,6 +602,47 @@ class NativeNotebookResponseSafetyTests(unittest.IsolatedAsyncioTestCase):
             panel.view.children=[]
             release.set()
             for worker in workers:await worker
+
+    async def test_picker_cancellation_after_ack_cannot_ack_or_unblock_queued_worker(self):
+        import asyncio
+        import threading
+        from unittest.mock import AsyncMock
+        panel = self.panel()
+        entered, release = threading.Event(), threading.Event()
+        picker_entered = asyncio.Event()
+        workers = []
+
+        def apply(action):
+            entered.set()
+            if not release.wait(2):
+                raise RuntimeError('Queued worker was not released')
+
+        async def picker(owner):
+            self.assertFalse(panel.busy)
+            self.assertEqual(panel.web.evaluate_javascript.await_count, 1)
+            workers.append(asyncio.create_task(panel.perform({'op': 'stroke', 'points': [[1, 2, .5]]})))
+            self.assertTrue(await asyncio.to_thread(entered.wait, 1))
+            picker_entered.set()
+            await asyncio.Future()
+
+        panel.editor.apply = Mock(side_effect=apply)
+        panel.web.evaluate_javascript = AsyncMock(return_value=True)
+        panel.app.editor_picker = lambda: NS(show_notebook_destination=picker)
+        saving = asyncio.create_task(panel.perform({'op': 'save-as'}))
+        try:
+            await asyncio.wait_for(picker_entered.wait(), 1)
+            saving.cancel()
+            with self.assertRaises(asyncio.CancelledError):
+                await saving
+            self.assertTrue(panel.busy)
+            panel.web.evaluate_javascript.assert_awaited_once()
+            panel.library.assert_not_called()
+        finally:
+            panel.view.children = []
+            release.set()
+            if not saving.done():
+                saving.cancel()
+            await asyncio.gather(saving, *workers, return_exceptions=True)
 
     async def test_provider_error_notice_survives_secondary_js_failure_without_dropping_canvas(self):
         panel=self.panel();panel.document.dirty=True
