@@ -26,6 +26,8 @@ HELP = {
     'vm.windows': 'Dedicated Windows test machine. With an empty selector, the manager detects its owned Windows machine. Create or recover it in Setup → Test machines if unavailable.',
     'vm.fedora_mode': 'Use guest for the dedicated Fedora machine (recommended). container-on-ubuntu is an advanced alternative requiring a separately configured Ubuntu test host with rootless Podman.',
     'vm.fedora_container_host': 'Only for container-on-ubuntu mode: the explicitly authorized Ubuntu test VM name or UUID. Direct Fedora guest testing does not use this field.',
+    'vm.windows_python_architecture': 'Select Python for the dedicated Windows VM. For full validation, use x86_64. ARM64 can run focused tests that do not need Qt WebEngine.',
+    'vm.windows_python_version': 'Optional exact CPython version for the dedicated Windows VM. Leave blank to use the shared Python version or the first supported ARM64 version.',
     'vm.windows_prepared_reference': 'Local JSON reference to prepared Windows tools. This is a path, not a tool download or credential.',
     'vm.shared_host': 'Reserved legacy shared-folder field. Isolated backends do not use it.',
     'vm.shared_guest': 'Reserved legacy shared-folder field. Isolated backends do not use it.',
@@ -102,6 +104,11 @@ def describe_settings(rows):
             entry['label'] = 'Fedora test machine' if name == 'vm.fedora' else 'Windows test machine'
             if entry.get('origin', '').startswith('Automatic selection unavailable:'):
                 entry['description'] += ' ' + entry['origin']
+        if name == 'vm.windows_python_architecture':
+            entry['label'] = 'Windows VM Python architecture'
+            entry['choices'] = ('x86_64', 'arm64')
+        if name == 'vm.windows_python_version':
+            entry['label'] = 'Windows VM Python version'
         if name == 'vm.fedora_mode':
             entry['label'] = 'Fedora execution mode'
             entry['choices'] = ('guest', 'container-on-ubuntu')

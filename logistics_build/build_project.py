@@ -460,8 +460,13 @@ class LogisticsProject:
         source['guest_source_readiness'] = ensure(self.root, snapshot, options['tools.manager_checkout'], source)
         local_manager = self.local_manager_test_arguments(source)
         results = workspace / ('windows-' + uuid4().hex)
+        from logistics_build.test_environments import load, windows_python
+        architecture = options.get('vm.windows_python_architecture', 'x86_64')
+        version = windows_python(load(snapshot), architecture, options.get('vm.windows_python_version', ''))
+        source['windows_python'] = dict(architecture=architecture, version=version)
         command = (str(self.interpreter), '-m', 'logistics_build.windows_backend', '--vm', guest['uuid'],
-                   '--snapshot', str(snapshot), '--results', str(results), '--source-identity', json.dumps(source))
+                   '--snapshot', str(snapshot), '--results', str(results), '--source-identity', json.dumps(source),
+                   '--python-architecture', architecture, '--python-version', version)
         if local_manager:
             command += local_manager
         elif options['tools.manager_checkout']:

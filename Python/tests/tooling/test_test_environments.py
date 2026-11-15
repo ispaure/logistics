@@ -44,14 +44,42 @@ class TestEnvironmentTests(unittest.TestCase):
                 (mobile / name).write_bytes((ROOT / 'mobile_build' / name).read_bytes())
             profile = root / 'private.json'
             with patch.dict('os.environ', {'LOGISTICS_MANAGER_PROFILE': str(profile)}):
-                manager_settings.save(mobile, {'testing.macos_runner': 'macos-26', 'testing.android_api': '37'})
+                manager_settings.save(mobile, {'testing.macos_runner': 'macos-26', 'testing.android_api': '37',
+                                               'vm.windows_python_architecture': 'arm64',
+                                               'vm.windows_python_version': '3.12.11'})
                 values, sources = manager_settings.settings(mobile)
             self.assertEqual(values['testing.android_api'], '37')
             self.assertIn('android-37', values['android.image'])
             self.assertIn('tracked', sources['testing.macos_runner'])
+            self.assertEqual(values['vm.windows_python_architecture'], 'arm64')
+            self.assertEqual(values['vm.windows_python_version'], '3.12.11')
+            self.assertEqual(load(root)['python_version'], DEFAULTS['python_version'])
             self.assertFalse(any(key.startswith('testing.') for key in json.loads(profile.read_text())))
             rows = describe_settings({'testing.' + key: dict(value=value) for key, value in DEFAULTS.items()})
             self.assertTrue(all('test-environments.json' in row['description'] for row in rows.values()))
+
+    def test_windows_vm_python_defaults_and_overrides(self):
+        from logistics_build.test_environments import windows_python
+
+        self.assertEqual(windows_python(DEFAULTS), DEFAULTS['python_version'])
+        self.assertEqual(windows_python(DEFAULTS, 'arm64'), '3.12.11')
+        self.assertEqual(windows_python(DEFAULTS, 'x86_64', '3.12.11'), '3.12.11')
+        for architecture, version in (('arm64', '3.12.2'), ('x86_64', '3.12'), ('x86', '')):
+            with self.subTest(architecture=architecture, version=version), self.assertRaises(ValueError):
+                windows_python(DEFAULTS, architecture, version)
+
+    def test_windows_arm64_requires_webengine_for_full_desktop_validation(self):
+        from logistics_build import local_desktop
+
+        with (patch.object(local_desktop.sys, 'platform', 'win32'),
+              patch.object(local_desktop.sysconfig, 'get_platform', return_value='win-arm64'),
+              patch.dict(local_desktop.sys.modules, {'PySide6.QtWebEngineCore': None})):
+            with self.assertRaisesRegex(RuntimeError, 'missing Qt WebEngine'):
+                local_desktop.verify_qt()
+            with patch.object(local_desktop.sys, 'stderr') as stderr:
+                local_desktop.verify_qt(focused=True)
+                stderr.write.assert_any_call('The pinned PySide6 wheel is missing Qt WebEngine on '
+                                             'Windows ARM64. Tests that require it can still fail.')
 
     def test_matrix_has_one_entry_per_desktop_and_explicit_runners(self):
         values = load(ROOT)

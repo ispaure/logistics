@@ -23,12 +23,18 @@ from logistics_build.guest_results import vm_attempt, waiting_progress
 PREPARE = WINDOWS_PREPARE
 
 
-def prepare(vm, output):
+def prepare(vm, output, *, architecture='x86_64', version=''):
     from build_manager.guest_workload import prepare_windows
     catalog = json.loads(Path(__file__).with_name('build_manager_tools.json').read_text())['windows_arm64']
-    from logistics_build.test_environments import load
-    runtime = dict(catalog['runtime'], python='cpython-' + load()['python_version'] + '-windows-x86_64')
-    return prepare_windows(Parallels(), vm, output, catalog, **runtime)
+    from logistics_build.test_environments import load, windows_python
+    version = windows_python(load(), architecture, version)
+    uv_arch = 'aarch64' if architecture == 'arm64' else 'x86_64'
+    runtime = dict(catalog['runtime'], python=f'cpython-{version}-windows-{uv_arch}',
+                   python_architecture=uv_arch)
+    prepared = prepare_windows(Parallels(), vm, output, catalog, **runtime)
+    prepared['python_architecture'] = architecture
+    save_json(output, prepared)
+    return prepared
 
 
 def source_zip(snapshot):
@@ -58,13 +64,22 @@ def _run_attempt(args):
 
 
 def _run_guest(args, client, cancelled, result, lifecycle):
+    from logistics_build.test_environments import load, windows_python
+    architecture = getattr(args, 'python_architecture', 'x86_64')
+    version = windows_python(load(args.snapshot), architecture, getattr(args, 'python_version', ''))
     reuse_prepared = args.prepared is not None and args.prepared.is_file()
     if reuse_prepared:
         prepared = json.loads(args.prepared.read_text())
         if prepared.get('vm') != result['vm'] or prepared.get('status') != 'prepared':
             raise ValueError('Prepared tools belong to another guest or are incomplete.')
-    else:
-        prepared = prepare(args.vm, args.results / 'prepared.json')
+        runtime = prepared.get('runtime', {})
+        # Older Logistics receipts provisioned x86_64 only. Their machine
+        # field can report the ARM64 guest even for an x86_64 interpreter.
+        if (prepared.get('python_architecture', 'x86_64') != architecture
+                or runtime.get('version', '').split(maxsplit=1)[:1] != [version]):
+            reuse_prepared = False
+    if not reuse_prepared:
+        prepared = prepare(args.vm, args.results / 'prepared.json', architecture=architecture, version=version)
     operation = uuid4().hex
     guest = WindowsGuest(client, prepared['vm'], prepared['workspace'], prepared['token'], operation)
     source = 'source-' + operation
@@ -76,7 +91,8 @@ def _run_guest(args, client, cancelled, result, lifecycle):
     environment = dict(PYTHONPATH=target + ';' + str(root / source / 'Python'), PYTHONUNBUFFERED='1',
                        PYTHONUTF8='1', QT_QPA_PLATFORM='offscreen',
                        UV_PYTHON_INSTALL_DIR=str(root / 'python'), UV_CACHE_DIR=str(root / 'cache'),
-                       UV_PYTHON_ARCH='x86_64', BROWSER_TEST_ARTIFACTS=str(root / reports / 'browser-diagnostics'))
+                       UV_PYTHON_ARCH='aarch64' if architecture == 'arm64' else 'x86_64',
+                       LOGISTICS_WINDOWS_VM_PYTHON=version, BROWSER_TEST_ARTIFACTS=str(root / reports / 'browser-diagnostics'))
     if getattr(args, 'manager_working_tree', None):
         environment['LOGISTICS_MANAGER_LOCAL_TEST_SOURCE'] = args.manager_working_tree
     if os.environ.get('LOGISTICS_REUSE_TEST_RESULTS') == 'off':
@@ -105,7 +121,11 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
 '''
         info = json.loads(guest.call_idempotent(configure,
             values=dict(source=target, git=prepared['git'], python=python), timeout=60))
-        result.update(runtime=info['runtime'], git=info['git'])
+        runtime = info['runtime']
+        expected_platform = 'win-arm64' if architecture == 'arm64' else 'win-amd64'
+        if runtime.get('python_platform') != expected_platform or runtime.get('version', '').split(maxsplit=1)[:1] != [version]:
+            raise ValueError(f'Windows VM did not provision the reviewed Python {version} ({architecture}).')
+        result.update(runtime=runtime, git=info['git'])
         environment['PATH'] = str(PureWindowsPath(prepared['git']).parent) + ';' + str(root / 'environment/Scripts') + ';' + info['path']
         manager = 'manager-' + operation
         manager_path = str(root / manager)
@@ -176,6 +196,8 @@ def main():
     parser.add_argument('--results', type=Path)
     parser.add_argument('--source-identity', type=json.loads)
     parser.add_argument('--prepared', type=Path)
+    parser.add_argument('--python-architecture', choices=('x86_64', 'arm64'), default='x86_64')
+    parser.add_argument('--python-version', default='')
     parser.add_argument('--pattern', default='')
     parser.add_argument('--native-notebooks', action='store_true', help='Run native notebook UI probes after focused setup')
     from logistics_build.notebook_validation import arguments
@@ -192,7 +214,7 @@ def main():
         return run(args)
     if not args.prepare_output:
         parser.error('Select source validation or an explicit preparation output.')
-    record = prepare(args.vm, args.prepare_output)
+    record = prepare(args.vm, args.prepare_output, architecture=args.python_architecture, version=args.python_version)
     print(json.dumps(dict(status='tools prepared; tests not run', guest_architecture=record['guestArchitecture'],
                           runtime=record['runtime'], interactive_session=record['session'])))
 

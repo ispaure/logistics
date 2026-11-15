@@ -52,8 +52,10 @@ def main():
             [sys.executable, '-c', 'import certifi; print(certifi.where())'],
             text=True).strip())
         # Clean runners must exercise real crypt operations, not skip their fixtures.
-        subprocess.run([sys.executable, '-m', 'logistics_build.local_desktop'],
-                       cwd=REPO, env=env, check=True, timeout=180)
+        preflight = [sys.executable, '-m', 'logistics_build.local_desktop']
+        if args.prepare_only:
+            preflight.append('--focused')
+        subprocess.run(preflight, cwd=REPO, env=env, check=True, timeout=180)
         env['LOGISTICS_REQUIRE_LOCALCRYPT_TESTS'] = '1'
     if args.prepare_only:
         print('Environment prepared; no platform tests were run.', flush=True)

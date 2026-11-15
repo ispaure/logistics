@@ -225,7 +225,7 @@ class GuestToolPreparationTests(unittest.TestCase):
                 patch.object(windows_backend.signal, 'signal'):
             results = Path(directory) / 'results'
             source = {'commit': 'fixture'}
-            args = argparse.Namespace(vm='windows-vm', results=results, source_identity=source,
+            args = argparse.Namespace(vm='windows-vm', results=results, snapshot=Path(directory), source_identity=source,
                                       prepared=None, shutdown=True)
             client = transport.return_value
             client.start.side_effect = [dict(uuid='windows-vm', status='stopped'),
@@ -267,7 +267,8 @@ class GuestToolPreparationTests(unittest.TestCase):
                 root = Path(directory)
                 source = {'commit': 'fixture'}
                 prepared = dict(vm='test-vm', status='prepared', token='a' * 32, workspace=r'C:\bm\fixture',
-                                python='python', git='git', runtime={}, guestArchitecture='ARM64')
+                                python='python', git='git', runtime={'architecture': 'ARM64', 'version': '3.12.2'},
+                                guestArchitecture='ARM64')
                 reference = root / 'prepared.json' if reuse else None
                 if reference:
                     reference.write_text(json.dumps(prepared))
@@ -283,7 +284,8 @@ class GuestToolPreparationTests(unittest.TestCase):
                     client.start.return_value = dict(uuid='test-vm', status='stopped')
                     client.selected.return_value = dict(uuid='test-vm', status=observed)
                     guest = guest_class.return_value
-                    guest.call_idempotent.return_value = json.dumps(dict(runtime={}, git='git', path=''))
+                    guest.call_idempotent.return_value = json.dumps(dict(
+                        runtime={'python_platform': 'win-amd64', 'version': '3.12.2'}, git='git', path=''))
                     guest.run.return_value = 0
                     evidence = []
 
@@ -318,7 +320,8 @@ class GuestToolPreparationTests(unittest.TestCase):
                     if reuse:
                         prepare.assert_not_called()
                     else:
-                        prepare.assert_called_once_with('test-vm', args.results / 'prepared.json')
+                        prepare.assert_called_once_with('test-vm', args.results / 'prepared.json',
+                                                        architecture='x86_64', version='3.12.2')
                     if transfer_fails:
                         guest.remove_paths.assert_not_called()
                     else:
@@ -377,7 +380,7 @@ class GuestToolPreparationTests(unittest.TestCase):
             root = Path(directory)
             fixture = root / 'invalid-preparation.json'
             fixture.write_text(json.dumps(dict(vm=vm, status='controlled-invalid-preparation')))
-            args = argparse.Namespace(vm=vm, results=root / 'results', source_identity={},
+            args = argparse.Namespace(vm=vm, results=root / 'results', snapshot=root, source_identity={},
                                       prepared=fixture, shutdown=True)
             client = transport.return_value
             client.start.return_value = dict(uuid=vm, status='stopped')

@@ -105,6 +105,19 @@ def outputs(values, target='all'):
                     skin=None, system_image=android_image(values, hosted=True))))
 
 
+def windows_python(values, architecture='x86_64', version=''):
+    if architecture not in ('x86_64', 'arm64'):
+        raise ValueError('Choose x86_64 or arm64 for the dedicated Windows test interpreter.')
+    if version and not re.fullmatch(r'\d+\.\d+\.\d+', version):
+        raise ValueError('Choose an exact Windows Python patch version.')
+    selected = version or values['python_version']
+    if architecture == 'arm64' and tuple(map(int, selected.split('.'))) < (3, 12, 11):
+        if version:
+            raise ValueError('Native Windows ARM64 requires managed Python 3.12.11 or later.')
+        selected = '3.12.11'
+    return selected
+
+
 def verify_host(values, *, system=None, python=None, os_version=None, windows_client=None):
     """Fail before tests if the selected host differs from the shared profile."""
     system = system or platform.system()
