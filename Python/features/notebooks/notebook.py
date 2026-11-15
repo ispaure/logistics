@@ -6,13 +6,15 @@ import json
 from pathlib import PurePosixPath
 import re
 import stat
+import sys
 import time
 from uuid import uuid4
 from zipfile import ZipFile, ZIP_DEFLATED, BadZipFile
 
 from .ink import InkPage
 
-MAX_ARCHIVE = 512 * 1024 * 1024
+# Android and some Android Python builds identify themselves differently.
+MAX_ARCHIVE = (256 if sys.platform == 'android' or hasattr(sys, 'getandroidapilevel') else 512) * 1024 * 1024
 TABLET_MAX_ARCHIVE = 128 * 1024 * 1024
 DESKTOP_MAX_ARCHIVE = 2 * 1024 * 1024 * 1024
 MAX_EXPANDED = 256 * 1024 * 1024
