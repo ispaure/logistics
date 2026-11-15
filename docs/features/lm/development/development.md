@@ -1,20 +1,42 @@
 # LM feature implementation
 
-## Try a desktop composer change
+LM Chat stores conversations locally and uses the selected profile and model
+to generate a reply. Desktop and mobile have their own conversation controls
+and storage adapters. They share the coordinator that publishes the user's
+turn before starting a request and the decoder that assembles streamed
+replies. Desktop Code mode can also use an IDE project as context and apply
+edits when enabled.
 
-In desktop **LM Chat**, paste 100 unsent lines into a new conversation. Raise the height fraction in `Python/features/lm/ui/page.py:LMPage.fit_composer` from half to 60%, preserving the minimum, controls and transcript padding. Update the height expectations in `test_multiline_draft_grows_to_half_the_chat_area_then_scrolls_and_shrinks`. From the checkout root, expect the long draft to scroll at the new cap and a one-line draft to shrink the dock. No server is needed.
+## Follow a message from Send to reply
+
+On desktop, **Send** passes the draft through `LMPage.send` in
+`Python/features/lm/ui/page.py`. It prepares the request with the selected
+profile and model, then `GenerationCoordinator.start` saves the user turn
+and pending response. Once the save succeeds, the page clears the draft
+and the coordinator starts the client. The generation tests use a mock
+client to check the order and to make sure a failed save leaves the draft
+editable. A failed client start leaves the saved turn available to retry.
 
 ```sh
-python3 dev.py test desktop --exact-file Python/tests/chat/test_lm_appearance.py
+python3 dev.py test desktop --exact-file Python/tests/chat/test_lm_generation.py
 ```
 
-## Find the desktop owner
+## Desktop conversation and context
 
 `register` lazily exposes `lm.chat`. Under `Python/features/lm/`, `ui/page.py` and `ui/composer.py` own input, `ui/conversation_*.py` owns history and presentation, `ui/profiles.py` owns server settings, and `domain.py`, `storage.py` and `session.py` own records and leases. `ui/attachments.py` checks containment, exclusions and the 64 KiB draft cap before inserting reviewable attachments. `ui/ide_context.py` snapshots editors on the GUI thread.
 
 `ui/conversation_tree.py` projects the desktop inventory and restores folder
 expansion and selection during refresh. `LMPage` coordinates opening and saving
 through the session, then asks the tree to restore the active row if a switch fails.
+
+For composer layout, start with `LMPage.fit_composer`. A long draft grows to
+half the chat area before it scrolls. Replacing it with one line shrinks the
+composer again. The appearance suite checks this behavior and transcript
+padding without a model connection.
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/chat/test_lm_appearance.py
+```
 
 ## Mobile ownership
 

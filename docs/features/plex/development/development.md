@@ -1,14 +1,19 @@
 # Develop Plex integration
 
-## Try a database summary change
+Plex integration handles server-data packages and read-only database comparison.
+Package replacement and database matching are separate workflows with their
+own recovery and validation contracts.
 
-From a terminal, launch desktop Logistics with Plex and rclone enabled. Open **Debug → Plex - Compare Databases…** and select two copies of one database. Change `Metadata Item Matches` to `Matched items` in `Python/features/plex/database.py:diff_media_type`. In the existing SQLite fixture, capture stdout from `database.test_script(self.path, self.path)`. Run from the repo root.
+## Trace database comparison
+
+**Debug → Plex - Compare Databases…** reaches
+`Python/features/plex/database.py` and `comparison.py`. Use copies of databases
+when exploring the UI. The synthetic SQLite fixtures cover movie/episode
+matching, missing relationships and supported schema differences:
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/integrations/test_plex.py
 ```
-
-Expect the new heading, one movie and one episode match, and the orphan episode unmatched on both sides.
 
 `database.py` opens SQLite read-only, defaults missing optional columns to null and rejects missing structural columns. `comparison.py` pairs movies by GUID and episodes by series identity, season and index. Optional hash matching still pairs each duplicate at most once.
 

@@ -1,16 +1,29 @@
 # Comic reader and archive development
 
-Comics requires Images and shares the Books & Comics enablement with EPUB. See the [desktop guide](../user/user.md), [mobile guide](../user_mobile/user_mobile.md) and [compression contract](compression.md).
+The comic reader opens image pages from an archive and tracks the reader's
+place by member name and page index. The desktop archive tools also compress
+pages, edit ComicInfo and convert CBR files. These operations build and
+validate a replacement archive before publishing it.
 
-## Try a compression threshold change
+Comics requires Images and shares the Books & Comics switch with EPUB. For
+reader controls see the [desktop guide](../user/user.md) or
+[mobile guide](../user_mobile/user_mobile.md).
 
-On desktop, choose **File Browser → Compress Comics…** for a fresh disposable CBZ. In `Python/features/comics/cbz.py`, raise `cbz_img_min_allowed_compression_percentage` from 75 to 76 and update `test_threshold_is_strict_and_override_is_preserved`. From the checkout root:
+## Check a compression decision
+
+On desktop, open **Compress Comics…** from File Browser with a disposable
+CBZ. The dialog sends its WebP options to the compression workflow in
+`Python/features/comics/cbz.py`. By default a WebP candidate must be smaller
+than 75% of the source page to replace it. The regression supplies a
+100-byte source page and checks that a 74-byte WebP replaces it. With a
+75-byte WebP the original stays in the archive. The test also exercises the
+always-keep override.
+Use the [compression contract](compression.md) for archive verification,
+batch handling of `CompressionLog.txt` and rebuilding ComicRack page records.
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/comics/test_comics.py
 ```
-
-For a 100-byte source page, expect 75-byte WebP to win, 76 bytes to retain the original, and always-keep to accept 76 bytes. Batch skips root `CompressionLog.txt` markers.
 
 ## Find the desktop edit point
 

@@ -1,10 +1,8 @@
-# File Tools documentation
+# File Tools
 
-Choose a guide for the task you want to complete.
+Inspect unusual filename characters and review generated Python bytecode for
+removal. These desktop folder actions begin with a scan of the selected scope.
 
-## Further reading
-
-- [File Tools Feature](development/development.md)
-- [Inspect paths and remove Python bytecode](user/user.md)
-
+- [Scan filenames and remove bytecode](user/user.md)
 - [Mobile availability](user_mobile/user_mobile.md)
+- [Action ownership and validation](development/development.md)

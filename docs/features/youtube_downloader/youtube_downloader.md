@@ -1,10 +1,8 @@
-# Youtube Downloader documentation
+# YouTube Downloader
 
-Choose a guide for the task you want to complete.
+Download configured channels and playlists into a desktop folder. Set up the
+folder and its channel INIs first, then use the folder action to run downloads.
 
-## Further reading
-
-- [YouTube Downloader Feature](development/development.md)
-- [Download configured channels and playlists](user/user.md)
-
-- [Mobile support boundary](user_mobile/user_mobile.md)
+- [Configure and download channels or playlists](user/user.md)
+- [Mobile availability](user_mobile/user_mobile.md)
+- [Download configuration and execution](development/development.md)

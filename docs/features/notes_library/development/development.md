@@ -1,12 +1,21 @@
 # Notes Library development
 
-Desktop has a Notes Library destination. Android and iOS discover marked local and unlocked LocalCrypt libraries in Documents. See the [user guides](../notes_library.md).
+Notes Library opens a folder of documents as one library. Files, Search and
+Links lead to documents under that root while the active document pane
+retains its draft and navigation history. Desktop has a Notes Library
+destination. Android and iOS discover marked local and unlocked LocalCrypt
+libraries in Documents. The [feature guides](../notes_library.md) show how
+to open and navigate a library.
 
-## Try a search ranking change
+## Trace a search within the library
 
-On desktop, open a temporary folder as a library with `needle2.md`, `needle10.md` and `Body.md` containing “needle”. Document search ranks the two filenames numerically before the body hit. Filename search returns only those filenames. Negate the `content_match` sort key in `Python/features/notes_library/library_files.py:ranked_search_rows`; preserve filename/path tie-breakers. Update the order in `test_rooted_search_ranks_names_before_bodies_and_name_scope_never_reads_text`.
-
-From the checkout root, expect the body hit first in document search and zero body reads in filename search.
+Open a temporary library with `needle2.md`, `needle10.md` and a
+`Body.md` containing “needle”. In document search, the two filename hits
+precede the body hit and the numeric part of each filename determines their
+order. Filename search only returns the two named files.
+In `Python/features/notes_library/library_files.py`, `search` collects the
+matches and `ranked_search_rows` orders them. The folder suite verifies
+the order and fails if a filename-only search reads a note body.
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/editing/test_notes_library_folders.py

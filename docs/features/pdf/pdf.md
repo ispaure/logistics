@@ -1,5 +1,8 @@
-# PDF Reader documentation
+# PDF Reader
 
-- [Desktop PDF reader](user/user.md)
-- [Mobile PDF reader](user_mobile/user_mobile.md)
-- [Implementation and validation](development/development.md)
+Read and search PDF documents on desktop and mobile. To annotate a supported
+PDF, create a separate notebook copy and open it in [Notebooks](../notebooks/notebooks.md).
+
+- [Read and search a PDF on desktop](user/user.md)
+- [Read a PDF on mobile](user_mobile/user_mobile.md)
+- [Reader integration, limits and tests](development/development.md)

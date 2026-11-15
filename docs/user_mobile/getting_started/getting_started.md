@@ -1,34 +1,53 @@
 # Getting started on mobile
 
-Wait for the startup steps to finish. If the app reports a startup failure,
-close and reopen it.
+Try creating a small text file with Logistics. You can do this on a phone or
+tablet before connecting an account or bringing in files from another app.
 
-## Find your way around
+## Create and save a note
 
-Use **Home** to open or create files, **Workspaces** to browse storage,
-and **Documents** to return to open files.
+1. Open **Home** and tap **New Document**. On iPhone Duo, look in
+   **Document actions** in the toolbar. If plain text is missing, enable
+   **Text Editor** in **Settings → Features**.
+2. Choose **Plain text (.txt)** and enter a name such as `Friday errands`.
+   On a narrow screen, tap **Next**. On a wide screen, use the folder pane
+   beside the name.
+3. Choose **On My Phone** or **On My Tablet**, then tap **Create here**.
+   You can use the top level for this example. The editor opens
+   `Friday errands.txt`.
+4. Type a line such as `Pick up the library books.` Tap **Save** in the
+   editor toolbar. On Android it may appear as a save icon.
 
-## Try a document before configuring a connection
+## Leave the editor and find the file again
 
-Open a sample text or Markdown file from Local. Edit it, save, and reopen it.
-Sharing a file from another app creates a copy. See
-[Document workflows](../documents/workflows.md) and
-[Remote and offline files](../documents/remote.md).
+Tap **Workspaces → Local → On My Phone** or **On My Tablet** to find your
+file in storage. Now go to **Documents → Open** and tap
+`Friday errands.txt` to resume the editor you left open. Workspaces shows
+the files in a folder. Documents keeps track of the readers and editors
+you are using.
 
-## Make the app comfortable
+Tap **×** to close the editor. If you have added anything since saving, use
+**Save** in the close prompt to keep the changes. Return to **Home** and
+choose **Open Document**. Select `Friday errands.txt` from the same device
+location. The line you saved should appear in the editor.
 
-Set text or Markdown size in Settings. Books and comics have their own
-Appearance controls. On Android, look for **High contrast / E Ink** in
-Appearance.
+## Keep working
+
+[Documents and readers](../documents/documents.md) shows how to find a file,
+return to a draft and use favourites. For files received from another app or
+for making a second copy, use [document workflows](../documents/workflows.md).
+When you are ready to browse a remote or work offline, read how
+[remote previews and local copies](../documents/remote.md) work.
+
+If the text is hard to read, browse [mobile settings](../settings/settings.md)
+for text size and Android's **High contrast / E Ink** mode. This guide and the
+rest of mobile Help are available offline under **Settings → Help → Mobile
+documentation**.
 
 ## Installing Android test builds
 
-Accept your Firebase App Distribution invitation with your Google account,
-download the APK, and allow installation from that source. Keep the existing
-beta installed to preserve its data. Debug-signed builds have a separate
-signing identity. See the [Build Deployment Manager guide](../../development/build-release/operator/setup.md).
-
-## Read more
-
-- [Documents and readers](../documents/documents.md)
-- [Using documentation](../documentation/documentation.md)
+For a test APK distributed through Firebase, accept the App Distribution
+invitation with your Google account, download the APK, and allow
+installation from that source. Keep the existing beta installed to preserve
+its data. Debug-signed builds use a separate signing identity. See the
+[Build Deployment Manager guide](../../development/build-release/operator/setup.md)
+for the test-build workflow.

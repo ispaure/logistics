@@ -7,35 +7,6 @@ phone. A wide window shows the list beside the selected category. On iPhone
 Duo the panes can follow the fold. The current category stays open when the
 window resizes. Preferences save as you change them.
 
-## Features
-
-Use **Settings → Features** to choose the available tools. All supported
-features start enabled. Turning one off hides its launchers, related settings
-and recent documents. Files, conversations and preferences stay on the device.
-Close that feature's documents in every window and finish its active work before
-disabling it. **Enable all features** restores the default selection. Built-in
-Help stays available.
-
-## Video
-
-On iPhone and iPad, enable **Native AirPlay video** before opening a compatible
-local video. See [watching on a TV](../../features/video/user_mobile/controls.md#watching-on-a-tv-with-iphone-or-ipad).
-
-## Document restoration
-
-Under **Settings → App**, **Close saved documents on restart** closes clean
-documents and keeps recovery drafts. With **Restore last document** also
-enabled, the last active document remains open.
-
-## Screen privacy and platform limits
-
-Protected sessions lock when interrupted or sent to the background. Android
-secure windows block ordinary screenshots and nonsecure capture. iOS shields
-protected content during app-switcher and background transitions and detected
-screen recording or mirroring. iOS still allows screenshots of visible
-content. Ordinary local files and readable exports stay readable after
-credentials lock. See [resuming a locked session](../../features/rclone/user_mobile/connections.md#resuming-a-locked-session).
-
 ## Appearance and E Ink status
 
 Use **Settings → Appearance → Accent color** to preview Hue and Saturation.
@@ -62,6 +33,40 @@ Use **Books & Comics → Comic & PDF magnifier zoom** or the magnifier's **−**
 and **+**. Both save the same setting, from 150% to 300%, with 190% as default.
 The category and setting reflect which readers are enabled.
 
+## Features
+
+Use **Settings → Features** to choose the available tools. All supported
+features start enabled. Turning one off hides its launchers, related settings
+and recent documents. Files, conversations and preferences stay on the device.
+Close that feature's documents in every window and finish its active work before
+disabling it. **Enable all features** restores the default selection. Built-in
+Help stays available.
+
+## Video
+
+On iPhone and iPad, enable **Native AirPlay video** before opening a compatible
+local video. See [watching on a TV](../../features/video/user_mobile/controls.md#watching-on-a-tv-with-iphone-or-ipad).
+
+## Document restoration
+
+Both **Close saved documents on restart** and **Restore last document**
+are on by default under **Settings → App**. When the app restarts, it closes
+the other saved documents but can reopen the last eligible file. Recovery
+drafts stay available. Turn off **Restore last document** to start without
+reopening that file, or turn off **Close saved documents on restart** to
+keep the other open documents. See [recovering a
+draft](../documents/workflows.md#recover-a-draft) if a file has changed or
+its source is unavailable.
+
+## Screen privacy and platform limits
+
+Protected sessions lock when interrupted or sent to the background. Android
+secure windows block ordinary screenshots and nonsecure capture. iOS shields
+protected content during app-switcher and background transitions and detected
+screen recording or mirroring. iOS still allows screenshots of visible
+content. Ordinary local files and readable exports stay readable after
+credentials lock. See [resuming a locked session](../../features/rclone/user_mobile/connections.md#resuming-a-locked-session).
+
 ## Trusted Wi-Fi session resume
 
 Open **Privacy & Security → Skip session password on trusted Wi-Fi** and add
@@ -75,14 +80,7 @@ prompt, manual lock or app restart still requires the password. Unavailable
 network information keeps the prompt. Duplicate SSIDs are possible, so use
 this setting only where that convenience is appropriate.
 
-## Preferences and storage
-
-Use **Reset → Clear cached documents** to review legacy imports. **Clear
-redundant copies…** removes only verified duplicates and their import reading
-records. It keeps originals, unsaved drafts, changed copies and copies whose
-originals cannot be verified.
-
-### File storage
+## File storage
 
 Under **Workspaces → Local**, **On My Phone** or **On My Tablet** holds
 ordinary files and incoming shares. **Rclone Copies** holds managed copies.
@@ -161,8 +159,10 @@ description beneath it explaining what it removes and keeps:
   and its saved playback position. Unlock protected storage to list its playlists.
   **Clear locked playlists…** removes records whose credentials are locked or
   unreadable. Both keep source notes; clearing locked records keeps readable playlists.
-- **Cached documents** opens a review of imported document copies. Original
-  source files are kept when copies are removed.
+- **Cached documents** opens a review of legacy imports. **Clear redundant
+  copies…** removes verified duplicates and their import reading records. It
+  keeps originals, unsaved drafts, changed copies and copies whose originals
+  cannot be verified.
 - **All app data** opens the full erasure scope and confirmation. This includes
   local app files, drafts, settings, history and saved credentials.
 

@@ -1,14 +1,21 @@
 # Project IDE
 
-## Try a column guide change
+The desktop IDE opens source files within registered projects. The project
+record supplies folder exclusions and editor settings. Split editors share
+the same buffer, so a project setting such as the column guide needs to
+reach each view of that document.
 
-On desktop, register a disposable Python project and split a source editor. Open **Project → Project Settings…**. In `Python/features/ide/projects.py`, change `Project.column_guide` and the `from_dict` fallback from 120 to 100. Keep explicitly stored values, including 0 for Off. Update the default assertions and run from the repo root.
+## Follow a project setting
+
+Open **Project → Project Settings…** in a disposable project.
+`Python/features/ide/projects.py:Project` owns persisted values such as the
+column guide and their defaults for older records. The fixture suites check
+explicit values, disabled guides and updates to split views. The Markdown
+tests cover the related shared-document lifecycle.
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/ide/test_ide.py --exact-file Python/tests/ide/test_ide_markdown.py
 ```
-
-Expect a 100-column default for fresh and older records without the setting. Explicit values survive and changes reach existing split views.
 
 ## Owners
 

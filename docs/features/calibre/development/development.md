@@ -1,16 +1,21 @@
 # Calibre library and export development
 
-Calibre launches desktop libraries and mirrors books. See the [desktop guide](../user/user.md) and [mobile availability](../user_mobile/user_mobile.md).
+The integration discovers Calibre libraries in local workspaces, opens them
+in the external Calibre application and mirrors selected book formats to an
+export folder. Review shows the filenames and planned additions or removals
+before the export writes to the destination. See the
+[desktop guide](../user/user.md) and [mobile availability](../user_mobile/user_mobile.md).
 
-## Try an export filename change
+## Follow an export name
 
-On desktop, open **Workspaces → Calibre → Export books… → Review export** with a disposable library (a `metadata.db` marker and author/book folders containing an EPUB and OPF) and empty destination. In `Python/features/calibre/metadata.py:get_metadata_book_name()`, try “Volume” for “Vol.” Update `test_metadata_series_and_existing_volume_are_not_duplicated`. From the checkout root:
+Use **Workspaces → Calibre → Export books… → Review export** with a disposable
+library and destination. `Python/features/calibre/metadata.py:get_metadata_book_name`
+combines book metadata into the proposed name. The fixture suite covers series
+names, volume normalization and avoiding duplicate volume labels:
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/calibre/test_calibre.py
 ```
-
-Expect `Series - Title - Volume 5` for index `5.00`, with one volume label if the title already contains it.
 
 ## Discovery and publication
 

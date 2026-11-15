@@ -1,8 +1,15 @@
 # Developing FUSE mounts
 
-## Try a change to mount action discovery
+FUSE integration opens a saved rclone remote as a mounted desktop folder.
+Logistics offers the action for eligible Cloud entries, then checks the
+remote, mount location and readiness when the user invokes it.
 
-On desktop, select a saved rclone remote in **Workspaces → Cloud**. Shorten the **Open Mount Folder** description in `Python/features/fuse/ui_contributions.py:_get_actions`. Run from the checkout root. Expect no mount during discovery and one callback with the captured remote and config.
+## Trace mount admission
+
+Selecting a saved remote in **Workspaces → Cloud** asks
+`Python/features/fuse/ui_contributions.py:_get_actions` for **Open Mount Folder**.
+The focused fixtures check that discovery does not mount anything and that
+invocation captures the intended remote and configuration:
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/integrations/test_fuse.py

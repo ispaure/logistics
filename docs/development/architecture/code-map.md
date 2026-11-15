@@ -1,5 +1,10 @@
 # Finding your way around the code
 
+Use this map after identifying the behavior you want to change. The
+[architecture overview](architecture.md) explains how the hosts, features and
+shared code fit together. If you are still deciding what to work on, start
+with [your first contribution](../development.md#make-your-first-contribution).
+
 ## Checkout root
 
 | Path | What belongs there |
@@ -28,7 +33,32 @@
 | Change build policy or release gates | `logistics_build/` and `.github/{workflows,scripts}/` |
 | Change reusable code or APIs | Separate `Python/commonUtils/` submodule and its own wiki |
 
-Follow a visible action to its lazy registration, then to the feature handler.
+## Trace a visible action
+
+Start with the action a user takes. If it belongs to a feature, find its
+declaration and follow the registered handler. If it changes what the host
+shows, start with the corresponding desktop or mobile entry point above.
+For example, the plain text file opened in the
+[first document walkthrough](../setup/getting-started.md) enters through
+`Python/desktop/file_browser.py`. Text Editor's browser declaration lives in
+`Python/features/text_editor/contributions.py`; its handler calls the editor
+service under `Python/features/text_editor/ui/`. That service keeps the
+editor available even after the file browser is closed. The
+[Text Editor development guide](../../features/text_editor/development/development.md)
+separates browser actions, editor lifetime and saving, and lists their tests.
+
+For other entry points, follow the
+[desktop transfer controls](../../features/rclone/development/transfers.md#find-desktop-transfer-controls)
+to their window and progress adapter, or find
+[Settings → Appearance](ui-architecture.md#find-a-screen-by-its-visible-name)
+in the desktop and mobile screen map. The
+[notebook brush walkthrough](../../features/notebooks/development/brush-calibration.md#try-a-brush-change)
+follows a drawing gesture to its feature and renderer. To see how a build
+workflow is wired, use the
+[Build Manager plan walkthrough](../build-release/build-manager-journeys.md#trace-a-validation-plan).
+
+## Find checks and follow import boundaries
+
 For a desktop registry change, run
 `python3 dev.py test desktop test_feature_registry.py` from root and expect
 dependency, contribution and activation checks to pass. Desktop tests live in
@@ -54,3 +84,5 @@ Trace a desktop registry change from `features.application.registry` to
 owner. Patch the application instance for integration tests and construct an
 independent registry for ownership tests. Move together the import, test
 patch target and payload declaration when changing a source owner.
+
+[Developer index](../development.md)

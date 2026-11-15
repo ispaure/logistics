@@ -1,8 +1,18 @@
 # Developing the rclone feature
 
-## Try a change to credential import
+rclone supplies the remote storage used by Cloud browsing, transfers and
+LocalCrypt copies. Desktop calls the rclone CLI. Android and iOS use the
+embedded Go bridge. Credential loading is the entry point for remote access
+and sets the lifetime of grants used by browsers, transfer jobs and readers.
 
-On desktop, follow **Settings → rclone → Credential packages → Import credential ZIP…**. Revise the same-name collision message in `Python/features/rclone/credentials.py:import_credential_package`, called by `ui/page.py:RclonePage`. Run from the checkout root. Expect first import to select without unlocking, identical reimport to reuse the ZIP, and collision to preserve saved bytes.
+## Follow credential import and unlock
+
+**Settings → rclone → Credential packages → Import credential ZIP…** calls
+`credentials.import_credential_package` through `ui/page.py:RclonePage`.
+Import validates and copies the encrypted ZIP and selects the imported
+package. Unlock is a separate action that loads credentials for use. The
+desktop tests exercise import without unlocking, identical reimport, and
+preservation of existing bytes when a different package has the same name.
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/resources/test_credential_import_ui.py
@@ -17,7 +27,8 @@ python3 dev.py test desktop --exact-file Python/tests/resources/test_credential_
 | Offline encrypted mappings and saves | [LocalCrypt](localcrypt.md) |
 | Online listings and readers | [Remote browsing](remote-browsing.md) |
 
-Desktop `ui_contributions.py` registers sources, actions and settings over the CLI. Android/iOS use `mobile_sources.json` and the embedded Go bridge.
+Desktop `ui_contributions.py` registers sources, actions and settings.
+Update `mobile_sources.json` when adding imports needed in the mobile build.
 
 ## Mobile ownership
 

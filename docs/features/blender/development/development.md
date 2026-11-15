@@ -1,14 +1,21 @@
 # Blender feature
 
-## Try a first-launch confirmation change
+Blender integration prepares a selected Blender release and preset for
+launch. A preset can use an installed release or request installation first.
+Once the release is ready, Logistics applies any selected add-ons and starts
+Blender with the preset's configuration.
 
-On desktop, open **Blender → Configure Blender… → Presets**. Make a disposable preset for an uninstalled release. Open its launch card and decline. In `Python/features/blender/ui/page.py:BlenderPage._launch`, revise the prompt while keeping the version, destination and decline path. Update `test_first_launch_prompts_installs_and_launches_configuration` and run from the repo root.
+## Follow a first launch
+
+In **Blender → Configure Blender… → Presets**, a preset for an uninstalled
+release reaches `Python/features/blender/ui/page.py:BlenderPage._launch`.
+The focused page fixtures check approval, decline, installation failure and
+cancellation, plus the already-installed path. Use their mocked installation
+work when changing this flow:
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/blender/test_blender_page.py
 ```
-
-Expect approval to install before launch, decline/failure/cancellation to stop launch, and an installed release to skip confirmation.
 
 ## Owners and contracts
 

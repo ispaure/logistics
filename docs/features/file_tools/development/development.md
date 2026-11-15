@@ -1,14 +1,19 @@
 # File Tools development
 
-## Try a scan summary change
+File Tools adds bounded inspection and cleanup actions to the desktop browser.
+Scanning produces reviewable results; deletion is a separate operation that
+revalidates the selected files.
 
-In desktop File Browser, right-click a disposable folder containing `note-é.txt`. Choose **List Weird Characters… → Scan files**. Change `Found` to `Matched` in `Python/features/file_tools/ui/dialogs.py:WeirdCharactersDialog._show_results` and update the summary assertion. Run from the repo root.
+## Trace a filename scan
+
+In File Browser, choose **List Weird Characters… → Scan files** for a disposable
+folder containing `note-é.txt`. `ui/dialogs.py:WeirdCharactersDialog._show_results`
+presents the matches from `filesystem.py`, which checks full paths and skips
+directory links. The fixtures verify the Unicode result and preserved files:
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/files/test_file_tools.py
 ```
-
-Expect `Matched 1`, `U+00E9`, and the unchanged fixture file. `filesystem.py` matches literal sequences across the full path and skips directory links.
 
 ## Reviewed deletion boundary
 

@@ -1,70 +1,54 @@
 # Mobile navigation
 
-Use the bottom tabs or the side rail to switch destinations. Each destination
-keeps its own place. Tap the selected destination again to return to its main
-screen. Open files and drafts remain available.
+Switch destinations with the bottom tabs or side rail. Each destination
+remembers where you left it. Tap the selected destination again to return to
+its main screen. Your open files and drafts stay available under
+[Documents](../documents/documents.md).
+
+Opening a file from a folder leaves you in the same destination. Back returns
+to the previous screen or folder with its search and selection. Use
+**••• → All documents** to go straight to the Documents list while keeping
+the current reader or editor open.
 
 ## iOS toolbars and iPhone Duo
 
-The system places actions such as Back, Save and More in the horizontal or
-side toolbar. On iPhone Duo the side toolbar can appear on the outer display
-and inner landscape. Check **More** when an action is missing.
-
-## Opening documents
-
-Opening a file keeps the current destination. Back returns to its original
-screen or folder with the search and selection intact. Use **All documents**
-to switch to the Documents list. Closing a document with **×** offers **Save**,
-**Quit without saving** or **Cancel** if it has edits. A failed save keeps the
-draft.
+The system can place toolbar actions such as Back, Save and More above or
+beside the content. On iPhone Duo, check the side toolbar on the outer
+display and inner landscape, or open **More** to find an action that moved
+into the menu.
 
 ## Android Back
 
 Back dismisses the current drawer, Find panel, reader tool or fullscreen
-view before leaving the screen. In a file browser it clears the query, closes
-search and then returns through visited folders. **Parent folder** always
-goes up one level. At a destination's root, Back returns to **Home**.
+view before leaving the screen. In a file browser it clears the query,
+closes search and then retraces visited folders. Use **Parent folder** to
+go up one level in the folder tree. From a destination's root, Back returns
+to **Home**.
 
 Leaving a transfer comparison cancels that review. Leaving active transfer
-details keeps the transfer running. Closing read-aloud controls can leave
+details lets the transfer continue. Closing read-aloud controls can leave
 speech playing.
-
-## Home and document search
-
-**Open now** resumes the active document. **Recent** opens a closed file.
-Use **See all in Documents** to open the Documents list. **Search documents**
-finds on-device filenames and folders, including unopened files.
-
-File-browser search includes local subfolders. Separate words may appear in
-any order. Put a phrase in quotes to keep its words together and ordered.
-The first search in a large local folder can take longer while the index is
-built. Private names stay out of the saved local index.
-
-**Unlock LocalCrypt** reopens a retained password-protected package. Recent
-references for that package become visible after unlocking. **Recovered draft**
-means edits are available from a recovery copy. Save or use **Save a copy…**
-to keep those edits, especially if the original has changed.
 
 ## File and conversation drawers
 
-The Documents hamburger opens local and unlocked LocalCrypt folders, recent
-files, comics and shortcuts. This browser keeps its own folder and search.
-Use **Split** in a wide window to put two open text or Markdown documents
-side by side. The drawer can temporarily replace the left editor.
-**Use one document** clears the pair. Narrowing the window keeps both drafts.
+Open the hamburger in Documents to browse device folders, unlocked LocalCrypt
+folders, recent files, comics and shortcuts. The drawer keeps its own folder
+and search as you work. On a wide screen, use **Split** to put two open text
+or Markdown documents side by side. The drawer can temporarily replace the
+left editor. **Use one document** clears the pair. Narrowing the window keeps
+both drafts available.
 
-In Chat, the hamburger opens conversations and their drafts. On a wide window
-the list can stay beside the conversation. See [Mobile settings](../settings/settings.md)
-for how settings panes adapt.
+In Chat, the hamburger shows conversations and drafts. On a wide screen the
+list can stay beside the conversation. [Mobile panels](panels.md) describes how the main destinations and their controls
+adapt to available space.
 
 ## Browsing folders on iOS
 
-In the Workspaces browser or Home file picker, native Back moves up a folder.
-At the storage root it returns to the opening screen. **Cancel** leaves the
-picker from any folder and keeps the original document and draft.
-**Show in folder** takes you to Workspaces with the file selected.
+In the Workspaces browser or Home file picker, native Back moves up a
+folder. At the storage root it returns to the opening screen. In a picker,
+**Cancel** leaves from any level and keeps the original document and draft.
 
-## Related pages
+## Use another window on iPad
 
-- [Mobile panels](panels.md)
-- [iPad windows](windows.md)
+See [iPad windows](windows.md) to open a separate document workspace and
+check which actions still belong in the original window.

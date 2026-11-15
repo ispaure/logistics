@@ -1,54 +1,42 @@
-# Using Logistics
+# Using Logistics on desktop
 
-For installation and first-run requirements, use [desktop setup](../../README.md#get-started).
+Once [Logistics is installed](../../README.md#get-started), try writing a
+short note and finding it again. You can do the whole walkthrough in a
+folder on your computer.
 
-Start in **File Browser** to work with any folder, or **Workspaces** for configured
-libraries, servers and remote storage. **Documents** lists open readers/editors;
-**Settings → Features** saves which tools are enabled. Required features are enabled
-together, and disabling a dependency with active dependents is refused.
+## Make a note and reopen it
 
-- [Files, search, storage, panes and Markdown](files-and-documents.md)
-- [Choose storage, save confidently and recover](working-safely.md)
-- [Bulk Rename: preview, apply and recover](../features/bulk_rename/user/user.md)
-- [Configuration: paths, credentials and saved settings](configuration.md)
-- [Reader history and saved positions](reader-history.md)
-- [Feature catalog and mobile availability](features.md)
+1. Use the house icon to go to the landing page. In **Read & edit**, choose
+   **New** on the **Text Editor** card. If the card is missing, enable
+   Text Editor under **Logistics Settings → Features** and save.
+2. Type a line such as `Pick up the library books on Friday.` Choose
+   **File → Save**, choose **Local files** in the save picker, and save
+   `friday-note.txt` in a writable folder you can find again.
+3. Switch to **File Browser** and go to that folder. The file in the folder
+   is the saved copy. Use **Open documents** in the rail to return to the
+   editor tab you left open.
+4. Close the editor tab, then double-click `friday-note.txt` in
+   **File Browser**. The editor should show the line you saved. If you had
+   typed anything since saving, closing would prompt you to save or discard
+   those edits, or cancel the close.
 
-Save settings explicitly; some changes apply to new windows or after a restart.
-A cancelled batch may already have changed some files;
-check the feature's recovery guidance before retrying.
+File Browser shows where your files are stored. Documents shows the readers
+and editors that are still open. Use **Workspaces** when you want to return to
+a configured folder, a remote account or its managed offline copy.
 
-## Try a local file first
+## Where to go next
 
-1. Open File Browser and choose a folder containing a disposable text or Markdown
-   file. No cloud account or server configuration is needed.
-2. Open it in its reader/editor. Go to Documents to find the retained tab and
-   return to it after browsing another folder.
-3. If you edit the file, save and reopen it to check the result. Closing a document
-   can prompt to save or discard; cancelling keeps it open.
+[Files and documents](files-and-documents.md) shows how to browse and search
+folders, keep several documents open and find configured storage. Before
+downloading, syncing or editing a private file, learn
+[where your changes go](working-safely.md) and how to recover a draft.
 
-You should now be able to find both the file's folder and its open document view.
-Use [working safely](working-safely.md) before exploring private copies, transfers
-or batch changes. Closing a document and deleting its file are different actions.
+For interface, startup and storage preferences, see
+[configuration and resources](configuration.md). To remove old filenames from Recent or reset
+where readers resume, see [reader history and saved positions](reader-history.md).
 
-## Feature guides
-
-Open **Settings**, select a feature in the sidebar, then click **User Guide**.
-Each guide explains that feature's setup, workflows, limits and recovery options.
-The button is unavailable if the guide is not installed.
-
-When browsing outside the app, use the [feature catalog](features.md)
-to find the same guides.
-
-## If a tool does not work
-
-Check feature enablement, the selected source/credential, required software and
-folder detection rules in its guide. Refresh Workspaces after changing its folders
-or loaded configs. Missing credentials do not prevent ordinary local browsing.
-
-Several Logistics instances can run at once and share file indexing work.
-Initial dependency setup needs internet. A missing shared launcher usually means
-the commonUtils submodule was not included; see
-[installation](../../README.md#get-started).
-
-- [Browse all feature guides](features.md)
+The [feature catalog](features.md) leads to the individual tools. In the app,
+open **Logistics Settings**, select a feature and choose **User Guide** to
+read its installed guide. If a launcher is missing, check **Features**.
+Enabling a tool also enables its required features. Save the selection to
+apply it.

@@ -1,18 +1,23 @@
 # Develop Image Tools
 
+Image Tools validates images for desktop and mobile viewing. Its desktop
+processing actions also convert image files to WebP and edit JPEG comments.
+Conversion settings determine how the worker encodes each image, then
+publication checks whether the result can replace the source.
+
 See the [desktop guide](../user/user.md) and [mobile guide](../user_mobile/user_mobile.md) for controls.
 
-## Try a compression default change
+## Follow compression options
 
-On desktop, enable **Image Tools**, place a disposable 100 × 100 PNG in a test folder and choose **Batch Compress Images to WEBP…** on the folder. Set the initial `self.max_long_edge` to 24 in `Python/features/images/ui/dialogs.py:ImageCompressDialog`. Relaunch, disable height and multiframe preservation, enable **Always keep compressed images**, then compress. Expect a 24 × 24 WebP.
-
-In `test_selected_options_reach_folder_workflow_and_results_remain_visible`, assert the initial 24 instead of setting it, raise the test height cap to 30 and update worker arguments and output dimensions. Run from the checkout root:
+The desktop folder action **Batch Compress Images to WEBP…** opens
+`Python/features/images/ui/dialogs.py:ImageCompressDialog`. It captures options
+for the folder workflow and keeps results visible when work completes. The
+focused fixture uses disposable images to check that resize and recursion
+choices reach the worker and produce the expected files:
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/images/test_image_folder_dialog.py
 ```
-
-Expect the 24 × 24 conversion, untouched nested PNG and retained results.
 
 ## Compression and publication
 

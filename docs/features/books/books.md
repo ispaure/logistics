@@ -1,9 +1,8 @@
-# Books documentation
+# Books
 
-Choose a guide for the task you want to complete.
+Read EPUB books, keep your place and edit book metadata. Books and Comics share
+a feature group in Settings; CBZ reading has its own [Comics guide](../comics/comics.md).
 
-## Further reading
-
-- [Books & Comics integration](development/development.md)
-- [Books & Comics](user/user.md)
-- [Mobile user guide](user_mobile/user_mobile.md)
+- [Read and manage EPUBs on desktop](user/user.md)
+- [Read EPUBs on mobile](user_mobile/user_mobile.md)
+- [Reader integration and validation](development/development.md)

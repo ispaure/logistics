@@ -1,14 +1,21 @@
 # Flight Simulator Feature
 
-## Try a preference error change
+This desktop integration applies the supplied X-Plane preference presets.
+Its core responsibility is to validate and publish the requested preference
+changes without losing the original configuration when validation fails.
 
-In desktop **Debug → X-Plane Presets**, open and cancel the **X-Plane 12: M3 Max Standalone** confirmation. In `Python/features/flight_sim/actions.py:_updated_preferences`, include `path.name` in the missing/duplicate key error. Update `test_missing_key_does_not_change_file` to expect `prefs`. Run from the repo root.
+## Trace preference validation
+
+The X-Plane preset actions on **Debug** use
+`Python/features/flight_sim/actions.py:_updated_preferences` to prepare
+updated preference bytes. Each required key must occur once before the
+update can proceed. Tests use synthetic preference files to verify that a
+missing key preserves the original file and that a failed second write
+restores the graphics settings.
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/integrations/test_flight_sim.py
 ```
-
-Expect the filename in the error, identical original bytes and no recovery copy. The fixture needs no simulator.
 
 ## Preference publication
 

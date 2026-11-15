@@ -1,19 +1,12 @@
 # Logistics
 
-Logistics brings file browsing, media tools and remote-folder management into one
-desktop app. Browse your files, see what's taking up space, read comics, rename
-batches of files, or work with your servers and libraries.
+Logistics brings file browsing, document readers and editors, media tools and
+remote-folder management into one app. Start with files already on your computer,
+then add libraries, servers or encrypted offline copies as you need them.
 
-It runs on Windows, macOS and Linux. Some tools are specific to one platform or
-need another application installed.
-
-Desktop [Notes Library](docs/features/notes_library/user/user.md) has its own sidebar
-destination below Documents, with independent libraries and split note tabs.
-
-Mobile Settings includes bundled offline documentation with nested folder browsing
-and file/title or page-text search.
-On iOS, a lightweight Home Screen widget can display numbers or short text supplied
-by Shortcuts; see the [widget setup guide](docs/user_mobile/shortcut-widgets.md).
+The desktop app runs on Windows, macOS and Linux. An Android/iOS development app
+supports a smaller set of document and storage workflows. Some tools need
+another application or service configured separately.
 
 ## Get started
 
@@ -36,12 +29,6 @@ launches reuse the installed environment.
 The Qt 6.12 interface requires macOS 14 or newer, Windows 10/11, or Linux
 with glibc 2.34 or newer on x86-64 (2.39 or newer on ARM64).
 
-Desktop video uses colour-managed libmpv on macOS, with HDR output and HDR-to-SDR
-tone mapping. VLC compatibility playback remains available. Windows/macOS offer
-a verified runtime download on first use; Linux requires the distribution's
-LibVLC, codec and subtitle plugins.
-See [video setup and controls](docs/features/video/user/user.md).
-
 Using Git instead? Clone with the shared utilities included, then open the same launcher:
 
 ```sh
@@ -51,123 +38,73 @@ git clone --recurse-submodules https://github.com/ispaure/logistics.git
 If you've already cloned it, run `git submodule update --init --recursive` in the
 project folder to fetch any missing shared files.
 
-You can open several Logistics instances. They share indexing work and progress;
-another open instance can resume unfinished indexing if its owner closes. If all
-instances close, queued indexing resumes on the next launch.
-
-Appearance and systemic tool settings share one Logistics Settings window, with
-repository defaults, personal AppData overrides and per-field reset. Fonts cover
-the interface, browser, reading and code; accent colors also tint dark surfaces.
-
 ## Find your way around
 
-The launch page shows active workspace and feature cards on the left, with
-favourites above recent files on the right. Choices open with the sidebar by
-default; **Appearance & shared controls → Menus** can switch to focused views.
-**Read & edit** below the saved files launches editors and readers, including
-comics, EPUBs and archives. Focused views keep a settings icon at the bottom-left for navigation.
+After opening Logistics, start with **File Browser** and a local text or Markdown
+file. **Documents** brings you back to open readers and editors. **Workspaces**
+collects configured local libraries, cloud locations and home servers; **Settings**
+controls feature availability and configuration.
 
-Use **File Browser** for any folder, or **Workspaces** for configured libraries
-and remote storage. Workspaces groups **Local**, **Cloud** and **Home Server**
-locations beside a docked file browser and workspace actions. **Documents** collects open readers and editors; their tabs can
-be split or detached. Use **Favourite file** in an opened document's **…** menu to pin its opening method on Home;
-Notes Library favourites reopen inside that library. On mobile, create a library from
-**Documents → Libraries → New Notes Library…**. Text, Markdown, notebook, EPUB and comic Open dialogs
-share a Local/LocalCrypt file picker; encrypted copies open in private readers or editors. Regular and private file browsers
-share list, tile and column views. **Settings** saves feature choices and configuration and
-provides links to each feature's help.
+The [desktop guide](docs/user/user.md) walks through the first local document and
+explains those parts of the app. Continue with
+[files and documents](docs/user/files-and-documents.md) for browsing and tabs, or
+[configuration](docs/user/configuration.md) when you are ready to set up a tool.
 
-Start with [files and documents](docs/user/files-and-documents.md), then choose a
-guide below. The [configuration guide](docs/user/configuration.md) explains resource paths,
-credentials and settings. External services need their own accounts/software.
+## Explore the tools
 
-## What can it do?
-
-The Android/iOS development app supports file browsing, text and Markdown editing,
-EPUB/comic/PDF reading, LM chat, and local or encrypted remote-folder workflows.
-It includes reviewed transfers, metadata editing, search, adaptive document
-panes, and an Inbox for files shared from other apps. **Settings → Features** turns
-mobile feature groups on or off; all current features are enabled by default.
-See [mobile usage](docs/user_mobile/user_mobile.md) for supported workflows,
-storage choices, format limits and validation status.
-
-For local builds, paired-device installation, Firebase and TestFlight distribution,
-start with the [mobile build and release handbook](docs/development/build-release/mobile-handbook.md).
-Use the standalone [Build Deployment Manager](docs/development/build-release/operator/setup.md) for
-checks, build-only artifacts and delivery. Logistics provides its project adapter
-in `logistics_build/`; there is no separate deployment launcher.
-The guided flow supports [combined platform validation and reviewed GitHub/Firebase/TestFlight delivery](docs/development/build-release/operator/workflows.md).
-
-| Tool | Use it to… |
+| What you want to do | Where to start |
 | --- | --- |
-| [Notes Library](docs/features/notes_library/user/user.md) | Read, edit and organize local or unlocked LocalCrypt notes with independent libraries and split document tabs |
-| [File Browser & Markdown](docs/user/files-and-documents.md) | Browse files and storage usage; inspect local SQLite databases and explicitly save supported row edits; read/edit Markdown and browse guides |
-| [Git](docs/features/git/user/user.md) | Clone repositories, browse history, stage and commit changes, manage branches and remotes |
-| [Bulk Rename](docs/features/bulk_rename/user/user.md) | Preview and apply changes to many filenames at once |
-| [Text Editor](docs/features/text_editor/user/user.md) | Edit text and code in tabs, search/replace, see Git change markers, and preserve file encodings |
-| [IDE](docs/features/ide/user/user.md) | Keep dockable projects, arrange shared file views in up to three internal groups, navigate Python definitions, search project files, and autosave with Git change markers |
-| [LM Chat](docs/features/lm/user/user.md) | Chat with an existing LM server or [supported on-device mobile models](docs/features/lm/user_mobile/conversations.md#on-device-models), paste screenshots, read and optionally edit IDE project files with saved change previews, and save conversations locally |
-| [Books](docs/features/books/user/user.md) and [Comics](docs/features/comics/user/user.md) | Read EPUBs and CBZs, edit metadata, and manage comic collections |
-| [Notebooks](docs/features/notebooks/user/user.md) | Create and edit .rmdoc notebooks with native ink, lasso stroke editing, image cutouts and arrangement, password-protected PDF backgrounds, and per-page templates (experimental) |
-| [PDF Reader](docs/features/pdf/user/user.md) | Read and search PDFs on desktop and mobile, jump to pages, swipe vertically, and duplicate a PDF as an annotatable .rmdoc beside it |
-| [Archives](docs/features/archives/user/user.md) | Browse, create, encrypt, test and extract ZIP/TAR archives |
-| [Images](docs/features/images/user/user.md) | View images with previous/next file navigation, compress images, work with photo metadata, and [capture bursts on iPhone](docs/features/images/user_mobile/user_mobile.md) |
-| [rclone](docs/features/rclone/user/user.md) | Browse remotes in read-only tabs, open supported files in memory, and use managed Pull/Push for local or encrypted folders |
-| [FUSE](docs/features/fuse/user/user.md) | Open supported remote storage as a mounted folder |
-| [Calibre](docs/features/calibre/user/user.md) | Open book libraries and export books |
-| [Plex](docs/features/plex/user/user.md) | Back up and restore media-server data |
-| [YouTube Downloader](docs/features/youtube_downloader/user/user.md) | Download channels and playlists |
-| [Minecraft](docs/features/minecraft/user/user.md) | Find and manage local servers |
-| [Blender](docs/features/blender/user/user.md) | Launch Blender configuration cards; manage presets, compatible addon libraries and Blue Hole branches/Deluxe in Settings |
-| [Perforce](docs/features/perforce/user/user.md) | Launch configured servers on Linux |
-| [Obsidian](docs/features/obsidian/user/user.md) | Find and open vaults |
-| [Dropbox](docs/features/dropbox/user/user.md) | Browse Dropbox folders and clean up conflicting copies |
-| [Links](docs/features/links/user/user.md) | Keep useful website shortcuts together |
-| [Smart Home](docs/features/smart_home/user/user.md) | Control Philips Hue and access Tautulli tools |
-| [Aviation Tools](docs/features/aviation_tools/user/user.md) | Flight calculators and aircraft/airport reference data |
-| [Flight Simulator](docs/features/flight_sim/user/user.md) | Manage X-Plane settings and window presets |
-| [Media](docs/features/media/user/user.md) | Rename audio chapters from a CSV |
-| [Video Player](docs/features/video/video.md) | Local/LocalCrypt MP4, MKV, AVI and other common video containers, best-effort remote/crypt streaming, subtitles, audio tracks and optional native AirPlay with TV text-subtitle selection on iPhone and iPad |
-| [File Tools](docs/features/file_tools/user/user.md) | Check filenames and remove Python bytecode files |
-| [System Tools](docs/features/system_tools/user/user.md) | Run platform-specific maintenance tools |
+| Read and edit documents | [Text Editor](docs/features/text_editor/text_editor.md), [Notes Library](docs/features/notes_library/notes_library.md), [Books](docs/features/books/books.md), [Comics](docs/features/comics/comics.md), [PDF](docs/features/pdf/pdf.md) and experimental [Notebooks](docs/features/notebooks/notebooks.md) |
+| View and process media | [Images](docs/features/images/images.md), [Video Player](docs/features/video/video.md) and [audio chapter tools](docs/features/media/media.md) |
+| Organize files | [File Browser](docs/user/files-and-documents.md), [Bulk Rename](docs/features/bulk_rename/bulk_rename.md) and [Archives](docs/features/archives/archives.md) |
+| Connect storage and keep offline copies | [rclone connections and LocalCrypt](docs/features/rclone/rclone.md), [FUSE mounts](docs/features/fuse/fuse.md) and [Dropbox tools](docs/features/dropbox/dropbox.md) |
+| Work with code and language models | [Git](docs/features/git/git.md), [IDE](docs/features/ide/ide.md) and [LM Chat](docs/features/lm/lm.md) |
+| Use configured applications and utilities | [Feature catalog](docs/features/features.md), including Calibre, Blender, Plex, Obsidian and platform tools |
+
+The [feature catalog](docs/features/features.md) explains each tool's purpose and
+links to its desktop, mobile and developer guides. Check a feature's prerequisites
+and recovery guidance before applying batch or remote changes.
 
 Additional emulator tools are available on request through ispaure’s **ally-tools**.
 
-## Learn more
+## Use Logistics on mobile
 
-Application source lives under `Python/`: `desktop/` hosts the desktop app,
-`mobile/` hosts the mobile app, and `features/` contains the tools they use.
-Project build policy and manager adapters live in `logistics_build/`; native
-packaging and deployment helpers live in `mobile_build/`. See the
-[code map](docs/development/architecture/code-map.md) for ownership and native compatibility.
-The [screen and panel map](docs/development/architecture/ui-architecture.md) locates named
-settings such as **Settings → Appearance** and explains where to add a panel.
+Start with the [mobile guide](docs/user_mobile/user_mobile.md) for Android and iOS.
+It covers local files, text and Markdown editing, supported readers, LM Chat,
+remote transfers and encrypted copies. It also explains differences in navigation,
+storage and platform support. Help is bundled in the app for offline use.
 
-For contributors, start with [your first contribution](docs/development/setup/getting-started.md).
-`python3 dev.py doctor` checks the local environment; `dev.py setup desktop` and
-`dev.py setup mobile` prepare separate host environments. Use `py` on Windows.
+For local builds, device installation or Firebase/TestFlight distribution, use
+[Build and release](docs/development/build-release/build-release.md). The standalone
+Build Deployment Manager runs the reviewed workflows through the Logistics adapter.
 
-Start at the [documentation wiki](docs/docs.md) for the user, mobile user and
-development hierarchies. Feature manuals live under `docs/features/<owner>/`.
+## Contribute
 
-- [User guide](docs/user/user.md): using the app and its tools.
-- [Configuration](docs/user/configuration.md): paths, settings and optional integrations.
-- [Development](docs/development/development.md): project structure, extension guides and testing.
-- [Publishing releases](docs/development/build-release/releasing.md): package checks and release troubleshooting.
+Start with the [developer guide](docs/development/development.md). It leads from
+running a checkout to understanding the app, choosing a change and checking it.
+The [first-run walkthrough](docs/development/setup/getting-started.md) uses the
+pinned Python environment and local files.
 
-Use the [developer index](docs/development/development.md) to find contracts and
-code owners after the first-contribution walkthrough. `python3 dev.py --help`
-(`py dev.py --help` on Windows) lists the local check helpers.
-Feature changes should include updates to their user guides. The application uses
-Python 3.12.2 and pinned dependencies; normal launchers manage that environment.
-Git and optional external tools are installed/configured separately.
+`python3 dev.py doctor` checks the local environment; `python3 dev.py --help`
+lists the contributor commands. Use `py` on Windows. The project uses Python
+3.12.2 and pinned dependencies, with separate desktop and mobile host environments.
+
+For a particular task, use [architecture](docs/development/architecture/architecture.md),
+[testing](docs/development/testing/testing.md) or
+[documentation maintenance](docs/development/documentation/documentation.md).
+Shared commonUtils API documentation belongs in that library's own repository.
+
+## Documentation and updates
+
+The [documentation wiki](docs/docs.md) is the home for user guides, feature
+manuals and contributor documentation. In-app Help opens the same guides.
+
+Use **Update Logistics** in the hub to update from published main, beta or alpha
+releases. Update checks are on by default; choose a channel or turn them off in
+**Settings → Configuration → Updates**. See
+[update settings](docs/user/configuration.md#logistics-updates) for user controls
+and [release packaging](docs/development/build-release/releasing.md) for publishing.
 
 ## License
 
 Logistics is available under the [MIT License](LICENSE.md).
-
-Logistics can update itself from published main, beta or alpha releases through
-**Update Logistics** in the hub. Checks are on by default; choose a channel or
-turn them off in **Settings → Configuration → Updates**. Updates preserve private
-software, credentials and ignored files. See [release packaging](docs/development/build-release/releasing.md)
-for supported installation manifests and channel tags.

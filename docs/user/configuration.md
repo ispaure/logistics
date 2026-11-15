@@ -1,9 +1,47 @@
 # Configuration and resources
 
 Open **Logistics Settings** from the rail or floating Settings button.
-Use **Features** to choose available tools and the [feature guides](features.md)
-for setup. Use **Open-source licenses** in Settings to read installed notices
-offline.
+Start there to change the app's appearance, choose which tools are available
+or control what opens on launch. The configuration files below are useful
+when you have a specific path, resource or integration to set up.
+
+## Software defaults and personal settings
+
+**Personal Settings** writes only overrides. **↶** removes an override so the
+software value applies again. **Default Software Configuration**, where
+available, edits the tracked defaults shown above the fields. Save explicitly.
+
+**Reset All Personal Settings…** removes overrides and unsaved personal
+configuration edits across all categories. It keeps documents, accounts,
+workspaces, reading progress and Blender presets. Launcher changes take effect
+on the next launch.
+
+## Appearance and workspace layout
+
+**Appearance & shared controls → Styling** changes theme, accent and
+interface, browser, reading and code fonts. Blank families use platform
+defaults. Preview changes and choose **Save Settings** to update open views.
+
+Under **Appearance & shared controls → Menus**, **Launch with sidebar**
+controls the next launch. Choose **Open full hub with sidebar** to restore
+the rail from a focused workspace.
+
+## Logistics updates
+
+In **Configuration → configFile.ini → Updates**, turn update checks on or off
+and choose **main**, **beta**, or **alpha**. The default checks published main
+releases. **Update Logistics** appears on the landing page when a release is
+available. It runs the normal close and save flow before restarting. Local
+changes or file collisions can stop the update. Git checkouts need clean
+tracked files and initialized submodules. Older extracted releases may need
+a fresh extraction.
+
+## Editing in the application
+
+Use **Settings → Configuration** to edit the launcher, application and
+maintenance INIs. Save explicitly. Shared configuration changes may need a
+restart. Manage generated rclone configurations from **Settings → rclone**.
+Use **Open-source licenses** in Settings to read installed notices offline.
 
 ## Configuration layers
 
@@ -79,40 +117,3 @@ See [rclone credentials](../features/rclone/user/user.md#set-up-credentials),
 PYC maintenance. System and application folders are protected by default,
 including when a recursive selection contains one. Add paths through
 **additional_protected_paths**. A missing policy file blocks these tools.
-
-## Editing in the application
-
-**Settings → Configuration** edits the launcher, application and maintenance
-INIs. Save explicitly. Shared configuration changes may need a restart.
-Manage generated rclone configurations from **Settings → rclone**.
-
-## Software defaults and personal settings
-
-**Personal Settings** writes only overrides. **↶** removes an override so the
-software value applies again. **Default Software Configuration**, where
-available, edits the tracked defaults shown above the fields. Save explicitly.
-
-**Reset All Personal Settings…** removes overrides and unsaved personal
-configuration edits across all categories. It keeps documents, accounts,
-workspaces, reading progress and Blender presets. Launcher changes take effect
-on the next launch.
-
-## Appearance and workspace layout
-
-**Appearance & shared controls → Styling** changes theme, accent and
-interface, browser, reading and code fonts. Blank families use platform
-defaults. Preview changes and choose **Save Settings** to update open views.
-
-Under **Appearance & shared controls → Menus**, **Launch with sidebar**
-controls the next launch. Choose **Open full hub with sidebar** to restore
-the rail from a focused workspace.
-
-## Logistics updates
-
-In **Configuration → configFile.ini → Updates**, turn update checks on or off
-and choose **main**, **beta**, or **alpha**. The default checks published main
-releases. **Update Logistics** appears on the landing page when a release is
-available. It runs the normal close and save flow before restarting. Local
-changes or file collisions can stop the update. Git checkouts need clean
-tracked files and initialized submodules. Older extracted releases may need
-a fresh extraction.

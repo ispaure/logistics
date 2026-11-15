@@ -1,14 +1,19 @@
 # Smart Home implementation
 
-## Try a color preset change
+Smart Home connects configured desktop controls to Philips Hue and provides
+separate Tautulli scripts. The Hue API validates the requested group and values
+before sending a command; UI retirement must account for in-flight calls.
 
-Find **Smart Home → Kitchen → Red** on desktop. Exercise the command with a mock bridge. In `Python/features/smart_home/philips_hue/api.py`, change `COLOR_PRESETS['Red']` from `(0, 254)` to `(0, 230)`. Update `test_combined_properties_use_one_validated_group` and run from the repo root.
+## Trace a Hue command
+
+A preset such as **Smart Home → Kitchen → Red** reaches
+`Python/features/smart_home/philips_hue/api.py`. Use the mock-bridge fixtures
+when changing this path. They check group validation and combining power,
+brightness and color into one call without controlling real lights:
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/integrations/test_smart_home.py
 ```
-
-Expect one call for mock group 1 with `on=True, bri=254, hue=0, sat=230`. The fixture adds brightness to the button's power and color. Restore the preset and assertion after experimenting.
 
 `configuration.py` prefers `[PhilipsHue] bridge_address_str` and falls back to `bridge_address` when absent. The API validates before connecting, requires one exact group name with a positive ID, and submits combined properties once. `ui/page.py` serializes commands off-thread and defers close until idle. In-flight bridge calls finish.
 

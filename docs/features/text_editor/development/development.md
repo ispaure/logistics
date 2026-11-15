@@ -1,8 +1,20 @@
 # Text Editor
 
-## Try a JSON formatting change
+Text Editor manages the open buffer, presentation and save lifecycle for
+plain text and source files. Editing commands act on the buffer. Saving uses
+the revision captured when the file was opened or last saved, so an external
+edit can prompt comparison or merge before another write.
 
-On desktop, open a temporary text file, select `{"a":1}` between other lines and use **Tools → Format JSON**. Undo restores the selection in one step. Change the success caption for **Validate JSON** in `Python/features/text_editor/ui/editing.py:EditingCommands.structured_text`. Add a caption assertion to `test_format_selection_undo_and_failure_preserves_buffer`. From the checkout root, expect the new caption, unchanged validation input and passing format/undo/error cases.
+## Follow a buffer edit
+
+Open a temporary file on desktop, select `{"a":1}` between other lines and
+choose **Tools → Format JSON**. The surrounding lines stay as they were and
+one Undo restores the original text. In
+`Python/features/text_editor/ui/editing.py:EditingCommands.structured_text`,
+the same command path chooses the selection or whole document, calls the
+shared formatter or validator, and groups a successful formatting change
+into a single undo step. The extensions suite checks formatting, Undo and
+preservation of the buffer on invalid input.
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/editing/test_text_editor_extensions.py

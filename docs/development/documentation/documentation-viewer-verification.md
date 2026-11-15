@@ -24,8 +24,9 @@ history in an isolated process.
 
 For a desktop click-through, open **File Browser → Help → File Browser Guide**.
 Select **Logistics documentation** in the tree, then follow **Developing
-Logistics → Setup → your first contribution**. Press **Back** to return through
-Setup, Developing Logistics, the wiki home and the File Browser guide. The
+Logistics → Set up and run Logistics → Run a checkout and open your first
+document**. Press **Back** to return through setup, Developing Logistics,
+the wiki home and the File Browser guide. The
 highlighted tree row should follow the article. **Forward** opens the wiki home.
 
 ## Native layout

@@ -1,16 +1,21 @@
 # PDF reader development
 
+The PDF feature adapts bounded document access and rendering to desktop and
+mobile readers. Navigation, search and annotation-copy creation sit above that
+read-only document boundary.
+
 See the [desktop guide](../user/user.md) and [mobile guide](../user_mobile/user_mobile.md) for reader controls.
 
-## Try changing the page link undo duration
+## Follow an internal page link
 
-On desktop, open a disposable linked PDF in **File Browser**. Change `PDFWindow.offer_link_return()` in `Python/features/pdf/ui/reader.py` from 3000 to 5000 ms and update `test_desktop_real_plain_click_and_undo`. Run from the checkout root:
+Click an internal link in a disposable PDF.
+`Python/features/pdf/ui/reader.py:PDFWindow.offer_link_return` offers a short
+return to the previous page; an explicit navigation clears it. The linked-PDF
+fixtures exercise the real click path and return behavior:
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/readers/test_pdf_links.py
 ```
-
-The fixture should jump from page 1 to 3, offer Undo for 5000 ms and return to 1. An explicit jump clears the offer.
 
 ## Open or render a PDF
 

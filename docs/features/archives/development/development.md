@@ -1,14 +1,21 @@
 # Archives development
 
-## Try an extraction menu change
+Archives adds extraction and creation actions to File Browser and opens
+archives in a retained inspection workspace. The feature owns the desktop
+dialogs, refresh and credential prompts. The archive operations themselves
+come from commonUtils.
 
-In desktop File Browser, right-click a disposable ZIP containing `notes.txt` and extract to a new folder in the library. Rename **Extract archive…** to **Extract entire archive…** in `Python/features/archives/__init__.py:register`. Keep the action ID and callback. Update the ZIP and CBZ menu assertions and run from the repo root after [desktop setup](../../../development/setup/getting-started.md).
+## Trace an extraction
+
+In File Browser, right-click a disposable ZIP containing `notes.txt` and extract
+it into a new folder. `Python/features/archives/__init__.py:register` declares the
+action and callback. The browser test follows that route through extraction and
+checks preserved source bytes, successful refreshes, and failure/cancellation.
+Run from the checkout root after [desktop setup](../../../development/setup/setup.md):
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/archives/test_archive_browser.py
 ```
-
-Expect the new label and TAR extraction with original bytes, one output refresh and one parent refresh. Failure or cancellation leaves sources and refresh state intact.
 
 ## Routing and lifecycle
 

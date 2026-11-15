@@ -1,9 +1,14 @@
-# Maintain the developer wiki
+# Maintaining the documentation
 
-Use the [documentation hierarchy](documentation-hierarchy.md) to choose the
-owning guide and preserve the sidebar structure. Keep a visible entry point,
-the code owner, a runnable focused check and its expected result near the top
-of each feature Development landing.
+The wiki serves readers learning the app and contributors learning the project.
+Keep those journeys understandable as features grow: introduce the concepts a
+page needs, explain the task, then lead to more detailed reference material.
 
-Run the [documentation viewer checks](documentation-viewer-verification.md)
-when changing navigation, links or the mobile Help payload.
+Use [documentation ownership and writing](documentation-hierarchy.md) to choose
+the right home and page purpose. It explains the audience paths, directory
+contract and how to add information without turning an introduction into a list
+of unrelated facts.
+
+Run the [documentation checks](documentation-viewer-verification.md) to validate
+structure and links. When changing navigation or Help packaging, also check the
+desktop viewer and bundled mobile guides.

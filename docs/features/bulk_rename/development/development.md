@@ -1,14 +1,19 @@
 # Bulk rename integration
 
-## Try a preview styling change
+Bulk Rename separates rule evaluation and preview from applying filesystem
+changes. Its desktop host lives under `Python/desktop/bulk_rename/`; shared
+rename mechanics remain in commonUtils.
 
-In desktop **Bulk Rename**, select a disposable `page2.txt` and enter `New_` under **Add → Prefix**. In `Python/desktop/bulk_rename/preview.py:change_formats`, switch bold to underline. Keep UTF-16 offsets and update `test_preview_bolds_changed_spans_and_prioritizes_filename_columns`. Run from the repo root.
+## Follow a rule into the preview
+
+Select a disposable `page2.txt` in **Bulk Rename** and enter `New_` under
+**Add → Prefix**. Preview should show `New_page2.txt` while the file stays
+unchanged. `preview.py:change_formats` marks changed spans using UTF-16 offsets.
+The UI fixtures check those spans, including emoji, and the surrounding controls:
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/files/test_bulk_rename_ui.py
 ```
-
-Expect `New_page2.txt` with the changed span underlined, including in the emoji fixture. Preview leaves the file in place.
 
 ## Host and use
 

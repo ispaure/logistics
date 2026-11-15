@@ -1,8 +1,16 @@
 # Developing Dropbox folder tools
 
-## Try a change to conflict cleanup
+Dropbox integration discovers folders managed by the desktop Dropbox client.
+In a folder review, Logistics identifies conflict copies with identical
+contents. It checks that the reviewed pair still matches before deleting
+the copy.
 
-On desktop, open **Workspaces → Local → Source → Dropbox → Conflicting Copies…** for a managed folder. In `Python/features/dropbox/conflicts.py:_require_reviewed_identity`, include the changed path in the stale-review error. Run from the checkout root. Expect replaced or edited pairs to survive and unchanged identical copies to be removable.
+## Follow a cleanup review
+
+The **Conflicting Copies…** action in Workspaces reaches
+`Python/features/dropbox/conflicts.py`. `_require_reviewed_identity` checks that
+apply still refers to the reviewed pair. The synthetic fixtures verify that
+replaced or edited files survive while unchanged identical copies are eligible:
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/integrations/test_dropbox.py

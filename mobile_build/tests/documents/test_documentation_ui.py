@@ -70,9 +70,9 @@ class DocumentationTests(unittest.TestCase):
 
     def test_bundled_settings_guide_renders_real_tables(self):
         root = Path(__file__).resolve().parents[3] / 'docs/user_mobile'
-        html = markdown_preview((root / 'user_mobile.md').read_text(), local_links=True)
+        html = markdown_preview((root / 'settings/settings.md').read_text(), local_links=True)
         self.assertIn('<table>', html)
-        self.assertIn('<th>Task</th>', html)
+        self.assertIn('<th>Action</th>', html)
         for guide in root.rglob('*.md'):
             with self.subTest(guide=guide.name):
                 self.assertIn('</html>', markdown_preview(guide.read_text(), local_links=True))

@@ -1,64 +1,75 @@
-# Document workflows
+# Copy, move and recover documents
 
-## File actions and long names
-
-Hold a file or folder, or tap its **•••**, to see its full name and actions.
-Hold the name in that menu to see the full path. When naming a new document,
-choose its format to set the extension. Folder names can include dots.
+Start with the file's current location. If it is online or in an encrypted
+folder on the device, use [remote and offline files](remote.md) to check
+where changes can be saved. In a file list, hold an item or tap its **•••**
+to see its full name and available actions. In that menu, hold the name
+to see its full path.
 
 ## Receive files from another app
 
-1. On iOS, choose **Share → Logisticks**, wait for the result, and tap **Done**.
-   Open Logisticks and find the copy in **Workspaces → Local → On My Phone**
-   or **On My Tablet**. Apple Files shows it under **On My iPhone/iPad →
-   Logisticks**.
-2. On Android, share to **Logisticks**, wait for the result, and tap **Open
-   Logisticks**. On a selected collection drive, files go to
-   `<drive>/Logistics/Files`. If the drive is unavailable, completed handoffs
-   wait in app storage.
+On iOS, use **Share → Logisticks**, wait for the result, and tap **Done**.
+Open Logistics and find the file in **Workspaces → Local → On My Phone**
+or **On My Tablet**. The same file appears in Apple's Files app under
+**On My iPhone/iPad → Logisticks**.
 
-Sharing leaves the originals in the sending app. Duplicate names get numbered
-suffixes. Cancel keeps files already received. Retry attachments that report an
-error. Received files start in ordinary unencrypted storage.
+On Android, share to **Logisticks**, wait for the result, and tap
+**Open Logisticks**. On a selected collection drive, files go to
+`<drive>/Logistics/Files`. If the drive is unavailable, completed handoffs
+wait in app storage. Reconnect the drive to make them available.
 
-Choose **••• → Move…**, pick a writable folder, then tap **Move here**.
-Moving an encrypted file into ordinary storage requires confirmation.
+Sharing puts a copy in ordinary unencrypted storage and leaves the original
+in the other app. Duplicate names get numbered suffixes. If you cancel,
+copies already received stay on the device. Retry attachments that reported
+an error.
+
+## Save or send a separate copy
+
+Use **Save As…** to copy a draft to a writable folder. Name it and tap
+**Save here**. You can pick an existing file in the save picker to reuse
+its name, then confirm replacement. If the destination changes during
+confirmation, review the file before retrying.
+
+In an editor that offers **Import…**, the system picker supplies a private
+app copy. Text imports accept up to 1 MiB. UTF-8 and supported Unicode BOM
+encodings retain their line endings. **Export…** sends a copy of the current
+draft through the system picker. Save the working document separately if
+you also want to update it.
+
+## Move or rename a file you are using
+
+Choose **••• → Move…**, pick a writable folder, and tap **Move here**.
+Moving a file out of an encrypted copy into ordinary storage requires
+confirmation because the destination will be readable as an ordinary file.
+
 Moving or renaming an open text file keeps its draft, and the next **Save**
-writes to the new path. Moving a folder also updates its open text files.
-A conflict or external change preserves the draft. Close affected readers or documents open in another
-window before moving them. Close a text file before renaming it to or from
-Markdown. If reopening fails after a move, inspect the destination and use
-**Save As** to preserve the draft.
+writes to the new path. Moving a folder updates the open text files inside
+it. Close affected readers or documents in other windows before moving
+them. Close a text file before renaming it to or from Markdown.
 
-## Document workflow
+A conflict or external change leaves the draft available. If the document
+fails to reopen after a move, inspect the destination first, then use
+**Save As** to preserve your draft.
 
-- **Create.** From Home or Documents, choose **New document**, pick a format,
-  and name it. Tap **Next** on a narrow screen or use the folder
-  pane on a wide screen. Choose a writable folder, create a subfolder if
-  needed, and tap **Create here**. Resizing or going back to the name keeps the
-  chosen folder. [Documents and readers](documents.md) lists supported locations.
-- **Open.** Use **Open document** from Home or Documents. The folder arrow goes up
-  a level. Android Back dismisses search or retraces folders before returning
-  to the overview. **Documents → Open** lists active sessions. **Recent** lists
-  closed sessions. If an old reference fails, open the file from its current
-  folder, reconnect the remote, or unlock its credential.
-- **Save.** Folder-backed files save to their original path. Use **Save As**,
-  pick a writable folder, enter the name, then tap **Save here**. Choose an
-  existing file to reuse its name. Confirm replacement when asked. If the
-  destination changed during confirmation, review it before retrying. Save
-  ordinary copies to Local and encrypted copies to LocalCrypt.
-- **Copy through a provider.** **Import…** makes a private copy from the system
-  picker. Text imports are limited to 1 MiB. UTF-8 and supported Unicode BOM
-  encodings retain their line endings. **Export…** sends a copy of the current
-  draft through the system picker. Save the document itself separately.
-- **Close.** Tap **×**. If prompted, choose **Save**, **Quit without saving**,
-  or **Cancel**. A failed save keeps the draft open. If there is a conflict,
-  use **Save a copy** to preserve both versions.
-- **Delete.** Choose **Document actions → Delete document…** for an app-stored
-  document. Confirm to remove its saved file, recovery copy, and Recent entry.
-  Close other app windows first.
-- **Recover.** Draft edits are checkpointed during editing. If a restored item
-  is unavailable, choose **Try again** or **Remove from open documents** to
-  remove only its session entry. The default **Close saved documents on restart**
-  keeps unsaved drafts and conflicts. Enable **Restore last document** to
-  reopen the last eligible ordinary file. Session-only items need an unlock.
+## Recover a draft
+
+A failed save keeps your edits open. If the saved file has changed outside
+Logistics, use **Save a copy** to preserve your edits and the saved version
+under separate names.
+
+During ordinary editing, Logistics periodically stores a recovery draft.
+An entry marked **Recovered draft** has edits to review and save. If a
+restored item is unavailable, choose **Try again** after fixing access.
+**Remove from open documents** removes its session entry only. The default
+**Close saved documents on restart** leaves unsaved drafts and conflicts
+available for recovery. **Restore last document**, also on by default,
+reopens the last eligible ordinary file. Session-only files require an unlock, and private
+text drafts are available only for the active session. Save those drafts
+before locking the source.
+
+## Delete an app-stored document
+
+For an app-stored document, close other Logistics windows and choose
+**Document actions → Delete document…**. Confirming removes the saved file,
+recovery copy and Recent entry. For a folder-backed file, use the actions
+from its folder.

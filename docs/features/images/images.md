@@ -1,10 +1,8 @@
-# Images documentation
+# Images
 
-Choose a guide for the task you want to complete.
+View individual images on desktop or mobile. Desktop tools also compress
+folders and edit JPG comments; the mobile guide covers iPhone burst capture.
 
-## Further reading
-
-- [Images Feature](development/development.md)
-- [View and process images](user/user.md)
-
-- [Images on mobile](user_mobile/user_mobile.md)
+- [View images and use desktop processing tools](user/user.md)
+- [Mobile viewing and iPhone camera](user_mobile/user_mobile.md)
+- [Image validation, processing and native adapters](development/development.md)

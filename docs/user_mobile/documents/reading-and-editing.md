@@ -1,43 +1,43 @@
 # Reading and editing on mobile
 
+Open a book, comic or PDF from a folder in Workspaces or the document
+drawer. This guide covers the controls inside readers and editors.
+For finding a file, switching between open documents or checking its
+storage location, use [Documents and readers](documents.md).
+
 ## Reading and editing
-
-Open EPUB, PDF, and CBZ/ZIP files from Workspaces or the file drawer. Unlock
-LocalCrypt to open its files. Choose **••• → Show in folder** to reveal a
-browsable source, or hold the title to see its full path. Swipe toolbar
-actions sideways on narrow Android screens to reach hidden buttons.
-
-Use **••• → All documents** to leave a document open and return to the list.
-Tap **×** to close it and return to your folder or previous view. Android Back
-dismisses secondary controls first. When asked about unsaved edits, choose
-**Save**, **Quit without saving**, or **Cancel**.
-
-Folder-backed readers retain supported positions for the app session. Locking
-private readers clears these positions. Imported books retain saved reading
-progress. Local, LocalCrypt, and remote files share four provider slots and a
-32 MiB memory budget. If you hit the limit, close a file in **Documents → Open**
-and retry. A single file can exceed the budget on its own. The workspace holds
-up to 32 open documents overall.
-
-Open the same file to resume its existing session. Save or discard private
-edits before closing, changing credentials or moving the file. Failed saves
-keep the draft. See [reader history and credentials](../../user/reader-history.md)
-for when private references and reading positions can be restored.
 
 Turn EPUB pages with horizontal swipes or Previous/Next. Drag the progress
 slider to jump between chapters or comic/PDF pages. Open **Actions** for
-Appearance and fullscreen. Comics open with controls hidden. Tap the page to
-reveal them, or use **Show reading controls** when available. On wide supported
-layouts, **Open beside another document** opens a second pane.
-See [Comic gestures on mobile](../../features/comics/user_mobile/gestures.md).
+Appearance and fullscreen. EPUB text size is also available with a pinch
+or in Settings. Comics open with controls hidden. Tap the page to reveal
+them or use **Show reading controls** when available. On supported wide
+layouts, use **Open beside another document** for a second pane. Swipe
+toolbar actions sideways on narrow Android screens to reach hidden
+buttons. See [comic gestures](../../features/comics/user_mobile/gestures.md)
+for page navigation and magnification.
 
-For Markdown, tap **Edit Markdown** and choose **Formatted** or **Source**.
-Use **Format** for headings, lists, links, code, and tables. Edit YAML
-properties, reference links, and wiki aliases in Source. Editing a formatted
-block can normalize its Markdown. **View document** shows the current draft.
-On iOS, find it in **•••** while Save is visible. Use **Actions → Rename
-document…** for managed documents. For limits and saving, see
-[Text and Markdown](documents.md#text-and-markdown).
+If opening another document fails because the workspace is full, close
+a file in **Documents → Open** and retry. You can keep up to 32 documents
+open. Local, LocalCrypt and remote documents that use provider readers
+share four slots and a 32 MiB file content budget. If one document alone
+exceeds that budget, the reader cannot open it.
+
+Folder-backed readers retain supported positions during the app session.
+Imported books store reading progress. If a private reader locks,
+unlock its source and reopen the file. See [reader history and
+credentials](../../user/reader-history.md) for when private references and
+positions can be restored.
+
+## Work with a Markdown draft
+
+Tap **Edit Markdown** to enter the editor. Choose **Format** for headings,
+lists, links, code and tables. Editing a formatted block can normalize its
+Markdown, so use **Source** when working with YAML properties, reference
+links or wiki aliases. **View document** previews the current draft. On
+iOS, look for this action under **•••** while Save is visible. Use
+**Actions → Rename document…** for a managed document. For saving and
+editing limits, see [Text and Markdown](documents.md#text-and-markdown).
 
 ## Markdown read-aloud
 

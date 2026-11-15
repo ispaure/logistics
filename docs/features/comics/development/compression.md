@@ -19,7 +19,7 @@ Rebuild `PageCount` and all `Pages` from selected image indices, sizes and dimen
 
 Cancel after the current comic, including verification and replacement. Report failed and untouched inputs. Batch compression continues after individual failures.
 
-Run the [compression regression](development.md#try-a-compression-threshold-change) for thresholds and manifests. Check dialog handoff and partial failure from the checkout root:
+Run the [compression regression](development.md#check-a-compression-decision) for thresholds and manifests. Check dialog handoff and partial failure from the checkout root:
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/comics/test_comic_compression_dialog.py

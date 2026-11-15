@@ -1,262 +1,116 @@
 # Testing Logistics
 
-Run commands from the checkout root. Use `py` in place of `python3` on Windows.
+Start with the behavior you changed, run its focused checks, then widen the
+scope when the change crosses an owner or platform boundary. A desktop or mobile
+host test gives quick feedback in a local environment; native appearance,
+gestures and OS lifecycle need device or simulator validation as well.
 
-- [Add and diagnose a test](adding-tests.md)
-- [Mobile performance and profiling](mobile-performance.md)
-- [Cross-platform archive checks](platform-checks.md)
-- [Local validation artifacts](validation-artifacts.md)
-
-For checkout and interpreter setup, start with
-[Set up and run Logistics](../setup/setup.md).
+Run commands from the checkout root. On Windows use `py` instead of `python3`.
 
 ## Run everyday checks
 
-`python3 dev.py doctor` checks interpreters, dependencies, submodules and tools without modifying environments.
-Setup needs uv and access to uncached packages. Both setup commands accept `--dry-run`.
+Prepare the [desktop environment](../setup/setup.md) first. `python3 dev.py doctor`
+reports missing dependencies without modifying environments. If your change
+also needs mobile host tests, run `python3 dev.py setup mobile`; this prepares
+its separate environment without requiring a mobile SDK.
+
+For example, after changing feature enablement:
 
 ```sh
-python3 dev.py setup desktop
-python3 dev.py setup mobile
+python3 dev.py test desktop test_feature_registry.py --dry-run
 python3 dev.py test desktop test_feature_registry.py
+```
+
+The first command shows the interpreter and selection. The second runs the
+selected test file in isolation. Read the reported failures and skips as well as
+the exit status. A passing host check does not establish native device behavior.
+
+Other common selections are:
+
+```sh
 python3 dev.py test desktop 'test_git_*.py'
-python3 dev.py test desktop test_documentation_layout.py
 python3 dev.py test mobile test_editor_picker.py
-python3 dev.py lint
-```
-
-Desktop and lint use root `.venv` with offscreen Qt for tests. Mobile host tests use
-`mobile_build/.venv` and `TOGA_BACKEND=toga_dummy`. Mobile setup adds locked host tools including pip and
-Briefcase, with no SDK required. Windows interpreters live under `Scripts/python.exe`.
-Use `--python /path/to/python` to override and `--dry-run` to inspect. Native appearance,
-gestures and OS lifecycle require the [mobile handbook](../build-release/mobile-handbook.md).
-
-Omit the filename to run the selected suite. Quote globs. For duplicate filenames,
-pass repeatable exact repository-relative POSIX paths:
-
-```sh
 python3 dev.py test desktop --exact-file Python/tests/tooling/test_regression_runner.py
-python3 dev.py test mobile --exact-file mobile_build/tests/documents/test_editor_picker.py
 ```
 
-Use either a filename/glob or exact files. Unmatched globs, duplicate paths,
-paths outside the suite and empty selections fail.
+Quote globs. Use a repository-relative `--exact-file` path when filenames are
+ambiguous; repeat it for multiple files. Omit the filename to select the whole
+suite. See [selection and environments](runner-reference.md#selection-and-environments)
+for overrides and selection rules.
 
-### Parallel regressions and shared host budgets
+## Find the tests for your change
 
-Direct runs default to serial file-stage processes. Windows, Linux and macOS
-can use 1, 2, 4 or 8 workers for the reviewed portable files in
-`Python/tests/parallel_regressions.py`. macOS also runs the reviewed offscreen
-Qt groups in parallel. Windows also admits reviewed commonUtils directory index
-and browser files and Logistics Git and editor files.
+Feature Development guides explain the behavior and focused checks owned by
+that feature. Use [the feature catalog](../../features/features.md) to find one,
+or list the project owner associations:
 
 ```sh
-python3 dev.py test shared --workers 4
-# macOS host fixtures
-python3 dev.py test mobile --workers 4
+python3 dev.py owners
+python3 dev.py test-owner images --dry-run
 ```
 
-The direct runner accepts `--isolate-modules --workers 4`. With default ordering
-in diagnostic mode, reviewed files run together within each stage, followed by
-exclusive files in plan order. Fast mode, fail-fast, explicit ordering and
-historical timing order retain their admission order. JSON and JUnit always
-retain plan order. Audit fixture isolation and cancellation before adding files.
-WebEngine, real media, provider integration, native windows, the shared Toga
-replay and the Go bridge suite run exclusively. Cancellation gives a pooled
-worker up to five seconds to retire supervised helpers before the runner cleans
-up its Windows Job Object or POSIX process group.
+Replace `images` with your owner ID. Removing `--dry-run` runs its deduplicated
+selections across the required environments. `Scripts/ownership.json` owns these
+associations. For example, an image compression change can start with
+`Python/tests/images/test_image_folder_tool.py`, then use the Images owner
+selection to check related behavior.
 
-Manager reservations coordinate participating processes across workflows. Defaults are
-four slots per platform and half logical CPUs across the host, capped at eight.
-Manager selects a tested pool within its reservation and the captured source's capabilities.
-Direct pools require manual coordination. Hosted Windows, Fedora and macOS use
-up to two workers, capped by available CPUs. The Windows pool covers 72 reviewed
-files, including the 13 portable commonUtils runtime files. Fedora pools the
-portable files. Matched pilots on hosted and local Windows and Fedora preserved
-all 69 portable case outcomes and reduced median wall time by 57–66% for those
-files with four workers.
+| What changed | Additional check |
+| --- | --- |
+| A wiki page or link | [Documentation checks](../documentation/documentation-viewer-verification.md) |
+| An owning `mobile_sources.json` | `python3 dev.py test desktop test_mobile_packaging.py` |
+| Imports or owner boundaries | `python3 dev.py architecture` and the [portable import matrix](runner-reference.md#portable-import-matrix) |
+| A test declaration or discovery root | `python3 dev.py test-structure` |
+| Native controls, gestures or OS behavior | The owning feature's native journey and [mobile handbook](../build-release/mobile-handbook.md) |
 
-On macOS, seven reviewed mobile-host files use workers with the dummy Toga
-backend. They cover editor picking, notebook storage, Notes Library panels,
-Android Back handling, reader opening and workspace navigation. A focused test
-on macOS matched all 244 case outcomes and took 77 seconds serially and 27
-seconds with four workers. Simulator and device tests retain their own gates.
+When behavior lacks coverage, follow [Add and diagnose a test](adding-tests.md)
+for a small worked example, fixture cleanup and ownership rules.
 
-### Execution stages and failure policy
+## Execution stages and failure policy
 
-Declare one default `TEST_STAGE = TestStage.REGRESSION` using
-`commonUtils.testing.stages`. Override with `@stage(TestStage.SMOKE)` at class
-or method level. Method overrides win. Embedded or non-Python sources use stage
-comments (`#` or `//`). Keep ordered native journeys in one stage.
+Profiles choose how much of the selected tests to run:
+
+| Profile | Coverage |
+| --- | --- |
+| `smoke` | Deterministic startup and core contracts |
+| `daily` | Smoke plus ordinary regression behavior |
+| `full` (default) | Daily plus extended matrices, parity and soak checks |
 
 ```sh
-python3 dev.py test-structure
 python3 dev.py test desktop --profile smoke --mode fast
-python3 dev.py test mobile --profile daily
-python3 dev.py test shared --profile full
-python3 dev.py test bridge --profile smoke --mode fast
 python3 dev.py test-owner document-services --profile daily
 ```
 
-| Profile | Selected stages |
-| --- | --- |
-| `smoke` | `SMOKE`, deterministic startup and core contracts |
-| `daily` | Smoke plus `REGRESSION`, ordinary behavior |
-| `full` (default) | Daily plus `EXTENDED`, costly matrices, parity and soak checks |
-
-`test-structure.json` declares classified roots. `dev.py test-structure --inventory`
-lists source declarations. `dev.py test desktop --inventory` and
-`python3 dev.py test bridge --profile smoke --inventory` apply selection without runtime
-discovery. Direct runners accept repeated `--stage`. Each Python file-stage runs in a
-fresh process, ordered by stage and path by default, with a 300-second per-file deadline.
-Native acceptance keeps its complete ordered journeys.
-
-Diagnostic mode continues independent work. Fast mode gates later stages on smoke,
-stops on discovery failure and stops later owner environments after a failed one.
-`--fail-fast` also stops at the first failure inside a file. Cleanup still runs.
-JSON records unrun cases and JUnit marks them skipped with reasons.
-`coverage_complete` describes execution of the selected scope. Check outcomes and exit status.
-
-### Focused resource, Git and tooling checks
-
-`test_local_crypt*.py` covers synthetic encrypted resources. A missing pinned rclone
-skips optional CLI cases. Any nonempty `LOGISTICS_REQUIRE_LOCALCRYPT_TESTS` makes
-that prerequisite mandatory. The platform runner's `--install` provisions pinned
-rclone with archive and executable hash checks. Daily covers standard encrypted
-rename/batching and empty/populated startup. Full adds alternate encryption modes,
-exhaustive help sweeps and packaged Help navigation.
-
-Use `test_git_ui*.py` for Git UI and `test_git_watchers.py` for notifications.
-Run `python3 dev.py architecture` for live-tree boundaries, including deferred factories.
-
-### Shared-library test matrix
-
-```sh
-python3 dev.py test shared
-python3 dev.py test shared test_streams.py
-python3 dev.py test shared 'test_native*browser*.py' --dry-run
-```
-
-The full matrix runs commonUtils Qt/portable tests in `.venv` and replays selected
-`tests/native/test_native*.py` in `mobile_build/.venv` with dummy Toga. Portable-only
-selections need only desktop setup. `test_qt_mobile_host.py` stays in the Qt leg.
-Use `--python PATH` for Qt and `--native-python PATH` for Toga. Required missing
-toolkits fail. The replay overlaps Qt coverage.
-
-Watcher tests need filesystem notifications. Loopback fixtures and Qt WebEngine need
-host socket and process capabilities. Recheck permission-related failures with disposable
-profiles and the required capabilities. Keep `PLAYWRIGHT_BROWSERS_PATH` consistent
-between installation and testing because test caches are isolated. Full mobile release
-plans require Node and Playwright before host tests. Configure the manager's Node,
-Node modules and optional Chrome fields (or `LOGISTICS_NODE`, `NODE_PATH`,
-`LOGISTICS_CHROME`). Leave Chrome empty for Playwright's installed Chromium.
-The prepared plan captures these paths, and its prerequisite checks the existing
-installation before running tests. Developer runs retain optional browser skips.
-
-### Timing reports and fixtures
-
-Python regression runs save per-environment JSON in `test-results/test-timings/`.
-Direct runners accept `--report PATH`. File times include imports and fixture/process
-overhead. Case times include case setup and cleanup. Reports checkpoint completed
-work and reject missing or mismatched case evidence. `complete` describes runner
-completion. Go bridge stage results appear on the console.
-
-Use `python3 dev.py test <suite> [filename] --timings REPORT.json` to order one Python
-leg using a previous report from the same root, interpreter, platform and backend.
-Run shared legs separately when supplying history. Compare before/after IDs,
-outcomes and file durations under matched conditions. Keep data-loss, encryption
-and recovery coverage when reducing fixture cost. See [fixture selection](adding-tests.md).
-
-### Desktop test folders
-
-`Python/tests/` discovers recursively. Group imports as `tests.<owner>`.
-
-| Behavior | Folders |
-| --- | --- |
-| Host, documents and workspace | `application/`, `files/`, `readers/`, `editing/`, `notebooks/` |
-| Providers, tools and external apps | `resources/`, `integrations/`, `version_control/`, `blender/`, `calibre/`, `ide/` |
-| Conversion, archives and chat | `comics/`, `images/`, `archives/`, `chat/` |
-| Build and policy | `tooling/` |
-
-Some `test_mobile_*.py` contracts run here. Check [staging](../../../mobile_build/tools.py)
-and [runtime smoke](../../../Python/mobile/smoke.py) before moving flat portable test modules or fixtures.
-See the [shared test folder map](../../../Python/commonUtils/docs/development/reference/tests/tests.md)
-for commonUtils.
-
-### Find the tests for your change
-
-Run `python3 dev.py owners`, then `python3 dev.py test-owner books --dry-run` with
-your owner ID. Remove `--dry-run` to run one deduplicated selection per environment.
-`Scripts/ownership.json` owns these associations. An empty profile selection fails.
-For image compression cancellation and encoder recovery, trace `compress_folders`
-in `Python/features/images/actions.py`, then run:
-
-```sh
-python3 dev.py test-owner images --dry-run
-python3 dev.py test desktop --exact-file Python/tests/images/test_image_folder_tool.py
-```
-
-Use `python3 dev.py test desktop` or `python3 dev.py test mobile` for complete host
-suites, and `python3 dev.py test desktop test_mobile_packaging.py` after editing
-an owner's `mobile_sources.json`. For a managed native or platform plan, see the
-[validation walkthrough](../build-release/build-manager-journeys.md#trace-a-validation-plan).
+The default diagnostic mode continues independent checks after a failure. Fast
+mode gates later stages on earlier results; `--fail-fast` also stops at the first
+failure inside a file. A narrower profile is useful feedback, but it leaves the
+unselected coverage untested. Use [the runner reference](runner-reference.md)
+for stage declarations, process isolation, reports and parallel execution.
 
 ## Correctness checks and test ownership
 
-Lint checks correctness including untracked source. Review optional unused imports
-and assignments with the owner before removing re-exports, registrations or lifetime handles.
-Use the shared `QtTestCase`, its `temporary_directory()` and bounded `wait_until()`
-to retire workers and windows before deleting storage. See the
-[shared fixture guide](../../../Python/commonUtils/docs/development/reference/tests/tests.md).
+Run `python3 dev.py lint` for correctness lint. Review unused-import suggestions
+with the owner before removing re-exports, registrations or lifetime handles.
+For Qt tests, use `QtTestCase`, `temporary_directory()` and bounded `wait_until()`
+to retire workers and windows before deleting storage. The
+[shared fixture guide](../../../Python/commonUtils/docs/development/reference/tests/tests.md)
+owns commonUtils APIs; [adding tests](adding-tests.md) explains Logistics fixtures.
 
-## CI, release gates and advanced validation
+Keep credentials, environments and generated output local. Use
+[validation artifacts](validation-artifacts.md) to locate reports and understand
+cleanup. After staging specific paths, `python3 dev.py hygiene` checks the index
+for ignored files and recognizable secrets.
 
-Windows runs native Qt startup with the `windows` plugin before offscreen regressions.
-Use physical hardware for mixed-DPI monitor crossings. See [platform checks](platform-checks.md)
-for hosted deadlines and diagnostics. Manager runs fresh smoke before regression and extended
-phases. Full mobile release plans also run architecture, toolchain, hygiene and lint on captured source.
-[Source releases](../build-release/releasing.md) require all desktop platform and archive
-checks, Android/iOS native acceptance and both embedded runtime gates. Each
-managed mobile platform runs fresh smoke for its host suites before their
-regression and extended stages. The platform's native and runtime gates still
-depend on the complete host coverage. iOS and Android host receipts are scoped
-to their respective platforms.
-Hosted [runtime checks](../build-release/mobile-launchers.md#hosted-builds-and-runtime-checks)
-require the pinned interpreter, exact source, complete cases and zero failures/skips.
-Publish commonUtils revisions before Logistics commits that reference them.
+## Broader validation
 
-For an isolated order audit:
+Choose these guides when your change needs evidence beyond a focused host test:
 
-```sh
-PYTHONPATH=Python:. .venv/bin/python Python/tests/run_regressions.py Python/tests --isolate-modules --order random --seed 7 --report test-results/order-audit.json
-```
-
-Use `--order reverse` for a reverse audit. Both reorder within stages and preserve
-class fixtures. Use fresh execution with evidence reuse disabled and dependencies
-fixed. Use private fixtures for subprocess APIs that resolve OS home independently.
-
-## Local disk usage and private files
-
-Use [artifact locations](validation-artifacts.md#find-an-output) and
-[retention](../build-release/build-manager.md#automatic-storage-retention).
-Keep credentials, environments and generated output local. Run `python3 dev.py hygiene`
-after staging specific paths. It checks the index for ignored files and recognizable secrets.
-
-## Worked contribution: desktop LM attachments
-
-Trace the `lm.chat` factory to `LMPage`, then to `ui/attachments.py:AttachmentController`.
-For an attachment change, preserve `AttachmentHost` context, portable `project_tools.py`
-containment/exclusions and the draft bound. Run `python3 dev.py test desktop test_lm_ui.py`
-with localhost available. Expect selection/file attachments, exclusions, project reopening
-and draft preservation to pass. See the [LM developer guide](../../features/lm/development/development.md).
-Use `dev.py compatibility` for forwarded imports.
-
-## Portable import matrix
-
-Run `python dev.py test desktop test_portable_imports.py` and
-`python dev.py test desktop test_architecture_contracts.py` after portable-owner
-changes. Fresh children reject presentation imports even when caught.
-Run `python dev.py test desktop test_document_architecture.py` for storage-boundary changes.
-See the [portable owner policy](../architecture/extension-points.md#portable-owner-policy).
-The external SDK's own suite runs separately with `python -m build_manager.contracts`
-using its owning interpreter.
+- [Test runner reference](runner-reference.md) — environments, shared suites,
+  scheduling, reports and CI gates.
+- [Platform checks](platform-checks.md) — cross-platform archive and desktop
+  validation, including hosted diagnostics.
+- [Mobile performance](mobile-performance.md) — profiling and performance work.
+- [Validation artifacts](validation-artifacts.md) — owned storage, report
+  locations and cleanup.
+- [Build and release](../build-release/build-release.md) — managed platform
+  plans, installable apps and release gates.

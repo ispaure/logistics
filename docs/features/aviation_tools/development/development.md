@@ -1,16 +1,21 @@
 # Aviation Tools
 
+The desktop feature presents flight calculations and supplied reference data.
+Its UI parses inputs and displays results; the calculation modules own the
+numerical behavior and data limits.
+
 Aviation Tools incorporates the former `ft` / Flight Tools project by Marc-André Voyer.
 
-## Try a distance display change
+## Follow a distance calculation
 
-On desktop, open **Aviation Tools → Distance**. Enter origin `0, 0` and destination `0, 1`. Change `.2f` to `.3f` in `Python/features/aviation_tools/ui/page.py:distance`. Extend the invalid-input retry fixture to assert the new display. Run from the repo root.
+Open **Aviation Tools → Distance** and enter origin `0, 0` and destination
+`0, 1`. `Python/features/aviation_tools/ui/page.py:distance` formats the result
+from the navigation calculation. The focused fixtures check the numerical
+reference (about 60.04046 NM), invalid input and retry without needing a service:
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/integrations/test_aviation_tools.py
 ```
-
-Expect `Distance: 60.040 NM` and the unchanged numeric reference of 60.04046 NM.
 
 `mathUtils/flightUtils.py` owns navigation and wind math. The KIAS chart interpolates flaps-up data and rejects out-of-chart speeds. KTAS → KIAS supports 2,000 ft. The cruise chart selects the closest altitude, adjusts temperature by 2 °C per 1,000 ft, then looks up the closest chart temperature and RPM. Missing combinations fail. These are historical data and approximations.
 

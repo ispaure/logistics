@@ -1,14 +1,19 @@
 # System Tools development
 
-## Try a clearer repair message
+System Tools adapts selected maintenance commands to the desktop host.
+The integration owns input validation, platform checks and launch construction;
+the operating system performs the requested repair or power-setting change.
 
-Find **Repair configured NTFS drive** on the Windows desktop **Debug** page. Use the mocked launcher for this change. In `Python/features/system_tools/actions.py:run_repair_ntfs_on_d`, change `Repairing {drive}` to `Running CHKDSK on {drive}` in the PowerShell message. Update the `Write-Host` assertion and run from the repo root.
+## Trace a repair command safely
+
+**Repair configured NTFS drive** reaches
+`Python/features/system_tools/actions.py:run_repair_ntfs_on_d`. Use the mocked
+launcher fixtures to inspect normalized drive arguments and rejected input
+without running CHKDSK or other maintenance commands:
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/application/test_system_tools.py
 ```
-
-Expect input ` e: ` to print `Running CHKDSK on E:` and invoke CHKDSK with `E: /f /r`. Invalid drive strings fail before launch.
 
 The Debug host confirms destructive actions and callbacks recheck the OS. `[Windows] ntfs_drive` defaults to `D:`. Repairs launch elevated PowerShell. **Repair system files** runs DISM ScanHealth, DISM RestoreHealth, SFC and AppX re-registration in order.
 

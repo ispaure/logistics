@@ -1,12 +1,8 @@
-# Media documentation
+# Media tools
 
-Choose a guide for the task you want to complete.
+Rename MKA audio files from chapter numbers and titles in a CSV. Video playback
+has a separate [Video Player guide](../video/video.md).
 
-## Further reading
-
-- [Media Feature](development/development.md)
-- [Rename MKA chapters from a CSV](user/user.md)
-- [Video Player compatibility link](user/video-player.md)
-- [Mobile Media Tools support and Video Player link](user_mobile/user_mobile.md)
-
-Playback has its own [Video Player documentation](../video/video.md).
+- [Prepare and review chapter filenames](user/user.md)
+- [Mobile availability and video handoff](user_mobile/user_mobile.md)
+- [Rename planning and recovery contracts](development/development.md)

@@ -1,8 +1,17 @@
 # Developing Personal Links
 
-## Try a change to shortcut settings
+Personal Links maps configured desktop shortcuts to validated browser URLs.
+The catalog defines available shortcuts, configuration resolves their values,
+and the action boundary validates a URL before handing it to the browser.
 
-On desktop, find **Links → Quick Links → Google**. Factor typed-key lookup in `Python/features/links/configuration.py:get_url` and `get_resolve_ip`. Extend the temporary INI fixture with both `google_str` and `google`. Run from the checkout root. Expect typed precedence and legacy-only fallback without starting a browser.
+## Follow a configured shortcut
+
+**Links → Quick Links → Google** reads its URL through `get_url` in
+`Python/features/links/configuration.py`. When a shortcut includes a
+computer placeholder, the action also reads host substitutions through
+`get_resolve_ip`. Typed INI keys take precedence and older untyped keys
+remain a fallback. Temporary INI fixtures check that compatibility without
+opening a browser.
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/application/test_ini_settings.py

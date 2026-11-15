@@ -1,10 +1,9 @@
-# Dropbox documentation
+# Dropbox
 
-Choose a guide for the task you want to complete.
+Browse folders already synced by the desktop Dropbox client and review
+conflicting copies. Cleanup distinguishes identical copies from files with
+unique edits.
 
-## Further reading
-
-- [Dropbox Feature](development/development.md)
-- [Browse Dropbox folders and clean conflicts](user/user.md)
-
-- [Dropbox on mobile](user_mobile/user_mobile.md)
+- [Browse folders and review conflicts](user/user.md)
+- [Mobile availability](user_mobile/user_mobile.md)
+- [Folder discovery and cleanup contracts](development/development.md)

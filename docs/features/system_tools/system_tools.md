@@ -1,10 +1,9 @@
-# System Tools documentation
+# System Tools
 
-Choose a guide for the task you want to complete.
+Run the available desktop system maintenance actions, including Windows repair
+commands and macOS lid-sleep controls. The user guide identifies what each
+action changes and how to restore saved settings.
 
-## Further reading
-
-- [System Tools Feature](development/development.md)
-- [Run system maintenance actions](user/user.md)
-
+- [Choose and run a maintenance action](user/user.md)
 - [Mobile availability](user_mobile/user_mobile.md)
+- [Platform commands and validation](development/development.md)

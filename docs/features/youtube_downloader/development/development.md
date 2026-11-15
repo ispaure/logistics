@@ -1,14 +1,20 @@
 # Develop YouTube Downloader
 
-## Try an output filename change
+The desktop downloader reads per-channel settings and constructs bounded
+yt-dlp invocations for a configured workspace. Configuration validation and
+argument construction are testable without downloading media.
 
-On desktop, use the [configuration example](../user/user.md) in a disposable local workspace and open **YouTube Downloader…**. With a synthetic URL, leave downloads idle. In `Python/features/youtube_downloader/settings.py:download_arguments`, change `%(title).50s` to `%(title).40s`. Assert the shorter template in `test_arguments_preserve_quotes_ampersands_and_template_percent` and run from the repo root.
+## Trace download arguments
+
+The **YouTube Downloader…** folder action opens the configured channels for
+that workspace. `download_arguments` in
+`Python/features/youtube_downloader/settings.py` builds the command for a
+selected channel. The synthetic fixtures check that URLs, quoted filters
+and template percent signs reach yt-dlp intact.
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/integrations/test_youtube_downloader.py
 ```
-
-Expect the new template, one intact URL after `--` and one quoted filter argument.
 
 ## Configuration, execution and sync
 

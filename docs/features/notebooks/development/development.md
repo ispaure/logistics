@@ -1,24 +1,29 @@
 # Develop the notebook editor
 
-Open or create editable RMDOC on desktop, Android or iOS. See the [desktop guide](../user/user.md) and [mobile guide](../user_mobile/user_mobile.md).
+The notebook editor opens, creates and saves editable RMDOC archives on
+desktop, Android and iOS. The drawing surface collects pen or pointer input.
+The Python editor applies the resulting commands to notebook pages, and
+storage publishes the archive while preserving supported native ink and
+unmodified data. For controls, see the [desktop guide](../user/user.md) and
+[mobile guide](../user_mobile/user_mobile.md).
 
-## Make a small brush change
+## Follow a stroke from drawing to save
 
 On desktop choose **Logistics → New / Open Document… → Notebook (.rmdoc) →
 New**. In **First page template**, choose Blank, then **Create notebook**.
-Save the disposable RMDOC, reopen it with **Open…** in the same chooser, and
-draw a short Medium Fineliner stroke.
+Draw a short Medium Fineliner stroke, save the disposable RMDOC and reopen it
+with **Open…** in that chooser.
 
-Try 3.75 in place of 3.5 in `Python/features/notebooks/brushes.py:BRUSHES[17]`.
-Update the two test expectations in the [brush walkthrough](brush-calibration.md#try-a-brush-change).
-Relaunch, draw again, then save and reopen. The old and new strokes should
-retain their respective widths. From the checkout root:
+Start with `assets/drawing.js` when tracing the canvas preview. For the saved
+stroke, follow the action through `Editor.apply` to the native width and
+thickness calculations in `brushes.py` and the scene writer in `ink.py`.
+The [brush calibration walkthrough](brush-calibration.md) explains how to
+change and compare those values. The portable tests check constant Fineliner
+widths and verify that thickness is written once and survives reopening.
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/notebooks/test_brush_calibration.py
 ```
-
-Expect six passing width, pressure, thickness, palette and round-trip checks.
 
 ## Find the owner of a change
 

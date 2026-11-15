@@ -1,16 +1,28 @@
 # EPUB reader and metadata development
 
-Books shares EPUB parsing across desktop, Android and iOS. Books & Comics enables the two reader engines under their existing IDs. See the [desktop guide](../user/user.md), [mobile guide](../user_mobile/user_mobile.md) and [Comics development guide](../../comics/development/development.md).
+The EPUB reader turns a publication's spine into a sequence of readable
+chapters and uses its navigation entries to find passages within them.
+Desktop, Android and iOS share the EPUB parser. Their reader views lay out
+the text and keep a reading location across page turns and changes in layout.
+The Books & Comics switch also enables the
+[comic reader](../../comics/development/development.md), which navigates image
+pages. See the [desktop guide](../user/user.md) and
+[mobile guide](../user_mobile/user_mobile.md) for reader controls.
 
-## Try a chapter error message change
+## Follow a chapter turn
 
-On desktop, open a disposable EPUB in **File Browser → Read EPUB…** and use its contents sidebar. In `Python/features/books/ui/reader.py:BooksPage._show_chapter()`, prefix the read error with “Could not open chapter.” Keep the previous-chapter restoration. Update `test_failed_chapter_navigation_keeps_visible_and_saved_location` and run from the configured checkout root:
+Open a sample EPUB with **Read EPUB…** from the desktop File Browser and
+pick a chapter in Contents. That selection and a turn across the end of a
+chapter both reach `BooksPage._show_chapter()` in
+`Python/features/books/ui/reader.py`. The method restores the previous
+chapter index on a read error so that the visible text and saved location
+still refer to the same chapter. The reader test injects a failed
+chapter read through Contents and other navigation controls, then verifies
+that a retry reaches the intended chapter.
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/readers/test_books_reader.py
 ```
-
-The injected error should show the new message and preserve the visible chapter and saved location until a successful retry.
 
 ## Format, rendering and navigation
 

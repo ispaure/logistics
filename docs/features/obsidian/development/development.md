@@ -1,8 +1,15 @@
 # Obsidian Feature
 
-## Try a registry serialization change
+This integration opens local vaults in the external Obsidian application.
+Logistics owns discovery and safe registration of a vault; editing notes inside
+Logistics belongs to [Notes Library](../../notes_library/development/development.md).
 
-On desktop (Windows, macOS or Linux), select a temporary folder with an empty `.obsidian` directory in **Workspaces**. Expect **Open "<name>" Vault**. Try indenting JSON in `Python/features/obsidian/registry.py:_write_registry`. Update the byte expectation in `test_preserves_mode_and_utf8_serialization`. From the checkout root, expect UTF-8, trailing newline, POSIX mode, concurrent-write protection and retry by existing ID to pass using temporary registries.
+## Follow vault registration
+
+A local folder containing `.obsidian` offers an Open Vault action in Workspaces.
+`Python/features/obsidian/registry.py:_write_registry` publishes registration
+while preserving unknown fields and detecting concurrent writes. The temporary
+registry fixtures verify UTF-8, file mode and retry using an existing ID:
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/editing/test_obsidian_registry.py

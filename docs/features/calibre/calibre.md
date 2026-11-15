@@ -1,9 +1,8 @@
-# Calibre documentation
+# Calibre
 
-Choose a guide for the task you want to complete.
+Find existing Calibre libraries, launch Calibre and export an EPUB mirror.
+Reading individual books inside Logistics belongs to [Books](../books/books.md).
 
-## Further reading
-
-- [Calibre Feature](development/development.md)
-- [Open and export Calibre libraries](user/user.md)
+- [Open a library and review an export](user/user.md)
 - [Mobile availability and book handoff](user_mobile/user_mobile.md)
+- [Library detection and export contracts](development/development.md)

@@ -1,76 +1,86 @@
 # Workspaces on mobile
 
-Open **Workspaces** for local files, managed copies, remotes and network shares.
-Tap a folder to browse or use **…** for workspace actions. Wide windows keep the
-workspace list beside the browser. Narrow windows open the browser on a separate
-screen. Rotating or folding keeps your current folder.
+Use **Workspaces** when you want to browse files where they are stored.
+For instance, open **Local → On My Phone** or **On My Tablet** to find a
+note you made in Logistics or a file another app shared with it. Tap a
+folder to enter it and a file to open it. You can return to the folder
+with Back or resume the file later from **Documents → Open**.
 
-| Source | Open it for |
+## Choose the folder to browse
+
+| Source | What you will find |
 | --- | --- |
-| **Local → On My Phone / On My Tablet** | Ordinary files and incoming shares. |
-| **Local → Rclone Copies** | Managed readable and encrypted copies. |
+| **Local → On My Phone / On My Tablet** | Ordinary files and files shared with Logistics. |
+| **Local → Rclone Copies** | Managed offline copies, including readable copies and encrypted LocalCrypt copies. |
 | **Cloud → Rclone Remotes** | Online folders from loaded credential packages. |
-| **Home Server** | [SMB or Mac shares](../../features/rclone/user_mobile/connections.md#smb-and-mac-shared-folders) added through **Add share…** and their offline copies. SMB remotes imported in a credential ZIP stay in Cloud. |
+| **Home Server** | [SMB or Mac shares](../../features/rclone/user_mobile/connections.md#smb-and-mac-shared-folders) added through **Add share…** and their offline copies. SMB remotes from credential ZIPs appear in Cloud. |
 
-Use **Credential** in Rclone Copies or Cloud to narrow the list. Open a locked
-folder and enter its ZIP password. If the source is missing, load or unlock the
-matching package in [Remote connections](../../features/rclone/user_mobile/connections.md).
-Use **Try again** if the workspace list failed to load. The folder-view button
-switches between a hierarchy and a flat list.
+Read [remote and offline files](../documents/remote.md) to see where you can
+edit and when an encrypted folder needs a password. Use **Credential** to
+narrow the Rclone Copies or Cloud list. If your folder is missing, load or
+unlock the matching package in [Remote
+connections](../../features/rclone/user_mobile/connections.md). If the list
+failed to load, tap **Try again**.
+
+Wide windows show the workspace list beside the browser. Narrow windows
+open the browser on its own screen. Rotating or folding keeps your current
+folder. The folder-view button switches between a hierarchy and a flat list.
+
+## Search and act on a file
+
+Tap the magnifying glass and type a filename or part of it. Local and
+LocalCrypt search covers subfolders. Cloud and Home Server search filters
+the folder you are viewing. Separate words may appear in any order. Put
+a phrase in quotes to match it in order. Tap **×** to clear the filter.
+
+If a large ordinary folder takes time to search, the app may show saved
+matches while it checks them. **Checking…** means those checks are still
+running. Tapping a saved result checks that file immediately. A result
+that is missing or inaccessible leaves the list and shows a message.
+Private names stay out of the saved local index.
+
+Tap **…** beside an item for eligible actions such as **Details**,
+**Rename** or **Move**. Keep the app open during a long move. Switching
+apps or locking the device interrupts the operation, so inspect the
+destination before retrying. See [moving a file you are
+using](../documents/workflows.md#move-or-rename-a-file-you-are-using) if
+the file is open in an editor.
+
+Use **Pin current folder** to keep a shortcut in Workspaces. Remote
+shortcuts require the same connection. Encrypted paths cannot be pinned
+for restoration. Removing a pin removes the shortcut.
 
 ## Notes Library
 
-Use **… → Open as Notes Library** for a folder marked as a Notes Library or an
-Obsidian vault. Search names and note text in local or unlocked encrypted
-libraries. Use **Names only** to skip text search. See
-[Notes Library on mobile](../../features/notes_library/user_mobile/user_mobile.md)
+For a folder marked as a Notes Library or an Obsidian vault, choose
+**… → Open as Notes Library**. Search filenames and note text in local
+or unlocked encrypted libraries. Use **Names only** to skip text search.
+See [Notes Library on mobile](../../features/notes_library/user_mobile/user_mobile.md)
 for supported files, editing and size limits.
 
-## File browser locations and actions
+## Keeping your place during delayed opens
 
-Tap a folder to enter it or a file to open it. Back returns to the browser
-with the same folder and search. Open sessions are also available under
-**Documents**.
-Use the magnifying glass to search and **×** to clear the filter. Local and
-LocalCrypt search includes subfolders. Cloud and Home Server search filters the
-current folder.
-
-Ordinary local search shows saved matches with **Checking…** while validating
-them in the background. Tapping a saved result checks that item independently;
-missing or inaccessible items show a message and leave the result list. Updates
-keep your selection and scroll position where possible.
-
-Use the **…** beside an item for **Details**, **Rename**, **Move** and other
-eligible actions. Keep the app open during a long move. Switching apps or
-locking the device interrupts the move. Check the result before retrying.
-
-Use **Pin current folder** to add a local or remote shortcut to Workspaces.
-Remote shortcuts require the same connection. Encrypted paths cannot be pinned
-for restoration. Remove a pin to remove just the shortcut.
+If you switch to another document while a private file opens, the newly
+opened file appears under **Documents** and your current view stays in place.
 
 ## Workspaces and Local / LocalCrypt sync
 
-Choose **Pull…** to make a local destination match an online folder, or **Push…**
-to make the selected online destination match the local copy. **Either action
-can replace files and delete destination files missing from the source.**
-Logistics does not create a backup of these changes.
-
-Finish edits before syncing their folder. See [remote transfers](../../features/rclone/user_mobile/workflows.md)
-to choose storage, review additions and deletions, and track progress.
+Tap **…** for workspace actions. **Pull…** updates an offline copy from
+the online folder. **Push…** updates the online folder from the managed
+copy. Either direction can replace files and remove destination files
+that are missing from the source. Finish edits and review the proposed
+changes in [remote transfers](../../features/rclone/user_mobile/workflows.md)
+before starting the sync.
 
 **Remove mapping (keep files)** detaches the association. **Delete local
-folder…** permanently deletes the local folder after confirmation and keeps the
-online copy.
+folder…** permanently deletes the local folder after confirmation and keeps
+the online copy.
 
 ## Local / LocalCrypt location
 
-On Android, use **Settings → Workspaces → File storage…**. Keep Logistics open
-until it verifies the copy and switches locations. **Use these files** selects
-an existing collection after checking its folder paths. It does not verify file
-contents. See [File storage](../settings/settings.md#file-storage) for permissions,
-deletion and returning to an old location.
-
-### Keeping your place during delayed opens
-
-If you switch to another document while a private file opens, it stays available
-under **Documents** without taking over your current view or draft.
+On Android, choose **Settings → Workspaces → File storage…** to change
+where collections live. Keep Logistics open if you choose to copy files
+and switch. **Use these files** selects existing collection folders after
+checking their paths. To verify file contents during a move, use the copy
+and switch option. See [file storage](../settings/settings.md#file-storage)
+for permissions, deleting an inactive copy and returning to an old location.

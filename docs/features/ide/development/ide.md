@@ -1,6 +1,6 @@
 # IDE architecture and implementation
 
-Start with the [worked contribution](development.md#try-a-column-guide-change).
+Start with the [project settings walkthrough](development.md#follow-a-project-setting).
 
 ## Implemented contracts
 

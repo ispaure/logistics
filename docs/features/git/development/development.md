@@ -1,16 +1,21 @@
 # Git workspace
 
+The Git workspace coordinates repository reads, reviewed commands and retained
+previews. Git executes repository operations; Logistics owns their UI, expected
+repository context, serialization and result presentation.
+
 Requires Git 2.40+. See [authentication and usage](../user/user.md) and [mobile availability](../user_mobile/user_mobile.md).
 
-## Try a diff preview change
+## Trace a diff preview
 
-On desktop, open a disposable Git repository. Commit a file, replace its contents with data containing a NUL byte, and select it in **File status**. Change the binary notice in `Python/features/git/diff_view.py:present_diff` and update the binary fixture. Run from the repo root.
+Selecting a changed file in **File status** reaches
+`Python/features/git/diff_view.py:present_diff`. Text and binary changes have
+different formatted presentations, while **Raw** retains Git's original patch.
+Use the synthetic diff fixtures to check that distinction:
 
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/version_control/test_git_diff_view.py
 ```
-
-Expect the new formatted notice and Git's exact original patch in **Raw**.
 
 | Change | Owner under `Python/features/git/` |
 | --- | --- |

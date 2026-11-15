@@ -4,7 +4,7 @@
 
 ## Desktop credential import and unlock presentation
 
-`credentials.import_credential_package` copies a validated ZIP (1 MiB cap) without extraction, reuses identical bytes and rejects same-name replacements atomically. Discovery/import prefer the configured Dropbox credential root when present, otherwise the local root. `ui/page.py:RclonePage` uses cancellable refresh and preserves rows and selection on failure. `ui/credential_unlock.py` offers session or persistent unlock; existing saved config survives session-only unlock. [Import UI check](development.md#try-a-change-to-credential-import)
+`credentials.import_credential_package` copies a validated ZIP (1 MiB cap) without extraction, reuses identical bytes and rejects same-name replacements atomically. Discovery/import prefer the configured Dropbox credential root when present, otherwise the local root. `ui/page.py:RclonePage` uses cancellable refresh and preserves rows and selection on failure. `ui/credential_unlock.py` offers session or persistent unlock; existing saved config survives session-only unlock. [Import UI check](development.md#follow-credential-import-and-unlock)
 
 ## Prepare and publish credentials
 
