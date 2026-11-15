@@ -95,9 +95,12 @@ def host_environment(phase, source):
     mobile = Path(mobile_python).parents[2]
     if mobile.name != 'mobile_build':
         return dict(phase.environment)
+    tool_paths = [str(mobile / '.tools/go/bin')]
+    if node := phase.environment.get('LOGISTICS_NODE'):
+        tool_paths.append(str(Path(node).parent))
     env = dict(phase.environment, LOGISTICS_REQUIRE_LOCALCRYPT_TESTS='1',
                PIP_FIND_LINKS=str(mobile / '.tools/release-wheels'),
-               PATH=str(mobile / '.tools/go/bin') + os.pathsep + os.environ.get('PATH', ''),
+               PATH=os.pathsep.join((*tool_paths, os.environ.get('PATH', ''))),
                GRADLE_OPTS='-Dorg.gradle.daemon=false')
     for setting, variable in (('tools.xcode', 'DEVELOPER_DIR'), ('tools.android_sdk', 'ANDROID_HOME'),
                               ('tools.java', 'JAVA_HOME')):

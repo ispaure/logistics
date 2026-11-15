@@ -12,12 +12,28 @@ import subprocess
 from tempfile import TemporaryDirectory
 import unittest
 
-from build_manager import Phase
+from build_manager import Phase, Plan
 from commonUtils.runtime.streams import CHUNK_SIZE
-from logistics_build.test_evidence import inputs, key_for
+from logistics_build.test_evidence import inputs, key_for, with_reuse
 
 
 class InputIdentityTests(unittest.TestCase):
+    def test_mobile_reuse_preserves_selected_node_in_smoke_and_regression_path(self):
+        root = Path('/checkout')
+        mobile = root / 'mobile_build'
+        node = root / 'tools with spaces' / 'bin' / 'node'
+        source = {'effective_settings': {'values': {'tools.mobile_python': str(mobile / '.venv/bin/python')}}}
+        environment = {'LOGISTICS_NODE': str(node), 'BUILD_MANAGER_TEST_PLATFORM': 'ios'}
+        phases = tuple(Phase(f'ios.validation.mobile-host{suffix}', ('python', 'test.py'), str(root),
+                             environment=environment) for suffix in ('.smoke', ''))
+        plan = Plan('Fixture', 'Test', source, phases, str(root / 'workspace'))
+        with patch('logistics_build.test_evidence.sys.platform', 'darwin'), \
+                patch.dict(os.environ, {'PATH': '/system/bin', 'LOGISTICS_REUSE_TEST_RESULTS': 'on', 'GITHUB_REF': ''}):
+            configured = with_reuse(plan)
+        expected = [str(mobile / '.tools/go/bin'), str(node.parent), '/system/bin']
+        for phase in configured.phases:
+            self.assertEqual(phase.environment['PATH'].split(os.pathsep), expected)
+
     def test_streamed_inputs_match_legacy_composite_digest(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
