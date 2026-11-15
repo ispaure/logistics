@@ -93,10 +93,10 @@ storage choices, format limits and validation status.
 
 For local builds, paired-device installation, Firebase and TestFlight distribution,
 start with the [mobile build and release handbook](docs/development/build-release/mobile-handbook.md).
-Use the standalone [Build Deployment Manager](docs/user/build-manager.md) for
+Use the standalone [Build Deployment Manager](docs/development/build-release/operator/setup.md) for
 checks, build-only artifacts and delivery. Logistics provides its project adapter
 in `logistics_build/`; there is no separate deployment launcher.
-The guided flow supports [combined platform validation and reviewed GitHub/Firebase/TestFlight delivery](docs/development/build-release/build-manager-journeys.md).
+The guided flow supports [combined platform validation and reviewed GitHub/Firebase/TestFlight delivery](docs/development/build-release/operator/workflows.md).
 
 | Tool | Use it to… |
 | --- | --- |
@@ -127,7 +127,7 @@ The guided flow supports [combined platform validation and reviewed GitHub/Fireb
 | [Aviation Tools](docs/features/aviation_tools/user/user.md) | Flight calculators and aircraft/airport reference data |
 | [Flight Simulator](docs/features/flight_sim/user/user.md) | Manage X-Plane settings and window presets |
 | [Media](docs/features/media/user/user.md) | Rename audio chapters from a CSV |
-| [Video Player](docs/features/video/video.md) | Local/LocalCrypt MP4, MKV, AVI and other common video containers, best-effort remote/crypt streaming, subtitles, audio tracks and optional native AirPlay on iPhone and iPad |
+| [Video Player](docs/features/video/video.md) | Local/LocalCrypt MP4, MKV, AVI and other common video containers, best-effort remote/crypt streaming, subtitles, audio tracks and optional native AirPlay with TV text-subtitle selection on iPhone and iPad |
 | [File Tools](docs/features/file_tools/user/user.md) | Check filenames and remove Python bytecode files |
 | [System Tools](docs/features/system_tools/user/user.md) | Run platform-specific maintenance tools |
 

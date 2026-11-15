@@ -1,26 +1,28 @@
 # Remote and offline files
 
-Add a connection in **Settings → Workspaces → rclone connections…**, then open
-it from Workspaces or Remote files.
+Add a [credential ZIP](../../features/rclone/user_mobile/connections.md#remote-files-and-credential-zips)
+or an [SMB share](../../features/rclone/user_mobile/connections.md#smb-and-mac-shared-folders),
+then open it from Workspaces.
 
 ## Direct reading
 
 Tap a supported file on a streaming connection. Readers open it read-only in
 memory. Text, Markdown, and INI support up to 1 MiB, and PNG, JPEG, and WebP
-support up to 16 MiB. Size and format limits also apply to
-[EPUB and comic archives](../../features/rclone/user_mobile/connections.md#remote-files-and-credential-zips),
-[PDF](../../features/pdf/user_mobile/user_mobile.md), and
+support up to 16 MiB. The remote EPUB and CBZ/ZIP preview cache holds up to
+128 MiB total, with a 128 MiB limit per archive. Close a reader to free its
+cache or reopen it to refresh its snapshot. Separate limits apply to
+[PDF](../../features/pdf/user_mobile/user_mobile.md) and
 [video](../../features/video/user_mobile/user_mobile.md). Locking or replacing
 credentials closes the associated private readers.
 
+For a password-protected archive, the closest `[LogisticsZIP]` section in a
+parent `remoteConfig.ini` supplies `archive_password`. A missing or empty key
+in that section stops inheritance. Enter the archive password when prompted.
+
 ## Offline folders
 
-Choose **••• → Download locally…**, then select a folder and name and tap
-**Download here**. Pick an unused name. Ordinary destinations require confirmation
-because decrypted files remain readable after you lock the connection.
-For a managed Local or LocalCrypt folder, use **Pull** in Workspaces and review
-the transfer before applying. Offline copies remain available when the remote
-is down. To find a retained book or comic import when its source is missing,
-use **Show cached copy in folder**.
-See [remote workflows](../../features/rclone/user_mobile/workflows.md#mobile-folder-navigation)
-or [Documents and readers](documents.md).
+Use [Download locally…](../../features/rclone/user_mobile/workflows.md#download-a-file-or-folder)
+for a one-time copy or [Pull…](../../features/rclone/user_mobile/workflows.md#pull-and-push-managed-folders)
+for a managed folder you can sync again. Offline copies remain available when
+the remote is down. To find a retained book or comic import when its source is
+missing, use **Show cached copy in folder**.

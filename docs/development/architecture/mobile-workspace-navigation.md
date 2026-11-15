@@ -14,7 +14,9 @@ for provider lifetime.
 
 ## Frame and drawer ownership
 
-`WorkspaceNavigation` owns destination routes, drawer state and retained pane
+`navigation.py` defines Home, Workspaces (route `files`), Documents,
+feature-gated Chat and Settings. UIKit reports native pops through a retained
+delegate. `WorkspaceNavigation` owns destination routes, drawer state and retained pane
 references. `WorkspaceFrame` borrows existing widgets for compact, split or
 folded presentation and returns them to their owners when membership changes.
 Reuse the source tree, editor and browser to preserve input, scroll and focus.
@@ -71,7 +73,7 @@ Use current generation and mapped connection identity at invocation. Old
 vault labels seed missing group captions; persisted ZIP associations determine
 later filtering. Retained session packages require the ZIP password when
 reimported. Forgetting credentials removes package keys and cached references.
-See [credential lifetime](configuration-and-data.md#rclone-credential-lifetime).
+See [embedded credential contexts](../../features/rclone/development/credentials.md#embedded-credential-contexts).
 
 `folder_hub_style` supplies shared row metrics, transparent branches,
 noninteractive group labels and guides. Keep stable folder IDs independent of
@@ -147,6 +149,10 @@ live and durable edits after confirmation. Keep missing originals, unique saved
 changes and drafts. Saved imports are separate from managed folders and ordinary
 history; inventory deletion checks busy readers and other windows and forgets
 matching import and Recent references. See [document actions](document-storage.md#document-action-matrix).
+
+## Independent UIKit scenes
+
+`window_scenes.py` attaches a host and bounded `Windows/<id>` workspace to each scene. Ordinary storage is shared and `WindowOwners` grants exclusive writers. The original window retains connection, transfer and chat ownership; protected sessions require a single window. Disconnect cancels picker work, checkpoints drafts and retires callbacks and leases. `mobile_build/build_support/scene_build.py` configures the generated plist. Required iPad evidence creates actual scenes, rejects a duplicate writer and restores separate state.
 
 ## Android Back policy
 
@@ -351,6 +357,21 @@ Physical touch, VoiceOver, minimum supported iOS, live providers and actual
 two-app Split View require their own evidence. Exercise repeated notebook entry
 in right-hand Split View while media activity changes, capturing control and
 reservation frames in the same window coordinates.
+
+### Shared native rotation inventory
+
+`rotation_screens.py` owns IDs and setup under `mobile_build/native_tests/tests/logisticsmobile/`.
+`rotation_checks.py` owns route, content and geometry checks. Reports separate the registered screens
+and current coverage gaps (`rotation_inventory`) from observations
+(`rotation_samples`). `exercise_rotation(panels=...)` limits setup
+to selected IDs in inventory order. Empty or unknown selections fail.
+
+```sh
+python3 dev.py test mobile test_rotation_screen_inventory.py
+python3 dev.py test mobile 'test_native_rotation*.py'
+```
+
+Run the maintained native scenario for rotation, rendering and safe-area acceptance.
 
 ### Verify native shell clearance
 

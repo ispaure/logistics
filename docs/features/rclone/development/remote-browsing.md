@@ -8,12 +8,7 @@ Enter through **Workspaces → Cloud** or desktop **File Browser → File → Op
 
 Use isolated child credentials, process-private aliases and null config. Check saved revisions and live grants before/after I/O. Readers keep leases beyond tab closure; revocation retires existing readers. CLI failures expose sanitized recovery or exit status, with revocation taking precedence. Keep remote paths out of local mutations, indexes and external launchers.
 
-**Download locally…** runs `transfers/remote_download.py` under the browser's
-credential grant. It uses rclone `copyto` for files and `copy` for folders,
-including empty directories. The worker stages beside the chosen destination
-and publishes with an exclusive rename after checking cancellation and access.
-The desktop Pull progress view shows rclone transfer statistics and reports
-completion after publication.
+For **Download locally…**, see [selected-item transfers](transfers.md#download-selected-items).
 
 ## Mobile listings and connection admission
 
@@ -23,9 +18,9 @@ Loaded and retained packages supply Cloud rows. A matching copy scopes only its 
 
 ## Mobile reader opening and cache
 
-`remote_readers.py:RemoteReaders` hands off an independent grant. `remote_source.py:RemoteSource` owns revision-bound ranges and remains re-exported by `remote_readers`. EPUB/ZIP uses `remote_cache_open` to fetch a validated RAM snapshot (128 MiB/file, 256 MiB/process); member reads use opaque tokens without further network I/O. Release on failure, close or revocation. Keep plaintext out of temporary files. [Reader lifecycle](../../../development/architecture/document-storage.md#trace-a-mobile-provider-reader)
+`remote_readers.py:RemoteReaders` hands off an independent grant. `remote_source.py:RemoteSource` owns revision-bound ranges and remains re-exported by `remote_readers`. EPUB/ZIP uses `remote_cache_open` to fetch a validated RAM snapshot (128 MiB per file and across the shared cache); member reads use opaque tokens without further network I/O. Release on failure, close or revocation. Keep plaintext out of temporary files. [Reader lifecycle](../../../development/architecture/document-storage.md#trace-a-mobile-provider-reader)
 
-Remote editors and metadata saves are read-only. Unsupported files offer a local copy. Archive password retry binds the item and generation and clears the field. [Selected mobile downloads](development.md#selected-remote-item-downloads-on-mobile)
+Remote editors and metadata saves are read-only. Unsupported files offer a local copy. Archive password retry binds the item and generation and clears the field. [Selected-item transfers](transfers.md#download-selected-items)
 
 ## Mobile document history
 
@@ -43,11 +38,3 @@ python3 dev.py test mobile --exact-file mobile_build/tests/reading/test_remote_r
 ```
 
 Desktop synthetic CLI cases require pinned rclone. Mobile stubs cover recovery, bounds and revocation. Go `remote_document_test.go` covers native ranges, revision checks and cancellation; use `LOGISTICS_REMOTE_BRIDGE` with `test_remote_bridge_native.py` for a rebuilt host library.
-
-## Offline folder snapshots
-
-Validate drive/parent and entries at snapshot boundaries. LocalCrypt maps names in memory in batches of 256 under the local read scope. Reject stale host, request or credential generation before publishing native pages of up to 40 entries.
-
-## Home credential unlock
-
-`home_unlock_candidates` filters loaded and Legacy-hidden names using retained metadata. Home and Files unlock for the session, clearing passwords and resolving private edits. Home unlock returns to Home.

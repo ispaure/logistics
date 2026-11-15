@@ -83,7 +83,7 @@ milestones and preserve cancellation, dismissal and retirement assertions.
 
 Update the owning native scenario and, for a new top-level case, the package's
 `CASES` and ordered reporting in `__main__.py`. For rotation, add a stable ID,
-setup and route to the [rotation inventory](testing.md#shared-native-rotation-inventory).
+setup and route to the [rotation inventory](../architecture/mobile-workspace-navigation.md#shared-native-rotation-inventory).
 For embedded runtime smoke, update `EXPECTED_TESTS` in `Python/mobile/smoke.py`.
 Manager checks both report contracts in `logistics_build/manager_suites.py`.
 Run the affected [native journey](../build-release/mobile-handbook.md). Record device

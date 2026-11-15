@@ -43,3 +43,7 @@ Save through stdin to ciphertext staging. Verify as required, recheck original r
 ## Push preflight
 
 `transfers/push_policy.py` and native `MirrorJobs` refuse missing mappings, mismatched identities, changed ciphertext and unsafe storage. Desktop explicit incomplete approval skips full authentication and generated-file cleanup while keeping structural checks. Normal and mobile reviews retain full preflight. [Transfer workflow](transfers.md)
+
+## Offline folder snapshots
+
+Validate drive/parent and entries at snapshot boundaries. LocalCrypt maps names in memory in batches of 256 under the local read scope. Reject stale host, request or credential generation before publishing native pages of up to 40 entries.

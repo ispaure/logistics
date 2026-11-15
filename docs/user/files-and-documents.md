@@ -30,10 +30,8 @@ edits. Managed databases stay read-only. See the
 ## Remote tabs
 
 Use **File → Open Remote…** or open a loaded remote in **Workspaces**. Remote
-tabs offer read-only previews and current-folder search. Right-click a file or
-folder and choose **Download locally…** to save a readable copy, with confirmation
-for encrypted remotes. Use a managed **Pull** for a linked Local or LocalCrypt
-copy. See [remote browsing and download limits](../features/rclone/user/user.md#browse-remote-files-directly).
+tabs offer read-only previews and current-folder search. See
+[remote browsing and downloads](../features/rclone/user/user.md#browse-remote-files-directly).
 
 ## Indexing across application instances
 
@@ -94,22 +92,8 @@ the Files pane to browse.
 ## Central settings
 
 Open **Logistics Settings** from the rail or floating Settings button. Use
-**Features** if a tool is missing. **Appearance & shared controls → Menus →
-Launch with sidebar** controls the next landing-page selection. Use **Open full
-hub with sidebar** to restore the rail from a focused workspace.
-
-Under **Styling**, separate font roles cover the interface, browser, reading and
-code. Preview changes and use **Save Settings**. **↶** removes an override.
-**Reset All Personal Settings…** resets personal categories and discards pending
-personal configuration edits. It keeps documents, accounts, reading progress
-and Blender presets.
-
-Use **Configuration → configFile.ini → Updates** to choose a published release
-channel. **Update Logistics** appears on the landing page when a release is
-offered. It follows the normal close/save flow and restarts after installation.
-Local changes or collisions stop the update. Older extracted releases may need
-a fresh extraction. Git checkouts need clean tracked files and initialized
-submodules. See [Configuration](configuration.md).
+**Features** if a tool is missing. See [Configuration](configuration.md) for
+appearance, personal settings and updates.
 
 ## Documentation browsing
 
@@ -120,16 +104,13 @@ viewer. Web links open your browser. Local code links open Text Editor. Hold
 
 ## Notes Library
 
-Choose **Notes Library → Open Library** and select a local folder or unlocked
-LocalCrypt copy. A marked workspace also offers **Open as Notes Library**.
-Download or sync cloud-only libraries first. Use **Edit Markdown** to change a
-note. Save or discard private drafts before locking credentials.
-See the [Notes Library guide](../features/notes_library/user/user.md).
+Choose **Notes Library → Open Library** or use **Open as Notes Library** on a
+marked workspace. See the [Notes Library guide](../features/notes_library/user/user.md)
+for supported locations and editing controls.
 
 ## Favourite files
 
 On a document's storage row, choose **… → Favourite file**. Adding it from
 Notes Library remembers the library and note. Use **×** on the landing page to
 remove a favourite. Session-only favourites appear after unlocking their
-credentials. **Settings → Reader history → Clear all recent files** clears the
-recent list and keeps favourites and files.
+credentials. See [Reader history](reader-history.md) for clearing Recent.

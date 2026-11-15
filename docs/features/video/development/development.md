@@ -116,6 +116,25 @@ A window reuses its empty AVPlayer for successive requests, disabling external
 playback when the video controller retires. Startup does not opt into long-form
 automatic route suggestions; iOS's Automatically AirPlay preference owns those
 system notifications, including ones shown while browsing protected media.
+The controller retains the reusable route player separately from its active item:
+retirement disables external playback even after a timeout has already detached
+the item. It does not attempt to force the system audio route back to the phone.
+That selection belongs to iOS's route picker/Control Center.
+
+Device lock preserves an established, authorized ordinary AirPlay session.
+`hasEstablishedAirPlay` requires a retained player that has reached external
+playback; `allowsAirPlay` still checks the current source grant and session
+restriction. New handoffs and local playback remain denied while protected data
+is unavailable. File protection is unchanged: an inaccessible source still fails
+its access/read checks. Closing, revocation and session protection detach as before.
+
+AVKit receiver controls can pause AVPlayer without calling the Logistics pause
+method. Timeline polling accepts that state during seeks, and seek completion
+rechecks the player before restarting; this prevents a stale `playRequested`
+flag from undoing receiver Pause. Rate-change notifications log state and system
+reason without filenames, titles or stream URLs. These logs help distinguish a
+pause reaching AVPlayer from one that never reaches the sender; they do not prove
+why a physical receiver stopped sending commands.
 
 Playback starts the receiver handoff while a saved-position seek is pending;
 output stays muted until the seek completes. Loading keeps the known-duration
@@ -126,10 +145,20 @@ at the held position.
 
 `video_chrome_tools --airplay-controls` checks the production controller with
 real VLC audio state and simulated AVPlayer loading, interrupted and stale seek
-completions, explicit Pause and timeout recovery. It also measures the system
+completions, phone/receiver Pause and timeout recovery. It injects device-lock
+availability and background notifications to check continued AirPlay, pause/resume,
+denied new handoffs, source revocation, route loss and session protection.
+Receiver Pause is checked during pending seeks, before polling and after repeated
+background transitions. It also measures the system
 route picker's alignment beside Forward and verifies HDR metadata with the
 pinned iOS remuxer. This disposable simulator check does not establish physical
 receiver compatibility.
+It also exports real native MP4/MKV fragments, serves the production HLS
+playlists over loopback and checks AVKit's legible options, selection, Off,
+and emitted caption text after seeking across a subtitle boundary. Each native
+media fragment is also decoded independently. The fixture includes MP4 timed text
+and MKV SubRip/ASS, including style removal. Its simulator and scratch files are removed
+after recording the result.
 
 An iPad simulator smoke test verified local H.264/AAC and HEVC/AAC playback
 from a saved seek position, pause and teardown, with external playback enabled.
@@ -140,7 +169,7 @@ fixture and Match Frame Rate enabled. Check saved position when switching back
 to VLC and verify TV output stops when the app enters session-only protection.
 Local playback and SDK compilation cannot establish receiver compatibility.
 
-#### MKV stream copy
+#### MKV and MP4 stream copy
 
 The host validation driver exercises H.264/AAC and HEVC/AAC MKVs with 24 fps
 video, B-frames and closed GOPs. It stream-copies both tracks into fragmented
@@ -157,10 +186,10 @@ PYTHONPATH=Python:. mobile_build/.venv/bin/python -m mobile_build.validation.vid
 The driver uses host FFmpeg and ffprobe with synthetic media. Only the JSON
 report survives the build manager's scratch lease.
 
-On iOS, the same preference enables indexed local MKV with H.264 or HEVC
+On iOS, the same preference enables indexed local MKV and MP4/MOV with H.264 or HEVC
 and separate AAC, AC-3 or E-AC-3 audio renditions. Mono, stereo or 5.1 Opus
 tracks convert to AAC-LC. A master playlist exposes audio renditions and
-plain-text WebVTT derived from embedded SubRip or WebVTT and ordinary local
+plain-text WebVTT derived from embedded SubRip, WebVTT, ASS/SSA or MP4 timed text and ordinary local
 SRT or WebVTT sidecars. Audio and subtitle menus select the AVPlayer media
 options while on TV and read the current selection when reopened, including
 changes initiated by the receiver. The master declares the output codecs,
@@ -171,6 +200,18 @@ from the bitstream when the container omits them. HDR variants include both VIDE
 FRAME-RATE; Apple rejects an incomplete or incorrect HDR declaration.
 Host tests cover these declarations and bounded HTTP requests; actual Apple TV
 menu presentation and selection need receiver acceptance.
+The subtitle codec is declared as `wvtt`; each VOD subtitle playlist covers the
+whole video, including empty segments. The timestamp map includes the remuxer's
+video presentation offset. ASS overrides/drawings and MP4 timed-text style boxes
+are removed; text and line breaks remain. PGS and other bitmap tracks are omitted.
+MOV sample indexes use decode timestamps, so the adapter resolves presentation
+timestamps at selected keyframe boundaries before creating HLS segments. Opening
+and per-fragment I/O remain bounded. MP4 retains its sample decode times and
+durations rather than reconstructing them from average frame cadence; audio and
+subtitle clocks include the same offset used to avoid negative initial DTS.
+Unsupported MP4/MOV profiles fall back to
+AVFoundation's file playback after rechecking access; that path exposes native
+embedded tracks without sidecars. MKV still requires the remux profile.
 Each fragment starts a fresh
 decoder and encoder, using audio preroll and a shared AAC sample grid so
 fragments can be generated out of order. The HEVC bitstream and color signaling

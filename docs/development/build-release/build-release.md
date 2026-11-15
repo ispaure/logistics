@@ -4,7 +4,8 @@ Start by [tracing a validation plan](build-manager-journeys.md#trace-a-validatio
 
 | Task | Guide |
 | --- | --- |
-| Find the right repository and adapter | [Ownership](build-deployment-audit.md), [tooling map](build-tooling.md) |
+| Run checks, build, install or deliver as an operator | [Build Manager operator guides](operator/operator.md) |
+| Find the right repository and adapter | [Build and deployment ownership](build-tooling.md) |
 | Change plan, backend or retention policy | [Build Manager adapter](build-manager.md) |
 | Set up or diagnose native builds | [Mobile handbook](mobile-handbook.md), [launcher commands](mobile-launchers.md) |
 | Change staged source or notices | [Mobile preparation](mobile-preparation.md), [open-source notices](open-source-notices.md) |

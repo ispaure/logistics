@@ -28,6 +28,8 @@ Readers prompt when needed and cache unlocks in memory. Batch compression uses t
 
 Wide pages default to split in portrait, with 8% overlap and manga traversal. Older checkpoints start at the first half. The RAM-only spread caps at 16 megapixels and 8192 per side. Preserve the selected page through hinge relayout. Run `python3 dev.py test mobile --exact-file mobile_build/tests/reading/test_comic_split.py`. For sibling traversal and corrupt-target recovery, see `test_comic_file_navigation.py`.
 
-`mobile/private_batch.py` keeps bounded private edit baselines in memory and wipes them on revocation. See [managed-copy publication](../../books/development/development.md#imported-metadata-publication). Add new mobile imports to `mobile_sources.json`.
+`mobile/private_batch.py` keeps bounded private edit baselines in memory and wipes them on revocation. See [managed-copy publication](../../../development/architecture/document-storage.md#imported-metadata-publication). Add new mobile imports to `mobile_sources.json`.
 
 `Python/mobile/external_display.py` blanks on privacy gates and temporarily chooses paired whole pages. Disconnect restores saved layout. iOS 27 registers the current host's `UISceneAccessory`. Android uses Presentation. Check `test_external_display.py` and `test_comic_sharing.py`. Wireless receiver page-turn synchronization remains open.
+
+`mobile/presentation.py` builds comic pages and spreads with the injected native zoom canvas. `ReaderChrome` owns controls and immersive presentation. Fit-size gates page gestures; fullscreen enables the hold magnifier for imported/provider comics and spreads. Android fullscreen releases hidden rail width. Auto spread uses measured landscape geometry, manga direction and standalone landscape/DoublePage metadata. Use `comic_viewport_probe.py` and `comic_spread_probe.py` for focused QA, and verify native touch and fullscreen restoration.

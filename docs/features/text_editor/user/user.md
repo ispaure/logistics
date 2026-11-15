@@ -57,22 +57,13 @@ Gutter marks compare the buffer with Git's index when available, or the last sav
 
 Choose an unlocked LocalCrypt location in the shared picker. Private text is limited to 16 MiB and Markdown to 8 MiB. Private drafts and recent paths stay out of ordinary recovery. Save before closing. A failed save keeps the draft. Export to Local creates plaintext. Moving an ordinary draft into LocalCrypt does not erase older plaintext copies or backups.
 
-## Notes Library and Documentation Library
-
-See [Notes Library](../../notes_library/user/user.md#notes-library-and-documentation-library).
-
-## Embedded source files in Notes Library
-
-See [source files](../../notes_library/user/user.md#embedded-source-files-in-notes-library).
-
-## JSON data views in Notes Library
-
-See [data views](../../notes_library/user/user.md#json-data-views-in-notes-library).
-
 ## Markdown images
 
-Use Markdown links or Obsidian embeds such as `![[images/photo #1.png|400]]`. Use `|400x200` to set both dimensions. Notes Library searches the note folder, library root and standard attachment folders. Explicit relative paths stay within the provider root.
+Use Markdown image links or Obsidian embeds such as
+`![[images/photo #1.png|400]]`. Use `|400x200` to set both dimensions.
+Explicit relative paths stay within the provider root.
 
-## Notes Library document groups
+## Notes Library
 
-See [document groups](../../notes_library/user/user.md#notes-library-document-groups).
+See [Using Notes Library](../../notes_library/user/user.md) for attachment
+search, embedded source files, data views and document groups.

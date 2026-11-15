@@ -6,10 +6,6 @@ On Android, enable **Appearance → Volume buttons turn pages**, then tap **Appl
 
 Enable **Settings → Books & Comics → Book cover on outer display** to try displaying the EPUB cover while reading on the inner screen. This experimental setting requires camera permission, displays the green indicator and can drain the battery faster. Footage is neither previewed nor saved. Protected and session-only documents are excluded. Physical Duo display behavior is still unverified.
 
-## Mobile development builds
-
-See the [mobile guide](../../../user_mobile/user_mobile.md) for supported storage and validation, or [book imports](library.md) for limits.
-
 ## Native mobile reading
 
 Use the chapter button to open nested contents and bookmarks. Tap a title to jump or a chevron to expand. **Find in chapter…** searches without case and wraps. The arrows and horizontal swipes turn pages across chapter boundaries. Drag and release the footer slider once screen-page counting finishes.
@@ -19,6 +15,8 @@ Wide landscape panes and a reported vertical fold show spreads. The fold stays c
 Imported, remote and LocalCrypt books offer rich pages, internal links and chapter search. Book scripts and external resources are blocked. Provider positions use encrypted checkpoints when a credential ZIP password is available. Passwordless private state stays in memory. Locking retires decrypted state. See [private reading state](../../../development/architecture/reader-state.md).
 
 **Edit metadata…** updates the ordinary imported copy. A failed save keeps form edits, while reopening can recover an interrupted archive/checksum publication.
+
+For an EPUB in an unlocked LocalCrypt folder, use **Edit metadata… → Save encrypted metadata**. See [encrypted archive saves](../../rclone/user_mobile/localcrypt.md#edit-encrypted-archive-metadata).
 
 ### Mobile fullscreen reading
 

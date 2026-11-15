@@ -10,7 +10,7 @@ screen. Rotating or folding keeps your current folder.
 | **Local → On My Phone / On My Tablet** | Ordinary files and incoming shares. |
 | **Local → Rclone Copies** | Managed readable and encrypted copies. |
 | **Cloud → Rclone Remotes** | Online folders from loaded credential packages. |
-| **Home Server** | SMB or Mac shares added through **Add share…** and their offline copies. SMB remotes imported in a credential ZIP stay in Cloud. |
+| **Home Server** | [SMB or Mac shares](../../features/rclone/user_mobile/connections.md#smb-and-mac-shared-folders) added through **Add share…** and their offline copies. SMB remotes imported in a credential ZIP stay in Cloud. |
 
 Use **Credential** in Rclone Copies or Cloud to narrow the list. Open a locked
 folder and enter its ZIP password. If the source is missing, load or unlock the
@@ -50,25 +50,8 @@ to make the selected online destination match the local copy. **Either action
 can replace files and delete destination files missing from the source.**
 Logistics does not create a backup of these changes.
 
-Before the transfer starts, check **From**, **To**, and the list of additions,
-replacements and deletions. Changed comparison results require another review.
-**Skip preview and start** can begin the transfer while the comparison is
-incomplete. Credentials and destination checks still apply. Skipping can
-replace or delete more files than the preview lists. Cancel before starting
-to leave the destination unchanged.
-
-For a first pull from a session-only encrypted remote, choose a readable
-**Local** copy or an **Encrypted Copy**. Encrypted copies retain the original
-encrypted names and bytes. Later transfers reuse the existing location and
-storage type. If more than one local mapping matches, choose the intended
-destination before reviewing the transfer.
-
-Tap the transfer indicator for progress or **Cancel**. Back closes the details
-and leaves the transfer running. Only one transfer runs at a time. You can
-browse existing local files during it. Finish edits before syncing their
-folder. Cancelling an active transfer can leave completed writes and deletions
-in place. See [rclone mobile workflows](../../features/rclone/user_mobile/workflows.md)
-for review, retries and copy handling.
+Finish edits before syncing their folder. See [remote transfers](../../features/rclone/user_mobile/workflows.md)
+to choose storage, review additions and deletions, and track progress.
 
 **Remove mapping (keep files)** detaches the association. **Delete local
 folder…** permanently deletes the local folder after confirmation and keeps the

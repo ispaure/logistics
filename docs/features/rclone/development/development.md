@@ -23,8 +23,4 @@ Desktop `ui_contributions.py` registers sources, actions and settings over the C
 
 `mobile/service.py` composes services. Controllers adapt workflows to controls; workflows own cancellation and stale-result rejection. Reopen after credential lock/replacement to obtain a fresh grant.
 
-## Selected remote-item downloads on mobile
-
-`mobile/remote_downloads.py` captures path, kind and generation. Go `download_sync.go` stages file Copy or folder Sync in independent storage, encrypted for LocalCrypt. Python publishes without clobber and retires staging on cancel/failure. Selected downloads leave mirror records unchanged. Check `test_remote_downloads.py` and native `TestDownload*`.
-
 Related desktop owners are [Dropbox](../../dropbox/development/development.md) and [FUSE](../../fuse/development/development.md).

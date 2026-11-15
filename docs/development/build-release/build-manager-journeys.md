@@ -1,21 +1,21 @@
-# Combined validation and delivery
+# Tracing Build Manager plans
 
-See [operator journeys](../../user/build-manager-journeys.md) for starting checks and delivery.
+See [operator journeys](operator/workflows.md) for starting checks and delivery.
 
 ## Trace a validation plan
 
-1. From the checkout root run `python3 logistics_build/tooling_bootstrap.py status` (`py` on Windows). If either environment needs repair, follow [tooling readiness](../../user/build-manager.md#project-tooling-readiness-and-repair).
+1. From the checkout root run `python3 logistics_build/tooling_bootstrap.py status` (`py` on Windows). If either environment needs repair, follow [tooling readiness](operator/setup.md#project-tooling-readiness-and-repair).
 2. In the manager choose the trusted checkout, **Run checks**, a platform and local host, then **Next: review plan**. Inspect source, host, phases and prerequisites. Plan review can refresh retention state and prepare snapshots. Stop before **Start validation**.
 3. Trace `build-project.json` → `LogisticsProject.make_journey` → `logistics_build/manager_journeys.py` (bridge action `journey_plan`). Match its [suite IDs](#shared-tests-and-suite-discovery) to `build-tests.json`.
 4. From the root run `python3 dev.py test desktop --exact-file Python/tests/tooling/test_manager_journeys.py`. Expect fixture plans to pass source binding, gate and cleanup checks using mocked native/provider work. For import errors, see [local SDK verification](#local-manager-dependency-and-verification).
 
 ## Source, settings and resource integrity
 
-One immutable PlanningContext binds source, version and effective settings. Each branch uses unique IDs, scoped resources and explicit dependencies. Source/settings drift stops preparation. Credentials remain protected references. Independent platform branches can overlap. See [storage policy](build-manager.md#automatic-storage-retention) and [manager installation](../../user/build-manager.md#external-manager-installation-adapter-api-1).
+One immutable PlanningContext binds source, version and effective settings. Each branch uses unique IDs, scoped resources and explicit dependencies. Source/settings drift stops preparation. Credentials remain protected references. Independent platform branches can overlap. See [storage policy](build-manager.md#automatic-storage-retention) and [manager installation](operator/setup.md#external-manager-installation-adapter-api-1).
 
 ## Local manager dependency and verification
 
-Use the exact revision in `build-manager-dependency.json`. See [manager installation](../../user/build-manager.md#external-manager-installation-adapter-api-1) for the pinned SDK and explicit local override. Run the [fixture check](#trace-a-validation-plan) before native or provider work.
+Use the exact revision in `build-manager-dependency.json`. See [manager installation](operator/setup.md#external-manager-installation-adapter-api-1) for the pinned SDK and explicit local override. Run the [fixture check](#trace-a-validation-plan) before native or provider work.
 
 ## Shared tests and suite discovery
 

@@ -57,20 +57,16 @@ original. Closing a reader keeps its saved file.
 Open supported remote files read-only. To keep one offline, download a copy or
 pull to a managed Local or LocalCrypt folder.
 
-[Remote and offline files](remote.md) covers the limits and both copy workflows.
-
 ## Related pages
 
 - [Reading and editing on mobile](reading-and-editing.md)
 - [Document workflows](workflows.md)
+- [Remote and offline files](remote.md)
 
 ## Markdown images from Local, LocalCrypt and Remotes
 
-Use `![Photo](images/photo.webp)` or `![[images/photo.webp]]` for a relative
-image. Preview and formatted editing support WebP, PNG, JPEG, and GIF.
-LocalCrypt and remote image bytes stay in memory. Notes Library also checks
-library-root paths and common attachment folders.
-See [supported image paths and limits](../../features/text_editor/user_mobile/user_mobile.md#images-in-folder-backed-markdown).
+See [images in folder-backed Markdown](../../features/text_editor/user_mobile/user_mobile.md#images-in-folder-backed-markdown)
+for relative paths, supported formats and attachment folders.
 
 ## Favourite files
 

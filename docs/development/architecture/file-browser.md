@@ -2,7 +2,7 @@
 
 `Python/desktop/file_browser.py:BrowserView` installs enabled
 `registry.get_browser_extensions()` on commonUtils FileBrowser. Shared APIs and
-examples live in the [feature guide](https://github.com/ispaure/commonUtils/blob/main/ui/features/README.md).
+examples live in the [feature guide](../../../Python/commonUtils/docs/development/reference/ui/features/features.md).
 Embedded and standalone Workspace hosts keep bindings with each view on detach.
 
 ## SQLite inspection boundary
@@ -47,6 +47,14 @@ The ordinary coordinator keeps `directory-index.jobs.sqlite3` and
 `directory-index.jobs.lock` next to the index. Mobile's index lives under
 app-private `Cache/`. LocalCrypt name records belong to the credential's
 `Cache/LocalCryptNames` store.
+
+### Desktop process lifetime
+
+Each app process participates in the same durable index queue without a launch
+lock. The OS coordinator lock elects a runner and the writer lock serializes
+mutations. A browser drops its own subscription on close. App exit drains the
+worker, releasing SQLite and locks. A later launch can resume unfinished index
+requests.
 
 ## Add a format, panel and context action
 

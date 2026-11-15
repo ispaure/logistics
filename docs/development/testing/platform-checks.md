@@ -38,7 +38,7 @@ deadline, release-tooling checks and uploads. Both suites report even after fail
 
 Isolated files report progress every 60 seconds and time out after 300 seconds.
 `build-tests.json` sets 1,800-second suite deadlines for shared and Logistics checks.
-`logistics_build/validation_plans.py` raises the Logistics suite minimum to 2,700
+`logistics_build/validation_plans.py` raises the Logistics suite minimum to 3,600
 seconds on Windows and 2,400 on macOS. Inspect logs, checkpoints and native crash reports.
 
 ```sh

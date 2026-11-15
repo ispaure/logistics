@@ -7,18 +7,8 @@ Run commands from the checkout root. Use `py` in place of `python3` on Windows.
 - [Cross-platform archive checks](platform-checks.md)
 - [Local validation artifacts](validation-artifacts.md)
 
-## Set up a checkout
-
-```sh
-git clone --recurse-submodules https://github.com/ispaure/logistics.git
-cd logistics
-```
-
-For missing submodules, preserve local edits and run `git submodule update --init --recursive`.
-Follow the [first contribution](../setup/getting-started.md) to launch the app.
-Desktop uses Python 3.12.2 and the PySide6 pin in [Python/pyproject.toml](../../../Python/pyproject.toml).
-Its Qt wheels require macOS 14+, Windows 10/11 or Linux with glibc 2.34+ (x86-64) or 2.39+ (ARM64).
-Use a separate environment to trial runtime upgrades. Refresh the desktop lock with `uv lock --project Python`.
+For checkout and interpreter setup, start with
+[Set up and run Logistics](../setup/setup.md).
 
 ## Run everyday checks
 
@@ -41,19 +31,6 @@ Briefcase, with no SDK required. Windows interpreters live under `Scripts/python
 Use `--python /path/to/python` to override and `--dry-run` to inspect. Native appearance,
 gestures and OS lifecycle require the [mobile handbook](../build-release/mobile-handbook.md).
 
-Equivalent desktop setup on macOS/Linux:
-
-```sh
-UV_PROJECT_ENVIRONMENT="$PWD/.venv" uv sync --project Python --locked --python 3.12.2
-```
-
-On Windows PowerShell:
-
-```powershell
-$env:UV_PROJECT_ENVIRONMENT = "$PWD/.venv"
-uv sync --project Python --locked --python 3.12.2
-```
-
 Omit the filename to run the selected suite. Quote globs. For duplicate filenames,
 pass repeatable exact repository-relative POSIX paths:
 
@@ -67,26 +44,43 @@ paths outside the suite and empty selections fail.
 
 ### Parallel regressions and shared host budgets
 
-Direct runs default to serial file-stage processes. Reviewed macOS offscreen files
-in `Python/tests/parallel_regressions.py` accept 1, 2, 4 or 8 workers:
+Direct runs default to serial file-stage processes. Windows, Linux and macOS
+can use 1, 2, 4 or 8 workers for the reviewed portable files in
+`Python/tests/parallel_regressions.py`. macOS also runs the reviewed offscreen
+Qt groups in parallel. Windows also admits reviewed commonUtils directory index
+and browser files and Logistics Git and editor files.
 
 ```sh
-python3 dev.py test desktop 'test_git*.py' --workers 4
-python3 dev.py test shared 'test_markdown*.py' --workers 4
+python3 dev.py test shared --workers 4
+# macOS host fixtures
+python3 dev.py test mobile --workers 4
 ```
 
-The direct runner accepts `--isolate-modules --workers 4`. Unreviewed files,
-stage transitions and the separate Toga replay stay serial. WebEngine, real media,
-provider integration, native windows and Go bridge tests stay exclusive.
-Audit fixture isolation and cancellation before adding files. JSON and JUnit retain
-plan order. Cancellation gives concurrent children up to five seconds to retire
-their supervised helpers before process-group cleanup.
+The direct runner accepts `--isolate-modules --workers 4`. With default ordering
+in diagnostic mode, reviewed files run together within each stage, followed by
+exclusive files in plan order. Fast mode, fail-fast, explicit ordering and
+historical timing order retain their admission order. JSON and JUnit always
+retain plan order. Audit fixture isolation and cancellation before adding files.
+WebEngine, real media, provider integration, native windows, the shared Toga
+replay and the Go bridge suite run exclusively. Cancellation gives a pooled
+worker up to five seconds to retire supervised helpers before the runner cleans
+up its Windows Job Object or POSIX process group.
 
 Manager reservations coordinate participating processes across workflows. Defaults are
 four slots per platform and half logical CPUs across the host, capped at eight.
 Manager selects a tested pool within its reservation and the captured source's capabilities.
-Direct pools require manual coordination. GitHub-hosted macOS uses up to two workers,
-capped by CPU count. Windows and Fedora are serial.
+Direct pools require manual coordination. Hosted Windows, Fedora and macOS use
+up to two workers, capped by available CPUs. The Windows pool covers 72 reviewed
+files, including the 13 portable commonUtils runtime files. Fedora pools the
+portable files. Matched pilots on hosted and local Windows and Fedora preserved
+all 69 portable case outcomes and reduced median wall time by 57–66% for those
+files with four workers.
+
+On macOS, seven reviewed mobile-host files use workers with the dummy Toga
+backend. They cover editor picking, notebook storage, Notes Library panels,
+Android Back handling, reader opening and workspace navigation. A focused test
+on macOS matched all 244 case outcomes and took 77 seconds serially and 27
+seconds with four workers. Simulator and device tests retain their own gates.
 
 ### Execution stages and failure policy
 
@@ -159,26 +153,7 @@ Node modules and optional Chrome fields (or `LOGISTICS_NODE`, `NODE_PATH`,
 The prepared plan captures these paths, and its prerequisite checks the existing
 installation before running tests. Developer runs retain optional browser skips.
 
-### Test timing and maintenance
-
-#### Shared native rotation inventory
-
-`rotation_screens.py` owns IDs and setup under `mobile_build/native_tests/tests/logisticsmobile/`.
-`rotation_checks.py` owns route, content and geometry checks. Two full cycles across
-31 screens yield 310 observations. Reports separate registered screens and gaps
-(`rotation_inventory`) from observations (`rotation_samples`). The catalog covers all
-top-level destinations. Settings gaps are Features, Camera, Read aloud, Markdown,
-EPUB, Books & Comics, Video, LM Chat and Reset. `exercise_rotation(panels=...)` limits setup
-to selected IDs in inventory order. Empty or unknown selections fail.
-
-```sh
-python3 dev.py test mobile test_rotation_screen_inventory.py
-python3 dev.py test mobile 'test_native_rotation*.py'
-```
-
-Run the maintained native scenario for rotation, rendering and safe-area acceptance.
-
-#### Timing reports and fixtures
+### Timing reports and fixtures
 
 Python regression runs save per-environment JSON in `test-results/test-timings/`.
 Direct runners accept `--report PATH`. File times include imports and fixture/process
@@ -260,20 +235,6 @@ Use `--order reverse` for a reverse audit. Both reorder within stages and preser
 class fixtures. Use fresh execution with evidence reuse disabled and dependencies
 fixed. Use private fixtures for subprocess APIs that resolve OS home independently.
 
-## Updating mobile host dependencies
-
-Edit `mobile_build/requirements-host.in`, then regenerate and commit the lock:
-
-```sh
-uv pip compile mobile_build/requirements-host.in --python-version 3.12 --universal --generate-hashes --output-file mobile_build/requirements-host.txt
-python3 dev.py toolchain
-```
-
-Native dependencies stay in `mobile_build/pyproject.toml`. Prepare pinned Go and
-the langdetect wheel via **Update project tooling…**, or
-`python -m build_manager.cli tooling --project NAME --update --confirm`. See
-[native prerequisites](../build-release/build-manager.md#project-owned-native-prerequisite-setup).
-
 ## Local disk usage and private files
 
 Use [artifact locations](validation-artifacts.md#find-an-output) and
@@ -296,6 +257,6 @@ Run `python dev.py test desktop test_portable_imports.py` and
 `python dev.py test desktop test_architecture_contracts.py` after portable-owner
 changes. Fresh children reject presentation imports even when caught.
 Run `python dev.py test desktop test_document_architecture.py` for storage-boundary changes.
-See the [portable owner policy](../architecture/architecture.md#portable-owner-policy).
+See the [portable owner policy](../architecture/extension-points.md#portable-owner-policy).
 The external SDK's own suite runs separately with `python -m build_manager.contracts`
 using its owning interpreter.

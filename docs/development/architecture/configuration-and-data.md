@@ -23,13 +23,6 @@ publication. Keep `mobile.preferences.DEFAULTS` and `Preferences.validate()`
 compatible. Invalid or oversized input blocks saving until repaired. Widgets
 use the API. Run `python3 dev.py test mobile test_mobile_preferences.py`.
 
-## Android collection location recovery
-
-`services.documents.locations.recover_location` validates a retained root and
-marker, requires one managed folder, and creates the missing companion. It
-checks root paths. `switch_location` copies and verifies document bytes before
-switching.
-
 ## Central software/personal configuration
 
 A toggle writes an explicit override even when equal to default. The reset
@@ -65,12 +58,10 @@ from cache into persistent INIs. Git scalar values move from JSON into feature
 INI; identity and actions stay in JSON. Blender copies legacy combined-release
 fields into version-specific INIs without replacing newer choices.
 
-## rclone credential lifetime
+## Storage and credential owners
 
-Discover ZIPs in ignored `Credentials/rclone` and its read-only Dropbox
-counterpart. Saved `.conf` remains independently available. Session ZIPs stay in
-RAM, with virtual `.session` identities and per-child environments. Detached
-FUSE requires a saved config. [Credential policies](../../features/rclone/development/credentials.md) ·
-[LocalCrypt](../../features/rclone/development/localcrypt.md)
+- [Mobile file storage](mobile-file-storage.md) owns collection locations and migration.
+- [Rclone credentials](../../features/rclone/development/credentials.md) owns
+  the saved configuration and session lifetimes.
 
-[Shared configuration APIs](https://github.com/ispaure/commonUtils/blob/main/configuration/README.md)
+[Shared configuration APIs](../../../Python/commonUtils/docs/development/reference/configuration/configuration.md)

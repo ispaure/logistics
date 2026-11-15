@@ -9,6 +9,17 @@ Desktop **Workspaces → Cloud → Pull** follows `ui_contributions.py:_get_acti
 3. `execute` consumes approval once, checks the binding and runs mandatory platform preflight. Programmatic `run` also preflights. Retrying an interactive execution requires fresh review.
 4. Keep review validity (mapping/record state) separate from execution access (credential lifetime). Cancellation keeps committed writes.
 
+## Download selected items
+
+Desktop **Download locally…** runs `transfers/remote_download.py` under the browser's
+credential grant. It uses rclone `copyto` for files and `copy` for folders,
+including empty directories. The worker stages beside the chosen destination
+and publishes with an exclusive rename after checking cancellation and access.
+The desktop Pull progress view shows rclone transfer statistics and reports
+completion after publication.
+
+On mobile, `mobile/remote_downloads.py` captures path, kind and generation. Go `download_sync.go` stages file Copy or folder Sync in independent storage, encrypted for LocalCrypt. Python publishes without clobber and retires staging on cancel/failure. Selected downloads leave mirror records unchanged. Check `test_remote_downloads.py` and native `TestDownload*`.
+
 ## Review and progress presentation
 
 Portable `transfers/{service,review,presentation}.py` own review and bounded display models. Desktop uses Qt. Mobile `transfers/mobile/surface.py` uses offline `assets/surface.*`, escaped paths, private WebViews, token/command/revision checks and 30 rows per page. Approve only a rendered current snapshot. Retire scans on close and redact private progress on revocation.

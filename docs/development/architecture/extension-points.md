@@ -8,7 +8,7 @@ Register lazy, owner-scoped declarations through [Feature](features.md#unified-f
 | Standalone page | `PageContribution` with unique ID and parent-aware factory. `navigation_icon` opts into rail and focus chooser. `launch_description` overrides the card description. |
 | Folder source or server | `LocalFolderSourceContribution`, `RemoteFolderSourceContribution` or `ServerProviderContribution`. Keep provider context opaque. [Folder scope](features.md#remote-folder-source-context) |
 | Folder actions | `FolderFeatureContribution` with worker-safe detector/actions and optional GUI factory. Opt into private sources only with backend-aware handlers. |
-| Document opener | `DocumentLauncherContribution` with stable editor ID, icon, Open and optional New. Publish `document_editor_id` and `document_editor_name` on the retained window. [Close contract](architecture.md#independent-text-documents) |
+| Document opener | `DocumentLauncherContribution` with stable editor ID, icon, Open and optional New. Publish `document_editor_id` and `document_editor_name` on the retained window. [Close contract](document-storage.md#independent-text-documents) |
 
 ## Debug
 
@@ -37,3 +37,16 @@ and refuses external-change conflicts.
 Validate contribution types before constructing widgets. Action descriptors
 specify exactly one callback or workflow. A server source supplies entries to
 the shared host. A direct destination also needs a page contribution.
+
+## Portable owner policy
+
+`Scripts/architecture.json` declares portable modules and recursive packages.
+`python3 dev.py architecture` checks direct and literal deferred imports.
+`test_portable_imports.py` imports selected owners in fresh interpreters with Qt,
+Toga, host packages and `commonUtils.ui` blocked. Review dependency additions at
+the narrowest owner. Presentation-only exceptions, such as LM's desktop Git
+preview, apply at their declared call sites.
+
+See the [document storage guard](document-storage.md#enforced-architecture-contract)
+for forbidden raw I/O and scoped exceptions. Use commonUtils for reusable
+[presentation and persistence](commonutils-integration.md).

@@ -19,16 +19,17 @@ In writable libraries, use **New folder**, **F2** to rename, or right-click for 
 
 In **Playlist → New playlist**, name the queue and use **Add Markdown**, or choose **Add to playlist** from a note. Drag entries or use **Move up/down**. Use **Repair reference** for a missing note. **Read aloud** resumes this queue's saved place, and **Play selected** starts another entry. Time skips cross entries. Removing entries or deleting the playlist keeps source notes. **This session** queues stay in memory.
 
-To clean up playlists across libraries, open **Settings → Reader history → Notes Library playlists**.
-**Delete a playlist…** lets you choose a playlist and confirm its removal, including its saved position.
-Unlock protected storage to include its playlists. **Clear locked playlists…** removes encrypted playlist
-records whose credentials are locked or unreadable. Both actions keep source notes.
+For cleanup across libraries, see [Notes Library playlists in Reader history](../../../user/reader-history.md#notes-library-playlists).
 
 For external vault launching, see [Obsidian desktop integration](../../obsidian/user/user.md).
 
 ## Embedded source files in Notes Library
 
 Open Markdown, notebook, image, PDF, video and source files in Files. Videos open the full Video Player. In Markdown, `![[clip.mp4]]` plays inline from the start when you press Play. Attachment resolution checks beside the note, the root, then a unique match. Specify a path to resolve ambiguity. Images use an 8 MiB and 16-megapixel limit. PDFs use 32 MiB.
+
+Image embeds can use standard attachment folders. Use an explicit relative
+path to limit lookup to that path within the library. See
+[Markdown image syntax](../../text_editor/user/user.md#markdown-images) for sizing.
 
 Source types include JSON/JSONC, JS/MJS/CJS, CSS, TXT, CSV, YAML/YML, TOML, INI, XML, HTML, PY and TS. Use Save and Find/Replace in the source editor. Saves keep encoding and line endings and refuse externally changed files. LocalCrypt plaintext stays in memory. Read-only locations stay read-only. Source files have a 16 MiB limit. Hidden configuration is excluded.
 

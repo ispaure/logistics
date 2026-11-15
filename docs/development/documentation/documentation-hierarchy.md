@@ -26,10 +26,14 @@ linked feature sources outside the payload. See
 
 ## Writing for a first-time reader
 
-Start with a visible action, its code owner, an exact focused command and the
-expected result. Include prerequisites, compatibility limits and recovery where
-they affect that task. Link to the owning contract for details used elsewhere.
-Keep dated audits, plans and implementation logs in Git history.
+Start a user guide with the visible action and the choices that affect its
+result. Include prerequisites, limits and recovery where they affect the task.
+Give shared workflows one detailed home and link to it from feature guides.
+
+Start a developer guide with a visible entry point, the code owner, a focused
+command and the expected result. Keep runtime contracts with the owning feature
+or architecture guide. Put staging and operator procedures under Build and
+Release. Keep dated audits, plans and implementation logs in Git history.
 
 ## Validation
 

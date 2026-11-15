@@ -57,6 +57,34 @@ separate admission check. Ordinary Local remains available with rclone disabled.
 Unknown compatibility adapters default to private and credential-bound.
 `document_source` dispatches optional provider hooks or the generic reader.
 
+## Independent text documents
+
+The QApplication-owned EditorService retains one window per document, even
+after the originating browser closes. Open reuses the existing buffer.
+`DocumentsPage` owns dock tabs. `request_document_close()` returns
+`CloseOutcome.ACCEPTED`, `VETOED` or `PENDING` so the host can distinguish Cancel
+from asynchronous retirement. The owner handles prompts and publishes `idle`.
+Plain windows retain native close vetoes, and legacy `prepare_close()` can defer
+closure.
+
+## Shared document workspace
+
+`workspace.py` keeps a 64 KiB/32-item ordinary manifest of managed UUIDs and whitelisted state, including per-text Edit/Preview. It preserves malformed input. Transient providers stay in memory. Callbacks capture session owner and generation. Replacement hosts retire old callbacks and pending private work. [Workspace navigation](mobile-workspace-navigation.md) owns adaptive panes and [window isolation](mobile-workspace-navigation.md#independent-uikit-scenes).
+
+| Contract | Owner |
+| --- | --- |
+| Private edit/save | `documents.py` bounds text to 1 MiB, preserves encoding/endings and checkpoints atomic UUID-based drafts. Stale/deleted originals require conflict handling. |
+| Import copy | `access.py` and `pickers.py` stream scoped URI/URL grants, then release them. |
+| Preview | `preview.py` renders bounded offline Markdown with escaped raw input. |
+
+### Explicit text-session close
+
+Close prompts on the captured dirty owner with Save, Keep draft, Discard or Cancel. Save/checkpoint failures retain the session. Discard reads and checkpoints current bounded source bytes without writing the original. Private sessions omit durable Keep. See [draft checkpointing](mobile-runtime.md#startup-and-document-responsiveness). Unavailable restored entries can retry or remove the workspace entry while preserving saved data.
+
+### Memory-only provider sessions
+
+`PrivateSessions` admits four controllers and 32 MiB of whole-file input. Identity is opaque and ordinary manifests omit all provider entries. Clean decoder resources release on inactivity or memory pressure; dirty text and forms remain until saved or discarded. Credential reload/forget checks every dirty owner before invalidating generations. `native_private_workspace` covers two encrypted drafts, cancellation and callback retirement.
+
 ## Publication and compatibility
 
 - `publish_document_stream` and `document_transaction` own archive metadata
@@ -93,6 +121,10 @@ after picker cancellation if the provider already committed. Encrypted imports
 keep their stable record keys and update display names. Run the rename-reference
 and LocalCrypt rename tests for persisted identities.
 
+## Imported metadata publication
+
+`Python/mobile/library_edits.py` replaces the managed UUID copy after revision and checksum validation. A bounded journal recovers matching before/after digests on open and stays available on conflict. Check cancellation before each file enters publication. Provider adapters own their transactions and credentials.
+
 ## Document action matrix
 
 | Format | Local and writable LocalCrypt | Cloud |
@@ -102,16 +134,24 @@ and LocalCrypt rename tests for persisted identities.
 | PDF and images | Read or preview | Bounded preview |
 | EPUB and supported comics | Read and edit supported metadata | Read-only preview |
 
-Image Tools runs separate filesystem batches. Text/Markdown limits are 16/8 MiB
-on desktop and 1 MiB on mobile. Notebooks admit up to 32 MiB compressed, 128 MiB
-expanded and 1,000 pages. Native `crypt_write_buffer` stages up to 32 MiB directly
-as ciphertext. See [notebook storage and recovery](../../features/notebooks/development/development.md#editing-and-recovery).
+Image Tools runs separate filesystem batches. Text and Markdown limits are
+16 MiB and 8 MiB on desktop LocalCrypt, respectively, and 1 MiB for mobile
+editing. The notebook parser admits up to 128 MiB compressed, 256 MiB expanded
+and 65,536 entries. Mobile LocalCrypt's `crypt_write_buffer` stages up to
+32 MiB directly as ciphertext. See [notebook storage and recovery](../../features/notebooks/development/development.md#editing-and-recovery).
 
 Ordinary notebook recovery distinguishes successful publication, uncertain
 durability and unknown outcome. Keep the draft for recovery or Save As when
 its original folder is unavailable. A verified Move/Rename can retarget the
 open session without losing undo state. Ordinary Export Copy verifies the
 destination and rejects host-protected provider roots.
+
+For a mobile Move or Rename, start at `mobile/document_mutations.py`.
+`prepare_document_mutation` flushes queued edits and captures open sessions on
+the UI thread. `DocumentMutation.execute` verifies the saved baselines and
+moves storage on a worker. It returns a handoff with reopened text documents
+and notebooks, plus any progress or reference errors. `apply` checks each
+session's current identity before retargeting its editor on the UI thread.
 
 For mobile Create, `document_choices.py` opens `EditorPicker` with name, format
 and provider location in one route. Construct notebook bytes from the final

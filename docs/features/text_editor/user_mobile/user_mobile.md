@@ -7,6 +7,7 @@ Enable **Text Editor** in Features. Open or create the document from Documents o
 Ordinary text and source files use the native editor with a language dropdown. **Find and replace…** searches the current source buffer. The standalone editor accepts up to 1 MiB. Desktop merge, multiple cursors, folding and split view are unavailable.
 
 Edit Local or unlocked LocalCrypt files. Copy a cloud file locally to edit. Ordinary drafts have private recovery. LocalCrypt drafts are session-only, so save before closing or locking. Failed saves keep edits. Use **Save a copy…** after an external change.
+Text saves preserve encoding, byte order marks and line endings.
 
 In Markdown, type headings or emphasis markers or use the formatting toolbar. Use **Format → link** for a URL or relative path. **Find in this page…** searches preview and **Find and replace…** searches Source. Pinch to resize Markdown text. **Settings → Markdown → Justify text** reflows paragraphs and lists without rewriting the source. Use **Read aloud…** for the selected text or the rendered note.
 
@@ -18,7 +19,7 @@ See [Documents and editing](../../../user_mobile/documents/documents.md) and [Re
 
 Use a path such as `![Photo](images/photo.webp)` or `![[photo #1.png|400]]`. Size hints accept a width or both dimensions, such as `|400x200`. Notes Library also checks its root and Attachments, Assets and Images folders. Standalone imports may lack access to siblings, so open the source from its folder.
 
-PNG, JPEG, GIF and static WebP use an 8 MiB and 16-megapixel limit per image and 16 MiB per render. Missing images show alternative text. LocalCrypt image bytes stay in memory. Paths must remain inside the provider root.
+PNG, JPEG, GIF and static WebP use an 8 MiB and 16-megapixel limit per image and 16 MiB per render. Missing images show alternative text. LocalCrypt and remote image bytes stay in memory. Paths must remain inside the provider root.
 
 ## Lock-screen speech
 

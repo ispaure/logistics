@@ -103,7 +103,6 @@ Create folders with **New folder…**, then drag conversations into them or use
 Use **Refresh** to pick up changes from another window. Conversation switching
 and dragging are paused during a request.
 
-## Mobile development builds
+## Android and iOS
 
-See [LM mobile workflows](../user_mobile/workflows.md#mobile-development-builds).
-Saved conversations stay on the device where they were created.
+See [LM on mobile](../user_mobile/user_mobile.md) for setup, chat and export.

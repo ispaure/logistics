@@ -14,7 +14,16 @@ On iOS 17.4 or later, turn on **Playback → Subtitle PiP (reopen video)** and r
 2. Tap **AirPlay** beside **Forward 10 seconds** and select the TV. Use the phone or tablet's normal timeline, play/pause and skip controls.
 3. Select **iPhone** in the route picker to continue on device, including after a connection or seek failure.
 
-Compatible MKV streams use H.264/HEVC and compatible AAC, AC-3, E-AC-3 or Opus audio. Opus converts to AAC. Choose supported tracks in **Audio tracks** and **Subtitles**. SRT and WebVTT can display on TV, with PGS available for local playback. The TV controls subtitle appearance and HDR. Session-only protection blocks AirPlay.
+Compatible MP4/MKV streams use H.264/HEVC and compatible AAC, AC-3, E-AC-3 or Opus audio. Opus converts to AAC. Embedded MP4 timed text and MKV SRT, WebVTT and ASS/SSA text are offered as TV subtitle tracks, together with discovered SRT/WebVTT sidecars. ASS styling and drawings are omitted; the TV controls subtitle appearance. Image subtitles such as PGS remain local-only. Session-only protection blocks AirPlay.
+
+Once native AirPlay is playing on the TV, switching apps or locking the iPhone
+keeps that session available, including pause/resume. Start a new AirPlay session
+while the phone is unlocked. Playback still stops if source access is revoked or
+the file becomes unreadable; session-only protection continues to block AirPlay.
+
+On Apple TV, reveal the playback controls with the remote and open **Subtitles** to choose a track or **Off**, alongside the audio selector. Only compatible subtitle tracks appear. The phone's **Audio tracks** and **Subtitles** menus control the same selection and reflect TV changes when reopened. MP4/MOV files outside the stream-copy profile use native playback, where available embedded Apple-compatible tracks remain selectable but sidecars are unavailable.
+
+Closing the video player stops its AirPlay video, releases the playback item and closes its streaming server. iOS may keep Apple TV selected as the system audio route. To return that route to the phone, choose **iPhone** in the AirPlay picker or Control Center; you do not need to disable AirPlay in Settings. Apple does not provide a reliable app API to disconnect that audio route. See [Apple's explanation](https://developer.apple.com/forums/thread/810035).
 
 iOS controls automatic AirPlay suggestions. To stop those suggestions while
 keeping manual selection available, choose **Settings → General → AirPlay &

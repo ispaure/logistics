@@ -1,6 +1,6 @@
 # Logistics TestFlight workflow
 
-Use TestFlight in the standalone [manager](../../user/build-manager.md). It runs source-bound native/runtime gates, archives and verifies the IPA, then pauses for artifact and destination review. The local and GitHub workflows use the same deployment helpers. Upload defaults off.
+Use TestFlight in the standalone [manager](operator/setup.md). It runs source-bound native/runtime gates, archives and verifies the IPA, then pauses for artifact and destination review. The local and GitHub workflows use the same deployment helpers. Upload defaults off.
 
 ## Identity and prerequisites
 

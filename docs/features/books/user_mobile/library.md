@@ -8,7 +8,7 @@ Use **Import…** for a standalone EPUB or CBZ/ZIP. This creates a private copy 
 
 For an AES or ZipCrypto comic import, enter the ZIP password and tap **Unlock comic**. A wrong password clears the field for retry. Cancel keeps the encrypted import. Closing clears the active password and decoded pages, so opening asks again. Entry names remain visible. Folder readers can use configured archive passwords.
 
-EPUB imports permit up to 5,000 entries, 256 MiB for archive and expanded total, and 8 MiB per member. Chapters and rendered HTML are limited to 2 MiB. DRM, encrypted EPUBs and fixed-layout SVG books are unsupported. CBZ/ZIP imports have the 5,000-entry cap and separate per-page limits. See [comic workflows](../../comics/user_mobile/reading.md#native-mobile-library) and [comic gestures](../../comics/user_mobile/gestures.md).
+EPUB imports permit up to 5,000 entries, 256 MiB for archive and expanded total, and 8 MiB per member. Chapters and rendered HTML are limited to 2 MiB. DRM, encrypted EPUBs and fixed-layout SVG books are unsupported. CBZ/ZIP imports have the 5,000-entry cap and separate [comic page limits](../../comics/user_mobile/reading.md#supported-formats-and-page-limits). See [comic gestures](../../comics/user_mobile/gestures.md).
 
 ### Reader navigation and imported metadata
 

@@ -21,8 +21,10 @@ troubleshooting → Check rclone engine** runs an offline diagnostic.
 
 Embedded rclone supports existing settings for Google Drive, Dropbox, OneDrive,
 S3, WebDAV and SMB, plus one crypt layer over a supported remote. WebDAV and
-custom S3 endpoints require HTTPS with certificate verification. Use a separate
-form for [direct SMB shares](localcrypt.md#smb-and-mac-shared-folders).
+custom S3 endpoints require HTTPS with certificate verification. For SMB in a
+credential ZIP, rclone accepts `host`, `user`, `pass`, `domain` and `port`.
+The ZIP's `pass` must be rclone-obscured. To enter an ordinary password, use
+[the direct SMB form](#smb-and-mac-shared-folders).
 
 **Session-Only** retains password-protected ZIPs under device encryption for
 future unlocking. Re-select unencrypted ZIPs after restart. **Persistent**
@@ -32,18 +34,10 @@ stay in memory. Saved connections restore in the background. If restoration
 fails, unlock the device and choose **Reload saved credentials**, or forget and
 reimport. Session-only token refreshes may require a fresh package after exit.
 
-The online browser keeps previews in memory. EPUBs and CBZ/ZIP comics use up to
-128 MiB per archive and 256 MiB across open books/comics. Close a reader to free
-its cache or reopen it for a fresh snapshot. If an inner ZIP needs a password,
-the closest `[LogisticsZIP]` section in a parent `remoteConfig.ini`
-supplies `archive_password`. A missing or empty key there stops inheritance.
-Use the password form if needed.
-
 **Cancel** requests a stop. Another online request can show **Cancel current
 request**; local browsing remains available. Browsing has a two-minute deadline
-and cancellation may wait for an upstream call. Use [Download locally…](workflows.md#mobile-folder-navigation)
-for a selected copy, or [LocalCrypt](localcrypt.md#localcrypt-encrypted-offline-reading)
-for managed encrypted copies.
+and cancellation may wait for an upstream call. See [remote and offline files](../../../user_mobile/documents/remote.md)
+for reader limits and offline copies.
 
 ### Locked credentials and Workspaces
 
@@ -71,14 +65,30 @@ previously saved filename as Session-Only keeps its older saved copy. Use
 **Forget this credential package** to remove both. Password-protected session
 packages keep encrypted open/recent paths under the ZIP password.
 
-## Folder search scope
+## SMB and Mac shared folders
 
-Remote and Home Server searches filter the current folder. Local and LocalCrypt
-include subfolders. Scroll to see more results.
+On a Mac, enable **File Sharing** using SMB and grant the account access to the
+folders. Connect from the same network or a reachable VPN.
+
+1. Open **Settings → Workspaces → SMB shares…** or **Home Server → Add share…**.
+2. Enter a unique name and the server hostname or IP address, without
+   `smb://` or a share path. Enter the account credentials or select
+   **Connect as guest**. The default port is 445. Set a different port or
+   domain under **Advanced options**.
+3. Choose **Connect & browse shares**. If the hostname fails, try the IP address.
+   A network or login failure keeps the connection available for retry.
+
+**Save credentials on this device** defaults on and uses the device vault.
+Turn it off for a temporary connection. Previously saved credentials remain.
+Direct shares appear in **Home Server**. SMB remotes imported in a ZIP appear
+under their package in **Cloud**. To keep a share offline, open it and
+[pull a managed copy](workflows.md#pull-and-push-managed-folders).
 
 ## Resuming a locked session
 
-Enter the named ZIP passwords in turn, or the temporary password for a
-passwordless session. The optional [trusted Wi-Fi session resume setting](../../../user_mobile/settings/settings.md#trusted-wi-fi-session-resume)
+Enter the requested ZIP, connection or temporary session password. Session
+lock passwords stay in memory. To unlock a retained ZIP from Home, tap
+**Unlock** beside **Your workspace**. The optional
+[trusted Wi-Fi session resume setting](../../../user_mobile/settings/settings.md#trusted-wi-fi-session-resume)
 can skip the foreground-resume prompt on listed networks for already unlocked
 session-only credentials. Restart and manual lock still require unlocking.

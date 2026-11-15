@@ -44,23 +44,15 @@ Use **Books & Comics → Encrypt unencrypted comics…**. Each plain comic needs
 
 ## More help
 
-See [Using Logistics](../../../user/user.md) and the [mobile guide](../../../user_mobile/user_mobile.md).
+See [Using Logistics](../../../user/user.md) and [Comics on mobile](../user_mobile/user_mobile.md).
 
 ## Compression decisions and collection maintenance
 
 WebP pages are normally retained below 75% of the original size. **Always keep compressed images** bypasses this test and requires disabling preservation of animated or multipage originals. That allows first-frame conversion. Compression can rename pages, flatten folders and remove sidecars. Rebuilt ComicInfo page records lose old per-page bookmarks, DoublePage flags and page types. Batches skip marked compressed comics. There is no collection-wide Undo.
 
-## Mobile development builds
-
-See [Comics mobile workflows](../user_mobile/reading.md#mobile-development-builds).
-
 ## Metadata inside LocalCrypt
 
-Choose **Edit comic metadata…** (desktop) or **Edit metadata…** in a private mobile reader. Saves preserve page bytes and inner ZIP passwords and create no plaintext backup. Desktop folder batches scan up to 10,000 entries and report archives that cannot unlock. Push saved edits before pulling if you need them on the remote. Pull can replace local changes. See [mobile LocalCrypt](../../rclone/user_mobile/localcrypt.md#localcrypt-encrypted-offline-reading).
-
-## Native mobile library
-
-See [Comics mobile workflows](../user_mobile/reading.md#native-mobile-library).
+Choose **Edit comic metadata…**. Saves preserve page bytes and inner ZIP passwords without creating a plaintext backup. Folder batches scan up to 10,000 entries and report archives that cannot unlock. Push saved edits before pulling if you need them on the remote. Pull can replace local changes. See [LocalCrypt on desktop](../../rclone/user/localcrypt.md).
 
 ## Page-turn motion
 

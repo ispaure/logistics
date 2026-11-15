@@ -30,10 +30,11 @@ enabled, the last active document remains open.
 ## Screen privacy and platform limits
 
 Protected sessions lock when interrupted or sent to the background. Android
-uses its secure-window protection. iOS shields protected content during
-app-switcher and background transitions and detected screen recording or
-mirroring. iOS still allows screenshots of visible content. Ordinary local
-files and readable exports stay readable after credentials lock.
+secure windows block ordinary screenshots and nonsecure capture. iOS shields
+protected content during app-switcher and background transitions and detected
+screen recording or mirroring. iOS still allows screenshots of visible
+content. Ordinary local files and readable exports stay readable after
+credentials lock. See [resuming a locked session](../../features/rclone/user_mobile/connections.md#resuming-a-locked-session).
 
 ## Appearance and E Ink status
 
@@ -55,13 +56,13 @@ controls, stronger outlines and reduced animation. It also applies to open
 HTML views. Images and comic pages keep their colors. Turn it off to return to
 the system appearance.
 
-## Settings and build information
+## Comic and PDF magnifier
 
 Use **Books & Comics → Comic & PDF magnifier zoom** or the magnifier's **−**
 and **+**. Both save the same setting, from 150% to 300%, with 190% as default.
 The category and setting reflect which readers are enabled.
 
-### Trusted Wi-Fi session resume
+## Trusted Wi-Fi session resume
 
 Open **Privacy & Security → Skip session password on trusted Wi-Fi** and add
 an exact network name in **Trusted Wi-Fi networks…**. **Add current network**
@@ -94,7 +95,7 @@ ordinary files and incoming shares. **Rclone Copies** holds managed copies.
   reports a conflict, resolve it before reopening Logistics.
 - **Android.** Open **Settings → Workspaces → File storage…** to review exact
   paths, change drives or remove old copies. Android 11 and newer can use
-  shared-drive folders after granting the requested access. Android 7–10 use
+  shared-drive folders after granting **All files access**. Android 7–10 use
   app-owned folders, which are removed by uninstall or app data reset.
 
 | Action | What happens |

@@ -19,6 +19,11 @@ progress. Local, LocalCrypt, and remote files share four provider slots and a
 and retry. A single file can exceed the budget on its own. The workspace holds
 up to 32 open documents overall.
 
+Open the same file to resume its existing session. Save or discard private
+edits before closing, changing credentials or moving the file. Failed saves
+keep the draft. See [reader history and credentials](../../user/reader-history.md)
+for when private references and reading positions can be restored.
+
 Turn EPUB pages with horizontal swipes or Previous/Next. Drag the progress
 slider to jump between chapters or comic/PDF pages. Open **Actions** for
 Appearance and fullscreen. Comics open with controls hidden. Tap the page to

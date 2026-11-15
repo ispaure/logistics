@@ -4,9 +4,9 @@
 
 On Android, choose **Appearance → Volume buttons turn pages → Apply and return**. Volume down advances and volume up goes back. This off-by-default setting is separate from EPUB.
 
-## Mobile development builds
+## Supported formats and page limits
 
-iOS and Android read CBZ/ZIP with PNG, JPEG or static WebP pages. Each page is limited to 8 MiB, 8192 pixels per axis and 16 megapixels. See the [mobile guide](../../../user_mobile/user_mobile.md) for validation. Compression, CBR conversion and collection organization are desktop tools.
+iOS and Android read CBZ/ZIP with PNG, JPEG or static WebP pages. Each page is limited to 8 MiB, 8192 pixels per axis and 16 megapixels.
 
 ## Native mobile library
 
@@ -22,6 +22,8 @@ To inspect retained imports, open **Settings → Reset → Clear cached document
 
 Use **Edit metadata…** in an ordinary imported reader. Successful saves preserve page images and the external import source. Standalone encrypted imports support reading and have no metadata writer.
 
+In an unlocked LocalCrypt comic, use **Edit metadata… → Save encrypted metadata**. See [encrypted archive saves](../../rclone/user_mobile/localcrypt.md#edit-encrypted-archive-metadata).
+
 For Local or unlocked LocalCrypt folders, choose **Files → Actions → Edit comics in this folder…**. Check only intended fields, then **Apply selected fields**. An empty checked field clears it. The scan includes descendants up to 200 comics, 10,000 entries and 16 folder levels. Changed or unsupported archives fail preflight. **Cancel after current comic** keeps completed saves and leaves remaining files untouched. Inspect results and reopen the batch if revisions cannot refresh.
 
 Unlocked LocalCrypt needs the configured inner password for protected archives. Saves update ciphertext locally. Push separately to update the remote. Closing, backgrounding or locking clears draft fields and suggestions. Already published edits remain saved.
@@ -29,6 +31,11 @@ Unlocked LocalCrypt needs the configured inner password for protected archives. 
 ### iOS edge-to-edge reading
 
 Tap the fullscreen page to restore controls. An active Duo fold keeps the divider clear between paired pages or places the picture above a horizontal fold. **Reduce Transparency** disables the artwork behind side controls.
+
+### Android fullscreen reading
+
+Tap the page to restore controls. Swipe from an edge to reveal the system
+bars temporarily.
 
 ## Reading on a TV
 

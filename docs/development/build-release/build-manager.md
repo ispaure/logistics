@@ -1,6 +1,6 @@
 # Logistics build manager integration
 
-Use the [operator guide](../../user/build-manager.md) for installation and plan review. Logistics pins the external SDK in `build-manager-dependency.json`. [Install the pin in each tooling environment](../../user/build-manager.md#external-manager-installation-adapter-api-1). Its `logistics_build/build_project.py` adapter owns app source, suites, backends, signing and release policy. The SDK owns execution, locks, transports, artifact verification and review UI. See [ownership](build-deployment-audit.md).
+Use the [operator guide](operator/setup.md) for installation and plan review. Logistics pins the external SDK in `build-manager-dependency.json`. [Install the pin in each tooling environment](operator/setup.md#external-manager-installation-adapter-api-1). Its `logistics_build/build_project.py` adapter owns app source, suites, backends, signing and release policy. The SDK owns execution, locks, transports, artifact verification and review UI. See [ownership](build-tooling.md).
 
 ## Dedicated test-machine settings
 
@@ -70,7 +70,7 @@ On Apple Silicon choose **This Mac — Android Emulator**. Configure the complet
 
 `build-tests.json` owns suite roots and predecessors. The descriptor declares selectables such as `portable.contracts`, `desktop.ui`, platform `.native`, `.runtime`, `.incoming` and `release.acceptance`. See [suite file responsibilities](../testing/adding-tests.md#decide-which-files-to-update). Host patterns intersect named host suites. Native/release suites reject focused patterns. Named selection is local. `python3 dev.py test-map` distinguishes discovered files, declared sources/drivers and registered case IDs.
 
-Reviewed tester delivery requires tooling, desktop UI, mobile host, full native and actual runtime acceptance before signed preparation. Verify source and dependency IDs, platform, case inventory, device families and teardown. `ios.runtime` uses a separate disposable iPhone testbed without Duo/iPad UI checks. Runtime adapters delegate compiler/setup to the pinned SDK and retain Logistics pins and gate verification in `mobile_runtime_tools.json`. Incoming-file suites use the actual system menus and disposable sender/receiver apps. See [incoming files](mobile-preparation.md#incoming-files-and-inbox).
+Reviewed tester delivery requires tooling, desktop UI, mobile host, full native and actual runtime acceptance before signed preparation. Verify source and dependency IDs, platform, case inventory, device families and teardown. `ios.runtime` uses a separate disposable iPhone testbed without Duo/iPad UI checks. Runtime adapters delegate compiler/setup to the pinned SDK and retain Logistics pins and gate verification in `mobile_runtime_tools.json`. Incoming-file suites use the actual system menus and disposable sender/receiver apps. See [incoming files](../architecture/mobile-file-storage.md#incoming-files-and-inbox).
 
 `python -m logistics_build.test_structure --check` validates the captured structure before tests. Declared smoke phases run fresh before broad regression. A verified exact-input host receipt can satisfy the later phase. See [execution stages](../testing/testing.md#execution-stages-and-failure-policy). A focused native diagnostic can use `mobile_build.validation.document_storage_tools` with `--probe native-suite`.
 
@@ -114,7 +114,7 @@ Copy needed evidence to ignored `test-results/` before exit. New marked scratch 
 
 ### Project-owned native prerequisite setup
 
-After `python3 dev.py setup desktop` and `python3 dev.py setup mobile`, choose **Project tooling → Update project tooling…** or run `python -m build_manager.cli tooling --project NAME --update --confirm`. On supported hosts this prepares verified Go 1.26.9 and the pure langdetect 1.0.9 wheel from `native_tooling.json`. Xcode/SDK, Java and signing have separate setup. Preserve an exact existing Go selection. Move conflicting Go or unverified legacy wheel contents aside under the guarded tooling lock before repair. Use [tooling readiness and repair](../../user/build-manager.md#project-tooling-readiness-and-repair) for environment recovery.
+After `python3 dev.py setup desktop` and `python3 dev.py setup mobile`, choose **Project tooling → Update project tooling…** or run `python -m build_manager.cli tooling --project NAME --update --confirm`. On supported hosts this prepares verified Go 1.26.9 and the pure langdetect 1.0.9 wheel from `native_tooling.json`. Xcode/SDK, Java and signing have separate setup. Preserve an exact existing Go selection. Move conflicting Go or unverified legacy wheel contents aside under the guarded tooling lock before repair. Use [tooling readiness and repair](operator/setup.md#project-tooling-readiness-and-repair) for environment recovery.
 
 To preserve a legacy unverified wheel folder, run the guarded move from the root. On Windows change the child interpreter to `mobile_build/.venv/Scripts/python.exe`. Then rerun the tooling update.
 

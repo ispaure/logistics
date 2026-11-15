@@ -7,7 +7,7 @@ records the work and evidence.
 ## Use the guided flow
 
 1. Add or select the trusted Logistics checkout. For setup and repair, see
-   [Using the Logistics build manager](build-manager.md).
+   [Using the Logistics build manager](setup.md).
 2. Choose **Run checks**, **Build only**, or **Prepare and deliver**. Choose
    platforms and hosts. A GitHub host dispatches hosted checks even without
    a GitHub release destination.
@@ -24,9 +24,24 @@ records the work and evidence.
    actions after their gates pass. Device installs still pause for review.
    CLI and retained plans use their own declared review requirements.
 
-A failed branch only blocks work that depends on it. Resume verifies retained
-artifacts before reuse. Reconcile an uncertain upload or install before trying
-again.
+A failed branch blocks work that depends on it. Independent Android and iOS
+steps can overlap. A waiting card names the resource it needs, such as shared
+build capacity or signing. Resume verifies retained artifacts before reuse.
+Reconcile an uncertain upload or install before trying again.
+
+## Build without tests or delivery
+
+Choose **Build only**, then a supported local iOS or Android host. This creates
+a simulator app or test APK. Use a delivery flow for installing or submitting it.
+
+## Publish GitHub without testing
+
+Advanced **Release → GitHub** prepares a source release without local gates.
+Keep **Run GitHub validation** on for normal hosted checks. When explicitly
+publishing without those checks, turn it off and review the new plan. The
+release records the opt-out. Independent push-triggered CI can still run.
+Use the full preset with the appropriate validation settings for a tested
+release. GitHub publication requires a clean committed checkout.
 
 ## Tester messages and development devices
 

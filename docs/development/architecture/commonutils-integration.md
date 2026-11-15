@@ -30,3 +30,11 @@ presentation adapter. Preserve the provider's own revision and grant checks.
 Use `logistics_build/` for project policy and the standalone manager for
 supervision. Review dependency pins with changes to shared contracts and
 check `test_release_verification.py` for release pin handling.
+
+## Shared controls and publication
+
+Use commonUtils outlines for Markdown headings, EPUB chapters and bookmarks.
+The entry target remains opaque to the widget. Use shared `entry_views` for
+selection and sorting. Keep the archive-member and filesystem-index models with
+their respective owners. Reuse `atomic_write_bytes` for verified publication.
+The caller validates format, encoding, symlink policy and schema.

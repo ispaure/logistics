@@ -10,7 +10,10 @@ are currently locked or unloaded:
 - **Clear all recent files** removes recent-file lists. Saved positions and files
   are kept. Old encrypted caches also contain private reopen references, so unloaded
   reopen references are removed as part of clearing those caches. Open documents
-  stay open.
+  and favourites stay available.
+
+On mobile, **Clear** beside **Recent** removes recent links, including encrypted
+history for unlocked packages. It keeps open documents and saved files.
 
 Session-only remotes, whether crypt or ordinary, and session-only LocalCrypt save
 private positions and bookmarks under the owning credential ZIP password. Titles

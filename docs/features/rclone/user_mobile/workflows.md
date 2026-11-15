@@ -1,9 +1,10 @@
-# Rclone mobile workflows
+# Remote transfers on mobile
 
-## Android and iOS prototype
+## Pull and push managed folders
 
-In **Workspaces**, choose a mapped folder’s **••• → Pull** to refresh its
-on-device copy or **Push** to update the remote. Both use rclone Sync.
+In **Workspaces**, use an online folder's **••• → Pull…** to create or refresh
+its on-device copy. Use a managed copy's **••• → Push…** to update the remote.
+Both use rclone Sync.
 Destination files and empty folders can be replaced or deleted without a backup.
 One transfer runs at a time. Existing local copies stay available for browsing.
 
@@ -12,7 +13,17 @@ Verify** shows the phase. The endpoint strip shows **From** and **To** paths.
 Percentages use known bytes or file counts. Removal counts describe attempts.
 Completion appears after verification. **Continue browsing** keeps the job
 active. **Stop transfer** asks before cancellation. Completed changes remain
-after a failure or stop. See [mobile sync](../../../user_mobile/folder_hub/folder_hub.md#workspaces-and-local--localcrypt-sync).
+after a failure or stop.
+
+### Choose storage on the first pull
+
+For a new copy from a session-only crypt remote, the **Use an encrypted copy
+(recommended)?** prompt offers **Yes** to keep the encrypted names and bytes
+in LocalCrypt or **No** for a decrypted Local copy.
+Both persist on disk. New copies from saved credentials or non-crypt remotes
+use Local. Later pulls keep the existing copy's location and storage type.
+If several mappings match, choose the intended copy before reviewing the
+transfer. See [unlock and use a LocalCrypt copy](localcrypt.md).
 
 ### Review file changes
 
@@ -20,41 +31,22 @@ Check **New files**, **Updated files**, **Delete from destination** and any
 **Local cleanup**. Use search and pages to inspect paths. Choose **Push N
 changes** or **Pull N changes** and confirm. A changed comparison needs another
 confirmation. **Skip preview and start** begins sync without waiting for the
-comparison to finish. Back cancels review before sync starts.
+comparison to finish. Storage access and filesystem link checks still apply.
+The transfer can replace or delete more files than the preview lists. Back
+cancels review before sync starts.
 
-### Mobile folder navigation
+## Download a file or folder
 
-Use **••• → Download locally…** on a remote file or folder. Choose **On My Phone / On My Tablet**, an available local copy or an unlocked
-LocalCrypt location. Choose the destination folder and name, then **Download here**. Confirm when choosing a
-decrypted destination. Existing names are refused. The action downloads only
-that selection and creates no recurring mapping. LocalCrypt writes encrypted
-names and bytes. Use transfer details to follow or cancel the download.
+Use **••• → Download locally…** on a remote file or folder. Choose **On My
+Phone / On My Tablet**, an available local copy or an unlocked LocalCrypt
+location. Choose the destination folder and an unused name, then **Download
+here**. Confirm when choosing a decrypted destination. The action downloads
+only that selection and creates no recurring mapping. LocalCrypt writes
+encrypted names and bytes. Use transfer details to follow or cancel the download.
 
-### Android collection drive
+## Restore access to a managed copy
 
-Choose **Settings → Workspaces → File storage…** for both Local and LocalCrypt.
-Android 11+ needs All files access for public SD-card storage. Android 7–10 uses
-app-owned folders, which Android removes on uninstall or clearing app data.
-Migration verifies the new copy and retains the source as a backup. If the
-selected drive is missing, collection operations stop. See [mobile storage](../../../user_mobile/settings/settings.md#file-storage).
-
-### Unlock from Home
-
-**Unlock** beside **Your workspace** lets you choose a retained ZIP and enter
-its password for this session. **Show Legacy** controls Legacy entries.
-
-### Side-by-side mobile credential packages
-
-Set storage independently per ZIP. See [multiple packages](connections.md#multiple-credential-packages-on-android-and-ios)
-and the [mobile package guide](../../../user_mobile/navigation/panels.md#multiple-credential-packages-on-android-and-ios).
 Forgetting a package preserves its downloaded files. A replacement ZIP can
-have a different name or password. Reopening LocalCrypt requires the original
-cipher, while Push/Pull also require the original destination account.
-
-### Mobile Workspaces source tabs
-
-Find online folders under **Cloud → Rclone Remotes**, and managed offline copies
-under **Local → Rclone Copies**. Select **All** or a credential package.
-Direct SMB shares appear under **Home Server**. SMB imported from a ZIP appears
-under its package in Cloud. **Encrypted Copy** identifies LocalCrypt storage.
-**Locked** and **Unlocked** describe current access.
+have a different name or password. Reopening LocalCrypt requires matching
+crypt settings. Push and Pull also require the original destination account.
+See [credential packages](connections.md#locked-credentials-and-workspaces).

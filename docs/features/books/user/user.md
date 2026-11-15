@@ -36,20 +36,16 @@ Ordinary EPUB 2 and 3 text books support nested contents, internal links and ima
 
 Check for damage or DRM. Limits are 20,000 archive entries, 512 MiB expanded and 32 MiB per resource. Keep the original if another reader is needed to inspect it.
 
-## Mobile development builds
-
-See [Books mobile workflows](../user_mobile/reading.md#mobile-development-builds).
-
 ## Metadata inside LocalCrypt
 
-Choose **Edit EPUB metadata…** in the LocalCrypt browser or **Edit metadata…** on mobile. Saves update the encrypted offline copy and preserve the inner ZIP password. There is no plaintext backup. Push separately to update the remote. See [LocalCrypt editing](../../rclone/user/user.md#read-and-edit-a-localcrypt-copy-on-desktop).
+Choose **Edit EPUB metadata…** in the LocalCrypt browser. Saves update the encrypted offline copy and preserve the inner ZIP password. There is no plaintext backup. Push separately to update the remote. See [LocalCrypt editing](../../rclone/user/localcrypt.md).
 
 Private readers are absent from ordinary Recent. Positions and bookmarks use credential ZIP encryption where available and stay in memory for passwordless sessions. Retry a wrong password in the same prompt.
-
-## Native mobile reading
-
-See [Books mobile workflows](../user_mobile/reading.md#native-mobile-reading) and the [mobile guide](../../../user_mobile/user_mobile.md).
 
 ## Page-turn motion
 
 A short slide animates turns within and between chapters.
+
+## Android and iOS
+
+See [Books on mobile](../user_mobile/user_mobile.md).

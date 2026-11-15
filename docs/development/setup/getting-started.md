@@ -17,7 +17,7 @@ python3 dev.py doctor
 On Windows use `py`. Setup creates root `.venv`. Expect Python, uv, commonUtils
 and the desktop environment to report OK. A desktop-only machine may lack
 mobile tools. Use the pinned `Python/commonUtils` submodule.
-[Setup details](../testing/testing.md#set-up-a-checkout)
+[Interpreter and lockfile](setup.md#desktop-interpreter-and-lockfile)
 
 On macOS, if a restricted runner denies boot identity verification, run setup
 in a normal local Terminal with access to `/usr/sbin/sysctl -n kern.bootsessionuuid`.

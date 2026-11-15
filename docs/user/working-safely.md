@@ -18,12 +18,6 @@ See the [desktop file guide](files-and-documents.md),
 [mobile document guide](../user_mobile/documents/documents.md) and
 [remote/offline guide](../user_mobile/documents/remote.md) for location choices.
 
-## Create and find your first mobile document
-
-Choose **New document**, select a format, enter a name and choose a writable
-folder. Save writes to that file. Reopen it through Workspaces to confirm the
-location. See the [creation steps](../user_mobile/documents/documents.md).
-
 ## Know when you are making a copy
 
 Importing or receiving an attachment does not grant write-back to the original
@@ -47,8 +41,8 @@ an edit in an offline copy has already reached the server.
 
 If a transfer stops, inspect its result and affected destinations before retrying.
 Cancellation may leave completed items. Keep the original and your draft until
-the resulting files are verified. The [rclone guide](../features/rclone/user/user.md)
-owns connection setup, Pull/Push and LocalCrypt details.
+the resulting files are verified. See [desktop transfers](../features/rclone/user/user.md#transfer-files)
+or [mobile transfers](../features/rclone/user_mobile/workflows.md).
 
 ## Recover without overwriting the version you need
 

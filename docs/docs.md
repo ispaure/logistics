@@ -14,7 +14,7 @@ desktop, with a separate mobile workspace for supported features.
 | Clear reading positions or recent files | [Reader history](user/reader-history.md) |
 | Learn a particular tool | [Feature catalog](features/features.md) |
 | Set up a checkout, change code or choose a test | [Developing Logistics](development/development.md) |
-| Build, validate or deliver Logistics | [Build manager workflow](user/build-manager-journeys.md) |
+| Build, validate or deliver Logistics | [Build manager workflow](development/build-release/operator/workflows.md) |
 
 ## Browse the wiki
 

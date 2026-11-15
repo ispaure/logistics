@@ -35,3 +35,13 @@ python3 dev.py test mobile test_workflow_ownership.py
 ```
 
 Expect protected/plain import, retry, stale-result rejection and compatibility forwarding. Use synthetic ZIPs in the disposable native runner to verify actual picker cancellation, password clearing, restore and Forget.
+
+## Embedded credential contexts
+
+`mobile_build/rclone_bridge/` links pinned rclone and AES/ZipCrypto support. The ZIP chooser copies up to 1 MiB while its grant is held. Load clears the password, keeps input for retry after failure and releases the ZIP after success. Remote selection is explicit.
+
+`credential_sets.go` admits up to 32 packages. Aggregate aliases delegate to the original package, with collisions disambiguated by package identity. Crypt lookups stay inside that package. Stable connection hashes let existing copies resolve the same account. Saved contexts persist in the encrypted vault; session contexts remain memory-only. LGCV1 is readable and multi-package saves use LGCV2. `CloudClient` serializes publication and state epochs across scenes. Lock clears all contexts; generation checks reject late operations.
+
+## Home credential unlock
+
+`home_unlock_candidates` filters loaded and Legacy-hidden names using retained metadata. Home and Files unlock for the session, clearing passwords and resolving private edits. Home unlock returns to Home.

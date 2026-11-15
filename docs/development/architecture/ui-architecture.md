@@ -165,7 +165,7 @@ background ownership.
 ## Check ownership and packaging
 
 Run `python3 dev.py architecture` and `python3 dev.py test desktop test_portable_imports.py`
-when a move changes imports. The [portable owner policy](architecture.md#portable-owner-policy)
+when a move changes imports. The [portable owner policy](extension-points.md#portable-owner-policy)
 and `test_architecture_contracts.py` check reviewed feature-to-host edges
 and prevent mobile feature adapters from importing the application host.
 Use [test ownership](../testing/testing.md) to select the workflow suites.

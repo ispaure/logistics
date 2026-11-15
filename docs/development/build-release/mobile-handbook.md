@@ -1,6 +1,6 @@
 # Build and release Logistics Mobile yourself
 
-Use [Build Deployment Manager](../../user/build-manager-journeys.md) for routine validation, builds and delivery. Briefcase generates native projects from curated Python sources. Edit `Python/` and `mobile_build/` sources; restage and rebuild to update the generated project.
+Use [Build Deployment Manager](operator/workflows.md) for routine validation, builds and delivery. Briefcase generates native projects from curated Python sources. Edit `Python/` and `mobile_build/` sources; restage and rebuild to update the generated project.
 
 ## Checkout and device ownership
 
@@ -17,7 +17,7 @@ python3 dev.py setup desktop
 python3 dev.py setup mobile
 ```
 
-Follow [project tooling readiness and repair](../../user/build-manager.md#project-tooling-readiness-and-repair) to install the pinned manager, Go and the language detector wheel. Briefcase 0.4.5 runs separately from desktop Qt. For each manual build shell, activate mobile Python and expose the selected tools:
+Follow [project tooling readiness and repair](operator/setup.md#project-tooling-readiness-and-repair) to install the pinned manager, Go and the language detector wheel. Briefcase 0.4.5 runs separately from desktop Qt. For each manual build shell, activate mobile Python and expose the selected tools:
 
 ```sh
 source mobile_build/.venv/bin/activate

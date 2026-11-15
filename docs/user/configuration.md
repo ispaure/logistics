@@ -1,8 +1,8 @@
 # Configuration and resources
 
-Start with the defaults. Configure the integrations you use through
-**Logistics Settings** and their [feature guides](features.md). Use
-**Open-source licenses** in Settings to search and read installed notices
+Open **Logistics Settings** from the rail or floating Settings button.
+Use **Features** to choose available tools and the [feature guides](features.md)
+for setup. Use **Open-source licenses** in Settings to read installed notices
 offline.
 
 ## Configuration layers
@@ -66,18 +66,12 @@ A saved rclone config uses the ZIP's base name. Use distinct names for
 distinct configurations. Keep credentials and passwords in private locations,
 outside tracked example INIs.
 
-## Public software provisioning
+## Tools and integrations
 
-Logistics offers a verified rclone download when a command needs a missing or
-different executable. Mounting can offer macFUSE or WinFsp. Install Linux
-FUSE support through your distribution. Declining or cancelling a download
-stops the requested action. Check the feature's guide for additional tools.
-
-## Configure a feature
-
-Use the [feature catalog](features.md) for setup, supported platforms and file
-actions. Load credential ZIPs under **Settings → rclone**. Use the owning
-feature's Settings page for its INI and library options.
+See [rclone credentials](../features/rclone/user/user.md#set-up-credentials),
+[rclone download versions](../features/rclone/user/download-versions.md),
+[FUSE mount setup](../features/fuse/user/user.md) and
+[Text Editor preferences](../features/text_editor/user/preferences.md).
 
 ## Destructive folder tools
 
@@ -92,14 +86,6 @@ including when a recursive selection contains one. Add paths through
 INIs. Save explicitly. Shared configuration changes may need a restart.
 Manage generated rclone configurations from **Settings → rclone**.
 
-## Rclone download versions
-
-See [Choose rclone download versions](../features/rclone/user/download-versions.md#rclone-download-versions).
-
-## Text Editor preferences
-
-See [Text Editor preferences](../features/text_editor/user/preferences.md#text-editor-preferences).
-
 ## Software defaults and personal settings
 
 **Personal Settings** writes only overrides. **↶** removes an override so the
@@ -111,13 +97,22 @@ configuration edits across all categories. It keeps documents, accounts,
 workspaces, reading progress and Blender presets. Launcher changes take effect
 on the next launch.
 
+## Appearance and workspace layout
+
 **Appearance & shared controls → Styling** changes theme, accent and
 interface, browser, reading and code fonts. Blank families use platform
-defaults. Open views update after saving.
+defaults. Preview changes and choose **Save Settings** to update open views.
+
+Under **Appearance & shared controls → Menus**, **Launch with sidebar**
+controls the next launch. Choose **Open full hub with sidebar** to restore
+the rail from a focused workspace.
 
 ## Logistics updates
 
 In **Configuration → configFile.ini → Updates**, turn update checks on or off
 and choose **main**, **beta**, or **alpha**. The default checks published main
 releases. **Update Logistics** appears on the landing page when a release is
-available. Save your work before accepting it.
+available. It runs the normal close and save flow before restarting. Local
+changes or file collisions can stop the update. Git checkouts need clean
+tracked files and initialized submodules. Older extracted releases may need
+a fresh extraction.

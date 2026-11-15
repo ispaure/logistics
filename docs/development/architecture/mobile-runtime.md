@@ -18,7 +18,7 @@ owns preparation, deployment and native validation. Paths below are relative to
 
 | State or UI | Owner |
 | --- | --- |
-| Startup, lazy services, feature presentation ports | `app.py`, `composition/{assembly,presentation}.py` |
+| Startup, lazy services, feature presentation ports | `app.py`, `composition/{assembly,notes,presentation}.py` |
 | Session identity, generation, windows and scenes | `workspace.py`, `window_owners.py`, `window_scenes.py` |
 | Home and Documents | `home.py`, `documents_hub.py`, `hub_controls.py`; summaries and reopen in `hub_ui.py` |
 | Destination routes, panes and retained drawers | `routes.py`, `workspace_navigation.py`, `adaptive_workspace.py`, `file_drawer.py` |
@@ -53,7 +53,9 @@ defines read-only `HostService`, writable `HostAttribute` and record-backed
 `StateAttribute`. Pass feature adapters explicit capabilities through
 `composition.presentation` and keep their imports independent of the mobile host.
 For example, rclone gets folder-route and loading-panel callbacks and Text Editor
-gets font and folder actions. Pinned locations use a `LocationHost`; a remote pin
+gets font and folder actions. `composition.notes` assembles Notes Library host and
+drawer capabilities and resolves retained controllers when callbacks run.
+Pinned locations use a `LocationHost`; a remote pin
 lookup admits navigation and errors only for the captured client, generation and
 live host.
 
@@ -143,7 +145,7 @@ guard until cancellation settles.
 
 - **New:** `show_document_creation` shares one naming and browsing route. Choose ordinary or unlocked LocalCrypt storage, including mapped copies. Use the non-overwriting operation to publish empty text/Markdown and reopen through the provider. Completion removes the picker route. A failed open preserves the form; Cancel restores the origin.
 - **Open:** validate the captured selection and provider capabilities before opening. New folder enters the created location only while that picker is still current.
-- **Save As:** `destination_names.save_filename` validates a single child name. A basename inherits a supported suffix or defaults to `.txt`; invalid explicit suffixes are rejected. Confirm replacement and recheck revision. Verify the reopened bytes before source handoff through `app.finish_save_as_source`. Keep the draft on reopen failure. Cancel and native dismissal return to the captured source, including new drafts. Cancellation can arrive after successful publication.
+- **Save As:** `destination_names.save_filename` validates a single child name. A basename inherits a supported suffix or defaults to `.txt`; invalid explicit suffixes are rejected. `EditorPicker` captures the operation before resolving the destination and asking for consent. It rechecks replacement revisions before writing and verifies the reopened bytes before source handoff through `app.finish_save_as_source`. Keep the draft on reopen failure. Cancel and native dismissal return to the captured source, including new drafts. Cancellation can arrive after successful publication.
 - **Move:** `show_destination` uses the same browser. The operation keeps captured source identity and separate destination selection. Direct remote targets are excluded from text creation; encrypted creation uses `encrypted_copies()`.
 
 See [private export consent and draft lifetime](document-storage.md#privacy-and-lifetime).
@@ -247,9 +249,11 @@ summaries; a hidden session can be removed without navigating to it.
 checkpoints through session transitions. A veto keeps the host usable for retry.
 Replacement flushes mounted native input, checkpoints reader progress and
 revalidates private receipts and notebook state before marking sessions terminal
-and claiming the successor. Startup revalidates that claim before publishing
-loaded models. Cleanup after the claim can be retried by resource identity;
-the successor retains ownership. Android Activity replacement retires old IME,
+and claiming the successor. The registry lives in `mobile.application_lifecycle`.
+`HostLifecycle.prepare_startup_models` holds the claim across worker loading and
+checks it before returning models to `LogisticsMobile`. Scene disconnect releases
+its claim through the same lifecycle owner. Cleanup after the claim can be
+retried by resource identity while the successor retains ownership. Android Activity replacement retires old IME,
 navigation, Back and resize callbacks before workspace reuse.
 
 Accepted exit and replacement invalidate owned presentations and tasks. Only
@@ -259,7 +263,7 @@ failure and retires even on veto; registry cleanup compares host identity.
 `abort_startup` retires partial state without checkpointing.
 `services.worker_retirement.drain_worker` waits through repeated caller
 cancellation and retrieves worker errors. The workflow owns signalling, admission
-and the original cancellation. See [incoming files](../build-release/mobile-preparation.md#incoming-files-and-inbox)
+and the original cancellation. See [incoming files](mobile-file-storage.md#incoming-files-and-inbox)
 for receiver handoff and publication locking. Check `test_application_lifecycle.py`,
 `test_startup_models.py` and `test_window_owners.py`.
 
@@ -359,12 +363,8 @@ checkpoints and new windows until process restart. Collection volumes outside
 the app container are outside reset erasure. The iOS privacy manifest declares
 CA92.1 for app-only defaults.
 
-Collection operations stay in `storage_ui.py` and `storage_location.py`.
-Stage and verify both trees and source revisions before committing a new
-location. Protect the active location from wipe; empty setup requires an empty
-destination. Android API 24–29 exposes mounted app-owned directories with
-uninstall/clear-data lifetime. API 30+ uses mounted volumes and All files access.
-See [collection recovery](configuration-and-data.md#android-collection-location-recovery).
+Collection volumes and shared file intake follow the
+[mobile file storage policy](mobile-file-storage.md).
 
 ## Packaging and verification
 

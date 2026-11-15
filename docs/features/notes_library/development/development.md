@@ -27,7 +27,7 @@ python3 dev.py test desktop --exact-file Python/tests/editing/test_notes_library
 
 ## Mobile browsing and document lifecycle
 
-`Python/mobile/notes_discovery.py` stops at a marked root. Compatibility host `Python/mobile/obsidian.py` receives callbacks from `composition/presentation.py:notes_host`. Within the feature, `mobile/notes_library.py:VaultBrowser` owns Files/history, `library_panels.py` owns retained queries and scroll, and `library_opening.py:LibraryDocuments` admits and retires documents. `preparation.py` owns deferred reads and cleanup.
+`Python/mobile/notes_discovery.py` scans captured sources up to marked roots and publishes rows for the current request. Compatibility host `Python/mobile/obsidian.py` receives callbacks from `composition/notes.py:notes_host`. Within the feature, `mobile/notes_library.py:VaultBrowser` owns Files and history. `library_tree.py` projects visible rows for native and widget lists, and `library_panels.py` owns retained queries and scroll. `library_opening.py:LibraryDocuments` prepares, admits and retires documents. `preparation.py` owns deferred reads and cleanup.
 
 Back dismisses transient controls and cancels pending loads first. Before returning from an open Search result, flush the editor and resolve Save/Discard/Cancel. Restore row and viewport for the same scope/query. Cancel or failed save retains the draft. Publish a replacement only after access, navigation generation and WebView admission checks. Hold the lease until abandoned workers retire. Lock invalidates callbacks before hiding content.
 
@@ -53,7 +53,7 @@ admission. `drawer_motion.py` owns drawer animation and respects reduced motion
 and the Android E Ink setting. Disposal detaches opening observers, restores
 any replaced Android listener and finishes pending dismissals.
 
-`Python/mobile/composition/presentation.py:notes_drawer_host` supplies the
+`Python/mobile/composition/notes.py:notes_drawer_host` supplies the
 current window, fold division, appearance, scroll clearance and privacy gate.
 The host-created overlay remains registered with screen privacy, which detaches
 private panels before showing the unlock screen.

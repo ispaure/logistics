@@ -1,6 +1,6 @@
 # Local iPhone and iPad deployment
 
-Use [manager delivery](../../user/build-manager-journeys.md) → Dev devices and select saved recipients. The low-level helper is `mobile_build/deployment/device_tools.py`. Set up [verified native prerequisites](build-manager.md#project-owned-native-prerequisite-setup), then expose the pure langdetect wheel to binary-only child installers:
+Use [manager delivery](operator/workflows.md) → Dev devices and select saved recipients. The low-level helper is `mobile_build/deployment/device_tools.py`. Set up [verified native prerequisites](build-manager.md#project-owned-native-prerequisite-setup), then expose the pure langdetect wheel to binary-only child installers:
 
 ```sh
 export PIP_FIND_LINKS="$PWD/mobile_build/.tools/release-wheels"

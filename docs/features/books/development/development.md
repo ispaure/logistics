@@ -32,6 +32,5 @@ For format changes, run `python3 dev.py test desktop --exact-file Python/tests/r
 
 `Python/mobile/reader_sessions.py` and `reader_ui.py` route to `features/books/mobile/library/catalog_panel.py`. Refresh and Import live in the native toolbar on iOS and the header on Android. Folder rows open Workspaces. `library/index.py` indexes ordinary imports and excludes protected metadata. `test_library_catalog.py` checks discovery and activation.
 
-## Imported metadata publication
-
-`Python/mobile/library_edits.py` replaces the managed UUID copy after revision and checksum validation. A bounded journal recovers matching before/after digests on open and stays available on conflict. Check cancellation before each file enters publication. Provider adapters own their transactions and credentials.
+See [imported metadata publication](../../../development/architecture/document-storage.md#imported-metadata-publication)
+for mobile EPUB and CBZ copies.

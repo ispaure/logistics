@@ -21,6 +21,13 @@ Set text or Markdown size in Settings. Books and comics have their own
 Appearance controls. On Android, look for **High contrast / E Ink** in
 Appearance.
 
+## Installing Android test builds
+
+Accept your Firebase App Distribution invitation with your Google account,
+download the APK, and allow installation from that source. Keep the existing
+beta installed to preserve its data. Debug-signed builds have a separate
+signing identity. See the [Build Deployment Manager guide](../../development/build-release/operator/setup.md).
+
 ## Read more
 
 - [Documents and readers](../documents/documents.md)

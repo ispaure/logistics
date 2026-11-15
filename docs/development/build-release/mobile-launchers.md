@@ -1,6 +1,6 @@
 # Logistics mobile build and deployment commands
 
-Use the [mobile handbook](mobile-handbook.md) for host setup and Briefcase builds. Start operator checks and releases in [Build Deployment Manager](../../user/build-manager.md). The legacy shortcuts and deployment window are retired. Direct commands below support diagnostics; full release gates run through reviewed manager plans.
+Use the [mobile handbook](mobile-handbook.md) for host setup and Briefcase builds. Start operator checks and releases in [Build Deployment Manager](operator/setup.md). The legacy shortcuts and deployment window are retired. Direct commands below support diagnostics; full release gates run through reviewed manager plans.
 
 ## Android device helper
 
@@ -27,7 +27,7 @@ Use the project owner's Google account. The direct helper builds from current lo
 
 ## Prepare a native build
 
-Complete [tooling readiness](../../user/build-manager.md#project-tooling-readiness-and-repair). Use the [platform recipes](mobile-handbook.md#run-in-an-iphone-simulator-and-open-xcode) and [prepared wheel cache](mobile-device-deployment.md). Source staging defaults to committed inputs; `--allow-dirty` supports development. Normal app artifacts precede the separate Briefcase test build. The [artwork installer](mobile-preparation.md#launcher-artwork) runs during native composition.
+Complete [tooling readiness](operator/setup.md#project-tooling-readiness-and-repair). Use the [platform recipes](mobile-handbook.md#run-in-an-iphone-simulator-and-open-xcode) and [prepared wheel cache](mobile-device-deployment.md). Source staging defaults to committed inputs; `--allow-dirty` supports development. Normal app artifacts precede the separate Briefcase test build. The [artwork installer](mobile-preparation.md#launcher-artwork) runs during native composition.
 
 ## Native navigation foundation checks
 
