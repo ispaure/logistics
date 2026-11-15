@@ -33,10 +33,11 @@ class ManagerSuiteTests(unittest.TestCase):
             mobile = replace(desktop, id='mobile', argv=(*desktop.argv[:2], 'mobile_build/tests', '--isolate-modules'),
                              environment={'TOGA_BACKEND': 'toga_dummy'})
             shared = replace(desktop, id='shared', argv=(*desktop.argv[:2], 'Python/commonUtils/tests', '--isolate-modules'))
+            replay = replace(shared, id='replay', environment={'TOGA_BACKEND': 'toga_dummy'})
             native = Phase('native', (sys.executable, 'ui_tools.py'), str(ROOT), resources={'device:fixture': 1})
-            plan = Plan('Fixture', 'Test', {}, (desktop, mobile, shared, native), temporary)
+            plan = Plan('Fixture', 'Test', {}, (desktop, mobile, shared, replay, native), temporary)
             budgeted = suites.with_worker_budget(plan, 'android', directory=directory)
-            self.assertEqual([p.resources.get(test_workers.HOST) for p in budgeted.phases], [4, 1, 4, None])
+            self.assertEqual([p.resources.get(test_workers.HOST) for p in budgeted.phases], [4, 4, 4, 1, None])
             self.assertEqual(budgeted.phases[0].stop_grace, 6)
             self.assertEqual(budgeted.phases[-1], native)
             for backend in ('GitHub', 'Local Parallels VM'):
@@ -65,6 +66,28 @@ class ManagerSuiteTests(unittest.TestCase):
                     result = suites.with_worker_budget(plan, 'macos', directory=directory).phases[0]
                     self.assertEqual(result.resources[test_workers.HOST], count)
                     self.assertEqual(result.resources[test_workers.PLATFORM + 'macos'], count)
+
+    def test_windows_and_linux_budget_reviewed_files_for_each_platform(self):
+        from build_manager import test_workers
+        with TemporaryDirectory() as temporary:
+            directory = Path(temporary) / 'resources'
+            test_workers.configure(dict(per_platform=4, host=4), directory)
+            for host, target in (('win32', 'windows'), ('linux', 'linux')):
+                with patch.object(sys, 'platform', host):
+                    for root, pattern, count in (
+                            ('Python/commonUtils/tests', 'test*.py', 4),
+                            ('Python/commonUtils/tests/runtime', 'test_streams.py', 4),
+                            ('Python/commonUtils/tests/index', 'test_persistent_directory_index.py', 4 if host == 'win32' else 1),
+                            ('Python/commonUtils/tests/markdown', 'test*.py', 1),
+                            ('Python/tests', 'test*.py', 4 if host == 'win32' else 1)):
+                        with self.subTest(host=host, root=root, pattern=pattern):
+                            phase = Phase('tests', (sys.executable, 'Python/tests/run_regressions.py', root,
+                                '--isolate-modules', '--pattern', pattern), str(ROOT),
+                                environment={'QT_QPA_PLATFORM': 'offscreen'})
+                            plan = Plan('Fixture', 'Test', {}, (phase,), temporary)
+                            result = suites.with_worker_budget(plan, target, directory=directory).phases[0]
+                            self.assertEqual(result.resources[test_workers.HOST], count)
+                            self.assertEqual(result.resources[test_workers.PLATFORM + target], count)
 
     def setUp(self):
         temporary = TemporaryDirectory(prefix='manager-suite-contracts-')

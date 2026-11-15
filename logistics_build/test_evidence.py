@@ -119,7 +119,8 @@ def key_for(phase, *, runtime=None):
     if not (root / '.git').exists():
         return ''  # Synthetic fixture plans have no verifiable tracked inputs.
     if suite == 'commonutils':
-        scopes = ['Python/commonUtils', 'Python/tests/run_regressions.py', 'Python/tests/regression_timing.py']
+        scopes = ['Python/commonUtils', 'Python/tests/run_regressions.py', 'Python/tests/regression_timing.py',
+                  'Python/tests/parallel_regressions.py']
     elif suite == 'release-tooling':
         scopes = ['.github/scripts', 'logistics_build/manager_suites.py']
     elif suite == 'compression-parity':

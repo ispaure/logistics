@@ -36,10 +36,13 @@ class DeveloperCommandTests(unittest.TestCase):
             self.assertEqual(qt.args[0][qt.args[0].index('--workers') + 1], '4')
             self.assertNotIn('--workers', native.args[0])
             self.assertEqual(native.kwargs['env']['TOGA_BACKEND'], 'toga_dummy')
-            for suite in ('mobile', 'bridge'):
-                with self.subTest(suite=suite), self.assertRaises(SystemExit) as error:
-                    dev.main(['test', suite, '--workers', '2'])
-                self.assertEqual(error.exception.code, 2)
+            self.assertEqual(dev.main(['test', 'mobile', '--workers', '2']), 0)
+            command = run.call_args.args[0]
+            self.assertEqual(command[command.index('--workers') + 1], '2')
+            self.assertEqual(run.call_args.kwargs['env']['TOGA_BACKEND'], 'toga_dummy')
+            with self.assertRaises(SystemExit) as error:
+                dev.main(['test', 'bridge', '--workers', '2'])
+            self.assertEqual(error.exception.code, 2)
 
     def setUp(self):
         # These cases exercise routing; real inventory validation has its own fixtures.

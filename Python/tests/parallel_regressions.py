@@ -1,4 +1,4 @@
-"""Opt-in scheduling for reviewed macOS offscreen file-stage processes."""
+"""Schedule reviewed offscreen test files in isolated processes."""
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from contextlib import contextmanager
 import os
@@ -6,7 +6,7 @@ from pathlib import Path
 import signal
 import subprocess
 import sys
-from threading import Event
+from threading import Event, Lock, Thread
 from time import monotonic
 from unittest.mock import patch
 
@@ -114,12 +114,64 @@ QT_GROUPS = {
     ),
 }
 QT_FILES = frozenset(directory + '/' + name for directory, names in QT_GROUPS.items() for name in names)
+WINDOWS_GROUPS = {
+    'Python/commonUtils/tests/index': (
+        'test_directory_exclusions.py', 'test_directory_index.py', 'test_directory_reconcile.py',
+        'test_directory_schema.py', 'test_directory_search_terms.py', 'test_discovery_index_ui.py',
+        'test_event_driven_index.py', 'test_index_allocation.py', 'test_index_coordinator.py',
+        'test_index_efficiency.py', 'test_index_folder_sizes.py', 'test_index_operation_state.py',
+        'test_index_search_jobs.py', 'test_integrated_index_search.py', 'test_managed_index_views.py',
+        'test_persistent_directory_index.py', 'test_shared_browser_index.py', 'test_shared_index_jobs.py',
+    ),
+    'Python/commonUtils/tests/browser': (
+        'test_browser_file_actions.py', 'test_browser_index_policy.py', 'test_browser_model_metadata.py',
+        'test_browser_polish.py', 'test_browser_presentation.py', 'test_browser_scan_request.py',
+        'test_browser_size_sort.py', 'test_file_browser.py', 'test_search.py', 'test_search_columns.py',
+        'test_search_delay.py', 'test_sqlite_browser.py', 'test_sqlite_browser_integration.py',
+    ),
+    'Python/tests/version_control': (
+        'test_git_backend.py', 'test_git_commands.py', 'test_git_diff_view.py', 'test_git_hunk_layout.py',
+        'test_git_menu_retirement.py', 'test_git_merge.py', 'test_git_models.py', 'test_git_preferences.py',
+        'test_git_repository_tabs.py', 'test_git_ui_actions.py', 'test_git_ui_actions_2.py',
+        'test_git_ui_files.py', 'test_git_ui_history.py', 'test_git_ui_history_2.py',
+        'test_git_ui_lifecycle.py', 'test_git_ui_operations.py', 'test_git_ui_operations_2.py',
+        'test_git_ui_presentation.py', 'test_git_watchers.py',
+    ),
+    'Python/tests/editing': (
+        'test_code_font.py', 'test_editor_changes.py', 'test_editor_hunks.py', 'test_editor_resource_picker.py',
+        'test_notes_library_folders.py', 'test_notes_playlists.py',
+        'test_text_editor.py', 'test_text_editor_extensions.py', 'test_text_editor_recovery.py',
+    ),
+}
+WINDOWS_FILES = frozenset(directory + '/' + name for directory, names in WINDOWS_GROUPS.items() for name in names)
+# This set passed matched serial and concurrent pilots on Windows and Fedora.
+PORTABLE_GROUPS = {
+    'Python/commonUtils/tests/runtime': (
+        'test_batch.py', 'test_browsing.py', 'test_choices.py', 'test_file_locking.py',
+        'test_line_redaction.py', 'test_migrations.py', 'test_persistence.py',
+        'test_private_publication.py', 'test_protected_keys.py', 'test_session_store.py',
+        'test_sse_framing.py', 'test_streams.py', 'test_transfer_phases.py',
+    ),
+}
+PORTABLE_FILES = frozenset(directory + '/' + name for directory, names in PORTABLE_GROUPS.items() for name in names)
+MOBILE_GROUPS = {
+    'mobile_build/tests/documents': ('test_editor_picker.py', 'test_notebook_storage.py'),
+    'mobile_build/tests/editing': ('test_notes_library_panels.py',),
+    'mobile_build/tests/native': ('test_android_back.py',),
+    'mobile_build/tests/storage': ('test_storage_reader_opening.py',),
+    'mobile_build/tests/workspace': ('test_hub_documents.py', 'test_workspace_navigation.py'),
+}
+MOBILE_FILES = frozenset(directory + '/' + name for directory, names in MOBILE_GROUPS.items() for name in names)
 
 
 def require_parallel_environment(workers=2):
-    if (sys.platform != 'darwin' or os.environ.get('QT_QPA_PLATFORM') != 'offscreen'
-            or os.environ.get('TOGA_BACKEND')):
-        raise ValueError('Parallel test workers currently require macOS and QT_QPA_PLATFORM=offscreen.')
+    toga = os.environ.get('TOGA_BACKEND')
+    if toga:
+        supported = sys.platform == 'darwin' and toga == 'toga_dummy'
+    else:
+        supported = sys.platform in ('darwin', 'linux', 'win32') and os.environ.get('QT_QPA_PLATFORM') == 'offscreen'
+    if not supported:
+        raise ValueError('Parallel test workers require offscreen Qt on Windows, Linux or macOS, or dummy Toga on macOS.')
     if os.environ.get('BUILD_MANAGER_TEST_PROGRESS') == '1':
         reserved = os.environ.get(RESERVATION_ENV, '')
         if not reserved.isdecimal() or not workers <= int(reserved) <= 8:
@@ -137,7 +189,12 @@ def eligible(path):
         name = path.resolve().relative_to(ROOT).as_posix()
     except ValueError:
         return False
-    return name in QT_FILES and not os.environ.get('TOGA_BACKEND')
+    toga = os.environ.get('TOGA_BACKEND')
+    if toga:
+        return sys.platform == 'darwin' and toga == 'toga_dummy' and name in MOBILE_FILES
+    if sys.platform == 'win32':
+        return name in PORTABLE_FILES or name in WINDOWS_FILES
+    return name in PORTABLE_FILES or sys.platform == 'darwin' and name in QT_FILES
 
 
 @contextmanager
@@ -167,12 +224,63 @@ def cooperate():
         yield
 
 
-def child(command, environment, timeout, cancelled):
-    """Own the entire child process group, including after its leader exits."""
-    from build_manager.executor import stop_process
-    process = subprocess.Popen(command, env=environment, start_new_session=True)
-    deadline = monotonic() + timeout
+_windows_output_lock = Lock()
+
+
+@contextmanager
+def _windows_child(command, environment):
+    """Assign before resume and drain the job's output while the file runs."""
+    from build_manager.windows_process import WindowsProcess
+
+    process = WindowsProcess(command, cwd=Path.cwd(), env=environment)
+    errors = []
+
+    def forward_output():
+        try:
+            with process.stdout as stream:
+                while line := stream.readline(16384):
+                    with _windows_output_lock:
+                        sys.stdout.buffer.write(line)
+                        sys.stdout.buffer.flush()
+        except (OSError, ValueError) as error:
+            errors.append(error)
+
+    reader = Thread(target=forward_output, daemon=True)
     try:
+        reader.start()
+        yield process
+    finally:
+        try:
+            process.kill_tree()
+            process.wait_tree()
+        finally:
+            process.close()
+            if reader.ident is None:
+                process.stdout.close()
+            else:
+                reader.join(timeout=5)
+                if reader.is_alive():
+                    raise RuntimeError('Owned Windows test output did not close.')
+        if errors:
+            raise RuntimeError('Could not stream Windows test output.') from errors[0]
+
+
+@contextmanager
+def _posix_child(command, environment):
+    from build_manager.executor import stop_process
+
+    process = subprocess.Popen(command, env=environment, start_new_session=True)
+    try:
+        yield process
+    finally:
+        stop_process(process, grace=.25)
+
+
+def child(command, environment, timeout, cancelled):
+    """Own the entire child process tree, including after its leader exits."""
+    launch = _windows_child if os.name == 'nt' else _posix_child
+    with launch(command, environment) as process:
+        deadline = monotonic() + timeout
         while True:
             remaining = deadline - monotonic()
             if cancelled.is_set() or remaining <= 0:
@@ -190,11 +298,10 @@ def child(command, environment, timeout, cancelled):
                 return process.wait(timeout=min(.05, remaining)), None
             except subprocess.TimeoutExpired:
                 pass
-    finally:
-        stop_process(process, grace=.25)
 
 
-def schedule(plan, execute, report, directory, *, workers, mode, fail_fast, cancelled):
+def schedule(plan, execute, report, directory, *, workers, mode, fail_fast, cancelled,
+             group_eligible=False):
     """Preserve stage and exclusive barriers; aggregate in source-plan order."""
     results = {}
     unstarted = {}
@@ -204,7 +311,7 @@ def schedule(plan, execute, report, directory, *, workers, mode, fail_fast, canc
     def mark(indices, why):
         for index in indices:
             stage, row = plan[index]
-            unstarted[index] = dict(file=str(row.path.relative_to(directory)), stage=stage.value,
+            unstarted[index] = dict(file=row.path.relative_to(directory).as_posix(), stage=stage.value,
                 cases=[case for case in row.inventory() if case['stage'] == stage.value], reason=why)
 
     def save():
@@ -238,6 +345,10 @@ def schedule(plan, execute, report, directory, *, workers, mode, fail_fast, canc
     with ThreadPoolExecutor(max_workers=workers) as pool, retire_on_error():
         for stage in stages:
             pending = [i for i, item in enumerate(plan) if item[0] is stage]
+            if group_eligible:
+                # Coalesce reviewed work to avoid draining the pool between
+                # small batches. Stable sorting retains both groups' order.
+                pending.sort(key=lambda i: not eligible(plan[i][1].path))
             active = {}
             stage_failed = False
             while pending or active:

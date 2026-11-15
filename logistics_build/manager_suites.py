@@ -120,19 +120,36 @@ def with_worker_budget(plan, target, *, directory=None):
                 or '--isolate-modules' not in phase.argv):
             continue
         selected.append(phase.id)
-        if (sys.platform != 'darwin'
-                or phase.environment.get('QT_QPA_PLATFORM') != 'offscreen'
-                or phase.environment.get('TOGA_BACKEND')):
+        toga = phase.environment.get('TOGA_BACKEND')
+        if toga:
+            supported = sys.platform == 'darwin' and toga == 'toga_dummy'
+        else:
+            supported = sys.platform in ('darwin', 'linux', 'win32') and phase.environment.get('QT_QPA_PLATFORM') == 'offscreen'
+        if not supported:
             continue
         capability = Path(phase.cwd) / 'Python/tests/parallel_regressions.py'
         if capability.is_file():
             declarations = {}
             for node in ast.parse(capability.read_text()).body:
                 if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-                    if node.targets[0].id in {'SUPPORTED_WORKERS', 'RESERVATION_ENV', 'QT_GROUPS'}:
+                    if node.targets[0].id in {'SUPPORTED_WORKERS', 'RESERVATION_ENV', 'QT_GROUPS',
+                                              'PORTABLE_GROUPS', 'MOBILE_GROUPS', 'WINDOWS_GROUPS'}:
                         declarations[node.targets[0].id] = ast.literal_eval(node.value)
-            groups = declarations.pop('QT_GROUPS', None)
-            if declarations == dict(SUPPORTED_WORKERS=(1, 2, 4, 8), RESERVATION_ENV='BUILD_MANAGER_RESERVED_TEST_WORKERS') and _parallel_selection(phase, groups):
+            qt_groups = declarations.pop('QT_GROUPS', None)
+            portable_groups = declarations.pop('PORTABLE_GROUPS', {})
+            mobile_groups = declarations.pop('MOBILE_GROUPS', {})
+            windows_groups = declarations.pop('WINDOWS_GROUPS', {})
+            if toga:
+                groups = mobile_groups
+            elif sys.platform == 'darwin':
+                # None identifies the historical Git-only runner capability.
+                groups = {**qt_groups, **portable_groups} if qt_groups is not None else None
+            elif sys.platform == 'win32':
+                groups = {**portable_groups, **windows_groups}
+            else:
+                groups = portable_groups
+            if (declarations == dict(SUPPORTED_WORKERS=(1, 2, 4, 8), RESERVATION_ENV='BUILD_MANAGER_RESERVED_TEST_WORKERS')
+                    and _parallel_selection(phase, groups)):
                 accelerated.append(phase.id)
     plan = replace(plan, phases=tuple(replace(phase, stop_grace=max(6, phase.stop_grace))
         if phase.id in accelerated else phase for phase in plan.phases))
@@ -250,6 +267,8 @@ def with_host_gates(plan, desktop_python, *, release=False):
     hosts = tuple(remaining_mobile_stages(manifest_phases(first.cwd, 'mobile-host',
         {'desktop': desktop_python, 'mobile': first.argv[0]},
         ('Python/tests/run_regressions.py', '{directory}', '--isolate-modules'), environment=env)))
+    hosts = tuple(replace(phase, environment=dict(phase.environment, TOGA_BACKEND='toga_dummy'))
+                  if phase.id in {'mobile-host', 'mobile-host.smoke'} else phase for phase in hosts)
     from logistics_build.browser_tooling import require_release_browser
     if release:
         hosts = require_release_browser(hosts, first, desktop_python, plan.workspace)
