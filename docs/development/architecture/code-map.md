@@ -1,5 +1,21 @@
 # Finding your way around the code
 
+## Checkout root
+
+| Path | What belongs there |
+| --- | --- |
+| `Python/` | Desktop and mobile application source, feature modules, desktop tests and the pinned commonUtils submodule. |
+| `docs/` | User and developer wiki. Start at `docs/docs.md`. |
+| `Scripts/` | Existing development helpers called by the root launchers and `dev.py`. Keep their paths when updating callers. |
+| `Credentials/` | Local, ignored credentials. Keep this directory out of shared and exported source. |
+| `logistics_build/` | The external Build Deployment Manager adapter, source capture, platform execution and retention policy. Start at `logistics_build/build_project.py` and `build-project.json`. |
+| `mobile_build/` | Mobile staging, Briefcase project and deployment recipes, mobile host tests and native fixtures. |
+| `.github/` | Hosted validation, release workflows and packaging scripts. |
+| `dev.py` and `LaunchLogistics_*` | Checkout setup and test commands, and platform-specific desktop launchers. |
+| `tmp/`, `test-results/` and `mobile_build/logs/` | Ignored temporary work and retained evidence. See [validation artifacts](../testing/validation-artifacts.md). |
+
+## Application owners
+
 | Task | Start here |
 | --- | --- |
 | Start desktop or change the rail, chooser or tabs | `Python/launch.py`, `Python/desktop/{main_window,sidebar,landing,documents}.py` |

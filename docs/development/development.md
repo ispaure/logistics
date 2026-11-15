@@ -13,6 +13,10 @@ open its Development page.
 | Review a build plan, stage the mobile app or prepare a release | [Build and release](build-release/build-release.md) |
 | Update a wiki page or verify Help | [Documentation](documentation/documentation.md) |
 
+See the [checkout map](architecture/code-map.md#checkout-root) for source and
+entry points, and [validation artifacts](testing/validation-artifacts.md) for
+reports from completed tests.
+
 ## Worked lookups
 
 - Follow the [desktop transfer controls](../features/rclone/development/transfers.md#find-desktop-transfer-controls) from the transfer window to its Qt view and progress adapter.
