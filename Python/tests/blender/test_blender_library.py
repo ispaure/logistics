@@ -387,6 +387,36 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertEqual((self.preset / '.logistics-addons.json').read_bytes(), state)
         self.assertNotIn('updated=True', (self.preset / 'scripts/addons/tool/__init__.py').read_text())
 
+    def test_failed_publication_restores_missing_resources_and_pending_selection(self):
+        self.library.add(self.package('tool.zip'))
+        self.library.save_pending_selection(self.release, 'Art', ['legacy:tool'],
+                                            bluehole={'enabled': False, 'branch': 'main'})
+        selection = self.preset / '.logistics-addons.json'
+        pending = selection.read_bytes()
+        missing = [self.preset / folder for folder in ('config', 'datafiles')]
+        for path in missing:
+            path.rmdir()
+        preferences = self.preset / 'config/userpref.blend'
+        installed = self.preset / 'scripts/addons/tool'
+
+        def prepare(*args, **kwargs):
+            self.assertTrue((installed / '__init__.py').is_file())
+            self.assertEqual(selection.read_bytes(), pending)
+            preferences.write_bytes(b'prepared preferences')
+
+        def fail_publication(*args):
+            self.assertEqual(preferences.read_bytes(), b'prepared preferences')
+            raise OSError('selection publication failed')
+
+        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch('features.blender.addons.scanning.run_blender_script', side_effect=prepare), \
+                patch.object(self.library, '_publish_selection', side_effect=fail_publication):
+            with self.assertRaisesRegex(OSError, 'selection publication failed'):
+                self.library.apply(self.release, 'Art', ['legacy:tool'])
+        self.assertEqual(selection.read_bytes(), pending)
+        self.assertFalse(installed.exists())
+        self.assertEqual([path.name for path in missing if path.exists()], [])
+
     def test_cancel_during_extraction_restores_resources_and_selection(self):
         from commonUtils.runtime.operations import OperationCancelled
         from features.blender.addons import library as module
@@ -429,6 +459,8 @@ class BlenderLibraryTests(unittest.TestCase):
         scoped = self.library.for_preset(self.preset)
         scoped.add(self.package('private.zip', (2, 0, 0)))
         original_resolve = self.library.resolve
+        datafiles = self.preset / 'datafiles'
+        datafiles.rmdir()
         before = self.preset / 'config/userpref.blend'; before.write_bytes(b'artist preferences')
         def race(*args, **kwargs):
             addon = original_resolve(*args, **kwargs)
@@ -442,6 +474,7 @@ class BlenderLibraryTests(unittest.TestCase):
                 self.library.apply(self.release, 'Art', ['legacy:tool'], bluehole={'enabled': False, 'branch': 'main'})
         run.assert_not_called()
         self.assertEqual(before.read_bytes(), b'artist preferences')
+        self.assertFalse(datafiles.exists())
         self.assertFalse((self.preset / 'scripts/addons/tool').exists())
         self.assertFalse((self.preset / '.logistics-addons.json').exists())
 
