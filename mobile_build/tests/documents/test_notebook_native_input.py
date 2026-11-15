@@ -165,7 +165,7 @@ class NativeNotebookLifecycleTests(unittest.IsolatedAsyncioTestCase):
         async def wait(value): return await value
         panel.bridge = NS(active=True, wait=wait, sequence=0)
         panel.web = NS(evaluate_javascript=AsyncMock(return_value=True))
-        panel.editor = NS(index=0, notebook=NS(pages=[NS(id="synthetic-page")])); panel.busy = False; panel.closed = False
+        panel.editor = NS(index=0, notebook=NS(pages=[NS(id="synthetic-page")], large_pdf_view=False)); panel.busy = False; panel.closed = False
         panel.progress = None
         panel.pen_input = NS(owns_native_transport=True, pending=True)
         panel.document = NS(save=Mock())
@@ -328,7 +328,7 @@ class NativeNotebookResponseSafetyTests(unittest.IsolatedAsyncioTestCase):
         panel.web=NS();panel.view=NS(children=[panel.web]);panel.status=NS(text='')
         panel.app=NS(active_host=True,adaptive=NS(render=Mock()))
         page = NS(id="synthetic-page", strokes=[])
-        panel.editor = NS(index=0, notebook=NS(pages=[page], page=lambda index: page), page_previews=Mock(return_value=[]))
+        panel.editor = NS(index=0, notebook=NS(pages=[page], page=lambda index: page, large_pdf_view=False), page_previews=Mock(return_value=[]))
         panel.document=NS(resource=object(),recovery=object(),dirty=False,recovery_deleted=False)
         panel.library=Mock();panel.state=lambda:{'native_pen':False}
         return panel
