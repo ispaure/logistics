@@ -106,6 +106,12 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic, strong) UILabel *bufferLabel;
 @property(nonatomic, strong) UIStackView *bufferOverlay;
 @property(nonatomic) BOOL buffering, hasPlayed;
+@property(nonatomic, copy) NSString *audioSwitchTrack;
+@property(nonatomic) NSUInteger audioSwitchGeneration;
+@property(nonatomic) BOOL audioSwitchSawBuffering, audioSwitchBuffered;
+@property(nonatomic) uint64_t audioSwitchPlayed;
+@property(nonatomic) int64_t audioSwitchClock;
+@property(nonatomic) NSTimeInterval audioSwitchDeadline;
 @property(nonatomic, copy) NSString *transportFailure;
 @property(nonatomic) BOOL hingePartiallyOpen, tabletop, portraitTabletop;
 @property(nonatomic) CGRect tabletopArea;
@@ -180,6 +186,12 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @end
 
 static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoController *owner);
+
+@interface LGVideoController (AudioSwitch)
+- (BOOL)switchAudioTrack:(VLCMediaPlayerTrack *)track;
+- (void)cancelAudioSwitch;
+- (void)updateAudioSwitch;
+@end
 
 @interface LGVideoController (AirPlay)
 - (void)installAirPlayControls;
@@ -380,7 +392,7 @@ typedef struct {
             [self setNeedsUpdateOfHomeIndicatorAutoHidden];
             [self setNeedsUpdateOfScreenEdgesDeferringSystemGestures];
         }];
-    self.bufferOverlay.hidden = !self.buffering || self.lockHidden || self.pipActive;
+    self.bufferOverlay.hidden = self.retired || !self.buffering || self.lockHidden || self.pipActive;
     [self scheduleControls];
 }
 - (void)scheduleControls {
@@ -622,6 +634,12 @@ typedef struct {
     self.ended = NO;
     self.lastPlaybackProgress = self.lastFrameProgress = NSProcessInfo.processInfo.systemUptime;
     self.lastRenderedClock = target;
+    if (self.audioSwitchTrack.length) {
+        self.audioSwitchGeneration++;
+        self.audioSwitchSawBuffering = self.audioSwitchBuffered = NO;
+        self.audioSwitchPlayed = self.player.media.statistics.playedAudioBuffers;
+        self.audioSwitchDeadline = NSProcessInfo.processInfo.systemUptime + 20;
+    }
     if (self.networkResumePending) self.bufferPosition = target;
     self.startMilliseconds = self.player.isPlaying ? -1 : target;
     self.resumeSeekSubmitted = NO;
@@ -640,6 +658,7 @@ typedef struct {
 }
 - (void)done:(id)sender { if (self.closed) self.closed(); }
 - (void)pause {
+    [self cancelAudioSwitch];
     if ([self hasAirPlay]) {
         [self.airPlayPlayer pause];
         self.playRequested = NO;
@@ -759,6 +778,14 @@ typedef struct {
     self.pausePending = NO;
     if (self.audioSuppressed) { self.player.audio.muted = self.resumeMuted; self.audioSuppressed = NO; }
     self.playRequested = YES;
+    if (self.audioSwitchTrack.length) {
+        // Paused preroll can advance VLC's reported clock while the displayed
+        // checkpoint stays held. Reflush at that checkpoint on explicit Play.
+        self.audioSwitchGeneration++;
+        self.audioSwitchSawBuffering = self.audioSwitchBuffered = NO;
+        self.audioSwitchDeadline = NSProcessInfo.processInfo.systemUptime + 20;
+        self.player.time = [VLCTime timeWithNumber:@([self positionMilliseconds])];
+    }
     [self clearPausePresentation];
     // Resume an already-open paused input immediately. Fresh inputs are
     // positioned as soon as the native Opening event arrives.
@@ -809,8 +836,12 @@ typedef struct {
     BOOL frameStall = !missingFrames && (now - self.lastFrameProgress >= 2.5);
     BOOL fallbackStall = missingFrames && (now - self.lastPlaybackProgress >= 3.0 ||
         (self.networkWaiting && now - self.lastFrameProgress >= 3.0));
-    BOOL stalled = self.playRequested && !self.manualResumeRequired && !self.ended &&
-        (!self.pausePending || self.rateChangePending) && (frameStall || fallbackStall);
+    BOOL switchingAudio = self.audioSwitchTrack.length && self.playRequested;
+    BOOL stalled = switchingAudio || (self.playRequested && !self.manualResumeRequired && !self.ended &&
+        (!self.pausePending || self.rateChangePending) && (frameStall || fallbackStall));
+    self.bufferLabel.text = switchingAudio ? @"Switching audio…" : @"";
+    self.bufferLabel.hidden = !switchingAudio;
+    self.bufferSpinner.accessibilityLabel = switchingAudio ? @"Switching audio" : @"Buffering video";
     if (stalled && self.transportFailure) { [self playbackFailed]; return; }
     BOOL changed = self.buffering != stalled;
     self.buffering = stalled;
@@ -985,6 +1016,7 @@ typedef struct {
         self.lastTextTrackCount = textCount;
         [self applyPlaybackOptions];
     }
+    [self updateAudioSwitch];
     [self updatePlaybackProgress];
     // Playing can arrive before the first frame/seek acknowledgement. Revisit
     // eligibility once those arrive without postponing an existing deadline.
@@ -1025,6 +1057,7 @@ typedef struct {
 - (void)mediaPlayerStateChanged:(VLCMediaPlayerState)state {
     dispatch_async(dispatch_get_main_queue(), ^{
         if (self.retired || [self hasAirPlay]) return;
+        if (state == VLCMediaPlayerStateStopped || state == VLCMediaPlayerStateError) [self cancelAudioSwitch];
         [self logHDRTransition:[NSString stringWithFormat:@"state-%ld", (long)state]];
         if (state != VLCMediaPlayerStatePlaying) self.pausePending = NO;
         if (state == VLCMediaPlayerStatePaused && self.player.state == VLCMediaPlayerStatePaused &&
@@ -1173,7 +1206,11 @@ typedef struct {
     for (NSUInteger index = 0; index < tracks.count; index++) {
         VLCMediaPlayerTrack *track = tracks[index];
         [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:[self trackLabel:track index:index] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-            if ([self canPlay:NO]) { track.selectedExclusively = YES; [self selectTrack:text ? @"subtitle_track" : @"audio_track" index:(NSInteger)index key:[self trackKey:track]]; }
+            if ([self canPlay:NO]) {
+                if (text) track.selectedExclusively = YES;
+                else if (![self switchAudioTrack:track]) return;
+                [self selectTrack:text ? @"subtitle_track" : @"audio_track" index:(NSInteger)index key:[self trackKey:track]];
+            }
         }]];
     }
     if (text) {
@@ -1188,8 +1225,21 @@ typedef struct {
     [self presentPlaybackDialog:menu];
 }
 - (void)mediaPlayerBufferingChanged:(float)progress {
-    // Decoder progress callbacks also describe prebuffering while frames are
-    // flowing. The render-progress watchdog owns the quiet buffering indicator.
+    // Keep callbacks queued before a replacement selection/seek from completing it.
+    NSUInteger generation = self.audioSwitchGeneration;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (!self.audioSwitchTrack.length || self.retired || generation != self.audioSwitchGeneration) return;
+        if (progress <= 0) self.audioSwitchSawBuffering = YES;
+        if (progress >= 1 && self.audioSwitchSawBuffering && !self.audioSwitchBuffered) {
+            self.audioSwitchBuffered = YES;
+            // Anything counted before this post-flush event could belong to
+            // the old output queue. Require another real output buffer.
+            self.audioSwitchPlayed = self.player.media.statistics.playedAudioBuffers;
+            self.audioSwitchClock = self.player.time.value.longLongValue;
+        }
+        [self updateAudioSwitch];
+    });
+    // Ordinary decoder prebuffering still belongs to the render watchdog.
 }
 - (void)cast:(id)sender {
     if ([self hasAirPlay] || self.airPlayPreparing || (self.airPlayAvailable && [self hasAirPlayAudioRoute])) {
@@ -1226,6 +1276,7 @@ typedef struct {
         return;
     }
     self.startMilliseconds = [self positionMilliseconds];
+    [self cancelAudioSwitch];
     [self.player stop];
     self.casting = [self.player setRendererItem:renderer] && renderer != nil;
     if (self.casting) [self moveVideoToExternalHost:nil];
@@ -1330,6 +1381,8 @@ typedef struct {
     // Remove the movie before releasing its source. Leave the empty AVPlayer
     // available for another explicit AirPlay request in this window.
     self.retired = YES;
+    self.buffering = NO;
+    [self cancelAudioSwitch];
     // A closed video must not leave the window's reusable AVPlayer opted into
     // external playback while browsing or opening a protected document.
     [self detachAirPlayKeepingRoute:NO];
@@ -1783,6 +1836,7 @@ typedef struct {
 
 #import "HDRDiagnostics.m"
 #import "PausePresentation.m"
+#import "AudioSwitch.m"
 
 #import "CaptionPictureInPicture.m"
 #import "AirPlayVideo.m"

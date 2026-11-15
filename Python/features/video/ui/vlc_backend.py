@@ -1,12 +1,30 @@
 """LibVLC decoder adapted to the desktop player's Qt event/track contract."""
 
 import ctypes
+from dataclasses import dataclass
 from threading import Lock
+from time import monotonic
 
 from commonUtils.ui import pyside as qt
 from PySide6.QtMultimedia import QMediaPlayer, QMediaMetaData
 
-from .backend import PlaybackCapabilities
+from .backend import AUDIO_SWITCH_ERROR, AUDIO_SWITCH_TIMEOUT, PlaybackCapabilities
+
+
+@dataclass
+class AudioSwitch:
+    track: int
+    position: int
+    deadline: float | None
+
+
+@dataclass
+class AudioSeek:
+    track: int
+    position: int
+    buffering: bool = False
+    buffered: bool = False
+    played: int | None = None
 
 
 class NativeMediaTrack(ctypes.Structure):
@@ -73,6 +91,7 @@ class VLCPlayer(qt.QObject):
     errorOccurred = qt.Signal()
     picture = qt.Signal(object, object)
     renderedProgress = qt.Signal()
+    audioSwitchChanged = qt.Signal(bool, str)
     PlaybackState = QMediaPlayer.PlaybackState
     Error = QMediaPlayer.Error
     MediaStatus = QMediaPlayer.MediaStatus
@@ -91,6 +110,7 @@ class VLCPlayer(qt.QObject):
         self._tracks = ((), ())
         self._pending_seek = None
         self._seek_issued = False
+        self._audio_switch = self._audio_seek = None
         self._paused_preview_target = None
         self._rate = 1.
         self._options = {}
@@ -119,6 +139,8 @@ class VLCPlayer(qt.QObject):
         self._callbacks = self.make_callbacks()
         self.native.video_set_callbacks(*self._callbacks[:3], None)
         self.native.video_set_format_callbacks(self._callbacks[3], self._callbacks[4])
+        self._events = self.native.event_manager()
+        self._events.event_attach(vlc.EventType.MediaPlayerBuffering, self.audio_switch_buffering)
         self.picture.connect(self.present_picture)
         self.timer = qt.QTimer(self)
         self.timer.setInterval(100)
@@ -187,6 +209,7 @@ class VLCPlayer(qt.QObject):
             and abs(self.native.get_time() - self._paused_preview_target) <= 200) if not self.retired else False
         current = generation[:2] == (self.generation, self.seek_generation)
         if (not self.retired and self.media is not None and current
+                and self._error == self.Error.NoError
                 and ((self._state == self.PlaybackState.PlayingState and generation[2]) or preview)):
             if self._source_size is None:
                 self.read_metadata()
@@ -209,8 +232,10 @@ class VLCPlayer(qt.QObject):
         if self.retired:
             return
         if self.media is not None:
-            self._restore_audio_track = self.native.audio_get_track()
+            self._restore_audio_track = (self._audio_switch.track if self._audio_switch is not None
+                                         else self.native.audio_get_track())
             self._restore_subtitle_track = self.native.video_get_spu()
+        self.finish_audio_switch()
         self._source = url
         self.generation += 1
         self.audio.suppress(True)
@@ -264,8 +289,12 @@ class VLCPlayer(qt.QObject):
             return
         self._pause_after_open = preserve_pause
         if self.media is not None and self.native.play() == 0:
+            switch = self._audio_switch
             self.audio.suppress(preserve_pause or self._pending_seek is not None)
-            if self._held_position is not None:
+            if switch is not None:
+                switch.deadline = None if preserve_pause else monotonic() + AUDIO_SWITCH_TIMEOUT
+                self._held_position = None
+            elif self._held_position is not None:
                 # A starvation hold may already equal the paused native clock.
                 # Seeking to that exact position needlessly invalidates frames
                 # and can miss the asynchronous seek acknowledgement window.
@@ -279,6 +308,8 @@ class VLCPlayer(qt.QObject):
         if self.retired:
             return
         self._held_position = self.position()
+        if self._audio_switch is not None:
+            self._audio_switch.deadline = None
         self._pause_after_open = True
         self.audio.suppress(True)
         self.native.set_pause(1)
@@ -287,6 +318,7 @@ class VLCPlayer(qt.QObject):
     def stop(self):
         if self.retired:
             return
+        self.finish_audio_switch()
         self.native.stop()
         self.set_state(self.PlaybackState.StoppedState)
 
@@ -294,6 +326,8 @@ class VLCPlayer(qt.QObject):
         return self._state
 
     def position(self):
+        if self._audio_switch is not None:
+            return self._audio_switch.position
         if self._pending_seek is not None:
             return self._pending_seek
         return self._held_position if self._held_position is not None else self._position
@@ -304,7 +338,16 @@ class VLCPlayer(qt.QObject):
     def setPosition(self, value):
         if self.retired:
             return
-        self._pending_seek = max(0, int(value))
+        target = max(0, int(value))
+        if self._audio_switch is not None:
+            self._audio_switch.position = target
+            if self._audio_switch.deadline is not None:
+                self._audio_switch.deadline = monotonic() + AUDIO_SWITCH_TIMEOUT
+            if self._held_position is not None:
+                self._held_position = target
+            self.positionChanged.emit(target)
+            return
+        self._pending_seek = target
         self.presentation_current = False
         self.seek_generation += 1
         self.audio.suppress(True)
@@ -328,6 +371,7 @@ class VLCPlayer(qt.QObject):
         if self.retired:
             return False
         position, playing = self.position(), self._state == self.PlaybackState.PlayingState
+        self.finish_audio_switch()
         self._opened = False
         self.native.stop()
         if self.native.set_renderer(renderer) != 0:
@@ -424,17 +468,102 @@ class VLCPlayer(qt.QObject):
                 release(table, count)
 
     def activeAudioTrack(self):
-        return next((index for index, row in enumerate(self._tracks[0]) if row[0] == self.native.audio_get_track()), -1)
+        identity = self._audio_switch.track if self._audio_switch is not None else self.native.audio_get_track()
+        return next((index for index, row in enumerate(self._tracks[0]) if row[0] == identity), -1)
 
     def activeSubtitleTrack(self):
         return next((index for index, row in enumerate(self.subtitle_rows()) if row[0] == self.native.video_get_spu()), -1)
 
     def setActiveAudioTrack(self, index):
-        if self.retired:
+        if self.retired or not 0 <= index < len(self._tracks[0]):
             return
         self._restore_audio_track = None
-        if 0 <= index < len(self._tracks[0]):
-            self.native.audio_set_track(self._tracks[0][index][0])
+        self.switch_audio(self._tracks[0][index][0])
+
+    def switch_audio(self, identity):
+        switch = self._audio_switch
+        if switch is not None and switch.track == identity:
+            return
+        if switch is None and self.native.audio_get_track() == identity and self._error == self.Error.NoError:
+            return
+        if self._state == self.PlaybackState.StoppedState:
+            self.native.audio_set_track(identity)
+            return
+        deadline = monotonic() + AUDIO_SWITCH_TIMEOUT if self._state == self.PlaybackState.PlayingState else None
+        if switch is not None:
+            switch.track, switch.deadline = identity, deadline
+            return
+        position = self.position()
+        if self._pending_seek is None and self._held_position is None:
+            position = max(position, self.native.get_time())
+        self._audio_switch = AudioSwitch(identity, position, deadline)
+        self._pending_seek = self._paused_preview_target = None
+        self.seek_generation += 1
+        self.presentation_current = False
+        # The native seek coordinates A/V preroll. Keep valid output audible
+        # once it starts: polled statistics can lag behind by a full second.
+        self.audio.suppress(self._state != self.PlaybackState.PlayingState)
+        self.audioSwitchChanged.emit(True, '')
+
+    def audio_switch_buffering(self, event):
+        # LibVLC calls this on the input thread. Record the cycle without
+        # calling back into the decoder from its event handler.
+        seek = self._audio_seek
+        if seek is not None:
+            if event.u.new_cache < 100:
+                seek.buffering = True
+                seek.buffered = False
+            elif seek.buffering:
+                seek.buffered = True
+
+    def finish_audio_switch(self, error=''):
+        if self._audio_switch is not None:
+            self._audio_switch = self._audio_seek = None
+            self.audioSwitchChanged.emit(False, error)
+
+    def fail_audio_switch(self):
+        self._error = self.Error.ResourceError
+        self.pause()
+        self.finish_audio_switch(AUDIO_SWITCH_ERROR)
+
+    def poll_audio_switch(self, state, position, played):
+        switch, seek = self._audio_switch, self._audio_seek
+        if switch.deadline is not None and monotonic() >= switch.deadline:
+            self.fail_audio_switch()
+            return
+        if state not in (self.vlc.State.Playing, self.vlc.State.Paused):
+            return
+        if state == self.vlc.State.Playing and self._state == self.PlaybackState.PausedState:
+            self.native.set_pause(1)
+        if not self.native.is_seekable():
+            self.fail_audio_switch()
+            return
+        target = (switch.track, switch.position)
+        if seek is None or (seek.buffered and (seek.track, seek.position) != target):
+            if self.native.audio_get_track() != switch.track and self.native.audio_set_track(switch.track) != 0:
+                self.fail_audio_switch()
+                return
+            # The seek flushes the prior track and restarts demux and both
+            # decoders at the held position. Serialize consecutive requests
+            # across the native buffering boundaries.
+            self._audio_seek = AudioSeek(*target)
+            self.native.set_time(switch.position)
+            return
+        if not seek.buffered:
+            return
+        audio_ready = switch.track < 0 or (self._external_route and position > switch.position)
+        if not self._external_route and switch.track >= 0 and played is not None:
+            # LibVLC reports 100% before the decoder releases buffered audio.
+            # Only an increase after the new cycle demonstrates actual output.
+            if seek.played is None:
+                seek.played = played
+            audio_ready = played > seek.played
+        if (state == self.vlc.State.Playing and self._state == self.PlaybackState.PlayingState
+                and self.native.audio_get_track() == switch.track
+                and position >= switch.position - 200
+                and audio_ready):
+            self._error = self.Error.NoError
+            self.finish_audio_switch()
 
     def setActiveSubtitleTrack(self, index):
         if self.retired:
@@ -484,7 +613,8 @@ class VLCPlayer(qt.QObject):
         """VLC text renderer preferences belong to an instance, not media options."""
         opened = self.media is not None
         position, paused = self.position(), self._state != self.PlaybackState.PlayingState
-        selected = self.native.audio_get_track(), self.native.video_get_spu()
+        selected = (self._audio_switch.track if self._audio_switch is not None else self.native.audio_get_track(),
+                    self.native.video_get_spu())
         candidate = instance_for(self.vlc, scale)
         native = candidate.media_player_new()
         try:
@@ -505,6 +635,7 @@ class VLCPlayer(qt.QObject):
         self.generation += 1
         self.audio.suppress(True)
         self.native.stop()
+        self._events.event_detach(self.vlc.EventType.MediaPlayerBuffering)
         self.native.set_media(None)
         if self.media is not None:
             self.media.release()
@@ -512,6 +643,8 @@ class VLCPlayer(qt.QObject):
         self.native.release()
         self.instance.release()
         self.native, self.instance = native, candidate
+        self._events = native.event_manager()
+        self._events.event_attach(self.vlc.EventType.MediaPlayerBuffering, self.audio_switch_buffering)
         self.audio.player = native
         self.audio.setVolume(self.audio.volume())
         self._font_scale = scale
@@ -566,6 +699,7 @@ class VLCPlayer(qt.QObject):
         if state in (self.vlc.State.Playing, self.vlc.State.Paused):
             self._opened = True
         if state == self.vlc.State.Stopped and self._opened and self._state != self.PlaybackState.StoppedState:
+            self.finish_audio_switch()
             self._error = self.Error.ResourceError
             self.set_state(self.PlaybackState.StoppedState)
             self.errorOccurred.emit()
@@ -573,13 +707,17 @@ class VLCPlayer(qt.QObject):
         if state == self.vlc.State.Playing and self.native.get_rate() != self._rate:
             self.native.set_rate(self._rate)
         if state == self.vlc.State.Error:
+            self.finish_audio_switch()
             if self._error == self.Error.NoError:
                 self._error = self.Error.NetworkError if self._external_route else self.Error.FormatError
                 self.set_state(self.PlaybackState.StoppedState)
                 self.errorOccurred.emit()
             return
         if state == self.vlc.State.Ended:
-            if self._state != self.PlaybackState.StoppedState:
+            if self._audio_switch is not None:
+                self.fail_audio_switch()
+                return
+            if self._state != self.PlaybackState.StoppedState and self._error == self.Error.NoError:
                 self.set_state(self.PlaybackState.StoppedState)
                 self.mediaStatusChanged.emit(self.MediaStatus.EndOfMedia)
             return
@@ -588,6 +726,11 @@ class VLCPlayer(qt.QObject):
             self._duration = duration
             self.durationChanged.emit(duration)
         position = max(0, self.native.get_time())
+        got_stats = self.media.get_stats(self.stats)
+        if self._audio_switch is not None:
+            self.poll_audio_switch(state, position, self.stats.played_abuffers if got_stats else None)
+            if self._audio_switch is not None or self._error != self.Error.NoError:
+                return
         if self._pending_seek is not None and state in (self.vlc.State.Playing, self.vlc.State.Paused):
             if self._seek_issued and abs(position - self._pending_seek) <= 200:
                 self._pending_seek = None
@@ -601,7 +744,7 @@ class VLCPlayer(qt.QObject):
             self.positionChanged.emit(position)
         if state == self.vlc.State.Playing and self._pause_after_open and self._pending_seek is None:
             self._paused_preview_target = position
-        if self.media.get_stats(self.stats):
+        if got_stats:
             displayed = self.stats.displayed_pictures
             if displayed != self._displayed:
                 self._displayed = displayed
@@ -617,9 +760,9 @@ class VLCPlayer(qt.QObject):
             self._tracks = tracks
             self.read_metadata()
             if self._restore_audio_track in {row[0] for row in tracks[0]}:
-                if self.native.audio_get_track() != self._restore_audio_track:
-                    self.native.audio_set_track(self._restore_audio_track)
+                selected = self._restore_audio_track
                 self._restore_audio_track = None
+                self.switch_audio(selected)
             if self._restore_subtitle_track == -1 or self._restore_subtitle_track in {row[0] for row in tracks[1]}:
                 if self.native.video_get_spu() != self._restore_subtitle_track:
                     self.native.video_set_spu(self._restore_subtitle_track)
@@ -633,10 +776,12 @@ class VLCPlayer(qt.QObject):
         if self.retired:
             return
         self.retired = True
+        self.finish_audio_switch()
         self.timer.stop()
         self.generation += 1
         self.audio.suppress(True)
         self.native.stop()
+        self._events.event_detach(self.vlc.EventType.MediaPlayerBuffering)
         self.native.set_media(None)
         if self.media is not None:
             self.media.release()

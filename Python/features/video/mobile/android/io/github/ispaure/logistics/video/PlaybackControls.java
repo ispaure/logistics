@@ -22,6 +22,8 @@ final class PlaybackControls {
     JSONObject settings = new JSONObject();
     JSONArray queue = new JSONArray();
     boolean locked, cacheApproximate;
+    private int pendingAudioTrack = Integer.MIN_VALUE;
+    private String pendingAudioKey = "";
     private final Button unlock;
     private final CacheStrip cache;
 
@@ -86,6 +88,11 @@ final class PlaybackControls {
             boolean reload = !updated.optString("audio_language").equals(settings.optString("audio_language"))
                 || !updated.optString("subtitle_language").equals(settings.optString("subtitle_language"))
                 || updated.optDouble("subtitle_scale", 1) != settings.optDouble("subtitle_scale", 1);
+            if (pendingAudioTrack == updated.optInt("audio_track", Integer.MIN_VALUE) &&
+                    pendingAudioKey.equals(updated.optString("audio_track_key"))) {
+                pendingAudioTrack = Integer.MIN_VALUE;
+                pendingAudioKey = "";
+            }
             settings = updated; queue = new JSONArray(rows);
             owner.setVideoHeader(settings.optString("video_title"), settings.optString("video_path"), settings.optString("source_label"), settings.optBoolean("source_remote"));
             cache.setVisibility(settings.optBoolean("source_remote") ? View.VISIBLE : View.GONE);
@@ -105,10 +112,13 @@ final class PlaybackControls {
     void apply() {
         if (!settings.isNull("subtitle_track")) owner.pendingSubtitleURL = null;
         if (owner.pendingSubtitleURL != null) owner.attachSubtitleURL(owner.pendingSubtitleURL);
-        int audio = resolveTrack("audio_track", owner.player.getAudioTracks(), false);
-        int text = resolveTrack("subtitle_track", owner.player.getSpuTracks(), true);
-        if (audio != Integer.MIN_VALUE && owner.player.getAudioTrack() != audio) owner.player.setAudioTrack(audio);
+        int audio = pendingAudioTrack == Integer.MIN_VALUE ? settings.optInt("audio_track", Integer.MIN_VALUE) : pendingAudioTrack;
+        String audioKey = pendingAudioTrack == Integer.MIN_VALUE ? settings.optString("audio_track_key") : pendingAudioKey;
+        audio = resolveTrack(audio, audioKey, owner.player.getAudioTracks(), false);
+        int text = resolveTrack(settings.optInt("subtitle_track", Integer.MIN_VALUE), settings.optString("subtitle_track_key"),
+            owner.player.getSpuTracks(), true);
         if (text != Integer.MIN_VALUE && owner.player.getSpuTrack() != text) owner.selectSubtitleTrack(text);
+        if (audio != Integer.MIN_VALUE) owner.selectAudioTrack(audio, false);
         owner.player.setRate((float) settings.optDouble("rate", 1));
         owner.player.setAudioDelay(settings.optLong("audio_delay_ms") * 1000);
         owner.player.setSpuDelay(settings.optLong("subtitle_delay_ms") * 1000);
@@ -116,10 +126,8 @@ final class PlaybackControls {
         owner.player.setVideoScale(aspect.equals("fill") ? MediaPlayer.ScaleType.SURFACE_FIT_SCREEN :
             aspect.equals("original") ? MediaPlayer.ScaleType.SURFACE_ORIGINAL : MediaPlayer.ScaleType.SURFACE_BEST_FIT);
     }
-    private int resolveTrack(String field, MediaPlayer.TrackDescription[] tracks, boolean text) {
-        int id = settings.optInt(field, Integer.MIN_VALUE);
+    private int resolveTrack(int id, String key, MediaPlayer.TrackDescription[] tracks, boolean text) {
         if (id == -1) return id;
-        String key = settings.optString(field + "_key", "");
         int match = Integer.MIN_VALUE;
         if (tracks != null) for (MediaPlayer.TrackDescription track : tracks) {
             if (track.id < 0) continue;
@@ -135,6 +143,12 @@ final class PlaybackControls {
             next.put(field, id);
             next.put(field + "_key", key);
             if (field.equals("subtitle_track")) next.put("subtitle_file", "");
+            if (field.equals("audio_track")) {
+                // The host persists settings asynchronously. Until it echoes
+                // this choice, never let an older echo undo a newer selection.
+                pendingAudioTrack = id;
+                pendingAudioKey = key;
+            }
             emit("settings", next.toString());
         } catch (Exception error) { owner.status("Invalid playback track."); }
     }

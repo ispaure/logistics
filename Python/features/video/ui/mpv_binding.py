@@ -127,8 +127,20 @@ class Core(qt.QObject):
         if not self.closed:
             self.queue.put(command)
 
+    def pause(self, paused):
+        self.api.set_property_string(self.handle, b'pause', b'yes' if paused else b'no')
+
+    def switch_audio(self, track, position):
+        # Hold the native clock while changing the audio chain and requesting
+        # A/V preroll. The seek event releases this hold if Play is intended.
+        self.pause(True)
+        return (self.api.property(self.handle, 'seekable')
+            and self.api.set_property_string(self.handle, b'aid', str(track).encode()) >= 0
+            and self.api.command_args(self.handle, 'seek', position / 1000, 'absolute+exact') >= 0)
+
     def run(self):
         generation, loaded, desired_pause, pending_seek, failed = 0, False, True, None, False
+        switch_serial, switch_state = None, None
         last = 0
         try:
             while True:
@@ -143,18 +155,26 @@ class Core(qt.QObject):
                     if kind == 'source':
                         generation, url = args
                         loaded, pending_seek, failed = False, None, False
+                        switch_serial, switch_state = None, None
                         self.api.command_args(self.handle, 'stop')
-                        self.api.set_property_string(self.handle, b'pause', b'yes')
+                        self.pause(True)
                         if url:
                             self.api.command_args(self.handle, 'loadfile', url)
                     elif kind == 'pause':
                         desired_pause = args[0]
-                        self.api.set_property_string(self.handle, b'pause', b'yes' if desired_pause else b'no')
+                        if switch_state != 'awaiting-seek':
+                            self.pause(desired_pause)
                     elif kind == 'seek':
                         pending_seek = args[0]
                         if loaded:
                             self.api.command_args(self.handle, 'seek', pending_seek / 1000, 'absolute+exact')
                             pending_seek = None
+                    elif kind == 'switch-audio':
+                        switch_serial, track, position = args
+                        switch_state = 'awaiting-seek' if loaded and self.switch_audio(track, position) else 'failed'
+                    elif kind == 'clear-audio-switch':
+                        if switch_serial == args[0]:
+                            switch_serial, switch_state = None, None
                     elif kind == 'set':
                         result = self.api.set_property_string(self.handle, str(args[0]).encode(), str(args[1]).encode())
                         if args[0] in {'target-trc', 'target-prim', 'target-peak', 'tone-mapping'}:
@@ -162,6 +182,8 @@ class Core(qt.QObject):
                                 raise RuntimeError('The colour output configuration was rejected.')
                             self.redraw.emit()
                     elif kind == 'command':
+                        if args[0] == 'stop':
+                            switch_serial, switch_state = None, None
                         self.api.command_args(self.handle, *args)
                     continue
                 event = self.api.wait_event(self.handle, .02).contents
@@ -170,17 +192,26 @@ class Core(qt.QObject):
                     if pending_seek is not None:
                         self.api.command_args(self.handle, 'seek', pending_seek / 1000, 'absolute+exact')
                         pending_seek = None
-                    self.api.set_property_string(self.handle, b'pause', b'yes' if desired_pause else b'no')
+                    self.pause(desired_pause)
                 if event.id == 7:
                     loaded = False
                     if event.data:
                         failed = C.cast(event.data, C.POINTER(C.c_int))[0] == 4
+                if event.id == 20 and switch_state == 'awaiting-seek':  # MPV_EVENT_SEEK
+                    switch_state = 'seeking'
+                    self.pause(desired_pause)
+                if event.id == 21 and switch_state == 'seeking':  # MPV_EVENT_PLAYBACK_RESTART
+                    switch_state = 'restarted'
                 now = monotonic()
                 if now - last >= .1:
                     keys = ('time-pos', 'duration', 'pause', 'eof-reached', 'seeking', 'paused-for-cache',
                             'video-out-params', 'video-params', 'track-list', 'chapter-list', 'target-peak', 'target-trc')
                     state = {key: self.api.property(self.handle, key) for key in keys}
                     state.update(generation=generation, loaded=loaded, error=failed)
+                    if switch_serial is not None:
+                        state['audio-switch'] = (switch_serial, switch_state)
+                        if switch_state == 'restarted':
+                            state['audio-pts'] = self.api.property(self.handle, 'audio-pts')
                     if not self.closed:
                         self.snapshot.emit(state)
                     last = now

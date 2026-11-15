@@ -8,6 +8,10 @@ from PySide6.QtMultimediaWidgets import QVideoWidget
 from .audio_output import audio_output
 
 
+AUDIO_SWITCH_TIMEOUT = 8
+AUDIO_SWITCH_ERROR = 'Could not switch audio. Choose another track or press Play to retry.'
+
+
 @dataclass(frozen=True)
 class PlaybackCapabilities:
     external_formats: tuple[str, ...] = (".srt", ".vtt")

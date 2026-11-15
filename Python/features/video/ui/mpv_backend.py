@@ -1,9 +1,20 @@
 """Colour-preserving libmpv playback through the existing desktop player contract."""
+from dataclasses import dataclass
+from time import monotonic
+
 from commonUtils.ui import pyside as qt
 from PySide6.QtMultimedia import QMediaPlayer, QMediaMetaData
-from .backend import PlaybackCapabilities
+from .backend import AUDIO_SWITCH_ERROR, AUDIO_SWITCH_TIMEOUT, PlaybackCapabilities
 from .mpv_binding import API, Core
 from .mpv_surface import ColourSurface
+
+
+@dataclass
+class AudioSwitch:
+    serial: int
+    track: int | str
+    position: int
+    deadline: float | None
 
 
 class ColourAudio(qt.QObject):
@@ -41,6 +52,7 @@ class ColourPlayer(qt.QObject):
     playbackStateChanged = qt.Signal(object)
     errorOccurred = qt.Signal()
     renderedProgress = qt.Signal()
+    audioSwitchChanged = qt.Signal(bool, str)
     PlaybackState, Error, MediaStatus = QMediaPlayer.PlaybackState, QMediaPlayer.Error, QMediaPlayer.MediaStatus
 
     def __init__(self, core, video, parent):
@@ -49,6 +61,7 @@ class ColourPlayer(qt.QObject):
         self.audio = ColourAudio(core, parent)
         self._source, self._position, self._duration = qt.QUrl(), 0, 0
         self._pending_seek, self._ready, self._loaded = None, False, False
+        self._audio_switch, self._audio_switch_serial = None, 0
         self._state, self._error = self.PlaybackState.StoppedState, self.Error.NoError
         self.generation, self.retired, self.presented, self._ended = 0, False, False, False
         self._tracks, self._chapters, self._settings, self._subtitles = [], [], None, set()
@@ -79,6 +92,7 @@ class ColourPlayer(qt.QObject):
     def setSource(self, url):
         if self.retired:
             return
+        self.finish_audio_switch()
         self.generation += 1
         self._source, self._position, self._duration = qt.QUrl(url), 0, 0
         self._pending_seek, self._loaded, self._ended = None, False, False
@@ -97,18 +111,23 @@ class ColourPlayer(qt.QObject):
         if not self.retired and self.parent().playback_permitted():
             if self._ended:
                 self.setPosition(0)
+            if self._audio_switch is not None:
+                self._audio_switch.deadline = monotonic() + AUDIO_SWITCH_TIMEOUT
             self.core.submit('pause', False)
             self.set_state(self.PlaybackState.PlayingState)
             self.audio.suppress(not self._loaded)
 
     def pause(self):
         if not self.retired:
+            if self._audio_switch is not None:
+                self._audio_switch.deadline = None
             self.core.submit('pause', True)
             self.audio.suppress(True)
             self.set_state(self.PlaybackState.PausedState)
 
     def stop(self):
         if not self.retired:
+            self.finish_audio_switch()
             self.core.submit('command', 'stop')
             self.video.clear()
             self.set_state(self.PlaybackState.StoppedState)
@@ -122,6 +141,8 @@ class ColourPlayer(qt.QObject):
         return self._state
 
     def position(self):
+        if self._audio_switch is not None:
+            return self._audio_switch.position
         return self._position if self._pending_seek is None else self._pending_seek
 
     def duration(self):
@@ -132,7 +153,12 @@ class ColourPlayer(qt.QObject):
             if self._ended:
                 self._ended = False
                 self.mediaStatusChanged.emit(self.MediaStatus.BufferedMedia)
-            self._pending_seek = max(0, int(value))
+            target = max(0, int(value))
+            if self._audio_switch is not None:
+                self.switch_audio(self._audio_switch.track, target)
+                self.positionChanged.emit(target)
+                return
+            self._pending_seek = target
             self.core.submit('seek', self._pending_seek)
             self.positionChanged.emit(self._pending_seek)
 
@@ -149,13 +175,14 @@ class ColourPlayer(qt.QObject):
         return 'The colour video renderer could not read or present this video.'
 
     def failed(self, message):
+        self.finish_audio_switch()
         if not self.retired and self._error == self.Error.NoError:
             self._error = self.Error.FormatError
             self.pause()
             self.errorOccurred.emit()
 
     def frame_submitted(self):
-        if not self.retired and self._loaded:
+        if not self.retired and self._loaded and self._audio_switch is None:
             self.presented = True
             self.renderedProgress.emit()
 
@@ -176,25 +203,29 @@ class ColourPlayer(qt.QObject):
             self._duration = duration
             self.durationChanged.emit(duration)
         position = round((state.get('time-pos') or 0) * 1000)
-        if self._pending_seek is not None and abs(position - self._pending_seek) <= 200 and not state.get('seeking'):
-            self._pending_seek = None
-        if self._pending_seek is None and position != self._position:
-            self._position = position
-            self.positionChanged.emit(position)
         tracks = state.get('track-list') or []
         if tracks != self._tracks:
             self._tracks = tracks
             self.tracksChanged.emit()
         self._chapters = state.get('chapter-list') or []
+        if state.get('error'):
+            self.failed('Decoder error')
+            return
+        if self._audio_switch is not None:
+            self.update_audio_switch(state, position)
+        if self._audio_switch is None and self._error == self.Error.NoError:
+            if self._pending_seek is not None and abs(position - self._pending_seek) <= 200 and not state.get('seeking'):
+                self._pending_seek = None
+            if self._pending_seek is None and position != self._position:
+                self._position = position
+                self.positionChanged.emit(position)
         self.audio.suppress(not self._loaded or self._state != self.PlaybackState.PlayingState)
         if self.video.source_ready != was_ready:
             self.video.update()
-        if state.get('eof-reached') and not self._ended:
+        if state.get('eof-reached') and not self._ended and self._error == self.Error.NoError:
             self._ended = True
             self.set_state(self.PlaybackState.StoppedState)
             self.mediaStatusChanged.emit(self.MediaStatus.EndOfMedia)
-        if state.get('error'):
-            self.failed('Decoder error')
 
     def track_rows(self, kind):
         return [row for row in self._tracks if row.get('type') == kind and not row.get('external')]
@@ -225,6 +256,9 @@ class ColourPlayer(qt.QObject):
         return self.metadata('sub')
 
     def activeAudioTrack(self):
+        if self._audio_switch is not None:
+            return next((i for i, row in enumerate(self.track_rows('audio'))
+                         if row['id'] == self._audio_switch.track), -1)
         return next((i for i, row in enumerate(self.track_rows('audio')) if row.get('selected')), -1)
 
     def activeSubtitleTrack(self):
@@ -236,7 +270,55 @@ class ColourPlayer(qt.QObject):
         self.core.submit('set', 'aid' if kind == 'audio' else 'sid', identity)
 
     def setActiveAudioTrack(self, index):
-        self.select_track('audio', index)
+        if self.retired:
+            return
+        tracks = self.track_rows('audio')
+        identity = tracks[index]['id'] if 0 <= index < len(tracks) else 'no'
+        if self._audio_switch is not None and self._audio_switch.track == identity:
+            return
+        if self._audio_switch is None and self.activeAudioTrack() == index and self._error == self.Error.NoError:
+            return
+        if not self._loaded or self._state == self.PlaybackState.StoppedState:
+            self.core.submit('set', 'aid', identity)
+            return
+        self.switch_audio(identity, self.position())
+
+    def switch_audio(self, track, position):
+        was_pending = self._audio_switch is not None
+        self._audio_switch_serial += 1
+        deadline = monotonic() + AUDIO_SWITCH_TIMEOUT if self._state == self.PlaybackState.PlayingState else None
+        self._audio_switch = AudioSwitch(self._audio_switch_serial, track, position, deadline)
+        self._pending_seek = None
+        # Native exact-seek preroll holds both outputs. Do not consume muted
+        # samples while waiting for the next worker readiness snapshot.
+        self.audio.suppress(not self._loaded or self._state != self.PlaybackState.PlayingState)
+        self.core.submit('switch-audio', self._audio_switch_serial, track, position)
+        if not was_pending:
+            self.audioSwitchChanged.emit(True, '')
+
+    def finish_audio_switch(self, error=''):
+        if self._audio_switch is not None:
+            self.core.submit('clear-audio-switch', self._audio_switch.serial)
+            self._audio_switch = None
+            self.audioSwitchChanged.emit(False, error)
+
+    def update_audio_switch(self, state, position):
+        switch = self._audio_switch
+        native_switch = state.get('audio-switch')
+        if (state.get('eof-reached') or (native_switch == (switch.serial, 'failed'))
+                or (switch.deadline is not None and monotonic() >= switch.deadline)):
+            self._position = switch.position
+            self._error = self.Error.ResourceError
+            self.pause()
+            self.finish_audio_switch(AUDIO_SWITCH_ERROR)
+            return
+        selected = next((row['id'] for row in self.track_rows('audio') if row.get('selected')), 'no')
+        if (native_switch == (switch.serial, 'restarted') and state.get('seeking') is False
+                and not state.get('paused-for-cache') and selected == switch.track
+                and position >= switch.position - 200
+                and (selected == 'no' or state.get('audio-pts') is not None)):
+            self._error = self.Error.NoError
+            self.finish_audio_switch()
 
     def setActiveSubtitleTrack(self, index):
         self.select_track('sub', index)
@@ -274,6 +356,7 @@ class ColourPlayer(qt.QObject):
         if self.retired:
             return
         self.retired = True
+        self.finish_audio_switch()
         self.colour_timer.stop()
         self.video.retire()  # Release GPU resources before terminating the decoder worker.
         self.core.retire()

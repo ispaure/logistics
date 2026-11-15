@@ -138,7 +138,10 @@
             NSString *preferred = entry[0];
             if (!preferred.length) continue;
             for (VLCMediaPlayerTrack *track in entry[1])
-                if (track.language.length && [track.language caseInsensitiveCompare:preferred] == NSOrderedSame) { track.selectedExclusively = YES; break; }
+                if (track.language.length && [track.language caseInsensitiveCompare:preferred] == NSOrderedSame) {
+                    if (track.audio) [self switchAudioTrack:track]; else track.selectedExclusively = YES;
+                    break;
+                }
         }
     }
     for (NSString *key in @[@"audio_track", @"subtitle_track"]) {
@@ -158,7 +161,9 @@
                     match = track;
                 }
             } else if (index >= 0 && index < (NSInteger)tracks.count) match = tracks[index];
-            if (match && !match.isSelected) match.selectedExclusively = YES;
+            if (match && !match.isSelected) {
+                if (text) match.selectedExclusively = YES; else [self switchAudioTrack:match];
+            }
         }
     }
     if (self.subtitleTracksBeforeAttachment) {

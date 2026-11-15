@@ -46,6 +46,7 @@ import org.videolan.libvlc.Media;
 import org.videolan.libvlc.MediaPlayer;
 import org.videolan.libvlc.RendererDiscoverer;
 import org.videolan.libvlc.RendererItem;
+import org.videolan.libvlc.interfaces.IMedia;
 import org.videolan.libvlc.util.VLCVideoLayout;
 import java.util.ArrayList;
 
@@ -80,6 +81,7 @@ public final class VideoPlayer {
     private final LinearLayout bufferingOverlay;
     private final TextView bufferingLabel;
     private boolean buffering;
+    private AudioTrackSwitch audioTrackSwitch;
     private boolean networkWaiting, networkResumePending, playRequested;
     private long bufferPosition, observedClock = -1, observedFrames, lastPlaybackProgress, lastFrameProgress, lastRenderedClock;
     private final TextView timeLabel;
@@ -91,7 +93,7 @@ public final class VideoPlayer {
     private final Runnable hideControls = new Runnable() {
         @Override public void run() {
             AccessibilityManager accessibility = (AccessibilityManager) activity.getSystemService(Context.ACCESSIBILITY_SERVICE);
-            if (fullscreen && attached && !buffering && observedFrames > 0 && resume < 0 && player.isPlaying() && !seek.isPressed()
+            if (fullscreen && attached && !buffering && audioTrackSwitch == null && observedFrames > 0 && resume < 0 && player.isPlaying() && !seek.isPressed()
                     && (openDialog == null || !openDialog.isShowing()) && !accessibility.isTouchExplorationEnabled())
                 setControlsVisible(false);
             else if (fullscreen && attached) scheduleControls();
@@ -233,6 +235,7 @@ public final class VideoPlayer {
         bufferingOverlay.addView(new android.widget.ProgressBar(activity));
         TextView bufferingLabel = new TextView(activity);
         bufferingLabel.setTextColor(Color.WHITE);
+        bufferingLabel.setText("Switching audio…");
         bufferingLabel.setVisibility(View.GONE);
         bufferingOverlay.setContentDescription("Buffering video");
         bufferingOverlay.addView(bufferingLabel);
@@ -506,7 +509,8 @@ public final class VideoPlayer {
     private void scheduleControls() {
         handler.removeCallbacks(hideControls);
         boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
-        if (fullscreen && controlsVisible && attached && !buffering && observedFrames > 0 && resume < 0 && player.isPlaying() && !pip)
+        if (fullscreen && controlsVisible && attached && !buffering && audioTrackSwitch == null &&
+                observedFrames > 0 && resume < 0 && player.isPlaying() && !pip)
             handler.postDelayed(hideControls, 3000);
     }
 
@@ -521,7 +525,7 @@ public final class VideoPlayer {
             fadeChrome(videoHeader, shown, immediate);
         }
         View decor = activity.getWindow().getDecorView();
-        bufferingOverlay.setVisibility(buffering && !pip && !lockHidden ? View.VISIBLE : View.GONE);
+        updateBufferingOverlay();
         boolean immersive = fullscreen && !pip;
         if (Build.VERSION.SDK_INT >= 30) {
             WindowInsetsController controller = decor.getWindowInsetsController();
@@ -696,6 +700,72 @@ public final class VideoPlayer {
             seekTo(current);
         }
     }
+
+    boolean selectAudioTrack(int track, boolean manual) {
+        if (lockHidden || (playbackFailed && !manual) || !allowed(false)) return false;
+        if (audioTrackSwitch != null) {
+            // Native events carry no request ID. Finish the in-flight cycle
+            // before issuing the latest replacement; never reassign its queued
+            // 0/100/time callbacks to a newer operation.
+            if (audioTrackSwitch.requestedTrack() != track)
+                audioTrackSwitch.request(track, audioTrackSwitch.requestedPosition());
+            return true;
+        }
+        if (player.getAudioTrack() == track) return true;
+        return selectAudioTrackAt(track, manual, progressSeek >= 0 ? progressSeek : position());
+    }
+
+    private boolean selectAudioTrackAt(int track, boolean manual, long current) {
+        if (track >= 0 && !player.isSeekable()) {
+            if (manual) status("Audio tracks can only be switched when this video supports seeking.");
+            return false;
+        }
+        if (!player.setAudioTrack(track)) {
+            if (manual) status("This audio track could not be selected.");
+            return false;
+        }
+        if (track >= 0) {
+            audioTrackSwitch = new AudioTrackSwitch(track);
+            // A same-track user seek may emit no new ESSelected. All events
+            // belonging to the previous operation have already been consumed.
+            audioTrackSwitch.selected(player.getAudioTrack());
+            seekPlayback(current, false);
+            setControlsVisible(true);
+        }
+        return true;
+    }
+
+    private void cancelAudioTrackSwitch() {
+        if (audioTrackSwitch == null) return;
+        audioTrackSwitch = null;
+        updateBufferingOverlay();
+    }
+
+    private void updateBufferingOverlay() {
+        boolean switching = audioTrackSwitch != null && playRequested;
+        boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
+        bufferingLabel.setVisibility(switching ? View.VISIBLE : View.GONE);
+        bufferingOverlay.setContentDescription(switching ? "Switching audio" : "Buffering video");
+        bufferingOverlay.setVisibility((buffering || switching) && !pip && !lockHidden ? View.VISIBLE : View.GONE);
+    }
+
+    private IMedia.Stats playbackStats() {
+        IMedia media = player.getMedia();
+        try { return media == null ? null : media.getStats(); }
+        finally { if (media != null) media.release(); }
+    }
+
+    private void failAudioTrackSwitch() {
+        long target = audioTrackSwitch.requestedPosition();
+        cancelAudioTrackSwitch();
+        playbackFailed = true;
+        pause();
+        resume = target;
+        progressSeek = -1;
+        status(transportFailure != null ? transportFailure :
+            "The audio track did not become ready. Press Play to retry from this position.");
+    }
+
     void reloadPlaybackOptions() {
         if (done) return;
         boolean requested = playRequested;
@@ -708,8 +778,18 @@ public final class VideoPlayer {
     private void onPlayerEvent(MediaPlayer.Event event) {
         if (done) return;
         if (event.type == MediaPlayer.Event.Stopped && optionsReloadPending) return;
-        // Native buffering percentages also describe prefetch while video
-        // is flowing. updatePlaybackProgress owns the stall indicator.
+        if (audioTrackSwitch != null) {
+            if (event.type == MediaPlayer.Event.ESSelected && event.getEsChangedType() == IMedia.Track.Type.Audio) {
+                audioTrackSwitch.selected(event.getEsChangedID());
+            } else if (event.type == MediaPlayer.Event.Buffering) {
+                float percent = event.getBuffering();
+                IMedia.Stats stats = percent >= 100f ? playbackStats() : null;
+                audioTrackSwitch.buffering(percent, stats == null ? 0 : stats.playedAbuffers);
+            } else if (event.type == MediaPlayer.Event.TimeChanged) {
+                audioTrackSwitch.timeChanged(event.getTimeChanged());
+            }
+        }
+        // Ordinary network-buffering UI is driven by observed playback stalls.
         if (event.type == MediaPlayer.Event.Paused || event.type == MediaPlayer.Event.Stopped)
             pausePending = false;
         if (event.type == MediaPlayer.Event.Paused && playRequested && !manualResumeRequired
@@ -718,22 +798,25 @@ public final class VideoPlayer {
         if (event.type == MediaPlayer.Event.Playing) {
             optionsReloadPending = false;
             playbackActive = true;
-            if (tools != null) tools.apply();
             ended = false;
             if (manualResumeRequired || !focusHeld || !allowed(false)) {
                 pause();
                 return;
             }
             if (resume >= 0) {
-                if (Math.abs(player.getTime() - resume) >= 1500) player.setTime(resume);
+                if (audioTrackSwitch == null && Math.abs(player.getTime() - resume) >= 1500) player.setTime(resume);
                 mediaStartsAtResume = false;
                 resumeSeekSubmitted = true;
             }
+            if (tools != null) tools.apply();
             scheduleControls();
         }
-        if (event.type == MediaPlayer.Event.ESAdded && tools != null) tools.apply();
-        if (event.type == MediaPlayer.Event.TimeChanged && progressSeek >= 0) confirmProgressSeek();
+        if ((event.type == MediaPlayer.Event.ESAdded ||
+                (event.type == MediaPlayer.Event.SeekableChanged && event.getSeekable())) && tools != null) tools.apply();
+        if (event.type == MediaPlayer.Event.TimeChanged && progressSeek >= 0 && audioTrackSwitch == null)
+            confirmProgressSeek();
         if (event.type == MediaPlayer.Event.EndReached) {
+            cancelAudioTrackSwitch();
             ended = true;
             playRequested = false;
             lastPosition = 0;
@@ -742,26 +825,31 @@ public final class VideoPlayer {
         }
         if (event.type == MediaPlayer.Event.EncounteredError ||
                 (event.type == MediaPlayer.Event.Stopped && playbackActive && playRequested && !ended)) {
-            playbackFailed = true;
-            long position = Math.max(0, lastPosition);
-            pause();
-            resume = position;
-            status(transportFailure != null ? transportFailure :
-                "Playback stopped unexpectedly. Press Play to retry from this position.");
+            if (audioTrackSwitch != null) failAudioTrackSwitch();
+            else {
+                playbackFailed = true;
+                long position = Math.max(0, lastPosition);
+                pause();
+                resume = position;
+                status(transportFailure != null ? transportFailure :
+                    "Playback stopped unexpectedly. Press Play to retry from this position.");
+            }
         }
         if (event.type == MediaPlayer.Event.Playing) updateScreenAwake();
         else if (event.type == MediaPlayer.Event.Paused || event.type == MediaPlayer.Event.Stopped
                 || event.type == MediaPlayer.Event.EndReached || event.type == MediaPlayer.Event.EncounteredError) {
             playbackActive = false;
+            if (event.type == MediaPlayer.Event.Stopped) cancelAudioTrackSwitch();
             if (!playRequested || event.type != MediaPlayer.Event.Paused) {
                 buffering = false;
-                bufferingOverlay.setVisibility(View.GONE);
+                updateBufferingOverlay();
             }
             root.setKeepScreenOn(false);
         }
     }
 
     private void installMedia() {
+        cancelAudioTrackSwitch();
         Media media = new Media(vlc, Uri.parse(sourceURL));
         mediaStartsAtResume = resume > 0;
         resumeSeekSubmitted = false;
@@ -779,15 +867,32 @@ public final class VideoPlayer {
     public void seekTo(long target) {
         if (tools != null && tools.locked) return;
         if (!allowed(false) || !player.isSeekable()) return;
+        if (audioTrackSwitch != null) {
+            target = Math.max(0, target);
+            if (player.getLength() > 0) target = Math.min(target, player.getLength() - 1);
+            audioTrackSwitch.request(audioTrackSwitch.requestedTrack(), target);
+            progressSeek = target;
+            return;
+        }
+        seekPlayback(target, true);
+    }
+
+    private void seekPlayback(long target, boolean recordProgress) {
         target = Math.max(0, target);
         if (player.getLength() > 0) target = Math.min(target, player.getLength() - 1);
         ended = false;
         lastPlaybackProgress = lastFrameProgress = android.os.SystemClock.elapsedRealtime();
         lastRenderedClock = target;
         if (networkResumePending) bufferPosition = target;
-        resume = player.isPlaying() ? -1 : target;
+        resume = playRequested ? -1 : target;
         resumeSeekSubmitted = false;
-        progressSeek = target;
+        if (recordProgress) progressSeek = target;
+        if (audioTrackSwitch != null) {
+            audioTrackSwitch.seek(target);
+            audioTrackSwitch.playing(playRequested, lastPlaybackProgress);
+            buffering = false;
+            updateBufferingOverlay();
+        }
         player.setTime(target);
     }
 
@@ -834,8 +939,12 @@ public final class VideoPlayer {
         if (audioSuppressed) { player.setVolume(resumeVolume); audioSuppressed = false; }
         playRequested = true;
         pausePresentation.clear();
-        if (resume >= 0 && player.isPlaying()) { player.setTime(resume); resumeSeekSubmitted = true; }
+        if (audioTrackSwitch == null && resume >= 0 && player.isPlaying()) {
+            player.setTime(resume);
+            resumeSeekSubmitted = true;
+        }
         lastPlaybackProgress = lastFrameProgress = android.os.SystemClock.elapsedRealtime();
+        if (audioTrackSwitch != null) audioTrackSwitch.playing(true, lastPlaybackProgress);
         updatePlayIcon();
         networkResumePending = false;
         android.util.Log.d("VideoPlayback", "play target=" + resume + " current=" + player.getTime());
@@ -851,11 +960,9 @@ public final class VideoPlayer {
     }
 
     private void updatePlaybackProgress() {
-        long now = android.os.SystemClock.elapsedRealtime(), clock = player.getTime(), frames = 0;
-        org.videolan.libvlc.interfaces.IMedia media = player.getMedia();
-        try {
-            if (media != null && media.getStats() != null) frames = media.getStats().displayedPictures;
-        } finally { if (media != null) media.release(); }
+        long now = android.os.SystemClock.elapsedRealtime(), clock = player.getTime();
+        IMedia.Stats stats = playbackStats();
+        long frames = stats == null ? 0 : stats.displayedPictures;
         boolean newFrame = frames > observedFrames;
         boolean statsReset = frames < observedFrames;
         if (newFrame) { lastRenderedClock = clock; lastFrameProgress = now; }
@@ -863,6 +970,22 @@ public final class VideoPlayer {
         if (statsReset) lastFrameProgress = now; // VLC stats reset on a new input.
         observedFrames = frames;
         observedClock = clock;
+        if (audioTrackSwitch != null) {
+            if (audioTrackSwitch.ready(player.getAudioTrack(), stats == null ? -1 : stats.playedAbuffers, !casting)) {
+                AudioTrackSwitch completed = audioTrackSwitch;
+                cancelAudioTrackSwitch();
+                if (completed.hasReplacement() && allowed(false)) {
+                    selectAudioTrackAt(completed.requestedTrack(), true, completed.requestedPosition());
+                    return;
+                }
+                if (progressSeek >= 0) confirmProgressSeek();
+                lastPlaybackProgress = lastFrameProgress = now;
+                scheduleControls();
+            } else if (playRequested && (transportFailure != null || audioTrackSwitch.expired(now))) {
+                failAudioTrackSwitch();
+            }
+            return;
+        }
         // Some devices never report displayedPictures: use a guarded fallback.
         boolean missingFrames = frames == 0 && observedFrames == 0;
         boolean frameStall = !missingFrames && now - lastFrameProgress >= 2500;
@@ -879,8 +1002,7 @@ public final class VideoPlayer {
         }
         boolean changed = buffering != stalled;
         buffering = stalled;
-        boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
-        bufferingOverlay.setVisibility(stalled && !pip && !lockHidden ? View.VISIBLE : View.GONE);
+        if (changed) updateBufferingOverlay();
         if (changed) {
             android.util.Log.d("VideoPlayback", (stalled ? "stalled" : "recovered") +
                 " clock=" + clock + " renderedClock=" + lastRenderedClock +
@@ -1022,7 +1144,11 @@ public final class VideoPlayer {
         if (subtitlesOnly) { labels.add("Subtitles off"); actions.add(() -> { player.setSpuTrack(-1); tools.selectTrack("subtitle_track", -1, ""); }); }
         MediaPlayer.TrackDescription[] audio = player.getAudioTracks();
         if (!subtitlesOnly && audio != null) for (MediaPlayer.TrackDescription track : audio) {
-            labels.add((player.getAudioTrack() == track.id ? "✓ " : "") + trackLabel(track, false)); actions.add(() -> { player.setAudioTrack(track.id); tools.selectTrack("audio_track", track.id, trackKey(track, false)); });
+            int selected = audioTrackSwitch == null ? player.getAudioTrack() : audioTrackSwitch.requestedTrack();
+            labels.add((selected == track.id ? "✓ " : "") + trackLabel(track, false));
+            actions.add(() -> {
+                if (selectAudioTrack(track.id, true)) tools.selectTrack("audio_track", track.id, trackKey(track, false));
+            });
         }
         MediaPlayer.TrackDescription[] text = player.getSpuTracks();
         if (subtitlesOnly && text != null) for (MediaPlayer.TrackDescription track : text) {
@@ -1118,7 +1244,8 @@ public final class VideoPlayer {
                     status("This receiver disconnected. Choose Cast again.");
                     return;
                 }
-                resume = Math.max(0, player.getTime());
+                resume = position();
+                cancelAudioTrackSwitch();
                 player.stop();
                 player.setRenderer(selected);
                 casting = index != 0;
@@ -1167,6 +1294,7 @@ public final class VideoPlayer {
         if (optionsMenu != null) optionsMenu.dismiss();
         if (openDialog != null) { openDialog.dismiss(); openDialog = null; }
         pause();
+        cancelAudioTrackSwitch();
         resume = position();
         player.stop();  // Retire buffered private frames before the host lock.
         if (attached) {
@@ -1188,12 +1316,13 @@ public final class VideoPlayer {
 
     public long progressPosition() {
         if (ended) return 0;
-        if (progressSeek >= 0 || networkResumePending || resumeSeekSubmitted || resume >= 0) return -1;
+        if (audioTrackSwitch != null || progressSeek >= 0 || networkResumePending || resumeSeekSubmitted || resume >= 0) return -1;
         return player.getTime();
     }
 
     public long position() {
         if (ended) return 0;
+        if (audioTrackSwitch != null) return audioTrackSwitch.requestedPosition();
         if (networkResumePending) return bufferPosition;
         if (resume >= 0) return resume;
         long value = player.getTime();
@@ -1233,11 +1362,12 @@ public final class VideoPlayer {
         setControlsVisible(true);
         manualResumeRequired = true;
         playRequested = false;
+        if (audioTrackSwitch != null) audioTrackSwitch.playing(false, 0);
         updatePlayIcon();
         if (networkResumePending) resume = bufferPosition;
         networkResumePending = false;
         buffering = false;
-        bufferingOverlay.setVisibility(View.GONE);
+        updateBufferingOverlay();
         if (player.isPlaying() && !pausePending) {
             pausePending = true;
             player.pause(); // Guard and coalesce the native pause; never toggle OS state.

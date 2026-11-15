@@ -39,9 +39,12 @@ def android(workspace):
         (workspace / 'classes.jar').write_bytes(archive.read('classes.jar'))
     source = ROOT / 'Python/features/video/mobile/android/io/github/ispaure/logistics/video/VideoPlayer.java'
     extra = [ROOT / 'Python/mobile/android/io/github/ispaure/logistics/audio/AudioOutputs.java',
-             ROOT / 'Python/features/books/mobile/android/io/github/ispaure/logistics/books/SpeechMediaService.java']
+             ROOT / 'Python/features/books/mobile/android/io/github/ispaure/logistics/books/SpeechMediaService.java',
+             ROOT / 'mobile_build/validation/fixtures/AudioTrackSwitchChecks.java']
     subprocess.run(['javac', '-cp', str(platforms[-1]) + os.pathsep + str(workspace / 'classes.jar'),
                     '-d', str(workspace / 'compiled'), *map(str, source.parent.glob('*.java')), *map(str, extra)], check=True)
+    subprocess.run(['java', '-cp', str(workspace / 'compiled'),
+                    'io.github.ispaure.logistics.video.AudioTrackSwitchChecks'], check=True)
 
 
 def ios(workspace):

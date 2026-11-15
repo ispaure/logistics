@@ -6,6 +6,8 @@ from commonUtils.ui import pyside as qt
 from PySide6.QtMultimedia import QMediaPlayer
 from commonUtils.ui.readers.reader_chrome import ReaderFullscreen
 
+from .backend import AUDIO_SWITCH_ERROR
+
 
 class VideoFullscreen(ReaderFullscreen):
     """Temporarily lift the player out of its document pane, preserving its slot."""
@@ -86,6 +88,7 @@ class PlaybackPresentation:
     def build_presentation(self):
         self.requested_play = False
         self.network_hold = False
+        self.switching_audio = False
         self.network_waits = set()
         self.last_frame = self.last_clock = monotonic()
         self.have_frame = False
@@ -104,6 +107,8 @@ class PlaybackPresentation:
         self.player.videoSink().videoFrameChanged.connect(self.frame_presented)
         if hasattr(self.player, 'renderedProgress'):
             self.player.renderedProgress.connect(self.render_progress)
+        if hasattr(self.player, 'audioSwitchChanged'):
+            self.player.audioSwitchChanged.connect(self.audio_switch_changed)
         self.network_wait.connect(self.network_waiting)
         self.overlay.setMouseTracking(True)
         self.overlay.installEventFilter(self)
@@ -125,7 +130,7 @@ class PlaybackPresentation:
             self.render_progress()
 
     def render_progress(self):
-        if self.closing or not self.have_frame:
+        if self.closing or not self.have_frame or self.switching_audio:
             return
         self.last_frame = monotonic()
         self.frame_position = self.player.position()
@@ -133,6 +138,21 @@ class PlaybackPresentation:
             self.wait_indicator.hide()
             if self.status.text() == 'Waiting for video data…':
                 self.status.setText('Playing.' if self.requested_play else 'Paused.')
+
+    def audio_switch_changed(self, pending, error):
+        if self.closing:
+            return
+        self.switching_audio = pending
+        self.last_frame = self.last_clock = monotonic()
+        self.wait_indicator.setText('Switching audio…' if pending else 'Buffering…')
+        self.wait_indicator.setAccessibleName('Switching audio' if pending else 'Waiting for video data')
+        self.wait_indicator.setVisible(pending)
+        if error:
+            self.status.setText(self.transport_failure or error)
+        elif self.status.text() == AUDIO_SWITCH_ERROR:
+            self.status.setText('Playing.' if self.requested_play else 'Paused.')
+        if pending or error:
+            self.show_controls()
 
     def network_waiting(self, token, active):
         if self.closing:
@@ -166,7 +186,8 @@ class PlaybackPresentation:
         self.requested_play = False
         self.network_hold = False
         self.player.pause()
-        self.wait_indicator.hide()
+        if not self.switching_audio:
+            self.wait_indicator.hide()
         self.update_play(self.player.playbackState())
         self.show_controls()
 
@@ -184,6 +205,9 @@ class PlaybackPresentation:
             and not self.window().isMinimized() and not self.casting)
         if self.requested_play and not self.playback_permitted():
             self.pause_requested()
+            return
+        if self.switching_audio:
+            self.show_controls()
             return
         now = monotonic()
         waiting = (self.requested_play and not self.casting and (
@@ -218,7 +242,7 @@ class PlaybackPresentation:
         if not self.window().isFullScreen() or self.settings_pane.isVisible():
             return
         focus = qt.QApplication.focusWidget()
-        if (not self.requested_play or not self.have_frame or self.network_hold
+        if (not self.requested_play or not self.have_frame or self.network_hold or self.switching_audio
                 or qt.QAccessible.isActive()
                 or self.seek.isSliderDown() or qt.QApplication.activePopupWidget()
                 or qt.QApplication.activeModalWidget() or self.chrome.underMouse()

@@ -31,7 +31,8 @@ class SeekResumeTests(unittest.TestCase):
             native=NS(play=Mock(return_value=0), get_time=Mock(return_value=native_time)),
             media=object(), audio=NS(suppress=Mock()), _held_position=held,
             _pending_seek=pending, setPosition=Mock(), set_state=Mock(),
-            PlaybackState=NS(PausedState='paused', PlayingState='playing'),
+            PlaybackState=NS(PausedState='paused', PlayingState='playing'), _audio_switch=None,
+            _error='none', Error=NS(NoError='none'),
             generation=7, seek_generation=3, _state='playing', _paused_preview_target=None,
             _buffer_lock=Lock(), _source_size=None, read_metadata=Mock(),
             video=NS(videoSink=Mock(return_value=NS(setImage=Mock()))), presentation_current=False)

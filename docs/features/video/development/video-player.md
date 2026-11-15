@@ -47,3 +47,29 @@ touch remain separate.
 Keep one idle LibVLC core until process exit to avoid scanning the plugin bank
 on each open. Configured players still release native resources, providers and
 credentials at close.
+
+## Audio track changes
+
+VLC audio selection starts a decoder at the demuxer's read-ahead position.
+The desktop and mobile adapters seek back to the current playback position
+after selecting a different track, so VLC flushes and prerolls audio and video
+together. The controls show **Switching audio…** during the transition. Choosing
+a track while paused does not request playback. Nonseekable active inputs keep
+the current selection and explain that switching is unavailable.
+
+Selection acknowledgement and 100% buffering alone are not output readiness:
+VLC reports buffer completion before waiting for decoders. Local playback also
+requires fresh audio output statistics after the seek's buffering cycle. Cast
+uses sender decoder/clock progress because receiver audio statistics are not
+available; physical receiver sound still needs hardware acceptance. Native
+AirPlay retains its separate AVPlayer selection and playback lifecycle.
+Replacement selections, user seeks, pauses, failures and retirement invalidate
+or restart the pending operation. A readiness deadline pauses playback and
+reports a retryable error instead of claiming success.
+
+`video_chrome_tools --audio-switch` builds a two-language AAC fixture and checks
+the production iOS controller on an owned disposable simulator: visible wait,
+native audio output, paused selection/resume, rapid replacement and stale
+callbacks, nonseekable refusal, timeout and retirement. The runner records its
+result before removing the simulator and scratch workspace. These counters
+verify native audio delivery, not physical speaker audibility.
