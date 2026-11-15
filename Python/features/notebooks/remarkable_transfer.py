@@ -11,7 +11,7 @@ from io import BytesIO
 from commonUtils.runtime.operations import check_cancelled
 
 from .images import image_data, validate_png
-from .notebook import Notebook
+from .notebook import Notebook, TABLET_MAX_ARCHIVE
 from .remarkable_export import export_rmdoc, needs_background_pdf
 from .remarkable_ssh import UUID
 from .templates import available
@@ -103,12 +103,12 @@ def prepare_upload(data: bytes, *, cancelled=lambda: False) -> PreparedUpload:
     check_cancelled(cancelled)
     if not isinstance(data, bytes):
         raise TypeError('Upload preparation accepts immutable archive bytes.')
-    book = Notebook.read(data)
+    book = Notebook.read(data, max_bytes=TABLET_MAX_ARCHIVE)
     _validate(book, cancelled)
     converted = needs_background_pdf(book)
     archive = export_rmdoc(book, cancelled=cancelled) if converted else data
     if converted:
-        result = Notebook.read(archive)
+        result = Notebook.read(archive, max_bytes=TABLET_MAX_ARCHIVE)
         _validate(result, cancelled)
         # Only the known background export may change these sidecars. In
         # particular, page scenes, image resources and opaque members survive.
