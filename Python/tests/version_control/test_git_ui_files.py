@@ -17,15 +17,25 @@ from tests.version_control.fixtures import GitUIFixture
 class GitUIFilesTests(GitUIFixture, QtTestCase):
     def test_edit_working_file_reuses_text_editor_service(self):
         from unittest.mock import Mock
-        self.commit_fixture(); self.open()
-        service = Mock()
+
+        class EditorService(qt.QObject):
+            saved = qt.Signal(object)
+
+        self.commit_fixture()
+        self.open()
+        service = EditorService()
+        service.open = Mock()
         with patch('features.application.registry.is_feature_enabled', return_value=True), \
              patch('features.text_editor.ui.service.editor_service', return_value=service):
             self.page.edit_file('file.txt')
             self.page.edit_file('file.txt')
+        file = self.repo.root() / 'file.txt'
         self.assertEqual(service.open.call_count, 2)
-        service.open.assert_called_with(self.repo.root() / 'file.txt')
-        service.saved.connect.assert_called_once()
+        service.open.assert_called_with(file)
+        with patch.object(self.page, 'refresh') as refresh:
+            service.saved.emit(self.root / 'outside.txt')
+            service.saved.emit(file)
+            refresh.assert_called_once_with()
 
     def test_double_click_routes_to_ide_before_text_editor_and_validates_paths(self):
         from unittest.mock import Mock

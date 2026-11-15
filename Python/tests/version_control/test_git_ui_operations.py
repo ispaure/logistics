@@ -43,23 +43,61 @@ class GitUIOperationsTests(GitUIFixture, QtTestCase):
         self.assertEqual(remote.decode('ascii'), self.repo.status().oid)
         self.assertEqual(self.page.snapshot.status.ahead, 0)
 
-    def test_conflict_merge_dialog_saves_and_optionally_stages(self):
+    def _open_conflict_review(self):
         from commonUtils.ui.code_editor.merge import MergeDialog
         from features.git.runner import GitError
-        path=self.repo.path/'conflict.txt'
+
+        path = self.repo.path / 'conflict.txt'
+
         def commit(text):
-            path.write_text(text); self.repo.stage([path.name]); self.repo.commit('Change')
-        commit('base\n'); self.repo.create_branch('incoming'); commit('incoming\n')
-        self.repo.switch('main'); commit('local\n')
-        with self.assertRaises(GitError): self.repo.merge('incoming')
-        self.open(); self.page.resolve_conflict(path.name); self.wait()
-        dialog=self.page.findChildren(MergeDialog)[0]
+            path.write_text(text)
+            self.repo.stage([path.name])
+            self.repo.commit('Change')
+
+        commit('base\n')
+        self.repo.create_branch('incoming')
+        commit('incoming\n')
+        self.repo.switch('main')
+        commit('local\n')
+        with self.assertRaises(GitError):
+            self.repo.merge('incoming')
+        self.open()
+        self.page.resolve_conflict(path.name)
+        self.wait()
+        dialog = self.page.findChild(MergeDialog)
+        stage = next(box for box in dialog.findChildren(qt.QCheckBox) if box.text().startswith('Stage resolved'))
+        return path, dialog, stage
+
+    def test_conflict_merge_dialog_saves_and_optionally_stages(self):
+        path, dialog, stage = self._open_conflict_review()
         self.assertFalse(dialog.apply_button.isEnabled())
-        dialog.widget.choose(0,'both')
-        stage=next(box for box in dialog.findChildren(qt.QCheckBox) if box.text().startswith('Stage resolved'))
-        stage.setChecked(True); dialog.apply_result(); self.wait()
-        self.assertEqual(path.read_text(),'local\nincoming\n')
+        dialog.widget.choose(0, 'both')
+        stage.setChecked(True)
+        dialog.apply_result()
+        self.wait()
+        self.assertEqual(path.read_text(), 'local\nincoming\n')
         self.assertFalse(any(change.conflict for change in self.repo.status().changes))
+
+    def test_conflict_merge_dialog_keeps_branch_from_before_review(self):
+        path, dialog, stage = self._open_conflict_review()
+        before = path.read_bytes()
+        # Renaming leaves the working file and conflict stages intact.
+        self.repo.rename_branch('main', 'renamed')
+        self.page.refresh()
+        self.wait()
+        self.assertEqual(self.page.snapshot.status.branch, 'renamed')
+
+        dialog.widget.choose(0, 'both')
+        stage.setChecked(True)
+        dialog.apply_result()
+        self.wait()
+
+        self.assertEqual(path.read_bytes(), before)
+        self.assertTrue(any(change.conflict for change in self.page.snapshot.status.changes))
+        self.assertTrue(dialog.isVisible())
+        self.assertTrue(dialog.apply_button.isEnabled())
+        self.assertTrue(stage.isEnabled())
+        self.assertIn('active branch changed', dialog.widget.status.text())
 
     def test_browser_remote_addresses_accept_http_and_ssh_only(self):
         from features.git.ui.chrome import browser_remote_url

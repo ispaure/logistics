@@ -14,6 +14,7 @@ from ..preferences import Preferences
 from ..repository import Repository, clone, initialize
 from ..runner import redact
 from .changes import ChangesPanel
+from .commands.working_copy import WorkingCopyCommands
 from .dialogs import FormDialog
 from .jobs import GitJobs
 from .repository_tools import RepositoryTools
@@ -91,6 +92,7 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
         self.repository_tools = RepositoryTools(self)
         from .commands.forms import RepositoryCommands
         self.commands = RepositoryCommands(self)
+        self.working_copy = WorkingCopyCommands(self)
         self._build()
         self.init_preferences()
         from .menus import RepositoryMenus
@@ -619,85 +621,10 @@ class RepositoryView(ApplicationPreferences, GitJobs, RepositoryLayout, qt.QMain
             qt.QDesktopServices.openUrl(qt.QUrl.fromLocalFile(str(self.path)))
 
     def resolve_conflict(self, relative_path):
-        if self.busy or not self.path:
-            return
-        from commonUtils.persistence.merge import merge_text
-        from commonUtils.ui.code_editor.merge import MergeDialog
-        path = self.path
-        def read(runner):
-            inputs = Repository(path, runner).conflict_inputs(relative_path)
-            return inputs, merge_text(inputs.base, inputs.left, inputs.right)
-        def opened(payload):
-            inputs, model = payload
-            if self.path != path or self.closing:
-                return
-            rebase = inputs.operation == 'rebase'
-            dialog = MergeDialog(model, self, path=inputs.path,
-                left_name='Index stage 2 — rebased onto' if rebase else 'Index stage 2 — current branch',
-                right_name='Index stage 3 — commit being replayed' if rebase else 'Index stage 3 — incoming changes')
-            from services.editors.ui.fonts import bind_code_views
-            bind_code_views(dialog)
-            stage = qt.QCheckBox('Stage resolved file after saving', dialog)
-            dialog.layout().insertWidget(1, stage)
-            def apply(text):
-                if self.busy or self.path != path or self.closing:
-                    raise ValueError('Repository changed or is busy. Reopen the merge.')
-                stage_requested = stage.isChecked()
-                dialog.applying = True
-                dialog.widget.setEnabled(False)
-                stage.setEnabled(False)
-                dialog.apply_button.setEnabled(False)
-                dialog.widget.status.setText('Saving merge result…')
-                def saved(result):
-                    from shiboken6 import isValid
-                    if isValid(dialog):
-                        dialog.applying = False
-                        dialog.accept()
-                self.commands.dispatch('Save merge result', 'save_conflict', inputs, text,
-                                       stage=stage_requested, repository=path, after=saved)
-                return False
-            def finished():
-                from shiboken6 import isValid
-                if isValid(dialog) and dialog.applying:
-                    dialog.applying = False
-                    dialog.widget.setEnabled(True)
-                    stage.setEnabled(True)
-                    dialog._ready()
-                    dialog.widget.status.setText(self.status.text())
-            self.idle.connect(finished)
-            def disconnected():
-                from shiboken6 import isValid
-                if isValid(self):
-                    self.idle.disconnect(finished)
-            dialog.destroyed.connect(disconnected)
-            dialog.apply_callback = apply
-            dialog._ready()
-            dialog.show()
-        self._job('Read merge inputs', read, opened)
+        return self.working_copy.resolve_conflict(relative_path)
 
     def edit_file(self, relative_path):
-        if self.busy or not self.path:
-            return
-        path = (self.path / relative_path).resolve()
-        if not path.is_relative_to(self.path.resolve()) or not path.is_file():
-            self._message('The selected path is not a regular file within this repository.', error=True)
-            return
-        if self.working_file_opener and self.working_file_opener(path):
-            return
-        from features.application import registry
-        if not registry.is_feature_enabled('text_editor'):
-            self._message('Enable the Text Editor feature in Settings to edit files outside registered IDE projects.', error=True)
-            return
-        from features.text_editor.ui.service import editor_service
-        service = editor_service()
-        if not hasattr(self, '_editor_service'):
-            self._editor_service = service
-            service.saved.connect(self._editor_saved)
-        service.open(path)
-
-    def _editor_saved(self, path):
-        if self.path and Path(path).resolve().is_relative_to(self.path.resolve()):
-            self.refresh()
+        return self.working_copy.edit_file(relative_path)
 
     def compare_to_head(self):
         return self.history_controller.compare_to_head()
