@@ -1,5 +1,4 @@
 """Required native-image entry contracts, tested without starting an app."""
-import asyncio
 import importlib
 import importlib.util
 from pathlib import Path
@@ -79,21 +78,16 @@ class NativeNotebookImageEntryTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(app._notebook_image_report['success'])
 
     async def test_timeout_preserves_cleanup_and_inflight_evidence(self):
-        app, actual_wait = SimpleNamespace(), asyncio.wait_for
-        async def bounded(awaitable, timeout):
-            self.assertEqual(timeout, 120)
-            return await actual_wait(awaitable, .01)
+        app, primary = SimpleNamespace(), TimeoutError('LocalCrypt provider deadline')
         async def stalled(app):
             app._notebook_image_report = dict(success=False,
                 providers=[dict(provider='LocalCrypt', cases=['in flight'])])
-            try:
-                await asyncio.Event().wait()
-            finally:
-                app._notebook_image_report['cleanup_attempted'] = True
-        with patch.object(self.fixture.images, 'exercise_notebook_images', stalled, create=True), \
-                patch.object(self.fixture.entry.asyncio, 'wait_for', bounded):
-            with self.assertRaises(TimeoutError):
+            app._notebook_image_report['cleanup_attempted'] = True
+            raise primary
+        with patch.object(self.fixture.images, 'exercise_notebook_images', stalled):
+            with self.assertRaises(TimeoutError) as caught:
                 await self.fixture.entry.required_notebook_images(app)
+        self.assertIs(caught.exception, primary)
         self.assertTrue(app._notebook_image_report['cleanup_attempted'])
         self.assertEqual(app._notebook_image_report['providers'][0]['cases'], ['in flight'])
 

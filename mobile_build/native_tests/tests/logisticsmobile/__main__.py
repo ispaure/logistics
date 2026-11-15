@@ -30,8 +30,7 @@ async def required_notebook_images(app):
     """Require both providers before publishing the normal native image case."""
     from .notebook_image_checks import exercise_notebook_images
     try:
-        result = await asyncio.wait_for(measure(app, 'notebook-images',
-            exercise_notebook_images(app)), timeout=120)
+        result = await measure(app, 'notebook-images', exercise_notebook_images(app))
         app._notebook_image_report = result
         assert isinstance(result, dict) and result.get('success') is True, result
         providers = result.get('providers', [])

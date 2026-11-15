@@ -312,6 +312,7 @@ class ImageWorkflow:
 
 
 IMAGE_FIXTURE_SHA256 = '53ea0caccddb485387031ade567c107bd9159fcbe30b3878433305f5dc69ab79'
+IMAGE_PROVIDER_TIMEOUT = 120
 
 
 
@@ -462,8 +463,8 @@ def _cleanup_image_run(app, run):
 async def exercise_notebook_images(app, *, output=None):
     """Required provider workflow; use the already-imported synthetic Secret remote.
 
-    The caller owns the stage deadline. This function never imports credentials
-    and propagates failures after publishing partial evidence and owned teardown.
+    Each provider owns its full open, save, reopen and close budget. Failures
+    propagate after publishing partial evidence and retiring owned resources.
     """
     from copy import deepcopy
     from hashlib import sha256
@@ -476,6 +477,7 @@ async def exercise_notebook_images(app, *, output=None):
     from services.documents.storage import DocumentResource
     from services.documents.mobile_notebooks import open_notebook,close_notebook,panels
     from .fixtures import capture_window
+    from .timings import measure
     import base64
     import traceback
     report=dict(success=False,providers=[],cleanup=dict(errors=[],original_restored=False),error='',
@@ -517,7 +519,7 @@ async def exercise_notebook_images(app, *, output=None):
         run.update(temporary=temporary,root=root)
         app.set_feature_enabled('notebooks',True,refresh=False)
         app.show_home()
-        for label in ('Local','LocalCrypt'):
+        async def exercise_provider(label):
             report['phase']=label+':open'
             folder=root/label;folder.mkdir()
             provider=LocalFiles(folder) if label=='Local' else CryptFiles(folder,app.cloud_client,'Secret')
@@ -570,6 +572,11 @@ async def exercise_notebook_images(app, *, output=None):
                 recovery_checked=label=='Local',reopened=True))
             assert close_notebook(app,panel.session.id,'discard')
             getattr(provider,'close',lambda:None)();record['closed']=True
+
+        for label in ('Local','LocalCrypt'):
+            await measure(app, 'notebook-image-provider',
+                          asyncio.wait_for(exercise_provider(label), timeout=IMAGE_PROVIDER_TIMEOUT),
+                          provider=label)
         assert [row['provider'] for row in report['providers']]==['Local','LocalCrypt']
     except BaseException as error:
         primary=error

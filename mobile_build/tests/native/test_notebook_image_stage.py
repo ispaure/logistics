@@ -14,7 +14,7 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class ImageStageCleanupTests(unittest.IsolatedAsyncioTestCase):
-    async def run_failure(self, *, cancelled=False, private=False, provider_close_fails=False, late_unrelated=False, partial_open=False, partial_clone=False):
+    async def run_failure(self, *, cancelled=False, private=False, provider_close_fails=False, late_unrelated=False, partial_open=False, partial_clone=False, provider_timeout=False):
         from features.notebooks.notebook import Notebook
         from commonUtils.runtime.resources.local import LocalFiles
         with TemporaryDirectory() as directory:
@@ -82,6 +82,12 @@ class ImageStageCleanupTests(unittest.IsolatedAsyncioTestCase):
                 panel=registry.pop(key);panel.dispose();workspace.close(key,guard=lambda value:True)
                 return True
             failure=asyncio.CancelledError('injected timeout cancellation') if cancelled else AssertionError('injected pixel failure')
+            budgets=[]
+            actual_wait=asyncio.wait_for
+            async def bound_provider(awaitable, timeout):
+                completed=[row['provider'] for row in app._notebook_image_report['providers']]
+                budgets.append((timeout, completed))
+                return await actual_wait(awaitable, timeout if not completed else .01)
             class Workflow:
                 def __init__(self,evaluate,editor,capture,progress=None,diagnostic=None):
                     self.cases=[]
@@ -95,6 +101,8 @@ class ImageStageCleanupTests(unittest.IsolatedAsyncioTestCase):
                             registry[unrelated.session.id]=unrelated
                             sessions[unrelated.session.id]=unrelated.session
                             app.notebook_panel=unrelated
+                        if provider_timeout:
+                            await asyncio.Event().wait()
                         raise failure
                 async def send(self,action):pass
                 async def idle(self):pass
@@ -110,9 +118,17 @@ class ImageStageCleanupTests(unittest.IsolatedAsyncioTestCase):
                 # Cleanup injection is independent of real native-view qualification.
                 context.enter_context(patch.object(checks,'verify_native_image_view',return_value='toga_android.webview'))
                 context.enter_context(patch('mobile_build.native_tests.tests.logisticsmobile.fixtures.capture_window',AsyncMock()))
-                with self.assertRaises(type(failure)) as raised:
+                if provider_timeout:
+                    context.enter_context(patch.object(checks.asyncio,'wait_for',side_effect=bound_provider))
+                with self.assertRaises(TimeoutError if provider_timeout else type(failure)) as raised:
                     await checks.exercise_notebook_images(app)
-            self.assertIs(raised.exception,failure)
+            if provider_timeout:
+                self.assertEqual(budgets, [(120, []), (120, ['Local'])])
+                self.assertIsInstance(raised.exception.__cause__, asyncio.CancelledError)
+                self.assertEqual(app._notebook_image_report['phase'], 'LocalCrypt:capture-transform-arrange')
+                self.assertEqual([row['provider'] for row in app._notebook_image_report['providers']], ['Local'])
+            else:
+                self.assertIs(raised.exception,failure)
             expected={'original','late-unrelated'} if late_unrelated else {'original'}
             self.assertEqual(set(sessions),expected)
             self.assertEqual(set(registry),expected)
@@ -151,6 +167,9 @@ class ImageStageCleanupTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_timeout_cancellation_propagates_after_cleanup(self):
         await self.run_failure(cancelled=True)
+
+    async def test_provider_timeout_gets_fresh_budget_and_keeps_completed_local_evidence(self):
+        await self.run_failure(private=True, provider_timeout=True)
 
     async def test_cleanup_error_is_evidence_and_does_not_replace_primary_failure(self):
         await self.run_failure(provider_close_fails=True)
