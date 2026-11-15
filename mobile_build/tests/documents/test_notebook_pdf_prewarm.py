@@ -193,7 +193,7 @@ class PdfPrewarmOwnershipTests(unittest.IsolatedAsyncioTestCase):
                 raise TimeoutError('fixture validation was not released')
         resource = NS(check=check)
         document = NS(resource=resource)
-        editor = NS(notebook=NS(content={'fileType':'pdf'}), pdf_data=lambda:None)
+        editor = NS(notebook=NS(content={'fileType':'pdf'}), prepare_pdf=lambda: None)
         panel = NS(editor=editor, document=document, closed=False, app=NS(active_host=True))
         task = asyncio.create_task(NotebookPanel.prewarm_pdf(panel))
         try:
@@ -210,7 +210,7 @@ class PdfPrewarmOwnershipTests(unittest.IsolatedAsyncioTestCase):
                 started.set()
                 if not released.wait(3):
                     raise TimeoutError('fixture classification was not released')
-            editor = NS(notebook=NS(content={'fileType':'pdf'}), pdf_data=classify)
+            editor = NS(notebook=NS(content={'fileType':'pdf'}), prepare_pdf=classify)
             panel = NS(editor=editor, closed=False, app=NS(active_host=True))
             task = asyncio.create_task(NotebookPanel.prewarm_pdf(panel))
             try:
