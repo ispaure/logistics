@@ -3,6 +3,7 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import copy
+from contextlib import contextmanager
 import json
 from pathlib import Path
 import shutil
@@ -272,6 +273,118 @@ class PublicationRecoveryTests(unittest.TestCase):
             self.assertEqual(self.run_owned(), 0)
         self.assertEqual(len(pushes), 1)
 
+    def test_source_tag_and_observation_keep_one_lock_and_durable_effect_order(self):
+        from build_manager.profiles import save_json
+        self.seed(status='prepared', run_id=None)
+        self.git('tag', '-d', self.tag)
+        self.client.tag_exists = False
+        active = False
+        events = []
+        run, git, read_text = subprocess.run, owner.git, Path.read_text
+        get, asset, terminal = self.client.get, owner._publication_asset, owner._publication_terminal
+
+        @contextmanager
+        def lock(path):
+            nonlocal active
+            self.assertFalse(active)
+            self.assertEqual(path, self.receipt.with_suffix('.lock'))
+            active = True
+            events.append('locked')
+            try:
+                yield
+            finally:
+                events.append('unlocked')
+                active = False
+
+        def read(path, *args, **kwargs):
+            if path == self.receipt:
+                self.assertTrue(active, 'Receipt binding must be read under the publication lock')
+            return read_text(path, *args, **kwargs)
+
+        def save(path, value):
+            self.assertTrue(active)
+            events.append('save:' + value['status'])
+            save_json(path, value)
+
+        def source(root, *args):
+            if args == ('status', '--porcelain'):
+                return ''
+            if args == ('branch', '--show-current'):
+                return 'shared-reviewed'
+            return git(root, *args)
+
+        def command(argv, **kwargs):
+            if argv[:2] not in (['git', 'push'], ['git', 'tag']):
+                return run(argv, **kwargs)
+            self.assertTrue(active)
+            if argv[:2] == ['git', 'tag']:
+                events.append('create-tag')
+                self.assertEqual(json.loads(self.receipt.read_text())['status'], 'tag-create-intent')
+                return run(argv, **kwargs)
+            target = argv[-1]
+            events.append('push:' + target)
+            record = json.loads(self.receipt.read_text())
+            if target == 'refs/tags/' + self.tag:
+                self.assertEqual(record['status'], 'tag-push-intent')
+                self.tag_object = self.git('rev-parse', target)
+                self.assertEqual(record['tag_object'], self.tag_object)
+                self.client.tag_exists = True
+            else:
+                self.assertEqual(record['status'], 'branch-push-intent')
+            return subprocess.CompletedProcess(argv, 0)
+
+        def provider_read(*args, **kwargs):
+            self.assertTrue(active)
+            return get(*args, **kwargs)
+
+        def observe(callback, label, *args, **kwargs):
+            self.assertTrue(active)
+            events.append(label)
+            return callback(*args, **kwargs)
+
+        with patch('build_manager.locking.workspace_lock', side_effect=lock), \
+                patch('build_manager.profiles.save_json', side_effect=save), \
+                patch.object(Path, 'read_text', read), patch.object(owner, 'git', side_effect=source), \
+                patch.object(owner.subprocess, 'run', side_effect=command), \
+                patch.object(self.client, 'get', side_effect=provider_read), \
+                patch.object(owner, '_publication_asset', side_effect=lambda *a, **k: observe(asset, 'asset', *a, **k)), \
+                patch.object(owner, '_publication_terminal', side_effect=lambda *a, **k: observe(terminal, 'jobs', *a, **k)):
+            self.assertEqual(owner._owned_release_source(self.root, self.client, self.tag, self.commit, Event(),
+                receipt=self.receipt, owner=self.token, reuse_test_results=True,
+                published_commit=False, timeout=.2, poll=.001), 0)
+        self.assertEqual(events, ['locked', 'save:branch-push-intent', 'push:shared-reviewed',
+            'push:' + self.commit + ':refs/heads/alpha', 'save:tag-create-intent', 'create-tag',
+            'save:tag-push-intent', 'push:refs/tags/' + self.tag, 'save:tag-pushed', 'asset',
+            'save:tag-pushed', 'jobs', 'asset', 'save:verified', 'unlocked'])
+
+    def test_unknown_local_tag_creation_resumes_without_recreating(self):
+        self.receipt.unlink()
+        self.git('tag', '-d', self.tag)
+        self.client.tag_exists = False
+        run = subprocess.run
+        creates, pushes = [], []
+
+        def command(argv, **kwargs):
+            if argv[:2] == ['git', 'tag']:
+                self.assertEqual(json.loads(self.receipt.read_text())['status'], 'tag-create-intent')
+                creates.append(argv)
+                run(argv, **kwargs)
+                raise subprocess.CalledProcessError(1, argv)
+            if argv[:2] == ['git', 'push']:
+                pushes.append(argv)
+                self.tag_object = self.git('rev-parse', 'refs/tags/' + self.tag)
+                self.client.tag_exists = True
+                return subprocess.CompletedProcess(argv, 0)
+            return run(argv, **kwargs)
+
+        with patch.object(owner.subprocess, 'run', side_effect=command):
+            with self.assertRaises(subprocess.CalledProcessError):
+                self.run_owned()
+            self.assertEqual(json.loads(self.receipt.read_text())['status'], 'tag-create-intent')
+            self.assertEqual(self.run_owned(), 0)
+        self.assertEqual(len(creates), 1)
+        self.assertEqual(len(pushes), 1)
+
     def test_accepted_tag_push_unknown_resumes_without_second_push(self):
         self.receipt.unlink()
         self.git('tag', '-d', self.tag)
@@ -401,6 +514,65 @@ class PublicationRecoveryTests(unittest.TestCase):
         self.assertEqual(self.run_owned(), 0)
         self.assertEqual(self.client.posts, [(77, 1)])
         self.assertEqual(self.client.reconciles, [1])
+
+    def test_second_artifact_failure_never_sends_second_rerun(self):
+        self.failed('timed_out', artifact=True)
+        rerun = self.client.rerun_failed
+
+        def fail_again(*args, **kwargs):
+            accepted = rerun(*args, **kwargs)
+            self.failed('timed_out', artifact=True)
+            return accepted
+
+        with patch.object(self.client, 'rerun_failed', side_effect=fail_again):
+            for _ in range(2):
+                with self.assertRaisesRegex(RuntimeError, 'Required release jobs failed'):
+                    self.run_owned()
+        self.assertEqual(self.client.posts, [(77, 1)])
+        record = json.loads(self.receipt.read_text())
+        self.assertEqual(record['status'], 'failed')
+        self.assertEqual(record['failed_attempt'], 2)
+        self.assertEqual(len(record['reruns']), 1)
+
+    def test_cancelled_observation_resumes_without_republishing(self):
+        cancelled = Event()
+        asset = owner._publication_asset
+
+        def stop_after_asset(*args, **kwargs):
+            result = asset(*args, **kwargs)
+            cancelled.set()
+            return result
+
+        with patch.object(owner, '_publication_asset', side_effect=stop_after_asset):
+            with self.assertRaisesRegex(TimeoutError, 'resume this exact receipt/tag'):
+                owner._owned_release_source(self.root, self.client, self.tag, self.commit, cancelled,
+                    receipt=self.receipt, owner=self.token, reuse_test_results=True,
+                    published_commit=True, timeout=.2, poll=.001)
+        record = json.loads(self.receipt.read_text())
+        self.assertEqual(record['status'], 'observation-stopped')
+        self.assertEqual(record['tag_object'], self.tag_object)
+        self.assertNotIn('proof', record)
+        with patch.object(owner.subprocess, 'run', wraps=subprocess.run) as run:
+            self.assertEqual(self.run_owned(), 0)
+        self.assertFalse(any(call.args[0][:2] in (['git', 'tag'], ['git', 'push']) for call in run.call_args_list))
+        self.assertFalse(self.client.posts)
+
+    def test_cancellation_after_terminal_witness_prevents_verified_receipt(self):
+        cancelled = Event()
+        terminal = owner._publication_terminal
+
+        def stop_after_jobs(*args):
+            result = terminal(*args)
+            cancelled.set()
+            return result
+
+        with patch.object(owner, '_publication_terminal', side_effect=stop_after_jobs):
+            with self.assertRaisesRegex(RuntimeError, 'cancelled before external effect or completion'):
+                owner._owned_release_source(self.root, self.client, self.tag, self.commit, cancelled,
+                    receipt=self.receipt, owner=self.token, reuse_test_results=True,
+                    published_commit=True, timeout=.2, poll=.001)
+        self.assertNotIn('proof', json.loads(self.receipt.read_text()))
+        self.assertFalse(self.client.posts)
 
     def test_partial_release_is_observed_without_upload_or_metadata_patch(self):
         self.client.partial = 2

@@ -1063,12 +1063,160 @@ def _publication_asset(root, client, tag, commit, dependency, cancelled):
     return dict(release=release['html_url'], release_id=release['id'], asset_id=assets[0]['id'], verified=verified)
 
 
+class _RetainedPublication:
+    """Own one receipt's binding and transitions under the caller's single lock."""
+
+    def __init__(self, client, receipt, binding, cancelled):
+        from build_manager.profiles import save_json
+        self.client, self.receipt = client, receipt
+        self.binding, self.cancelled = binding, cancelled
+        self._save_json = save_json
+        saved = json.loads(self.receipt.read_text()) if self.receipt.exists() else None
+        if saved is not None and (saved.get('schema') != 1 or saved.get('binding') != binding):
+            raise ValueError('Publication receipt differs from the reviewed owner/source/tag/dependency.')
+        self.saved = saved
+
+    def check_cancel(self):
+        if self.cancelled.is_set():
+            raise RuntimeError('Owned publication cancelled before external effect or completion.')
+
+    def save(self, **values):
+        self.saved.update(values)
+        self._save_json(self.receipt, self.saved)
+
+    def publish_tag(self, *, published_commit):
+        """Publish or reconcile only this receipt's immutable source tag."""
+        from urllib.parse import quote
+        client, binding, cancelled, saved = self.client, self.binding, self.cancelled, self.saved
+        root, tag, commit = Path(binding['root']), binding['tag'], binding['commit']
+        owner, reuse_test_results = binding['owner'], binding['reuse_test_results']
+        github_validation = binding['github_validation']
+        tag_path = client.base + '/git/ref/tags/' + quote(tag, safe='')
+        remote = _publication_get(client, tag_path, cancelled)
+        if saved is None:
+            if remote is not None:
+                raise ValueError('Release tag already exists without this operation ownership proof; it will never be moved.')
+            self.saved = saved = dict(schema=1, binding=binding, status='prepared', reruns=[])
+        if remote is not None:
+            if (saved.get('status') == 'prepared' or saved.get('tag_object') != remote.get('object', {}).get('sha')
+                    or client.resolve_ref('refs/tags/' + tag) != commit):
+                raise ValueError('Existing release tag is unowned, moved or mismatched.')
+        else:
+            if saved.get('status') not in {'prepared', 'branch-push-intent', 'tag-create-intent', 'tag-push-intent'}:
+                raise ValueError('Previously observed owned tag disappeared; do not recreate it automatically.')
+            if published_commit or saved['status'] in {'tag-create-intent', 'tag-push-intent'}:
+                if _publication_get(client, client.base + '/commits/' + commit, cancelled).get('sha') != commit:
+                    raise ValueError('Reviewed release source is not published.')
+            else:
+                if git(root, 'status', '--porcelain') or git(root, 'rev-parse', 'HEAD') != commit:
+                    raise ValueError('Commit intended source before requesting a release.')
+                shared = root / 'Python/commonUtils'
+                if git(shared, 'status', '--porcelain'):
+                    raise ValueError('Commit intended shared changes first.')
+                branch = git(shared, 'branch', '--show-current')
+                if not branch:
+                    raise ValueError('Select the intended shared publication branch.')
+                self.save(status='branch-push-intent')
+                self.check_cancel()
+                subprocess.run(['git', 'push', 'origin', branch], cwd=shared, check=True, timeout=120)
+                self.check_cancel()
+                subprocess.run(['git', 'push', 'origin', commit + ':refs/heads/' + tag.split('-')[1].split('.')[0]], cwd=root, check=True, timeout=120)
+            message = 'Logistics source release\n\nBuild-Manager-Publication: ' + owner
+            if not reuse_test_results:
+                message += '\nBuild-Manager-Reuse: off'
+            if github_validation == 'off':
+                message += '\nBuild-Manager-Hosted-Validation: off'
+            # Local tags are adopted only after our prior durable create intent,
+            # exact owner annotation and source prove this operation created them.
+            local = subprocess.run(['git', 'rev-parse', '--verify', 'refs/tags/' + tag], cwd=root, capture_output=True, text=True, timeout=30)
+            if local.returncode == 0:
+                if saved.get('status') not in {'tag-create-intent', 'tag-push-intent'} or git(root, 'for-each-ref', '--format=%(contents)', 'refs/tags/' + tag) != message:
+                    raise ValueError('Local release tag has no matching retained creation intent.')
+                if git(root, 'rev-parse', tag + '^{commit}') != commit:
+                    raise ValueError('Local owned tag identifies another source.')
+            else:
+                self.save(status='tag-create-intent')
+                self.check_cancel()
+                subprocess.run(['git', 'tag', '-a', tag, commit, '-m', message], cwd=root, check=True, timeout=30)
+            self.save(status='tag-push-intent', tag_object=git(root, 'rev-parse', 'refs/tags/' + tag))
+            self.check_cancel()
+            subprocess.run(['git', 'push', 'origin', 'refs/tags/' + tag], cwd=root, check=True, timeout=120)
+            remote = _publication_get(client, tag_path, cancelled)
+            if remote is None or remote['object']['sha'] != saved['tag_object'] or client.resolve_ref('refs/tags/' + tag) != commit:
+                raise RuntimeError('Tag push outcome is unverified; resume this operation, never create another tag.')
+            self.save(status='tag-pushed')
+
+    def observe(self, *, timeout, poll):
+        """Verify bytes and terminal jobs, retaining at most one owned rerun."""
+        client, binding, cancelled, saved = self.client, self.binding, self.cancelled, self.saved
+        root, tag, commit = Path(binding['root']), binding['tag'], binding['commit']
+        dependency, github_validation = binding['commonUtils_commit'], binding['github_validation']
+        deadline = time.monotonic() + timeout
+        asset = _publication_asset(root, client, tag, commit, dependency, cancelled)
+        terminal_asset_deadline = None
+        while time.monotonic() < deadline and not cancelled.is_set():
+            if not saved.get('run_id'):
+                runs = _publication_get(client, client.base + '/actions/runs?event=push&head_sha=' + commit + '&per_page=100', cancelled)
+                candidates = [row for row in runs['workflow_runs'] if row.get('head_sha') == commit
+                              and row.get('head_branch') == tag and row.get('path', '').split('@')[0] == binding['workflow']]
+                if len(candidates) > 1:
+                    raise ValueError('More than one release run identifies this immutable tag.')
+                if not candidates:
+                    cancelled.wait(min(5, poll))
+                    continue
+                self.save(run_id=candidates[0]['id'], attempt=candidates[0].get('run_attempt', 1))
+            run_id, attempt = saved['run_id'], saved['attempt']
+            if saved['reruns'] and saved['reruns'][-1]['status'] == 'intent':
+                accepted = client.reconcile_rerun(run_id, commit, expected_attempt=saved['reruns'][-1]['from_attempt'],
+                    expected_ref='refs/tags/' + tag, expected_workflow=binding['workflow'], cancelled=cancelled)
+                saved['reruns'][-1].update(status='accepted', attempt=accepted['run_attempt'])
+                self.save(attempt=accepted['run_attempt'])
+                attempt = saved['attempt']
+            observed = client.attempt(run_id, attempt, commit, expected_ref='refs/tags/' + tag,
+                                      expected_workflow=binding['workflow'])
+            jobs = _publication_jobs(client, run_id, attempt, cancelled)
+            witness = _publication_terminal(root, commit, jobs)
+            if asset is None:
+                asset = _publication_asset(root, client, tag, commit, dependency, cancelled)
+            if witness and asset is None:
+                terminal_asset_deadline = terminal_asset_deadline or min(deadline, time.monotonic() + 60)
+                if time.monotonic() >= terminal_asset_deadline:
+                    raise RuntimeError('Terminal publish succeeded without a visible verified release ZIP; resume observation, never upload again.')
+            if witness and asset is not None:
+                # Gate observation can outlive the first download. Confirm the
+                # currently published bytes/identity before recording completion.
+                current_asset = _publication_asset(root, client, tag, commit, dependency, cancelled)
+                if current_asset is None or current_asset != asset:
+                    raise RuntimeError('Published release or verified asset changed during gate observation; inspect the owned operation.')
+                asset = current_asset
+                self.check_cancel()
+                self.save(status='verified', proof=dict(run_id=run_id, run_attempt=attempt,
+                    github_validation=github_validation, hosted_validation_skipped=github_validation == 'off',
+                    aggregate_status=observed.get('status'), jobs=[{k: row.get(k) for k in ('id', 'name', 'status', 'conclusion')} for row in jobs], **asset))
+                print(json.dumps(dict(tag=tag, commit=commit, **saved['proof'])), flush=True)
+                return 0
+            failed = jobs and all(row.get('status') == 'completed' for row in jobs) and any(row.get('conclusion') not in {'success', 'skipped'} for row in jobs)
+            if failed:
+                if saved['reruns'] or not _publication_transient(client, jobs):
+                    self.save(status='failed', failed_attempt=attempt)
+                    raise RuntimeError('Required release jobs failed; no automatic product-test retry is permitted.')
+                saved['reruns'].append(dict(status='intent', from_attempt=attempt))
+                self.save(status='rerun-intent')  # Persist BEFORE the one irreversible POST.
+                self.check_cancel()
+                accepted = client.rerun_failed(run_id, commit, expected_attempt=attempt,
+                    expected_ref='refs/tags/' + tag, expected_workflow=binding['workflow'], confirmed=True, cancelled=cancelled)
+                saved['reruns'][-1].update(status='accepted', attempt=accepted['run_attempt'])
+                self.save(attempt=accepted['run_attempt'])
+                continue
+            cancelled.wait(poll)
+        self.save(status='observation-stopped')
+        raise TimeoutError('Owned release remains unverified; resume this exact receipt/tag without repeating publication.')
+
+
 def _owned_release_source(root, client, tag, commit, cancelled, *, receipt, owner,
                           reuse_test_results, published_commit, github_validation='on', timeout=13600, poll=15):
     """One retained publication operation; only its exact immutable tag may resume."""
     from build_manager.locking import workspace_lock
-    from build_manager.profiles import save_json
-    from urllib.parse import quote
     import math
     _publication_capabilities(client)  # Before ANY tag, branch or provider write.
     if any(type(value) not in (int, float) or not math.isfinite(value) or value <= 0 for value in (timeout, poll)):
@@ -1092,130 +1240,11 @@ def _owned_release_source(root, client, tag, commit, cancelled, *, receipt, owne
                    commonUtils_commit=dependency, owner=owner, reuse_test_results=reuse_test_results,
                    github_validation=github_validation,
                    workflow='.github/workflows/release.yml')
+    # Binding, tag effects and observation are one serialized transaction.
     with workspace_lock(receipt.with_suffix('.lock')):
-        saved = json.loads(receipt.read_text()) if receipt.exists() else None
-        if saved is not None and (saved.get('schema') != 1 or saved.get('binding') != binding):
-            raise ValueError('Publication receipt differs from the reviewed owner/source/tag/dependency.')
-        tag_path = client.base + '/git/ref/tags/' + quote(tag, safe='')
-        remote = _publication_get(client, tag_path, cancelled)
-        if saved is None:
-            if remote is not None:
-                raise ValueError('Release tag already exists without this operation ownership proof; it will never be moved.')
-            saved = dict(schema=1, binding=binding, status='prepared', reruns=[])
-        def check_cancel():
-            if cancelled.is_set():
-                raise RuntimeError('Owned publication cancelled before external effect or completion.')
-        def save(**values):
-            saved.update(values)
-            save_json(receipt, saved)
-        if remote is not None:
-            if (saved.get('status') == 'prepared' or saved.get('tag_object') != remote.get('object', {}).get('sha')
-                    or client.resolve_ref('refs/tags/' + tag) != commit):
-                raise ValueError('Existing release tag is unowned, moved or mismatched.')
-        else:
-            if saved.get('status') not in {'prepared', 'branch-push-intent', 'tag-create-intent', 'tag-push-intent'}:
-                raise ValueError('Previously observed owned tag disappeared; do not recreate it automatically.')
-            if published_commit or saved['status'] in {'tag-create-intent', 'tag-push-intent'}:
-                if _publication_get(client, client.base + '/commits/' + commit, cancelled).get('sha') != commit:
-                    raise ValueError('Reviewed release source is not published.')
-            else:
-                if git(root, 'status', '--porcelain') or git(root, 'rev-parse', 'HEAD') != commit:
-                    raise ValueError('Commit intended source before requesting a release.')
-                shared = root / 'Python/commonUtils'
-                if git(shared, 'status', '--porcelain'):
-                    raise ValueError('Commit intended shared changes first.')
-                branch = git(shared, 'branch', '--show-current')
-                if not branch:
-                    raise ValueError('Select the intended shared publication branch.')
-                save(status='branch-push-intent')
-                check_cancel()
-                subprocess.run(['git', 'push', 'origin', branch], cwd=shared, check=True, timeout=120)
-                check_cancel()
-                subprocess.run(['git', 'push', 'origin', commit + ':refs/heads/' + tag.split('-')[1].split('.')[0]], cwd=root, check=True, timeout=120)
-            message = 'Logistics source release\n\nBuild-Manager-Publication: ' + owner
-            if not reuse_test_results:
-                message += '\nBuild-Manager-Reuse: off'
-            if github_validation == 'off':
-                message += '\nBuild-Manager-Hosted-Validation: off'
-            # Local tags are adopted only after our prior durable create intent,
-            # exact owner annotation and source prove this operation created them.
-            local = subprocess.run(['git', 'rev-parse', '--verify', 'refs/tags/' + tag], cwd=root, capture_output=True, text=True, timeout=30)
-            if local.returncode == 0:
-                if saved.get('status') not in {'tag-create-intent', 'tag-push-intent'} or git(root, 'for-each-ref', '--format=%(contents)', 'refs/tags/' + tag) != message:
-                    raise ValueError('Local release tag has no matching retained creation intent.')
-                if git(root, 'rev-parse', tag + '^{commit}') != commit:
-                    raise ValueError('Local owned tag identifies another source.')
-            else:
-                save(status='tag-create-intent')
-                check_cancel()
-                subprocess.run(['git', 'tag', '-a', tag, commit, '-m', message], cwd=root, check=True, timeout=30)
-            save(status='tag-push-intent', tag_object=git(root, 'rev-parse', 'refs/tags/' + tag))
-            check_cancel()
-            subprocess.run(['git', 'push', 'origin', 'refs/tags/' + tag], cwd=root, check=True, timeout=120)
-            remote = _publication_get(client, tag_path, cancelled)
-            if remote is None or remote['object']['sha'] != saved['tag_object'] or client.resolve_ref('refs/tags/' + tag) != commit:
-                raise RuntimeError('Tag push outcome is unverified; resume this operation, never create another tag.')
-            save(status='tag-pushed')
-        deadline = time.monotonic() + timeout
-        asset = _publication_asset(root, client, tag, commit, dependency, cancelled)
-        terminal_asset_deadline = None
-        while time.monotonic() < deadline and not cancelled.is_set():
-            if not saved.get('run_id'):
-                runs = _publication_get(client, client.base + '/actions/runs?event=push&head_sha=' + commit + '&per_page=100', cancelled)
-                candidates = [row for row in runs['workflow_runs'] if row.get('head_sha') == commit
-                              and row.get('head_branch') == tag and row.get('path', '').split('@')[0] == binding['workflow']]
-                if len(candidates) > 1:
-                    raise ValueError('More than one release run identifies this immutable tag.')
-                if not candidates:
-                    cancelled.wait(min(5, poll))
-                    continue
-                save(run_id=candidates[0]['id'], attempt=candidates[0].get('run_attempt', 1))
-            run_id, attempt = saved['run_id'], saved['attempt']
-            if saved['reruns'] and saved['reruns'][-1]['status'] == 'intent':
-                accepted = client.reconcile_rerun(run_id, commit, expected_attempt=saved['reruns'][-1]['from_attempt'],
-                    expected_ref='refs/tags/' + tag, expected_workflow=binding['workflow'], cancelled=cancelled)
-                saved['reruns'][-1].update(status='accepted', attempt=accepted['run_attempt'])
-                save(attempt=accepted['run_attempt'])
-                attempt = saved['attempt']
-            observed = client.attempt(run_id, attempt, commit, expected_ref='refs/tags/' + tag,
-                                      expected_workflow=binding['workflow'])
-            jobs = _publication_jobs(client, run_id, attempt, cancelled)
-            witness = _publication_terminal(root, commit, jobs)
-            if asset is None:
-                asset = _publication_asset(root, client, tag, commit, dependency, cancelled)
-            if witness and asset is None:
-                terminal_asset_deadline = terminal_asset_deadline or min(deadline, time.monotonic() + 60)
-                if time.monotonic() >= terminal_asset_deadline:
-                    raise RuntimeError('Terminal publish succeeded without a visible verified release ZIP; resume observation, never upload again.')
-            if witness and asset is not None:
-                # Gate observation can outlive the first download. Confirm the
-                # currently published bytes/identity before recording completion.
-                current_asset = _publication_asset(root, client, tag, commit, dependency, cancelled)
-                if current_asset is None or current_asset != asset:
-                    raise RuntimeError('Published release or verified asset changed during gate observation; inspect the owned operation.')
-                asset = current_asset
-                check_cancel()
-                save(status='verified', proof=dict(run_id=run_id, run_attempt=attempt,
-                    github_validation=github_validation, hosted_validation_skipped=github_validation == 'off',
-                    aggregate_status=observed.get('status'), jobs=[{k: row.get(k) for k in ('id', 'name', 'status', 'conclusion')} for row in jobs], **asset))
-                print(json.dumps(dict(tag=tag, commit=commit, **saved['proof'])), flush=True)
-                return 0
-            failed = jobs and all(row.get('status') == 'completed' for row in jobs) and any(row.get('conclusion') not in {'success', 'skipped'} for row in jobs)
-            if failed:
-                if saved['reruns'] or not _publication_transient(client, jobs):
-                    save(status='failed', failed_attempt=attempt)
-                    raise RuntimeError('Required release jobs failed; no automatic product-test retry is permitted.')
-                saved['reruns'].append(dict(status='intent', from_attempt=attempt))
-                save(status='rerun-intent')  # Persist BEFORE the one irreversible POST.
-                check_cancel()
-                accepted = client.rerun_failed(run_id, commit, expected_attempt=attempt,
-                    expected_ref='refs/tags/' + tag, expected_workflow=binding['workflow'], confirmed=True, cancelled=cancelled)
-                saved['reruns'][-1].update(status='accepted', attempt=accepted['run_attempt'])
-                save(attempt=accepted['run_attempt'])
-                continue
-            cancelled.wait(poll)
-        save(status='observation-stopped')
-        raise TimeoutError('Owned release remains unverified; resume this exact receipt/tag without repeating publication.')
+        publication = _RetainedPublication(client, receipt, binding, cancelled)
+        publication.publish_tag(published_commit=published_commit)
+        return publication.observe(timeout=timeout, poll=poll)
 
 
 def release_source(root, client, tag, commit, cancelled, *, reuse_test_results=True, published_commit=False, operation_receipt=None, publication_owner=None, skip_hosted_validation=False):

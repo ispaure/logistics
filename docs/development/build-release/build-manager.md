@@ -149,6 +149,11 @@ With reuse enabled, one unambiguous branch-push run can satisfy matching validat
 
 New plans journal tag/write intent against the reviewed owner, repository, tag object, commit and gitlink. Resume an existing tag only with that exact receipt. Reconcile legacy or foreign attempts manually. Review the existing ZIP's digest and source/dependency manifests. Metadata repair changes reviewed title/body while preserving draft/prerelease state and assets.
 
+`build_project._owned_release_source` holds one receipt lock across retained-source
+binding, owned tag publication and observation. Its private `_RetainedPublication`
+owner shares that receipt state across the phases; each irreversible write keeps
+its durable intent before the effect, and observation never starts outside the lock.
+
 Completion requires valid assets and exact-attempt `evidence`, `package` and `publish` success with terminal visible jobs. The reviewed workflow hash binds this witness. Default hosted validation stays on; a reviewed `testing.github_validation=off` run records its immutable bypass and publishes without hosted test credit.
 
 One failed-jobs rerun is allowed for a proven artifact-service finalization failure with bounded logs and successful prior steps. Save intent before the POST. Reconcile ambiguous responses by GET for the exact attempt. Observation can resume from its receipt after cancellation or timeout.
