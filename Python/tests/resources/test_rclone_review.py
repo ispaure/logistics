@@ -564,8 +564,11 @@ class ReviewDialogTests(QtTestCase):
         self.assertEqual(dialog.details.topLevelItem(0).text(1), '00030.txt')
         self.assertIn('00030', dialog.inspector_labels['path'].text())
         dialog.search.setText('09999')
-        from PySide6.QtTest import QTest
-        QTest.qWait(400)
+        self.wait_until(lambda: dialog.projection.query == '09999'
+            and dialog.details.topLevelItemCount() == 1
+            and dialog.details.topLevelItem(0).toolTip(1) == 'folder/09999.txt',
+            message=lambda: f'Large review search did not settle. '
+                            f'Query {dialog.projection.query!r}, rows {dialog.details.topLevelItemCount()}.')
         self.assertEqual(dialog.details.topLevelItemCount(), 1)
         self.assertIn('09999', dialog.inspector_labels['path'].text())
         dialog.reject()
