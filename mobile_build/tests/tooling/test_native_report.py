@@ -351,6 +351,39 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             ui_tools.cleanup_owned_ios_device(lease, client=client)
             self.assertTrue(json.loads(lease.read_text())['removed'])
 
+    def test_hosted_boot_rechecks_existing_owned_device_after_inventory_stall(self):
+        client = Mock()
+        client.devices.return_value = {'devices': {'com.apple.CoreSimulator.SimRuntime.iOS-27-1': [
+            dict(udid='profile', name='iPhone Duo', state='Shutdown', isAvailable=True,
+                 deviceTypeIdentifier='com.apple.CoreSimulator.SimDeviceType.iPhone-Duo')]}}
+        client.create.return_value = 'owned-boot'
+        inventory = subprocess.TimeoutExpired(['xcrun', 'simctl', 'list', 'devices'], 60)
+        inventory.__context__ = subprocess.TimeoutExpired(
+            ['xcrun', 'simctl', 'bootstatus'], 180, output=b'Waiting on Data Migration')
+        client.boot.side_effect = inventory
+        client.matching.side_effect = [inventory, {'state': 'Booting'}]
+        with TemporaryDirectory() as directory, patch.dict(ui_tools.os.environ, {'GITHUB_ACTIONS': 'true'}), \
+                patch.object(ui_tools.time, 'sleep'):
+            lease = Path(directory) / 'lease.json'
+            self.assertEqual(ui_tools.owned_ios_device(lease, client=client, sdk='27.1', duo=True), 'owned-boot')
+            record = json.loads(lease.read_text())
+            proof = json.loads(lease.with_name('ios-native-ui-boot-timeout.json').read_text())
+            self.assertTrue(proof['recovered'])
+            self.assertEqual(proof['prior_timeout']['stdout'], 'Waiting on Data Migration')
+            self.assertEqual(client.matching.call_count, 2)
+            self.assertTrue(all(row.args == ('owned-boot', record['name']) for row in client.matching.call_args_list))
+            client.boot.assert_called_once_with('owned-boot', name=record['name'])
+            client.invoke.assert_called_once_with('bootstatus', 'owned-boot', '-b', timeout=25)
+            client.remove.assert_not_called()
+
+    def test_hosted_boot_does_not_accept_missing_or_shut_down_simulator(self):
+        for row in (None, {'state': 'Shutdown'}):
+            with self.subTest(row=row):
+                client = Mock()
+                client.matching.return_value = row
+                self.assertFalse(ui_tools.wait_for_hosted_boot(client, 'owned-boot', 'owned-label'))
+                client.invoke.assert_not_called()
+
     def test_shared_test_app_is_reused_and_wrong_or_missing_builds_fail_before_launch(self):
         import os
         from unittest.mock import patch

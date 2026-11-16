@@ -73,6 +73,11 @@ iPhone/iPad use runtime 27.0 and Duo uses 27.1 with its required rotation matrix
 iPad must pass independent-window checks. Android runs independently. The native
 attempt limits are 30 minutes per iOS device and 40 minutes on Android.
 
+If hosted CoreSimulator stops answering during boot, the gate observes the same
+leased simulator for up to 150 additional seconds. It requires a successful
+`bootstatus` before app launch and retains the timeout evidence. A missing or
+shut-down simulator still fails startup.
+
 The gate requires exact source and complete reports from all selected jobs.
 Failed, cancelled and required skipped jobs fail, as do unhandled native callback
 errors even with passing cases. A complete stdout report takes precedence. If

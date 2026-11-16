@@ -764,6 +764,24 @@ def boot_timeout_details(error, started, record, lease):
         stdout=decoded(error.stdout), stderr=decoded(error.stderr))
 
 
+def wait_for_hosted_boot(client, device, name, *, budget=150):
+    """Observe the same already-started simulator through a transient service stall."""
+    deadline = time.monotonic() + budget
+    while (remaining := deadline - time.monotonic()) > 0:
+        try:
+            row = client.matching(device, name, timeout=min(10, remaining))
+            if row is None or row['state'] not in ('Booting', 'Booted'):
+                return False
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return False
+            client.invoke('bootstatus', device, '-b', timeout=min(25, remaining))
+            return True
+        except subprocess.TimeoutExpired:
+            time.sleep(min(.5, max(0, deadline - time.monotonic())))
+    return False
+
+
 def owned_ios_device(lease, *, ipad=False, duo=False, client=None, sdk=None):
     """Use the same fresh, owned simulator lifecycle as local native QA."""
     from build_manager.apple_simulators import AppleSimulators
@@ -796,14 +814,25 @@ def owned_ios_device(lease, *, ipad=False, duo=False, client=None, sdk=None):
     try:
         client.boot(device, name=name)
     except subprocess.TimeoutExpired as error:
-        # bootstatus reports its current boot phase on stdout. Keep that
-        # evidence even when the simulator never becomes responsive.
+        recovered = False
         try:
             details = boot_timeout_details(error, boot_started, record, lease)
+            if isinstance(error.__context__, subprocess.TimeoutExpired):
+                details['prior_timeout'] = boot_timeout_details(error.__context__, boot_started, record, lease)
+            if os.environ.get('GITHUB_ACTIONS') == 'true' and details['stage'] in ('boot', 'bootstatus', 'inventory'):
+                # Hosted CoreSimulator can stop answering both bootstatus and
+                # inventory, then recover while the runner gathers diagnostics.
+                # Wait for a successful bootstatus on the original owned lease.
+                try:
+                    recovered = wait_for_hosted_boot(client, device, name)
+                except (OSError, RuntimeError, ValueError) as failure:
+                    error.add_note(f'Owned boot recovery ended with {type(failure).__name__}.')
+                details['recovered'] = recovered
             lease.with_name('ios-native-ui-boot-timeout.json').write_text(json.dumps(details))
         except Exception:
             error.add_note('Owned boot timeout diagnostics could not be captured or saved.')
-        raise
+        if not recovered:
+            raise
     return device
 
 
