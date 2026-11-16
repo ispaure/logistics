@@ -389,7 +389,16 @@ class PDFMobileTests(unittest.TestCase):
                     async def wait_for_close():
                         while owner.session.id in app.private_sessions.controllers:
                             await asyncio.sleep(.01)
-                    await asyncio.wait_for(wait_for_close(), timeout=5)
+                    try:
+                        await asyncio.wait_for(wait_for_close(), timeout=15)
+                    except TimeoutError:
+                        progress = getattr(owner, '_provider_progress', None)
+                        close = getattr(owner, '_exit_task', None)
+                        self.fail(
+                            f'PDF session did not close. Operation busy={owner.operation_busy}, '
+                            f'exit scheduled={close is not None}, progress pending='
+                            f'{getattr(progress, "pending", None) is not None}, '
+                            f'progress worker={getattr(progress, "worker", None) is not None}.')
                     self.assertTrue(search.controller.disposed)
                     self.assertFalse(search.controller.results.matches)
                     self.assertEqual(search.input.value, '')

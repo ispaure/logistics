@@ -782,7 +782,7 @@ def wait_for_hosted_boot(client, device, name, *, budget=150):
     return False
 
 
-def owned_ios_device(lease, *, ipad=False, duo=False, client=None, sdk=None):
+def owned_ios_device(lease, *, ipad=False, duo=False, client=None, sdk=None, recover_boot=False):
     """Use the same fresh, owned simulator lifecycle as local native QA."""
     from build_manager.apple_simulators import AppleSimulators
     from uuid import uuid4
@@ -819,7 +819,7 @@ def owned_ios_device(lease, *, ipad=False, duo=False, client=None, sdk=None):
             details = boot_timeout_details(error, boot_started, record, lease)
             if isinstance(error.__context__, subprocess.TimeoutExpired):
                 details['prior_timeout'] = boot_timeout_details(error.__context__, boot_started, record, lease)
-            if os.environ.get('GITHUB_ACTIONS') == 'true' and details['stage'] in ('boot', 'bootstatus', 'inventory'):
+            if recover_boot and details['stage'] in ('boot', 'bootstatus', 'inventory'):
                 # Hosted CoreSimulator can stop answering both bootstatus and
                 # inventory, then recover while the runner gathers diagnostics.
                 # Wait for a successful bootstatus on the original owned lease.
@@ -923,7 +923,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     if args.command in ('ios-device', 'ios-ipad', 'ios-duo'):
         options = dict(ipad=args.command == 'ios-ipad', duo=args.command == 'ios-duo')
-        print(owned_ios_device('logs/ios-native-ui-owned.json', **options)
+        print(owned_ios_device('logs/ios-native-ui-owned.json',
+                               recover_boot=os.environ.get('GITHUB_ACTIONS') == 'true', **options)
               if args.owned else ios_device(**options))
     elif args.command == 'ios-cleanup':
         cleanup_owned_ios_device('logs/ios-native-ui-owned.json')

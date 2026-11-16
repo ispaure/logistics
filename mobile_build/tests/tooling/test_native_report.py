@@ -362,10 +362,10 @@ runpy.run_path(sys.argv[0], run_name='__main__')
             ['xcrun', 'simctl', 'bootstatus'], 180, output=b'Waiting on Data Migration')
         client.boot.side_effect = inventory
         client.matching.side_effect = [inventory, {'state': 'Booting'}]
-        with TemporaryDirectory() as directory, patch.dict(ui_tools.os.environ, {'GITHUB_ACTIONS': 'true'}), \
-                patch.object(ui_tools.time, 'sleep'):
+        with TemporaryDirectory() as directory, patch.object(ui_tools.time, 'sleep'):
             lease = Path(directory) / 'lease.json'
-            self.assertEqual(ui_tools.owned_ios_device(lease, client=client, sdk='27.1', duo=True), 'owned-boot')
+            self.assertEqual(ui_tools.owned_ios_device(
+                lease, client=client, sdk='27.1', duo=True, recover_boot=True), 'owned-boot')
             record = json.loads(lease.read_text())
             proof = json.loads(lease.with_name('ios-native-ui-boot-timeout.json').read_text())
             self.assertTrue(proof['recovered'])
