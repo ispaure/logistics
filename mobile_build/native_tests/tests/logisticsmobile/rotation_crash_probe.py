@@ -175,6 +175,21 @@ def main():
     return RotationCrashApp('Rotation trace QA', 'io.github.ispaure.logisticsnotebookqa')
 
 
+def settings_snapshot(app):
+    state = native_state(app)
+    adapter = app.native_host.adapter
+    tab = adapter.controller
+    selected = native_value(tab.selectedViewController)
+    navigation = adapter.navigation_for(app.native_host.state.destination)
+    state.update(tab=controller_state(tab), selected_index=int(native_value(tab.selectedIndex)),
+                 selected_controller=controller_state(selected),
+                 top=controller_state(navigation.topViewController),
+                 visible=controller_state(navigation.visibleViewController),
+                 category=app.settings_navigation.selected,
+                 wide=app.settings_navigation.wide)
+    return state
+
+
 async def run_settings_comparison(app, mode):
     """Compare Settings transitions in two fresh copies of the same test app."""
     import asyncio
@@ -183,21 +198,7 @@ async def run_settings_comparison(app, mode):
     from mobile.routes import contains
     from .rotation_checks import rotate, wait_until
 
-    def snapshot(app):
-        state = native_state(app)
-        adapter = app.native_host.adapter
-        tab = adapter.controller
-        selected = native_value(tab.selectedViewController)
-        navigation = adapter.navigation_for(app.native_host.state.destination)
-        state.update(tab=controller_state(tab), selected_index=int(native_value(tab.selectedIndex)),
-                     selected_controller=controller_state(selected),
-                     top=controller_state(navigation.topViewController),
-                     visible=controller_state(navigation.visibleViewController),
-                     category=app.settings_navigation.selected,
-                     wide=app.settings_navigation.wide)
-        return state
-
-    trace = RotationTrace(app, snapshot=snapshot)
+    trace = RotationTrace(app, snapshot=settings_snapshot)
 
     def transition_finished():
         adapter = app.native_host.adapter
@@ -245,6 +246,48 @@ async def run_settings_comparison(app, mode):
         trace.emit('python-error', traceback=traceback.format_exc())
         status = 1
     finally:
+        trace.stream.close()
+    await asyncio.sleep(.25)
+    os._exit(status)
+
+
+
+async def run_warm_settings(app):
+    """Keep the original preceding journey and stop after the last suspect panel."""
+    import asyncio
+    import traceback
+    from . import rotation_checks
+    from .rotation_screens import SCREENS
+
+    trace = RotationTrace(app, snapshot=settings_snapshot)
+    inventory = [screen.panel for screen in SCREENS]
+    panels = inventory[:inventory.index('settings-epub') + 1]
+    settings = panels[panels.index('settings'):]
+    original = rotation_checks.rotate_panel
+
+    async def traced(app, *, panel, cycle, orientation):
+        if panel not in settings:
+            return await original(app, panel=panel, cycle=cycle, orientation=orientation)
+        trace.panel = panel
+        trace.request += 1
+        trace.emit('request-before', native=True, orientation=orientation, cycle=cycle)
+        result = await original(app, panel=panel, cycle=cycle, orientation=orientation)
+        trace.emit('request-settled', native=True, orientation=orientation, cycle=cycle)
+        return result
+
+    try:
+        trace.emit('warm-rotation-start', native=True)
+        rotation_checks.rotate_panel = traced
+        await rotation_checks.exercise_rotation(app, panels=panels)
+        assert trace.request == 50
+        trace.emit('complete', native=True, mode='warm', samples=trace.request)
+        status = 0
+    except Exception:
+        traceback.print_exc()
+        trace.emit('python-error', traceback=traceback.format_exc())
+        status = 1
+    finally:
+        rotation_checks.rotate_panel = original
         trace.stream.close()
     await asyncio.sleep(.25)
     os._exit(status)

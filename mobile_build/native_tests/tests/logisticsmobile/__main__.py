@@ -122,6 +122,9 @@ async def exercise(app):
         print('LOGISTICS_UI_REVIEW=complete; checking native browser Back', flush=True)
         from .browser_back_checks import exercise_browser_back
         ui_review.update(await measure(app, 'browser-back', exercise_browser_back(app)))
+        if os.environ.get('LOGISTICS_SETTINGS_ROTATION_PROBE') == 'warm':
+            from .rotation_crash_probe import run_warm_settings
+            await run_warm_settings(app)
         from .rotation_checks import exercise_rotation
         ui_review.update(await measure(app, 'rotation', exercise_rotation(app)))
         passed.append('native_rotation_safe_areas')
@@ -234,7 +237,7 @@ class NativeCheckApp(LogisticsMobile):
         elif self.navigation_hold:
             from .navigation_hold import hold_navigation
             start_traced_check(self, hold_navigation)
-        elif mode := os.environ.get('LOGISTICS_SETTINGS_ROTATION_PROBE'):
+        elif (mode := os.environ.get('LOGISTICS_SETTINGS_ROTATION_PROBE')) in ('held', 'immediate'):
             from .rotation_crash_probe import run_settings_comparison
             start_traced_check(self, lambda app: run_settings_comparison(app, mode))
         else:

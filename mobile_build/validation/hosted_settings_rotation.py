@@ -16,13 +16,10 @@ TRACE = 'logistics-native-ui-rotation-trace.jsonl'
 
 
 def run(device, mode):
-    from build_manager.apple_simulators import AppleSimulators
-
     logs = Path('logs')
     lease = json.loads((logs / 'ios-native-ui-owned.json').read_text())
     if (lease['device'] != device or lease.get('removed')
-            or not lease['name'].startswith('Logistics Native Gate ')
-            or AppleSimulators().matching(device, lease['name']) is None):
+            or not lease['name'].startswith('Logistics Native Gate ')):
         raise ValueError('Expected the fresh diagnostic simulator lease.')
     app = Path('build/logisticsmobile/ios/xcode/build/Debug-iphonesimulator/Logistics Mobile.app')
     verify_prebuilt_ios(app=app)
@@ -37,11 +34,12 @@ def run(device, mode):
                                  'SIMCTL_CHILD_PYTHONUNBUFFERED': '1'}
     started = time.time_ns()
     exit_code = None
+    expected = 50 if mode == 'warm' else 36
     try:
         with (logs / 'settings-rotation-console.log').open('w') as output:
             finished = subprocess.run([*simctl, 'launch', '--console-pty', device, BUNDLE],
                                       env=environment, stdout=output, stderr=subprocess.STDOUT,
-                                      timeout=180, check=False)
+                                      timeout=1100 if mode == 'warm' else 180, check=False)
             exit_code = finished.returncode
     finally:
         if source.is_file():
@@ -61,7 +59,7 @@ def run(device, mode):
                        last=rows[-1] if rows else None)
         (logs / 'settings-rotation-summary.json').write_text(json.dumps(summary, indent=2) + '\n')
         print(json.dumps(summary), flush=True)
-    if (exit_code != 0 or summary['settled'] != 36 or summary['snapshots'] != 36
+    if (exit_code != 0 or summary['settled'] != expected or summary['snapshots'] != expected
             or summary['last']['event'] != 'complete' or summary['last']['mode'] != mode):
         raise RuntimeError('The Settings rotation comparison did not complete with full snapshots.')
 

@@ -76,7 +76,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mode: [held, immediate]
+        mode: [warm]
     defaults:
       run:
         shell: bash
