@@ -235,14 +235,10 @@ class WorkspaceNavigation(AdaptiveWorkspace):
     def update_destination_bar(self, destination):
         host = self.app.native_host
         adapter = host.adapter
-        if not getattr(adapter, 'sidebar_used', False):
-            self.sync_destination_bar(destination)
+        if adapter is None or not hasattr(adapter, 'navigation') or host.state.destination != destination:
             return
-        if host.state.destination != destination:
-            return
-        # The iPad sidebar can deliver a folder selection while UIKit is
-        # mounting the pushed controller. Showing the bar performs layout
-        # synchronously, so let that native transition unwind first.
+        # Changing bar visibility forces UIKit layout. Let the route finish
+        # mounting its new controller and views before laying out the bar.
         if self._pending_destination_bar is None:
             self.app.loop.call_soon(self._flush_destination_bar)
         self._pending_destination_bar = adapter, destination
