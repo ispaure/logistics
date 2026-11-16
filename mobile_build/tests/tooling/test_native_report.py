@@ -941,6 +941,35 @@ class IgnoredNativeCallbackTests(unittest.TestCase):
 
 
 class NativeEvidenceRetentionTests(unittest.TestCase):
+    def test_failed_notebook_capture_retains_diagnostics_from_cache_and_tar(self):
+        import io
+        import tarfile
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            cache = root / 'cache'
+            notebook = cache / 'notebook-image-evidence'
+            notebook.mkdir(parents=True)
+            files = {
+                'LocalCrypt-capture-failure.json': b'{}',
+                'LocalCrypt-capture-failure-current.png': b'current background',
+                'LocalCrypt-capture-failure-clipboard.png': b'clipboard result',
+            }
+            for name, content in files.items():
+                (notebook / name).write_bytes(content)
+            data = io.BytesIO()
+            with tarfile.open(fileobj=data, mode='w') as archive:
+                archive.add(notebook, arcname=notebook.name)
+            data.seek(0)
+            for output, manifest in (
+                (root / 'ios', ui_tools.retain_native_cache(cache, root / 'ios', 0)),
+                (root / 'android', ui_tools.retain_native_tar(data, root / 'android', 0)),
+            ):
+                self.assertEqual({entry['name'] for entry in manifest},
+                                 {f'{notebook.name}/{name}' for name in files})
+                for name, content in files.items():
+                    self.assertEqual((output / f'{notebook.name}--{name}').read_bytes(), content)
+
     def test_fixed_files_fresh_only_manifest_and_old_output_removed(self):
         with TemporaryDirectory() as directory:
             root = Path(directory); cache = root/'cache'; cache.mkdir()

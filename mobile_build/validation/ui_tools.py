@@ -390,7 +390,11 @@ NATIVE_EVIDENCE = ('pdf-edge-left.png', 'pdf-edge-right.png') + tuple(
     for provider in ('Local', 'LocalCrypt')
     for phase in ('captured', 'transformed', 'arranged', 'second-page', 'cut-pasted', 'reopened')
     for suffix in ('', '-canvas')) + tuple(
-    f'notebook-image-evidence/{provider}-saved.rmdoc' for provider in ('Local', 'LocalCrypt'))
+    f'notebook-image-evidence/{provider}-{filename}'
+    for provider in ('Local', 'LocalCrypt')
+    for filename in ('saved.rmdoc', 'capture-failure.json', 'capture-failure.png',
+                     'capture-failure-canvas.png', 'capture-failure-original.png',
+                     'capture-failure-current.png', 'capture-failure-clipboard.png'))
 EVIDENCE_FILE_LIMIT = 4 * 1024 * 1024
 EVIDENCE_TOTAL_LIMIT = 32 * 1024 * 1024
 
