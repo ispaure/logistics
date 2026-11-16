@@ -243,9 +243,20 @@ class SessionTransitions:
 
         async def close_after_progress():
             try:
-                await progress.flush()
-                if progress.pending is None and host.active_host and host.workspace.accepts(token):
-                    self.request_close_session(key, _markdown_flushed=True, _progress_flushed=True)
+                while host.active_host and host.workspace.accepts(token):
+                    generation = progress.generation
+                    await progress.flush()
+                    if not host.active_host or not host.workspace.accepts(token):
+                        return
+                    if progress.pending is None and self.request_close_session(
+                            key, _markdown_flushed=True, _progress_flushed=True):
+                        return
+                    # A native page callback can enqueue a newer position as
+                    # the write finishes. Keep the close intent through that
+                    # write, but leave a failed write available for explicit retry.
+                    if progress.generation == generation:
+                        host.__dict__.setdefault('_reader_closing', set()).discard(key)
+                        return
             finally:
                 owner._progress_close_task = None
 

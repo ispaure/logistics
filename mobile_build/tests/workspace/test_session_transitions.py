@@ -108,3 +108,48 @@ class PendingCloseTests(unittest.IsolatedAsyncioTestCase):
 
             host.request_close_session.assert_not_called()
             self.assertIsNone(private._exit_task)
+
+    async def test_private_reader_close_drains_a_new_position_arriving_after_flush(self):
+        with TemporaryDirectory() as directory:
+            workspace = Workspace(Path(directory).resolve())
+            session = workspace.open('provider-session', 'fixture', 'epub', transient=True)
+            key = session.id
+            progress = SimpleNamespace(worker=None, generation=1, pending={'page': 1},
+                                       sample_surface=Mock(), schedule=Mock(return_value=object()))
+            private = SimpleNamespace(operation_busy=False, _provider_progress=progress,
+                                      private_dirty=lambda: False)
+            providers = SimpleNamespace(controllers={key: private})
+            flushed = []
+
+            async def flush():
+                flushed.append(progress.pending)
+                if progress.generation == 1:
+                    # The WebView publishes a new offset after the first write.
+                    progress.generation += 1
+                    progress.pending = {'page': 1, 'offset': 42}
+                else:
+                    progress.pending = None
+
+            def close(closing_key, *, discard):
+                self.assertEqual(closing_key, key)
+                self.assertFalse(discard)
+                self.assertIsNone(progress.pending)
+                del providers.controllers[key]
+                return workspace.close(key, guard=lambda _: True)
+
+            progress.flush = flush
+            providers.close = close
+            host = SimpleNamespace(workspace=workspace, active_host=True, text_views={},
+                                   loop=asyncio.get_running_loop(), visible_reader=lambda: key,
+                                   provider_sessions=lambda: providers, reader_closed=Mock())
+            transitions = SessionTransitions(host)
+            host.request_close_session = transitions.request_close_session
+            host.close_session = lambda closing_key: transitions.close(closing_key).committed
+
+            self.assertTrue(transitions.request_reader_close(key))
+            await private._progress_close_task
+
+            self.assertEqual(flushed, [{'page': 1}, {'page': 1, 'offset': 42}])
+            self.assertNotIn(key, providers.controllers)
+            self.assertNotIn(key, workspace.sessions)
+            host.reader_closed.assert_called_once_with(key)
