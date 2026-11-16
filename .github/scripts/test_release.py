@@ -154,7 +154,13 @@ class PackageTests(unittest.TestCase):
 
             launch_temp = root / 'launch-temp'
             launch_temp.mkdir()
-            env = dict(os.environ, APPDATA=str(root / 'appdata'), USERPROFILE=str(root / 'user'),
+            appdata = root / 'appdata'
+            appdata.mkdir()
+            local_appdata = root / 'local-appdata'
+            local_appdata.mkdir()
+            # The wrapper reads its personal settings from APPDATA. Keep the
+            # actual Windows profile available to PowerShell during startup.
+            env = dict(os.environ, APPDATA=str(appdata), LOCALAPPDATA=str(local_appdata),
                        TEMP=str(launch_temp), TMP=str(launch_temp))
             env.pop('COMMONUTILS_ROOT', None)
             log = root / 'launcher.log'

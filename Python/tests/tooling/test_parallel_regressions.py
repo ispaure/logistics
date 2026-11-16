@@ -121,7 +121,7 @@ class SchedulingTests(unittest.TestCase):
                     self.assertTrue(parallel.eligible(parallel.ROOT / next(iter(parallel.PORTABLE_FILES))))
                     index = parallel.ROOT / 'Python/commonUtils/tests/index/test_integrated_index_search.py'
                     markdown = parallel.ROOT / 'Python/commonUtils/tests/markdown/test_markdown.py'
-                    self.assertEqual(parallel.eligible(index), target in ('darwin', 'win32'))
+                    self.assertEqual(parallel.eligible(index), target == 'win32')
                     self.assertEqual(parallel.eligible(markdown), target == 'darwin')
                     with patch.dict(os.environ, TOGA_BACKEND='toga_dummy'):
                         self.assertEqual(parallel.eligible(parallel.ROOT / next(iter(parallel.MOBILE_FILES))),

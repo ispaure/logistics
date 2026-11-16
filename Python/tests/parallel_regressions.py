@@ -16,6 +16,8 @@ SUPPORTED_WORKERS = (1, 2, 4, 8)
 RESERVATION_ENV = 'BUILD_MANAGER_RESERVED_TEST_WORKERS'
 # Explicit files, rather than a directory glob: a newly added test starts
 # exclusive until its resources and concurrent behavior have been reviewed.
+# The macOS browser files that require real file watchers run alone because
+# their filesystem notifications have timed out during pooled execution.
 QT_GROUPS = {
     'Python/tests/version_control': (
         'test_git_backend.py',
@@ -58,7 +60,6 @@ QT_GROUPS = {
         'test_text_editor_recovery.py',
     ),
     'Python/commonUtils/tests/browser': (
-        'test_browser_file_actions.py',
         'test_browser_index_policy.py',
         'test_browser_model_metadata.py',
         'test_browser_polish.py',
@@ -67,7 +68,6 @@ QT_GROUPS = {
         'test_browser_size_sort.py',
         'test_entry_views.py',
         'test_features.py',
-        'test_file_browser.py',
         'test_search.py',
         'test_search_columns.py',
         'test_search_delay.py',
@@ -89,7 +89,6 @@ QT_GROUPS = {
         'test_index_folder_sizes.py',
         'test_index_operation_state.py',
         'test_index_search_jobs.py',
-        'test_integrated_index_search.py',
         'test_managed_index_views.py',
         'test_persistent_directory_index.py',
         'test_shared_browser_index.py',
