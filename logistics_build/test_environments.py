@@ -8,7 +8,7 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULTS = {
-    'macos_runner': 'macos-26', 'windows_runner': 'windows-11-arm',
+    'macos_runner': 'macos-26', 'windows_runner': 'windows-2025',
     'linux_runner': 'ubuntu-24.04-arm', 'ios_runner': 'xcode-27',
     'android_runner': 'ubuntu-24.04', 'python_version': '3.12.2',
     'macos_major': '26', 'windows_major': '11',
@@ -17,11 +17,14 @@ DEFAULTS = {
     'android_api': '36', 'android_model': 'pixel_9',
     'android_local_abi': 'arm64-v8a', 'android_github_abi': 'x86_64',
 }
+WINDOWS_SERVER_RUNNERS = {'windows-2022': 20348, 'windows-2025': 26100, 'windows-2025-vs2026': 26100}
 DESCRIPTIONS = {
     **{key: 'Explicit GitHub runner label. OS patches still follow that runner image; never use a floating latest label.'
        for key in DEFAULTS if key.endswith('_runner')},
+    'windows_runner': 'Explicit native x64 Windows runner for GitHub. windows-2025 uses Windows Server 2025. '
+                      'The dedicated local Windows client and its Python architecture are configured separately.',
     'macos_major': 'Required macOS major version for local and hosted desktop tests. Minor and patch versions are recorded, not claimed equal.',
-    'windows_major': 'Required Windows client version. Windows Server is not an equivalent replacement.',
+    'windows_major': 'Required version for the local Windows client and any custom hosted Windows client runner.',
     'python_version': 'Desktop/build Python version shared with GitHub. Existing local interpreters must match; saving does not install tools.',
     'fedora_image': 'Single Linux desktop test distribution, also required for the local dedicated guest. Ubuntu is only the container host.',
     'ios_sdk': 'Required iOS Simulator SDK major.minor series for local and GitHub native tests.',
@@ -34,10 +37,10 @@ DESCRIPTIONS = {
 }
 
 LABELS = {
-    'macos_runner': 'macOS GitHub runner', 'windows_runner': 'Windows client GitHub runner',
+    'macos_runner': 'macOS GitHub runner', 'windows_runner': 'Windows x64 GitHub runner',
     'linux_runner': 'Fedora container host runner', 'ios_runner': 'iOS GitHub runner',
     'android_runner': 'Android GitHub runner', 'python_version': 'Desktop / build Python version',
-    'macos_major': 'Required macOS major version', 'windows_major': 'Required Windows client version',
+    'macos_major': 'Required macOS major version', 'windows_major': 'Windows client version',
     'fedora_image': 'Fedora version / container image', 'ios_sdk': 'iOS Simulator SDK series',
     'iphone_runtime': 'iPhone simulator runtime', 'duo_runtime': 'Duo simulator runtime',
     'ipad_runtime': 'iPad simulator runtime', 'android_api': 'Android API level',
@@ -134,7 +137,8 @@ def windows_python(values, architecture='x86_64', version=''):
     return selected
 
 
-def verify_host(values, *, system=None, python=None, os_version=None, windows_client=None):
+def verify_host(values, *, system=None, python=None, os_version=None, windows_client=None,
+                hosted=False, runner_arch=None, interpreter_platform=None):
     """Fail before tests if the selected host differs from the shared profile."""
     system = system or platform.system()
     python = python or platform.python_version()
@@ -145,14 +149,27 @@ def verify_host(values, *, system=None, python=None, os_version=None, windows_cl
         if actual.split('.')[0] != values['macos_major']:
             raise ValueError('macOS version differs from project settings: ' + actual)
     elif system == 'Windows':
-        # Windows 11 retains NT 10.0; distinguish the client by its build.
         actual = os_version or platform.version()
         client = sys.getwindowsversion().product_type == 1 if windows_client is None else windows_client
+        build = int(actual.split('.')[-1])
+        if hosted:
+            if runner_arch != 'X64' or interpreter_platform != 'win-amd64':
+                raise ValueError('Hosted Windows needs a native x64 runner and x64 Python.')
+            expected_server = WINDOWS_SERVER_RUNNERS.get(values['windows_runner'])
+            if expected_server is not None:
+                if client or build != expected_server:
+                    raise ValueError('Windows Server build differs from the configured GitHub runner: ' + actual)
+                return dict(system=system, python=python, os_version=actual, windows_client=False,
+                            runner_arch=runner_arch, interpreter_platform=interpreter_platform)
         if not client:
             raise ValueError('Windows Server cannot replace the configured Windows client.')
-        major = '11' if int(actual.split('.')[-1]) >= 22000 else '10'
+        # Windows 11 retains NT 10.0; distinguish the client by its build.
+        major = '11' if build >= 22000 else '10'
         if major != values['windows_major']:
             raise ValueError('Windows client version differs from project settings: ' + actual)
+        if hosted:
+            return dict(system=system, python=python, os_version=actual, windows_client=True,
+                        runner_arch=runner_arch, interpreter_platform=interpreter_platform)
     elif system == 'Linux':
         actual = os_version or Path('/etc/os-release').read_text()
         fields = dict(line.split('=', 1) for line in actual.splitlines() if '=' in line)

@@ -65,7 +65,9 @@ def main(*, focused=False):
     values = load()
     if sys.platform == 'win32' and os.environ.get('LOGISTICS_WINDOWS_VM_PYTHON'):
         values['python_version'] = os.environ['LOGISTICS_WINDOWS_VM_PYTHON']
-    host_environment = verify_host(values)
+    host_environment = verify_host(values, hosted=os.environ.get('GITHUB_ACTIONS') == 'true',
+                                   runner_arch=os.environ.get('RUNNER_ARCH'),
+                                   interpreter_platform=sysconfig.get_platform())
     from PySide6.QtCore import qVersion
     verify_qt(focused=focused)
     from services.video_runtime import binding

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "macos_runner": "macos-26",
-  "windows_runner": "windows-11-arm",
+  "windows_runner": "windows-2025",
   "linux_runner": "ubuntu-24.04-arm",
   "ios_runner": "xcode-27",
   "android_runner": "ubuntu-24.04",

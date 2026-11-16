@@ -46,7 +46,7 @@ Set `vm.fedora_mode=container-on-ubuntu` and `vm.fedora_container_host` to an au
 
 ## Parallels Windows backend
 
-Select the dedicated Windows guest. **Test machines → Allow Windows filesystem tests…** enables the required normal-user symlink capability. WinError 1314 blocks full acceptance. Validate with the entire suite after the symlink probe. Current Windows ARM coverage uses x64 Python under emulation. The portable Git/uv catalog is `logistics_build/build_manager_tools.json`. An explicit `vm.windows_prepared_reference` can reuse verified tools. The backend collects logs before removing owned workspaces and records actual process exits. Use the [setup reconciliation command](build-manager-journeys.md#retried-guest-validation) for incomplete attempts.
+Select the dedicated Windows 11 guest. **Test machines → Allow Windows filesystem tests…** enables the required normal-user symlink capability. WinError 1314 blocks full acceptance. Validate with the entire suite after the symlink probe. The portable Git/uv catalog is `logistics_build/build_manager_tools.json`. An explicit `vm.windows_prepared_reference` can reuse verified tools. The backend collects logs before removing owned workspaces and records actual process exits. Use the [setup reconciliation command](build-manager-journeys.md#retried-guest-validation) for incomplete attempts.
 
 ## Local guest setup with unpublished manager pins
 
@@ -66,7 +66,7 @@ On Apple Silicon choose **This Mac — Android Emulator**. Configure the complet
 
 `test-environments.json` is the tracked source of runner labels, Python, iOS runtime families and Android API/model/ABI. Edit it in **Test environments (local and GitHub)**. Private machine paths and signing stay in the profile. Local ARM64 and hosted x86_64 Android results carry their actual identities. A changed toolchain invalidates affected evidence.
 
-For a dedicated Windows VM, **Project settings** can select ARM64 Python and record the absolute guest path and SHA-256 of a locally built PySide6 WebEngine wheel. The wheel must match the locked WebEngine version. GitHub continues to use x64 Python.
+For a dedicated Windows 11 ARM64 VM, select ARM64 Python in **Project settings** and record the absolute guest path and SHA-256 of a locally built PySide6 WebEngine wheel. The wheel must match the locked WebEngine version. In **Test environments (local and GitHub)**, the independent **Windows x64 GitHub runner** setting defaults to `windows-2025` (Windows Server 2025) with native x64 Python.
 
 ## Guided manager suites and tester acceptance
 

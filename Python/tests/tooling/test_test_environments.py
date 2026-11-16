@@ -47,12 +47,14 @@ class TestEnvironmentTests(unittest.TestCase):
             digest = 'a' * 64
             with patch.dict('os.environ', {'LOGISTICS_MANAGER_PROFILE': str(profile)}):
                 manager_settings.save(mobile, {'testing.macos_runner': 'macos-26', 'testing.android_api': '37',
+                                               'testing.windows_runner': 'windows-2025',
                                                'vm.windows_python_architecture': 'arm64',
                                                'vm.windows_python_version': '3.12.11',
                                                'vm.windows_webengine_wheel': wheel,
                                                'vm.windows_webengine_sha256': digest})
                 values, sources = manager_settings.settings(mobile)
             self.assertEqual(values['testing.android_api'], '37')
+            self.assertEqual(values['testing.windows_runner'], 'windows-2025')
             self.assertIn('android-37', values['android.image'])
             self.assertIn('tracked', sources['testing.macos_runner'])
             self.assertEqual(values['vm.windows_python_architecture'], 'arm64')
@@ -119,6 +121,22 @@ class TestEnvironmentTests(unittest.TestCase):
                           dict(system='Linux', os_version='ID=ubuntu\nVERSION_ID="24.04"')):
             with self.subTest(overrides=overrides), self.assertRaises(ValueError):
                 verify_host(values, **dict(dict(python='3.12.2'), **overrides))
+
+    def test_hosted_windows_uses_native_x64_and_its_configured_os(self):
+        from logistics_build.test_environments import verify_host
+
+        values = dict(DEFAULTS)
+        matrix = json.loads(outputs(values, 'windows')['desktop_matrix'])
+        self.assertEqual(matrix['include'], [{'target': 'windows', 'runner': 'windows-2025'}])
+        server = dict(system='Windows', python=values['python_version'], os_version='10.0.26100',
+                      windows_client=False, hosted=True, runner_arch='X64', interpreter_platform='win-amd64')
+        self.assertFalse(verify_host(values, **server)['windows_client'])
+        for changes in ({'runner_arch': 'ARM64'}, {'interpreter_platform': 'win-arm64'},
+                        {'windows_client': True}, {'os_version': '10.0.20348'}):
+            with self.subTest(changes=changes), self.assertRaises(ValueError):
+                verify_host(values, **dict(server, **changes))
+        client = dict(server, windows_client=True, os_version='10.0.26200')
+        self.assertTrue(verify_host(dict(values, windows_runner='windows-client-x64'), **client)['windows_client'])
 
     def test_runtime_android_matches_shared_api_and_unknown_recipe_stops(self):
         from logistics_build.test_environments import configure_android_testbed
