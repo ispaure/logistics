@@ -173,3 +173,78 @@ def main():
             super().startup()
 
     return RotationCrashApp('Rotation trace QA', 'io.github.ispaure.logisticsnotebookqa')
+
+
+async def run_settings_comparison(app, mode):
+    """Compare Settings transitions in two fresh copies of the same test app."""
+    import asyncio
+    import traceback
+
+    from mobile.routes import contains
+    from .rotation_checks import rotate, wait_until
+
+    def snapshot(app):
+        state = native_state(app)
+        adapter = app.native_host.adapter
+        tab = adapter.controller
+        selected = native_value(tab.selectedViewController)
+        navigation = adapter.navigation_for(app.native_host.state.destination)
+        state.update(tab=controller_state(tab), selected_index=int(native_value(tab.selectedIndex)),
+                     selected_controller=controller_state(selected),
+                     top=controller_state(navigation.topViewController),
+                     visible=controller_state(navigation.visibleViewController),
+                     category=app.settings_navigation.selected,
+                     wide=app.settings_navigation.wide)
+        return state
+
+    trace = RotationTrace(app, snapshot=snapshot)
+
+    def transition_finished():
+        adapter = app.native_host.adapter
+        navigation = adapter.navigation_for('settings')
+        return all(native_value(owner.transitionCoordinator) is None
+                   for owner in (adapter.controller, navigation))
+
+    def choose(category):
+        app.settings_navigation.choose(category)
+        navigation = app.settings_navigation
+        assert navigation.selected == category and navigation.detail_requested, category
+        assert contains(app.body, navigation.options[category]), category
+
+    try:
+        assert mode in ('held', 'immediate'), mode
+        app.show_settings()
+        assert app.select_destination('settings')
+        orientations = ('landscape-left', 'landscape-right', 'portrait')
+        trace.emit('start', native=True, mode=mode)
+        choose('Text')
+        await asyncio.sleep(.5)
+        for index, orientation in enumerate(orientations * 12):
+            category = ('Text' if index < 18 else 'EPUB') if mode == 'held' else (
+                'EPUB' if index % 2 == 0 else 'Text')
+            trace.request = index + 1
+            trace.panel = category
+            if app.settings_navigation.selected != category:
+                trace.emit('switch-before', native=True)
+                app.routes.back()
+                choose(category)
+            if mode == 'held':
+                await wait_until(transition_finished, timeout=5,
+                                 message='Held Settings transition did not settle')
+            # In the immediate arm no loop turn occurs between choose and the native request.
+            trace.emit('request-before', native=True, orientation=orientation)
+            await rotate(app, orientation)
+            assert app.settings_navigation.selected == category
+            assert contains(app.body, app.settings_navigation.options[category]), category
+            trace.emit('request-settled', native=True, orientation=orientation)
+        trace.emit('complete', native=True, mode=mode, samples=trace.request)
+        print(f'LOGISTICS_SETTINGS_ROTATION_COMPLETE={mode}:36', flush=True)
+        status = 0
+    except Exception:
+        traceback.print_exc()
+        trace.emit('python-error', traceback=traceback.format_exc())
+        status = 1
+    finally:
+        trace.stream.close()
+    await asyncio.sleep(.25)
+    os._exit(status)

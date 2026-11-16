@@ -234,6 +234,9 @@ class NativeCheckApp(LogisticsMobile):
         elif self.navigation_hold:
             from .navigation_hold import hold_navigation
             start_traced_check(self, hold_navigation)
+        elif mode := os.environ.get('LOGISTICS_SETTINGS_ROTATION_PROBE'):
+            from .rotation_crash_probe import run_settings_comparison
+            start_traced_check(self, lambda app: run_settings_comparison(app, mode))
         else:
             start_traced_check(self, exercise)
 
