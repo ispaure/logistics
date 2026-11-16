@@ -1,0 +1,36 @@
+name: Compare Windows launcher startup
+
+on:
+  push:
+    branches: [codex/windows-launcher-timeout]
+
+permissions:
+  contents: read
+
+jobs:
+  parser:
+    name: Launcher on ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        runner: [windows-11-arm, windows-2025]
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          submodules: recursive
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.12.2'
+          architecture: x64
+      - run: python .github/scripts/windows_launcher_timeout_probe.py
+      - name: Retain parser and supervisor evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
+        with:
+          name: launcher-${{ matrix.runner }}
+          path: test-results/windows-launcher-probe/
+          if-no-files-found: error
+          retention-days: 14
