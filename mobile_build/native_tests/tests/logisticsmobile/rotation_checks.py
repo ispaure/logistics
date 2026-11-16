@@ -443,10 +443,14 @@ def assert_visible_controls(app, *, frames=None):
 
 
 
-async def settled_visible_controls(app):
+async def settled_visible_controls(app, *, minimum=0):
     """Wait briefly for UIKit's rotation morph, retaining strict final bounds."""
-    return await wait_for_assertion(lambda: assert_visible_controls(app),
-                                    timeout=CONTROL_SETTLE_TIMEOUT)
+    def check():
+        count = assert_visible_controls(app)
+        assert count >= minimum, f'Expected {minimum} mounted controls, found {count}'
+        return count
+
+    return await wait_for_assertion(check, timeout=CONTROL_SETTLE_TIMEOUT)
 
 
 def rotation_native_geometry(app):

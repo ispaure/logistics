@@ -1,5 +1,6 @@
 """Exercise native transfer recovery without depending on an intermittent OS fault."""
 from commonUtils.testing.stages import TestStage
+from commonUtils.testing.waiting import wait_until
 
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
@@ -45,11 +46,11 @@ async def exercise_recovery(app):
             surfaces.append(surface)
             surface.update(model)
             app.show_view(surface, route='transfer-recovery', title='Transfer')
-            deadline = app.loop.time() + 8
-            while surface.native_fallback is None:
-                if app.loop.time() >= deadline:
-                    raise TimeoutError('Native transfer fallback did not appear.')
-                await asyncio.sleep(.05)
+            # Both forced recoveries need a watchdog turn and native view retirement.
+            # Give those steps one normal renderer window on slower simulators.
+            await wait_until(lambda: surface.native_fallback, timeout=previous_timeout, interval=.05,
+                             message=lambda: f'Native {model["mode"]} fallback did not mount '
+                                             f'after {surface.recovery_count} recoveries.')
             assert surface.recovery_count == 2 and surface.web is None
             assert surface.ready and surface.delivered_revision == surface.revision
             assert surface.native_fallback.parent is surface

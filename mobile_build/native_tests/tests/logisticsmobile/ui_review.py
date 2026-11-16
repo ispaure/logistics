@@ -351,7 +351,7 @@ async def exercise_ui_review(app):
         # their window (and UIKit bar items in their own bar), not that unrelated
         # detail viewport or the unmounted Toga proxy for a native bar item.
         from .rotation_checks import settled_visible_controls
-        assert await settled_visible_controls(app) >= 2, 'Browser search controls were not mounted'
+        await settled_visible_controls(app, minimum=2)
     else:
         from java import jarray, jint
         viewport = app.main_window._impl.container.native_content

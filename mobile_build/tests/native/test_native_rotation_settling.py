@@ -55,6 +55,12 @@ class RotationSettlingTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(audit.call_count, 2)
             sleep.assert_awaited_once_with(.1)
 
+    async def test_browser_controls_must_mount_before_acceptance(self):
+        with patch.object(rotation_checks, 'assert_visible_controls', side_effect=[0, 1, 2]) as audit, \
+                patch.object(waiting.asyncio, 'sleep', new_callable=AsyncMock):
+            self.assertEqual(await rotation_checks.settled_visible_controls(object(), minimum=2), 2)
+            self.assertEqual(audit.call_count, 3)
+
     async def test_persistent_overflow_still_fails_after_bounded_settling(self):
         with patch.object(rotation_checks, 'assert_visible_controls',
                           side_effect=AssertionError('control outside viewport')) as audit, \
