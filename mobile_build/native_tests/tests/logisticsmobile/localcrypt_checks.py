@@ -1,6 +1,7 @@
 """Real native widgets + compiled crypt bridge, using desktop-made ciphertext."""
 
 from commonUtils.testing.stages import TestStage
+from commonUtils.testing.waiting import wait_until
 
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
@@ -8,6 +9,7 @@ import base64
 import json
 import os
 from pathlib import Path
+from .settings import READER_READY_TIMEOUT
 
 
 async def exercise_localcrypt(app, passed, *, notebook_images=None):
@@ -59,9 +61,19 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
             if pending is not None:
                 await asyncio.wait_for(asyncio.shield(pending), 60)
                 decision.assert_awaited_once()
-        if not dirty:
-            assert owner.session.id not in app.private_sessions.controllers, (
-                'Clean private reader did not close', owner.session.title)
+            if not dirty:
+                # The accepted request can defer another close step while a
+                # native callback finishes. Observe removal from the registry.
+                def close_state():
+                    progress = getattr(owner, '_provider_progress', None)
+                    write_status = getattr(getattr(progress, 'state', None), 'write_status', None)
+                    return (f'Clean private reader did not close: {owner.session.title}; '
+                            f'operation_busy={owner.operation_busy}; '
+                            f'progress_pending={getattr(progress, "pending", None) is not None}; '
+                            f'progress_status={write_status}; close_dialogs={decision.await_count}')
+
+                await wait_until(lambda: owner.session.id not in app.private_sessions.controllers,
+                                 timeout=READER_READY_TIMEOUT, message=close_state)
         # UIKit restores retained folder rows after a reader pop. Finish that
         # navigation before starting another listing on the same browser.
         pending = app.routes.folders.task
