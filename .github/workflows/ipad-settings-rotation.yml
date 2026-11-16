@@ -69,7 +69,6 @@ jobs:
           retention-days: 14
 
   ios-ui:
-    name: Validate iOS ${{ matrix.device }}
     name: Compare Settings rotation (${{ matrix.mode }})
     needs: [environment, ios-build]
     runs-on: ${{ needs.environment.outputs.ios_runner }}
