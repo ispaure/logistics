@@ -39,10 +39,13 @@ class BlenderConsoleTests(unittest.TestCase):
                 children.append(subprocess.Popen(arguments, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL))
                 return []
             script = 'import os,json,time;from pathlib import Path;Path('+repr(str(output))+').write_text(json.dumps({"pid":os.getpid(),"config":os.environ["BLENDER_USER_CONFIG"]}));time.sleep(.2)'
+            # Match a directly launched Blender executable. A Windows venv's Python
+            # redirector starts a second process before executing the test script.
+            executable = sys._base_executable if os.name == 'nt' else sys.executable
             with patch.object(console_launch,'bundled_python',return_value=Path(sys.executable)), \
                     patch.object(console_launch,'terminal_command',side_effect=command), \
                     patch.object(console_launch.cmdShellWrapper,'exec_cmd',side_effect=terminal):
-                process = console_launch.launch_in_console([sys.executable,'-c',script],
+                process = console_launch.launch_in_console([executable,'-c',script],
                     dict(BLENDER_USER_CONFIG=str(root/'preset'),UNRELATED_SECRET='do not transfer'),root,'5.2.2')
             try:
                 children[0].wait(timeout=5)

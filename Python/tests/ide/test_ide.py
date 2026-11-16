@@ -79,7 +79,7 @@ class ProjectSettingsTests(IDEQtTests):
             self.assertEqual(project.source_paths, ['.', 'src'])
             self.assertEqual(project.excluded_paths, ['build', 'missing/output', 'src/generated'])
             self.assertEqual(project.excluded_patterns, ['*.xcarchive', 'build?.py'])
-            self.assertEqual(project_files(project, '.py'), ['src/main.py'])
+            self.assertEqual(project_files(project, '.py'), [str(Path('src') / 'main.py')])
             self.assertTrue(page.persist())
             restored = ProjectStore(page.store.path).projects[project.id]
             self.assertEqual(restored.excluded_paths, project.excluded_paths)
