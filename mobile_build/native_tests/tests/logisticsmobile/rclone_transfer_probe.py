@@ -71,10 +71,10 @@ class RcloneTransferProbe(LogisticsMobile):
                 await restore
             await asyncio.sleep(.5)
             self.routes.return_to('files')
-            self.loaded_remote_names = lambda: ['Personal', 'Backup']
-            self.show_local_push('Personal')
-            await self.wait_surface(self.transfer_controller()._transfer_setup_surface)
-            await capture_window(self, evidence / 'push-options.png')
+            with patch.object(self, 'loaded_remote_names', return_value=['Personal', 'Backup']):
+                self.show_local_push('Personal')
+                await self.wait_surface(self.transfer_controller()._transfer_setup_surface)
+                await capture_window(self, evidence / 'push-options.png')
             self.routes.return_to('files')
             owner = self.transfer_controller()
             state = owner.state
