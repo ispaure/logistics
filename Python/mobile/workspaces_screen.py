@@ -304,7 +304,6 @@ class WorkspacesScreen:
         if tab is None:
             tab = FolderTreeView(
                 browse=lambda name: self.browse_hub_folder(name),
-                choose=lambda name: self.choose_folder(name),
                 actions=lambda name: self.workspace_menu_actions(name),
                 invoke=self.invoke_workspace_action,
                 native_context=lambda: self.app._impl.native,

@@ -65,9 +65,9 @@ async def exercise_mirrors(app, comic_key):
             assert await app.refresh_folder_hub()
             assert 'Browse during pull' in app.folder_picker_choices
             assert 'Fixture' in app.folder_picker_choices
-            app.choose_folder('Fixture')
-            assert not app.folder_browse_button.enabled
-            assert not await app.open_picker_folder(app.folder_picker_selected)
+            assert not await app.browse_hub_folder('Fixture')
+            assert app.routes.screens['files'][-1][0] == 'workspace-status'
+            app.show_locations()
             await browse_local_during_transfer(app, 'Browse during pull')
             # Direct folder entry retains its root-to-Workspaces Back behavior.
             await app.browse_hub_folder('Browse during pull')
@@ -215,9 +215,7 @@ async def exercise_crypt_mirror(app, fixture):
         assert await app.refresh_folder_hub()
         entry = next(entry for entry in app.folder_picker_choices.values()
                      if entry['source'] == 'LocalCrypt' and entry.get('remote') == remote)
-        app.show_picker_folder(entry)
-        assert app.folder_browse_button.enabled
-        assert await app.open_picker_folder(entry), app.folder_picker_status.text
+        assert await app.open_picker_folder(entry), app.cloud_status.value
         row = next(row for row in app.file_rows.values() if Path(row['path']).name == 'note.md')
         assert not any('.partial' in row['name'] for row in app.file_rows.values())
         app.browser_file_selected(row)

@@ -2,6 +2,7 @@
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN
+from commonUtils.ui.native.forms import fit_section
 from features.rclone.transfers.presentation import removal_counts
 
 
@@ -9,17 +10,19 @@ class NativeTransferFallback(toga.Box):
     def __init__(self, surface):
         super().__init__(style=Pack(direction=COLUMN, flex=1, margin=12))
         self.surface = surface
-        self.title = toga.Label('Transfers', style=Pack(font_size=22))
-        self.paths = toga.Label('')
-        self.status = toga.Label('')
-        self.metrics = toga.Label('')
+        self.title = toga.Label('Transfers', style=Pack(font_size=22, font_weight='bold', margin_bottom=8))
+        self.paths = toga.Label('', style=Pack(font_size=14, margin_bottom=12))
+        self.status = toga.Label('', style=Pack(margin_bottom=8))
+        self.metrics = toga.Label('', style=Pack(font_size=14, margin_top=8, margin_bottom=8))
         self.rows = toga.Box(style=Pack(direction=COLUMN))
         self.buttons = toga.Box(style=Pack(direction=COLUMN))
         self.row_signature = self.button_signature = None
         self.scope = self.remote = None
-        body = toga.Box(children=[self.title, toga.Label('Simplified transfer view'),
-            self.paths, self.status, self.metrics, self.rows], style=Pack(direction=COLUMN))
-        self.add(toga.ScrollContainer(content=body, horizontal=False, style=Pack(flex=1)), self.buttons)
+        self._fitted_width = None
+        self.progress = toga.ProgressBar(max=100, value=0, style=Pack(height=10, margin_top=8))
+        self.body = toga.Box(children=[self.title, self.paths, self.status, self.metrics, self.rows],
+                             style=Pack(direction=COLUMN))
+        self.add(toga.ScrollContainer(content=self.body, horizontal=False, style=Pack(flex=1)), self.buttons)
 
     def button(self, title, action, enabled=True, **args):
         # Keep the revision shown by this particular native control. Replacing
@@ -28,7 +31,11 @@ class NativeTransferFallback(toga.Box):
         async def press(widget=None, **kwargs):
             if self.surface is not None:
                 await self.surface.dispatch(action, dict(args, revision=str(revision)))
-        return toga.Button(title, enabled=enabled, on_press=press, style=Pack(height=48))
+        return toga.Button(title, enabled=enabled, on_press=press, style=Pack(height=48, margin_top=6))
+
+    def reflow(self, width):
+        self._fitted_width = width
+        fit_section(self.body, width - 24)
 
     def render(self, model):
         mode = model.get('mode')
@@ -37,14 +44,34 @@ class NativeTransferFallback(toga.Box):
         buttons = []
         if mode == 'progress':
             phase = model.get('phase', 'idle')
-            self.status.text = phase.capitalize() + '\n' + (model.get('message') or model.get('status', ''))
+            self.title.text = {'idle': 'Transfers', 'complete': 'Transfer complete',
+                'failed': 'Transfer stopped', 'cancelled': 'Transfer cancelled',
+                'conflict': 'Files changed during sync'}.get(phase, model.get('operation', 'Transfer'))
+            self.status.text = model.get('message') or model.get('status', '')
             percentage = model.get('percentage')
+            if model.get('busy') or phase == 'complete':
+                if self.progress.parent is None:
+                    self.body.insert(3, self.progress)
+                maximum = 100 if percentage is not None else None
+                if self.progress.max != maximum:
+                    self.progress.stop()
+                    self.progress.max = maximum
+                    if maximum is None:
+                        self.progress.start()
+                if percentage is not None and self.progress.value != percentage:
+                    self.progress.value = percentage
+            elif self.progress.parent is self.body:
+                self.progress.stop()
+                self.body.remove(self.progress)
             self.metrics.text = ((f'{percentage:.0f}%\n' if percentage is not None else '')
                 + f"Files: {model.get('files', 0):,} / {model.get('total_files', 0):,}\n"
                 + f"Data: {model.get('done', 0) / 1_000_000:,.2f} / {model.get('total', 0) / 1_000_000:,.2f} MB\n"
                 + f"Checked: {model.get('checks', 0):,} · Listed: {model.get('listed', 0):,}")
             if phase != 'idle':
                 self.metrics.text += '\nRemoval attempts: ' + removal_counts(model)
+            if model.get('elapsed'):
+                minutes, seconds = divmod(model['elapsed'], 60)
+                self.metrics.text += f'\nElapsed: {minutes}:{seconds:02d}'
             rows = tuple(str(row.get('name', '')) for row in model.get('active_files', ()))
             if model.get('busy'):
                 buttons.append(('Stop transfer', 'stop', phase != 'stopping', {}))
@@ -100,8 +127,11 @@ class NativeTransferFallback(toga.Box):
             self.buttons.clear()
             for title, action, enabled, args in buttons:
                 self.buttons.add(self.button(title, action, enabled, **args))
+        if self._fitted_width is not None:
+            self.reflow(self._fitted_width)
 
     def clear_private_content(self):
+        self.progress.stop()
         self.surface = None
         self.title.text = self.paths.text = self.status.text = self.metrics.text = ''
         for child in self.rows.children:

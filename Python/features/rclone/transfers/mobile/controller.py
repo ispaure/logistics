@@ -21,7 +21,6 @@ class TransferController(MirrorUI):
         'mirror_job_signature',
         'start_mirror_review',
         'pull_remote_copy',
-        'push_remote_copy',
         'run_mirror_work',
         'publish_mirror_progress',
         'cancel_mirror_transfer',

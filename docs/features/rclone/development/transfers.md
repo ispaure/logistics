@@ -17,14 +17,27 @@ including empty directories. The worker stages beside the chosen destination
 and publishes with an exclusive rename after checking cancellation and access.
 The desktop Pull progress view shows rclone transfer statistics and reports
 completion after publication.
+The desktop browser relists tabs at the published item's parent. Its filesystem
+model retains the existing selection and navigation.
 
-On mobile, `mobile/remote_downloads.py` captures path, kind and generation. Go `download_sync.go` stages file Copy or folder Sync in independent storage, encrypted for LocalCrypt. Python publishes without clobber and retires staging on cancel/failure. Selected downloads leave mirror records unchanged. Check `test_remote_downloads.py` and native `TestDownload*`.
+On mobile, `mobile/remote_downloads.py` captures path, kind and generation.
+Go `download_sync.go` stages file Copy or folder Sync in independent storage,
+encrypted for LocalCrypt. Python publishes without clobber and retires staging
+on cancel or failure. The destination picker tells the mobile browser owner
+to refresh retained listings of the same parent after completion. Selected
+downloads leave mirror records unchanged. Check `test_remote_downloads.py`
+and native `TestDownload*`.
 
 ## Review and progress presentation
 
-Portable `transfers/{service,review,presentation}.py` own review and bounded display models. Desktop uses Qt. Mobile `transfers/mobile/surface.py` uses offline `assets/surface.*`, escaped paths, private WebViews, token/command/revision checks and 30 rows per page. Approve only a rendered current snapshot. Retire scans on close and redact private progress on revocation.
+Portable `transfers/{service,review,presentation}.py` own review and bounded display models. Desktop uses Qt. Mobile setup and review in `transfers/mobile/surface.py` use offline `assets/surface.*`, escaped paths, private WebViews, token/command/revision checks and 30 rows per page. Approve only a rendered current snapshot. Retire scans on close and redact private progress on revocation.
 
-Replace a stalled visible WebView once, then use `native_fallback.py` with the same action guards and running worker. Coalesce ordinary progress, retain terminal snapshots, and show verification separately from completion. Unknown totals stay indeterminate. Browsing retains jobs; Stop binds confirmation to the active epoch.
+Replace a stalled setup or review WebView once, then use `native_fallback.py`
+with the same action guards. The progress page uses these native controls from
+its first presentation, independently of the tab progress ring. Coalesce
+ordinary progress, retain terminal snapshots and show verification separately
+from completion. Unknown totals stay indeterminate. Browsing retains jobs.
+Stop binds confirmation to the active epoch.
 
 ## Native owners
 
@@ -49,7 +62,11 @@ Old `transfers.sync._watch_transfer` and `transfers.progress.add_removal_statist
 
 ## Mobile transfer appearance
 
-Edit light/dark defaults and older-engine fallback pairs in `transfers/assets/surface.css`; E Ink has overrides. `transfers/mobile/surface.py` injects palette roles through `services.appearance_palette.css_variables()`. CSS owns typography, scaling and spacing. Check setup, review and progress at compact/wide widths and enlarged text. Use `rclone-transfer` for native checks.
+Edit setup and review light/dark defaults and older-engine fallback pairs in
+`transfers/assets/surface.css`. E Ink has overrides. `surface.py` injects
+palette roles through `services.appearance_palette.css_variables()`. The
+native progress controls use the host appearance.
+Use `rclone-transfer` to check rendering and selected crypt downloads.
 
 ## Mobile sync shortcut layout
 

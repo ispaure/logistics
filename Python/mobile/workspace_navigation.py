@@ -375,15 +375,14 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                     and not getattr(view, '_hub_sections', False)
                     and not getattr(view, '_standalone_markdown', False) and
                     not getattr(view, '_documents_overview', False) and
-                    (root or route in ('editor', 'browser', 'remote-browser', 'folder-options', 'workspace-browser')
+                    (root or route in ('editor', 'browser', 'remote-browser', 'workspace-status', 'workspace-browser')
                      or (route or '').startswith('private:')))
         if eligible and not hasattr(view, '_workspace_frame'):
             view._workspace_frame = WorkspaceFrame(self, view, destination)
-            view._workspace_frame.folder_options = route == 'folder-options'
             self.frames.add(view._workspace_frame)
         if eligible and destination == 'files':
             view._workspace_frame.folder_root = root
-            view._workspace_frame.folder_detail = not root and route in ('browser', 'remote-browser', 'folder-options', 'workspace-browser')
+            view._workspace_frame.folder_detail = not root and route in ('browser', 'remote-browser', 'workspace-status', 'workspace-browser')
         menu = getattr(view, '_workspace_menu_button', None)
         if (menu is not None and self.app.routes.apple
                 and menu not in getattr(view, '_document_title_controls', ())):
@@ -556,6 +555,26 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 self.app.reflow_documents_hub()
             from .transfer_status import refresh as refresh_sync_status
             refresh_sync_status(self.app, destination)
+            dismiss = getattr(view, '_workspace_status_dismiss', None)
+            if dismiss is not None:
+                self.app.loop.call_soon(dismiss)
+            transfer = getattr(view, '_transfer_surface', None)
+            if transfer is not None:
+                transfer.queue_send()
+            status = getattr(view, '_workspace_status_label', None)
+            native = transfer.native_fallback if transfer is not None else None
+            if status is not None or native is not None:
+                target = destination or self.app.native_host.state.destination
+                width = self.content_width(target, margin=0)
+                columns = getattr(self, 'file_columns', None)
+                if target == 'files' and columns is not None:
+                    width = float(columns.navigation.view.bounds.size.width) or width
+                if status is not None:
+                    from commonUtils.ui.native.forms import fit_text
+                    detail_width = frame.main.style.width if frame is not None else None
+                    fit_text(status, (detail_width if isinstance(detail_width, (int, float)) else width) - 32)
+                if native is not None:
+                    native.reflow(width)
             from .browser_ui import sync_browser_population
             sync_browser_population(self.app, body)
         finally:

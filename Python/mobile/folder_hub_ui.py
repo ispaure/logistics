@@ -2,7 +2,6 @@
 
 import asyncio
 import inspect
-from contextlib import nullcontext
 from textwrap import fill
 
 import toga
@@ -10,7 +9,6 @@ from toga.style import Pack
 from toga.style.pack import COLUMN
 
 from commonUtils.ui.native.forms import fit_text
-from features.rclone.mobile.messages import import_hint
 from services.documents.locations import collection_path
 
 from .appearance import action_button
@@ -231,190 +229,116 @@ class FolderHubUI(WorkspacesScreen):
         entry = self.folder_picker_choices.get(name)
         if entry is None:
             return []
-        # Reuse the same command callbacks and enabled-state policy as the
-        # fallback page. Building this content does not navigate or start I/O.
-        page = self.show_picker_folder(entry, present=False)
-        snapshot = dict(entry)
-        controls = self.folder_action_controls
-        status = self.folder_picker_status
         actions = []
-        for button, _ in self.folder_action_controls:
-            if not button.enabled or button.text == 'Open as Notes Library':
-                continue
-            async def invoke(control=button):
-                if self.folder_picker_choices.get(name) != snapshot:
-                    return
-                self.folder_picker_selected = dict(snapshot)
-                self.folder_action_controls = controls
-                self.folder_picker_status = status
-                self.refresh_folder_actions(refresh_choices=False)
-                if control.enabled:
-                    origin = self.navigation_generation
-                    result = control.on_press()
-                    if inspect.isawaitable(result):
-                        await result
-                    if self.navigation_generation == origin and status.text:
-                        self.show_view(page, destination='files', route='folder-options', title=snapshot['name'])
-            actions.append((button.text, invoke))
-        if self.cloud_busy:
-            actions.append(('Cancel current request', self.cancel_mirror_transfer
-                if getattr(self, 'transfer_busy', False) else self.cancel_cloud))
+
+        def add(label, callback, *, needs_idle=False):
+            if needs_idle and (self.cloud_busy or self.transfer_busy):
+                return
+
+            def invoke():
+                if (self.folder_picker_choices.get(name) == entry
+                        and not (needs_idle and (self.cloud_busy or self.transfer_busy))):
+                    return callback()
+            actions.append((label, invoke))
+
+        seen = set()
+        for copy in (entry, *entry.get('copies', ())):
+            key = copy['source'], copy['kind'], str(copy['value'])
+            if key not in seen:
+                seen.add(key)
+                add('Browse ' + copy['source'], lambda copy=copy: self.open_picker_folder(copy))
+        if entry['kind'] == 'job':
+            add('Pull…', lambda: self.start_mirror_pull(entry['value']), needs_idle=True)
+            add('Push…', lambda: self.start_mirror_review(entry['value']), needs_idle=True)
+        else:
+            remote = next((copy for copy in (entry, *entry.get('copies', ()))
+                           if copy['kind'] == 'remote'), None)
+            if remote is not None:
+                async def pull():
+                    if await self.open_picker_folder(remote):
+                        await self.pull_remote_copy()
+                add('Pull…', pull, needs_idle=True)
+            if entry['kind'] == 'local' and entry['value']:
+                add('Push…', lambda: self.show_local_push(entry['value']), needs_idle=True)
+        if entry['source'] != 'Remote' and entry['value'] and entry['kind'] != 'shared-local':
+            add('Delete local folder…', lambda: self.delete_picker_folder(entry), needs_idle=True)
         return actions
 
-    def choose_folder(self, name):
-        entry = self.folder_picker_choices.get(name)
-        if entry is not None:
-            self.show_picker_folder(entry)
+    def show_workspace_status(self, entry, message, *, waiting=False):
+        from commonUtils.ui.native.forms import FittedLabel
+        from .appearance import surface
+
+        notice = surface(FittedLabel(message, style=Pack(margin_bottom=12)),
+                         background='transparent', foreground='text', outlined=False)
+        box = toga.Box(children=[notice], style=Pack(direction=COLUMN, margin=16, flex=1))
+        box._workspace_status_label = notice
+        if waiting and self.transfer_busy:
+            box.add(action_button(toga.Button('View transfer progress', on_press=self.show_transfers,
+                                              style=Pack(height=TOUCH_TARGET))))
+        elif waiting:
+            box.add(action_button(toga.Button('Cancel current request', on_press=self.cancel_cloud,
+                                              style=Pack(height=TOUCH_TARGET))))
+        if waiting:
+            def dismiss():
+                if (self.active_host and not (self.cloud_busy or self.transfer_busy
+                                              or getattr(self, '_folder_opening', False))
+                        and self.native_host.state.destination == 'files'
+                        and box in self.routes.body('files').children):
+                    self.routes.back()
+            box._workspace_status_dismiss = dismiss
+        self.show_view(box, destination='files', route='workspace-status', title=entry['name'])
 
     async def browse_hub_folder(self, name):
-        action_entry = self.folder_picker_choices.get(name)
-        if action_entry is None:
+        entry = self.folder_picker_choices.get(name)
+        if entry is None:
             return False
-        entry = folder_browse_copy(action_entry, self.folder_source)
-        if getattr(self, '_folder_opening', False):
-            # A pending online folder must not disable Workspaces. Local
-            # browsing can proceed; another online tap gets actions and Cancel.
-            from .files_ui import local_read_available
-            offline = entry['source'] == 'Local' or (entry['source'] == 'LocalCrypt'
-                and local_read_available(self, private=True))
-            if name == getattr(self, '_folder_opening_name', None) or not offline:
-                self.show_picker_folder(action_entry)
-                self.folder_picker_status.text = 'A folder is opening. Local folders remain available; use Cancel to stop the current request.'
-                return False
-        # Keep the status/credential-resume owner available if opening fails.
-        # Successful taps proceed directly into the existing guarded browser.
-        page = self.show_picker_folder(action_entry, present=False)
-        origin = self.navigation_generation
-        self.folder_picker_status.text = 'Opening ' + entry['source'] + ' folder…'
-        self.set_folder_loading(self.folder_picker_status.text, busy=True)
-        self.folder_loading_progress.max = None
-        self.folder_loading_progress.start()
-        loading_status, loading_progress = self.folder_loading_status, self.folder_loading_progress
-        token = self._folder_opening = object()
-        self._folder_opening_name = name
-        try:
-            await asyncio.sleep(0)
-            if entry['source'] == 'Remote':
-                opened = await self.open_picker_folder(entry)
-            else:
-                # The folder's loading bar already covers local-only browsing.
-                # Remote progress controls may not have been constructed yet.
-                activity = (self.remote_activity('Opening ' + entry['source'] + ' folder')
-                            if hasattr(self.app, 'cloud_view') else nullcontext())
-                async with activity:
-                    opened = await self.open_picker_folder(entry)
-        finally:
-            if self._folder_opening is token:
-                self._folder_opening = False
-                self._folder_opening_name = None
-                self.set_folder_loading()
-                self.folder_loading_progress.stop()
-                self.folder_loading_progress.max, self.folder_loading_progress.value = 100, 0
-            if not self._folder_opening or loading_progress is not self.folder_loading_progress:
-                loading_status.text = ''
-                loading_progress.stop()
-                loading_progress.max, loading_progress.value = 100, 0
-        # Credential guards may have presented an unlock page. Keep it visible.
-        if not opened and self.folder_picker_status.text.startswith('Opening '):
-            self.folder_picker_status.text = 'Folder did not open. Unlock its connection or retry.'
-        if not opened and self.navigation_generation == origin and self.folder_picker_status.text:
-            self.show_view(page, destination='files', route='folder-options', title=entry['name'])
-        return opened
-
-    def show_picker_folder(self, entry, *, present=True):
-        self.folder_picker_selected = dict(entry)
-        entry = self.folder_picker_selected
-        self.folder_picker_status = toga.Label('', style=Pack(font_size=12, margin_top=8))
-        async def browse(widget=None, **kwargs):
-            await self.open_picker_folder(entry)
-        self.folder_action_controls = []
-        descriptions = {'Local': 'On this device', 'LocalCrypt': 'Encrypted on this device', 'Remote': 'Online'}
-        self.folder_browse_button = action_button(toga.Button('Browse ' + entry['source'], on_press=browse,
-            enabled=not self.cloud_busy or entry['source'] == 'Local'
-            or (entry['source'] == 'LocalCrypt' and (getattr(self, 'transfer_busy', False) or getattr(self, 'remote_read_busy', False))), style=Pack(height=48)))
-        box = toga.Box(children=[toga.Label(fill(entry['name'], width=24), style=Pack(font_size=22, margin_top=12)),
-            toga.Label(descriptions[entry['source']], style=Pack(font_size=12, margin_bottom=12)), self.folder_browse_button],
-            style=Pack(direction=COLUMN, margin=12, flex=1))
-        self.folder_action_controls.append((self.folder_browse_button, entry['source'] == 'Remote'))
-        self.folder_browse_button._requires_crypt_session = entry['source'] == 'LocalCrypt'
-        seen = {(entry['source'], entry['kind'], str(entry['value']))}
-        for copy in entry.get('copies', []):
-            identity = (copy['source'], copy['kind'], str(copy['value']))
-            if identity in seen:
-                continue
-            seen.add(identity)
-            async def alternate(widget=None, selected=copy, **kwargs):
-                await self.open_picker_folder(selected)
-            button = toga.Button('Browse ' + copy['source'], on_press=alternate, style=Pack(height=48))
-            self.folder_action_controls.append((button, copy['source'] == 'Remote'))
-            button._requires_crypt_session = copy['source'] == 'LocalCrypt'
-            box.add(button)
-        if entry['kind'] == 'job':
-            box.add(toga.Label('Pull: Remote → ' + entry['source'] + '\nPush: ' + entry['source'] + ' → Remote',
-                               style=Pack(font_size=12, margin_top=12, margin_bottom=8)))
-            key = entry['value']
-            for label, action in [('Pull…', self.start_mirror_pull), ('Push…', self.start_mirror_review)]:
-                def transfer(widget=None, selected=key, operation=action, **kw):
-                    operation(selected)
-                button = toga.Button(label, on_press=transfer, style=Pack(height=48))
-                self.folder_action_controls.append((button, True))
-                box.add(button)
-        elif entry['kind'] == 'remote' or any(copy['kind'] == 'remote' for copy in entry.get('copies', [])):
-            remote_copy = entry if entry['kind'] == 'remote' else next(copy for copy in entry['copies'] if copy['kind'] == 'remote')
-            async def pull(widget=None, **kwargs):
-                if await self.open_picker_folder(remote_copy):
-                    await self.pull_remote_copy()
-            button = toga.Button('Pull…', on_press=pull, style=Pack(height=48, margin_top=8))
-            self.folder_action_controls.append((button, True))
-            box.add(button)
-            box.add(toga.Label(fill('The first pull links a local copy. Later pulls and pushes use that copy automatically.', width=32), style=Pack(font_size=12)))
-        if entry['kind'] == 'local' and entry['value']:
-            def push_local(widget=None, **kwargs):
-                self.show_local_push(entry['value'])
-            button = toga.Button('Push…', on_press=push_local, style=Pack(height=48))
-            self.folder_action_controls.append((button, True))
-            box.add(button)
-        if entry['source'] != 'Remote' and entry['value'] and entry['kind'] != 'shared-local':
-            async def delete(widget=None, **kwargs):
-                await self.delete_picker_folder(entry)
-            button = action_button(toga.Button('Delete local folder…', on_press=delete,
-                style=Pack(height=48, margin_top=24)), destructive=True)
-            self.folder_action_controls.append((button, True))
-            box.add(button)
-        box.add(self.folder_picker_status)
-        if self.cloud_busy:
-            box.add(toga.Button('Cancel current request', on_press=(self.cancel_mirror_transfer
-                if getattr(self, 'transfer_busy', False) else self.cancel_cloud), style=Pack(height=48)))
-        self.refresh_folder_actions(refresh_choices=False)
-        self.register_transfer_status(box)
-        # Retain a separate action page on phones; wide workspaces pair it with the tree.
-        scroll = toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1))
-        page = toga.Box(children=[scroll], style=Pack(direction=COLUMN, flex=1, margin=12))
-        if present:
-            self.show_view(page, destination='files', route='folder-options', title=entry['name'])
-        return page
-
+        return await self.open_picker_folder(folder_browse_copy(entry, self.folder_source))
 
     async def open_picker_folder(self, entry):
+        if not self.active_host:
+            return False
+        from .files_ui import local_read_available
+        offline = entry['source'] == 'Local' or (entry['source'] == 'LocalCrypt'
+            and local_read_available(self, private=True))
+        if entry == getattr(self, '_opening_workspace', None):
+            return False
+        if not offline and (self.cloud_busy or self.transfer_busy or getattr(self, '_folder_opening', False)):
+            message = ('Online browsing will be available when the transfer ends.'
+                       if self.transfer_busy else 'Wait for the current connection request before opening this workspace.')
+            self.show_workspace_status(entry, message, waiting=True)
+            return False
+
         key = (self.folder_source, self.folder_local_group if self.folder_source == 'Local' else None)
         name = next((name for name, choice in self.folder_picker_choices.items()
                      if entry == choice or entry == folder_browse_copy(choice, self.folder_source)),
                     entry['name'])
-        opened = await self._open_picker_folder(entry)
+        origin = self.navigation_generation
+        status = toga.Label('')
+        token = self._folder_opening = object()
+        self._opening_workspace = entry
+        self.set_folder_loading('Opening ' + entry['source'] + ' folder…', busy=True)
+        progress = self.folder_loading_progress
+        progress.max = None
+        progress.start()
+        try:
+            opened = await self._open_picker_folder(entry, status)
+        finally:
+            if self._folder_opening is token:
+                self._folder_opening = False
+                self._opening_workspace = None
+                self.set_folder_loading()
+                progress.stop()
+                progress.max, progress.value = 100, 0
+                self.dismiss_idle_workspace_status()
         if opened:
             for tab_key, tab in self.folder_tab_views.items():
                 tab.select(name if tab_key == key else None)
+        elif self.active_host and self.navigation_generation == origin:
+            self.show_workspace_status(entry, status.text or 'Could not open this workspace. Check the connection and try again.')
         return opened
 
-    async def _open_picker_folder(self, entry):
+    async def _open_picker_folder(self, entry, status):
         kind, value = entry['kind'], entry['value']
-        from .files_ui import local_read_available
-        offline = entry['source'] == 'Local' or (entry['source'] == 'LocalCrypt'
-            and local_read_available(self, private=True))
-        # Check the busy state before any native credential/identity lookup.
-        if self.cloud_busy and not offline:
-            self.folder_picker_status.text = 'This connection is busy. Local folders remain available. Cancel the current request to use this online folder.'
-            return False
         if entry['source'] != 'Local':
             # Workspaces may be the first credential entry point after startup.
             # Initialize the shared unlock/status controls before using them.
@@ -433,7 +357,7 @@ class FolderHubUI(WorkspacesScreen):
         if kind == 'job':
             job = self.mirror_store().jobs.get(value)
             if job is None:
-                self.folder_picker_status.text = 'This folder mapping is no longer available. Choose another workspace.'
+                status.text = 'This folder mapping is no longer available. Choose another workspace.'
                 return False
             if job['crypt']:
                 return await self.open_mirror_copy(value)
@@ -450,7 +374,7 @@ class FolderHubUI(WorkspacesScreen):
         if kind == 'job-remote':
             job = self.mirror_store().jobs.get(value)
             if job is None:
-                self.folder_picker_status.text = 'This folder mapping is no longer available. Choose another workspace.'
+                status.text = 'This folder mapping is no longer available. Choose another workspace.'
                 return False
             try:
                 from features.rclone.transfers.mobile.jobs import remote_location
@@ -462,35 +386,32 @@ class FolderHubUI(WorkspacesScreen):
                         or client is not self.cloud_client or generation != getattr(client, 'generation', None)):
                     return False
             except (OSError, ValueError) as error:
-                self.folder_picker_status.text = str(error)
+                status.text = str(error)
                 return False
         else:
             remote, path = value
         if remote not in [row.value for row in self.cloud_remote.items]:
-            self.folder_picker_status.text = 'Load the matching connection first.'
+            status.text = 'Load the matching connection first.'
             return False
         self.cloud_remote.value = remote
         self.cloud_location.value = path
         self.show_cloud()
-        await self.browse_cloud(preserve_path=True)
-        return self.cloud_open_remote == remote and self.cloud_path == path
+        return bool(await self.browse_cloud(preserve_path=True))
 
     def refresh_folder_actions(self, *, refresh_choices=True):
-        busy = getattr(self, 'cloud_busy', False) or getattr(self, 'transfer_busy', False)
-        for button, needs_idle in getattr(self, 'folder_action_controls', []):
-            button.enabled = not busy or (not needs_idle and (
-                not getattr(button, '_requires_crypt_session', False) or getattr(self, 'transfer_busy', False)
-                or getattr(self, 'remote_read_busy', False)))
-        # The retained tree can remain visible beside a browser, and credentials
-        # can change during transfers or in another window. Discovery reads only
-        # published metadata/local names, so it is safe while the bridge is busy.
+        # Discovery reads published metadata/local names while the bridge is busy.
         if refresh_choices and hasattr(self, 'folder_list') and not getattr(self.app, '_storage_changing', False):
-            choices = self.folder_choices()
-            self.update_folder_list(choices)
-        status = getattr(self, 'folder_picker_status', None)
-        if status is not None and not getattr(self, '_folder_opening', False):
-            status.text = import_hint('A transfer is running. Local folders and encrypted copies remain available; online operations wait.'
-                if getattr(self, 'transfer_busy', False) else 'A connection is busy. Local folders remain available.') if busy else ''
+            self.update_folder_list(self.folder_choices())
+        self.dismiss_idle_workspace_status()
+
+    def dismiss_idle_workspace_status(self):
+        if (not hasattr(self, 'routes') or self.cloud_busy or self.transfer_busy
+                or self.native_host.state.destination != 'files'):
+            return
+        for view in self.routes.body('files').children:
+            dismiss = getattr(view, '_workspace_status_dismiss', None)
+            if dismiss is not None:
+                self.app.loop.call_soon(dismiss)
 
     async def delete_picker_folder(self, entry):
         if self.cloud_busy or getattr(self, 'transfer_busy', False):

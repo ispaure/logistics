@@ -72,7 +72,7 @@ class MobileRoutes(Routes):
         self.retire_other_presentations(view, target, route)
         super().show(view, destination=destination, route=route, title=title, root=root)
         if (not root and route is not None and target != origin
-                and route not in ('browser', 'remote-browser', 'folder-options', 'workspace-browser')):
+                and route not in ('browser', 'remote-browser', 'workspace-status', 'workspace-browser')):
             # Opening a file/help page is a navigation action. Merely selecting
             # another tab does not call show and must not create this return edge.
             self.origins[target, route] = origin

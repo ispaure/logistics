@@ -11,6 +11,8 @@ class ListingWork:
     client: object
     credential_generation: object
     task: object = None
+    request: 'ListingRequest | None' = None
+    finished: asyncio.Event | None = None
 
 
 @dataclass(frozen=True)
@@ -64,6 +66,8 @@ class FolderListing:
         if not self.accepts(work, request):
             return None
         work.task = asyncio.current_task()
+        finished = asyncio.Event()
+        work.request, work.finished = request, finished
         try:
             rows = await asyncio.to_thread(request.source.list, request.folder,
                                            cancelled=work.cancel.is_set)
@@ -76,4 +80,12 @@ class FolderListing:
                 return None
             raise
         finally:
-            work.task = None
+            work.task = work.request = work.finished = None
+            finished.set()
+
+    async def settle_matching_read(self, matches):
+        # An older listing may have observed the directory before publication.
+        # Let its caller apply the snapshot before the matching refresh.
+        work = self.work
+        if work is not None and work.task is not None and matches(work.request.provider, work.request.folder):
+            await work.finished.wait()

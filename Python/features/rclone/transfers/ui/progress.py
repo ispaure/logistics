@@ -66,6 +66,8 @@ def open_download_progress(provider, path, destination):
             if self.worker.result is not None:
                 result = ProcessResult('succeeded', 0, 1)
                 message = 'Downloaded successfully.'
+                from desktop.file_browser import refresh_download_directory
+                refresh_download_directory(destination)
             elif error:
                 result = ProcessResult('failed', None, 1, error)
                 self.output.emit(error)

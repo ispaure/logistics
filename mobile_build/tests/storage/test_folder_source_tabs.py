@@ -716,10 +716,7 @@ class FolderSourceTabTests(unittest.TestCase):
                     target = opened.call_args.args[0]
                     self.assertEqual(target['kind'], expected)
                     self.assertEqual(target['value'], job['id'])
-                menu = next(child for child in app.folder_buttons[name].parent.children
-                            if getattr(child, 'control_icon', '') == 'more')
-                menu.on_press()
-                controls = [button.text for button, _ in app.folder_action_controls]
+                controls = list(dict(app.workspace_menu_actions(name)))
                 self.assertIn('Pull…', controls)
                 self.assertIn('Push…', controls)
                 self.assertIn('Browse Remote', controls)

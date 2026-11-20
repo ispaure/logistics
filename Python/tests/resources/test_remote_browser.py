@@ -244,7 +244,7 @@ class RemoteBrowserTests(QtTestCase):
     def test_desktop_selected_file_and_folder_downloads(self):
         from commonUtils.ui.tasks.process_host import register_process_host
         from commonUtils.ui.tasks.process_progress import ProcessProgressWindow
-        from desktop.file_browser import FileBrowserWindow
+        from desktop.file_browser import BrowserView, FileBrowserWindow
         from desktop.folder_actions import FolderActionsPage
         from features.rclone.ui.remote_browser import RemoteLocation
         from features.rclone.remote_policy import LOCAL_COPY_MESSAGE
@@ -266,6 +266,14 @@ class RemoteBrowserTests(QtTestCase):
                 window = FileBrowserWindow(RemoteLocation(context, 'Files'))
                 window.show()
                 view = window.workspace.active_view
+                (copies / 'keep.txt').write_text('retain the selection')
+                local = BrowserView(root_path=copies)
+                model = local.file_browser.model
+                # Isolate explicit publication from platform filesystem watches.
+                model.setOption(model.Option.DontWatchForChanges, True)
+                self.wait_until(lambda: model.index(str(copies / 'keep.txt')).isValid())
+                modes = local.file_browser.views
+                modes.select_source(model.index(str(copies / 'keep.txt')))
                 host = qt.QMainWindow()
                 actions = FolderActionsPage(lambda: None, host)
                 host.setCentralWidget(actions)
@@ -279,7 +287,7 @@ class RemoteBrowserTests(QtTestCase):
                     view.open_document(view.provider.root / 'unsupported.bin')
                     self.wait_until(lambda: not view.operation.busy, timeout=15)
                     self.assertEqual(dialog.call_args.args[2], LOCAL_COPY_MESSAGE)
-                    self.assertEqual(list(copies.iterdir()), [])
+                    self.assertEqual(list(copies.iterdir()), [copies / 'keep.txt'])
                 label, available, download = view.file_browser.actions[0]
                 self.assertEqual(label, 'Download locally…')
                 for source_name, copy_name in (('note.txt', 'renamed.txt'), ('nested', 'folder')):
@@ -296,12 +304,17 @@ class RemoteBrowserTests(QtTestCase):
                         self.assertTrue(progress.result.succeeded)
                         self.assertEqual(progress.bar.format(), 'Complete')
                         self.assertEqual(progress.metrics['files'], 1)
+                        self.wait_until(lambda: any(
+                            model.fileName(model.index(i, 0, model.index(str(copies)))) == copy_name
+                            for i in range(model.rowCount(model.index(str(copies))))), timeout=5)
+                        self.assertEqual(local.file_browser.navigation.directory, copies)
+                        self.assertEqual(local.file_browser.selected_objects()[0].path, copies / 'keep.txt')
                         progress.close()
                         warning.assert_not_called()
                 self.assertEqual((copies / 'renamed.txt').read_text(), 'Explicit local copy')
                 self.assertEqual((copies / 'folder' / 'child.txt').read_bytes(), b'child')
                 self.assertTrue((copies / 'folder' / 'empty').is_dir())
-                self.assertEqual({path.name for path in copies.iterdir()}, {'renamed.txt', 'folder'})
+                self.assertEqual({path.name for path in copies.iterdir()}, {'renamed.txt', 'folder', 'keep.txt'})
                 with patch.object(qt.QFileDialog, 'getExistingDirectory', return_value=str(copies)), \
                      patch.object(qt.QInputDialog, 'getText', return_value=('renamed.txt', True)):
                     progress = download(view.provider.root / 'unsupported.bin')
@@ -324,8 +337,8 @@ class RemoteBrowserTests(QtTestCase):
                     progress.cancel_button.click()
                     self.wait_until(lambda: not progress.busy, timeout=15)
                     self.assertEqual(progress.result.state, 'cancelled')
-                    self.assertEqual({path.name for path in copies.iterdir()}, {'renamed.txt', 'folder'})
                     progress.close()
+                self.assertEqual({path.name for path in copies.iterdir()}, {'renamed.txt', 'folder', 'keep.txt'})
                 self.assertEqual((copies / 'renamed.txt').read_text(), 'Explicit local copy')
                 self.assertEqual((source / 'unsupported.bin').read_bytes(), b'unsupported')
                 capture = os.environ.get('LOGISTICS_REMOTE_CAPTURE')

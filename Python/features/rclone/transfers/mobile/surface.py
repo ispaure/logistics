@@ -44,7 +44,7 @@ def surface_html():
 
 
 class TransferSurface(toga.Box):
-    def __init__(self, app, handler, *, visible=lambda: True):
+    def __init__(self, app, handler, *, visible=lambda: True, native=False):
         super().__init__(style=Pack(direction=COLUMN, flex=1))
         self.host, self.handler, self.visible = app, handler, visible
         self.closed, self.ready = False, False
@@ -65,6 +65,9 @@ class TransferSurface(toga.Box):
         self._transfer_surface = self
         self.dummy_backend = get_factory().WebView.__module__.startswith('toga_dummy.')
         self.web = None
+        if native:
+            self.mount_native()
+            return
         try:
             self.create_web()
         except Exception:
@@ -142,10 +145,13 @@ class TransferSurface(toga.Box):
             except Exception:
                 self.retire_web()
                 self.recovery_count = 2
+        self.mount_native()
+        self.queue_send()
+
+    def mount_native(self):
         from .native_fallback import NativeTransferFallback
         self.native_fallback = NativeTransferFallback(self)
         self.add(self.native_fallback)
-        self.queue_send()
 
     @property
     def bridge(self):

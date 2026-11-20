@@ -70,8 +70,8 @@ def _child_midpoints(branch):
 
 class FolderTreeView:
     """Own native row identity and menu retirement for one retained source tab."""
-    def __init__(self, *, browse, choose, actions, invoke, native_context):
-        self.browse_folder, self.choose_folder = browse, choose
+    def __init__(self, *, browse, actions, invoke, native_context):
+        self.browse_folder = browse
         self.load_actions, self.invoke, self.native_context = actions, invoke, native_context
         self.content = toga.Box(style=Pack(direction=COLUMN))
         self.nodes, self.panels, self.extras = {}, {}, {}
@@ -207,16 +207,14 @@ class FolderTreeView:
                     style=Pack(height=ROW_HEIGHT, flex=1))))
                 row.add(record.indicator, record.button)
                 if menu:
-                    def options(widget=None, selected=name, **kwargs):
-                        self.choose_folder(selected)
-                    record.menu = icon_button('more', 'Workspace actions for ' + name, on_press=options)
+                    record.menu = icon_button('more', 'Workspace actions for ' + name)
                     compact_icon(record.menu, width=TOUCH_TARGET, size=18)
                     from .action_menu import WorkspaceMenu
                     record.commands = WorkspaceMenu(record.menu,
                         lambda selected=name: self.load_actions(selected),
                         invoke=self.invoke,
                         context=self.native_context,
-                        fallback=lambda selected=name: self.choose_folder(selected))
+                        fallback=lambda: None)
                     row.add(record.menu)
                 folder_row(row)
             else:

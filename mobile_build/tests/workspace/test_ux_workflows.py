@@ -166,10 +166,9 @@ class UXWorkflowTests(unittest.TestCase):
         app.loop.run_until_complete(app.parent_file_folder())
         self.assertEqual(app.routes.screens['files'], [])
         self.assertIs(app.body, app.routes.roots['files'])
-        app.choose_folder('All files')
-        buttons = [w for w in widgets(app.body) if isinstance(w, toga.Button)]
-        self.assertFalse(any(w.text == 'Delete local folder…' for w in buttons))
-        self.assertEqual(app.folder_browse_button.action_role, 'primary')
+        actions = dict(app.workspace_menu_actions('All files'))
+        self.assertIn('Browse Local', actions)
+        self.assertNotIn('Delete local folder…', actions)
 
     def test_android_retained_roots_use_outer_allocation_and_subtract_the_rail(self):
         from types import SimpleNamespace

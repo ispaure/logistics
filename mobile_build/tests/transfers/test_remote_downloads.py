@@ -91,6 +91,63 @@ class RemoteDownloadTests(unittest.TestCase):
 
 
 class RemoteDownloadPickerTests(unittest.TestCase):
+    def test_download_publication_refreshes_retained_parent_without_navigation(self):
+        from features.rclone.transfers.mobile.models import TransferOutcome
+        from mobile_build.tests.support.readers import RemoteClient
+        from services.documents.locations import collection_path
+
+        app = create_app(self)
+        app.show_cloud(present=False)
+        app.cloud_client = RemoteClient()
+        root = collection_path(app.private_root)
+        parent = root / 'Destination'
+        parent.mkdir(parents=True)
+        (parent / 'keep.txt').write_text('retained')
+        (root / 'Unopened').mkdir()
+        (root / 'Unrelated').mkdir()
+
+        async def exercise():
+            drawer = app.adaptive.browser('home')
+            self.assertTrue(await drawer.show_main_browser('Local files', folder='Unrelated'))
+            unrelated = drawer.browser.folder_tree
+            self.assertTrue(await app.show_files(location=('Local files', parent.name)))
+            browser = app.file_browser
+            await browser.select(browser.entries[0])
+            selected, location = browser.selected, browser.location
+            history = list(browser.history.locations)
+            app.show_cloud()
+            picker = app.editor_picker()
+            for name, directory in (('copied.txt', False), ('copied folder', True)):
+                request = RemoteDownload(NS(remote='Fixture'), name, directory)
+                await picker.show_destination(name, request)
+                await picker.browser_editor_location(('Local', parent.name))
+                self.assertEqual(picker.editor_picker_location, ('Local', parent.name))
+                picker.save_as_name.value = name
+
+                def execute(request, client, destination, target, cancelled, progress, **kwargs):
+                    if request.directory:
+                        (destination.root / target).mkdir()
+                    else:
+                        (destination.root / target).write_text('downloaded')
+                    return TransferOutcome('download')
+
+                with patch.object(RemoteDownload, 'execute', autospec=True, side_effect=execute), \
+                        patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
+                    self.assertTrue(await picker.complete_destination(),
+                                    (app.cloud_status.value, picker.save_as_status.value))
+                self.assertEqual(app.routes.screens['files'][-1][0], 'transfers')
+                self.assertEqual(browser.location, location)
+                self.assertEqual(browser.history.locations, history)
+                self.assertEqual(browser.selected, selected)
+                self.assertIn(name, [entry.label for entry in browser.entries])
+                self.assertIs(drawer.browser.folder_tree, unrelated)
+                app.routes.back()
+            (root / 'Unopened' / 'new.txt').write_text('fresh on first visit')
+            self.assertTrue(await app.browser_file_location(('Local files', 'Unopened')))
+            self.assertIn('new.txt', [entry.label for entry in browser.entries])
+
+        app.loop.run_until_complete(exercise())
+
     def test_native_back_diagnostics_bound_routes_and_exclude_names(self):
         import json
         from mobile_build.native_tests.tests.logisticsmobile.files_checks import download_navigation_state

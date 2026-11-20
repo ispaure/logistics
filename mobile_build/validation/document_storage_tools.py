@@ -522,6 +522,13 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
                 client.invoke('launch', device, 'com.apple.Preferences')
                 time.sleep(1)
                 client.invoke('launch', device, bundle)
+            transfer_background = cache / 'transfer-background'
+            if entry_point.endswith('.rclone_transfer_probe') and transfer_background.exists():
+                transfer_background.unlink()
+                client.invoke('launch', device, 'com.apple.Preferences')
+                time.sleep(1)
+                client.invoke('launch', device, bundle)
+                (cache / 'transfer-resumed').touch()
             request = cache / 'notes-touch-request.json'
             if drive_notes and request.exists():
                 touch = json.loads(request.read_text())
@@ -869,6 +876,15 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
         while time.monotonic() < deadline:
             if observe is not None:
                 observe('poll', emulator, record, output)
+            if entry_point.endswith('.rclone_transfer_probe'):
+                request = subprocess.run([str(emulator.adb), '-s', serial, 'shell', 'run-as', bundle,
+                    'test', '-f', 'cache/transfer-background'], env=env, capture_output=True, timeout=15)
+                if request.returncode == 0:
+                    emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'rm', 'cache/transfer-background')
+                    emulator.invoke('-s', serial, 'shell', 'input', 'keyevent', 'KEYCODE_HOME')
+                    time.sleep(1)
+                    emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n', bundle + '/org.beeware.android.MainActivity')
+                    emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'touch', 'cache/transfer-resumed')
             if entry_point.endswith('.comic_guidance_probe'):
                 request = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
                     'cat', 'cache/comic-guidance-request.json'], env=env, capture_output=True, timeout=15)

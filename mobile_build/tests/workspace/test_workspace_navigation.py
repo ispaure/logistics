@@ -874,17 +874,16 @@ class WorkspaceNavigationTests(unittest.TestCase):
         self.assertIs(drawer.browser_widget.parent, app.body.children[0]._workspace_frame.main)
         self.assertEqual(app.editor.value, '# Keep this draft')
 
-    def test_folder_actions_pair_tree_at_center_and_collapse_on_phone(self):
+    def test_workspace_status_pairs_tree_at_center_and_collapses_on_phone(self):
         app = self.app
         app.show_locations()
         with patch.object(self.navigation, 'width', return_value=669):
-            app.choose_folder('All files')
+            app.folder_controller().show_workspace_status({'name': 'Remote'}, 'Waiting for online browsing')
             frame = app.body.children[0]._workspace_frame
             self.assertEqual(list(frame.row.children), [frame.folder_master, frame.main])
             self.assertLessEqual(abs(frame.folder_master.style.width - frame.main.style.width), 1)
             self.assertEqual(frame.main.style.margin_left, 16)
-            self.assertFalse(any(button.text == 'Remove mapping (keep files)'
-                                 for button, _ in app.folder_action_controls))
+            self.assertEqual(app.routes.screens['files'][-1][0], 'workspace-status')
             with patch.object(self.navigation, 'width', return_value=390):
                 self.navigation.render()
                 self.assertEqual(list(frame.row.children), [frame.main])
@@ -1021,7 +1020,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         app.show_locations()
         with patch.object(self.navigation, 'width', return_value=700), patch.object(
                 self.navigation, 'content_width', return_value=600):
-            app.choose_folder('All files')
+            app.folder_controller().show_workspace_status({'name': 'Remote'}, 'Waiting for online browsing')
             frame = app.body.children[0]._workspace_frame
             self.assertEqual(list(frame.row.children), [frame.main])
 
@@ -1033,7 +1032,7 @@ class WorkspaceNavigationTests(unittest.TestCase):
         overview = app.body.children[0]._workspace_frame
         controls = app.folder_source_tabs
         with patch.object(self.navigation, 'width', return_value=900):
-            for route in ('remote-browser', 'workspace-browser', 'folder-options'):
+            for route in ('remote-browser', 'workspace-browser', 'workspace-status'):
                 view = toga.Box(style=Pack(flex=1))
                 app.show_view(view, destination='files', route=route)
                 frame = view._workspace_frame

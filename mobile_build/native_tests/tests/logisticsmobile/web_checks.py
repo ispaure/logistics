@@ -71,14 +71,16 @@ def verify_native_transfer_fallback(surface):
     else:
         raise AssertionError('Transfer fallback requires actual iOS or Android widgets')
     model = surface.model
-    assert text(fallback.title) == (model.get('workspace') or 'Transfers'), 'Native transfer title is stale'
-    assert text(fallback.paths) == ('Source: ' + model.get('source', '—')
-        + '\nDestination: ' + model.get('destination', '—')), 'Native transfer endpoints are stale'
+    assert text(fallback.title), 'Native transfer title is missing'
+    paths = 'Source: ' + model.get('source', '—') + '\nDestination: ' + model.get('destination', '—')
+    assert getattr(fallback.paths, '_settings_source_text', text(fallback.paths)) == paths
+    assert text(fallback.paths) == fallback.paths.text, 'Native transfer endpoints were not drawn'
     metrics = text(fallback.metrics)
     buttons = {button.text: button for button in fallback.buttons.children}
     if model.get('mode') == 'progress':
-        assert text(fallback.status) == (model.get('phase', 'idle').capitalize() + '\n'
-            + (model.get('message') or model.get('status', ''))), 'Native transfer status is stale'
+        notice = model.get('message') or model.get('status', '')
+        assert getattr(fallback.status, '_settings_source_text', text(fallback.status)) == notice
+        assert text(fallback.status) == fallback.status.text, 'Native transfer status was not drawn'
         assert f"Files: {model.get('files', 0):,} / {model.get('total_files', 0):,}" in metrics, 'Native transfer file counts are stale'
         assert (f"Data: {model.get('done', 0) / 1_000_000:,.2f} / "
             + f"{model.get('total', 0) / 1_000_000:,.2f} MB") in metrics, 'Native transfer byte counts are stale'

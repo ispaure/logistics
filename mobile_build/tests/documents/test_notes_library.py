@@ -1335,10 +1335,8 @@ class NotesLibraryTests(unittest.TestCase):
         async def exercise():
             restore = getattr(self.app, 'cloud_restore_task', None)
             if restore is not None:await restore
-            entry = dict(source='Local', kind='local', value='Notes', name='Notes', copies=[])
-            self.app.show_picker_folder(entry)
-            self.assertFalse(any(getattr(child, 'text', '') == 'Open as Notes Library'
-                                 for child, _ in self.app.folder_action_controls))
+            self.app.show_locations()
+            self.assertNotIn('Open as Notes Library', dict(self.app.workspace_menu_actions('Notes')))
             self.app.show_documents_hub()
             self.app.document_view_buttons['Libraries'].on_press()
             await self.app._notes_discovery_task

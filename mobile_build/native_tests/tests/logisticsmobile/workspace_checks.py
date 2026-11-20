@@ -25,7 +25,7 @@ async def exercise_workspace(app):
         screenshots.append(str(path))
 
     app.show_locations()
-    app.choose_folder('All files')
+    app.folder_controller().show_workspace_status({'name': 'Remote'}, 'Waiting for online browsing')
     folder_frame = app.body.children[0]._workspace_frame
     await capture('folder-actions')
     assert folder_frame.header not in folder_frame.view().children

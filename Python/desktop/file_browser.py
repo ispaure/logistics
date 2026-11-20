@@ -37,6 +37,30 @@ BROWSER_POLICY = WorkspacePolicy(allow_last_tab_detach=False,
                                  detached_title='{title} — File Browser')
 
 
+def refresh_download_directory(destination):
+    """Ask Qt to relist browsers already at the published destination's parent."""
+    parent = native_path(Path(destination).parent).resolve()
+    from commonUtils.filesystem.index import directory_cache
+    directory_cache.invalidate(parent)
+    for view in qt.QApplication.allWidgets():
+        if not isinstance(view, BrowserView) or view.closing:
+            continue
+        browser = view.file_browser
+        directory = browser.navigation.directory
+        if directory is None or native_path(directory).resolve() != parent:
+            continue
+        # Keep the same model indexes, selection and viewport. Retarget the
+        # gatherer without changing the browser's navigation or watcher root.
+        model = browser.model
+        previous = model.rootPath()
+        with qt.QSignalBlocker(model):
+            model.setRootPath('')
+            model.setRootPath(str(directory))
+            if previous != str(directory):
+                model.setRootPath(previous)
+        browser.refresh_changed((directory,))
+
+
 @lru_cache(maxsize=8)
 def _crypt_copies(root, record_revision, interval):
     # Model callbacks are frequent. Refresh on publication and at least once a

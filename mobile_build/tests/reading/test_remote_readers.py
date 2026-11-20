@@ -100,8 +100,7 @@ class RemoteReaderTests(unittest.TestCase):
                     await asyncio.sleep(2.1)
                     self.assertIn(' · 2s', app.cloud_status.value)
                     app.show_locations()
-                    app.choose_folder('Other')
-                    self.assertEqual(app.folder_picker_selected['remote'], 'Other')
+                    self.assertIn('Browse Remote', dict(app.workspace_menu_actions('Other')))
                     self.assertTrue(app.cloud_cancel.enabled)
                     self.assertFalse(task.done())
                 finally:
@@ -135,7 +134,6 @@ class RemoteReaderTests(unittest.TestCase):
                     await asyncio.sleep(.01)
                 self.assertEqual(len(browser.buttons), 1)
                 self.assertEqual(client.calls, [('list', 'mangas')])
-                self.assertEqual(app.folder_picker_selected['remote'], 'Other')
             app.loop.run_until_complete(check())
 
     def test_comic_is_cached_once_then_pages_use_memory_and_close_releases_it(self):

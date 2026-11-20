@@ -645,7 +645,11 @@ class EditorPicker(DestinationForm):
                 self.app.routes.trim(route_destination, picker_index)
                 self.app.routes.render(route_destination)
             self.clear()
-            return await operation.destination_action.complete(self.app, destination, target)
+            completed = await operation.destination_action.complete(self.app, destination, target)
+            if completed:
+                from .browser_ui import refresh_download_directory
+                await refresh_download_directory(self.app, destination, target)
+            return completed
         except Exception as error:
             if operation is self.operation:
                 self.save_as_status.value = 'Download failed: ' + str(error)[:250]

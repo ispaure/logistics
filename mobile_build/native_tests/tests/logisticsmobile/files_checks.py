@@ -12,7 +12,7 @@ def download_navigation_state(app, source, tokens):
     def token(value):
         return tokens.setdefault(id(value), len(tokens) + 1) if value is not None else None
     kinds = {'remote-browser', 'text-destination', 'transfers', 'transfer-review',
-             'browser', 'workspace-browser', 'folder', 'folder-options', 'remote-item',
+             'browser', 'workspace-browser', 'folder', 'workspace-status', 'remote-item',
              'local-push', 'file-loading', 'close', 'private-close'}
     screens = app.routes.screens['files']
     body = app.routes.body('files')

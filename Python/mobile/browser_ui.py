@@ -143,6 +143,63 @@ def schedule_visible_file_browser_refresh(app):
         app.loop.create_task(refresh())
 
 
+async def refresh_download_directory(app, destination, target):
+    """Refresh retained listings of the published parent, including storage aliases."""
+    from .document_mutations import path_relative_to_mutation
+
+    parent = target.rpartition('/')[0]
+    drawers = tuple(getattr(app.adaptive, 'browsers', {}).values())
+    listings = (getattr(app, '_folder_listing', None), *(drawer.listing for drawer in drawers))
+
+    def matches(provider, folder):
+        try:
+            return path_relative_to_mutation(provider, folder, destination, parent) == ''
+        except (OSError, ValueError):
+            return False
+
+    await asyncio.gather(*(listing.settle_matching_read(matches) for listing in listings if listing is not None))
+    files = getattr(app, 'file_browser', None)
+
+    async def refresh(browser, provider, folder, current, publish):
+        if browser is None or browser.closed or browser.folder_tree is None or not matches(provider, folder):
+            return
+        tree, location = browser.folder_tree, browser.location
+        try:
+            rows = await asyncio.to_thread(browser.search_provider.list, folder)
+        except (OSError, ValueError):
+            # A concurrent lock or storage change owns any error presentation.
+            return
+        if (app.active_host and current() and not browser.closed
+                and browser.folder_tree is tree and browser.location == location):
+            publish(rows)
+
+    tasks = []
+    provider = getattr(app, 'file_provider', None)
+    if files is not None and provider is not None:
+        file_location = app.file_storage.value, app.file_location.value
+        if file_location == getattr(app, 'file_loaded_location', None):
+            def current():
+                return (app.file_browser is files and app.file_provider is provider
+                        and (app.file_storage.value, app.file_location.value) == file_location)
+
+            def publish(rows):
+                from .files_ui import FilesUI
+                app.file_rows = FilesUI.file_browser_rows(rows)
+                app.set_file_items(list(app.file_rows))
+                files.refresh_entries(rows)
+
+            tasks.append(refresh(files, provider, file_location[1], current, publish))
+    for drawer in drawers:
+        location = drawer.storage.value, drawer.folder
+        if drawer.browser.location != location:
+            continue
+        def current_drawer(drawer=drawer, location=location, generation=drawer.generation):
+            return (drawer.generation == generation and (drawer.storage.value, drawer.folder) == location)
+        tasks.append(refresh(drawer.browser, drawer.provider, drawer.folder,
+                             current_drawer, drawer.browser.refresh_entries))
+    await asyncio.gather(*tasks)
+
+
 class LogisticsBrowserPresentation(BrowserPresentation):
     command = staticmethod(apply_icon)
     command_style = staticmethod(browser_command)
@@ -156,6 +213,26 @@ class LogisticsBrowserPresentation(BrowserPresentation):
         return file_list_icon(folder)
 
 class FileBrowser(RecycledBrowser):
+    def refresh_entries(self, rows):
+        """Replace a directory snapshot while retaining its location and viewport."""
+        from commonUtils.runtime.browsing import BrowseEntry, BrowseTree, provider_entries
+
+        root = self.folder_tree.root
+        entries = list(provider_entries(self.search_provider, rows))
+        folder = BrowseTree(BrowseEntry(root, root.name, True), max_entries=len(entries) + 1)
+        folder.set_children(root, entries)
+        if self.tree is not self.folder_tree:
+            # A search may display descendants as well as current-folder rows.
+            # Keep those descendants while reconciling the changed parent.
+            entries.extend(entry for entry in self.tree.entries.values()
+                           if entry.identity != root and entry.identity.parent != root)
+            tree = BrowseTree(BrowseEntry(root, root.name, True), max_entries=len(entries) + 1)
+            tree.set_children(root, entries)
+        else:
+            tree = folder
+        self.folder_tree = folder
+        self.set_tree(tree, preserve=True)
+
     def __init__(self, *, folder_visible=None, local_search=None, **kwargs):
         self._resource_provider = None
         self._release_resource = lambda: None

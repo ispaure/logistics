@@ -25,6 +25,11 @@ def ordinary_local_copies(copies):
 
 
 class FilesUI:
+    @staticmethod
+    def file_browser_rows(rows):
+        return {f'{i + 1}. {"Folder" if row["directory"] else "File"}: {row["name"]}': row
+                for i, row in enumerate(rows)}
+
     def folder_listing(self):
         if not hasattr(self, '_folder_listing'):
             from .folder_listing import FolderListing
@@ -94,8 +99,7 @@ class FilesUI:
                     restore_location()
                     return False
                 self.file_provider, self.file_path = provider, path
-                self.file_rows = {f'{i + 1}. {"Folder" if row["directory"] else "File"}: {row["name"]}' : row
-                                  for i, row in enumerate(rows)}
+                self.file_rows = FilesUI.file_browser_rows(rows)
                 # set_entries publishes selection reset once with the new snapshot.
                 self.file_loaded_location = label, path
                 self.populate_file_browser(rows, self.file_password.value, location=self.file_loaded_location)

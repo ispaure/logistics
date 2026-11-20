@@ -128,6 +128,8 @@ class MirrorUI(TransferReviewUI):
             self.transfer_view = old
         else:
             async def command(action, args):
+                if not visible():
+                    return
                 if action == 'background':
                     self.routes.back()
                     screens = self.routes.screens[self.native_host.state.destination]
@@ -148,8 +150,9 @@ class MirrorUI(TransferReviewUI):
                 if not self.active_host:
                     return False
                 screens = self.routes.screens[self.native_host.state.destination]
-                return bool(screens and screens[-1][0] == 'transfers')
-            self._progress_surface = self.transfer_view = TransferSurface(self.app, command, visible=visible)
+                return bool(screens and screens[-1][0] == 'transfers'
+                            and self._progress_surface in screens[-1][1].children)
+            self._progress_surface = self.transfer_view = TransferSurface(self.app, command, visible=visible, native=True)
         # Retain the existing programmatic status handles used by cloud callers.
         if not hasattr(self, 'transfer_notice'):
             self.transfer_notice = toga.Label('')
@@ -294,22 +297,6 @@ class MirrorUI(TransferReviewUI):
             return
         self.begin_transfer_review(remote=remote, folder=folder, storage=storage)
 
-    async def push_remote_copy(self, widget=None, **kwargs):
-        if self.cloud_busy or getattr(self, 'transfer_busy', False):
-            return
-        remote = self.selected_cloud_remote()
-        if remote != self.cloud_open_remote:
-            self.cloud_status.value = 'Open the remote before reviewing a push.'
-            return
-        jobs = [job for job in self.mirror_store().jobs.values()
-                if job['remote'] == remote and self.mirror_store().target(job).is_dir()]
-        if len(jobs) == 1:
-            self.start_mirror_review(jobs[0]['id'])
-        elif jobs:
-            self.choose_transfer_copy(jobs, push=True)
-        else:
-            self.cloud_status.value = 'No local copy exists. Choose a folder in Files and Pull first.'
-
     async def run_mirror_work(self, work, operation, *, source=None, destination=None):
         return await self.execution.run(work, operation, source=source, destination=destination)
 
@@ -325,6 +312,8 @@ class MirrorUI(TransferReviewUI):
         done, total = snapshot.done, snapshot.total
         widgets = (id(self.transfer_notice), id(self.cloud_status), id(self.transfer_progress),
                    id(getattr(self, 'cloud_transfer_progress', None)), done, total)
+        if hasattr(self, '_progress_surface'):
+            self.render_transfer_summary()
         if self.transfer_message == previous and widgets == getattr(self, '_mirror_progress_widgets', None):
             # Repeated polling must not force native text/layout redraws while
             # the user opens an unrelated local document during a transfer.
@@ -351,8 +340,6 @@ class MirrorUI(TransferReviewUI):
                 bar.max = None
                 bar.start()
 
-        if hasattr(self, '_progress_surface'):
-            self.render_transfer_summary()
         self.refresh_transfer_status()
 
     def cancel_mirror_transfer(self, widget=None, **kwargs):
@@ -467,6 +454,4 @@ class TransferExecutionPresentation:
                     owner.dismiss_transfer_status()
 
             owner.loop.call_later(5, clear_completion)
-        screens = owner.routes.screens[owner.native_host.state.destination]
-        if screens and screens[-1][0] == 'transfers':
-            owner.render_transfer_summary()
+        owner.render_transfer_summary()

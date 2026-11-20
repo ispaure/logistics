@@ -262,7 +262,7 @@ class FolderHubTests(unittest.TestCase):
                             await asyncio.sleep(.01)
                         self.assertTrue(started.is_set())
                         self.assertIn('Checking connection', app.cloud_status.value)
-                        app.choose_folder('All files')
+                        app.show_home()
                         self.assertFalse(task.done())
                     finally:
                         release.set()
@@ -287,8 +287,7 @@ class FolderHubTests(unittest.TestCase):
             with patch.object(app, 'existing_crypt_locations', side_effect=AssertionError('Native discovery in UI')) as existing, \
                     patch.object(app, 'linked_crypt_locations', side_effect=AssertionError('Native discovery in UI')) as linked:
                 app.show_locations()
-                app.choose_folder('Second')
-                self.assertEqual(app.folder_picker_selected['remote'], 'Second')
+                self.assertIn('Browse Remote', dict(app.workspace_menu_actions('Second')))
                 existing.assert_not_called()
                 linked.assert_not_called()
 
@@ -319,14 +318,14 @@ class FolderHubTests(unittest.TestCase):
                                 break
                             await asyncio.sleep(.01)
                         self.assertTrue(started.is_set())
-                        app.choose_folder('All files')
-                        self.assertEqual(app.routes.screens['files'][-1][0], 'folder-options')
+                        self.assertIn('Browse Local', dict(app.workspace_menu_actions('All files')))
+                        app.show_home()
                         self.assertFalse(task.done())
                         self.assertEqual(query.call_count, 1)
                     finally:
                         release.set()
                         await task
-                    self.assertEqual(app.routes.screens['files'][-1][0], 'folder-options')
+                    self.assertEqual(app.native_host.state.destination, 'home')
             app.loop.run_until_complete(check())
             app.loop.run_until_complete(app.loop.shutdown_default_executor())
 
@@ -394,7 +393,7 @@ class FolderHubTests(unittest.TestCase):
             app.show_locations()
             with patch.object(app, 'require_remote_credentials', side_effect=AssertionError('Busy tap must not enter native code')):
                 self.assertFalse(app.loop.run_until_complete(app.browse_hub_folder('Online')))
-            self.assertIn('connection is busy', app.folder_picker_status.text)
+            self.assertEqual(app.routes.screens['files'][-1][0], 'workspace-status')
             def controls(widget):
                 yield widget
                 for child in getattr(widget, 'children', ()):
@@ -406,6 +405,35 @@ class FolderHubTests(unittest.TestCase):
             self.assertTrue(app.loop.run_until_complete(app.browse_hub_folder('Notes')))
             self.assertEqual(app.file_path, 'Notes')
             self.assertTrue(app.cloud_busy)
+
+    def test_transfer_status_restores_workspaces_after_progress_is_closed(self):
+        import asyncio
+        from mobile.routes import contains
+        with mobile_app() as app:
+            app.show_cloud(present=False)
+            app.cloud_remote.items = ['Online']
+            app.show_locations()
+            overview = app.body
+
+            async def exercise():
+                app.transfer_busy = True
+                app.set_cloud_busy(True)
+                self.assertFalse(await app.browse_hub_folder('Online'))
+                self.assertEqual(app.routes.screens['files'][-1][0], 'workspace-status')
+                status = app.body.children[0]._workspace_frame.main
+                progress = next(child for child in status.children
+                                if child.text == 'View transfer progress')
+                progress.on_press()
+                self.assertTrue(contains(app.body, app.transfer_view))
+                app.transfer_busy = False
+                app.set_cloud_busy(False)
+                self.assertTrue(contains(app.body, app.transfer_view))
+                app.routes.back()
+                await asyncio.sleep(0)
+                self.assertIs(app.body, overview)
+                self.assertFalse(app.routes.screens['files'])
+
+            app.loop.run_until_complete(exercise())
 
     def test_pending_online_folder_does_not_block_a_different_local_folder(self):
         import asyncio
@@ -449,8 +477,9 @@ class FolderHubTests(unittest.TestCase):
             directory = app.storage_root
             app.show_locations()
             with patch.object(app, 'folder_choices', side_effect=AssertionError('Menu must not rediscover folders')):
-                app.choose_folder('All files')
-            self.assertEqual(app.folder_browse_button.text, 'Browse Local')
+                actions = dict(app.workspace_menu_actions('All files'))
+            self.assertIn('Browse Local', actions)
+            self.assertFalse(app.routes.screens['files'])
 
     def test_folder_tap_shows_loading_rejects_repeat_and_preserves_unlock_page(self):
         import asyncio
@@ -467,16 +496,16 @@ class FolderHubTests(unittest.TestCase):
             started, release = asyncio.Event(), asyncio.Event()
             self.assertFalse(app.folder_loading_box.children)
             unlock_view = toga.Box(children=[toga.Label('Unlock matching credentials')])
-            async def open_folder(entry):
+            async def open_folder(entry, status):
                 started.set()
                 await release.wait()
                 app.show_view(unlock_view, destination='files', route='unlock-test', title='Unlock')
                 return False
             async def check():
-                with patch.object(app, 'open_picker_folder', side_effect=open_folder) as opened:
+                with patch.object(app.folder_controller(), '_open_picker_folder', side_effect=open_folder) as opened:
                     task = asyncio.create_task(app.browse_hub_folder('All files'))
                     await started.wait()
-                    self.assertIn('Opening Local folder', app.folder_picker_status.text)
+                    self.assertIn('Opening Local folder', app.folder_loading_status.text)
                     self.assertEqual(list(app.folder_loading_box.children),
                                      [app.folder_loading_status, app.folder_loading_progress])
                     self.assertFalse(await app.browse_hub_folder('All files'))
@@ -725,16 +754,15 @@ class FolderHubTests(unittest.TestCase):
                 app.set_cloud_busy(True)
                 app.show_locations()
                 self.assertEqual(set(before), set(app.folder_picker_choices))
-                app.choose_folder('Remote')
-                self.assertTrue(app.folder_browse_button.enabled)
-                self.assertTrue(all(not button.enabled for button, idle in app.folder_action_controls if idle))
-                app.loop.run_until_complete(app.folder_browse_button.on_press())
+                actions = dict(app.workspace_menu_actions('Remote'))
+                self.assertNotIn('Push…', actions)
+                self.assertNotIn('Pull…', actions)
+                app.loop.run_until_complete(actions['Browse Local']())
                 self.assertEqual(app.file_path, local['target'])
                 cancel = app.transfer_controller()._transfer_cancel
                 app.show_locations()
-                app.choose_folder('Secret')
-                self.assertTrue(app.folder_browse_button.enabled)
-                self.assertTrue(app.loop.run_until_complete(app.open_picker_folder(app.folder_picker_selected)))
+                self.assertTrue(app.loop.run_until_complete(
+                    dict(app.workspace_menu_actions('Secret'))['Browse LocalCrypt']()))
                 self.assertEqual(app.file_provider.remote, 'Secret')
                 row = next(row for row in app.file_rows.values() if not row['directory'])
                 app.browser_file_selected(row)
@@ -746,7 +774,6 @@ class FolderHubTests(unittest.TestCase):
                 self.assertIs(app.transfer_controller()._transfer_cancel, cancel)
                 app.transfer_busy = False
                 app.set_cloud_busy(False)
-                self.assertTrue(app.folder_browse_button.enabled)
                 self.assertTrue(app.routes.back())
                 self.assertIs(app.body, origin)
                 app.show_home()
@@ -776,8 +803,7 @@ class FolderHubTests(unittest.TestCase):
                 job, _ = store.create(app.cloud_client, 'Remote', 'folder')
                 app.show_locations()
                 entry = app.folder_picker_choices[job['target']]
-                app.show_picker_folder(entry)
-                labels = [button.text for button, _ in app.folder_action_controls]
+                labels = list(dict(app.workspace_menu_actions(job['target'])))
                 self.assertEqual([text for text in labels if text.startswith('Browse ')],
                                  ['Browse Local', 'Browse Remote'])
                 online = next(copy for copy in entry['copies'] if copy['source'] == 'Remote')
@@ -785,15 +811,13 @@ class FolderHubTests(unittest.TestCase):
                     app.loop.run_until_complete(app.open_picker_folder(online))
                     self.assertEqual(app.cloud_location.value, 'folder')
                     browse.assert_awaited_once()
-                app.show_picker_folder(app.folder_picker_choices['Only online'])
-                self.assertEqual([button.text for button, _ in app.folder_action_controls
-                                  if button.text.startswith('Browse ')], ['Browse Remote'])
+                self.assertEqual([label for label, _ in app.workspace_menu_actions('Only online')
+                                  if label.startswith('Browse ')], ['Browse Remote'])
                 store.target(job).rename(store.target(job).with_name('Unmapped local'))
                 app.show_locations()
                 self.assertNotIn(job['target'], app.folder_picker_choices)
-                app.show_picker_folder(app.folder_picker_choices['Unmapped local'])
-                self.assertEqual([button.text for button, _ in app.folder_action_controls
-                                  if button.text.startswith('Browse ')], ['Browse Local'])
+                self.assertEqual([label for label, _ in app.workspace_menu_actions('Unmapped local')
+                                  if label.startswith('Browse ')], ['Browse Local'])
                 app.show_transfers()
                 self.assertEqual(app.transfer_view.model['mode'], 'progress')
                 self.assertEqual(app.transfer_view.model['phase'], 'idle')
@@ -815,9 +839,7 @@ class FolderHubTests(unittest.TestCase):
             job, _ = app.mirror_store().create(app.cloud_client, 'Secret', 'folder', storage='LocalCrypt')
             app.set_loaded_remote_names([])
             app.show_locations()
-            entry = app.folder_picker_choices[job['target']]
-            app.show_picker_folder(entry)
-            labels = [button.text for button, _ in app.folder_action_controls]
+            labels = list(dict(app.workspace_menu_actions(job['target'])))
             self.assertIn('Browse LocalCrypt', labels)
             self.assertNotIn('Browse Remote', labels)
             self.assertFalse(source_choices(app.folder_choices(), 'rclone'))
@@ -844,8 +866,7 @@ class FolderHubTests(unittest.TestCase):
                 crypt, _ = store.create(app.cloud_client, 'Secret', '', storage='LocalCrypt')
                 def buttons():
                     app.show_locations()
-                    app.show_picker_folder(app.folder_picker_choices['Secret'])
-                    return [button.text for button, _ in app.folder_action_controls if button.text.startswith('Browse ')]
+                    return [label for label, _ in app.workspace_menu_actions('Secret') if label.startswith('Browse ')]
                 self.assertCountEqual(buttons(), ['Browse Local', 'Browse LocalCrypt', 'Browse Remote'])
                 store.target(crypt).rename(store.target(crypt).with_name('not-the-mapped-copy'))
                 self.assertCountEqual(buttons(), ['Browse Local', 'Browse Remote'])
@@ -891,7 +912,6 @@ class FolderHubTests(unittest.TestCase):
                 sibling.mkdir()
                 app.show_locations()
                 entry = app.folder_picker_choices['Comics']
-                app.show_picker_folder(entry)
                 async def exercise():
                     with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=False)):
                         with patch('commonUtils.runtime.resources.mutations.inventory', side_effect=AssertionError('No pre-confirmation scan')):

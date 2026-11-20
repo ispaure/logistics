@@ -52,7 +52,7 @@ class RemoteProbe(LogisticsMobile):
 
     async def visit(self, remote, folder='folder'):
         assert await self.open_picker_folder(dict(kind='remote', value=(remote, folder),
-            source='Remote', remote=remote)), self.cloud_status.value
+            source='Remote', remote=remote, name=remote)), self.cloud_status.value
         return self.body
 
     async def listing_responsiveness(self, output, result, cases):
@@ -99,8 +99,7 @@ class RemoteProbe(LogisticsMobile):
                 self.show_locations()
                 await asyncio.sleep(.1)
                 other = 'Secret' if remote == 'Cloud' else 'Cloud'
-                self.choose_folder(other)
-                assert self.folder_picker_selected['remote'] == other
+                assert 'Browse Remote' in dict(self.workspace_menu_actions(other))
                 assert not listing.done()
                 release.set()
                 assert await listing, self.cloud_status.value
@@ -118,7 +117,6 @@ class RemoteProbe(LogisticsMobile):
                 browser.search.value = 'series-199'
                 assert len(browser.buttons) == 1
                 assert calls == [(remote, 'mangas')], calls
-                assert self.folder_picker_selected['remote'] == other
                 await asyncio.sleep(.1)
                 measurements[remote] = dict(max_ui_gap_seconds=max(gaps), listing_calls=len(calls),
                     folders=200, timer_advanced=True, hub_menu_opened=True)
@@ -254,8 +252,7 @@ class RemoteProbe(LogisticsMobile):
                         try:
                             self.show_locations()
                             other = 'Secret' if remote == 'Cloud' else 'Cloud'
-                            self.choose_folder(other)
-                            assert self.folder_picker_selected['remote'] == other
+                            assert 'Browse Remote' in dict(self.workspace_menu_actions(other))
                             assert not ui_requests, ui_requests
                         finally:
                             self.cloud_client.request = original_request

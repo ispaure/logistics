@@ -26,23 +26,18 @@ class FolderController(FolderHubUI):
         "network_share_remotes",
         "change_folder_source",
         "change_folder_credential",
-        "choose_folder",
         "workspace_menu_actions",
         "browse_hub_folder",
-        "show_picker_folder",
         "open_picker_folder",
         "refresh_folder_actions",
         "delete_picker_folder",
     )
     FIELDS = (
         "_folder_opening",
-        "_folder_opening_name",
         "_hub_refreshing",
-        "folder_action_controls",
         "folder_add_share_button",
         "folder_add_remote_button",
         "folder_configured_sources",
-        "folder_browse_button",
         "folder_buttons",
         "folder_collapsed",
         "folder_credential",
@@ -64,8 +59,6 @@ class FolderController(FolderHubUI):
         "folder_picker_view",
         "folder_source_styled",
         "folder_picker_header",
-        "folder_picker_selected",
-        "folder_picker_status",
         "folder_source",
         "folder_source_buttons",
         "folder_source_actions",
@@ -132,13 +125,10 @@ class FolderController(FolderHubUI):
     browse_cloud = HostService("browse_cloud")
     browser_file_location = HostAttribute("browser_file_location")
     cancel_cloud = HostService("cancel_cloud")
-    cancel_mirror_transfer = HostAttribute("cancel_mirror_transfer")
     clear_private_reader = HostService("clear_private_reader")
     cloud_busy = HostAttribute("cloud_busy")
     cloud_client = HostAttribute("cloud_client")
     cloud_location = HostAttribute("cloud_location")
-    cloud_open_remote = HostAttribute("cloud_open_remote")
-    cloud_path = HostAttribute("cloud_path")
     cloud_remote = HostAttribute("cloud_remote")
     credential_groups = HostService("credential_groups")
     crypt_folder_target = HostAttribute("crypt_folder_target")

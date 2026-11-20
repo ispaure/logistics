@@ -8,12 +8,16 @@ Both use rclone Sync.
 Destination files and empty folders can be replaced or deleted without a backup.
 One transfer runs at a time. Existing local copies stay available for browsing.
 
-Tap the sync progress ring on a main tab to reopen details. **Scan → Transfer →
-Verify** shows the phase. The endpoint strip shows **From** and **To** paths.
-Percentages use known bytes or file counts. Removal counts describe attempts.
+Tap the sync progress ring on a main tab to reopen details. The progress page
+shows the source, destination, current activity and counts. Percentages use
+known bytes or file counts. Removal counts describe attempts.
 Completion appears after verification. **Continue browsing** keeps the job
 active. **Stop transfer** asks before cancellation. Completed changes remain
 after a failure or stop.
+
+If you open an online workspace during a transfer, the detail pane explains
+why browsing must wait and offers **View transfer progress**. Workspaces
+becomes available again when the transfer ends.
 
 ### Choose storage on the first pull
 
@@ -42,7 +46,9 @@ Phone / On My Tablet**, an available local copy or an unlocked LocalCrypt
 location. Choose the destination folder and an unused name, then **Download
 here**. Confirm when choosing a decrypted destination. The action downloads
 only that selection and creates no recurring mapping. LocalCrypt writes
-encrypted names and bytes. Use transfer details to follow or cancel the download.
+encrypted names and bytes. Use transfer details to follow or cancel the
+download. The destination listing updates after the item is saved. You can
+keep browsing the folder without reopening it.
 
 ## Restore access to a managed copy
 
