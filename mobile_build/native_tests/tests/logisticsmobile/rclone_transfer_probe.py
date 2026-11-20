@@ -213,7 +213,6 @@ class RcloneTransferProbe(LogisticsMobile):
     async def selected_downloads(self, report, evidence):
         from commonUtils.runtime.operations import check_cancelled
         from commonUtils.runtime.resources.documents import LocalDocuments
-        from features.rclone.mobile.cloud import CloudClient
         from features.rclone.mobile import remote_downloads
         from services.documents.locations import collection_path
         from services.documents.mobile_locations import enabled, phone_path
@@ -251,9 +250,10 @@ class RcloneTransferProbe(LogisticsMobile):
             archive.writestr('Cloud.txt', '[Cloud]\ntype=memory\n')
             archive.writestr('Secret.txt', '[Secret]\ntype=crypt\nremote=Cloud:encrypted\n'
                 'password=kbLdY_D-MRsrDH6_akD3SfOzlJ0VseUk2jfUrywMSTOLmTrSvFOxCkP94a-Ul-w\n')
-        client = self.cloud_client = CloudClient()
+        client = self.cloud_client
         names = await asyncio.to_thread(client.import_package, LocalDocuments(), package,
-                                        'synthetic-session-password', remember=False)
+                                        'synthetic-session-password', remember=True)
+        assert any(record['saved'] for record in client.package_records)
         self.set_loaded_remote_names(names)
         self.cloud_crypt_remotes = set(await asyncio.to_thread(client.crypt_remotes))
         identity = await asyncio.to_thread(client.connection_identity, 'Secret')
@@ -318,6 +318,7 @@ class RcloneTransferProbe(LogisticsMobile):
                             ready.unlink(missing_ok=True)
                             (Path(self.paths.cache) / 'transfer-background').touch()
                             await until(ready.exists, 'Native background/resume was not acknowledged')
+                            await wait_for_transfer_surface(progress, timeout=12)
                             await self.sample(progress, theme + '-resumed', report, evidence)
                         if outcome == 'cancelled':
                             await progress.native_fallback.buttons.children[0].on_press()
