@@ -11,6 +11,8 @@ Use a [retention scratch workspace](../testing/validation-artifacts.md) and an o
 - `shiboken6-6.12.0-6.12.0-cp315-cp315-ios_arm64_simulator.whl`:
   `289fd2fcfa82e93a4218399eded8227bc2830351ae900a3db672ef8b59eaa381`
 
+Use a fresh run identifier for `RUN_ID`.
+
 ```sh
 python mobile_build/qt_proof/prepare.py "${LOGISTICS_QT_SCRATCH}/stage"
 pyside6-ios-deploy "${LOGISTICS_QT_SCRATCH}/stage"/main.py --name LogisticsQtProof \
@@ -26,7 +28,7 @@ xcodebuild -project "${LOGISTICS_QT_SCRATCH}/stage"/deployment/ios_arm64_simulat
   CODE_SIGN_IDENTITY=- CODE_SIGNING_ALLOWED=YES
 xcrun simctl install SIMULATOR_UUID "${LOGISTICS_QT_SCRATCH}/build"/Build/Products/Debug-iphonesimulator/LogisticsQtProof.app
 xcrun simctl launch SIMULATOR_UUID io.github.ispaure.logisticsqtproof
-python mobile_build/qt_proof/collect.py SIMULATOR_UUID test-results/qt-proof
+python mobile_build/qt_proof/collect.py SIMULATOR_UUID tmp/test-results/RUN_ID/qt-proof
 ```
 
-Expect a complete fresh report and screenshots in ignored `test-results/qt-proof/`. Retire the simulator and scratch after collection.
+Expect a complete fresh report and screenshots in ignored `tmp/test-results/RUN_ID/qt-proof/`. Retire the simulator and scratch after collection.

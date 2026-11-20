@@ -28,7 +28,7 @@ The executor publishes atomic `result.json`, redacted logs and artifact hashes. 
 
 ## Validation and local outputs
 
-Integration contracts live in `Python/tests/tooling/` and `mobile_build/tests/tooling/`. Full scopes retain both owners' complete inventories as applicable. Qualify SDK changes separately with `python -m build_manager.contracts` in the SDK environment. See [platform checks](../testing/platform-checks.md) for native acceptance. Store plans and receipts under ignored `test-results/build-manager/`. Snapshots and counters use `mobile_build/.tools/build-manager/`. Keep signing material and personal settings private.
+Integration contracts live in `Python/tests/tooling/` and `mobile_build/tests/tooling/`. Full scopes retain both owners' complete inventories as applicable. Qualify SDK changes separately with `python -m build_manager.contracts` in the SDK environment. See [platform checks](../testing/platform-checks.md) for native acceptance. Store new repository-local plans and receipts under ignored `tmp/test-results/<run-id>/`. Snapshots and counters use `mobile_build/.tools/build-manager/`. Keep signing material and personal settings private.
 
 ## Local macOS acceptance
 
@@ -112,7 +112,7 @@ Save recovery material first. Explicitly enroll reviewed disposable directories 
 python -m logistics_build.build_retention --scratch /absolute/path/to/python /absolute/path/to/probe.py --output '{workspace}'
 ```
 
-Copy needed evidence to ignored `test-results/` before exit. New marked scratch runs live in `tmp/runs/scratch/`; marked legacy runs keep their original paths. Use explicit path/token or UUID adoption for legacy probes and simulators.
+Copy needed evidence to ignored `tmp/test-results/<run-id>/` before exit. New marked scratch runs live in `tmp/runs/scratch/`; marked legacy runs keep their original paths. Use explicit path/token or UUID adoption for legacy probes and simulators.
 
 ### Project-owned native prerequisite setup
 
@@ -128,7 +128,7 @@ from uuid import uuid4
 from logistics_build.tooling_bootstrap import owned_path
 root = Path.cwd().resolve()
 source = root / "mobile_build/.tools/release-wheels"
-target = root / "test-results" / ("native-wheels-preserved-" + uuid4().hex)
+target = root / "tmp" / ("native-wheels-preserved-" + uuid4().hex)
 if not all(owned_path(root, path) for path in (source, target)) or not source.is_dir():
     raise SystemExit("Preserve the existing linked or missing path separately; no changes made.")
 target.parent.mkdir(parents=True, exist_ok=True)

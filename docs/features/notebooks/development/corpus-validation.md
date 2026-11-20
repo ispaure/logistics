@@ -14,12 +14,14 @@ Use an isolated source snapshot, its own desktop environment and the Build
 Manager revision pinned by that source. From the snapshot root, choose a new
 ignored output directory:
 
+Use a fresh run identifier for `RUN_ID`.
+
 ```sh
 BUILD_MANAGER_DEPENDENCIES=project PYTHONDONTWRITEBYTECODE=1 \
 PYTHONPATH="$PWD/Python:$PWD" .venv/bin/python \
   -m logistics_build.build_retention --scratch \
   "$PWD/.venv/bin/python" -m tests.notebooks.corpus_prepare --conservative \
-  --output "$PWD/test-results/corpus-conservative"
+  --output "$PWD/tmp/test-results/RUN_ID/corpus-conservative"
 ```
 
 Omit `--conservative` for the strict fixture-only pixel and edit/save/reopen

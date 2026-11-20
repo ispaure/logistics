@@ -58,7 +58,9 @@ begins with an H1 after optional YAML properties; that title labels its viewer r
 Describe implemented behavior and verify consequential claims against source/tests.
 
 Keep raw test evidence (screenshots, recordings, reports and one-off probe copies)
-under ignored `test-results/` or `mobile_build/logs/`, outside documentation wikis.
+under the repository’s ignored `tmp/test-results/<run-id>/`. Keep other repository-local
+scratch under `tmp/`. Read historical receipts at their recorded paths. Preserve
+runner, Manager history, CI upload and retention access when changing a writer.
 The historical archive is local-only at `test-results/mobile-evidence/`; never add
 it or the legacy `docs/development/mobile-evidence/` location to Git, release
 packages or mobile offline help. Keep reusable test drivers/fixtures tracked in
@@ -90,7 +92,7 @@ independent build/cache hierarchy to bypass this policy.
 For one-off probes, use `logistics_build.build_retention.scratch()` or
 `python -m logistics_build.build_retention --scratch COMMAND ...`; `{workspace}` in command
 arguments expands to its disposable path. Save concise evidence to ignored
-`test-results/` before the scratch context exits. Use the manager's disposable
+`tmp/test-results/<run-id>/` before the scratch context exits. Use the manager's disposable
 simulator/emulator backends and their owned cleanup. If a task needs an alternate
 build path or temporary device, give it an explicit cleanup lifecycle and report
 any leftovers; do not leave SDK/AVD copies in global temporary storage.

@@ -97,9 +97,11 @@ Hosted native execution and capacity require a hosted run.
 For an iOS rotation lifetime investigation, the opt-in `rotation-crash` probe
 runs the complete native journey in a disposable QA app:
 
+Use a fresh run identifier for `RUN_ID`.
+
 ```sh
 python -m mobile_build.validation.document_storage_tools ios --probe rotation-crash \
-  --family iPhone --output test-results/rotation-crash
+  --family iPhone --output tmp/test-results/RUN_ID/rotation-crash
 ```
 
 The existing manager scratch and simulator cleanup own its temporary resources.

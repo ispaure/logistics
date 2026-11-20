@@ -2,7 +2,9 @@
 
 ## Find an output
 
-| Output | Default checkout-relative location |
+Write new checkout-local evidence under `tmp/test-results/<run-id>/` and use `tmp/` for other scratch. Use the run’s recorded artifact paths when inspecting results. When updating a producer, migrate its consumers and verify a failed run in both Project History and the CI artifacts.
+
+| Output | Paths used by existing producers and receipts |
 | --- | --- |
 | Disposable scratch | `tmp/runs/scratch/` |
 | Rebuildable probe compiler cache | `tmp/cache/compiler/` |
@@ -58,7 +60,7 @@ and credentials to fixtures and save needed evidence before cleanup.
 
 ## Historical evidence
 
-Save raw evidence under ignored `test-results/` or `mobile_build/logs/`.
+Preserve older evidence in `test-results/` and `mobile_build/logs/` at its recorded location.
 The local archive is `test-results/mobile-evidence/`. Releases and offline help
 exclude evidence, including legacy wiki copies. Keep reusable drivers and
 fixtures with their test owners.

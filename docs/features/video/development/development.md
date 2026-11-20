@@ -181,8 +181,10 @@ continuity. A separate input-seek check starts near 12.5 seconds and compares
 the resulting video packets with the third HLS fragment. The host stream-copy
 driver rejects Opus because it exercises the copy path only.
 
+Use a fresh run identifier for `RUN_ID`.
+
 ```sh
-PYTHONPATH=Python:. mobile_build/.venv/bin/python -m mobile_build.validation.video_airplay_remux --output test-results/mkv-remux.json
+PYTHONPATH=Python:. mobile_build/.venv/bin/python -m mobile_build.validation.video_airplay_remux --output tmp/test-results/RUN_ID/mkv-remux.json
 ```
 
 The driver uses host FFmpeg and ffprobe with synthetic media. Only the JSON

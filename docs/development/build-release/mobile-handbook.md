@@ -89,9 +89,11 @@ Securely preserve `.device.json`, `.android-beta/`, `.testflight-auth.json` and 
 
 Hosted native checks reuse one build across ordinary iPhone, iPad and Duo. Keep the required Duo runtime and model; verify actual hinge capability and portrait/both landscapes. From the root with a verified simulator app and leased Duo:
 
+Use a fresh run identifier for `RUN_ID`.
+
 ```sh
 python -m mobile_build.validation.duo_pose_tools --app '/absolute/path/Logistics Mobile.app' \
-  --device DUO_UDID --output mobile_build/logs/duo-outer-review
+  --device DUO_UDID --output tmp/test-results/RUN_ID/duo-outer-review
 ```
 
 The helper creates and removes `io.github.ispaure.logisticsduofoldqa` and saves diagnostics to a new output directory. Choose flat and partially folded interior poses in Device Hub, tall and wide, and use `--pose-sweep`. Use `--observe-folds --timeout 1800` to verify the retained comic route and logical page across all six observed states. That continuity result covers the comic only. See [platform checks](../testing/platform-checks.md#parallel-native-ios-validation).

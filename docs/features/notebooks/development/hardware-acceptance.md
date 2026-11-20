@@ -2,8 +2,10 @@
 
 See the [implementation status](development.md#current-implementation-and-acceptance-boundary). Use disposable synthetic notebooks. From the configured desktop checkout:
 
+Use a fresh run identifier for `RUN_ID`.
+
 ```sh
-PYTHONPATH=Python:. .venv/bin/python Python/tests/notebooks/notebook_acceptance_probe.py --output test-results/rmdoc-handoff
+PYTHONPATH=Python:. .venv/bin/python Python/tests/notebooks/notebook_acceptance_probe.py --output tmp/test-results/RUN_ID/rmdoc-handoff
 ```
 
 Use `acceptance.rmdoc` for legacy page order and `modern.rmdoc` for reordered/copied pages and tombstones. Record hashes, source and payload identity, model, firmware and refresh settings.

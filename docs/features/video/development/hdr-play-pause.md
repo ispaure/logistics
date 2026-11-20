@@ -29,9 +29,11 @@ measured luminance need separate evidence.
 
 Run from the repository root with the mobile host environment:
 
+Use a fresh run identifier for `RUN_ID`.
+
 ```sh
 PYTHONPATH=Python:. mobile_build/.venv/bin/python -m mobile_build.validation.video_chrome_tools \
-  --hdr --pause-transitions --framework FRAMEWORK --output test-results/video-hdr
+  --hdr --pause-transitions --framework FRAMEWORK --output tmp/test-results/RUN_ID/video-hdr
 ```
 
 Expect Pause acknowledgement, a stable layer, format and PQ attachments,

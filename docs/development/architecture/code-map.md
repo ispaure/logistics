@@ -17,7 +17,7 @@ with [your first contribution](../development.md#make-your-first-contribution).
 | `mobile_build/` | Mobile staging, Briefcase project and deployment recipes, mobile host tests and native fixtures. |
 | `.github/` | Hosted validation, release workflows and packaging scripts. |
 | `dev.py` and `LaunchLogistics_*` | Checkout setup and test commands, and platform-specific desktop launchers. |
-| `tmp/`, `test-results/` and `mobile_build/logs/` | Ignored temporary work and retained evidence. See [validation artifacts](../testing/validation-artifacts.md). |
+| `tmp/` | Ignored temporary work, including new evidence under `tmp/test-results/<run-id>/`. Older evidence remains at its recorded path. See [validation artifacts](../testing/validation-artifacts.md). |
 
 ## Application owners
 

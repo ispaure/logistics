@@ -86,8 +86,10 @@ Use the existing identifier and the certificate export containing its private ke
 
 Include this disclosure in Beta App Review and App Review notes. Generate and attach the synthetic sample, or provide a reviewer-accessible download link. Choose a fresh output filename:
 
+Use a fresh run identifier for `RUN_ID`.
+
 ```sh
-python3 -m mobile_build.validation.dataview_review --output test-results/app-review/dataview-review.zip
+python3 -m mobile_build.validation.dataview_review --output tmp/test-results/RUN_ID/app-review/dataview-review.zip
 ```
 
 > Notes Library supports limited Dataview-compatible JavaScript. Complete `dataviewjs` blocks run automatically in reading mode, and `dv.view` can execute a library-local script. There is no separate trust prompt. The disposable WebView worker blocks network access and exposes bounded in-library reads. It has no general native or file-write API. The app offers no script marketplace or native executable downloads. Imported or synced local libraries can contain scripts. The app displays generated output alongside the original editable source.

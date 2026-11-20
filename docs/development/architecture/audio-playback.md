@@ -39,9 +39,11 @@ Wi-Fi waiver. Rebuild both native adapters and Python for those probes.
 With the [pinned mobile wheels](../build-release/mobile-device-deployment.md)
 available, run from root:
 
+Use a fresh run identifier for `RUN_ID`.
+
 ```sh
 mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools ios \
-  --probe speech-playback --output test-results/speech-playback
+  --probe speech-playback --output tmp/test-results/RUN_ID/speech-playback
 ```
 
 Expect voice fallback and native start, word-progress and completion on the

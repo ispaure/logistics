@@ -34,8 +34,10 @@ PDF writing colors are blue `#304ae0`, red `#c23132`, green `#91da71`, yellow `#
 
 From a configured desktop checkout on macOS/Linux:
 
+Use a fresh run identifier for `RUN_ID`.
+
 ```sh
-PYTHONPATH=Python:. .venv/bin/python Python/tests/notebooks/brush_canvas_probe.py --output test-results/notebook-brushes/rendering
+PYTHONPATH=Python:. .venv/bin/python Python/tests/notebooks/brush_canvas_probe.py --output tmp/test-results/RUN_ID/notebook-brushes/rendering
 ```
 
 On Windows use `.venv\Scripts\python.exe` and `PYTHONPATH=Python;.`. Expect width parity and matching live/completed rasters. For headless failures retry with `QT_QPA_PLATFORM=offscreen` and `QTWEBENGINE_CHROMIUM_FLAGS="--disable-gpu --disable-accelerated-2d-canvas"`. See [hardware acceptance](hardware-acceptance.md) for physical input.

@@ -74,6 +74,8 @@ and `inputs --project REGISTRATION_ID` to confirm the hardware ID. Substitute
 the exact plan and step identities returned by the commands. Use a fresh output
 directory for each run.
 
+Use a fresh run identifier for `RUN_ID`.
+
 ```sh
 .venv/bin/python -m build_manager.cli journey --project REGISTRATION_ID \
   --goal deliver --platform android --destination android-devices \
@@ -81,12 +83,12 @@ directory for each run.
   --run-value 'devices.android=["HARDWARE_ID"]' \
   --run-value 'devices.android_connections={"HARDWARE_ID":"ADB_SERIAL"}' \
   --run-value devices.android_signing=beta \
-  --run-value devices.android_variant=debug --output test-results/build-manager/boox-plan.json
-.venv/bin/python -m build_manager.cli show-plan test-results/build-manager/boox-plan.json
-.venv/bin/python -m build_manager.cli run test-results/build-manager/boox-plan.json \
-  --output test-results/build-manager/boox-run --expect-identity PLAN_SHA256 --events
-.venv/bin/python -m build_manager.cli review test-results/build-manager/boox-run
-.venv/bin/python -m build_manager.cli resume test-results/build-manager/boox-run \
+  --run-value devices.android_variant=debug --output tmp/test-results/RUN_ID/boox-plan.json
+.venv/bin/python -m build_manager.cli show-plan tmp/test-results/RUN_ID/boox-plan.json
+.venv/bin/python -m build_manager.cli run tmp/test-results/RUN_ID/boox-plan.json \
+  --output tmp/test-results/RUN_ID/boox-run --expect-identity PLAN_SHA256 --events
+.venv/bin/python -m build_manager.cli review tmp/test-results/RUN_ID/boox-run
+.venv/bin/python -m build_manager.cli resume tmp/test-results/RUN_ID/boox-run \
   --confirm --expect-identity PLAN_SHA256 --approval-identity STEP=REVIEW_SHA256
 ```
 

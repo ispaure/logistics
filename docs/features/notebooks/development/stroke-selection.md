@@ -6,9 +6,11 @@
 
 From the configured desktop checkout root:
 
+Use a fresh run identifier for `RUN_ID`.
+
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/notebooks/test_stroke_selection.py
-PYTHONPATH=Python:. .venv/bin/python Python/tests/notebooks/selection_canvas_probe.py --output test-results/notebook-selection
+PYTHONPATH=Python:. .venv/bin/python Python/tests/notebooks/selection_canvas_probe.py --output tmp/test-results/RUN_ID/notebook-selection
 ```
 
 Expect persistent transforms and clipboard geometry, undo/redo and checkpoint rollback. The Qt probe uses synthetic mouse, finger and pen. For physical input see [hardware acceptance](hardware-acceptance.md).

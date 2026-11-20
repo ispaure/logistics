@@ -163,8 +163,10 @@ Publish commonUtils revisions before Logistics commits that reference them.
 
 For an isolated order audit:
 
+Use a fresh run identifier for `RUN_ID`.
+
 ```sh
-PYTHONPATH=Python:. .venv/bin/python Python/tests/run_regressions.py Python/tests --isolate-modules --order random --seed 7 --report test-results/order-audit.json
+PYTHONPATH=Python:. .venv/bin/python Python/tests/run_regressions.py Python/tests --isolate-modules --order random --seed 7 --report tmp/test-results/RUN_ID/order-audit.json
 ```
 
 Use `--order reverse` for a reverse audit. Both reorder within stages and preserve

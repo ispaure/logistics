@@ -90,7 +90,9 @@ Retire its layout listener on unlock or disposal. The lockscreen probe checks
 rotation with the keyboard open, wrong passwords, scrolling, Unlock and restored
 navigation. Run from root with the mobile build environment:
 
+Use a fresh run identifier for `RUN_ID`.
+
 ```sh
-PYTHONPATH=Python:. mobile_build/.venv/bin/python -m mobile_build.validation.lockscreen_tools ios --output test-results/lockscreen-ios
-PYTHONPATH=Python:. mobile_build/.venv/bin/python -m mobile_build.validation.lockscreen_tools android --android-image 'system-images;android-35;google_apis;arm64-v8a' --output test-results/lockscreen-android
+PYTHONPATH=Python:. mobile_build/.venv/bin/python -m mobile_build.validation.lockscreen_tools ios --output tmp/test-results/RUN_ID/lockscreen-ios
+PYTHONPATH=Python:. mobile_build/.venv/bin/python -m mobile_build.validation.lockscreen_tools android --android-image 'system-images;android-35;google_apis;arm64-v8a' --output tmp/test-results/RUN_ID/lockscreen-android
 ```

@@ -378,9 +378,11 @@ Run the maintained native scenario for rotation, rendering and safe-area accepta
 With a simulator app build, run from the repository root and use a fresh
 ignored output directory:
 
+Use a fresh run identifier for `RUN_ID`.
+
 ```sh
 mobile_build/.venv/bin/python -m mobile_build.validation.toolbar_conventions_tools \
-  --app "/absolute/path/to/Logistics Mobile.app" --output test-results/adaptive-shell \
+  --app "/absolute/path/to/Logistics Mobile.app" --output tmp/test-results/RUN_ID/adaptive-shell \
   --family "iPhone Duo" --adaptive-shell
 ```
 

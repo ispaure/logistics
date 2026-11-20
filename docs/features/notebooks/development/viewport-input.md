@@ -18,10 +18,12 @@ Pen contact or proximity cancels unfinished touch input and blocks new touch ges
 
 From the configured checkout root, put Node on PATH and run:
 
+Use a fresh run identifier for `RUN_ID`.
+
 ```sh
 python3 dev.py test desktop --exact-file Python/tests/notebooks/test_touch_navigation.py
 python3 dev.py test desktop --exact-file Python/tests/notebooks/test_native_pen_transport.py
-PYTHONPATH=Python:. .venv/bin/python Python/tests/notebooks/notebook_viewport_probe.py --output test-results/notebook-viewport
+PYTHONPATH=Python:. .venv/bin/python Python/tests/notebooks/notebook_viewport_probe.py --output tmp/test-results/RUN_ID/notebook-viewport
 ```
 
 Expect independent swipe, link tap and pinch routes, valid FIFO/nonce handling and stable zoom through relayout. The physical rapid-tap loss report remains open. Use [hardware acceptance](hardware-acceptance.md) for pen delivery, palm, hinge and optical checks.
