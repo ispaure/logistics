@@ -10,6 +10,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from uuid import uuid4
 
 
 REPO = Path(__file__).resolve().parents[2]
@@ -17,7 +18,8 @@ REPO = Path(__file__).resolve().parents[2]
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--results-dir', type=Path, default=REPO / 'test-results')
+    parser.add_argument('--results-dir', type=Path,
+                        help='Report directory (default: a new run under tmp/test-results)')
     parser.add_argument('--install', action='store_true', help='Install the project\'s pinned dependencies into this interpreter first')
     parser.add_argument('--prepare-only', action='store_true', help='With --install, prepare dependencies only; this is not a passing test result')
     args = parser.parse_args()
@@ -43,7 +45,7 @@ def main():
     if args.install and os.environ.get('LOGISTICS_MANAGER_CHECKOUT'):
         subprocess.run([sys.executable, '-m', 'logistics_build.guest_manager', '--checkout', os.environ['LOGISTICS_MANAGER_CHECKOUT'],
                         '--project', str(REPO)], cwd=REPO, check=True, timeout=180)
-    results = args.results_dir.resolve()
+    results = (args.results_dir or REPO / 'tmp/test-results' / f'desktop-{uuid4().hex}').resolve()
     results.mkdir(parents=True, exist_ok=True)
     report = {'platform': platform.platform(), 'python': sys.version,
               'dependencies': {name: version(name) for name in ('Pillow', 'PySide6', 'pyzipper', 'yt-dlp')}, 'checks': []}

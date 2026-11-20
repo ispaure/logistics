@@ -277,7 +277,11 @@ shutil.copyfile(os.environ['FIXTURE_PYTHON'], venv / 'bin/python')
                                     capture_output=True, text=True, timeout=15)
             calls = (root / 'calls').read_text()
             self.assertFalse(list(root.glob('logistics-platform.*')), 'Temporary environment leaked')
-            timing = (root / 'test-results/fedora-setup.log').read_text()
+            [setup_log] = (root / 'tmp/test-results').glob('fedora.*/fedora-setup.log')
+            timing = setup_log.read_text()
+            self.assertFalse((root / 'test-results').exists())
+            if 'platform finished' in timing:
+                self.assertIn(f'--results-dir {setup_log.parent.relative_to(root)}', calls)
             return result, calls, timing
 
     def test_platform_failure_still_runs_release_tooling_and_retains_failure(self):

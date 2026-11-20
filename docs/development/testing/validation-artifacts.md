@@ -11,7 +11,9 @@ Write new checkout-local evidence under `tmp/test-results/<run-id>/` and use `tm
 | Managed mobile device build workspaces | `tmp/build/mobile/` |
 | Standalone widget and video API reports | `tmp/test-results/widgets/` and `tmp/test-results/media/` |
 | Standalone mobile navigation reports | `tmp/test-results/navigation/`, one directory per run unless `--output` is supplied |
-| Manager history and host timing | `test-results/build-manager/` and `test-results/test-timings/` |
+| Standalone host timing | `tmp/test-results/test-timings/` |
+| Desktop platform checks | `tmp/test-results/desktop-<run-id>/` or the supplied `--results-dir`. Hosted desktop jobs use the GitHub run ID and attempt. |
+| Manager history | `test-results/build-manager/` |
 | Mobile deployment diagnostics | `mobile_build/logs/` |
 
 Use the path recorded by the producer for overrides and older runs. Manager

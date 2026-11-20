@@ -42,7 +42,7 @@ UI fixture.
 
 `Python/tests/platform/fedora.Containerfile` defines the shared hosted/local
 rootless-VM image. Run `fedora.sh` inside that image. Inspect
-`test-results/fedora-setup.log` for interpreter, manager and dependency
+`fedora-setup.log` in the run's `tmp/test-results/` directory for interpreter, manager and dependency
 deadlines. The 150-minute job includes preparation, the 90-minute platform
 deadline, release-tooling checks and uploads. Both suites report even after failure.
 

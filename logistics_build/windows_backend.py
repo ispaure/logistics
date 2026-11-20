@@ -186,7 +186,8 @@ $version=& $p.python -c 'import json,platform,sysconfig,struct,sys;print(json.du
             result['public_tool_cache_retained'] = reuse_prepared
 
         lifecycle.collect(
-            lambda: guest.collect([reports, source + '/test-results'], args.results / 'guest'),
+            lambda: guest.collect([reports, source + '/test-results', source + '/tmp/test-results/test-timings'],
+                                  args.results / 'guest'),
             args.results / 'guest' / reports / 'manager/result.json',
             cleanup)
 

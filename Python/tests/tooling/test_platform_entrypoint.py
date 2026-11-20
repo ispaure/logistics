@@ -100,6 +100,8 @@ class Fixture(TestCase):
                 self.assertTrue(observed_path.is_file(), result.stdout + result.stderr)
                 observed = observed_path.read_text().splitlines()
                 report = json.loads((fixture / 'results/summary.json').read_text())
+                timings = list((fixture / 'results/checks').glob('*/*/timing.json'))
+                self.assertEqual(len(timings), 1 if failure == 'smoke' else 2)
                 if failure == 'smoke':
                     self.assertEqual(observed, ['smoke'])
                     self.assertEqual(report['not_run'], [{'name': 'fixture', 'reason': 'Preflight/smoke gate failed'}])
@@ -108,3 +110,9 @@ class Fixture(TestCase):
                     self.assertEqual(observed, ['smoke', 'regression', 'extended'])
                     self.assertEqual([row['status'] for row in report['checks']],
                                      ['passed', 'failed' if failure else 'passed'])
+                if failure:
+                    from build_manager.history import load_run
+                    run = Path(report['checks'][-1]['execution'])
+                    _, retained = load_run(run / 'result.json')
+                    log = run / retained['phases'][0]['log']
+                    self.assertIn('AssertionError', log.read_text(encoding='utf-8'))

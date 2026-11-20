@@ -359,7 +359,7 @@ def main():
     parser.add_argument('--traceback-after', type=float, default=PROGRESS_INTERVAL,
                         help='Seconds between safe progress reports; crash tracebacks remain enabled')
     parser.add_argument('--report', type=Path,
-                        help='JSON timing report (default: timestamped file under test-results/test-timings)')
+                        help='JSON timing report (default: timestamped file under tmp/test-results/test-timings)')
     parser.add_argument('--timing-child', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--junit', type=Path, help='Write measured testcase evidence for the build manager')
     args = parser.parse_args()

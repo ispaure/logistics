@@ -117,7 +117,8 @@ successful coverage.
 
 ## Timing reports and fixtures
 
-Python regression runs save per-environment JSON in `test-results/test-timings/`.
+Standalone Python regression runs save per-environment JSON in `tmp/test-results/test-timings/`.
+The desktop platform runner puts these reports alongside the other evidence for its run.
 Direct runners accept `--report PATH`. File times include imports and fixture/process
 overhead. Case times include case setup and cleanup. Reports checkpoint completed
 work and reject missing or mismatched case evidence. `complete` describes runner

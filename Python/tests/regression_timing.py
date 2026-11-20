@@ -28,7 +28,9 @@ def timestamp():
 def default_report(directory):
     stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')
     root = Path(__file__).resolve().parents[2]
-    return root / 'test-results' / 'test-timings' / f'{directory.name}-{stamp}-{os.getpid()}.json'
+    destination = Path(os.environ.get('LOGISTICS_TEST_TIMING_DIRECTORY') or
+                       root / 'tmp/test-results/test-timings')
+    return destination / f'{directory.name}-{stamp}-{os.getpid()}.json'
 
 
 class TimingReport:
