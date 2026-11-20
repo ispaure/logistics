@@ -25,6 +25,9 @@ on:
 permissions:
   contents: read
 
+env:
+  LOGISTICS_MOBILE_EVIDENCE: tmp/test-results/native-${{ github.run_id }}-${{ github.run_attempt }}
+
 concurrency:
   group: mobile-build-${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/') }}
@@ -237,7 +240,8 @@ jobs:
         run: |
           mkdir -p "$BRIEFCASE_HOME"
           if [ -e /dev/kvm ]; then sudo chmod a+rw /dev/kvm; fi
-          python validation/ui_tools.py run android --device "$ANDROID_TEST_DEVICE" --no-update
+          python validation/ui_tools.py run android --device "$ANDROID_TEST_DEVICE" --no-update \
+            --logs "$GITHUB_WORKSPACE/$LOGISTICS_MOBILE_EVIDENCE"
       - name: Record remaining emulator disk headroom
         if: always()
         run: df -h "$RUNNER_TEMP"
@@ -249,6 +253,7 @@ jobs:
           path: |
             mobile_build/payload/source.json
             mobile_build/logs/
+            ${{ env.LOGISTICS_MOBILE_EVIDENCE }}/
           retention-days: 14
 
   ios-ui:
@@ -313,7 +318,8 @@ jobs:
             ipad) selector=ios-ipad; flags=(--require-independent-windows) ;;
             *) exit 1 ;;
           esac
-          device=$(python validation/ui_tools.py "$selector" --owned)
+          evidence="$GITHUB_WORKSPACE/$LOGISTICS_MOBILE_EVIDENCE"
+          device=$(python validation/ui_tools.py "$selector" --owned --logs "$evidence")
           # Capture launch decisions live: retrospective simulator logs can
           # contain only UUID compose failures after a WebKit startup stall.
           # Retain recent launch decisions throughout the suite. Stopping at the
@@ -321,16 +327,16 @@ jobs:
           xcrun simctl spawn "$device" log stream \
             --style compact --level debug --predicate \
             'subsystem BEGINSWITH "com.apple.WebKit" OR subsystem BEGINSWITH "com.apple.browserEngineKit" OR subsystem BEGINSWITH "com.apple.extensionkit" OR subsystem BEGINSWITH "com.apple.extensionfoundation" OR process == "runningboardd" OR process == "ScreenTimeSettingsAgent" OR process == "ScreenTimeAgent" OR process == "ManagedSettingsAgent" OR process == "FamilyControlsAgent" OR subsystem BEGINSWITH "com.apple.ScreenTime" OR subsystem BEGINSWITH "com.apple.BoardServices"' \
-            2>&1 | python validation/bounded_log.py logs/ios-webkit-live.log &
+            2>&1 | python validation/bounded_log.py "$evidence/ios-webkit-live.log" &
           webkit_log_pid=$!
           trap 'kill "$webkit_log_pid" 2>/dev/null || true; kill -KILL "$webkit_log_pid" 2>/dev/null || true; wait "$webkit_log_pid" 2>/dev/null || true' EXIT
-          python validation/ui_tools.py run ios --device "$device" --no-update "${flags[@]}"
+          python validation/ui_tools.py run ios --device "$device" --no-update --logs "$evidence" "${flags[@]}"
       - name: Capture iOS startup and crash diagnostics
         if: failure()
-        run: python validation/ui_tools.py ios-diagnostics
+        run: python validation/ui_tools.py ios-diagnostics --logs "$GITHUB_WORKSPACE/$LOGISTICS_MOBILE_EVIDENCE"
       - name: Remove the owned native validation simulator
         if: always()
-        run: python validation/ui_tools.py ios-cleanup
+        run: python validation/ui_tools.py ios-cleanup --logs "$GITHUB_WORKSPACE/$LOGISTICS_MOBILE_EVIDENCE"
       - name: Preserve device reports and diagnostics
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
@@ -339,6 +345,7 @@ jobs:
           path: |
             mobile_build/payload/source.json
             mobile_build/logs/
+            ${{ env.LOGISTICS_MOBILE_EVIDENCE }}/
           retention-days: 14
 
   native-gate:

@@ -545,27 +545,29 @@ def finish_native_evidence(collector, device, started_ns, logs, primary=None):
 
 
 def run(target, device, *, local=False, require_independent_windows=False, require_duo=False, no_update=False,
-        evidence_collector=None):
+        evidence_collector=None, logs=Path('logs')):
+    logs = Path(logs)
     def operation():
         started_ns = time.time_ns()
         primary = None
         try:
             return _run_once(target, device, local=local,
-                require_independent_windows=require_independent_windows, require_duo=require_duo, no_update=no_update)
+                require_independent_windows=require_independent_windows, require_duo=require_duo,
+                no_update=no_update, logs=logs)
         except BaseException as error:
             primary = error
             raise
         finally:
             collector = evidence_collector or (collect_owned_ios_evidence if target == 'ios' else None)
             if collector is not None:
-                finish_native_evidence(collector, device, started_ns, Path('logs'), primary)
+                finish_native_evidence(collector, device, started_ns, logs, primary)
     if target == 'ios' and no_update and not local and os.environ.get('GITHUB_ACTIONS') == 'true':
         from mobile_build.validation.ios_startup_recovery import run as recover_startup
-        return recover_startup(operation, device, tools=sys.modules[__name__])
+        return recover_startup(operation, device, tools=sys.modules[__name__], logs=logs)
     return operation()
 
 
-def _run_once(target, device, *, local=False, require_independent_windows=False, require_duo=False, no_update=False):
+def _run_once(target, device, *, logs, local=False, require_independent_windows=False, require_duo=False, no_update=False):
     from logistics_build.test_structure import inventory
     inventory(REPO)
     if no_update:
@@ -582,8 +584,7 @@ def _run_once(target, device, *, local=False, require_independent_windows=False,
     if target == 'android' and not local:
         command.extend(['--Xemulator=-no-window', '--Xemulator=-no-audio', '--Xemulator=-no-snapshot-load', '--Xemulator=-gpu',
                         '--Xemulator=software', '--shutdown-on-exit'])
-    logs = Path('logs')
-    logs.mkdir(exist_ok=True)
+    logs.mkdir(parents=True, exist_ok=True)
     clear_run_reports(logs, target)
     if target == 'android' and not local:
         record_android_emulator(logs)
@@ -852,10 +853,10 @@ def cleanup_owned_ios_device(lease, *, client=None):
         raise RuntimeError('Owned native gate simulator remains after cleanup.')
 
 
-def ios_diagnostics():
+def ios_diagnostics(logs=Path('logs')):
     """Capture original owned process/crash evidence without replaying the app."""
-    logs = Path('logs').resolve()
-    logs.mkdir(exist_ok=True)
+    logs = Path(logs).resolve()
+    logs.mkdir(parents=True, exist_ok=True)
     receipt = logs / 'ios-native-ui-device.json'
     try:
         recorded = json.loads(receipt.read_text()) if receipt.is_file() else {}
@@ -920,18 +921,20 @@ if __name__ == '__main__':
     parser.add_argument('--require-independent-windows', action='store_true')
     parser.add_argument('--require-duo', action='store_true')
     parser.add_argument('--no-update', action='store_true', help='Reuse an already built test application')
+    parser.add_argument('--logs', type=Path, default=Path('logs'), help='Native test evidence and simulator lease directory')
     args = parser.parse_args()
+    lease = args.logs / 'ios-native-ui-owned.json'
     if args.command in ('ios-device', 'ios-ipad', 'ios-duo'):
         options = dict(ipad=args.command == 'ios-ipad', duo=args.command == 'ios-duo')
-        print(owned_ios_device('logs/ios-native-ui-owned.json',
+        print(owned_ios_device(lease,
                                recover_boot=os.environ.get('GITHUB_ACTIONS') == 'true', **options)
               if args.owned else ios_device(**options))
     elif args.command == 'ios-cleanup':
-        cleanup_owned_ios_device('logs/ios-native-ui-owned.json')
+        cleanup_owned_ios_device(lease)
     elif args.command == 'ios-diagnostics':
-        ios_diagnostics()
+        ios_diagnostics(args.logs)
     else:
         if not args.target or not args.device:
             parser.error('run requires a target and --device')
         run(args.target, args.device, local=args.local, require_independent_windows=args.require_independent_windows,
-            require_duo=args.require_duo, no_update=args.no_update)
+            require_duo=args.require_duo, no_update=args.no_update, logs=args.logs)

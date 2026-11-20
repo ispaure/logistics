@@ -13,6 +13,7 @@ Write new checkout-local evidence under `tmp/test-results/<run-id>/` and use `tm
 | Standalone mobile navigation reports | `tmp/test-results/navigation/`, one directory per run unless `--output` is supplied |
 | Standalone host timing | `tmp/test-results/test-timings/` |
 | Desktop platform checks | `tmp/test-results/desktop-<run-id>/` or the supplied `--results-dir`. Hosted desktop jobs use the GitHub run ID and attempt. |
+| Hosted native mobile test evidence | `tmp/test-results/native-<run-id>-<attempt>/`. The device job artifact also carries Briefcase diagnostics. |
 | Manager history | `test-results/build-manager/` |
 | Mobile deployment diagnostics | `mobile_build/logs/` |
 

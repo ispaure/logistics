@@ -225,8 +225,9 @@ class NativeStartupRecoveryTests(unittest.TestCase):
         from mobile_build.validation import ui_tools
         with patch.object(ui_tools, '_run_once') as single, patch.object(recovery, 'run') as recover:
             with patch.dict('os.environ', {'GITHUB_ACTIONS': 'true'}):
-                ui_tools.run('ios', self.device, no_update=True)
+                ui_tools.run('ios', self.device, no_update=True, logs=self.logs)
                 recover.assert_called_once()
+                self.assertEqual(recover.call_args.kwargs['logs'], self.logs)
                 single.assert_not_called()
                 recover.reset_mock()
                 ui_tools.run('ios', self.device, local=True, no_update=True)

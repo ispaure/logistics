@@ -1098,8 +1098,11 @@ class NativeEvidenceRetentionTests(unittest.TestCase):
 
     def test_run_collects_after_body_before_return_and_preserves_body_error(self):
         calls = []; collector = Mock(side_effect=lambda *args: calls.append('collect'))
-        with patch.object(ui_tools, '_run_once', side_effect=lambda *args, **kwargs: calls.append('body') or {'passed': True}):
-            result = ui_tools.run('android', 'owned', local=True, evidence_collector=collector)
+        logs = Path('alternate-logs')
+        with patch.object(ui_tools, '_run_once', side_effect=lambda *args, **kwargs: calls.append('body') or {'passed': True}) as run_body:
+            result = ui_tools.run('android', 'owned', local=True, evidence_collector=collector, logs=logs)
+        self.assertEqual(run_body.call_args.kwargs['logs'], logs)
+        self.assertEqual(collector.call_args.args[2], logs)
         self.assertEqual(calls, ['body', 'collect']); self.assertTrue(result['passed'])
         primary = RuntimeError('body')
         with patch.object(ui_tools, '_run_once', side_effect=primary):
