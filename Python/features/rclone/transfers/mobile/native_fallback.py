@@ -43,6 +43,11 @@ class NativeTransferFallback(toga.Box):
         self.paths.text = 'Source: ' + model.get('source', '—') + '\nDestination: ' + model.get('destination', '—')
         buttons = []
         if mode == 'progress':
+            if self.buttons.parent is self:
+                # Keep the commands reachable while the native keyboard or
+                # a compact window temporarily shortens the page.
+                self.remove(self.buttons)
+                self.body.insert(3, self.buttons)
             phase = model.get('phase', 'idle')
             self.title.text = {'idle': 'Transfers', 'complete': 'Transfer complete',
                 'failed': 'Transfer stopped', 'cancelled': 'Transfer cancelled',
