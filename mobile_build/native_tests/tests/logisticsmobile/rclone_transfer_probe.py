@@ -354,9 +354,21 @@ class RcloneTransferProbe(LogisticsMobile):
         report['cancel_and_failure_cleanup'] = True
         report['background_resume_both_appearances'] = True
 
+        if sys.platform == 'ios':
+            from rubicon.objc import ObjCClass
+            from mobile.fold_layout import is_iphone_duo
+            expect_wide = int(ObjCClass('UIDevice').currentDevice.userInterfaceIdiom) == 1 or is_iphone_duo()
+        else:
+            expect_wide = self._impl.native.getResources().getConfiguration().smallestScreenWidthDp >= 600
+            if expect_wide:
+                (Path(self.paths.cache) / 'creation-orientation').write_text('landscape-left')
+        if expect_wide:
+            await rotate(self, 'landscape-left', timeout=30)
         self.change_folder_source('rclone')
         self.show_locations()
         assert await self.refresh_folder_hub()
+        if expect_wide:
+            await until(lambda: self.adaptive.wide, 'Workspaces did not enter its wide layout')
         workspace = next((name for name, entry in self.folder_picker_choices.items()
                           if any(copy.get('remote') == 'Secret' and copy['source'] == 'Remote'
                                  for copy in (entry, *entry.get('copies', ())))), None)
@@ -370,10 +382,14 @@ class RcloneTransferProbe(LogisticsMobile):
             frame = self.body.children[0]._workspace_frame
             assert frame.folder_detail
             assert any(getattr(child, 'text', '') == 'View transfer progress' for child in frame.main.children)
-            if self.adaptive.wide and getattr(self.adaptive, 'file_columns', None) is None:
+            columns = getattr(self.adaptive, 'file_columns', None)
+            if expect_wide and columns is None:
                 assert frame.folder_master in frame.row.children
+            elif expect_wide:
+                assert columns.sidebar.native.bounds.size.width > 0
+                assert columns.navigation.view.bounds.size.width > 0
             report['workspace_while_busy'] = dict(wide=self.adaptive.wide,
-                native_columns=getattr(self.adaptive, 'file_columns', None) is not None)
+                native_columns=columns is not None)
             await capture_window(self, evidence / 'workspace-transfer-status.png')
         finally:
             self.transfer_busy = False
