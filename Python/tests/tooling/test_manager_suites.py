@@ -401,13 +401,30 @@ class ManagerSuiteTests(unittest.TestCase):
             root = Path(directory);(root/'mobile_build').mkdir()
             (root/'.manager-source.json').write_text(json.dumps({'source':{'commit':'fixed'}}))
             result, lease = root/'retained/result.json',root/'device-lease.json'
+            old_logs = root / 'mobile_build/logs'
+            old_logs.mkdir()
+            (old_logs / 'ios-stale.log').write_text('prior run')
+
+            def run(*args, logs, **kwargs):
+                (logs / 'ios-native-ui.log').write_text(str(logs))
+                return {'success': True}
+
             with patch.object(ios_backend,'AppleSimulators') as clients, patch.object(ios_backend.os,'chdir'), \
-                    patch('mobile_build.validation.ui_tools.run',return_value={'success':True}):
+                    patch('mobile_build.validation.ui_tools.run',side_effect=run):
                 clients.return_value.create.return_value='owned-fixture-device'
-                for attempt in range(2):
+                attempts = []
+                for _ in range(2):
                     ios_backend.test(root,result,'iphone','fixture-model','fixture-runtime',lease)
-                    self.assertEqual(json.loads(result.read_text())['status'],'passed')
+                    report = json.loads(result.read_text())
+                    self.assertEqual(report['status'],'passed')
+                    attempts.append(Path(report['diagnostics']))
                     self.assertFalse(lease.exists())
+                self.assertNotEqual(*attempts)
+                for logs in attempts:
+                    self.assertEqual(logs.parent, result.parent)
+                    self.assertEqual(list(logs.iterdir()), [logs / 'ios-native-ui.log'])
+                    self.assertEqual((logs / 'ios-native-ui.log').read_text(), str(logs))
+                self.assertEqual(list(old_logs.iterdir()), [old_logs / 'ios-stale.log'])
                 self.assertEqual(clients.return_value.create.call_count,2)
                 self.assertEqual(clients.return_value.remove.call_count,2)
 

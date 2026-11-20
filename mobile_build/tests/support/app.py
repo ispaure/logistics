@@ -72,9 +72,9 @@ def mobile_app(*, root=None, storage_subdir=None, retire_documents=False):
         raise RuntimeError('mobile_app requires a synchronous test case')
     directory = None
     if root is None:
-        evidence = Path(__file__).resolve().parents[3] / 'test-results' / 'mobile-fixtures'
+        evidence = Path(__file__).resolve().parents[3] / 'tmp' / 'test-results'
         evidence.mkdir(parents=True, exist_ok=True)
-        directory = TemporaryDirectory(prefix='app-', dir=evidence, delete=False)
+        directory = TemporaryDirectory(prefix='mobile-fixture-', dir=evidence, delete=False)
         root = directory.name
     policy = asyncio.get_event_loop_policy()
     allocated = []

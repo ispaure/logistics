@@ -521,8 +521,9 @@ class LogisticsProject:
                    PIP_FIND_LINKS=str(self.mobile/'.tools/release-wheels'), GRADLE_OPTS='-Dorg.gradle.daemon=false')
         if options['tools.xcode']:
             env['DEVELOPER_DIR'] = options['tools.xcode']
-        run = workspace/('emulator-'+uuid4().hex)
-        device = run/'device'
+        run_id = 'emulator-' + uuid4().hex
+        device = workspace / run_id / 'device'
+        run = self.root / 'tmp/test-results' / run_id if operation == 'Test' else device.parent
         python = options['tools.mobile_python']
         base = (python,'-m','logistics_build.android_backend')
         common = ('--root',str(snapshot),'--workspace',str(device))
@@ -544,7 +545,8 @@ class LogisticsProject:
             for action in ('native','runtime'):
                 report = run/(action+'.json')
                 phases.append(Phase('android-'+action,(*base,action,*common,'--runtime-cache',str(cache),'--result',str(report)),
-                    str(snapshot),timeout=2500 if action=='native' else 1900,environment=env,dependencies=('android-ready',),artifacts=(str(report),)))
+                    str(snapshot),timeout=2500 if action=='native' else 1900,environment=env,dependencies=('android-ready',),
+                    artifacts=(str(report),),artifact_types={str(report): 'json'}))
             phases.append(Phase('android-cleanup',(*base,'cleanup',*common),str(snapshot),timeout=180,environment=env,always=True,kind='cleanup'))
         return Plan('Logistics','Complete Android native and runtime validation' if operation=='Test' else 'Build native Android test APK; no install',
                     source,tuple(phases),str(workspace),backend=self.backend_options('android',operation)[0],effect='test' if operation=='Test' else 'build')
@@ -582,7 +584,9 @@ class LogisticsProject:
                 raise ValueError('Selected simulator lacks an explicit device model.')
             selected.append(dict(kind=kind, model=model, runtime=runtime, template=row['udid']))
         source = dict(source, simulator_toolchain=client.toolchain(), simulator_sequence=selected, device_lifecycle='create owned disposable simulator; delete after evidence')
-        run = workspace / ('simulators-' + uuid4().hex)
+        run_id = 'simulators-' + uuid4().hex
+        run = self.root / 'tmp/test-results' / run_id
+        leases = workspace / run_id
         python = options['tools.mobile_python']
         base = (python, '-m', 'logistics_build.ios_backend')
         build_report = run/'build.json'
@@ -592,17 +596,18 @@ class LogisticsProject:
         for row in selected:
             kind = row['kind']
             report = run/kind/'result.json'
-            lease = run/(kind+'-lease.json')
+            lease = leases / (kind + '-lease.json')
             phases.append(Phase(kind, (*base,'test','--root',str(snapshot),'--kind',kind,'--model',row['model'],
                           '--runtime',row['runtime'],'--lease',str(lease),'--result',str(report)), str(snapshot),
-                          timeout=2100, environment=env, dependencies=('ios-build', *((previous_cleanup,) if previous_cleanup else ())), artifacts=(str(report),)))
+                          timeout=2100, environment=env, dependencies=('ios-build', *((previous_cleanup,) if previous_cleanup else ())),
+                          artifacts=(str(report),), artifact_types={str(report): 'json'}))
             phases.append(Phase(kind+'-cleanup', (*base,'cleanup','--root',str(snapshot),'--lease',str(lease)), str(snapshot),
                           timeout=180, environment=env, always=True, kind='cleanup', dependencies=(kind,)))
             previous_cleanup = kind+'-cleanup'
         pin = json.loads((self.root / 'logistics_build/mobile_runtime_tools.json').read_text())['cpython']
         cache = self.private / ('cpython-ios-' + pin['revision'])
         core = (python, '-m', 'logistics_build.ios_runtime')
-        lease = run / 'runtime-lease.json'
+        lease = leases / 'runtime-lease.json'
         report = run / 'runtime' / 'result.json'
         phases.extend([
             Phase('ios-runtime-tools', (*core, 'prepare', '--cache', str(cache), '--result', str(run / 'runtime-prepared.json')),

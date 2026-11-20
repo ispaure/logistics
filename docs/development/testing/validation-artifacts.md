@@ -14,6 +14,7 @@ Write new checkout-local evidence under `tmp/test-results/<run-id>/` and use `tm
 | Standalone host timing | `tmp/test-results/test-timings/` |
 | Desktop platform checks | `tmp/test-results/desktop-<run-id>/` or the supplied `--results-dir`. Hosted desktop jobs use the GitHub run ID and attempt. |
 | Hosted native mobile test evidence | `tmp/test-results/native-<run-id>-<attempt>/`. The device job artifact also carries Briefcase diagnostics. |
+| Local Manager mobile test evidence | `tmp/test-results/emulator-<run-id>/` and `tmp/test-results/simulators-<run-id>/` |
 | Manager history | `test-results/build-manager/` |
 | Mobile deployment diagnostics | `mobile_build/logs/` |
 
@@ -34,6 +35,11 @@ For managed tests, use **Project History** or run
 environment, substituting the registered name if it differs. Open the matching
 run's `result.json` and check its source, backend, status and finish time. Each
 retained artifact is listed with its kind and hash.
+
+For a local Android or iOS native phase, open its original phase log or the
+native result JSON to find the attempt's diagnostics directory. A retry gets
+its own directory. Each directory holds the Briefcase native log and any
+diagnostics the runner captured before disposing of the test device.
 
 ## Read Manager host timing
 

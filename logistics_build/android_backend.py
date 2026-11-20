@@ -7,6 +7,7 @@ import signal
 import subprocess
 import sys
 import time
+from uuid import uuid4
 
 from build_manager.android_emulators import AndroidEmulator
 from build_manager.native_commands import command, interrupt
@@ -120,21 +121,24 @@ def main():
         from logistics_build.mobile_runtime import test
         return test(args.root,args.runtime_cache,record['serial'],args.result)
     from mobile_build.validation.ui_tools import run, collect_owned_android_evidence
+    logs = args.result.parent / ('native-attempt-' + uuid4().hex)
+    logs.mkdir()
+    print('Native Android evidence: ' + str(logs), flush=True)
+    args.result.unlink(missing_ok=True)
     os.chdir(args.root/'mobile_build')
-    binding=json.loads((args.result.parent/'build.json').read_text())
-    verify_test_apk(args.root,binding)
     try:
-        report=run('android',record['serial'],local=True,no_update=True,
+        binding = json.loads((args.result.parent / 'build.json').read_text())
+        verify_test_apk(args.root, binding)
+        report=run('android',record['serial'],local=True,no_update=True,logs=logs,
                    evidence_collector=lambda device, started_ns, logs: collect_owned_android_evidence(
                        emulator, record, device, started_ns, logs))
         report['tested_apk_sha256']=verify_test_apk(args.root,binding)
-        args.result.write_text(json.dumps(report,indent=2)+'\n')
+    except BaseException as error:
+        report = dict(status='cancelled' if isinstance(error, KeyboardInterrupt) else 'failed', error=str(error))
+        raise
     finally:
-        import shutil
-        for log in (args.root/'mobile_build/logs').glob('android-*'):
-            if log.is_file():shutil.copy2(log,args.result.parent/log.name)
-            elif log.name == 'android-native-ui-evidence' and log.is_dir():
-                shutil.copytree(log,args.result.parent/log.name,dirs_exist_ok=True)
+        report['diagnostics'] = str(logs)
+        args.result.write_text(json.dumps(report, indent=2) + '\n')
 
 
 if __name__=='__main__':main()

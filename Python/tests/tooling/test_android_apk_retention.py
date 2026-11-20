@@ -107,6 +107,7 @@ class AndroidApkRetentionTests(unittest.TestCase):
         def consume(*args,**kwargs):
             self.assertEqual(apk.read_bytes(),retained.read_bytes())
             self.assertTrue(kwargs['no_update'])
+            (kwargs['logs'] / 'android-native-ui.log').write_text('owned native attempt')
             return dict(status='passed')
         argv=['android_backend','native','--root',str(self.snapshot),'--workspace',str(result.parent/'device'),'--result',str(result)]
         with patch.object(android_backend,'AndroidEmulator') as emulator, \
@@ -116,4 +117,14 @@ class AndroidApkRetentionTests(unittest.TestCase):
             emulator.return_value.marker=marker
             android_backend.main()
             run.assert_called_once()
-        self.assertEqual(json.loads(result.read_text())['tested_apk_sha256'],digest)
+            passed = json.loads(result.read_text())
+            run.side_effect = RuntimeError('controlled native failure')
+            with self.assertRaisesRegex(RuntimeError, 'controlled native failure'):
+                android_backend.main()
+        self.assertEqual(passed['tested_apk_sha256'],digest)
+        original = Path(passed['diagnostics'])
+        failed = json.loads(result.read_text())
+        self.assertEqual(failed['status'], 'failed')
+        self.assertNotEqual(Path(failed['diagnostics']), original)
+        self.assertEqual((original / 'android-native-ui.log').read_text(), 'owned native attempt')
+        self.assertFalse((self.snapshot / 'mobile_build/logs').exists())

@@ -63,7 +63,7 @@ context or `create_app(self)`. Keep storage alive until window and loop cleanup.
 Use the context inside a temporary-directory context so the app retires first.
 For explicit loop ownership, use `commonUtils.testing.event_loop.close_loop()`
 to drain executor work before removing files. Failed fixture cleanup retains
-its root under `test-results/mobile-fixtures/`. Reuse the support folder's
+its root under `tmp/test-results/mobile-fixture-<run-id>/`. Reuse the support folder's
 document/backend fixtures. Wait for bounded observable
 milestones and preserve cancellation, dismissal and retirement assertions.
 

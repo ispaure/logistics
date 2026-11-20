@@ -4,7 +4,6 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import shutil
 import signal
 import subprocess
 import sys
@@ -89,10 +88,13 @@ def test(root, result, kind, model, runtime, lease):
         cleanup(lease)
     client = AppleSimulators()
     name = 'Build Manager ' + kind + ' ' + uuid4().hex
-    result.parent.mkdir(parents=True, exist_ok=True)
+    logs = result.parent / ('attempt-' + uuid4().hex)
+    logs.mkdir(parents=True)
+    print('Native iOS evidence: ' + str(logs), flush=True)
     result.unlink(missing_ok=True)
     lease.parent.mkdir(parents=True, exist_ok=True)
-    record = dict(kind=kind, model=model, runtime=runtime, status='running', source=json.loads((root/'.manager-source.json').read_text())['source'])
+    record = dict(kind=kind, model=model, runtime=runtime, status='running', diagnostics=str(logs),
+                  source=json.loads((root/'.manager-source.json').read_text())['source'])
     started = time.monotonic()
     try:
         device = client.create(name, model, runtime)
@@ -114,7 +116,7 @@ def test(root, result, kind, model, runtime, lease):
         os.chdir(mobile)
         launch = time.monotonic()
         report = ui_tools.run('ios', device, local=True, no_update=True,
-                              require_duo=kind=='duo', require_independent_windows=kind=='ipad',
+                              require_duo=kind=='duo', require_independent_windows=kind=='ipad', logs=logs,
                               evidence_collector=lambda selected, started_ns, logs: ui_tools.collect_leased_ios_evidence(
                                   client, lease, owner, selected, started_ns, logs))
         record.update(status='passed', native_seconds=time.monotonic()-launch, report=report)
@@ -122,13 +124,6 @@ def test(root, result, kind, model, runtime, lease):
         record.update(status='cancelled' if isinstance(error, KeyboardInterrupt) else 'failed', error=str(error))
         raise
     finally:
-        logs = root/'mobile_build/logs'
-        if logs.exists():
-            for path in logs.glob('ios-*'):
-                if path.is_file():
-                    shutil.copy2(path, result.parent/path.name)
-                elif path.name == 'ios-native-ui-evidence' and path.is_dir():
-                    shutil.copytree(path, result.parent/path.name, dirs_exist_ok=True)
         teardown = time.monotonic()
         try:
             cleanup(lease)
