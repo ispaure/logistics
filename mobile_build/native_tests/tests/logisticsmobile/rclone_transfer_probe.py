@@ -356,11 +356,16 @@ class RcloneTransferProbe(LogisticsMobile):
 
         self.change_folder_source('rclone')
         self.show_locations()
+        assert await self.refresh_folder_hub()
+        workspace = next((name for name, entry in self.folder_picker_choices.items()
+                          if any(copy.get('remote') == 'Secret' and copy['source'] == 'Remote'
+                                 for copy in (entry, *entry.get('copies', ())))), None)
+        assert workspace in self.folder_buttons, tuple(self.folder_buttons)
         overview = self.body
         self.transfer_busy = True
         self.set_cloud_busy(True)
         try:
-            assert not await self.browse_hub_folder('Secret')
+            assert not await self.folder_buttons[workspace].on_press()
             assert self.routes.screens['files'][-1][0] == 'workspace-status'
             frame = self.body.children[0]._workspace_frame
             assert frame.folder_detail
@@ -374,8 +379,8 @@ class RcloneTransferProbe(LogisticsMobile):
             self.transfer_busy = False
             self.set_cloud_busy(False)
         await until(lambda: self.body is overview, 'Workspaces did not return after the transfer')
-        assert await self.browse_hub_folder('Secret'), self.cloud_status.value
-        assert self.routes.screens['files'][-1][0] == 'remote-browser'
+        assert await self.folder_buttons[workspace].on_press(), self.cloud_status.value
+        assert self.routes.screens['files'][-1][0].startswith(('remote-browser', 'folder:remote-browser:'))
         report['workspace_remote_reopens_after_transfer'] = True
 
 
