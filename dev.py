@@ -49,7 +49,7 @@ def main(argv=None):
     tests.add_argument('--inventory', action='store_true')
     tests.add_argument('--timings', type=Path,
                        help='Existing JSON timing report used to order tests on the same environment; '
-                            'new reports are saved automatically under test-results/test-timings')
+                            'new reports are saved automatically under tmp/test-results/test-timings')
     lint = commands.add_parser('lint', help='Run the CI correctness lint scope')
     for command in (tests, lint):
         command.add_argument('--python', type=Path, help='Use a specific environment Python executable')
