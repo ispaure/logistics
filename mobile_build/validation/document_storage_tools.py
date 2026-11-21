@@ -309,7 +309,7 @@ def check_progress_report(result, initial_pid):
 def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
             entry_point='tests.logisticsmobile.document_storage_probe',
             result_name='document-storage-result.json', family='iPhone', increase_contrast=False, duoctl=None, source_app=None, pose=None, runtime_id=None,
-            comic_scope=None):
+            comic_scope=None, exercise=None):
     validate_comic_scope(entry_point, comic_scope, platform='ios', family=family, pose=pose)
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
@@ -405,7 +405,7 @@ def run_ios(workspace, payload, output, env, *, bundle=BUNDLE,
         if not all(row['success'] for row in reports):
             raise RuntimeError('Viewer matrix has failures; inspect matrix.json')
         return reports
-    return exercise_ios_app(app, output, env, bundle=bundle, entry_point=entry_point,
+    return (exercise or exercise_ios_app)(app, output, env, bundle=bundle, entry_point=entry_point,
         result_name=result_name, family=family, increase_contrast=increase_contrast, duoctl=duoctl, pose=pose, runtime_id=runtime_id,
         comic_scope=comic_scope)
 

@@ -197,8 +197,16 @@ async def _send_ios(app, path, validate, anchor):
     from rubicon.objc import Block, CGRect, ObjCClass, objc_id
     window, presenter = await _ios_presenter(app, validate)
     url = ObjCClass('NSURL').fileURLWithPath(str(path))
-    sheet = ObjCClass('UIActivityViewController').alloc().initWithActivityItems(
-        [url], applicationActivities=None)
+    # A bare NSURL can be offered as a serialized URL to a Share extension.
+    # Advertise the file's content type and let iOS supply its scoped copy.
+    provider = ObjCClass('NSItemProvider').alloc().initWithContentsOfURL(url)
+    if provider is None:
+        raise OSError('iOS could not prepare the selected file for sharing.')
+    provider.suggestedName = path.name
+    provider.preferredPresentationStyle = 2  # UIPreferredPresentationStyleAttachment
+    provider.registerObject(url, visibility=0)  # NSItemProviderRepresentationVisibilityAll
+    configuration = ObjCClass('UIActivityItemsConfiguration').alloc().initWithItemProviders([provider])
+    sheet = ObjCClass('UIActivityViewController').alloc().initWithActivityItemsConfiguration(configuration)
     popover = sheet.popoverPresentationController
     if popover is not None:
         native = getattr(getattr(anchor, '_impl', None), 'native', None)

@@ -21,6 +21,40 @@ from mobile.action_menu import DocumentNativeMenu
 
 
 class NativeDocumentMenuTests(TestCase):
+    def test_ios_share_offers_file_contents_before_the_url(self):
+        from mobile import outbound_share
+
+        path = Path('cache/Selected file.bin')
+        url, configuration = object(), object()
+        provider = Mock()
+        sheet = SimpleNamespace(popoverPresentationController=None)
+        app = SimpleNamespace()
+
+        def present(controller, **_kwargs):
+            self.assertIs(controller, sheet)
+            controller.completionWithItemsHandler(None, True, None, None)
+
+        presenter = SimpleNamespace(presentViewController=present)
+        provider_factory = Mock()
+        provider_factory.alloc.return_value.initWithContentsOfURL.return_value = provider
+        config_factory = Mock()
+        config_factory.alloc.return_value.initWithItemProviders.return_value = configuration
+        controller_factory = Mock()
+        controller_factory.alloc.return_value.initWithActivityItemsConfiguration.return_value = sheet
+        classes = {'NSURL': SimpleNamespace(fileURLWithPath=Mock(return_value=url)),
+                   'NSItemProvider': provider_factory, 'UIActivityItemsConfiguration': config_factory,
+                   'UIActivityViewController': controller_factory}
+        bridge = SimpleNamespace(ObjCClass=classes.__getitem__, Block=lambda handler, *_: handler,
+                                 CGRect=object, objc_id=object)
+        with patch.dict('sys.modules', {'rubicon.objc': bridge}), \
+                patch.object(outbound_share, '_ios_presenter', new=AsyncMock(return_value=(None, presenter))):
+            self.assertTrue(asyncio.run(outbound_share._send_ios(app, path, lambda: None, None)))
+        provider_factory.alloc.return_value.initWithContentsOfURL.assert_called_once_with(url)
+        provider.registerObject.assert_called_once_with(url, visibility=0)
+        self.assertEqual(provider.suggestedName, path.name)
+        config_factory.alloc.return_value.initWithItemProviders.assert_called_once_with([provider])
+        controller_factory.alloc.return_value.initWithActivityItemsConfiguration.assert_called_once_with(configuration)
+
     def test_apple_item_share_menu_uses_system_sharing_glyph(self):
         from mobile.action_menu import ios_menu_actions
         from mobile.outbound_share import SEND

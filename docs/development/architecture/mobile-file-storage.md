@@ -38,7 +38,7 @@ files. `mobile/outbound_share.py` checks the source before and after streaming
 saved bytes into an app-private cache. Protected providers use the document
 export confirmation. The source is checked again before the share sheet opens.
 
-UIKit receives a file URL and the cache copy is removed on completion or
+UIKit receives a file-content representation and the cache copy is removed on completion or
 cancellation. Android hands off a read-only content URI scoped to one share.
 The Android provider rejects new opens after 15 minutes. The share flow
 cleans cancelled or expired staging, and startup prunes stale copies.
@@ -47,6 +47,9 @@ Run `python3 dev.py test mobile test_document_menus.py` for item ownership and
 protected staging. Run `python -m mobile_build.validation.outbound_android
 --output tmp/test-results/<run-id>` in the mobile tooling environment for
 the Android share sheet, generated receiver, exact bytes and expiration.
+Use `python -m mobile_build.validation.outbound_ios --output
+tmp/test-results/<run-id>` in the same environment for the iPhone share
+sheet, separate Share extension, exact bytes and staged-copy cleanup.
 
 ## iOS shared Local storage
 
