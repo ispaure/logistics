@@ -4,6 +4,9 @@
 Fedora userspace in a container hosted on Ubuntu. It runs shared and Logistics
 suites plus historical compression parity, keeping reports for 14 days.
 [test-environments.json](../../../test-environments.json) pins environments.
+Local macOS desktop runs require macOS 27. GitHub desktop runs use `macos-26`
+and require macOS 26. Older profiles and profiles with a blank local macOS
+major use the hosted major for both checks.
 The hosted Windows gate uses native x64 Python on Windows Server 2025
 (`windows-2025`). Local Windows client coverage uses the dedicated Windows
 11 ARM64 guest and its separately configured ARM64 Python.

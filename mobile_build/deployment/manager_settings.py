@@ -113,7 +113,8 @@ def resolve_settings(root, configured, profile, *, overrides=None):
     validate(values, configured)
     for key in configured:
         if key.startswith('testing.'):
-            sources[key] = 'tracked test-environments.json; shared with GitHub'
+            sources[key] = ('tracked test-environments.json; local desktop only' if key == 'testing.macos_local_major'
+                            else 'tracked test-environments.json; shared with GitHub')
     from logistics_build.test_environments import load, android_image
     test_environment = load(Path(root).parent)
     values['android.image'] = android_image(test_environment)

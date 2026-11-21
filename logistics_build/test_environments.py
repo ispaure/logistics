@@ -11,7 +11,7 @@ DEFAULTS = {
     'macos_runner': 'macos-26', 'windows_runner': 'windows-2025',
     'linux_runner': 'ubuntu-24.04-arm', 'ios_runner': 'xcode-27',
     'android_runner': 'ubuntu-24.04', 'python_version': '3.12.2',
-    'macos_major': '26', 'windows_major': '11',
+    'macos_major': '26', 'macos_local_major': '', 'windows_major': '11',
     'fedora_image': 'fedora:44', 'ios_sdk': '27.1',
     'iphone_runtime': '27.0', 'duo_runtime': '27.1', 'ipad_runtime': '27.0',
     'android_api': '36', 'android_model': 'pixel_9',
@@ -23,7 +23,8 @@ DESCRIPTIONS = {
        for key in DEFAULTS if key.endswith('_runner')},
     'windows_runner': 'Explicit native x64 Windows runner for GitHub. windows-2025 uses Windows Server 2025. '
                       'The dedicated local Windows client and its Python architecture are configured separately.',
-    'macos_major': 'Required macOS major version for local and hosted desktop tests. Minor and patch versions are recorded, not claimed equal.',
+    'macos_major': 'Required macOS major version for GitHub desktop tests and the fallback for local desktop tests.',
+    'macos_local_major': 'Required macOS major version for local desktop tests. Leave blank to use the GitHub requirement.',
     'windows_major': 'Required version for the local Windows client and any custom hosted Windows client runner.',
     'python_version': 'Desktop/build Python version shared with GitHub. Existing local interpreters must match; saving does not install tools.',
     'fedora_image': 'Single Linux desktop test distribution, also required for the local dedicated guest. Ubuntu is only the container host.',
@@ -40,7 +41,8 @@ LABELS = {
     'macos_runner': 'macOS GitHub runner', 'windows_runner': 'Windows x64 GitHub runner',
     'linux_runner': 'Fedora container host runner', 'ios_runner': 'iOS GitHub runner',
     'android_runner': 'Android GitHub runner', 'python_version': 'Desktop / build Python version',
-    'macos_major': 'Required macOS major version', 'windows_major': 'Windows client version',
+    'macos_major': 'Hosted macOS major version', 'macos_local_major': 'Local macOS major version',
+    'windows_major': 'Windows client version',
     'fedora_image': 'Fedora version / container image', 'ios_sdk': 'iOS Simulator SDK series',
     'iphone_runtime': 'iPhone simulator runtime', 'duo_runtime': 'Duo simulator runtime',
     'ipad_runtime': 'iPad simulator runtime', 'android_api': 'Android API level',
@@ -50,9 +52,12 @@ LABELS = {
 
 
 def validate(values):
+    values = {'macos_local_major': '', **values}
     if set(values) != set(DEFAULTS):
         raise ValueError('Test environment fields differ from the supported schema.')
     for key, value in values.items():
+        if key == 'macos_local_major' and value == '':
+            continue
         if not isinstance(value, str) or not re.fullmatch(r'[A-Za-z0-9_.:/-]+', value):
             raise ValueError('Invalid test environment value: ' + key)
         if key.endswith('_runner') and 'latest' in value:
@@ -68,8 +73,8 @@ def validate(values):
         raise ValueError('Choose a numbered Fedora image; Linux is tested once.')
     if not values['android_api'].isdigit() or int(values['android_api']) < 24:
         raise ValueError('Android API must be an integer >= 24.')
-    for key in ('macos_major', 'windows_major'):
-        if not values[key].isdigit():
+    for key in ('macos_major', 'macos_local_major', 'windows_major'):
+        if values[key] and not values[key].isdigit():
             raise ValueError('OS major version must be numeric.')
     for key in ('android_local_abi', 'android_github_abi'):
         if values[key] not in ('arm64-v8a', 'x86_64'):
@@ -87,6 +92,8 @@ def load(root=ROOT):
 
 def save(root, changes):
     values = validate(dict(load(root), **changes))
+    if not values['macos_local_major']:
+        del values['macos_local_major']
     path = Path(root) / 'test-environments.json'
     temporary = path.with_suffix('.tmp')
     temporary.write_text(json.dumps(dict(schema=1, **values), indent=2) + '\n')
@@ -103,7 +110,8 @@ def runtime_id(values, family):
 
 def outputs(values, target='all'):
     platforms = [target] if target in ('macos', 'windows') else ['macos', 'windows']
-    return dict(values, desktop_matrix=json.dumps({'include': [dict(target=p, runner=values[p + '_runner']) for p in platforms]}),
+    hosted_values = {key: value for key, value in values.items() if key != 'macos_local_major'}
+    return dict(hosted_values, desktop_matrix=json.dumps({'include': [dict(target=p, runner=values[p + '_runner']) for p in platforms]}),
                 android_device=json.dumps(dict(avd='LogisticsValidation', device_type=values['android_model'],
                     skin=None, system_image=android_image(values, hosted=True))))
 
@@ -146,7 +154,8 @@ def verify_host(values, *, system=None, python=None, os_version=None, windows_cl
         raise ValueError('Test Python differs from project settings: ' + python)
     if system == 'Darwin':
         actual = os_version or platform.mac_ver()[0]
-        if actual.split('.')[0] != values['macos_major']:
+        required = (None if hosted else values.get('macos_local_major')) or values['macos_major']
+        if actual.split('.')[0] != required:
             raise ValueError('macOS version differs from project settings: ' + actual)
     elif system == 'Windows':
         actual = os_version or platform.version()

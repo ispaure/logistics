@@ -30,7 +30,8 @@ class TestEnvironmentTests(unittest.TestCase):
             save(folder, {})
             before = (Path(folder) / 'test-environments.json').read_bytes()
             for changes in ({'macos_runner': 'macos-latest'}, {'fedora_image': 'ubuntu:24.04'},
-                            {'ios_sdk': '27\nINJECT=true'}, {'android_api': 'bad'}, {'unknown': 'value'}):
+                            {'ios_sdk': '27\nINJECT=true'}, {'android_api': 'bad'},
+                            {'macos_local_major': '27.2'}, {'unknown': 'value'}):
                 with self.subTest(changes=changes), self.assertRaises(ValueError):
                     save(folder, changes)
                 self.assertEqual((Path(folder) / 'test-environments.json').read_bytes(), before)
@@ -47,6 +48,7 @@ class TestEnvironmentTests(unittest.TestCase):
             digest = 'a' * 64
             with patch.dict('os.environ', {'LOGISTICS_MANAGER_PROFILE': str(profile)}):
                 manager_settings.save(mobile, {'testing.macos_runner': 'macos-26', 'testing.android_api': '37',
+                                               'testing.macos_local_major': '27',
                                                'testing.windows_runner': 'windows-2025',
                                                'vm.windows_python_architecture': 'arm64',
                                                'vm.windows_python_version': '3.12.11',
@@ -57,6 +59,8 @@ class TestEnvironmentTests(unittest.TestCase):
             self.assertEqual(values['testing.windows_runner'], 'windows-2025')
             self.assertIn('android-37', values['android.image'])
             self.assertIn('tracked', sources['testing.macos_runner'])
+            self.assertEqual(values['testing.macos_local_major'], '27')
+            self.assertIn('local desktop only', sources['testing.macos_local_major'])
             self.assertEqual(values['vm.windows_python_architecture'], 'arm64')
             self.assertEqual(values['vm.windows_python_version'], '3.12.11')
             self.assertEqual(values['vm.windows_webengine_wheel'], wheel)
@@ -121,6 +125,30 @@ class TestEnvironmentTests(unittest.TestCase):
                           dict(system='Linux', os_version='ID=ubuntu\nVERSION_ID="24.04"')):
             with self.subTest(overrides=overrides), self.assertRaises(ValueError):
                 verify_host(values, **dict(dict(python='3.12.2'), **overrides))
+
+    def test_local_macos_major_does_not_change_hosted_outputs_or_preflight(self):
+        from logistics_build.test_environments import verify_host
+
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / 'test-environments.json'
+            path.write_text(json.dumps({'schema': 1, 'macos_major': '26'}))
+            old = load(folder)
+            before = outputs(old)
+            self.assertEqual(old['macos_local_major'], '')
+            verify_host(old, system='Darwin', python='3.12.2', os_version='26.6.2')
+            save(folder, {'macos_local_major': '27'})
+            values = load(folder)
+            self.assertEqual(outputs(values), before)
+            self.assertNotIn('macos_local_major', before)
+            for hosted, accepted, rejected in ((False, '27.2.1', '26.6.2'), (True, '26.6.2', '27.2.1')):
+                with self.subTest(hosted=hosted):
+                    context = dict(system='Darwin', python='3.12.2', hosted=hosted)
+                    verify_host(values, os_version=accepted, **context)
+                    with self.assertRaisesRegex(ValueError, 'macOS version differs'):
+                        verify_host(values, os_version=rejected, **context)
+            save(folder, {'macos_local_major': ''})
+            self.assertNotIn('macos_local_major', json.loads(path.read_text()))
+            self.assertEqual(load(folder), old)
 
     def test_hosted_windows_uses_native_x64_and_its_configured_os(self):
         from logistics_build.test_environments import verify_host
