@@ -156,8 +156,16 @@ async def exercise_browser_thumbnails(app):
             assert app.file_browser is browser and browser.location == location
             await wait_for(lambda: browser._previews_visible, 'Returned browser did not resume previews')
 
-            native = browser.native_list._impl
-            native.set_vertical_position(0)
+            # Android has a pending native layout when the retained route is
+            # remounted. A scroll requested before it settles can be superseded.
+            await wait_for(lambda: bool(browser._visible_rows()) and browser._visible_rows()[0] == first,
+                           'Returned browser lost the scrolled row')
+            for _ in range(5):
+                browser.native_list.scroll_to_row(0)
+                await asyncio.sleep(.15)
+                if 0 in browser._visible_rows():
+                    break
+            assert 0 in browser._visible_rows(), list(browser._visible_rows())
             await expect_formats(browser, contents, 'The four preview formats did not all render')
             assert image_header(cached(browser, '001-image.png'), max_bytes=1024 * 1024).width == 160
             assert image_header(cached(browser, '004-comic.cbz'), max_bytes=1024 * 1024).height == 108
