@@ -1,5 +1,6 @@
 typedef NS_ENUM(NSInteger, LGBackgroundStage) {
-    LGWaitForVideo, LGEnterBackground, LGWaitInBackground, LGReturnToVideo,
+    LGWaitForVideo, LGForegroundPause, LGEnterPausedBackground, LGPausedBackground,
+    LGReturnPaused, LGExplicitResume, LGEnterBackground, LGWaitInBackground, LGReturnToVideo,
     LGLockOrdinary, LGPauseWhileLocked, LGUnlockOrdinary, LGResumeOrdinary,
     LGRevokeOrdinary, LGReauthorizeOrdinary, LGStartProtected, LGLockProtected, LGUnlockProtected
 };
@@ -21,6 +22,10 @@ typedef NS_ENUM(NSInteger, LGBackgroundStage) {
 @property(nonatomic) NSTimeInterval began, changed;
 @property(nonatomic) uint64_t heldAudio, heldFrames;
 @property(nonatomic) int64_t heldClock;
+@property(nonatomic) NSInteger cycle;
+@property(nonatomic) uint64_t lateAudio, lateFrames;
+@property(nonatomic) int64_t lateClock;
+@property(nonatomic) BOOL earlyOutput;
 @property(nonatomic) BOOL grant;
 @end
 
@@ -76,6 +81,7 @@ typedef NS_ENUM(NSInteger, LGBackgroundStage) {
     VLCMediaStats stats = [self.video playbackStats];
     self.heldAudio = stats.playedAudioBuffers;
     self.heldFrames = stats.displayedPictures;
+    self.earlyOutput = NO;
     [self save:@{@"samples": self.samples} name:@"progress.json"];
 }
 - (void)simulateDataAvailable:(BOOL)available {
@@ -95,18 +101,81 @@ typedef NS_ENUM(NSInteger, LGBackgroundStage) {
     if (@available(iOS 17.4, *)) displayReady = layer.readyForDisplay;
     BOOL captions = NO;
     for (VLCMediaPlayerTrack *track in v.player.textTracks) if (track.isSelected) captions = YES;
-    [self.samples addObject:@{@"stage": @(self.stage), @"time": @(now-self.began), @"clock": @(time),
+    CMTime displayTime = layer.controlTimebase ? CMTimebaseGetTime(layer.controlTimebase) : kCMTimeInvalid;
+    double displaySeconds = CMTIME_IS_NUMERIC(displayTime) ? CMTimeGetSeconds(displayTime) : -1;
+    [self.samples addObject:@{@"stage": @(self.stage), @"cycle": @(self.cycle), @"elapsed": @(elapsed),
+        @"time": @(now-self.began), @"clock": @(time), @"nativeClock": @(v.player.time.value.longLongValue),
+        @"renderedClock": @(v.lastRenderedClock), @"displaySeconds": @(displaySeconds),
+        @"buffering": @(v.buffering), @"decodeAudio": @(stats.decodedAudio),
+        @"surface": layer ? [NSString stringWithFormat:@"%p", layer] : @"",
+        @"surfaceAttached": @(v.movie.window != nil), @"surfaceStatus": @(layer.status),
         @"audio": @(stats.playedAudioBuffers), @"frames": @(stats.displayedPictures), @"background": @(background),
         @"localAudio": @(v.localAudioInBackground), @"playing": @(playing), @"hidden": @(v.movie.hidden),
         @"playRequested": @(v.playRequested), @"lockHidden": @(v.lockHidden),
         @"displayReady": @(displayReady), @"captionsSelected": @(captions), @"state": @(v.player.state)}];
-    if (now-self.began > 32) { [self finish:@"Background audio probe timed out"]; return; }
+    if (now-self.began > 39) { [self finish:@"Background audio probe timed out"]; return; }
 
     switch (self.stage) {
         case LGWaitForVideo:
             if (!playing || time < 1200 || !stats.playedAudioBuffers || !displayReady || !captions) return;
-            [self enter:LGEnterBackground];
-            [self save:@{} name:@"background-ready"];
+            [v togglePlay:nil];
+            [self enter:LGForegroundPause];
+            break;
+        case LGForegroundPause:
+            if (elapsed < .65) return;
+            if (playing || v.playRequested || llabs(time-self.heldClock) > 300) {
+                [self finish:@"Foreground Pause did not hold position"]; return;
+            }
+            [v togglePlay:nil];
+            [self enter:LGExplicitResume];
+            break;
+        case LGEnterPausedBackground:
+            if (!background) return;
+            [self enter:LGPausedBackground];
+            break;
+        case LGPausedBackground: {
+            if (elapsed < .8) return;
+            if (!background || playing || v.playRequested || v.localAudioInBackground ||
+                llabs(time-self.heldClock) > 300) {
+                [self finish:@"Paused app switch changed playback intent or position"]; return;
+            }
+            [self enter:LGReturnPaused];
+            NSString *marker = self.cycle == 1 ? @"foreground-ready" :
+                [NSString stringWithFormat:@"foreground-ready-%ld", (long)self.cycle - 1];
+            [self save:@{} name:marker];
+            break;
+        }
+        case LGReturnPaused:
+            if (UIApplication.sharedApplication.applicationState != UIApplicationStateActive) return;
+            if (playing || v.playRequested || llabs(time-self.heldClock) > 300) {
+                [self finish:@"Returning to the app changed paused playback"]; return;
+            }
+            [v togglePlay:nil];
+            [self enter:LGExplicitResume];
+            break;
+        case LGExplicitResume:
+            if (elapsed >= 1 && !self.earlyOutput) {
+                self.earlyOutput = YES;
+                self.lateAudio = stats.playedAudioBuffers;
+                self.lateFrames = stats.displayedPictures;
+                self.lateClock = time;
+            }
+            if (elapsed < 2.6) return;
+            if (!playing || v.buffering || v.movie.hidden || !displayReady || !captions ||
+                time < self.heldClock + 1500 || time < self.lateClock + 900 ||
+                stats.playedAudioBuffers <= self.lateAudio || stats.displayedPictures < self.lateFrames + 5) {
+                [self finish:@"Explicit Play did not sustain picture and audio after the first second"]; return;
+            }
+            if (++self.cycle <= 3) {
+                [v togglePlay:nil];
+                [self enter:LGEnterPausedBackground];
+                NSString *marker = self.cycle == 1 ? @"background-ready" :
+                    [NSString stringWithFormat:@"background-ready-%ld", (long)self.cycle - 1];
+                [self save:@{} name:marker];
+            } else {
+                [self enter:LGEnterBackground];
+                [self save:@{} name:@"background-ready-3"];
+            }
             break;
         case LGEnterBackground:
             if (!background) return;
@@ -121,7 +190,7 @@ typedef NS_ENUM(NSInteger, LGBackgroundStage) {
                 [self finish:@"Ordinary audio or clock stopped in real background"]; return;
             }
             [self enter:LGReturnToVideo];
-            [self save:@{} name:@"foreground-ready"];
+            [self save:@{} name:@"foreground-ready-3"];
             break;
         case LGReturnToVideo:
             if (background || v.localAudioInBackground || elapsed < .5 || !displayReady ||

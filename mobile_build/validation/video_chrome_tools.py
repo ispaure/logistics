@@ -25,7 +25,11 @@ from logistics_build.build_retention import scratch
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def run(framework, output, model, orientation='portrait', hdr=False, resume=0, fold=False, *, movie=None, url=None, duration=30000, unknown_duration=False, pause_transitions=False, pip_controls=False, pip_subtitles=False, embedded_subtitles=False, external_display=False, airplay_controls=False, audio_switch=False, seek_recovery=False, audio_tail=False, video_tail=False, subtitle_tail=False, background_audio=False):
+def run(framework, output, model, orientation='portrait', hdr=False, resume=0, fold=False, *,
+        movie=None, url=None, duration=30000, unknown_duration=False, pause_transitions=False,
+        pip_controls=False, pip_subtitles=False, embedded_subtitles=False, external_display=False,
+        airplay_controls=False, audio_switch=False, seek_recovery=False, audio_tail=False,
+        video_tail=False, subtitle_tail=False, background_audio=False, runtime_version=None):
     output.mkdir(parents=True, exist_ok=False)
     client = AppleSimulators()
     device = None
@@ -163,38 +167,44 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
         hls_server = None
         try:
             runtimes = json.loads(client.invoke('list', 'runtimes', '--json'))['runtimes']
-            supported = sorted((r for r in runtimes if r.get('isAvailable') and r['name'].startswith('iOS')),
+            supported = sorted((r for r in runtimes if r.get('isAvailable') and r['name'].startswith('iOS')
+                                and (runtime_version is None or r['version'] == runtime_version)),
                                key=lambda r: tuple(map(int, r['version'].split('.'))), reverse=True)
-            runtime, identifier = next((r['identifier'], row['identifier'])
+            target = next(((r['identifier'], row['identifier'])
                 for r in supported for row in r['supportedDeviceTypes']
-                if model in row['name'] and (model != 'iPhone' or 'Duo' not in row['name']))
+                if model in row['name'] and (model != 'iPhone' or 'Duo' not in row['name'])), None)
+            if target is None:
+                raise ValueError(f'No installed iOS runtime for {model} ({runtime_version or "latest"})')
+            runtime, identifier = target
             device = client.create(name, identifier, runtime)
-            (output / 'lease.json').write_text(json.dumps(dict(device=device, name=name)))
-            client.boot(device)
+            (output / 'lease.json').write_text(json.dumps(dict(device=device, name=name, runtime=runtime, model=identifier)))
+            client.boot(device, name=name)
             client.invoke('install', device, str(app), timeout=120)
             client.invoke('launch', device, bundle)
             cache = Path(client.invoke('get_app_container', device, bundle, 'data')) / 'Documents/result.json'
             deadline = time.monotonic() + (100 if url or pip_subtitles else 50)
-            backgrounded = False
-            foregrounded = False
+            background_count = 0
+            foreground_count = 0
             while time.monotonic() < deadline:
                 if airplay_controls and hls_server is None and cache.with_name('hls-fixtures.json').exists():
                     hls_server = serve_airplay_fixtures(cache.parent)
                     shutil.copyfile(cache.with_name('hls-fixtures.json'), output / 'hls-fixtures.json')
                     shutil.copytree(cache.with_name('hls'), output / 'hls')
                     verify_airplay_fragments(output)
-                if pip_subtitles and not backgrounded and cache.with_name('pip-ready.json').exists():
+                if pip_subtitles and not background_count and cache.with_name('pip-ready.json').exists():
                     client.invoke('launch', device, 'com.apple.Preferences')
-                    backgrounded = True
+                    background_count += 1
                     time.sleep(1)
                     client.invoke('io', device, 'screenshot', str(output / 'pip-background.png'))
                     cache.with_name('pip-background-ready').touch()
-                if background_audio and not backgrounded and cache.with_name('background-ready').exists():
+                background_marker = 'background-ready' if not background_count else f'background-ready-{background_count}'
+                foreground_marker = 'foreground-ready' if not foreground_count else f'foreground-ready-{foreground_count}'
+                if background_audio and cache.with_name(background_marker).exists():
                     client.invoke('launch', device, 'com.apple.Preferences')
-                    backgrounded = True
-                if background_audio and not foregrounded and cache.with_name('foreground-ready').exists():
+                    background_count += 1
+                if background_audio and cache.with_name(foreground_marker).exists():
                     client.invoke('launch', device, bundle)
-                    foregrounded = True
+                    foreground_count += 1
                 if cache.exists():
                     report = json.loads(cache.read_text())
                     (output / 'result.json').write_text(json.dumps(report, indent=2))
@@ -271,6 +281,7 @@ def main():
     parser.add_argument('--framework', required=True, type=Path)
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--model', choices=('iPhone Duo', 'iPhone', 'iPad'), default='iPhone Duo')
+    parser.add_argument('--runtime', help='Use this installed iOS version instead of the newest compatible one.')
     parser.add_argument('--orientation', choices=('portrait', 'landscape'), default='portrait')
     parser.add_argument('--hdr', action='store_true', help='Decode 10-bit BT.2020 PQ HEVC and inspect the native HDR layer.')
     parser.add_argument('--pip-subtitles', action='store_true', help='Exercise composited subtitles, real PiP/background, track-off/on and skip callbacks.')
@@ -284,13 +295,20 @@ def main():
     parser.add_argument('--airplay-controls', action='store_true', help='Check local mute recovery and simulated receiver loading, seeks and route layout.')
     parser.add_argument('--external-display', action='store_true', help='Exercise the live drawable handoff into a synthetic external viewport.')
     parser.add_argument('--pause-transitions', action='store_true', help='Run native Play/Pause/Resume checks in both HDR modes without chrome timing checks.')
-    parser.add_argument('--resume', type=int, default=0, help='Resume milliseconds in the 30-second fixture.')
+    parser.add_argument('--resume', type=int, default=0,
+                        help='Resume position in milliseconds. With --audio-tail, check saved-position EOF and Replay.')
     parser.add_argument('--fold', action='store_true', help='Exercise a synthetic horizontal division and lower control deck.')
     parser.add_argument("--embedded-subtitles", action="store_true", help="Test a muxed subtitle track with --pip-subtitles")
     args = parser.parse_args()
     if args.embedded_subtitles and not args.pip_subtitles:
         parser.error("--embedded-subtitles requires --pip-subtitles")
-    run(args.framework.resolve(), args.output.resolve(), args.model, args.orientation, args.hdr, args.resume, args.fold, pause_transitions=args.pause_transitions, pip_controls=args.pip_controls, pip_subtitles=args.pip_subtitles, embedded_subtitles=args.embedded_subtitles, external_display=args.external_display, airplay_controls=args.airplay_controls, audio_switch=args.audio_switch, seek_recovery=args.seek_recovery, audio_tail=args.audio_tail, video_tail=args.video_tail, subtitle_tail=args.subtitle_tail, background_audio=args.background_audio)
+    run(args.framework.resolve(), args.output.resolve(), args.model, args.orientation, args.hdr,
+        args.resume, args.fold, pause_transitions=args.pause_transitions, pip_controls=args.pip_controls,
+        pip_subtitles=args.pip_subtitles, embedded_subtitles=args.embedded_subtitles,
+        external_display=args.external_display, airplay_controls=args.airplay_controls,
+        audio_switch=args.audio_switch, seek_recovery=args.seek_recovery, audio_tail=args.audio_tail,
+        video_tail=args.video_tail, subtitle_tail=args.subtitle_tail, background_audio=args.background_audio,
+        runtime_version=args.runtime)
 
 
 if __name__ == '__main__':

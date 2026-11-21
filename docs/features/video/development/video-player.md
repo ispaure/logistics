@@ -73,9 +73,10 @@ reports a retryable error instead of claiming success.
 `video_chrome_tools --audio-switch` builds a two-language AAC fixture and checks
 the production iOS controller on an owned disposable simulator: visible wait,
 native audio output, paused selection/resume, rapid replacement and stale
-callbacks, nonseekable refusal, timeout and retirement. The runner records its
-result before removing the simulator and scratch workspace. These counters
-verify native audio delivery, not physical speaker audibility.
+callbacks, nonseekable refusal, timeout and retirement. The receipt records the
+selection timestamp alongside audio buffers, presented pictures and clock
+samples. These counters measure native delivery. Check speaker audibility on
+hardware.
 
 ## Unequal stream lengths and declared media bounds
 
@@ -101,6 +102,13 @@ The iOS adapter reads libVLC's actual clock for seek acknowledgment, since the
 VLCKit time property can retain an optimistic target during preroll. Statistics
 come from a retained native media descriptor with an initialized C struct and
 a checked success result; unavailable counters never become output evidence.
+Local audio-only VLC inputs use a 250 ms cache so short tails can advance
+before demux reaches EOF. During VLC teardown, the controller retains the last
+position if the native clock resets to zero before the Stopped notification.
+`video_chrome_tools --audio-tail --resume 8500` checks the saved position
+in a synthetic 10-second file, tracks audio through EOF and requires fresh
+picture and audio after Replay. Run the same probe without `--resume` to cover
+the 6-second entry, Pause, backward seek and natural transition.
 
 ## AirPlay unequal-stream remuxing
 

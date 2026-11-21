@@ -307,7 +307,14 @@ fixture retains TLS and disposable trust. `video_chrome_tools` checks iOS menus,
 fade and geometry. `video_fold_probe.py` checks retained playback and hinge
 exclusion. `video_remote_resume_tools` checks a delayed MKV range at a saved
 seek. `video_privacy_tools` checks app switching, concealment, callback
-retirement and paused resume. Record real codec/clock observations and the
+retirement and paused resume. For ordinary local iOS playback,
+`video_chrome_tools --background-audio` compares a foreground pause with three
+paused switches to Settings and back. Each explicit resume must advance the
+clock and deliver fresh pictures and audio beyond the first second.
+`video_android_audio_tail --captions --startup-control` checks ordinary
+startup before testing caption restoration and Replay. `--stereo-aac` changes
+only the audio tracks and `--avc-aac` changes both encodings while keeping the
+stream endpoints. Record real codec/clock observations and the
 exact payload. Use [hardware acceptance](hardware-acceptance.md) for physical
 touch, audible sync, route changes, Split View and receivers.
 

@@ -20,7 +20,8 @@ from mobile_build.validation.video_android_pip_tools import BUNDLE, ROOT, projec
 ACTIVITY = 'VideoAudioTailQAActivity'
 
 
-def run(output, image=None, model=None, *, video_tail=False, captions=False, startup_control=False):
+def run(output, image=None, model=None, *, video_tail=False, captions=False, startup_control=False,
+        avc_aac=False, stereo_aac=False):
     if video_tail and startup_control:
         raise ValueError('The ordinary startup control compares the forward restore path')
     output.mkdir(parents=True, exist_ok=False)
@@ -50,13 +51,19 @@ def run(output, image=None, model=None, *, video_tail=False, captions=False, sta
             subtitle_track = ['-map', '3:s', '-c:s', 'srt',
                 '-metadata:s:s:0', 'language=eng', '-disposition:s:0', 'default']
         picture = 'color=c=0x102040:' if captions else 'testsrc2='
+        video_codec = (
+            ['-c:v', 'libx264', '-preset', 'fast', '-pix_fmt', 'yuv420p'] if avc_aac else
+            ['-c:v', 'libx265', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p10le',
+             '-x265-params', 'pools=1:frame-threads=1:log-level=error']
+        )
+        audio_codec = ['-c:a', 'aac', '-ac', '2'] if avc_aac or stereo_aac else ['-c:a', 'eac3', '-ac', '6']
         subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
             f'{picture}size=160x90:rate=12:duration={video_seconds}', '-f', 'lavfi', '-i',
             f'sine=frequency=440:sample_rate=48000:duration={audio_seconds}', *other_audio, *subtitle_source,
             '-map', '0:v', '-map', '1:a', *other_track, *subtitle_track,
-            '-c:v', 'libx265', '-preset', 'ultrafast', '-pix_fmt', 'yuv420p10le',
-            '-g', '24', '-bf', '2', '-x265-params', 'pools=1:frame-threads=1:log-level=error',
-            '-c:a', 'eac3', '-ac', '6', str(movie)], check=True)
+            *video_codec, '-g', '24', '-bf', '2', *audio_codec, str(movie)], check=True)
+        (output / 'fixture.json').write_bytes(subprocess.check_output(
+            ['ffprobe', '-v', 'error', '-show_streams', '-of', 'json', str(movie)]))
         with (output / 'android-build.log').open('w') as log:
             subprocess.run([str(project / 'gradlew'), '--offline', '--no-daemon', 'assembleDebug'],
                 cwd=project, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=300, check=True)
@@ -159,9 +166,13 @@ def main():
     parser.add_argument('--video-tail', action='store_true', help='Give video an extra nine seconds after both audio tracks end')
     parser.add_argument('--captions', action='store_true', help='Check an embedded cue through and beyond the A/V tail')
     parser.add_argument('--startup-control', action='store_true', help='Measure ordinary video startup before the forward restore')
+    codecs = parser.add_mutually_exclusive_group()
+    codecs.add_argument('--avc-aac', action='store_true', help='Use an H.264/stereo AAC control with the same stream endpoints')
+    codecs.add_argument('--stereo-aac', action='store_true', help='Keep HEVC and substitute stereo AAC for 5.1 E-AC-3')
     args = parser.parse_args()
     run(args.output.resolve(), args.image, args.model, video_tail=args.video_tail,
-        captions=args.captions, startup_control=args.startup_control)
+        captions=args.captions, startup_control=args.startup_control, avc_aac=args.avc_aac,
+        stereo_aac=args.stereo_aac)
 
 
 if __name__ == '__main__':

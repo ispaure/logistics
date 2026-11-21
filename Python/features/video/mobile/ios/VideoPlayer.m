@@ -811,7 +811,9 @@ typedef struct {
     // VLC 4 start-time clips the timeline and duration. Seek the opening
     // input instead so timestamps and later seeks retain the original origin.
     [media addOption:@":network-caching=6000"];
-    [media addOption:@":file-caching=1500"];
+    // A local audio-only tail can be shorter than the normal file cache.
+    // Give VLC time to establish its output clock before the demuxer reaches EOF.
+    [media addOption:self.audioOnlyInput ? @":file-caching=250" : @":file-caching=1500"];
     // Cloud starvation makes software-decoded interframe AVI arrive late.
     // Decode complete frames instead of catching up with partial pictures, and
     // retain the last good picture when the decoder flags damaged output.
@@ -1097,6 +1099,10 @@ typedef struct {
     if (self.networkResumePending) return self.bufferPosition;
     if (self.startMilliseconds >= 0) return self.startMilliseconds;
     int64_t value = [self nativeTimeMilliseconds];
+    // VLC can reset its clock during teardown before notifying us that it
+    // stopped. Keep the last playback position for EOF detection and retry.
+    if (value == 0 && (self.player.state == VLCMediaPlayerStateStopping ||
+                       self.player.state == VLCMediaPlayerStateStopped)) return self.lastPosition;
     return value >= 0 ? value : self.lastPosition;
 }
 - (int64_t)declaredMediaEnd {

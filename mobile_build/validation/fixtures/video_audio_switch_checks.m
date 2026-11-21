@@ -10,6 +10,7 @@
 @property(nonatomic, strong) LGVideoController *video;
 @property(nonatomic, strong) NSTimer *timer;
 @property(nonatomic, strong) NSMutableArray *samples;
+@property(nonatomic, strong) NSMutableArray *measurements;
 @property(nonatomic) NSInteger stage;
 @property(nonatomic) NSTimeInterval began, switched;
 @property(nonatomic) int64_t held;
@@ -19,16 +20,20 @@
 - (void)finish:(NSString *)error {
     [self.timer invalidate]; self.timer = nil;
     [self.video retireWithCompletion:nil];
-    NSDictionary *result = @{@"success": @(!error), @"error": error ?: @"", @"samples": self.samples};
+    NSDictionary *result = @{@"success": @(!error), @"error": error ?: @"",
+        @"samples": self.samples, @"selections": self.measurements};
     NSString *path = [NSHomeDirectory() stringByAppendingPathComponent:@"Documents/result.json"];
     [NSFileManager.defaultManager createDirectoryAtPath:path.stringByDeletingLastPathComponent withIntermediateDirectories:YES attributes:nil error:nil];
     [[NSJSONSerialization dataWithJSONObject:result options:NSJSONWritingPrettyPrinted error:nil] writeToFile:path atomically:YES];
 }
 - (void)scene:(UIScene *)scene willConnectToSession:(UISceneSession *)session options:(UISceneConnectionOptions *)options {
     self.samples = [NSMutableArray array];
+    self.measurements = [NSMutableArray array];
     self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
     self.video = [LGVideoController new];
-    self.video.videoURL = [[NSBundle.mainBundle URLForResource:@"fixture" withExtension:@"mp4"] absoluteString];
+    NSString *remote = NSBundle.mainBundle.infoDictionary[@"QAURL"];
+    self.video.videoURL = remote.length ? remote :
+        [[NSBundle.mainBundle URLForResource:@"fixture" withExtension:@"mp4"] absoluteString];
     self.video.startMilliseconds = 0;
     self.video.subtitleJSON = @"[]"; self.video.queueJSON = @"[]"; self.video.optionsJSON = @"{}";
     self.video.allowed = ^BOOL(BOOL external) { return YES; };
@@ -46,7 +51,9 @@
     NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
     VLCMediaStats stats = v.player.media.statistics;
     [self.samples addObject:@{@"stage": @(self.stage), @"time": @(now-self.began),
-        @"clock": @([v positionMilliseconds]), @"audio": @(stats.playedAudioBuffers),
+        @"clock": @([v positionMilliseconds]), @"nativeClock": @([v nativeTimeMilliseconds]),
+        @"audio": @(stats.playedAudioBuffers), @"frames": @(stats.displayedPictures),
+        @"renderedClock": @(v.lastRenderedClock), @"buffering": @(v.buffering),
         @"decodedAudio": @(stats.decodedAudio), @"pending": @(v.audioSwitchTrack.length > 0),
         @"buffered": @(v.audioSwitchBuffered), @"sawBuffering": @(v.audioSwitchSawBuffering),
         @"spinner": @(v.bufferSpinner.isAnimating), @"playing": @(v.player.isPlaying)}];
@@ -63,6 +70,8 @@
         }
         [v showStatus:@""];
         self.held = [v positionMilliseconds]; self.audio = stats.playedAudioBuffers; self.switched = now;
+        [self.measurements addObject:@{@"stage": @1, @"action": @"playing switch", @"time": @(now-self.began),
+            @"position": @(self.held), @"audio": @(self.audio), @"frames": @(stats.displayedPictures)}];
         [v switchAudioTrack:tracks[1]];
         if (!v.audioSwitchTrack.length || v.bufferOverlay.hidden || v.bufferLabel.hidden) {
             [self finish:@"Playing switch did not immediately present its wait state"]; return;
@@ -73,6 +82,8 @@
             !v.playRequested || llabs([v positionMilliseconds]-self.held) > (now-self.switched)*1000+800) {
             [self finish:@"Switch completed without selected audio output or jumped timeline"]; return;
         }
+        [self.measurements addObject:@{@"stage": @1, @"action": @"switch ready",
+            @"time": @(now-self.began), @"position": @([v positionMilliseconds])}];
         [v pause]; self.switched = now; self.stage = 2;
     } else if (self.stage == 2 && !v.player.isPlaying && now-self.switched > .5) {
         self.held = [v positionMilliseconds];

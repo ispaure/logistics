@@ -21,7 +21,10 @@
 @property(nonatomic, strong) NSMutableArray *samples;
 @property(nonatomic) NSInteger stage;
 @property(nonatomic) NSTimeInterval began, changed;
+@property(nonatomic) NSTimeInterval playStarted;
 @property(nonatomic) int64_t held;
+@property(nonatomic) int64_t tailEntry;
+@property(nonatomic) BOOL tailDelivered;
 @end
 @implementation LGVideoAudioTailChecks
 - (void)finish:(NSString *)error {
@@ -37,7 +40,9 @@
     self.window = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *)scene];
     self.video = [LGVideoController new];
     self.video.videoURL = [[NSBundle.mainBundle URLForResource:@"fixture" withExtension:@"mkv"] absoluteString];
-    self.video.startMilliseconds = 6000; self.video.knownDuration = 10000;
+    self.tailEntry = [NSBundle.mainBundle.infoDictionary[@"QAResume"] longLongValue];
+    self.video.startMilliseconds = self.tailEntry ?: 6000;
+    self.video.knownDuration = 10000;
     self.video.subtitleJSON = @"[]"; self.video.queueJSON = @"[]"; self.video.optionsJSON = @"{\"media_bounds\":{\"end_ms\":10000,\"video\":[{\"end_ms\":3000}],\"audio\":[{\"end_ms\":10000}]}}";
     self.video.allowed = ^BOOL(BOOL external) { return YES; };
     self.video.requestPlay = ^BOOL { return YES; };
@@ -47,6 +52,7 @@
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, NSEC_PER_SEC/2), dispatch_get_main_queue(), ^{
         self.logger = [LGTailLogger new]; self.logger.level = 4; self.logger.messages = [NSMutableArray array];
         self.video.player.libraryInstance.loggers = @[self.logger];
+        self.playStarted = NSProcessInfo.processInfo.systemUptime;
         [self.video startByUser];
         self.timer = [NSTimer scheduledTimerWithTimeInterval:.05 target:self selector:@selector(sample:) userInfo:nil repeats:YES];
     });
@@ -62,6 +68,24 @@
         @"frames": @(stats.displayedPictures), @"audio": @(stats.playedAudioBuffers),
         @"buffering": @(v.buffering), @"seekable": @(v.player.isSeekable)}];
     if (now-self.began > 45) { [self finish:@"Audio-tail playback timed out"]; return; }
+    if (self.tailEntry > 0 && self.stage == 0) {
+        int64_t tailLength = v.knownDuration - self.tailEntry;
+        int64_t clockTolerance = 350;
+        // VLC's public clock is sampled less often than buffer delivery.
+        if (stats.playedAudioBuffers && [v nativeTimeMilliseconds] >= v.knownDuration - clockTolerance)
+            self.tailDelivered = YES;
+        if (v.ended) {
+            if (!self.tailDelivered || !v.audioOnlyInput ||
+                now-self.playStarted < (tailLength-clockTolerance) / 1000. ||
+                stats.playedAudioBuffers < (tailLength-clockTolerance) / 24) {
+                [self finish:@"Saved tail reached EOF without advancing the native audio clock"]; return;
+            }
+            [v startByUser]; self.stage = 7;
+        } else if (v.player.state == VLCMediaPlayerStateStopped && now-self.playStarted > 2) {
+            [self finish:@"Audio tail stopped without exposing Replay"];
+        }
+        return;
+    }
     if (self.stage == 0 && v.player.isPlaying && v.startMilliseconds < 0 &&
         stats.playedAudioBuffers > 0 && [v positionMilliseconds] >= 6500) {
         if (v.buffering || !v.seek.enabled) { [self finish:@"Audio-only resume remained loading or disabled the timeline"]; return; }
