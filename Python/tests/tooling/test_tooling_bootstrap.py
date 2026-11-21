@@ -449,7 +449,7 @@ class ToolingBootstrapTests(TestCase):
             shutil.copy2(repo / 'logistics_build' / name, package / name)
         (package / 'build_project.py').write_text(
             'class LogisticsProject:\n'
-            ' def __init__(self,root): pass\n'
+            ' def __init__(self,root,*,results_directory=None): pass\n'
             ' def make_plan(self,*a,**kw): return self\n'
             ' def data(self): return dict(source={},phases=[],workspace="owned",resource_locks=["existing"])\n')
         request = dict(schema=1, action='plan', values=dict(operation='Test', target='android', backend='Local'))
