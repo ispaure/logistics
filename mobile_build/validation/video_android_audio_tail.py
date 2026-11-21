@@ -21,9 +21,11 @@ ACTIVITY = 'VideoAudioTailQAActivity'
 
 
 def run(output, image=None, model=None, *, video_tail=False, captions=False, startup_control=False,
-        avc_aac=False, stereo_aac=False):
+        avc_aac=False, stereo_aac=False, background_resume=False):
     if video_tail and startup_control:
         raise ValueError('The ordinary startup control compares the forward restore path')
+    if background_resume and (video_tail or captions or startup_control or stereo_aac):
+        raise ValueError('Background resume uses its own ordinary H.264/AAC fixture')
     output.mkdir(parents=True, exist_ok=False)
     options, _ = manager_settings.settings(ROOT / 'mobile_build')
     sdk = options['tools.android_sdk']
@@ -39,6 +41,9 @@ def run(output, image=None, model=None, *, video_tail=False, captions=False, sta
         }, indent=2))
         movie = assets / 'tail.mkv'
         video_seconds, audio_seconds = (12, 3) if video_tail else (4, 12)
+        if background_resume:
+            video_seconds = audio_seconds = 25
+            avc_aac = True
         other_audio = ['-f', 'lavfi', '-i', f'sine=frequency=880:sample_rate=48000:duration={audio_seconds}']
         other_track = ['-map', '2:a', '-metadata:s:a:0', 'language=eng',
                        '-metadata:s:a:1', 'language=fra']
@@ -77,13 +82,16 @@ def run(output, image=None, model=None, *, video_tail=False, captions=False, sta
             apk = project / 'app/build/outputs/apk/debug/app-debug.apk'
             emulator.invoke('-s', serial, 'install', str(apk), timeout=180)
             emulator.invoke('-s', serial, 'shell', 'settings', 'put', 'system', 'screen_off_timeout', '600000')
+            emulator.invoke('-s', serial, 'shell', 'settings', 'put', 'secure', 'immersive_mode_confirmations', 'confirmed')
             emulator.invoke('-s', serial, 'shell', 'input', 'keyevent', 'KEYCODE_WAKEUP')
             emulator.invoke('-s', serial, 'shell', 'wm', 'dismiss-keyguard')
             emulator.invoke('-s', serial, 'shell', 'am', 'start', '-n',
                 BUNDLE + '/io.github.ispaure.logistics.video.' + ACTIVITY, '--ez', 'video_tail',
                 str(video_tail).lower(), '--ez', 'captions', str(captions).lower(),
-                '--ez', 'startup_control', str(startup_control).lower())
+                '--ez', 'startup_control', str(startup_control).lower(), '--ez',
+                'background_resume', str(background_resume).lower())
             deadline = time.monotonic() + 100
+            returned = False
             captures = {}
             expected = {'baseline', 'backseek'}
             if video_tail:
@@ -91,6 +99,14 @@ def run(output, image=None, model=None, *, video_tail=False, captions=False, sta
             else:
                 expected.add('replay')
             while time.monotonic() < deadline:
+                if background_resume and not returned:
+                    marker = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', BUNDLE,
+                        'cat', 'cache/background-resume-ready'], env=env, capture_output=True, timeout=15)
+                    if marker.stdout.strip() == b'ready':
+                        time.sleep(1)
+                        emulator.invoke('-s', serial, 'shell', 'am', 'start', '-f', '0x00020000', '-n',
+                            BUNDLE + '/io.github.ispaure.logistics.video.' + ACTIVITY)
+                        returned = True
                 if captions:
                     sample = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as',
                         BUNDLE, 'cat', 'cache/caption-request.json'], env=env, capture_output=True, timeout=15)
@@ -135,7 +151,7 @@ def run(output, image=None, model=None, *, video_tail=False, captions=False, sta
                     raise RuntimeError(result['error'])
                 if captions and set(pixels) != expected:
                     raise AssertionError('Native captions were not proven wherever the video was active')
-                print(f'Android native audio-tail checks passed. Report: {output / "android-result.json"}', flush=True)
+                print(f'Android native playback checks passed. Report: {output / "android-result.json"}', flush=True)
                 break
             else:
                 raise TimeoutError('Android native audio-tail checks timed out')
@@ -166,13 +182,15 @@ def main():
     parser.add_argument('--video-tail', action='store_true', help='Give video an extra nine seconds after both audio tracks end')
     parser.add_argument('--captions', action='store_true', help='Check an embedded cue through and beyond the A/V tail')
     parser.add_argument('--startup-control', action='store_true', help='Measure ordinary video startup before the forward restore')
+    parser.add_argument('--background-resume', action='store_true',
+                        help='Compare foreground Pause/Play with an ordinary paused switch through Settings')
     codecs = parser.add_mutually_exclusive_group()
     codecs.add_argument('--avc-aac', action='store_true', help='Use an H.264/stereo AAC control with the same stream endpoints')
     codecs.add_argument('--stereo-aac', action='store_true', help='Keep HEVC and substitute stereo AAC for 5.1 E-AC-3')
     args = parser.parse_args()
     run(args.output.resolve(), args.image, args.model, video_tail=args.video_tail,
         captions=args.captions, startup_control=args.startup_control, avc_aac=args.avc_aac,
-        stereo_aac=args.stereo_aac)
+        stereo_aac=args.stereo_aac, background_resume=args.background_resume)
 
 
 if __name__ == '__main__':

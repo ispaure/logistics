@@ -1,11 +1,13 @@
 package io.github.ispaure.logistics.video;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -19,8 +21,10 @@ import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 
-/** Production VideoPlayer playing a synthetic HEVC/E-AC-3 Matroska file. */
+/** Production VideoPlayer playing synthetic Matroska fixtures. */
 public final class VideoAudioTailQAActivity extends Activity {
+    private enum BackgroundPhase { STARTUP, PAUSED, FOREGROUND_PLAY, SWITCH_PAUSE, SETTINGS, RETURN_PLAY }
+
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final JSONArray samples = new JSONArray();
     private final String run = Long.toString(SystemClock.elapsedRealtimeNanos());
@@ -29,6 +33,9 @@ public final class VideoAudioTailQAActivity extends Activity {
     private boolean finished, videoTail, captions;
     private int stage, selectedTrack, originalAudioTrack = -1, audioBeforeSwitch;
     private long started, changed, held;
+    private BackgroundPhase backgroundPhase;
+    private boolean backgroundStopped, backgroundReturned;
+    private int resumedFrames, resumedAudio;
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
@@ -36,11 +43,12 @@ public final class VideoAudioTailQAActivity extends Activity {
         try {
             videoTail = getIntent().getBooleanExtra("video_tail", false);
             captions = getIntent().getBooleanExtra("captions", false);
+            if (getIntent().getBooleanExtra("background_resume", false)) backgroundPhase = BackgroundPhase.STARTUP;
             movie = new File(getCacheDir(), "tail.mkv");
             try (InputStream input = getAssets().open(movie.getName())) {
                 Files.copy(input, movie.toPath(), StandardCopyOption.REPLACE_EXISTING);
             }
-            boolean control = getIntent().getBooleanExtra("startup_control", false);
+            boolean control = backgroundPhase != null || getIntent().getBooleanExtra("startup_control", false);
             stage = control ? -1 : 0;
             openPlayer(control);
         } catch (Throwable error) {
@@ -57,17 +65,22 @@ public final class VideoAudioTailQAActivity extends Activity {
                 public void closed() { finish(); }
                 public void command(String name, String value) { }
             });
-        video.setKnownDuration(12000);
+        video.setKnownDuration(backgroundPhase == null ? 12000 : 25000);
         String bounds = videoTail ? "\"video\":[{\"end_ms\":12000}],\"audio\":[{\"end_ms\":3000},{\"end_ms\":3000}]" :
             "\"video\":[{\"end_ms\":4000}],\"audio\":[{\"end_ms\":12000}]";
-        video.configurePlayback("{\"video_title\":\"Native video tail QA\",\"media_bounds\":{\"end_ms\":12000," + bounds + "}" +
-            (captions ? ",\"subtitle_language\":\"eng\"}" : "}"), "[]");
-        if (control) {
+        if (backgroundPhase == null) {
+            video.configurePlayback("{\"video_title\":\"Native video tail QA\",\"media_bounds\":{\"end_ms\":12000," + bounds + "}" +
+                (captions ? ",\"subtitle_language\":\"eng\"}" : "}"), "[]");
+        } else {
+            video.configurePlayback("{\"video_title\":\"Native background resume QA\"}", "[]");
+        }
+        if (control && backgroundPhase == null) {
             // Match the language used by the post-tail normal input.
             org.videolan.libvlc.Media media = (org.videolan.libvlc.Media) video.player.getMedia();
             try { media.addOption(":audio-track-id=2"); }
             finally { media.release(); }
-        } else {
+        }
+        if (!control) {
             require(video.position() == 11999 && !video.player.isPlaying(),
                 "A stale checkpoint was not clamped when the declared A/V end arrived");
             video.seekTo(6000);
@@ -87,13 +100,82 @@ public final class VideoAudioTailQAActivity extends Activity {
 
     @Override public void onWindowFocusChanged(boolean focused) {
         super.onWindowFocusChanged(focused);
-        if (!focused || video == null || started != 0 || finished) return;
+        if (!focused || video == null || finished) return;
+        if (backgroundPhase == BackgroundPhase.SETTINGS && backgroundStopped) backgroundReturned = true;
+        if (started != 0) return;
         started = changed = SystemClock.uptimeMillis();
         handler.postDelayed(() -> {
             if (finished) return;
             video.startByUser();
             sample();
         }, 500);
+    }
+
+    @Override public void onStop() {
+        super.onStop();
+        if (backgroundPhase != BackgroundPhase.SETTINGS || finished) return;
+        video.background();
+        backgroundStopped = true;
+        try {
+            Files.write(new File(getCacheDir(), "background-resume-ready").toPath(),
+                "ready".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        } catch (Exception error) {
+            finishWith(error);
+        }
+    }
+
+    private void backgroundPhase(BackgroundPhase phase, long now) {
+        backgroundPhase = phase;
+        changed = now;
+        resumedFrames = -1;
+    }
+
+    private void checkBackground(long now, long position, boolean playing, boolean buffering, int frames, int audio) {
+        long elapsed = now - changed;
+        switch (backgroundPhase) {
+            case STARTUP:
+                if (!playing || position < 650 || frames < 6 || audio < 10) return;
+                held = position;
+                video.pause();
+                backgroundPhase(BackgroundPhase.PAUSED, now);
+                break;
+            case PAUSED:
+            case SWITCH_PAUSE:
+                if (elapsed < 650) return;
+                require(!playing && Math.abs(position - held) <= 250, "Pause did not hold its position");
+                if (backgroundPhase == BackgroundPhase.PAUSED) {
+                    video.startByUser();
+                    backgroundPhase(BackgroundPhase.FOREGROUND_PLAY, now);
+                } else {
+                    backgroundPhase(BackgroundPhase.SETTINGS, now);
+                    startActivity(new Intent(Settings.ACTION_SETTINGS));
+                }
+                break;
+            case SETTINGS:
+                if (!backgroundReturned) return;
+                require(!playing && Math.abs(position - held) <= 250, "Returning to the app changed Pause or position");
+                video.startByUser();
+                backgroundPhase(BackgroundPhase.RETURN_PLAY, now);
+                break;
+            case FOREGROUND_PLAY:
+            case RETURN_PLAY:
+                if (elapsed >= 1150 && resumedFrames < 0) {
+                    resumedFrames = frames;
+                    resumedAudio = audio;
+                }
+                if (elapsed < 3300) return;
+                require(playing && !buffering && position > held + 1500 &&
+                    frames > resumedFrames + 12 && audio > resumedAudio + 30,
+                    "Picture and audio stalled after explicit Play in " + backgroundPhase);
+                if (backgroundPhase == BackgroundPhase.RETURN_PLAY) {
+                    finishWith(null);
+                } else {
+                    held = position;
+                    video.pause();
+                    backgroundPhase(BackgroundPhase.SWITCH_PAUSE, now);
+                }
+                break;
+        }
     }
 
     private boolean spinnerShown(View view, String label) {
@@ -151,8 +233,15 @@ public final class VideoAudioTailQAActivity extends Activity {
                 .put("frames", frames).put("audio", audio).put("playing", playing)
                 .put("spinning", spinning).put("switching", switching)
                 .put("seekEnabled", video.seek.isEnabled()).put("track", video.player.getAudioTrack())
-                .put("subtitle", video.player.getSpuTrack()).put("duration", video.durationMilliseconds()));
+                .put("subtitle", video.player.getSpuTrack()).put("duration", video.durationMilliseconds())
+                .put("backgroundPhase", backgroundPhase == null ? JSONObject.NULL : backgroundPhase.name())
+                .put("vlcViewsAttached", video.player.getVLCVout().areViewsAttached()));
             require(now - started < 75000, "Playback or the recovery check timed out at stage " + stage);
+            if (backgroundPhase != null) {
+                checkBackground(now, position, playing, spinning, frames, audio);
+                if (!finished) scheduleSample();
+                return;
+            }
             if (stage == -1) {
                 require(now - started < 20000, "Ordinary startup control produced no picture and audio within 20 seconds");
                 if (playing && frames > 0 && audio > 0 && clock > 300) {

@@ -135,6 +135,7 @@ public final class VideoPlayer {
     private final AudioManager audio;
     private AudioFocusRequest focusRequest;
     private boolean focusHeld, manualResumeRequired, pausePending, lockHidden, playbackActive;
+    private boolean reloadVideoAfterBackground;
     private final AudioManager.OnAudioFocusChangeListener focusListener = change -> {
         if (change != AudioManager.AUDIOFOCUS_GAIN) {
             focusHeld = false;
@@ -1184,7 +1185,21 @@ public final class VideoPlayer {
             tail = initialTail;
             playbackFailed = true;
         }
-        if (playbackFailed) restartInput();
+        boolean restoreVideoSurface = reloadVideoAfterBackground && attached &&
+            !player.getVLCVout().areViewsAttached();
+        reloadVideoAfterBackground = false;
+        if (restoreVideoSurface) {
+            if (audioTrackSwitch != null) {
+                reopenAudioTrack = audioTrackSwitch.requestedTrack();
+                cancelAudioTrackSwitch();
+            }
+            // Restart the old decoder and bind the recreated surface before
+            // resuming. Either operation alone can leave audio playing over
+            // a frozen picture after Android destroys the SurfaceView.
+            player.detachViews();
+            restartInput();
+            attachVideoOutput();
+        } else if (playbackFailed) restartInput();
         transportFailure = null;
         message.setText("");
         message.setVisibility(View.GONE);
@@ -1586,12 +1601,17 @@ public final class VideoPlayer {
     public void show() {
         if (done || attached) return;
         lockHidden = false;
+        reloadVideoAfterBackground = false;
         attachRootToWindow();
+        attachVideoOutput();
+        setControlsVisible(true);
+    }
+
+    private void attachVideoOutput() {
         // MediaCodec must render directly to SurfaceView to preserve HDR buffers
         // and their color metadata. TextureView composites through an SDR path
         // on older Android versions and has limited HDR support on newer ones.
         player.attachViews(video, null, true, false);
-        setControlsVisible(true);
     }
 
     private void attachRootToWindow() {
@@ -1725,7 +1745,11 @@ public final class VideoPlayer {
         pausePresentation.clear();
         root.setKeepScreenOn(false);
         boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
-        if (restricted) hide(); else if (!pip && !casting) pause();
+        if (restricted) hide();
+        else if (!pip && !casting) {
+            pause();
+            reloadVideoAfterBackground = attached && inputDisplayedVideo && tail != Tail.AUDIO;
+        }
         pausePresentation.clear();
     }
     public void status(String text) {

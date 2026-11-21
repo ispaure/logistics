@@ -311,6 +311,10 @@ retirement and paused resume. For ordinary local iOS playback,
 `video_chrome_tools --background-audio` compares a foreground pause with three
 paused switches to Settings and back. Each explicit resume must advance the
 clock and deliver fresh pictures and audio beyond the first second.
+`video_android_audio_tail --background-resume` checks the same transition on
+Android. When Android destroys VLC's inline surface in the background, the
+next explicit Play reopens the decoder at the held position and binds the
+surface again. Retained surfaces resume their existing input.
 `video_android_audio_tail --captions --startup-control` checks ordinary
 startup before testing caption restoration and Replay. `--stereo-aac` changes
 only the audio tracks and `--avc-aac` changes both encodings while keeping the
