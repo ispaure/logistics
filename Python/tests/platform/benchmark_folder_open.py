@@ -104,10 +104,29 @@ with patch.object(registry, 'get_browser_extensions', return_value=[]):
                 parent = model.browse_index(leave_folder)
                 if model.canFetchMore(parent):
                     model.fetchMore(parent)
+            next_folder = root / 'next'
+            events = {}
+            if sample['cold']:
                 assert str(leave_folder) not in loaded
             leave = monotonic()
-            browser.navigate(root / 'next')
-            sample['leave_to_action'] = until(lambda: select(root / 'next')) - leave
+
+            def on_input():
+                events.setdefault('input_dispatch', monotonic() - leave)
+                if select(next_folder):
+                    events['selection'] = monotonic() - leave
+                else:
+                    qt.QTimer.singleShot(1, on_input)
+
+            # Timestamp selection inside the queued input turn. The outer
+            # event pump can continue draining unrelated callbacks afterward.
+            qt.QTimer.singleShot(0, on_input)
+            browser.navigate(next_folder)
+            events['navigation_return'] = monotonic() - leave
+            sample['leave_pump_return'] = until(lambda: 'selection' in events) - leave
+            sample['leave_to_action'] = events['selection']
+            sample['leave_event_phases'] = events
+            sample['left_loaded_at_selection'] = (str(leave_folder) in loaded
+                and loaded[str(leave_folder)] - leave <= events['selection'])
             if sample['cold']:
                 until(lambda: str(leave_folder) in loaded)
             until(lambda: not browser.folder_busy)
