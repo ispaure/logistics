@@ -26,6 +26,7 @@ UNIFIED_PROGRESS_ENTRY = 'tests.logisticsmobile.unified_progress_probe'
 UNIFIED_PROGRESS_RESULT = 'unified-progress-result.json'
 UNIFIED_PROGRESS_ANDROID_ENTRY = 'tests.logisticsmobile.unified_progress_android_probe'
 UNIFIED_PROGRESS_VIDEO_ENTRY = 'tests.logisticsmobile.unified_progress_video_probe'
+READER_APPEARANCE_ENTRY = 'tests.logisticsmobile.reader_appearance_probe'
 COMIC_SCOPES = ('matrix', 'basic', 'lifecycle', 'library', 'readers', 'windows', 'fold', 'reduced-motion')
 QA_BUNDLES = {UNIFIED_PROGRESS_BUNDLE, BUNDLE, 'io.github.ispaure.logisticsnotesauditqa', 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
               'io.github.ispaure.logisticscomicqa',
@@ -41,6 +42,9 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 
 
 def diagnostics(entry_point):
+    if entry_point == READER_APPEARANCE_ENTRY:
+        return ('reader-appearance-progress.json', *(f'appearance-{provider}-{kind}.png'
+                 for provider in ('local', 'localcrypt') for kind in ('comic', 'epub', 'pdf')))
     if entry_point.endswith('.rotation_crash_probe'):
         return NATIVE_DIAGNOSTICS + ('logistics-native-ui-rotation-trace.jsonl',)
     if entry_point.endswith('.comic_guidance_probe'):
@@ -219,7 +223,8 @@ def copy_payload(payload, target, *, entry_point='tests.logisticsmobile.document
         shutil.rmtree(target / name, ignore_errors=True)
         shutil.copytree(payload / name, target / name)
     shutil.copytree(SOURCE / 'mobile_build/native_tests/tests', target / 'tests', dirs_exist_ok=True)
-    if entry_point in (UNIFIED_PROGRESS_ENTRY, UNIFIED_PROGRESS_ANDROID_ENTRY, UNIFIED_PROGRESS_VIDEO_ENTRY):
+    if entry_point in (UNIFIED_PROGRESS_ENTRY, UNIFIED_PROGRESS_ANDROID_ENTRY,
+                       UNIFIED_PROGRESS_VIDEO_ENTRY, READER_APPEARANCE_ENTRY):
         stage_progress_credentials(target / 'tests/logisticsmobile')
     # Cached native shells predate notebooks. Supply the exact declared pure
     # Python dependency from the configured test environment.
@@ -1130,7 +1135,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('comic-guidance', 'workspace-edges', 'mobile-feedback', 'documents-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'notebook-geometry', 'editor-keyboard', 'storage', 'reader-space', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'playlist-speech', 'native-suite', 'rotation-crash', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('comic-guidance', 'workspace-edges', 'mobile-feedback', 'documents-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'notebook-geometry', 'editor-keyboard', 'storage', 'reader-space', 'reader-appearance', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'playlist-speech', 'native-suite', 'rotation-crash', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--retain-build', action='store_true', help='Pin this managed QA build for reruns; caller must remove the pin and workspace afterward.')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
@@ -1262,6 +1267,9 @@ def main():
                                     result_name=UNIFIED_PROGRESS_RESULT)
             if args.platform == 'android':
                 creation_profile['probe_timeout'] = 480
+        if args.probe == 'reader-appearance':
+            creation_profile = dict(entry_point=READER_APPEARANCE_ENTRY,
+                                    result_name='reader-appearance-result.json')
         if args.probe == 'reader-space':
             creation_profile = dict(bundle='io.github.ispaure.logisticsreaderspaceqa',
                 entry_point='tests.logisticsmobile.reader_space_probe', result_name='reader-space-result.json')

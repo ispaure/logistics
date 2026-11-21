@@ -62,6 +62,82 @@ class ReaderLifecycleTests(TestCase):
         self.assertEqual(button.text, '×')
         self.assertEqual(button.accessible_name, 'Close document')
 
+    def test_comic_appearance_back_keeps_the_live_provider_page_and_input(self):
+        from features.rclone.localcrypt.mobile.resources import CryptFiles
+        from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
+        from mobile_build.tests.support.localcrypt import ReaderClient
+        from services.documents.mobile_storage import open_provider_document
+        from services.session_auth import ResumePassword
+
+        _, comic = make_books(self.root)
+        encrypted = CryptFiles(self.root / 'encrypted', ReaderClient(), 'Secret')
+        path = encrypted._physical(comic.name)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(comic.read_bytes()[::-1])
+
+        async def exercise():
+            for provider in (LocalFiles(self.root), encrypted):
+                with self.subTest(provider=type(provider).__name__):
+                    self.app.preferences.save(comic_layout='single')
+                    gate = ResumePassword('disposable password') if provider is encrypted else None
+                    self.assertTrue(await open_provider_document(self.app, provider, comic.name, privacy_gate=gate))
+                    owner = self.app.private_sessions.active
+                    await owner.move_private_page(1)
+                    reader, spread = owner.crypt_reader, owner.provider_spread
+                    owner.show_provider_layout()
+                    owner.provider_layout.value = 'double'
+                    self.assertIsNone(self.app.visible_reader())
+                    self.assertTrue(self.app.routes.back())
+                    self.assertEqual(self.app.visible_reader(), owner.session.id)
+                    self.assertIs(owner.crypt_reader, reader)
+                    self.assertIn(spread, owner.crypt_content.children)
+                    self.assertEqual(self.app.preferences.values['comic_layout'], 'single')
+                    owner.show_provider_layout()
+                    await owner.apply_provider_layout()
+                    self.assertEqual(self.app.visible_reader(), owner.session.id)
+                    self.assertIs(owner.provider_spread, spread)
+                    self.assertEqual(owner._provider_displayed_index, 1)
+                    spread.canvas.page(-1)
+                    await owner._comic_swipe_task
+                    self.assertEqual(owner._provider_displayed_index, 0)
+                    owner.provider_spread.canvas.page(1)
+                    await owner._comic_swipe_task
+                    self.assertEqual(owner._provider_displayed_index, 1)
+                    owner.show_provider_layout()
+                    owner.provider_layout.value = 'auto'
+                    await owner.apply_provider_layout()
+                    self.assertEqual(self.app.preferences.values['comic_layout'], 'auto')
+                    self.assertEqual(owner._provider_displayed_index, 1)
+
+                    if gate is not None:
+                        owner.show_provider_layout()
+                        owner.provider_layout.value = 'double'
+                        gate.lock()
+                        privacy = self.app.screen_privacy
+                        privacy.refresh()
+                        self.assertIs(self.app.main_window.content, privacy.lock_view)
+                        await owner.apply_provider_layout()
+                        self.assertEqual(self.app.preferences.values['comic_layout'], 'auto')
+                        self.app.private_sessions.suspend()
+                        self.assertTrue(self.app.routes.back())
+                        await asyncio.sleep(0)
+                        self.assertIs(owner.crypt_reader, reader)
+                        self.assertTrue(owner.page_suspended)
+                        self.assertIs(self.app.main_window.content, privacy.lock_view)
+                        privacy.lock_password.value = 'disposable password'
+                        await privacy.unlock()
+                        async with asyncio.timeout(5):
+                            while owner.page_suspended:
+                                await asyncio.sleep(.01)
+                        self.assertEqual(owner._provider_displayed_index, 1)
+                        owner.provider_spread.canvas.page(-1)
+                        await owner._comic_swipe_task
+                        self.assertEqual(owner._provider_displayed_index, 0)
+                    self.assertTrue(self.app.request_reader_close(owner.session.id))
+                    await self.wait_closed(owner)
+
+        self.run_async(exercise())
+
     def test_local_close_and_android_back_free_slots_without_leaving_stale_routes(self):
         path = self.root / 'note.txt'
         path.write_text('Saved text')

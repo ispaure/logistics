@@ -852,20 +852,34 @@ class ProviderUI(FilesUI):
         view = ReaderAppearance(self.preferences.values, self.apply_provider_layout)
         self.provider_appearance = view
         self.provider_layout = view.layout_choice
-        self.show_view(view, route='private:' + self.session.id + ':layout', title='Reading appearance')
+        self.show_view(view, route='private:' + self.session.id + ':layout',
+                       title='Reading appearance', retain_private=self)
 
     async def apply_provider_layout(self, widget=None, **kwargs):
-        if self.cloud_busy or self.crypt_reader is None:
+        from .routes import contains
+        view = self.provider_appearance
+        privacy = self.app.screen_privacy
+        current = self.provider_document().capture()
+
+        def presented():
+            return (current() and self.manager.active is self
+                    and not privacy.inactive and not privacy.resume_locked
+                    and contains(self.app.body, view))
+
+        if self.cloud_busy or self.crypt_reader is None or not presented():
             return
+        changes = {key: value for key, value in view.settings().items()
+                   if self.preferences.values[key] != value}
         try:
-            self.preferences.save(**self.provider_appearance.settings())
-            from .font_scaling import refresh
-            refresh(self)
+            if changes:
+                self.preferences.save(**changes)
         except (OSError, ValueError) as error:
-            self.provider_appearance.status.text = str(error)
+            view.status.text = str(error)
             return
-        await self.read_crypt_page()
-        self.resume_crypt()
+        if changes.keys() & {'comic_layout', 'comic_split_wide'}:
+            await self.read_crypt_page(valid=presented)
+        if presented():
+            self.resume_crypt()
 
     async def refresh_provider_comic_neighbors(self, *args, **kwargs):
         return await self.provider_comic_controller().refresh_provider_comic_neighbors(*args, **kwargs)

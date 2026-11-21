@@ -1,4 +1,4 @@
-"""Restore the visible EPUB after a Settings visit or a released page."""
+"""Restore a suspended reader or resume EPUB after a Settings visit."""
 import asyncio
 import json
 import logging
@@ -18,7 +18,7 @@ def bridge_for(owner, provider):
     return getattr(view, '_chapter_bridge', None)
 
 
-def resume_visible_epub(app):
+def resume_visible_reader(app):
     privacy = getattr(app, 'screen_privacy', None)
     if privacy is None or not app.active_host or privacy.inactive or any(gate.locked for gate in privacy.gates()):
         return
@@ -36,16 +36,18 @@ def resume_visible_epub(app):
     provider = name == 'private_sessions'
     if provider:
         reader = owner.crypt_reader
-        if reader is None or reader.book is None or not manager.available(key):
+        if reader is None or not manager.available(key):
             return
         if getattr(owner, 'page_suspended', False):
             owner.resume_suspended_page()
             return
-    else:
-        if owner.session.kind != 'epub':
+        if reader.book is None:
             return
+    else:
         if owner.book_reader is None:
             owner.resume_suspended_page()
+            return
+        if owner.session.kind != 'epub':
             return
 
     bridge = bridge_for(owner, provider)

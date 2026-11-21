@@ -46,3 +46,20 @@ Wide pages default to split in portrait, with 8% overlap and manga traversal. Ol
 `Python/mobile/external_display.py` blanks on privacy gates and temporarily chooses paired whole pages. Disconnect restores saved layout. iOS 27 registers the current host's `UISceneAccessory`. Android uses Presentation. Check `test_external_display.py` and `test_comic_sharing.py`. Wireless receiver page-turn synchronization remains open.
 
 `mobile/presentation.py` builds comic pages and spreads with the injected native zoom canvas. `ReaderChrome` owns controls and immersive presentation. Fit-size gates page gestures; fullscreen enables the hold magnifier for imported/provider comics and spreads. Android fullscreen releases hidden rail width. Auto spread uses measured landscape geometry, manga direction and standalone landscape/DoublePage metadata. Use `comic_viewport_probe.py` and `comic_spread_probe.py` for focused QA, and verify native touch and fullscreen restoration.
+
+Provider-backed Appearance keeps the current spread and its gesture handlers
+while the form is open. Back discards unapplied changes. Applying a layout
+refreshes the selected page. If memory pressure releases the page, returning to
+the reader reloads it once the session is available and unlocked.
+Run the focused Manager probe with disposable files and a disposable device.
+Use a fresh output directory and repeat with `android` for the shared route.
+
+```sh
+python -m mobile_build.validation.document_storage_tools ios --probe reader-appearance \
+  --output tmp/test-results/RUN_ID/ios
+```
+
+The probe covers changed settings, unchanged Apply, Back, page input, and
+reopen for ordinary local and LocalCrypt comics. It also checks the session-only
+lock during Appearance, EPUB Settings return, and PDF return from its document
+actions.

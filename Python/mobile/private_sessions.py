@@ -123,7 +123,9 @@ class PrivateController(ReaderHost, ProviderUI):
             progress = getattr(self, '_provider_progress', None)
             if progress is not None and progress.worker is not None:
                 await asyncio.wait({progress.task})
-            if (self.page_suspended and self.provider_document().can_start()
+            privacy = self.app.screen_privacy
+            if (self.page_suspended and not privacy.inactive and not privacy.resume_locked
+                    and self.provider_document().can_start()
                     and self.manager.active is self and self.manager.available(self.session.id)
                     and self.app.visible_reader() == self.session.id):
                 await self.read_crypt_page()

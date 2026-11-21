@@ -498,12 +498,12 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             session = self.workspace.sessions.get(key)
             if session is not None and self.workspace.active == key:
                 self.loop.create_task(self.resume_library_session(session))
-        self.schedule_epub_resume()
+        self.schedule_reader_resume()
         return True
 
-    def schedule_epub_resume(self):
-        from .reading.epub_resume import resume_visible_epub
-        self.loop.call_soon(resume_visible_epub, self)
+    def schedule_reader_resume(self):
+        from .reading.epub_resume import resume_visible_reader
+        self.loop.call_soon(resume_visible_reader, self)
 
     def _flush_reader_progress(self):
         private = getattr(self, 'private_sessions', None)
@@ -548,7 +548,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         if (hasattr(self, 'editor_view') and self.editor_view.session is not None
                 and self.document_view in body.children):
             self.editor_view.session.view['markdown_mode'] = 'edit'
-        self.schedule_epub_resume()
+        self.schedule_reader_resume()
 
     def resize_workspace(self, widget=None, *args, **kwargs):
         from .layout_events import defer_host_resize
