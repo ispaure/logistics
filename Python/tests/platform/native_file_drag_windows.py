@@ -76,6 +76,10 @@ class Desktop:
         self.user.WindowFromPoint.restype = wintypes.HWND
         self.user.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
         self.user.GetAncestor.restype = wintypes.HWND
+        self.user.GetClientRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+        self.user.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+        self.user.ClientToScreen.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.POINT)]
+        self.user.GetClassNameW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
         self.user.MoveWindow.argtypes = [
             wintypes.HWND, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_int, wintypes.BOOL,
         ]
@@ -101,6 +105,23 @@ class Desktop:
 
     def window_at(self, point):
         return self.user.GetAncestor(self.user.WindowFromPoint(wintypes.POINT(*point)), 2)
+
+    def window_info(self, window):
+        bounds = wintypes.RECT()
+        label = ctypes.create_unicode_buffer(128)
+        if window:
+            self.user.GetWindowRect(window, ctypes.byref(bounds))
+            self.user.GetClassNameW(window, label, len(label))
+        return label.value, (bounds.left, bounds.top, bounds.right, bounds.bottom)
+
+    def client_point(self, window, widget, point):
+        area = wintypes.RECT()
+        origin = wintypes.POINT()
+        if not (self.user.GetClientRect(window, ctypes.byref(area))
+                and self.user.ClientToScreen(window, ctypes.byref(origin))):
+            raise RuntimeError('Unable to map Logistics client coordinates to the guest display.')
+        return (origin.x + round(area.right * point.x() / widget.width()),
+                origin.y + round(area.bottom * point.y() / widget.height()))
 
     def drag(self, start, end, *, key=None, escape=False):
         self.require_input()
@@ -142,6 +163,7 @@ def exercise(root, cleanup):
     width, height = int(bounds.width() * ratio), int(bounds.height() * ratio)
     if width < 1000 or height < 600:
         raise RuntimeError(f'Guest display is too small for two drop windows ({width}×{height}).')
+    print(json.dumps(dict(backend=app.platformName(), display=[width, height], device_ratio=ratio)), flush=True)
     shell, local = root / 'Explorer side', root / 'Logistics side'
     shell.mkdir()
     local.mkdir()
@@ -188,8 +210,11 @@ def exercise(root, cleanup):
         raise AssertionError(description)
 
     def step(source, destination, source_window, target_window, *, key=None, escape=False):
-        if desktop.window_at(source) != source_window or desktop.window_at(destination) != target_window:
-            raise RuntimeError('A generated source or destination is covered by another window.')
+        for point, expected in ((source, source_window), (destination, target_window)):
+            actual = desktop.window_at(point)
+            if actual != expected:
+                raise RuntimeError(f'Generated test point {point} is outside its expected window. '
+                                   f'Expected {desktop.window_info(expected)}, observed {desktop.window_info(actual)}.')
         errors = []
 
         def gesture():
@@ -209,13 +234,12 @@ def exercise(root, cleanup):
         return row['x'], row['y']
 
     def qt_point(point):
-        mapped = viewport.mapToGlobal(point)
-        return round(mapped.x() * ratio), round(mapped.y() * ratio)
+        return desktop.client_point(logistics, window, viewport.mapTo(window, point))
 
     def to_qt(path, key, *, escape=False):
         desktop.user.SetForegroundWindow(explorer)
         before = set(_windows)
-        step(shell_point(path.name), qt_point(viewport.rect().bottomLeft() + qt.QPoint(35, -35)),
+        step(shell_point(path.name), qt_point(qt.QPoint(35, viewport.height() * 2 // 3)),
              explorer, logistics, key=key, escape=escape)
         if escape:
             until(lambda: not window.workspace.active_view.move_actions.busy, 'Cancelled drag started a job.')
@@ -278,7 +302,6 @@ def exercise(root, cleanup):
     assert existing.read_bytes() == b'existing at native destination' and collision.read_bytes() == b'existing'
     print('Logistics → Explorer: native conflict dialog cancelled and preserved both files.', flush=True)
     assert not list(local.glob('.drag-*'))
-    print(json.dumps(dict(backend=app.platformName(), display=[width, height], device_ratio=ratio)), flush=True)
 
 
 def main():
