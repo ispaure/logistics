@@ -26,6 +26,7 @@ FEATURES = (
     MobileFeature('text_editor', 'Text Editor', 'Create, read and edit text, Markdown and source files.'),
     MobileFeature('notebooks', 'Notebooks', 'Create and draw in reMarkable (.rmdoc) notebooks.'),
     MobileFeature('books', 'Books & Comics', 'Read EPUB books and comic archives and browse their libraries.', ('books', 'comics')),
+    MobileFeature('archives', 'Archives', 'Browse, create, edit and extract on-device archives.'),
     MobileFeature('pdf', 'PDF Reader', 'Read PDF documents.'),
     MobileFeature('images', 'Image Tools', 'View images and use Burst camera on supported devices.'),
     MobileFeature('video', 'Video Player', 'Play Local, LocalCrypt and remote/crypt video, including MP4, MKV and AVI.'),
@@ -63,6 +64,8 @@ def group_enabled(preferences, name):
 
 
 def document_feature(name='', kind=None):
+    if kind == 'archive':
+        return 'archives'
     suffix = PurePosixPath(str(name)).suffix.lower()
     if suffix in VIDEO_EXTENSIONS:
         return 'video'

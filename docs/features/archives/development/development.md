@@ -29,4 +29,21 @@ Under `Python/features/archives/`, `ui/browser.py` owns scoped refresh and `ui/w
 
 The source basket (`ui/create.py`) asks for a new confirmed AES password. **Create encrypted ZIP…** (`ui/create_zip.py`) resolves every source's configured password, refuses conflicts, and requires a confirmed fallback to match any configured password. Its dialog waits for worker cancellation. A published ZIP survives late cancellation.
 
-See [desktop formats and controls](../user/user.md). Mobile reader password input serves Books and Comics. Test those adapters with their owners.
+See [desktop formats and controls](../user/user.md). Reader password input serves
+Books and Comics. Test those adapters with their owners.
+
+## Mobile File Browser
+
+`Python/mobile/archive_ui.py` wires the row and selection actions to an archive
+workspace and the existing resource picker. `archive_operations.py` checks
+provider paths, captured revisions and write capability before invoking the
+shared archive engine. Creation verifies the ordinary on-device output before
+exclusive publication. ZIP member edits use the shared verified rewrite.
+Extraction publishes a new folder atomically. Keep ZIP/CBZ reader activation
+independent of management and keep remote and encrypted-storage providers
+under their existing policies.
+
+The generated archive workflow runs in the mobile host suite and in the
+native Android and iOS inventory. The host archive tests cover all desktop
+creation formats, cancellation, read-only and private destinations, locked
+headers, unsafe paths, collisions and a refused rewrite.

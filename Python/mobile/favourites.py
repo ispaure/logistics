@@ -188,6 +188,9 @@ async def reopen(app, row, *, error_title='Open favourite'):
             from .workspace import Session
             session = Session('', source['provider'], source['resource'], opener['kind'], title=row['title'])
             return await app.recent_opener(session)()
+        if opener.get('kind') == 'archive':
+            from .archive_ui import reopen_archive
+            return await reopen_archive(app, source)
         if opener.get('kind') != 'notes':
             from .document_sources import reopen_file
             return await reopen_file(app, source, kind=opener.get('kind'))
@@ -254,6 +257,8 @@ def populate(app, container, *, heading=True, row_font=None):
         container.add(toga.Label(store.errors[0], style=Pack(font_size=12)))
     buttons = []
     for row in rows:
+        if row['opener'].get('kind') == 'archive' and not app.feature_enabled('archives'):
+            continue
         async def open_row(widget=None, row=row, **kwargs):
             await reopen(app, row)
         async def remove(widget=None, row=row, **kwargs):

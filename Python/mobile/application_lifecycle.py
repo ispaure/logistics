@@ -271,6 +271,7 @@ class HostLifecycle:
             self._retire(host.cloud_client, 'cancel')
         self._retire(getattr(host, 'chat_client', None), 'cancel')
         self._retire(getattr(host, '_editor_picker', None), 'clear')
+        self._retire(getattr(host, '_archives', None), 'retire')
         self._retire(self, '_invalidate_sessions')
         self._retire(getattr(host, '_crypt_cancel', None), 'set')
         # Activity recreation keeps the Python process alive. Retire the old

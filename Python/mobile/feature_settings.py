@@ -16,6 +16,12 @@ def set_enabled(app, name, value, *, refresh=True):
     members = BY_NAME[name].names
     if not value:
         for host in hosts(app):
+            archives = getattr(host, '_archives', None)
+            picker = getattr(host, '_editor_picker', None)
+            if name == 'archives' and (
+                    (archives is not None and (archives.item is not None or archives.cancel is not None))
+                    or (picker is not None and getattr(picker.operation.destination_action, 'kind', '').startswith('archive-'))):
+                raise ValueError('Close the archive and finish any archive operation before turning Archives off.')
             video = getattr(host, 'video_player', None)
             if video is not None and not video.closed:
                 from services.documents.storage import DocumentPolicy

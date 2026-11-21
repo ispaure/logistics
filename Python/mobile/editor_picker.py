@@ -13,6 +13,7 @@ from commonUtils.runtime.resources.paths import resource_name
 from commonUtils.runtime.resources.provider import capabilities
 from .document_destination_form import DestinationForm, PickerMessage as PickerMessage
 from .local_sources import destination_location_labels
+from .archive_operations import ACTION_KINDS, ordinary
 from services.documents.storage import DocumentPolicy
 from services.workflow_host import HostService, StateAttribute
 
@@ -302,7 +303,12 @@ class EditorPicker(DestinationForm):
         self.discard_notebook_templates()
         from .protection import for_app
         for_app(self.app).changed()
-        if creation is not None or mode == 'folder':
+        action = getattr(destination_action, 'kind', '')
+        if action in ACTION_KINDS:
+            self.creation_storage(include_encrypted=False)
+            self.editor_storage_roots = {label: provider for label, provider in self.editor_storage_roots.items()
+                                         if ordinary(provider) or provider is None}
+        elif creation is not None or mode == 'folder':
             self.creation_storage()
         else:
             action = getattr(destination_action, 'kind', '')
@@ -333,6 +339,11 @@ class EditorPicker(DestinationForm):
             source_provider = getattr(self.operation.binary_owner.document.resource, 'provider', None)
         source_folder = ''
         source_label = None
+        if action in ACTION_KINDS:
+            item = destination_action.item
+            source_label = 'Source location'
+            self.editor_storage_roots[source_label] = item.provider
+            source_folder = item.path.rpartition('/')[0]
         if mode == 'save' and creation is None and source_provider is not None and not getattr(source_provider, 'remote_storage', False):
             source_label = 'Source location'
             self.editor_storage_roots[source_label] = source_provider
@@ -486,7 +497,11 @@ class EditorPicker(DestinationForm):
         writable = provider is not None and not getattr(provider, 'remote_storage', False) and not virtual_root
         mode = self.operation.mode
         can_create_folder = mode != 'open' and writable and capabilities(provider).create
-        if mode == 'open':
+        action = getattr(self.operation.destination_action, 'kind', '')
+        if action in ACTION_KINDS:
+            can_submit = ready and ordinary(provider) and (action == 'archive-add' or can_create_folder)
+            can_create_folder = can_create_folder and action != 'archive-add'
+        elif mode == 'open':
             can_submit = ready
         elif mode == 'folder':
             can_submit = can_create_folder and capabilities(provider).delete
@@ -521,7 +536,10 @@ class EditorPicker(DestinationForm):
     async def complete_destination(self):
         if self.cloud_busy or self.editor_picker_location != (self.save_as_storage.value, self.picker_folder.value):
             return
-        if getattr(self.operation.destination_action, 'kind', '') == 'download':
+        action = getattr(self.operation.destination_action, 'kind', '')
+        if action in ACTION_KINDS:
+            return await self.complete_archive_action()
+        if action == 'download':
             return await self.complete_download()
         work = self._begin_work()
         work.mutation = True
@@ -597,6 +615,59 @@ class EditorPicker(DestinationForm):
                     plan.release()
             finally:
                 self._finish_work(work)
+
+    async def complete_archive_action(self):
+        from .file_operations import retiring_work
+        if not self.app.feature_enabled('archives') or not self.picker_primary.enabled:
+            return
+        work = self._begin_work()
+        work.mutation = True
+        action = work.presentation.destination_action
+        label, folder = work.location
+        self.save_as_status.value = 'Working… Use Cancel to stop.'
+        try:
+            provider = self.editor_provider(label)
+            name = self.save_as_name.value
+            format = self.archive_format.value if action.kind == 'archive-create' else None
+            work.awake = self.app.acquire_awake_lease()
+
+            def completed(result):
+                work.committed = True
+                if action.kind == 'archive-add':
+                    action.workspace.rewritten(result)
+
+            result = await retiring_work(lambda cancelled: action.execute(
+                provider, folder, name, format, self.app.private_root, cancelled), work.cancel, completed=completed)
+            if not self._accepts(work):
+                return
+            self._finish_work(work)
+            self.clear()
+            self.return_from_archive_picker()
+            if action.kind == 'archive-add':
+                action.workspace.status.text = action.workspace.message
+            elif action.kind == 'archive-extract':
+                action.workspace.status.text = 'Extracted to ' + result.name
+            else:
+                await self.app.browse_files()
+                self.app.file_status.value = 'Created ' + result.name
+        except Exception as error:
+            if work.operation is self.operation and self.active_host:
+                self.save_as_status.value = ('Archive operation cancelled.' if work.cancel.is_set()
+                                             else str(error)[:300])
+        finally:
+            self._finish_work(work)
+
+    def return_from_archive_picker(self):
+        adaptive = self.app.adaptive
+        if self.app.native_host.state.destination == 'documents' and adaptive.split is not None:
+            adaptive.trim_details(max(0, len(adaptive.detail_routes) - 1))
+            if adaptive.detail_routes:
+                self.app.route_changed(adaptive.detail_routes[-1][1])
+                adaptive.render()
+            else:
+                adaptive.show_list()
+            return
+        self.app.routes.back()
 
     def update_move_progress(self, values):
         done, total = values['done'], values['total']
@@ -676,7 +747,9 @@ class EditorPicker(DestinationForm):
             self.editor_picker_rows[label] = row
             self.browser_editor_selected(None)
         self.picker_entries.value = label
-        if (not row['directory'] and self.operation.mode != 'folder'
+        if getattr(self.operation.destination_action, 'kind', '') == 'archive-add':
+            self.save_as_name.value = row['name']
+        elif (not row['directory'] and self.operation.mode != 'folder'
                 and self.operation.creation is None and self.operation.destination_action is None):
             self.save_as_name.value = row['name']
 
@@ -873,6 +946,8 @@ class EditorPicker(DestinationForm):
             self.clear()
             if visible:
                 if destination_action is not None:
+                    if destination_action.kind in ACTION_KINDS:
+                        return None if dismissed else self.return_from_archive_picker()
                     if getattr(destination_action, 'kind', '') == 'download':
                         # UIKit may already have popped this form; direct Back
                         # and Cancel still need to retire it exactly once.

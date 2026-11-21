@@ -26,6 +26,7 @@ documentation**.
 - Read [books](../features/books/user_mobile/user_mobile.md),
   [comics](../features/comics/user_mobile/user_mobile.md) or
   [PDFs](../features/pdf/user_mobile/user_mobile.md).
+- Create, edit and extract [archives](../features/archives/user_mobile/user_mobile.md) in File Browser.
 - Browse [images and use Burst camera](../features/images/user_mobile/user_mobile.md)
   or watch [video](../features/video/user_mobile/user_mobile.md).
 - Connect to a [remote folder or share](../features/rclone/user_mobile/connections.md),

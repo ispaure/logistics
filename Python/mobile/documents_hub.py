@@ -382,6 +382,12 @@ class DocumentsHub:
             row = self.session_panel(session, close=True, summary=summary)
             row.document_button.style.font_size = FILENAME_FONT
             rows.append(row)
+        owner = getattr(self.app, '_archives', None)
+        if owner is not None and owner.enabled() and owner.item is not None:
+            rows.append(toga.Box(children=[
+                toga.Button(owner.name, on_press=lambda widget: owner.present(), style=Pack(height=48, flex=1)),
+                toga.Button('×', on_press=owner.close, style=Pack(height=48)),
+            ], style=Pack(direction=ROW)))
         entries.add(document_list(rows, 'No open documents.'))
         if rows:
             entries.add(empty_document_row('Close a view with ×. Your saved file stays.'))
@@ -393,6 +399,9 @@ class DocumentsHub:
             style=Pack(direction=ROW, align_items=CENTER)))
         rows = []
         for session, summary in recent:
+            if (owner is not None and owner.item is not None and session.kind == 'archive'
+                    and owner.matches_reference(session.source)):
+                continue
             row = self.recent_row(session, summary)
             row.document_button.style.font_size = FILENAME_FONT
             rows.append(row)

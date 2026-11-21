@@ -93,6 +93,9 @@ async def exercise(app):
         choices = [row.value for row in app.file_storage.items]
         assert 'Local files' in choices, ('cold local roots', choices, app.file_status.value)
         assert app.file_provider is not None and not app.file_browser.closed
+        from .archive_checks import exercise_archives
+        await measure(app, 'archive-management', exercise_archives(app))
+        passed.append('native_archive_management')
         app.show_home()
         from .navigation_checks import exercise_navigation
         navigation_proof = await measure(app, 'navigation', exercise_navigation(app))

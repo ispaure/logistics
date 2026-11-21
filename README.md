@@ -72,7 +72,7 @@ Additional emulator tools are available on request through ispaure’s **ally-to
 
 Start with the [mobile guide](docs/user_mobile/user_mobile.md) for Android and iOS.
 It covers local files, text and Markdown editing, supported readers, LM Chat,
-remote transfers and encrypted copies. It also explains differences in navigation,
+remote transfers, encrypted copies and [on-device archives](docs/features/archives/user_mobile/user_mobile.md). It also explains differences in navigation,
 storage and platform support. Help is bundled in the app for offline use.
 
 For local builds, device installation or Firebase/TestFlight distribution, use

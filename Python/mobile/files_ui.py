@@ -255,6 +255,7 @@ class FilesUI:
              ('Copy', self.copy_file),
              ('Pin current folder', self.locations_controller().pin_local_folder),
              ('Delete selected…', self.delete_file), ('Change location…', lambda: self.show_file_actions(operation='location')),
+             ('Select items', self.begin_file_selection),
              ('Archive password…', lambda: self.show_file_actions(operation='password'))], self.show_file_actions)
         self.file_browser.attach_location_header(self.file_status,
             icon_button('back', 'Back to Workspaces', on_press=self.parent_file_folder))
@@ -263,9 +264,11 @@ class FilesUI:
         self.file_browser.location_bar.add(self.file_actions_button)
         self.file_checked = {}
         self.file_cut_button = toga.Button('Cut', on_press=self.cut_files, style=Pack(height=48, flex=1))
+        self.file_archive_button = toga.Button('Create archive…', on_press=self.create_file_archive,
+                                             enabled=False, style=Pack(height=48, flex=1))
         self.file_select_done = toga.Button('Done selecting', on_press=self.end_file_selection,
                                            style=Pack(height=48, flex=1))
-        self.file_select_bar = toga.Box(children=[self.file_cut_button, self.file_select_done],
+        self.file_select_bar = toga.Box(children=[self.file_cut_button, self.file_archive_button, self.file_select_done],
                                         style=Pack(direction=ROW, height=48, display='none'))
         self.file_source_tabs = toga.Box(style=Pack(direction=ROW, height=48))
         self.files_view = toga.Box(children=[
@@ -392,10 +395,13 @@ class FilesUI:
                          *([('Move…', lambda: self.show_file_actions(operation='move'))] if access.delete else []),
                          *([('Copy', self.copy_file)] if self.can_copy_file(provider) else []),
                          ('Details', self.show_file_details), ('Delete…', self.delete_file)]
+        from .archive_ui import archive_commands
+        commands.extend(archive_commands(self.app, provider, selected))
         if context is None:
-            if access.delete:
+            from .archive_operations import ordinary
+            if access.delete or (ordinary(provider) and self.feature_enabled('archives')):
                 commands.append(('Select items', self.begin_file_selection))
-                if selected:
+                if selected and access.delete:
                     commands.append(('Cut', self.cut_files))
             if access.create and access.rename and access.delete and self.pending_file_cut():
                 commands.append(('Paste move here', self.paste_files))
@@ -408,7 +414,10 @@ class FilesUI:
             return
         self.file_browser.on_check_entry = self.check_file_entry
         self.file_browser.highlight_selection()
-        self.file_cut_button.enabled = False
+        self.file_cut_button.enabled = self.file_archive_button.enabled = False
+        from .archive_operations import ordinary
+        self.file_archive_button.style.display = ('pack' if ordinary(self.file_provider)
+                                                  and self.feature_enabled('archives') else 'none')
         # The Workspaces frame reparents the original browser contents into
         # its detail pane. Keep the selection row with those contents.
         self.file_select_bar.style.display = 'pack'
@@ -422,8 +431,20 @@ class FilesUI:
             self.file_checked[entry.identity] = entry.payload
         self.file_browser.checked_entries = set(self.file_checked)
         self.file_browser.highlight_selection()
-        self.file_cut_button.enabled = bool(self.file_checked)
+        from commonUtils.runtime.resources.provider import capabilities
+        self.file_cut_button.enabled = bool(self.file_checked) and capabilities(self.file_provider).delete
+        self.file_archive_button.enabled = bool(self.file_checked)
         self.file_cut_button.text = f'Cut ({len(self.file_checked)})'
+
+    async def create_file_archive(self, widget=None, **kwargs):
+        from .archive_ui import controller
+        from .archive_operations import ArchiveItem, ordinary
+        provider = self.file_provider
+        if ordinary(provider) and self.feature_enabled('archives'):
+            sources = tuple(ArchiveItem.from_row(provider, row) for row in self.file_checked.values())
+            if sources:
+                self.end_file_selection()
+                await controller(self.app).create(sources)
 
     def end_file_selection(self, widget=None, **kwargs):
         self.file_select_bar.style.display = 'none'
@@ -784,6 +805,12 @@ class FilesUI:
                 return
             if provider.entry(path)['directory']:
                 raise ValueError('Choose a file to read.')
+            from commonUtils import archives
+            from .archive_operations import ArchiveItem, ordinary
+            if (self.feature_enabled('archives') and ordinary(provider)
+                    and path.lower().endswith(archives.TAR_SUFFIXES)):
+                from .archive_ui import controller
+                return await controller(self.app).open(ArchiveItem(provider, path))
             from services.documents.mobile_storage import open_provider_document
             self.crypt_password.value = self.file_password.value
             return await open_provider_document(self.app, provider, path)

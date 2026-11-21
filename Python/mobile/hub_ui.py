@@ -124,7 +124,10 @@ class HubUI(HomeScreen, DocumentsHub):
             if source is not None:
                 from .document_sources import reopen_file
                 try:
-                    if session.kind == 'video':
+                    if session.kind == 'archive':
+                        from .archive_ui import reopen_archive
+                        await reopen_archive(self.app, source)
+                    elif session.kind == 'video':
                         await reopen_file(self.app, source, kind='video')
                     else:
                         await reopen_file(self.app, source)

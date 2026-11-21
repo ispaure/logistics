@@ -65,7 +65,8 @@ class DestinationForm:
             open_folder=self.browser_editor_folder, navigate=self.browser_editor_location,
             open_file=self.browser_editor_file, contextual_selection=False, preview=False)
         from .filename_input import FilenameInput
-        directory = mode in ('open', 'folder')
+        directory = mode in ('open', 'folder') or getattr(destination_action, 'kind', '') in (
+            'archive-create', 'archive-extract', 'archive-add')
         if getattr(destination_action, 'kind', '') == 'move':
             directory = destination_action.provider.entry(destination_action.path)['directory']
         self.save_as_name = FilenameInput(value=name, directory=directory,
@@ -104,7 +105,14 @@ class DestinationForm:
             toga.Button('Cancel', on_press=self.hide_new_folder, style=Pack(height=48))], style=Pack(direction=ROW))
         self.new_folder_form = toga.Box(children=[self.new_folder_name, folder_actions], style=Pack(
             direction=COLUMN if creation is not None else ROW))
+        action = getattr(destination_action, 'kind', '')
         name_fields = [toga.Label('Name' if destination_action is not None else name_label), self.save_as_name]
+        if action == 'archive-add':
+            name_fields[0].text = 'Select an item or enter its name'
+        if action == 'archive-create':
+            from .archive_operations import FORMATS
+            self.archive_format = toga.Selection(items=list(FORMATS), style=Pack(height=48))
+            name_fields += [self.archive_format]
         location_fields = [self.picker_destination, self.save_as_status]
         if creation is not None:
             self._build_creation_naming(operation, name_fields)

@@ -7,7 +7,7 @@ from hashlib import sha256
 
 MAX_RECENT = 10
 MAX_HISTORY_BYTES = 64 * 1024
-REFERENCE_KINDS = KINDS | {'video'}
+REFERENCE_KINDS = KINDS | {'video', 'archive'}
 
 
 class RecentDocuments:
@@ -77,7 +77,7 @@ class RecentDocuments:
                 if opener is not None:
                     item = dict(item, opener=opener)
                 title = relocated_title(item['title'], before, source) if source != before else item['title']
-                item = dict(item, source=source, resource=self.reference_id(source), title=title)
+                item = dict(item, source=source, resource=self.reference_id(source, item['kind']), title=title)
             identity = item['provider'], item['resource']
             if identity not in seen:
                 result.append(item)
@@ -132,7 +132,7 @@ class RecentDocuments:
                     'download': {'type', 'remote', 'identity', 'key'}}
         if (source.get('type') not in expected or set(source) != expected[source['type']]
                 or any(not isinstance(value, str) or not value or len(value) > 4096 for value in source.values())
-                or item['resource'] != RecentDocuments.reference_id(source)):
+                or item['resource'] != RecentDocuments.reference_id(source, item['kind'])):
             raise ValueError('Invalid recent file source.')
         from pathlib import Path
         if source['type'] == 'local':
@@ -162,7 +162,9 @@ class RecentDocuments:
                 raise ValueError('Recent note is outside its library.')
 
     @staticmethod
-    def reference_id(source):
+    def reference_id(source, kind=None):
+        if kind == 'archive':
+            source = dict(source, opener='archive')
         return sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
 
     def remember_file(self, session, source, *, opener=None):
@@ -170,7 +172,7 @@ class RecentDocuments:
             return
         from services.documents.progress_identity import normalize_local_reference
         source, opener = normalize_local_reference(self.private_root, source, opener)
-        item = dict(provider='file-reference', resource=self.reference_id(source),
+        item = dict(provider='file-reference', resource=self.reference_id(source, session.kind),
                     kind=session.kind, title=session.title, source=source, opened=time_ns())
         if opener is not None:
             item['opener'] = dict(opener)
@@ -204,7 +206,7 @@ class RecentDocuments:
             if before is not after:
                 if after is None:
                     continue
-                item = dict(item, source=after, resource=self.reference_id(after),
+                item = dict(item, source=after, resource=self.reference_id(after, item['kind']),
                             title=relocated_title(item['title'], before, after, names=names))
                 if 'opener' in item:
                     item['opener'] = relocated_opener(item['opener'], source, destination)

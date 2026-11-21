@@ -154,13 +154,13 @@ class DocumentCatalog(CredentialBuckets):
                 if (not isinstance(row, dict) or set(row) != {'id', 'title', 'source', 'opener', 'updated'}
                         or not isinstance(row['title'], str) or len(row['title']) > 1024
                         or not isinstance(row['source'], dict) or not isinstance(row['opener'], dict)
-                        or type(row['updated']) is not int or row['id'] != self.identity(row['source'])):
+                        or type(row['updated']) is not int or row['id'] != self.identity(row['source'], row['opener'])):
                     raise ValueError('Invalid document reference.')
             if normalize and self.normalize is not None and cipher is None:
                 normalized = {}
                 for row in sorted(rows, key=lambda item: item['updated'], reverse=True):
                     source, opener = self.normalize(row['source'], row['opener'])
-                    key = self.identity(source)
+                    key = self.identity(source, opener)
                     title = (relocated_title(row['title'], row['source'], source)
                              if source != row['source'] and source.get('type') == 'local' else row['title'])
                     normalized.setdefault(key, dict(row, id=key, source=source, opener=opener, title=title))
@@ -175,7 +175,9 @@ class DocumentCatalog(CredentialBuckets):
                 self.save(updated)
 
     @staticmethod
-    def identity(source):
+    def identity(source, opener=None):
+        if isinstance(opener, dict) and opener.get('kind') == 'archive':
+            source = dict(source, opener='archive')
         return sha256(json.dumps(source, sort_keys=True).encode()).hexdigest()
 
     def remember(self, source, title, opener, *, favourite=False, cipher=None):
@@ -183,7 +185,7 @@ class DocumentCatalog(CredentialBuckets):
             value = self.read(cipher)
             if self.normalize is not None and cipher is None:
                 source, opener = self.normalize(source, opener)
-            row = dict(id=self.identity(source), title=title, source=source, opener=opener, updated=time_ns())
+            row = dict(id=self.identity(source, opener), title=title, source=source, opener=opener, updated=time_ns())
             field, maximum = ('favourites', 100) if favourite else ('recent', 10)
             value[field] = [row, *(old for old in value[field] if old['id'] != row['id'])][:maximum]
             self.save(value, cipher)
@@ -212,7 +214,7 @@ class DocumentCatalog(CredentialBuckets):
                         item = updated
                         opener = relocated_opener(row['opener'], source, destination)
                         title = relocated_title(row['title'], row['source'], item, names=names)
-                        row = dict(row, id=self.identity(item), source=item, opener=opener, title=title)
+                        row = dict(row, id=self.identity(item, opener), source=item, opener=opener, title=title)
                     rows.append(row)
                 value[field] = rows
             if changed:
