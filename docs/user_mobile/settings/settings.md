@@ -64,7 +64,15 @@ Protected sessions lock when interrupted or sent to the background. Android
 secure windows block ordinary screenshots and nonsecure capture. iOS shields
 protected content during app-switcher and background transitions and detected
 screen recording or mirroring. iOS still allows screenshots of visible
-content. Ordinary local files and readable exports stay readable after
+content. Session-only credentials do not turn on a Siri restriction. Where
+**Siri → Excluded Apps** is available, system Settings lets you limit app
+access for Siri, Search and suggestions. Apple also offers Visual Intelligence
+on screenshots, and this setting's effect on that path is unverified.
+[iPhone Siri settings](https://support.apple.com/en-euro/guide/iphone/iphc28624b81abc/27/ios/27)
+· [iPad Siri settings](https://support.apple.com/guide/ipad/change-siri-settings-ipade5045bb1abc/ipados)
+· [Visual Intelligence](https://support.apple.com/en-gb/guide/iphone/iph12eb1545e/ios)
+
+Ordinary local files and readable exports stay readable after
 credentials lock. See [resuming a locked session](../../features/rclone/user_mobile/connections.md#resuming-a-locked-session).
 
 ## Trusted Wi-Fi session resume

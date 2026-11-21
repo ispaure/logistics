@@ -67,7 +67,8 @@ covers what is saved after a read.
 For shared rules, see [configuration and compatibility](configuration-and-data.md)
 for defaults and migrations, [access and privacy](access-privacy.md) for
 credential and protection decisions, and [audio and capture privacy](audio-playback.md)
-for playback and screen capture.
+for playback and screen capture. See [Siri access to onscreen content](siri-screen-access.md)
+for the Apple platform feasibility decision.
 
 ## Add or extend a feature
 
