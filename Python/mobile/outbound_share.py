@@ -194,25 +194,32 @@ async def _ios_presenter(app, validate):
 
 
 def _ios_file_provider(path):
-    from rubicon.objc import Block, ObjCBlock, ObjCClass, objc_block, objc_id
+    from rubicon.objc import Block, ObjCBlock, ObjCClass, SEL, objc_block, objc_id
 
     url = ObjCClass('NSURL').fileURLWithPath(str(path))
     UTType = ObjCClass('UTType')
     data = UTType.typeWithIdentifier('public.data')
     suffix = path.suffix[1:]
-    # For an unregistered extension, declare a dynamic type that still
-    # conforms to file data so document receivers can load its contents.
-    content = UTType.typeWithFilenameExtension(suffix, conformingToType=data) if suffix else None
-    provider = ObjCClass('NSItemProvider').alloc().init()
+    content = UTType.typeWithFilenameExtension(suffix) if suffix else None
+    if content is None or content.dynamic or not content.conformsToType(data):
+        content = data
+    ItemProvider = ObjCClass('NSItemProvider')
+    if ItemProvider.instancesRespondToSelector(SEL('initWithContentsOfURL:contentType:openInPlace:coordinated:visibility:')):
+        provider = ItemProvider.alloc().initWithContentsOfURL(
+            url, contentType=content, openInPlace=False, coordinated=False, visibility=0)
+    else:
+        provider = ItemProvider.alloc().init()
+
+        def load(completion):
+            ObjCBlock(completion, None, objc_id, c_bool, objc_id)(url, False, None)
+            return None
+
+        provider.registerFileRepresentationForTypeIdentifier(content.identifier,
+            fileOptions=0, visibility=0, loadHandler=Block(load, objc_id, objc_block))
+    if provider is None:
+        raise OSError('iOS could not prepare the selected file for sharing.')
     provider.suggestedName = path.name
     provider.preferredPresentationStyle = 2  # UIPreferredPresentationStyleAttachment
-
-    def load(completion):
-        ObjCBlock(completion, None, objc_id, c_bool, objc_id)(url, False, None)
-        return None
-
-    provider.registerFileRepresentationForTypeIdentifier((content or data).identifier,
-        fileOptions=0, visibility=0, loadHandler=Block(load, objc_id, objc_block))
     # iOS uses the file URL to match extensions that accept files. Keep the
     # byte representation first so the receiver can load the attachment.
     provider.registerObject(url, visibility=0)

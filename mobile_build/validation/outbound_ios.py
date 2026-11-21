@@ -58,12 +58,22 @@ def build_receiver(work, output, env):
     binding = '        NSString *type = nil;'
     if source.count(binding) != 1:
         raise ValueError('Expected the native receiver to choose a content representation.')
-    implementation.write_text(source.replace(binding, '''
+    source = source.replace(binding, '''
         NSString *inventory = [[queue stringByDeletingLastPathComponent]
             stringByAppendingPathComponent:@"representation-types.txt"];
         [([provider.registeredTypeIdentifiers componentsJoinedByString:@"\\n"])
             writeToFile:inventory atomically:YES encoding:NSUTF8StringEncoding error:nil];
-''' + binding))
+''' + binding)
+    loaded = '            // The representation URL is valid only during this callback.'
+    if source.count(loaded) != 1:
+        raise ValueError('Expected the native receiver to load a scoped file.')
+    implementation.write_text(source.replace(loaded, '''
+            NSString *details = [NSString stringWithFormat:@"type=%@ file=%d error=%@/%ld",
+                type, url.isFileURL, error.domain, (long)error.code];
+            [details writeToFile:[[queue stringByDeletingLastPathComponent]
+                stringByAppendingPathComponent:@"representation-load.txt"]
+                atomically:YES encoding:NSUTF8StringEncoding error:nil];
+''' + loaded))
     info = extension / 'Info.plist'
     metadata = plistlib.loads(info.read_bytes())
     metadata['CFBundleDisplayName'] = 'Outbound QA Receiver'
@@ -116,9 +126,9 @@ def exercise(sender, output, env, *, receiver, project, bundle, result_name, run
             shutil.copyfile(report_file, output / 'ios-result.json')
         state = fixture._queue_state(queue)
         write(output / 'recipient.json', state)
-        inventory = queue.parent / 'representation-types.txt'
-        if inventory.is_file():
-            shutil.copyfile(inventory, output / inventory.name)
+        for name in ('representation-types.txt', 'representation-load.txt'):
+            if (queue.parent / name).is_file():
+                shutil.copyfile(queue.parent / name, output / name)
         if xctest or not report_file.exists():
             raise RuntimeError(f'iOS outbound XCTest did not pass (exit {xctest}); see outbound-xctest.log.')
         report = json.loads(report_file.read_bytes())
