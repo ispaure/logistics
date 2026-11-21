@@ -4,6 +4,7 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
+from ctypes import c_void_p
 import gc
 import sys
 import threading
@@ -16,19 +17,16 @@ from mobile.cycle_collection import UICycleCollection, bind_ios_timer_ownership
 
 
 class CycleCollectionTests(unittest.IsolatedAsyncioTestCase):
-    def test_rubicon_handle_owns_its_timer_until_collection(self):
-        native_timer = object()
-
-        class BaseTimer:
-            def __init__(self):
-                self._timer = native_timer
-                self.cycle = self
-
-            def cancel(self):
-                self.removed_timer = self._timer
-
-        release = Mock()
-        eventloop = SimpleNamespace(CFTimerHandle=BaseTimer, libcf=SimpleNamespace(CFRelease=release))
+    async def test_rubicon_retires_each_timer_once_before_user_code_or_collection(self):
+        loop = asyncio.get_running_loop()
+        loop._timers = set()
+        loop._cfrunloop = object()
+        cf = Mock()
+        cf.CFAbsoluteTimeGetCurrent.return_value = 100
+        cf.CFRunLoopTimerCreate.side_effect = (c_void_p(1000), c_void_p(2000))
+        eventloop = SimpleNamespace(CFTimerHandle=object, libcf=cf, CFRunLoopTimerRef=c_void_p,
+                                    CFRunLoopTimerCallBack=lambda callback: callback,
+                                    kCFRunLoopCommonModes=object())
         with patch.dict(sys.modules, {'rubicon.objc': SimpleNamespace(eventloop=eventloop)}), \
                 patch('importlib.metadata.version', return_value='0.5.7'):
             bind_ios_timer_ownership()
@@ -36,15 +34,34 @@ class CycleCollectionTests(unittest.IsolatedAsyncioTestCase):
             bind_ios_timer_ownership()
             self.assertIs(eventloop.CFTimerHandle, handle_type)
 
-        handle = handle_type()
-        handle.cancel()
-        self.assertIs(handle.removed_timer, native_timer)
-        reference = weakref.ref(handle)
-        release.assert_not_called()
-        del handle
+        calls_at_dispatch = []
+
+        def run_callback(arg):
+            calls_at_dispatch.extend(cf.mock_calls)
+            fired.cancel()
+            gc.collect()
+
+        callback = Mock(side_effect=run_callback)
+        fired = handle_type(loop=loop, timeout=1, callback=callback, args=('fired',))
+        cancelled = handle_type(loop=loop, timeout=2, callback=callback, args=('cancelled',))
+        first, second = fired._timer, cancelled._timer
+        dispatch = cf.CFRunLoopTimerCreate.call_args_list[0].args[5]
+        self.assertIs(dispatch, cf.CFRunLoopTimerCreate.call_args_list[1].args[5])
+        dispatch(first, None)
+        cancelled.cancel()
+        cancelled.cancel()
+        dispatch(second, None)  # Native delivery that was already queued.
+        self.assertTrue(cancelled.cancelled())
+        self.assertFalse(loop._timers)
+        callback.assert_called_once_with('fired')
+        self.assertEqual([call[0] for call in calls_at_dispatch[-2:]],
+                         ['CFRunLoopTimerInvalidate', 'CFRelease'])
+        references = weakref.ref(fired), weakref.ref(cancelled)
+        del fired, cancelled
         gc.collect()
-        self.assertIsNone(reference())
-        release.assert_called_once_with(native_timer)
+        self.assertTrue(all(reference() is None for reference in references))
+        self.assertEqual([call.args[0] for call in cf.CFRunLoopTimerInvalidate.call_args_list], [first, second])
+        self.assertEqual([call.args[0] for call in cf.CFRelease.call_args_list], [first, second])
 
     async def test_worker_allocations_leave_finalization_to_ui_loop(self):
         loop = asyncio.get_running_loop()

@@ -5,6 +5,7 @@ those finalizers during an unrelated executor allocation, so the iOS process
 collects eligible generations from its UI loop instead. Reference counting is
 unchanged; background jobs must not explicitly collect native widget cycles.
 """
+import asyncio
 import atexit
 import gc
 import threading
@@ -64,7 +65,7 @@ _owner = None
 
 
 def bind_ios_timer_ownership():
-    """Balance the native timer reference owned by a Rubicon timer handle."""
+    """Give Rubicon 0.5.7 timers an explicit registration and retirement path."""
     from importlib.metadata import PackageNotFoundError, version
 
     try:
@@ -74,22 +75,58 @@ def bind_ios_timer_ownership():
     if not pinned:
         return
     from rubicon.objc import eventloop
-    base = eventloop.CFTimerHandle
-    if getattr(base, '_releases_native_timer', False):
+    if getattr(eventloop.CFTimerHandle, '_owns_native_timer', False):
         return
-    release = eventloop.libcf.CFRelease
+    cf = eventloop.libcf
+    cf.CFRelease.restype = None
+    cf.CFRunLoopTimerInvalidate.argtypes = [eventloop.CFRunLoopTimerRef]
+    cf.CFRunLoopTimerInvalidate.restype = None
+    pending = {}
+    lock = threading.Lock()
 
-    class TimerHandle(base):
-        _releases_native_timer = True
+    def retire(timer):
+        # Stop native delivery while we still own the create reference.
+        cf.CFRunLoopTimerInvalidate(timer)
+        cf.CFRelease(timer)
 
-        def __del__(self):
-            # Rubicon 0.5.7 creates a CFRunLoopTimer but drops only the loop's
-            # reference on fire/cancel. Keep the create reference until this
-            # handle retires so a later cancel still has a valid pointer.
-            timer = getattr(self, '_timer', None)
-            if timer:
+    @eventloop.CFRunLoopTimerCallBack
+    def dispatch(timer, _context):
+        # One process-lived trampoline also covers delivery already in flight
+        # when another thread cancels a timer.
+        with lock:
+            handle = pending.pop(timer.value, None)
+            if handle is None:
+                return
+            handle._timer = None
+            handle._loop._timers.discard(handle)
+        retire(timer)
+        handle._run()
+
+    class TimerHandle(asyncio.TimerHandle):
+        _owns_native_timer = True
+
+        def __init__(self, *, loop, timeout, callback, args):
+            super().__init__(cf.CFAbsoluteTimeGetCurrent() + timeout, callback, args, loop)
+            timer = cf.CFRunLoopTimerCreate(None, self.when(), 0, 0, 0, dispatch, None)
+            if not timer:
+                raise RuntimeError('Unable to create the iOS event-loop timer.')
+            self._timer = timer
+            # Publish the handle before native registration can dispatch it.
+            with lock:
+                pending[timer.value] = self
+                loop._timers.add(self)
+                cf.CFRunLoopAddTimer(loop._cfrunloop, timer, eventloop.kCFRunLoopCommonModes)
+
+        def cancel(self):
+            with lock:
+                timer = self._timer
+                if timer is None:
+                    return
                 self._timer = None
-                release(timer)
+                super().cancel()
+                pending.pop(timer.value)
+                self._loop._timers.discard(self)
+            retire(timer)
 
     eventloop.CFTimerHandle = TimerHandle
 

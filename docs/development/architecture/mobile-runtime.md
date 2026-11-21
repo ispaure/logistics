@@ -252,9 +252,10 @@ widgets, retired views, descriptors by class, and app memory after settling.
 Home and Documents retire native command menus before replacing their document
 rows. This drops the UIKit actions that otherwise retain removed row trees.
 Retiring a menu also releases its saved command callbacks. On iOS with
-Rubicon 0.5.7, the timer handle releases its Core Foundation timer when Python
-collects the handle. The handle keeps the timer valid for cancellation through
-its lifetime. When profiling iOS, sample native UI and timer counts in the app
+Rubicon 0.5.7, dispatch and cancellation invalidate and release each Core
+Foundation timer exactly once. The native callback stays alive for the process,
+and cyclic collection can retire a Python timer handle without calling Core
+Foundation. When profiling iOS, sample native UI and timer counts in the app
 and track WebKit child processes separately from app RSS.
 
 Use commonUtils' `READER_LAYOUT` for shared track, thumb and touch geometry.
