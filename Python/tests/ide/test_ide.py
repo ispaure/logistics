@@ -930,6 +930,14 @@ class RestoreTests(WorkspaceFixture):
     def test_independent_projects_layout_and_missing_files_survive_restart(self):
         from features.ide.ui.page import IDEPage
         from features.ide.projects import Project
+
+        def wait_for_projects(page):
+            # Opening a file also schedules a disk check. The previously
+            # active project can still be checking when the next project opens.
+            self.wait_until(lambda: all(not view.disk_pending and not view.worker and not view.queue
+                                        for view in page.views),
+                            message='IDE projects did not finish opening and checking their files')
+
         with self.temporary_directory() as directory:
             root = Path(directory).resolve()
             state = root / 'IDE' / 'workspace.json'
@@ -946,7 +954,7 @@ class RestoreTests(WorkspaceFixture):
             one.split_right()
             two = page.open_project(second)
             two.open_path(b)
-            self.wait(two)
+            wait_for_projects(page)
             self.assertIsNot(one.documents[a], two.documents[b])
             self.assertTrue(page.prepare_close())
             self.assertTrue(any(first.layout['splitter']))
@@ -954,8 +962,7 @@ class RestoreTests(WorkspaceFixture):
             page.close()
             b.unlink()
             restored = IDEPage(store_path=state)
-            for project_view in restored.views:
-                self.wait(project_view)
+            wait_for_projects(restored)
             self.assertEqual(len(restored.views), 2)
             self.assertEqual(len(restored.views[0].groups), 2)
             self.assertEqual(restored.views[1].unavailable[0]['path'], str(b))
