@@ -1346,6 +1346,22 @@ class LMWidgetTests(LMPageFixture):
                 browser.set_source('Only prose and `inline code`.')
                 self.assertEqual(browser.code_buttons, [])
 
+    def test_markdown_recovers_from_an_unrelated_root_frame_wrapper(self):
+        from features.lm.ui.conversation_view import MessageBrowser
+        browser = MessageBrowser(self.page)
+        browser.set_source('Initial reply')
+        cursor = browser.textCursor()
+        cursor.setPosition(3, qt.QTextCursor.MoveMode.KeepAnchor)
+        browser.setTextCursor(cursor)
+        document = browser.document()
+        with patch.object(document, 'rootFrame', return_value=qt.QObject(self.page)):
+            browser.set_source('Initial reply\n\n```text\nupdated\n```')
+        self.assertIsNot(browser.document(), document)
+        self.assertEqual(browser.textCursor().selectedText(), 'Ini')
+        self.assertEqual(len(browser.code_buttons), 1)
+        browser.code_buttons[0][1].click()
+        self.assertEqual(self.app.clipboard().text(), 'updated')
+
     def test_user_messages_keep_pasted_headers_and_line_breaks_literal(self):
         from features.lm.ui.conversation_view import Bubble
         source = ('Please add this header:\n\n'

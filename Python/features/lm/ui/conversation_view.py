@@ -77,20 +77,33 @@ class MessageBrowser(MarkdownBrowser):
             button.hide()
             button.deleteLater()
         self.code_buttons.clear()
-        if self.literal_prose:
-            set_user_document(self.document(), source)
-        else:
-            self.document().setMarkdown(source, qt.QTextDocument.MarkdownFeature.MarkdownDialectGitHub |
-                                        qt.QTextDocument.MarkdownFeature.MarkdownNoHTML)
-        style_document(self.document(), message_palette(self.literal_prose), callouts={})
-        self.document().setDocumentMargin(8)
+        document = self.document()
+        self._load_source(document, source)
+        if not isinstance(document.rootFrame(), qt.QTextFrame):
+            # Some Qt bindings can reuse a stale QObject wrapper when Markdown
+            # replaces the root frame. Keep the old document alive while rebuilding.
+            replacement = qt.QTextDocument(self)
+            replacement.setDefaultFont(document.defaultFont())
+            replacement.setDefaultStyleSheet(document.defaultStyleSheet())
+            self._load_source(replacement, source)
+            self.setDocument(replacement)
+            document = replacement
+        style_document(document, message_palette(self.literal_prose), callouts={})
+        document.setDocumentMargin(8)
         self.rebuild_code_buttons()
-        cursor = qt.QTextCursor(self.document())
-        end = self.document().characterCount() - 1
+        cursor = qt.QTextCursor(document)
+        end = document.characterCount() - 1
         cursor.setPosition(min(anchor, end))
         cursor.setPosition(min(position, end), qt.QTextCursor.MoveMode.KeepAnchor)
         self.setTextCursor(cursor)
         self.fit_height()
+
+    def _load_source(self, document, source):
+        if self.literal_prose:
+            set_user_document(document, source)
+        else:
+            document.setMarkdown(source, qt.QTextDocument.MarkdownFeature.MarkdownDialectGitHub |
+                                 qt.QTextDocument.MarkdownFeature.MarkdownNoHTML)
 
     def rebuild_code_buttons(self):
         def visit(parent):
