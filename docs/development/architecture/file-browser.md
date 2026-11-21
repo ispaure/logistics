@@ -35,7 +35,8 @@ requested move through its verified provider mutation. Sources offering only
 a move or link are rejected. Partial results, conflicts and cancellation appear
 in the desktop Workspace actions process view. Native local exports offer
 durable file URLs and leave file-manager transfer progress and conflict
-handling with the receiver. The drag return value alone establishes handoff.
+handling with the receiver. On Cocoa, Qt can return an ignored action after
+Finder completes a drop. Logistics reports an unknown outcome in that case.
 Logistics cannot reconcile Home references with an external move because the
 receiver does not report the final destination to the browser.
 

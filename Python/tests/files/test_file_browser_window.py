@@ -456,6 +456,14 @@ class BrowserWindowTests(QtTestCase):
         mime.setUrls([qt.QUrl.fromLocalFile(str(self.path)), qt.QUrl('smb://example.invalid/file')])
         self.assertEqual(local_drag_paths(mime), ())
 
+    def test_cocoa_ignore_action_reports_an_unknown_external_outcome(self):
+        from desktop.native_file_drag import handoff_message
+
+        with patch.object(qt.QApplication, 'platformName', return_value='cocoa'):
+            self.assertEqual(handoff_message(qt.Qt.DropAction.IgnoreAction),
+                             'Check the file manager for progress, conflicts and the outcome.')
+            self.assertEqual(handoff_message(None), '')
+
     def test_keyboard_move_relocates_reader_progress_and_home_for_a_folder(self):
         from PySide6.QtTest import QTest
         from commonUtils.runtime.resources.local import LocalFiles

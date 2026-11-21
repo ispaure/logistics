@@ -76,6 +76,10 @@ def start_file_drag(widget, paths, *, internal=False):
 
 def handoff_message(action):
     if action == qt.Qt.DropAction.IgnoreAction:
+        # Cocoa can return IgnoreAction after the receiving app moves or copies
+        # local URLs. It also returns IgnoreAction for a cancelled drag.
+        if qt.QApplication.platformName() == 'cocoa':
+            return 'Check the file manager for progress, conflicts and the outcome.'
         return 'No file-manager handoff was accepted.'
     if action is not None:
         return 'Drop accepted. Check the file manager for progress, conflicts and the outcome.'
