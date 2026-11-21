@@ -104,9 +104,15 @@
         self.stage = 5;
     } else if (self.stage == 5 && !v.audioSwitchTrack.length) {
         [v switchAudioTrack:tracks[1]];
+        int64_t target = MAX(1000, [v positionMilliseconds] - 750);
+        [v seekToMilliseconds:target];
+        if ([v positionMilliseconds] != target || [v progressPosition] != -1) {
+            [self finish:@"Pending switch did not hold the latest requested position"]; return;
+        }
         v.audioSwitchDeadline = now-1;
         [v updateAudioSwitch];
-        if (v.playRequested || v.audioSwitchTrack.length || ![v.message.text containsString:@"Audio did not become ready"]) {
+        if (v.playRequested || v.audioSwitchTrack.length || [v positionMilliseconds] != target ||
+            ![v.message.text containsString:@"Audio did not become ready"]) {
             [self finish:@"Readiness deadline did not pause and report failure"]; return;
         }
         [v startByUser]; self.stage = 6;

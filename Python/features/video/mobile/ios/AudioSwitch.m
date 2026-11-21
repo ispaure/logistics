@@ -16,6 +16,7 @@
     track.selectedExclusively = YES;
     if (!self.hasPlayed) return YES; // Initial discovery is already prerolling.
     self.audioSwitchTrack = track.trackId;
+    self.audioSwitchPosition = position;
     self.audioSwitchPlayed = [self playbackStats].playedAudioBuffers;
     self.audioSwitchDeadline = NSProcessInfo.processInfo.systemUptime + 20;
     // Do not pause the decoder: seek preroll owns the shared output clock. A
@@ -41,9 +42,12 @@
         if ([self.message.text isEqualToString:@"Audio has not started here. Video continues."]) [self showStatus:@""];
     }
     if (!self.audioSwitchTrack.length) return;
-    BOOL selected = NO;
-    for (VLCMediaPlayerTrack *track in self.player.audioTracks)
-        if ([track.trackId isEqual:self.audioSwitchTrack] && track.isSelected) selected = YES;
+    BOOL selected = NO, anyAudioSelected = NO;
+    for (VLCMediaPlayerTrack *track in self.player.audioTracks) {
+        if (!track.isSelected) continue;
+        anyAudioSelected = YES;
+        if ([track.trackId isEqual:self.audioSwitchTrack]) selected = YES;
+    }
     // Selection alone only acknowledges a command. Require the post-seek
     // buffering cycle AND newly played audio, including silent audio samples.
     // Cast decodes at the receiver, so local audio counters cannot attest to
@@ -63,9 +67,18 @@
     // video output and its advancing clock prove that the shared preroll has
     // completed, but do not prove audio is audible or permanently exhausted.
     // Report that distinct outcome instead of blocking otherwise valid video.
-    if (selected && self.audioSwitchBuffered && self.playRequested && !self.networkWaiting &&
+    BOOL videoAdvanced = self.audioSwitchBuffered && self.playRequested && !self.networkWaiting &&
         !self.transportFailure && stats.displayedPictures > self.audioSwitchFrames &&
-        [self nativeTimeMilliseconds] - MAX(self.audioSwitchClock, self.audioSwitchDecodeClock) >= 1250) {
+        [self nativeTimeMilliseconds] - MAX(self.audioSwitchClock, self.audioSwitchDecodeClock) >= 1250;
+    // An unsupported decoder can leave no selected audio after preroll.
+    // Once pictures advance on their own, pause at the original position.
+    if (videoAdvanced && !self.casting && !anyAudioSelected) {
+        [self pause];
+        [self updateTimeline];
+        [self showStatus:@"This audio track could not be started. Choose another track and press Play."];
+        return;
+    }
+    if (videoAdvanced && selected) {
         [self cancelAudioSwitch];
         self.audioOutputMissing = YES;
         self.audioMissingPlayed = stats.playedAudioBuffers;
@@ -78,6 +91,7 @@
     }
     if (NSProcessInfo.processInfo.systemUptime >= self.audioSwitchDeadline) {
         [self pause];
+        [self updateTimeline];
         [self showStatus:@"Audio did not become ready. Choose another track or press Play to retry."];
     }
 }

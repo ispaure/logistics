@@ -130,7 +130,7 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic) BOOL audioSwitchSawBuffering, audioSwitchBuffered;
 @property(nonatomic) uint64_t audioSwitchPlayed, audioSwitchDecoded, audioSwitchFrames, audioMissingPlayed;
 @property(nonatomic) BOOL audioOutputMissing;
-@property(nonatomic) int64_t audioSwitchClock, audioSwitchDecodeClock;
+@property(nonatomic) int64_t audioSwitchPosition, audioSwitchClock, audioSwitchDecodeClock;
 @property(nonatomic) NSTimeInterval audioSwitchDeadline;
 @property(nonatomic, copy) NSString *transportFailure;
 @property(nonatomic) BOOL hingePartiallyOpen, tabletop, portraitTabletop;
@@ -705,6 +705,7 @@ typedef struct {
     self.lastPlaybackProgress = self.lastFrameProgress = NSProcessInfo.processInfo.systemUptime;
     self.lastRenderedClock = target;
     if (self.audioSwitchTrack.length) {
+        self.audioSwitchPosition = target;
         self.audioSwitchGeneration++;
         self.audioSwitchSawBuffering = self.audioSwitchBuffered = NO;
         self.audioSwitchPlayed = [self playbackStats].playedAudioBuffers;
@@ -734,6 +735,8 @@ typedef struct {
 - (void)done:(id)sender { if (self.closed) self.closed(); }
 - (void)pause {
     self.openDeadline = 0;
+    if (self.audioSwitchTrack.length && self.startMilliseconds < 0)
+        self.startMilliseconds = self.audioSwitchPosition;
     [self cancelAudioSwitch];
     if ([self hasAirPlay]) {
         [self.airPlayPlayer pause];
@@ -1126,7 +1129,8 @@ typedef struct {
     if ([self hasAirPlay]) return !self.airPlayWasExternal || self.airPlaySeekTarget >= 0 ||
         self.airPlayPlayer.currentItem.status != AVPlayerItemStatusReadyToPlay ? -1 :
         [self airPlayTime:self.airPlayPlayer.currentTime];
-    if (self.progressSeek >= 0 || self.networkResumePending || self.resumeSeekSubmitted || self.startMilliseconds >= 0)
+    if (self.audioSwitchTrack.length || self.progressSeek >= 0 || self.networkResumePending ||
+        self.resumeSeekSubmitted || self.startMilliseconds >= 0)
         return -1;
     return [self nativeTimeMilliseconds];
 }
@@ -1140,6 +1144,7 @@ typedef struct {
     }
     if (self.networkResumePending) return self.bufferPosition;
     if (self.startMilliseconds >= 0) return self.startMilliseconds;
+    if (self.audioSwitchTrack.length) return self.audioSwitchPosition;
     int64_t value = [self nativeTimeMilliseconds];
     // VLC can reset its clock during teardown before notifying us that it
     // stopped. Keep the last playback position for EOF detection and retry.

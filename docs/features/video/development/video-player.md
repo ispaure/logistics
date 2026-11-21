@@ -72,6 +72,9 @@ reports a retryable error instead of claiming success.
 On Android, the selected track's preroll owns recovery until the switch
 finishes or fails. The unequal-stream fallback waits because pictures can
 arrive while the audio and playback clock are still recovering from the seek.
+On iOS, the timeline and saved checkpoint stay at the requested position
+while a switch is pending. If VLC leaves audio deselected and picture playback
+advances after preroll, Logistics pauses there and offers another track.
 
 `video_chrome_tools --audio-switch` builds a two-language AAC fixture and checks
 the production iOS controller on an owned disposable simulator: visible wait,
