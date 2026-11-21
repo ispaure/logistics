@@ -16,7 +16,7 @@ class LaunchTests(unittest.TestCase):
         patcher = patch.object(launch, 'IndexService')
         self.service = patcher.start().return_value
         self.addCleanup(patcher.stop)
-        for name in ('apply_styling', 'initialize_settings'):
+        for name in ('apply_styling', 'initialize_settings', 'monitor_private_speech'):
             patcher = patch.object(launch, name)
             patcher.start(); self.addCleanup(patcher.stop)
         patcher = patch.object(launch.registry, 'load_feature_preferences')

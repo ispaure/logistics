@@ -5,7 +5,7 @@ import sys
 import weakref
 
 from commonUtils.ui import pyside as qt
-from PySide6.QtMultimedia import QMediaDevices
+from services.documents.ui.audio_outputs import SelectedAudioOutput
 
 _observers = {}
 _notification_callback = None
@@ -95,9 +95,8 @@ class DesktopLifecycle(qt.QObject):
         self.window = weakref.ref(window)
         self.closed = False
         self.interrupted.connect(self.pause)
-        self.devices = QMediaDevices(self)
-        self.output = bytes(QMediaDevices.defaultAudioOutput().id())
-        self.devices.audioOutputsChanged.connect(self.outputs_changed)
+        self.devices = SelectedAudioOutput(self)
+        self.devices.changed.connect(self.outputs_changed)
         self.native = None
         self.rebinding = False
         self.awake = False
@@ -142,11 +141,10 @@ class DesktopLifecycle(qt.QObject):
                 window.resume_guard.lock()
             self.keep_awake(False)
 
-    def outputs_changed(self):
-        output = bytes(QMediaDevices.defaultAudioOutput().id())
-        if self.output and (output != self.output or self.output not in {bytes(row.id()) for row in QMediaDevices.audioOutputs()}):
+    def outputs_changed(self, had_output):
+        window = self.window()
+        if had_output or (window is not None and window.resume_guard is not None):
             self.pause()
-        self.output = output
 
     def keep_awake(self, active):
         if self.awake == active:

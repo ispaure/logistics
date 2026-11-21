@@ -22,6 +22,7 @@ from commonUtils.runtime.diagnostics import configure
 from commonUtils.ui.diagnostics import present_diagnostic
 
 from desktop.main_window import MainWindow
+from desktop.speech_outputs import monitor_private_speech
 from services.folders.ui.indexing import IndexService
 
 
@@ -39,6 +40,7 @@ def main() -> int:
         indexing.start()
         apply_theme(app)
         apply_styling(app)
+        monitor_private_speech(app)
         from desktop.settings.window import open_settings
         app._commonutils_open_settings = open_settings
         log(Severity.DEBUG, 'Logistics', 'Initialize Features')

@@ -32,6 +32,13 @@ OS rerouting may precede notification and receivers can retain buffered audio.
 iOS general still screenshots and external cameras remain outside app shielding.
 Desktop capture protection is best effort. Mobile owns Bluetooth consent.
 
+On desktop, Qt reports changes to the default audio output. Losing that
+output pauses video and locks a protected player, including one already
+paused. A newly identifiable default also locks protected video. A change
+stops read-aloud in session-only document windows, or throughout the app while
+session-only credentials are loaded. Stopping also cancels pending playlist
+speech. Ordinary narration continues when its output changes.
+
 Run `python3 dev.py test mobile test_audio_output.py` for route, consent and
 lifetime behavior. Actual Bluetooth and iPhone Mirroring require physical checks.
 [Hardware acceptance](../../features/video/development/hardware-acceptance.md)
