@@ -11,7 +11,7 @@ from commonUtils.ui import pyside as qt
 from PySide6.QtTest import QTest
 from shiboken6 import isValid
 
-from desktop import clipboard
+from services.documents.ui import clipboard
 from features.rclone import session
 from services.documents.ui.private_views import protect_private_view
 

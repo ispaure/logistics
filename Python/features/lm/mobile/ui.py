@@ -510,8 +510,7 @@ class ChatUI(ChatSettingsPanel):
 
     def chat_transcript_navigation(self, widget, url, **kwargs):
         if self.active_host and widget is self.chat_transcript and url == 'https://logistics.invalid/chat/copy':
-            from mobile.clipboard import controller
-            if policy := controller(self.app):
+            if policy := getattr(self.app, 'clipboard', None):
                 self.loop.create_task(self.copy_transcript(widget, policy, self.transcript.generation))
         return False
 
@@ -580,11 +579,10 @@ class ChatUI(ChatSettingsPanel):
                 start = 0
                 while start < min(len(entries), len(previous)) and entries[start] is previous[start]:
                     start += 1
-                from mobile.clipboard import supported
                 script = transcript_update(data['id'], entries[start:],
                     self.presentation.font_size('markdown'),
                     configured=configured(self.chat_profile),
-                    force_latest=force_latest, start=start, native_clipboard=supported(self.app))
+                    force_latest=force_latest, start=start, native_clipboard=getattr(self.app, 'clipboard', None) is not None)
                 ready = await self.chat_transcript.evaluate_javascript(script)
                 if not self.active_host:
                     return

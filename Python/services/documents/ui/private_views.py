@@ -42,7 +42,7 @@ class PrivateViewGuard(qt.QObject):
         window.installEventFilter(self)
         self.bind(provider)
         _guards.add(self)
-        from desktop.clipboard import PROTECTION
+        from services.documents.ui.clipboard import PROTECTION
         self._release_process_protection = PROTECTION.retain(self, lambda: (), protected=self.retains_protection)
         window.destroyed.connect(self._release_process_protection)
         window.destroyed.connect(lambda: _guards.discard(self))

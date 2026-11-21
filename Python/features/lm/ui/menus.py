@@ -1,6 +1,6 @@
 """Desktop conversation menu assembly; actions and session state stay on the page."""
 from commonUtils.ui import pyside as qt
-from desktop.clipboard import guarded
+from services.documents.ui.clipboard import guarded
 
 
 def build_menus(page, layout):

@@ -1,6 +1,6 @@
 """Conventional menus, published by the existing workspace menu router."""
 from commonUtils.ui import pyside as qt
-from desktop.clipboard import guarded
+from services.documents.ui.clipboard import guarded
 from services.clipboard_policy import CLIPBOARD_COMMANDS
 
 

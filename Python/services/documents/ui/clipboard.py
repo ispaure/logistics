@@ -9,7 +9,7 @@ from services.desktop_video_access import session_contexts
 from services.protection import ProtectionScope
 
 FIELD = ('Privacy', 'restrict_session_clipboard_bool')
-CONFIG = Path(__file__).resolve().parents[1] / 'configFile.ini'
+CONFIG = Path(__file__).resolve().parents[3] / 'configFile.ini'
 PROTECTION = ProtectionScope(session_contexts)
 _STANDARD_KEYS = qt.QKeySequence.StandardKey
 _KEYS = (_STANDARD_KEYS.Cut, _STANDARD_KEYS.Copy, _STANDARD_KEYS.Paste)

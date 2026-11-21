@@ -157,7 +157,7 @@ class EditorWindow(CommandControls, SyntaxSettings, EditingCommands, FileOperati
         self._view_menu = view
 
     def edit(self, method):
-        from desktop.clipboard import clipboard_blocked
+        from services.documents.ui.clipboard import clipboard_blocked
         from services.clipboard_policy import CLIPBOARD_COMMANDS
         if method in CLIPBOARD_COMMANDS and clipboard_blocked():
             return

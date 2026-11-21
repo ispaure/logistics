@@ -1,7 +1,7 @@
 """Privacy & Security settings for Qt desktop."""
 from commonUtils.ui import pyside as qt
 
-from desktop.clipboard import CONFIG, FIELD
+from services.documents.ui.clipboard import CONFIG, FIELD
 from features.settings import settings_store
 from services.clipboard_policy import DESCRIPTION, LABEL
 

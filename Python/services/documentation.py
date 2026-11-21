@@ -27,6 +27,6 @@ def open_guide(path, *, directory=None, **kwargs):
     from commonUtils.formats.markdown.wiki import documentation_root
     from commonUtils.ui.markdown import open_markdown
     window = open_markdown(path, directory=directory or documentation_root(path), **kwargs)
-    from desktop.clipboard import guard_markdown_actions
+    from services.documents.ui.clipboard import guard_markdown_actions
     guard_markdown_actions(window.viewer)
     return window

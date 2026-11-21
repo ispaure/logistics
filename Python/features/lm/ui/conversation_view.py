@@ -10,7 +10,7 @@ from .image_view import ScreenshotView
 from .changes import EditedFilesCard
 from .icons import action_button, chat_icon
 from .user_message import set_user_document
-from desktop.clipboard import clipboard_blocked, guarded
+from services.documents.ui.clipboard import clipboard_blocked, guarded
 
 
 def message_palette(user=False):

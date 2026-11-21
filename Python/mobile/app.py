@@ -1084,6 +1084,11 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         from .protection import for_app
         return for_app(self)
 
+    @property
+    def clipboard(self):
+        from .clipboard import controller
+        return controller(self)
+
     async def open_crypt(self, widget=None, *, copies=None, key=None, prepared=None, destination=None, privacy_gate=None, edit=False, **kwargs):
         copies = copies or self.cloud_controller().crypt_copies
         if key is None:

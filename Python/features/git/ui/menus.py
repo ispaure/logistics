@@ -102,7 +102,7 @@ class RepositoryMenus(qt.QObject):
         return None
 
     def edit(self, method):
-        from desktop.clipboard import clipboard_blocked
+        from services.documents.ui.clipboard import clipboard_blocked
         from services.clipboard_policy import CLIPBOARD_COMMANDS
         if method in CLIPBOARD_COMMANDS and clipboard_blocked():
             return
@@ -115,7 +115,7 @@ class RepositoryMenus(qt.QObject):
 
     def copy_hash(self):
         commit = self.view.history.selected_commit()
-        from desktop.clipboard import clipboard_blocked
+        from services.documents.ui.clipboard import clipboard_blocked
         if commit and not clipboard_blocked():
             qt.QApplication.clipboard().setText(commit.oid)
 
