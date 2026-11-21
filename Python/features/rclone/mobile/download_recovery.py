@@ -180,7 +180,10 @@ async def queue_command(controller, action, args, visible):
         if action == 'downloads':
             model = dict(surface.model, downloads=[dict(id=j['id'], path=j['selection']['path'],
                          name=j['selection']['name'], offset=j['offset'], size=j['source']['size']) for _, j in rows])
-            if not rows:
+            if rows and controller.state.display_revoked:
+                # This list has a fresh grant. Keep the previous transfer redacted.
+                model.update(phase='idle', message='Choose a download to resume or discard.')
+            elif not rows:
                 model['message'] = 'No interrupted downloads for the unlocked connections.'
             surface.update(model)
             return

@@ -809,6 +809,8 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
     validate_comic_scope(entry_point, comic_scope, platform='android')
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
+    if entry_point.endswith('.download_recovery_probe') and device is not None:
+        raise ValueError('Download recovery requires an owned disposable emulator.')
     if (entry_point == READER_APPEARANCE_ENTRY or entry_point.endswith('.comic_guidance_probe')) and device is not None:
         raise ValueError('Native reader input probes require an owned disposable emulator.')
     if probe_timeout is not None and (type(probe_timeout) is not int or not 1 <= probe_timeout <= 3600):
@@ -1161,7 +1163,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('comic-guidance', 'workspace-edges', 'mobile-feedback', 'documents-search', 'filename-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'notebook-geometry', 'editor-keyboard', 'storage', 'reader-space', 'reader-appearance', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'playlist-speech', 'native-suite', 'rotation-crash', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-rapid-ink', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('comic-guidance', 'workspace-edges', 'mobile-feedback', 'documents-search', 'filename-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'download-recovery', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'notebook-geometry', 'editor-keyboard', 'storage', 'reader-space', 'reader-appearance', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'playlist-speech', 'native-suite', 'rotation-crash', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-rapid-ink', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--retain-build', action='store_true', help='Pin this managed QA build for reruns; caller must remove the pin and workspace afterward.')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--android-gpu', choices=('host', 'swiftshader'), default='swiftshader',
@@ -1191,6 +1193,8 @@ def main():
         parser.error('Unified progress acceptance requires a disposable device.')
     if args.ios_runtime and args.platform != 'ios':
         parser.error('--ios-runtime requires iOS.')
+    if args.probe == 'download-recovery' and (args.platform != 'android' or args.device):
+        parser.error('Download recovery requires an owned disposable Android emulator.')
     if args.probe == 'android-header' and args.platform != 'android':
         parser.error('The android-header probe requires Android.')
     if args.android_tablet and (args.platform != 'android' or args.device):
@@ -1448,6 +1452,14 @@ def main():
             if args.probe == 'boox-preview':
                 profile = dict(bundle='io.github.ispaure.logisticsrawinkqa',
                     entry_point='tests.logisticsmobile.boox_preview_probe', result_name='boox-preview-result.json')
+            if args.probe == 'download-recovery':
+                from mobile_build.validation.android_download_recovery import android_fixture
+                with android_fixture(workspace, args.output) as observe:
+                    run_android(workspace, payload, args.output, env, options,
+                        bundle='io.github.ispaure.logisticsnotebookqa', gpu=args.android_gpu,
+                        entry_point='tests.logisticsmobile.download_recovery_probe',
+                        result_name='download-recovery-result.json', observe=observe, probe_timeout=360)
+                return
             run_android(workspace, payload, args.output, env, options,
                         device=args.device, tablet=args.android_tablet, gpu=args.android_gpu, **profile)
 

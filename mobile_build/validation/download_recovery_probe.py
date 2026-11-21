@@ -56,8 +56,9 @@ class Server(BaseHTTPRequestHandler):
             file = key in items
             kind = '<D:resourcetype/>' if file else '<D:resourcetype><D:collection/></D:resourcetype>'
             href = quote(key if file else key + '/')
-            checksum = (f'<oc:checksums xmlns:oc="http://owncloud.org/ns"><oc:checksum>SHA1:{self.server.sha1}</oc:checksum></oc:checksums>'
-                        if file and self.server.checksummed else '')
+            sha1_value = self.server.checksums.get(key)
+            checksum = (f'<oc:checksums xmlns:oc="http://owncloud.org/ns"><oc:checksum>SHA1:{sha1_value}</oc:checksum></oc:checksums>'
+                        if sha1_value else '')
             length = f'<D:getcontentlength>{items[key][0]}</D:getcontentlength>' if file else ''
             replies.append(f'<D:response><D:href>{escape(href)}</D:href><D:propstat><D:prop>{kind}{length}'
                            '<D:getlastmodified>Tue, 10 Nov 2026 12:00:00 GMT</D:getlastmodified>'
@@ -292,7 +293,7 @@ def exercise(root, size, mode):
         if mode in ('native-plain', 'native-saved'):
             checksum.update(block)
     server.items = {'/'+NAME: (size, seed, None)}
-    server.checksummed, server.sha1 = mode in ('native-plain', 'native-saved'), checksum.hexdigest()
+    server.checksums = {'/'+NAME: checksum.hexdigest()} if mode in ('native-plain', 'native-saved') else {}
     server.ranged = not mode.endswith('unsupported')
     server.counts = []
     with ExitStack() as stack:
@@ -316,7 +317,7 @@ def exercise(root, size, mode):
         url = f'{"https" if webdav else "http"}://127.0.0.1:{server.server_port}/'
         with open_archive(root/'Fixture.zip', 'w', password=PASSWORD) as archive:
             if webdav:
-                archive.writestr('server.txt', f'[Server]\ntype=webdav\nurl={url}\nvendor={"owncloud" if server.checksummed else "other"}\n')
+                archive.writestr('server.txt', f'[Server]\ntype=webdav\nurl={url}\nvendor={"owncloud" if server.checksums else "other"}\n')
             else:
                 config = f'[Server]\ntype=http\nurl={url}\n'
                 archive.writestr('server.txt', config)

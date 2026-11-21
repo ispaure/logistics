@@ -58,6 +58,20 @@ Go, desktop rclone and mobile environment installed.
 .venv/bin/python -m mobile_build.validation.download_recovery_probe --mode native-crypt --receipt tmp/test-results/recovery/crypt.json
 ```
 
+Run the Android acceptance on a Manager-owned disposable emulator from the same
+checkout. It drives the destination picker and Transfers controls and force-stops
+the QA app at 16 MiB. The ranged server checks each resumed request against the
+remaining bytes. The probe verifies the final plaintext SHA-256 for a password
+session, saved credentials and a matching LocalCrypt destination. It also compares
+the stored LocalCrypt ciphertext with the desktop rclone fixture, records Android
+KeyInfo for the vault key and declines the byte-zero prompt on a source without
+a checksum. The QA build trusts a generated loopback certificate in its private
+app directory.
+
+```sh
+mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools android --probe download-recovery --output tmp/test-results/android-recovery
+```
+
 The probe checks free capacity and removes its managed scratch directory.
 The default fixture is 64 MiB plus 137 bytes. Use `--size` for larger runs.
 
