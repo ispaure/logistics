@@ -5,6 +5,7 @@
 /Addons/
 /Credentials/
 /RemoteCredentials/
+/.aws/
 *.conf
 /pyCharmProjects/
 
