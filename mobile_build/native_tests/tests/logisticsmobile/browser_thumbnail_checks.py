@@ -128,6 +128,8 @@ async def exercise_browser_thumbnails(app):
     gate = Event()
     calls = []
     original = type(source).load
+    build_tiles, mount_listing = browser._render_tiles, browser._mount_listing
+    tile_build_seconds = tile_mount_seconds = 0.0
 
     def slow(source, row, size, cancelled):
         if row['path'].startswith(folder.name + '/'):
@@ -137,13 +139,29 @@ async def exercise_browser_thumbnails(app):
             gate.wait()
         return original(source, row, size, cancelled)
 
-    with patch.object(type(source), 'load', slow):
+    def timed_build_tiles():
+        nonlocal tile_build_seconds
+        started = monotonic()
+        build_tiles()
+        tile_build_seconds += monotonic() - started
+
+    def timed_mount_listing(view):
+        nonlocal tile_mount_seconds
+        started = monotonic()
+        mount_listing(view)
+        if view is browser._tile_scroll and view.parent is browser.widget:
+            tile_mount_seconds += monotonic() - started
+
+    with patch.object(type(source), 'load', slow), \
+            patch.object(browser, '_render_tiles', new=timed_build_tiles), \
+            patch.object(browser, '_mount_listing', new=timed_mount_listing):
         try:
             await wait_for(lambda: len(calls) == 2, ('workers', calls))
             assert len(browser._preview_jobs) == 2
             jobs = tuple(browser._preview_jobs.values())
             started = monotonic()
             browser.native_list.scroll_to_bottom()
+            scrolled_at = monotonic()
             await wait_for(lambda: all(job.is_set() for job in jobs), 'Recycled rows kept thumbnail work',
                            timeout=2)
             cancelled_at = monotonic()
@@ -157,6 +175,10 @@ async def exercise_browser_thumbnails(app):
             timing = dict(cancel_seconds=cancelled_at - started,
                           switch_seconds=switched_at - cancelled_at,
                           elapsed_seconds=switched_at - started,
+                          scroll_call_seconds=scrolled_at - started,
+                          cancel_after_scroll_seconds=cancelled_at - scrolled_at,
+                          tile_build_seconds=tile_build_seconds,
+                          tile_mount_seconds=tile_mount_seconds,
                           decoder_starts=len(calls), elapsed_limit=2, decoder_limit=2)
             print('LOGISTICS_NATIVE_DETAIL=' + json.dumps(dict(thumbnail_view_switch=timing)), flush=True)
             assert timing['decoder_starts'] == 2, ('Decoder started while both slots were held', timing)

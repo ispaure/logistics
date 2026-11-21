@@ -128,13 +128,22 @@ class NativeBrowserTests(unittest.TestCase):
             index = 151  # The second card in its tile row must survive the round trip.
             entry = browser._list_entries[index]
             browser.selected = entry.identity
+            built = []
+            build = browser._tile_card
+
+            def detached_card(tile):
+                self.assertIsNone(browser._tile_scroll.parent)
+                built.append(tile.identity)
+                return build(tile)
+
             with patch.object(browser, '_visible_rows', return_value=range(index, 165)), \
+                    patch.object(type(browser._tile_scroll._impl), '__module__', 'toga_android.widgets.scrollcontainer'), \
                     patch.object(browser._tile_scroll._impl, 'get_max_vertical_position', return_value=14000), \
-                    patch.object(browser, '_tile_card', wraps=browser._tile_card) as build:
+                    patch.object(browser, '_tile_card', side_effect=detached_card):
                 browser.show_tiles()
-                built = [call.args[0].identity for call in build.call_args_list]
                 self.assertEqual(built, list(browser._tile_cards))
                 self.assertIn(entry.identity, built)
+                self.assertIs(browser.mounted_listing(), browser._tile_scroll)
                 self.assertEqual(browser.vertical_position, (index // 2) * browser.TILE_ROW_HEIGHT)
                 self.assertEqual(browser.selected, entry.identity)
 
@@ -188,8 +197,14 @@ class NativeBrowserTests(unittest.TestCase):
                     await wait_for(lambda: len(calls) == 2)
                     self.assertCountEqual(calls, ['0.png', '1.png'])
                     held = tuple(browser._preview_jobs.values())
+                    browser._preview_update.cancel()
+                    browser._preview_update = None
+                    browser._schedule_previews(1)  # The native row notification must take priority.
+                    fallback = browser._preview_update
                     viewport[:] = [3, 4, 5]
                     browser._row_visible(browser.native_list.data[3])
+                    self.assertTrue(fallback.cancelled())
+                    self.assertLess(browser._preview_update.when(), fallback.when())
                     await wait_for(lambda: all(job.is_set() for job in held))
                     self.assertCountEqual(calls, ['0.png', '1.png'])
                     self.assertEqual(len(browser._preview_jobs), 2)

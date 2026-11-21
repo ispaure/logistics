@@ -30,6 +30,7 @@ class LocalFileBrowser(FileBrowser):
         self._tile_previews = {}
         self._mode_anchor = None
         self._restoring_tile_anchor = False
+        self._defer_tile_mount = False
         super().__init__(**kwargs)
         self.view_switch = browser_command(icon_button('file_tiles', 'Show tiles', on_press=self.switch_view))
 
@@ -121,6 +122,10 @@ class LocalFileBrowser(FileBrowser):
         return next((widget for widget in (self.native_list, self._tile_scroll, self.empty_label)
                      if widget.parent is self.widget), None)
 
+    def _mount_listing(self, view):
+        if not (self._defer_tile_mount and view is self._tile_scroll):
+            super()._mount_listing(view)
+
     def render(self):
         from .native.file_shortcuts import focus, focused
 
@@ -128,7 +133,18 @@ class LocalFileBrowser(FileBrowser):
         transfer = (previous is not None and previous.factory.Button.__module__.startswith('toga_android.')
                     and focused(previous))
         self._reset_previews()
-        super().render()
+        defer_tiles = (self._restoring_tile_anchor and previous is not self._tile_scroll
+                       and type(self._tile_scroll._impl).__module__.startswith('toga_android.'))
+        self._defer_tile_mount = defer_tiles
+        try:
+            super().render()
+        finally:
+            self._defer_tile_mount = False
+        if defer_tiles:
+            # Assemble the anchored rows before attaching the scroll view to the
+            # Android window. Each row insertion would otherwise refresh it.
+            self._mount_listing(self._tile_scroll)
+            self.presentation.bind_keyboard(self)
         if transfer:
             target = self.mounted_listing()
             if target is not None and not focused(target):
@@ -276,9 +292,17 @@ class LocalFileBrowser(FileBrowser):
         self._schedule_previews()
 
     def _schedule_previews(self, delay=0):
-        if (self._preview_update is None and not self.closed and self._previews_visible
-                and self.thumbnails is not None and self.thumbnails.enabled):
-            self._preview_update = self._loop.call_later(delay, self._update_previews)
+        if (self.closed or not self._previews_visible or self.thumbnails is None
+                or not self.thumbnails.enabled):
+            return
+        when = self._loop.time() + delay
+        if self._preview_update is not None:
+            if self._preview_update.when() <= when:
+                return
+            # A native bind should retire recycled rows on the next turn,
+            # even if a delayed fallback check is already queued.
+            self._preview_update.cancel()
+        self._preview_update = self._loop.call_at(when, self._update_previews)
 
     def _preview_targets(self):
         if self.mode == 'List':
