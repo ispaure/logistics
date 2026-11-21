@@ -301,6 +301,17 @@ class NativeWebCheckTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(RuntimeError, 'did not render'):
             await wait_for_text(view, 'Document closed.', absent='Nested Markdown note', timeout=.02)
 
+    async def test_missing_native_url_does_not_mask_render_timeout(self):
+        class View:
+            @property
+            def url(self):
+                raise AttributeError('Android WebView has no URL')
+
+        view = View()
+        view.evaluate_javascript = AsyncMock(return_value='')
+        with self.assertRaisesRegex(RuntimeError, 'did not render.*Android WebView has no URL'):
+            await wait_for_text(view, 'Document closed.', timeout=.02)
+
 
 class WebViewLifecycleCounterTests(unittest.TestCase):
     def test_counts_creations_and_retired_views_without_retaining_them(self):
@@ -352,7 +363,7 @@ class TransferSurfaceAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             isHidden=lambda: False, alpha=1, superview=None)
         fallback = widget(native, parent=surface, surface=surface,
             title=label('Current transfer'), paths=label('Source: Local/current\nDestination: Remote:'),
-            status=label('Transfer\nCopying files…'),
+            status=label('Copying files…'),
             metrics=label('50%\nFiles: 2 / 4\nData: 0.50 / 1.00 MB\nChecked: 1 · Listed: 4'),
             buttons=state(children=[state(text='Stop transfer', enabled=True),
                 state(text='Continue browsing', enabled=True)]))

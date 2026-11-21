@@ -5,6 +5,7 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
 from io import BytesIO
+from commonUtils.runtime.platform import OS, get_os
 from services.documents.locations import collection_path, CollectionFiles
 from .fixtures import capture_window
 from .notes_tree_helpers import row_paths
@@ -140,7 +141,10 @@ async def exercise_obsidian(app, encrypted):
         assert owner.path is None and not owner.rows.children
         if label == 'localcrypt':
             assert owner.provider.closed and not provider.closed
-        if hasattr(owner.web, 'private_closed'):
+        if getattr(owner.web, '_document_retired', False):
+            assert get_os() is OS.ANDROID
+            assert owner.web.parent is None
+        elif hasattr(owner.web, 'private_closed'):
             # Android deliberately destroys a private WebView; evaluating JS on
             # a destroyed view cannot produce a callback.
             assert owner.web.private_closed

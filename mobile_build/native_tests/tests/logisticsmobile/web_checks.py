@@ -73,8 +73,9 @@ def verify_native_transfer_fallback(surface):
     model = surface.model
     assert text(fallback.title), 'Native transfer title is missing'
     paths = 'Source: ' + model.get('source', '—') + '\nDestination: ' + model.get('destination', '—')
-    assert getattr(fallback.paths, '_settings_source_text', text(fallback.paths)) == paths
-    assert text(fallback.paths) == fallback.paths.text, 'Native transfer endpoints were not drawn'
+    drawn_paths = text(fallback.paths)
+    assert getattr(fallback.paths, '_settings_source_text', drawn_paths) == paths, 'Native transfer endpoints are stale'
+    assert drawn_paths == fallback.paths.text, 'Native transfer endpoints are stale'
     metrics = text(fallback.metrics)
     buttons = {button.text: button for button in fallback.buttons.children}
     if model.get('mode') == 'progress':
@@ -256,5 +257,10 @@ async def wait_for_text(view, expected, *, absent=None, timeout=30):
             # hosted sampler enumerates symbols and captures thread stacks.
             # Exiting during that work can leave only a binary-image inventory.
             await asyncio.sleep(60)
-        raise RuntimeError(f'WebView did not render {expected!r}; last value={last!r}, url={view.url!r}, native={state!r}') from None
+        try:
+            url = view.url
+        except (AttributeError, RuntimeError) as error:
+            state['url_error'] = str(error)
+            url = None
+        raise RuntimeError(f'WebView did not render {expected!r}; last value={last!r}, url={url!r}, native={state!r}') from None
     await task

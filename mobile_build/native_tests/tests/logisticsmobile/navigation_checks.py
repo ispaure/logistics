@@ -109,14 +109,21 @@ async def exercise_first_selection(app):
             if get_os() is OS.IOS:
                 from mobile.fold_layout import has_fold
                 if has_fold(app, app.main_window):
-                    from .ui_review import home_document_menu
+                    from .fixtures import ios_toolbar_items
                     home = adapter.navigation[host.destinations.index('home')]
                     adapter.controller.selectedViewController = home
                     app._apple_tab_selection_delegate.tabBarController_didSelectViewController_(
                         adapter.controller, home)
                     await asyncio.sleep(.15)
                     assert host.state.destination == 'home'
-                    home_document_menu(app)
+                    view = app.routes.body('home').children[0]
+                    assert view._home_primary_actions.parent is None
+                    assert not home.isNavigationBarHidden()
+                    creator, = view._home_primary_buttons
+                    assert creator.text == 'New Document'
+                    item = creator._ios_action_item
+                    assert item in ios_toolbar_items(adapter.content_controller('home'))
+                    assert item.isEnabled()
     app.show_home()
     return samples
 

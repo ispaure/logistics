@@ -24,7 +24,7 @@ class WorkspaceCommandTests(TestCase):
             self.assertEqual(app.routes.screens['files'], before)
             self.assertIn('Browse Local', actions)
             self.assertIn('Delete local folder…', actions)
-            app.loop.run_until_complete(actions['Push…']())
+            actions['Push…']()
             push.assert_called_once_with('Notes')
 
     def test_stale_and_busy_commands_cannot_start_push(self):
@@ -34,12 +34,12 @@ class WorkspaceCommandTests(TestCase):
         with patch.object(app, 'show_local_push') as push:
             actions = dict(app.workspace_menu_actions('Notes'))
             app.cloud_busy = True
-            app.loop.run_until_complete(actions['Push…']())
+            actions['Push…']()
             push.assert_not_called()
             self.assertNotIn('Push…', dict(app.workspace_menu_actions('Notes')))
             app.cloud_busy = False
             app.folder_picker_choices.pop('Notes')
-            app.loop.run_until_complete(actions['Push…']())
+            actions['Push…']()
             push.assert_not_called()
 
 
@@ -94,7 +94,7 @@ class ColdWorkspaceTransferTests(TestCase):
                     async def exercise():
                         with patch.object(app, 'require_remote_credentials_async',
                                           new=AsyncMock(return_value=False)) as credentials:
-                            await actions['Push…' if push else 'Pull…']()
+                            actions['Push…' if push else 'Pull…']()
                             self.assertFalse(await app.transfer_task)
                             credentials.assert_awaited_once()
                             self.assertTrue(hasattr(app, 'cloud_view'))
