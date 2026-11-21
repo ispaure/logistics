@@ -11,7 +11,9 @@ separate archive reads, decode and rendering.
 Use `mobile_build.validation.document_storage_tools` with `--probe filename-search`
 for matched native Local and LocalCrypt fixtures on a disposable device. The
 probe records first actionable match, completion, cancellation, rename and
-credential-lock behavior. Run `Python/tests/platform/benchmark_folder_open.py`
+credential-lock behavior. Timing starts at the native query event. The receipt
+also records time from synthetic value assignment, which can include initial UIKit
+keyboard work before the query event. Run `Python/tests/platform/benchmark_folder_open.py`
 with a Manager scratch path and a separate evidence output path for desktop
 folder opening, navigation and rename.
 

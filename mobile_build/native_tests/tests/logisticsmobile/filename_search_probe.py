@@ -60,22 +60,35 @@ class SearchProbe(LogisticsMobile):
     async def sample(self, browser, provider, cold, phases):
         browser.set_entries(provider, '', await asyncio.to_thread(provider.list, ''),
                             location=('fixture', ''))
+        opened = monotonic()
         browser.open_search()
         actions = []
         browser.on_item_actions = lambda row: actions.append(row['path'])
         phases.clear()
         start = monotonic()
         browser.search.value = QUERY
+        submitted = monotonic()
         await self.wait(lambda: any(row.entry.payload['path'] == 'folder-000/' + TARGET
                                     for row in browser.native_list.data))
         row = next(row for row in browser.native_list.data if row.entry.payload['path'].endswith('/' + TARGET))
+        observed = monotonic()
         await browser._select_row(row)
         assert actions == ['folder-000/' + TARGET], actions
-        first = monotonic() - start
+        selected = monotonic()
         await self.wait(lambda: browser.page_label.text == '1 matches' and not browser.searching)
-        complete = monotonic() - start
-        result = dict(cold=cold, first=first, completion=complete,
-                      worker_phases=dict(phases))
+        complete = monotonic()
+        # UIKit can spend time inside a synthetic value assignment before
+        # delivering the same change event as a keyboard edit. Keep both clocks.
+        query_event = phases['first_query_event']
+        moments = {name.removeprefix('first_'): value - start for name, value in phases.items()
+                   if name.startswith('first_')}
+        result = dict(cold=cold, first=selected - query_event, completion=complete - query_event,
+                      value_set_to_first=selected - start, value_set_to_completion=complete - start,
+                      open_search=start - opened, submit_return=submitted - start,
+                      row_observed=observed - query_event, action_after_row=selected - observed,
+                      phase_starts=moments,
+                      worker_phases={name: value for name, value in phases.items()
+                                     if not name.startswith('first_')})
         browser.close_search()
         await self.wait(lambda: not browser.searching)
         return result
@@ -225,6 +238,7 @@ class SearchProbe(LogisticsMobile):
                         original = getattr(owner, method)
                         def measured(*args, **kwargs):
                             start = monotonic()
+                            phases.setdefault('first_' + label, start)
                             try:
                                 return original(*args, **kwargs)
                             finally:
@@ -236,7 +250,10 @@ class SearchProbe(LogisticsMobile):
                     timer(providers, 'matches_name', 'filtering')
                     timer(resources, '_modified_time', 'metadata_formatting')
                     timer(view, 'set_tree', 'publication')
+                    timer(view, '_queue_query', 'query_event')
+                    timer(view, 'render', 'render')
                     timer(search, 'search', 'search_worker')
+                    view.resource_search = search.search
                     timer(provider, 'list', 'provider_list')
                     if provider.private:
                         timer(provider._directory_index, '_fingerprint', 'index_validation')

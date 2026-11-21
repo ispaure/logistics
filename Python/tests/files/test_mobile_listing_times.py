@@ -19,11 +19,13 @@ class ListingTimeTests(unittest.TestCase):
             for zone in ('America/Toronto', 'America/St_Johns', 'Asia/Kolkata', 'UTC'):
                 os.environ['TZ'] = zone
                 time.tzset()
+                by_second = {}
                 for timestamp in (0, 1705320000.125, 1721044800, 1710053999, 1710054000,
-                                  1710053999.9999998, 1730613599.9999998):
+                                  1710053999.9999998, 1730613599.9999998, 1710054000.25, -0.0000002):
                     with self.subTest(zone=zone, timestamp=timestamp):
                         expected = datetime.fromtimestamp(timestamp).astimezone().isoformat(sep=' ', timespec='seconds')
                         self.assertEqual(_modified_time(timestamp), expected)
+                        self.assertEqual(_modified_time(timestamp, by_second=by_second), expected)
         finally:
             if previous is None:
                 os.environ.pop('TZ', None)

@@ -274,6 +274,9 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
 
     def _list_inventory(self, folder, path, children, cancelled):
         rows, unchanged = [], True
+        # Listing timestamps have second precision. Share offset and format
+        # work only within this listing, where mirrored files often share it.
+        modified_times = {}
         for offset in range(0, len(children), 256):
             check_cancelled(cancelled)
             batch = [(name, info, directory) for name, info, directory in children[offset:offset + 256]
@@ -311,7 +314,7 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
                     (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns))
                 rows.append(dict(name=PurePosixPath(plain).name, path=plain, directory=directory,
                     size=info.st_size, revision=revision,
-                    modified=_modified_time(info.st_mtime)))
+                    modified=_modified_time(info.st_mtime, by_second=modified_times)))
         check_cancelled(cancelled)
         self._guard(folder)
         rows.sort(key=lambda row: (not row['directory'], row['name'].casefold()))

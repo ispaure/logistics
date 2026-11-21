@@ -191,6 +191,19 @@ class SavedSearchPublicationTests(unittest.TestCase):
         while pending := tuple(task for task in self.browser.tasks if not task.done()):
             await asyncio.wait_for(asyncio.gather(*pending), 5)
 
+    def test_typeahead_counts_elapsed_time_before_the_search_task_starts(self):
+        from commonUtils.ui.native_browser import presentation
+
+        browser = self.browser
+        self.show_folder('')
+        self.loop.run_until_complete(self.finish_tasks())
+        sleep = AsyncMock()
+        with patch.object(presentation, 'monotonic', return_value=10.5), \
+                patch.object(presentation, 'asyncio', SimpleNamespace(sleep=sleep)):
+            self.loop.run_until_complete(browser._apply_query(
+                browser.search_epoch, browser.search_cancelled, 10.0, .3))
+        sleep.assert_awaited_once_with(0)
+
     def test_index_completion_preserves_pending_typeahead_and_replays_submitted_text(self):
         from commonUtils.search.policy import SEARCH_DEBOUNCE_SECONDS
 

@@ -210,15 +210,23 @@ def local_folder_snapshot(provider, path='', *, cancelled=lambda: False, names_o
     return rows if names_only else sorted(rows, key=lambda row: (not row['directory'], row['name'].casefold()))
 
 
-def _modified_time(timestamp):
+def _modified_time(timestamp, *, by_second=None):
     # localtime supplies the offset for this date, including DST. astimezone()
     # probes the system timezone again for every row, which is costly on mobile.
     # Match datetime's microsecond rounding before choosing an offset; a value
     # just before a DST transition can round into the following second.
     instant = datetime.fromtimestamp(timestamp, timezone.utc)
+    if by_second is not None:
+        second = instant.replace(microsecond=0)
+        cached = by_second.get(second)
+        if cached is not None:
+            return cached
     offset = time.localtime(instant.timestamp()).tm_gmtoff
     zone = timezone(timedelta(seconds=offset))
-    return instant.astimezone(zone).isoformat(sep=' ', timespec='seconds')
+    formatted = instant.astimezone(zone).isoformat(sep=' ', timespec='seconds')
+    if by_second is not None and len(by_second) < 128:
+        by_second[second] = formatted
+    return formatted
 
 
 class _Progress:
