@@ -116,6 +116,9 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic, strong) UITapGestureRecognizer *menuOutsideTap;
 @property(nonatomic, strong) UIStackView *controls;
 @property(nonatomic, strong) UIScrollView *controlsScroll;
+@property(nonatomic, strong) CADisplayLink *subtitleLayoutLink;
+@property(nonatomic, weak) UIView *shiftedSubtitleView;
+@property(nonatomic) CGFloat subtitleClearance;
 @property(nonatomic, strong) UIVisualEffectView *controlsBackdrop;
 @property(nonatomic, strong) UIVisualEffect *controlsMaterial;
 @property(nonatomic, strong) UIActivityIndicatorView *bufferSpinner;
@@ -255,6 +258,12 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 - (void)clearPausePresentation;
 @end
 
+@interface LGVideoController (InlineSubtitles)
+- (void)updateInlineSubtitles;
+- (void)resetInlineSubtitles;
+- (CGRect)naturalSubtitleFrame:(UIView *)surface relativeTo:(UIView *)parent;
+@end
+
 typedef struct {
     CGRect safeArea;
     CGRect controlsArea;
@@ -392,6 +401,7 @@ typedef struct {
     if (!hideBar) [self.navigationController setNavigationBarHidden:NO animated:NO];
     [self.view layoutIfNeeded];
     [bar layoutIfNeeded];
+    [self updateInlineSubtitles];
     bar.userInteractionEnabled = !hideBar;
     bar.accessibilityElementsHidden = hideBar;
     [UIView animateWithDuration:immediate ? 0 : .2 delay:0
@@ -407,6 +417,7 @@ typedef struct {
             if (generation != self.chromeGeneration) return;
             self.controlsScroll.hidden = !shown;
             self.videoHeader.hidden = !shown;
+            [self updateInlineSubtitles];
             // Changing status/navigation visibility earlier shrinks the safe
             // area and moves still-visible controls during their fade.
             self.systemChromeHidden = self.tabletop || !shown;
@@ -447,6 +458,7 @@ typedef struct {
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     self.surfaceVisible = NO;
+    [self resetInlineSubtitles];
     [self clearPausePresentation];
     [self setScreenAwake:NO];
     [self.controlsTimer invalidate]; self.controlsTimer = nil;
@@ -510,6 +522,7 @@ typedef struct {
     }
     [self layoutVideoDrawable];
     [self applyPictureSize];
+    [self updateInlineSubtitles];
     return YES;
 }
 - (void)externalDisplayDisconnected {
@@ -564,6 +577,7 @@ typedef struct {
     [self layoutVideoDrawable];
     [self layoutControlDeck:layout margin:margin poseChanged:poseChanged];
     [self layoutPlaybackTools];
+    [self updateInlineSubtitles];
 }
 
 - (void)updateItem:(UIBarButtonItem *)button label:(NSString *)label {
@@ -1569,6 +1583,7 @@ typedef struct {
     view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [self.movie addSubview:view];
     [self configureVideoDynamicRange:view.layer];
+    [self updateInlineSubtitles];
 }
 - (void)configureVideoDynamicRange:(CALayer *)layer {
     // This changes only the requested display headroom, never the source HDR metadata.
@@ -2082,6 +2097,7 @@ typedef struct {
 
 #import "HDRDiagnostics.m"
 #import "PausePresentation.m"
+#import "InlineSubtitles.m"
 #import "AudioSwitch.m"
 
 #import "CaptionPictureInPicture.m"

@@ -29,7 +29,8 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
         movie=None, url=None, duration=30000, unknown_duration=False, pause_transitions=False,
         pip_controls=False, pip_subtitles=False, embedded_subtitles=False, external_display=False,
         airplay_controls=False, audio_switch=False, seek_recovery=False, audio_tail=False,
-        video_tail=False, subtitle_tail=False, background_audio=False, runtime_version=None):
+        video_tail=False, subtitle_tail=False, background_audio=False, runtime_version=None,
+        inline_subtitles=False):
     output.mkdir(parents=True, exist_ok=False)
     client = AppleSimulators()
     device = None
@@ -40,7 +41,7 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
         app.mkdir()
         (app / 'Frameworks').mkdir()
         shutil.copytree(framework, app / 'Frameworks/VLCKit.framework', symlinks=True)
-        fixture_movie = app / ('fixture.mkv' if audio_tail or video_tail or subtitle_tail else 'fixture.mp4')
+        fixture_movie = app / ('fixture.mkv' if audio_tail or video_tail or subtitle_tail or inline_subtitles else 'fixture.mp4')
         source = workspace / 'main.m'
         controller = ROOT / 'Python/features/video/mobile/ios/VideoPlayer.m'
         fixture = ROOT / 'mobile_build/validation/fixtures' / ('video_background_audio_checks.m' if background_audio else 'video_duration_tail_checks.m' if subtitle_tail else 'video_video_tail_checks.m' if video_tail else 'video_audio_tail_checks.m' if audio_tail else 'video_seek_recovery_checks.m' if seek_recovery else 'video_audio_switch_checks.m' if audio_switch else 'video_airplay_checks.m' if airplay_controls else 'video_chrome_checks.m')
@@ -90,7 +91,7 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
                          '-metadata:s:a:0', 'language=eng', '-metadata:s:a:1', 'language=fra']
             subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i',
                             'testsrc2=size=128x72:rate=12:duration=3' if audio_tail else
-                            'color=c=0x102040:size=640x360:rate=24' if pip_subtitles else 'testsrc2=size=128x72:rate=12', *audio, '-t', '3' if subtitle_tail else '10' if audio_tail or video_tail else '30',
+                            'color=c=0x102040:size=640x360:rate=24' if pip_subtitles or inline_subtitles else 'testsrc2=size=128x72:rate=12', *audio, '-t', '3' if subtitle_tail else '10' if audio_tail or video_tail else '30',
                             '-threads', '1', *codec, str(fixture_movie)], check=True)
         if subtitle_tail:
             captions = workspace / 'long.srt'
@@ -98,6 +99,13 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
             muxed = workspace / 'long-caption.mkv'
             subprocess.run(['ffmpeg', '-v', 'error', '-i', str(fixture_movie), '-i', str(captions),
                 '-map', '0', '-map', '1', '-c', 'copy', str(muxed)], check=True)
+            shutil.move(muxed, fixture_movie)
+        if inline_subtitles:
+            captions = workspace / 'inline.srt'
+            captions.write_text('1\n00:00:00,400 --> 00:00:25,000\n<font color="#ff28cb">Subtitle check\nSecond line</font>\n')
+            muxed = workspace / 'inline.mkv'
+            subprocess.run(['ffmpeg', '-v', 'error', '-i', str(fixture_movie), '-i', str(captions),
+                '-map', '0:v', '-map', '1:s', '-c', 'copy', '-disposition:s:0', 'default', str(muxed)], check=True)
             shutil.move(muxed, fixture_movie)
         if embedded_subtitles or background_audio:
             muxed = workspace / 'captioned.mp4'
@@ -154,7 +162,7 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
                 'yuv420p10le', 'smpte2084', 'bt2020'), 'HDR fixture lost its depth or color tags'
         (app / 'Info.plist').write_bytes(plistlib.dumps(dict(CFBundleIdentifier=bundle,
             CFBundleName='Video Chrome QA', QAOrientation=orientation, QAHDR=hdr, QAResume=resume, QAFold=fold,
-            QAURL=url or '', QADuration=duration, QAUnknownDuration=unknown_duration, QAStreamProbe=bool(url), QAPauseTransitions=pause_transitions, QAPipControls=pip_controls, QAPipSubtitles=pip_subtitles, QAPipEmbedded=embedded_subtitles, QAExternalDisplay=external_display, UIBackgroundModes=['audio'],
+            QAURL=url or '', QADuration=duration, QAUnknownDuration=unknown_duration, QAStreamProbe=bool(url), QAPauseTransitions=pause_transitions, QAPipControls=pip_controls, QAPipSubtitles=pip_subtitles, QAPipEmbedded=embedded_subtitles, QAExternalDisplay=external_display, QAInlineSubtitles=inline_subtitles, UIBackgroundModes=['audio'],
             NSAppTransportSecurity=dict(NSAllowsLocalNetworking=True),
             CFBundleExecutable='VideoChromeQA', CFBundleVersion='1',
             CFBundleShortVersionString='1.0', CFBundlePackageType='APPL', MinimumOSVersion='17.0',
@@ -294,6 +302,8 @@ def main():
     parser.add_argument('--background-audio', action='store_true', help='Check ordinary local background audio and protected-data lifecycle policy.')
     parser.add_argument('--airplay-controls', action='store_true', help='Check local mute recovery and simulated receiver loading, seeks and route layout.')
     parser.add_argument('--external-display', action='store_true', help='Exercise the live drawable handoff into a synthetic external viewport.')
+    parser.add_argument('--inline-subtitles', action='store_true',
+                        help='Check embedded SRT geometry through the inline control fade, with optional split panes.')
     parser.add_argument('--pause-transitions', action='store_true', help='Run native Play/Pause/Resume checks in both HDR modes without chrome timing checks.')
     parser.add_argument('--resume', type=int, default=0,
                         help='Resume position in milliseconds. With --audio-tail, check saved-position EOF and Replay.')
@@ -308,7 +318,7 @@ def main():
         external_display=args.external_display, airplay_controls=args.airplay_controls,
         audio_switch=args.audio_switch, seek_recovery=args.seek_recovery, audio_tail=args.audio_tail,
         video_tail=args.video_tail, subtitle_tail=args.subtitle_tail, background_audio=args.background_audio,
-        runtime_version=args.runtime)
+        runtime_version=args.runtime, inline_subtitles=args.inline_subtitles)
 
 
 if __name__ == '__main__':

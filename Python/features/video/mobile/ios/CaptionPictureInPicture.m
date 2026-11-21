@@ -63,7 +63,7 @@ API_AVAILABLE(ios(17.4))
             [self drawSubtitleViews:view context:cg];
             continue;
         }
-        CGRect frame = [view convertRect:view.bounds toView:owner.movie];
+        CGRect frame = [owner naturalSubtitleFrame:view relativeTo:owner.movie];
         CGContextSaveGState(cg);
         CGContextTranslateCTM(cg, frame.origin.x, frame.origin.y);
         CGContextSetAlpha(cg, view.alpha);

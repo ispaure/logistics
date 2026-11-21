@@ -24,6 +24,9 @@
 @property(nonatomic) NSTimeInterval pipStageTime;
 @property(nonatomic) NSUInteger pipFrameCheckpoint;
 @property(nonatomic) int64_t pipClockCheckpoint;
+@property(nonatomic) NSInteger subtitleStage;
+@property(nonatomic) NSTimeInterval subtitleStageTime;
+@property(nonatomic) CGRect subtitlePicture, subtitleNaturalCue;
 @end
 @interface LGVideoChromeChecks (PiPChecks)
 - (void)samplePipSubtitles;
@@ -223,6 +226,67 @@
     });
 }
 - (BOOL)application:(UIApplication *)app didFinishLaunchingWithOptions:(NSDictionary *)options { return YES; }
+- (void)sampleInlineSubtitles:(NSTimer *)timer {
+    LGVideoController *v = self.video;
+    NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
+    if (now - self.started > 12) { [self finish:@"Inline caption did not reach the expected layout"]; return; }
+    UIView *surface = LGSubtitleSurface(v.movie);
+    if (!surface || CGRectIsEmpty(surface.bounds)) return;
+    CGRect cue = LGRenderedSubtitleBounds(surface);
+    if (CGRectIsNull(cue)) return;
+    cue = [surface convertRect:cue toView:self.window];
+    CGRect picture = [v.movie convertRect:v.movie.bounds toView:self.window];
+    CGRect deck = [v.controlsScroll convertRect:v.controlsScroll.bounds toView:self.window];
+    BOOL folded = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAFold"] boolValue];
+    if (self.subtitleStage && now - self.subtitleStageTime < .35) return;
+    if (self.subtitleStage == 0 && v.player.time.intValue < 1200) return;
+    if (self.subtitleStage == 2 && !folded && now - self.subtitleStageTime < 3.15) return;
+    if (self.subtitleStage == 3 && v.player.isPlaying) return;
+    [self.samples addObject:@{@"stage": @(self.subtitleStage), @"picture": NSStringFromCGRect(picture),
+        @"deck": NSStringFromCGRect(deck), @"cue": NSStringFromCGRect(cue), @"clearance": @(v.subtitleClearance),
+        @"deckHidden": @(v.controlsScroll.hidden), @"clock": @(v.player.time.intValue)}];
+    if (self.subtitleStage == 0) {
+        if (folded != v.tabletop || (!folded && !v.controlsScroll.hidden)) {
+            [self finish:@"Inline caption baseline used the wrong control layout"]; return;
+        }
+        self.subtitlePicture = picture;
+        self.subtitleNaturalCue = cue;
+        [v setControlsShown:YES];
+    } else if (!CGRectEqualToRect(picture, self.subtitlePicture)) {
+        [self finish:@"The video moved while checking inline caption clearance"]; return;
+    } else if (self.subtitleStage == 2 && !folded) {
+        if (!v.controlsScroll.hidden || v.subtitleClearance ||
+            !CGRectEqualToRect(cue, self.subtitleNaturalCue)) {
+            [self finish:@"Automatic hide did not restore the cue"]; return;
+        }
+        [v setControlsShown:YES];
+        [v pause];
+    } else if (self.subtitleStage < 4) {
+        BOOL overlaps = CGRectIntersectsRect(self.subtitleNaturalCue, deck);
+        if (v.controlsScroll.hidden || overlaps != (v.subtitleClearance > 0) ||
+            CGRectIntersectsRect(cue, deck) || (folded && CGRectIntersectsRect(picture, deck))) {
+            [self finish:@"The full cue did not clear the visible deck"]; return;
+        }
+        if (self.subtitleStage == 2 && folded) { [self finish:nil]; return; }
+        if (self.subtitleStage == 3) {
+            UIView *external = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 320, 180)];
+            [self.window addSubview:external];
+            v.externalDisplayAllowed = ^BOOL { return YES; };
+            BOOL moved = [v moveVideoToExternalHost:external] && v.subtitleClearance == 0;
+            BOOL returned = [v moveVideoToExternalHost:nil];
+            [external removeFromSuperview];
+            if (!moved || !returned) { [self finish:@"The inline shift leaked onto the external drawable"]; return; }
+            [v setControlsShown:NO];
+        }
+    } else {
+        NSString *error = v.controlsScroll.hidden && v.subtitleClearance == 0 &&
+            CGRectEqualToRect(cue, self.subtitleNaturalCue) ? nil : @"The cue did not return after the controls faded";
+        [self finish:error];
+        return;
+    }
+    self.subtitleStage++;
+    self.subtitleStageTime = now;
+}
 - (void)checkExternalDrawable {
     LGVideoController *v = self.video;
     AVSampleBufferDisplayLayer *layer = [v sampleBufferLayer:v.movie.layer];
@@ -293,7 +357,9 @@
     self.video = [LGVideoController new];
 #endif
     NSString *remoteURL = [NSBundle.mainBundle objectForInfoDictionaryKey:@"QAURL"];
-    self.video.videoURL = remoteURL.length ? remoteURL : [[NSBundle.mainBundle URLForResource:@"fixture" withExtension:@"mp4"] absoluteString];
+    BOOL inlineSubtitles = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAInlineSubtitles"] boolValue];
+    self.video.videoURL = remoteURL.length ? remoteURL :
+        [[NSBundle.mainBundle URLForResource:@"fixture" withExtension:inlineSubtitles ? @"mkv" : @"mp4"] absoluteString];
     self.video.startMilliseconds = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAResume"] longLongValue];
     self.video.knownDuration = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QADuration"] longLongValue] ?: 30000;
     if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAUnknownDuration"] boolValue]) self.video.knownDuration = 0;
@@ -319,6 +385,16 @@
         if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAStreamProbe"] boolValue]) [self.video setNetworkWaiting:YES];
         [self.video startByUser];
         self.started = NSProcessInfo.processInfo.systemUptime;
+        if (inlineSubtitles) {
+#ifdef LG_VIDEO_FOLD_QA
+            [(LGVideoPoseQAController *)self.video applyTestFold:YES];
+#else
+            [self.video setControlsShown:NO];
+#endif
+            self.sampler = [NSTimer scheduledTimerWithTimeInterval:.05 target:self
+                selector:@selector(sampleInlineSubtitles:) userInfo:nil repeats:YES];
+            return;
+        }
         if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAExternalDisplay"] boolValue]) {
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{ [self checkExternalDrawable]; });
             return;

@@ -11,6 +11,7 @@
     "mobile/android.py",
     "mobile/ios.py",
     "mobile/android/io/github/ispaure/logistics/video/AudioTrackSwitch.java",
+    "mobile/android/io/github/ispaure/logistics/video/InlineSubtitles.java",
     "mobile/android/io/github/ispaure/logistics/video/VideoPlayer.java",
     "mobile/ios/VideoPlayer.m",
     "mobile/ios/AirPlayVideo.m",
@@ -29,6 +30,7 @@
     "mobile/ios/HDRDiagnostics.m",
     "mobile/ios/CaptionPictureInPicture.m",
     "mobile/ios/PausePresentation.m",
+    "mobile/ios/InlineSubtitles.m",
     "mobile/ios/AudioSwitch.m",
     "mobile/android/io/github/ispaure/logistics/video/PausePresentation.java",
     "sidecars.py"

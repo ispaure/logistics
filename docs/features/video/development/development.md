@@ -89,6 +89,28 @@ acknowledgement and seeks to the held position before resuming. Mobile
 preference writes serialize. See [iOS HDR pause and resume](hdr-play-pause.md)
 and [PiP and captions](video-player.md#mobile-pip-controls-and-captions).
 
+### Inline subtitle clearance
+
+The inline controllers compare the painted bounds of a supported text cue with
+the laid-out control deck in window coordinates. A cue moves up just far enough
+to clear an intersection and returns after the deck fades. A separate deck
+leaves the cue at its original position. Video sizing, text styling, and the
+decoder clock continue through the same rendering path.
+
+iOS uses the transparent subpicture view of the pinned sample-buffer renderer.
+Android uses the separate LibVLC subtitle surface when its pixels can be read.
+A sidecar whose codec is missing from Android's track metadata can qualify when
+an explicit SRT attachment identifies one new track.
+A renderer that blends captions into the video, a secure Android window,
+unidentified tracks, positioned ASS, and bitmap tracks retain native placement.
+If the full cue will not fit above the deck inside the picture, it retains
+native placement there too. PiP and external playback use their own geometry.
+
+Use `video_chrome_tools --inline-subtitles --orientation landscape` to check
+an embedded multiline cue through playback, Pause, automatic hide and synthetic
+external drawable handoff. Use
+`--inline-subtitles --fold` in portrait with the Duo SDK to verify separate panes.
+
 ### Dedicated iOS display output
 
 `mobile.external_display` and the VLC controller reparent the live picture

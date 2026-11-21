@@ -72,6 +72,7 @@ public final class VideoPlayer {
     private final boolean restricted;
     private final LibVLC vlc;
     final MediaPlayer player;
+    private final InlineSubtitles inlineSubtitles;
     final FrameLayout root;
     final VLCVideoLayout video;
     final LinearLayout controls;
@@ -178,6 +179,11 @@ public final class VideoPlayer {
         bufferingLabel = addBufferingOverlay();
         controls = new LinearLayout(activity);
         controlsScroll = addControlDeck();
+        inlineSubtitles = new InlineSubtitles(this, handler, controlsScroll, () ->
+            attached && liveVideoOutput && !done && !lockHidden && !casting && !restricted &&
+            root.getWindowVisibility() == View.VISIBLE &&
+            !activity.isInPictureInPictureMode() &&
+            (activity.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) == 0);
         videoHeader = createHeaderContainer();
         videoTitle = new TextView(activity);
         sourceLabel = addVideoHeader();
@@ -213,6 +219,10 @@ public final class VideoPlayer {
             @Override public void onWindowFocusChanged(boolean focused) {
                 super.onWindowFocusChanged(focused);
                 if (focused && fullscreen) updateChrome();
+            }
+            @Override protected void onWindowVisibilityChanged(int visibility) {
+                super.onWindowVisibilityChanged(visibility);
+                if (inlineSubtitles != null) inlineSubtitles.refresh();
             }
             @Override protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
                 super.onSizeChanged(width, height, oldWidth, oldHeight);
@@ -539,6 +549,7 @@ public final class VideoPlayer {
             chromeShown = shown;
             fadeChrome(controlsScroll, shown, immediate);
             fadeChrome(videoHeader, shown, immediate);
+            inlineSubtitles.refresh();
         }
         View decor = activity.getWindow().getDecorView();
         updateBufferingOverlay();
@@ -610,11 +621,15 @@ public final class VideoPlayer {
         // System privacy/PiP transitions conceal immediately. Animator duration
         // scale also honors the device's reduced-animation preference.
         view.animate().alpha(shown ? 1f : 0f).setDuration(immediate ? 0 : 200)
-            .withEndAction(() -> { if (!shown) view.setVisibility(View.INVISIBLE); }).start();
+            .withEndAction(() -> {
+                if (!shown) view.setVisibility(View.INVISIBLE);
+                if (view == controlsScroll) inlineSubtitles.refresh();
+            }).start();
     }
 
     private void restoreChrome() {
         handler.removeCallbacks(hideControls);
+        inlineSubtitles.reset();
         View decor = activity.getWindow().getDecorView();
         decor.setSystemUiVisibility(previousSystemUi);
         if (Build.VERSION.SDK_INT >= 30 && decor.getWindowInsetsController() != null) {
@@ -735,12 +750,23 @@ public final class VideoPlayer {
     }
     public void showSubtitleBrowser(String json) { if (!done) tools.browser(json); }
     public void showCachedRanges(String json) { if (!done && allowed(false)) tools.cached(json); }
+    private static boolean isSrt(Uri uri) {
+        String path = uri.getPath();
+        return path != null && path.toLowerCase(java.util.Locale.ROOT).endsWith(".srt");
+    }
+
     public void attachSubtitleURL(String url) {
         selectedSubtitleURL = url;
         pendingSubtitleURL = tail == Tail.AUDIO ? null : url;
         if (pendingSubtitleURL == null) return;
-        if (allowed(false) && player.isPlaying() && player.addSlave(Media.Slave.Type.Subtitle, Uri.parse(url), true))
+        if (!allowed(false) || !player.isPlaying()) return;
+        Uri uri = Uri.parse(url);
+        boolean srt = isSrt(uri);
+        MediaPlayer.TrackDescription[] before = srt ? player.getSpuTracks() : null;
+        if (player.addSlave(Media.Slave.Type.Subtitle, uri, true)) {
             pendingSubtitleURL = null;
+            inlineSubtitles.attachedSubtitle(srt, before);
+        }
     }
     void selectSubtitleTrack(int track) {
         selectedSubtitleURL = pendingSubtitleURL = null;
@@ -854,7 +880,10 @@ public final class VideoPlayer {
         if (done) return;
         if (optionsReloadPending && (event.type == MediaPlayer.Event.Stopped ||
                 event.type == MediaPlayer.Event.EndReached)) return;
-        if (event.type == MediaPlayer.Event.Vout) liveVideoOutput = event.getVoutCount() > 0;
+        if (event.type == MediaPlayer.Event.Vout) {
+            liveVideoOutput = event.getVoutCount() > 0;
+            inlineSubtitles.refresh();
+        }
         if (confirmingStartupVideoSeek) {
             if (event.type == MediaPlayer.Event.Buffering && event.getBuffering() == 0f) {
                 startupSeekReset = true;
@@ -964,6 +993,7 @@ public final class VideoPlayer {
         confirmingStartupVideoSeek = false;
         if (tools != null && !tools.settings.isNull("subtitle_track")) selectedSubtitleURL = null;
         pendingSubtitleURL = tail == Tail.AUDIO ? null : selectedSubtitleURL;
+        inlineSubtitles.inputChanged(pendingSubtitleURL != null && isSrt(Uri.parse(pendingSubtitleURL)));
         Media media = new Media(vlc, Uri.parse(sourceURL));
         inputHasVideoAndAudio = inputPlayedAudio = inputDisplayedVideo = false;
         observedClock = -1;
@@ -1589,6 +1619,7 @@ public final class VideoPlayer {
                 player.stop();
                 player.setRenderer(selected);
                 casting = index != 0;
+                inlineSubtitles.refresh();
                 startByUser();
             }).setNegativeButton("Cancel", null).create();
         dialog.setOnDismissListener(value -> {
