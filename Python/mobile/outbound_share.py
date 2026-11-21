@@ -213,6 +213,9 @@ def _ios_file_provider(path):
 
     provider.registerFileRepresentationForTypeIdentifier((content or data).identifier,
         fileOptions=0, visibility=0, loadHandler=Block(load, objc_id, objc_block))
+    # iOS uses the file URL to match extensions that accept files. Keep the
+    # byte representation first so the receiver can load the attachment.
+    provider.registerObject(url, visibility=0)
     return provider
 
 

@@ -60,6 +60,9 @@ class NativeDocumentMenuTests(TestCase):
         register.assert_called_once()
         self.assertEqual(register.call_args.args, (inferred.identifier,))
         self.assertEqual(register.call_args.kwargs['fileOptions'], 0)
+        provider.registerObject.assert_called_once_with(url, visibility=0)
+        self.assertEqual([call[0] for call in provider.mock_calls],
+                         ['registerFileRepresentationForTypeIdentifier', 'registerObject'])
         register.call_args.kwargs['loadHandler'](object())
         completion.assert_called_once_with(url, False, None)
         self.assertEqual(provider.suggestedName, path.name)

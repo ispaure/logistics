@@ -53,6 +53,17 @@ def build_receiver(work, output, env):
     for name in ('Main.entitlements', 'Share.entitlements', 'IncomingFiles.m'):
         path = extension / name
         path.write_text(path.read_text().replace(incoming_build.GROUP, RECEIVER_GROUP))
+    implementation = extension / 'ShareViewController.m'
+    source = implementation.read_text()
+    binding = '        NSString *type = nil;'
+    if source.count(binding) != 1:
+        raise ValueError('Expected the native receiver to choose a content representation.')
+    implementation.write_text(source.replace(binding, '''
+        NSString *inventory = [[queue stringByDeletingLastPathComponent]
+            stringByAppendingPathComponent:@"representation-types.txt"];
+        [([provider.registeredTypeIdentifiers componentsJoinedByString:@"\\n"])
+            writeToFile:inventory atomically:YES encoding:NSUTF8StringEncoding error:nil];
+''' + binding))
     info = extension / 'Info.plist'
     metadata = plistlib.loads(info.read_bytes())
     metadata['CFBundleDisplayName'] = 'Outbound QA Receiver'
@@ -105,6 +116,9 @@ def exercise(sender, output, env, *, receiver, project, bundle, result_name, run
             shutil.copyfile(report_file, output / 'ios-result.json')
         state = fixture._queue_state(queue)
         write(output / 'recipient.json', state)
+        inventory = queue.parent / 'representation-types.txt'
+        if inventory.is_file():
+            shutil.copyfile(inventory, output / inventory.name)
         if xctest or not report_file.exists():
             raise RuntimeError(f'iOS outbound XCTest did not pass (exit {xctest}); see outbound-xctest.log.')
         report = json.loads(report_file.read_bytes())
