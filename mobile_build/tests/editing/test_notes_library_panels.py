@@ -1065,8 +1065,14 @@ class NotesLibraryPanelTests(unittest.TestCase):
                 play.assert_not_called()
                 panel.play_button.on_press()
                 play.assert_called_once_with(panel.playlist.id, anchor=panel.play_button)
-            with patch.object(owner.sidebar, 'choose_action', new=AsyncMock(return_value='down')):
+            with patch.object(owner.sidebar, 'choose_action', new=AsyncMock(return_value='down')) as choose:
                 await panel.entry_buttons[second.id].on_press()
+            menu, window = choose.await_args.args
+            self.assertIs(window, owner.view.window)
+            self.assertTrue(choose.await_args.kwargs['apple_native'])
+            self.assertEqual(menu.title, 'Plan.MD')
+            self.assertEqual(menu.message, 'Vault/Projects/Plan.MD')
+            self.assertIn(('Move down', 'down', 0), menu.choices)
             await panel.reload()
             self.assertEqual(panel.playlist.entries[1], second)
 
@@ -1095,41 +1101,6 @@ class NotesLibraryPanelTests(unittest.TestCase):
             owner.dispose()
             self.assertFalse(panel.rows.children)
             self.assertEqual(panel.header.text, '')
-        self.run_async(exercise())
-
-    def test_native_playlist_menu_applies_to_the_tapped_entry_and_retires(self):
-        from dataclasses import replace
-        from unittest.mock import Mock
-
-        async def exercise():
-            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
-            panel = owner.playlist_panel
-            owner.select_panel_tab('Playlist')
-            await panel.loading
-            record = await panel.change('create', 'Morning')
-            for path in ('Vault/Home.md', 'Vault/Projects/Plan.MD'):
-                await panel.change('add', record.id, path)
-            await panel.reload()
-            panel.open(record.id)
-            first, second = panel.playlist.entries
-            panel.selected = first.id
-            button = panel.entry_buttons[second.id]
-            native_menu = Mock()
-            presentation = replace(owner.host.presentation, NativeMenu=native_menu)
-            with patch.object(owner, 'host', replace(owner.host, presentation=presentation)):
-                panel.bind_entry_menu(button, record.id, second.id, 1)
-            anchor, actions = native_menu.call_args.args
-            self.assertIs(anchor, button)
-            self.assertEqual([title for title, _ in actions],
-                             ['Move up', 'Repair reference…', 'Remove entry'])
-            with patch.object(panel, 'apply_action', new=AsyncMock()) as dispatch:
-                await actions[-1][1]()
-                self.assertEqual(panel.selected, second.id)
-                dispatch.assert_awaited_once_with('remove')
-                panel.render()
-                native_menu.return_value.dispose.assert_called_once_with()
-                await actions[-1][1]()
-                dispatch.assert_awaited_once()
         self.run_async(exercise())
 
     def test_playlist_speech_opens_note_and_document_action_uses_the_same_controls(self):
