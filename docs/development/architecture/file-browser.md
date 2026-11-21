@@ -23,6 +23,8 @@ The desktop File Browser host tests cover hover, Escape, window arrangements
 and keyboard actions. The mobile destination and document-mutation tests cover
 conflicts, interrupted cleanup, and Home references. The managed
 `workspace-move` probe exercises the native mobile file menus and LocalCrypt.
+On iPhone it also moves a generated EPUB and CBZ together, relaunches the app,
+and reopens both from Home to verify the EPUB bookmark and comic page 37.
 
 ## SQLite inspection boundary
 

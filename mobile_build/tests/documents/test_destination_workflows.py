@@ -73,13 +73,21 @@ class DestinationWorkflowTests(unittest.TestCase):
         (destination / 'conflict.txt').write_text('Keep destination')
         self.run_async(self.app.show_files(location=('Local files', '')))
         browser = self.app.file_browser
+        from mobile.routes import contains
+        parent = self.app.file_select_bar.parent
+        self.assertTrue(contains(self.app.files_view, self.app.file_select_bar))
+        self.assertEqual(self.app.file_select_bar.style.display, 'none')
         self.app.begin_file_selection()
+        self.assertIs(self.app.file_select_bar.parent, parent)
+        self.assertEqual(self.app.file_select_bar.style.display, 'pack')
         for entry in list(browser.tree.entries.values()):
             if not entry.container:
                 self.run_async(browser.activate_entry(entry))
         self.assertEqual(len(self.app.file_checked), 2)
         self.assertIsNone(self.app.provider_sessions().active)
         self.app.cut_files()
+        self.assertIs(self.app.file_select_bar.parent, parent)
+        self.assertEqual(self.app.file_select_bar.style.display, 'none')
         self.run_async(self.app.browser_file_location(('Local files', 'Destination')))
         self.assertIn('Paste move here', dict(self.app.file_item_commands()))
         self.run_async(self.app.paste_files())

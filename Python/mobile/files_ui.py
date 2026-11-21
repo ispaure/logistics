@@ -266,10 +266,11 @@ class FilesUI:
         self.file_select_done = toga.Button('Done selecting', on_press=self.end_file_selection,
                                            style=Pack(height=48, flex=1))
         self.file_select_bar = toga.Box(children=[self.file_cut_button, self.file_select_done],
-                                        style=Pack(direction=ROW))
+                                        style=Pack(direction=ROW, height=48, display='none'))
         self.file_source_tabs = toga.Box(style=Pack(direction=ROW, height=48))
         self.files_view = toga.Box(children=[
             self.file_browser.location_bar,
+            self.file_select_bar,
             self.file_browser.scroll_container()],
             style=Pack(direction=COLUMN, margin=12, flex=1))
         self.files_view._refresh_file_listing = self.browse_files
@@ -403,12 +404,14 @@ class FilesUI:
         return commands + [('Archive password…', lambda: self.show_file_actions(operation='password'))]
 
     def begin_file_selection(self):
-        if self.cloud_busy or self.file_select_bar.parent is not None:
+        if self.cloud_busy or self.file_browser.on_check_entry is not None:
             return
         self.file_browser.on_check_entry = self.check_file_entry
         self.file_browser.highlight_selection()
         self.file_cut_button.enabled = False
-        self.files_view.insert(1, self.file_select_bar)
+        # The Workspaces frame reparents the original browser contents into
+        # its detail pane. Keep the selection row with those contents.
+        self.file_select_bar.style.display = 'pack'
 
     def check_file_entry(self, entry):
         if self.cloud_busy:
@@ -423,8 +426,7 @@ class FilesUI:
         self.file_cut_button.text = f'Cut ({len(self.file_checked)})'
 
     def end_file_selection(self, widget=None, **kwargs):
-        if self.file_select_bar.parent is not None:
-            self.file_select_bar.parent.remove(self.file_select_bar)
+        self.file_select_bar.style.display = 'none'
         self.file_checked.clear()
         self.file_browser.on_check_entry = None
         self.file_browser.checked_entries.clear()

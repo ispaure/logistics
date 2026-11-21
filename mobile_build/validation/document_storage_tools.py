@@ -26,6 +26,7 @@ UNIFIED_PROGRESS_ENTRY = 'tests.logisticsmobile.unified_progress_probe'
 UNIFIED_PROGRESS_RESULT = 'unified-progress-result.json'
 UNIFIED_PROGRESS_ANDROID_ENTRY = 'tests.logisticsmobile.unified_progress_android_probe'
 UNIFIED_PROGRESS_VIDEO_ENTRY = 'tests.logisticsmobile.unified_progress_video_probe'
+WORKSPACE_MOVE_ENTRY = 'tests.logisticsmobile.workspace_move_probe'
 READER_APPEARANCE_ENTRY = 'tests.logisticsmobile.reader_appearance_probe'
 RAPID_INK_PROFILE = dict(bundle='io.github.ispaure.logisticsnotebookqa',
     entry_point='tests.logisticsmobile.notebook_rapid_ink_probe', result_name='notebook-rapid-ink-result.json')
@@ -442,6 +443,7 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
     (output / 'ios-lease.json').write_text(json.dumps(dict(device=device, name=name, runtime=runtime, model=model)))
     cache = console = console_stream = None
     initial_progress_pid = None
+    restart_probe = entry_point in (UNIFIED_PROGRESS_ENTRY, UNIFIED_PROGRESS_VIDEO_ENTRY, WORKSPACE_MOVE_ENTRY)
     try:
         client.boot(device)
         if comic_scope is not None:
@@ -625,7 +627,7 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
                 if entry_point.endswith('.lockscreen_probe') and result.get('phase') not in ('complete', 'failed'):
                     time.sleep(.2)
                     continue
-                checkpoint = (entry_point in (UNIFIED_PROGRESS_ENTRY, UNIFIED_PROGRESS_VIDEO_ENTRY)
+                checkpoint = (restart_probe
                               and initial_progress_pid is None and result.get('success') and result.get('phase') == 'checkpoint')
                 if not checkpoint:
                     (output / 'ios-result.json').write_text(json.dumps(result, indent=2))
@@ -633,7 +635,7 @@ def exercise_ios_app(app, output, env, *, bundle=BUNDLE,
                 client.invoke('io', device, 'screenshot', str(output / screenshot))
                 if not result['success']:
                     raise RuntimeError(result.get('error') or result.get('errors') or 'Native layout assertions failed')
-                if entry_point in (UNIFIED_PROGRESS_ENTRY, UNIFIED_PROGRESS_VIDEO_ENTRY):
+                if restart_probe:
                     expected_scope = env.get('SIMCTL_CHILD_LOGISTICS_PROGRESS_CASE')
                     if expected_scope and result.get('scope') != expected_scope:
                         raise ValueError('Native progress probe ran a different case scope.')
@@ -1357,7 +1359,7 @@ def main():
                 entry_point='tests.logisticsmobile.localcrypt_probe', result_name='localcrypt-result.json')
         if args.probe == 'workspace-move':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
-                entry_point='tests.logisticsmobile.workspace_move_probe', result_name='workspace-move-result.json')
+                entry_point=WORKSPACE_MOVE_ENTRY, result_name='workspace-move-result.json')
         if args.probe == 'notes-markdown-feedback':
             creation_profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                 entry_point='tests.logisticsmobile.notes_markdown_feedback_probe', result_name='notes-markdown-feedback-result.json')
