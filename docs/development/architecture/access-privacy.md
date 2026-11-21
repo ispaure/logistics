@@ -39,7 +39,7 @@ own scope.
 
 | Surface | Enforcement and limits |
 | --- | --- |
-| Qt desktop | Standard focused shortcuts and Qt context actions for text widgets and embedded WebEngine. Logistics Edit actions and chat and Git clipboard writes consult the same decision. X11 primary-selection publication, direct accessibility text access, and OS clipboard history and sync are separate. |
+| Qt desktop | Standard focused shortcuts and Qt context actions for text widgets and embedded WebEngine. Logistics Edit actions and chat and Git clipboard writes consult the same decision. Linux primary-selection publication, direct accessibility text access, and OS clipboard history and sync are separate. |
 | Android | Toga EditText covers text menu commands through the native edit handler. WebView intercepts standard shortcuts, Chromium selection actions routed through Android ActionMode, and DOM clipboard events on WebView versions with document-start scripts. Keyboard providers can still insert content as typed text. |
 | iPhone and iPad | UIKit fields, text views and WebKit standard clipboard responder actions check the current process scope. WebKit link and image preview menus and system keyboard services are separate. |
 | Mobile Chat | The transcript requests Copy through its host. The host rechecks the scope before writing rendered text to the platform clipboard. |
@@ -56,7 +56,8 @@ The Qt regression runs on the offscreen clipboard. The mobile probe uses
 generated strings and Manager-owned disposable devices. It checks native text
 context handlers and focused shortcuts, embedded text editing, Chat Copy,
 credential lock and final owner release. A second scope models process-wide
-retention independently of a visible secondary scene.
+retention. On supported iPads the probe also opens a real second scene and
+checks that protection held by the primary scene applies to its editor.
 
 ## Resume challenges and asynchronous callbacks
 

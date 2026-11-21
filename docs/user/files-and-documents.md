@@ -68,8 +68,8 @@ last credentials restores these commands when the last retained protected view
 has released its content.
 
 Existing clipboard contents stay available to other apps. Clipboard history
-and device sync are controlled by the operating system. On X11, selecting
-text can still publish it to the separate primary selection. File Browser
+and device sync are controlled by the operating system. On Linux desktops
+with a primary selection, selecting text can still publish it there. File Browser
 copy and move commands remain available and can use the file-manager clipboard.
 
 ## Search and inspect storage

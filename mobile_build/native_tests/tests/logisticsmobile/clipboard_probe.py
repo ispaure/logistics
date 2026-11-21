@@ -65,10 +65,10 @@ class ClipboardProbe(LogisticsMobile):
         if self.policy.android:
             from java import jclass
             return native.onTextContextMenuItem(getattr(jclass('android.R$id'), operation))
-        from rubicon.objc import SEL
+        from rubicon.objc import SEL, objc_id, send_message
         action = SEL(operation + ':')
         enabled = native.canPerformAction(action, withSender=None)
-        getattr(native, operation)(None)
+        send_message(native, action, None, restype=None, argtypes=[objc_id])
         return bool(enabled)
 
     def shortcut(self, native, operation):
@@ -140,6 +140,33 @@ class ClipboardProbe(LogisticsMobile):
         assert status == expected, (status, expected)
         assert self.access() == (OTHER if restricted else MARKER)
 
+    async def check_scenes(self):
+        manager = self.scene_manager
+        assert manager.new_window(), manager.error
+        child = None
+        try:
+            await wait_until(lambda: any(host is not self and getattr(host, 'scene_active', False) and
+                                         not getattr(host, '_startup_in_progress', False) for host in manager.owners.hosts.values()),
+                             timeout=25, message='Second iPad scene did not settle')
+            child = next(host for host in manager.owners.hosts.values() if host is not self)
+            assert child.native_scene != self.native_scene
+            assert child.clipboard is self.clipboard
+            child.show_documents()
+            field = child.editor
+            await self.check_text(field, self.menu, False)
+            release = self.protection.register(object(), lambda: (), protected=lambda: True)
+            try:
+                await self.check_text(field, self.menu, True)
+            finally:
+                release()
+            await self.check_text(field, self.menu, False)
+        finally:
+            child = child or next((host for host in manager.owners.hosts.values() if host is not self), None)
+            if child is not None:
+                assert manager.close_window(child), manager.error
+                await wait_until(lambda: len(manager.owners.hosts) == 1,
+                                 timeout=20, message='Second iPad scene did not close')
+
     async def exercise(self):
         report = dict(success=False, cases=[])
         try:
@@ -207,6 +234,9 @@ class ClipboardProbe(LogisticsMobile):
             finally:
                 release()
             report['cases'].append('in-page chat Copy routes through native clipboard protection')
+            if not self.policy.android and self.scene_manager.supported:
+                await self.check_scenes()
+                report['cases'].append('retained protection in the primary scene applies to the secondary UIKit editor')
             report['success'] = True
         except BaseException:
             report['error'] = traceback.format_exc()
