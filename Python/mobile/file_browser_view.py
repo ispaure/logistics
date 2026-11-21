@@ -32,6 +32,12 @@ class LocalFileBrowser(FileBrowser):
         super().__init__(**kwargs)
         self.view_switch = browser_command(icon_button('file_tiles', 'Show tiles', on_press=self.switch_view))
 
+    def _list_selected(self, widget, **kwargs):
+        if not self._rendering and not widget.updating:
+            from .native.file_shortcuts import focus
+            focus(widget)
+        super()._list_selected(widget, **kwargs)
+
     def configure_previews(self, source):
         previous = self.thumbnails
         if previous is not None and (previous.provider is not source.provider
@@ -83,9 +89,22 @@ class LocalFileBrowser(FileBrowser):
         self._mode_anchor = None
         super().stop()
 
+    def mounted_listing(self):
+        return next((widget for widget in (self.native_list, self._tile_scroll, self.empty_label)
+                     if widget.parent is self.widget), None)
+
     def render(self):
+        from .native.file_shortcuts import focus, focused
+
+        previous = self.mounted_listing()
+        transfer = (previous is not None and previous.factory.Button.__module__.startswith('toga_android.')
+                    and focused(previous))
         self._reset_previews()
         super().render()
+        if transfer:
+            target = self.mounted_listing()
+            if target is not None and not focused(target):
+                focus(target)
         self._schedule_previews()
 
     def switch_view(self, widget=None, **kwargs):
@@ -176,11 +195,24 @@ class LocalFileBrowser(FileBrowser):
             command = icon_button('overflow', 'Actions for ' + button.text,
                                   on_press=partial(self._tile_actions, entry))
             card.add(toga.Box(children=[button, command], style=Pack(direction=ROW)))
+        dispatch = getattr(self, 'file_key_dispatch', None)
+        if dispatch is not None and button.factory.Button.__module__.startswith('toga_android.'):
+            from .native.file_shortcuts import bind
+            for control in card.children[-1].children if self.on_item_actions is not None else (button,):
+                control._file_key_binding = bind(control, dispatch, focusable=False)
         return card
+
+    async def _select_pressed(self, entry, widget, **kwargs):
+        if self.mode == 'Tiles' and widget is self.buttons.get(entry.identity):
+            from .native.file_shortcuts import focus
+            focus(self._tile_scroll)
+        return await super()._select_pressed(entry, widget, **kwargs)
 
     async def _tile_actions(self, entry, widget=None, **kwargs):
         if self.closed or self.navigation_busy or not self._entry_current(entry):
             return
+        from .native.file_shortcuts import focus
+        focus(self._tile_scroll)
         entry = await self.validate_cached_entry(entry)
         if entry is None or not self._entry_current(entry):
             return

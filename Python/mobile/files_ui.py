@@ -222,6 +222,15 @@ class FilesUI:
         from .file_browser_view import LocalFileBrowser
         self.file_browser = LocalFileBrowser(folder_visible=self.folder_path_visible, selected=self.browser_file_selected, open_folder=self.browser_file_folder, navigate=self.browser_file_location, open_file=self.browser_file_open)
         self.file_browser.install_item_commands(lambda row: self.file_item_commands(row=row))
+        from weakref import ref
+        from .native.file_shortcuts import install
+        owner = ref(self)
+
+        def file_key(browser, key):
+            current = owner()
+            return current is not None and current.file_browser is browser and current.file_move_shortcut(key)
+
+        install(self.file_browser, file_key)
         self.file_browser.navigation_controls.remove(self.file_browser.back_button)
         self.file_password = PasswordInput(placeholder='Inner archive password, when needed', style=Pack(height=48))
         from .filename_input import FilenameInput
@@ -472,6 +481,25 @@ class FilesUI:
         if cut is not None and cut[0].private and cut[2] != (client, getattr(client, 'generation', None)):
             self._file_cut = cut = None
         return cut
+
+    def file_move_shortcut(self, key):
+        from commonUtils.runtime.resources.provider import capabilities
+
+        if (not self.active_host or self.cloud_busy or self.file_browser.navigation_busy
+                or self.file_provider is None):
+            return False
+        access = capabilities(self.file_provider)
+        if key == 'x' and access.delete:
+            if not self.file_checked and self.file_selection.value not in self.file_rows:
+                return False
+            self.cut_files()
+            return True
+        if key == 'v' and access.create and access.rename and access.delete and self.pending_file_cut():
+            task = getattr(self, '_file_paste_shortcut_task', None)
+            if task is None or task.done():
+                self._file_paste_shortcut_task = self.loop.create_task(self.paste_files())
+            return True
+        return False
 
     def cut_files(self, widget=None, **kwargs):
         provider = self.file_provider

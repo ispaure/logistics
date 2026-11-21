@@ -328,6 +328,31 @@ class ReaderBridgeLifecycleTests(unittest.TestCase):
         self.assertEqual(view.scripts, scripts)
         self.assertEqual(events, [])
 
+    def test_wheel_burst_timestamp_transfers_with_a_chapter_boundary(self):
+        from features.books.mobile.presentation import chapter_view
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+
+        view = SimpleNamespace(set_content=Mock(), evaluate_javascript=Mock())
+        chapter = "<html><head></head><body>Passage</body></html>"
+        event = Mock()
+        chapter_view(chapter, view, on_event=event)
+        previous = view._chapter_bridge
+        time = 1795296449734
+        self.assertFalse(previous.navigation(view, previous.root + f"next?offset=9&wheelTime={time}"))
+        event.assert_called_once_with("next", 9)
+
+        chapter_view(chapter, view)
+        current = view._chapter_bridge
+        self.assertTrue(previous.closed)
+        current.loaded(view)
+        self.assertIn(f'"wheelTime": {time}', view.evaluate_javascript.call_args.args[0])
+
+        current.navigation(view, current.root + "next?offset=0")
+        chapter_view(chapter, view)
+        view._chapter_bridge.loaded(view)
+        self.assertIn('"wheelTime": null', view.evaluate_javascript.call_args.args[0])
+
     def test_private_html_size_limit_rejects_before_toolkit_or_disk_fallback(self):
         from features.books.mobile.private_view import PrivateWebView, MAX_HTML
         from types import SimpleNamespace

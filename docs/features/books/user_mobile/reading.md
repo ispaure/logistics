@@ -10,6 +10,12 @@ Enable **Settings → Books & Comics → Book cover on outer display** to try di
 
 Use the chapter button to open nested contents and bookmarks. Tap a title to jump or a chevron to expand. **Find in chapter…** searches without case and wraps. The arrows and horizontal swipes turn pages across chapter boundaries. Drag and release the footer slider once screen-page counting finishes.
 
+With focus in the EPUB page, use Left/Right, Page Up/Page Down, or Space to
+turn pages. A mouse wheel or trackpad scroll can turn a page on either axis
+when the system delivers the gesture to the page. A scrollable area inside
+the page keeps its own scrolling. System gestures such as Home, app
+switching, and Android's edge Back remain system controls.
+
 Wide landscape panes and a reported vertical fold show spreads. The fold stays clear between equal text columns. Resizing or changing appearance keeps the current passage or the highlighted speech word. Bookmarks retain text offsets, with older chapter-only bookmarks opening at the chapter start.
 
 Imported, remote and LocalCrypt books offer rich pages, internal links and chapter search. Book scripts and external resources are blocked. Provider positions use encrypted checkpoints when a credential ZIP password is available. Passwordless private state stays in memory. Locking retires decrypted state. See [private reading state](../../../development/architecture/reader-state.md).

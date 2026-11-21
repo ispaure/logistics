@@ -58,6 +58,10 @@ confirmation because the destination will be readable as an ordinary file.
 In File Browser, use an item's actions to move a single file or folder.
 To move several items together, choose **Select items**, tap each item,
 then tap **Cut**. Browse to the destination and choose **Paste move here**.
+With the listing focused, use **Command-X** and **Command-V** on iPhone or
+iPad, or **Ctrl-X** and **Ctrl-V** on Android, for the same move. Tap the
+destination listing before pasting if it needs focus. A focused search field
+uses the text editing shortcuts.
 Items that conflict stay at the source and remain cut. **Cancel move**
 stops remaining work. Inspect both folders if a move stops after publishing
 a verified destination.

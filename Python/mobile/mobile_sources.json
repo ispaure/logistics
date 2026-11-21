@@ -124,6 +124,7 @@
     "native/android_clipboard.py",
     "native/android_inline_html.py",
     "native/android_markdown_font.py",
+    "native/file_shortcuts.py",
     "native/ios_clipboard.py",
     "navigation.py",
     "notebook_mutations.py",

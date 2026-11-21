@@ -85,6 +85,18 @@ Securely preserve `.device.json`, `.android-beta/`, `.testflight-auth.json` and 
 | Wireless device absent | Check paired transport, same Wi-Fi and development-service status. |
 | Processing or review incomplete | Check the exact App Store Connect build and resume distribution from its receipt. |
 
+## Mobile hardware input checks
+
+Use the `hardware-input` probe in `mobile_build.validation.document_storage_tools`
+on Manager-owned disposable devices. Run it on iPhone, iPad, and Android
+with the tablet viewport. The probe generates its own files and pages. It
+checks native keyboard routing, clipboard protection, file selection moves,
+and EPUB wheel and swipe behavior. The iOS probe invokes UIKit responder
+actions. Both platforms dispatch synthetic reader events inside the WebView.
+Android also dispatches a mouse-source event to the native file list.
+Record physical keyboard and accessory results separately, including which
+gestures the system delivers and whether input resumes after reconnect.
+
 ## Duo rotation and fold verification
 
 Hosted native checks reuse one build across ordinary iPhone, iPad and Duo. Keep the required Duo runtime and model; verify actual hinge capability and portrait/both landscapes. From the root with a verified simulator app and leased Duo:

@@ -115,9 +115,10 @@ SCRIPT = r'''
    return JSON.stringify([pageWidth,stride,columns,pages.style.height,css.fontFamily,css.fontSize,
      css.lineHeight,css.letterSpacing,css.textAlign]);
  };
- const notify = (action, value) => {
+ const notify = (action, value, wheelTime=null) => {
    window.location.href = options.root + action + '?offset=' + value + '&end=' + (page===lastPage() ? '1' : '0')+
-     '&page='+page+'&pages='+pageCount+'&columns='+columns+'&layout='+encodeURIComponent(layoutKey());
+     '&page='+page+'&pages='+pageCount+'&columns='+columns+'&layout='+encodeURIComponent(layoutKey())+
+     (wheelTime===null?'':'&wheelTime='+Math.round(wheelTime));
  };
  const visible = (middle=false) => {
    if(pageAnimation && pageAnimation.playState==='running')return anchor;
@@ -189,21 +190,72 @@ SCRIPT = r'''
    else seek(anchor);
    notify('position',anchor);
  };
- const touchStart=e=>{const t=e.touches.length===1?e.touches[0]:null;touch=t?{x:t.clientX,y:t.clientY}:null;};
- // Two-finger movement belongs to the host's text-size pinch recognizer.
- const touchMove=e=>{if(e.touches.length===1 && !selectedRange()) e.preventDefault();};
- const touchEnd=e=>{
-   if(!touch || selectedRange()) return;
-   const t=e.changedTouches[0], dx=t.clientX-touch.x,dy=t.clientY-touch.y;touch=null;
-   if(Math.abs(dx)>45 && Math.abs(dx)>Math.abs(dy)*1.3) window.reader.turn(dx<0?1:-1);
+ // Book content can contain its own scroll areas and interactive elements.
+ // Scroll remains with the innermost area for the whole burst, including at its edge.
+ const interactive=target=>target instanceof Element &&
+   (target.isContentEditable || target.closest('input,textarea,select,button,a[href],[role="textbox"]'));
+ const innerScroll=(target,horizontal)=>{
+   for(let element=target;element instanceof Element && element!==pages;element=element.parentElement){
+     const overflow=getComputedStyle(element)[horizontal?'overflowX':'overflowY'];
+     if((overflow==='auto' || overflow==='scroll') &&
+        (horizontal ? element.scrollWidth>element.clientWidth : element.scrollHeight>element.clientHeight))return true;
+   }
+   return false;
  };
- const wheel=e=>{e.preventDefault();};
- const key=e=>{if(['ArrowLeft','ArrowRight','PageUp','PageDown',' '].includes(e.key)){
-   e.preventDefault();window.reader.turn(['ArrowLeft','PageUp'].includes(e.key)?-1:1);
- }};
+ const touchStart=e=>{
+   const t=e.touches.length===1 && !interactive(e.target)?e.touches[0]:null;
+   touch=t?{x:t.clientX,y:t.clientY,target:e.target}:null;
+ };
+ const touchMove=e=>{
+   if(e.touches.length!==1){touch=null;return;}
+   if(!touch || selectedRange())return;
+   const t=e.touches[0];
+   if(!innerScroll(touch.target,Math.abs(t.clientX-touch.x)>Math.abs(t.clientY-touch.y)))e.preventDefault();
+ };
+ const cancelTouch=()=>{touch=null;};
+ const touchEnd=e=>{
+   const start=touch;cancelTouch();
+   if(!start || selectedRange())return;
+   const t=e.changedTouches[0],dx=t.clientX-start.x,dy=t.clientY-start.y;
+   if(Math.abs(dx)>45 && Math.abs(dx)>Math.abs(dy)*1.3 && !innerScroll(start.target,true))window.reader.turn(dx<0?1:-1);
+ };
+ let wheelTime=options.wheelTime || -Infinity,wheelDelta=0,wheelAxis=null,wheelUsed=!!options.wheelTime;
+ const resetWheel=()=>{wheelTime=-Infinity;wheelDelta=0;wheelAxis=null;wheelUsed=false;};
+ const wheel=e=>{
+   if(e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey)return;
+   const x=Math.abs(e.deltaX),y=Math.abs(e.deltaY);
+   if(!x && !y)return;
+   const time=performance.timeOrigin+e.timeStamp;
+   if(time-wheelTime>220)resetWheel();
+   wheelTime=time;
+   const horizontal=x>y;
+   if(wheelAxis===null && Math.max(x,y)>Math.min(x,y)*1.3)wheelAxis=horizontal;
+   const axis=wheelAxis ?? horizontal;
+   if(interactive(e.target) || innerScroll(e.target,axis)){wheelUsed=true;return;}
+   if(selectedRange() || suspended){wheelUsed=true;return;}
+   e.preventDefault();
+   if(wheelUsed || wheelAxis===null || horizontal!==axis)return;
+   const delta=(axis?e.deltaX:e.deltaY)*(e.deltaMode===1?16:e.deltaMode===2?innerHeight:1);
+   // Reversals discard the old partial motion. Latch after one turn until
+   // the burst goes quiet so diagonal samples and momentum cannot turn twice.
+   wheelDelta=Math.sign(delta)===Math.sign(wheelDelta)?wheelDelta+delta:delta;
+   if(Math.abs(wheelDelta)<48)return;
+   wheelUsed=true;
+   window.reader.turn(Math.sign(wheelDelta),wheelTime);
+ };
+ const key=e=>{
+   if(e.defaultPrevented || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey ||
+      interactive(e.target) || selectedRange() || suspended)return;
+   const previous=['ArrowLeft','PageUp'].includes(e.key);
+   if(!previous && !['ArrowRight','PageDown',' '].includes(e.key))return;
+   if(innerScroll(e.target,e.key.startsWith('Arrow')))return;
+   e.preventDefault();
+   if(!e.repeat)window.reader.turn(previous?-1:1);
+ };
  document.addEventListener('touchstart',touchStart,{passive:true});
  document.addEventListener('touchmove',touchMove,{passive:false});
  document.addEventListener('touchend',touchEnd);
+ document.addEventListener('touchcancel',cancelTouch);
  document.addEventListener('wheel',wheel,{passive:false});document.addEventListener('keydown',key);
  let measurement=null, measureEpoch=0;
  const measureNodes=new Set();
@@ -270,13 +322,13 @@ SCRIPT = r'''
    measurement: () => measurement,
    seekPage: value => {place(value);anchor=visible(true);notify('position',anchor);},
    seek: (offset,end=null) => {seek(offset,end);notify('position',anchor);},
-   suspend: () => {suspended=true;stopMotion();},
+   suspend: () => {suspended=true;cancelTouch();resetWheel();stopMotion();},
    resume: () => {suspended=false;resized();return true;},
-   turn: direction => {
+   turn: (direction, wheelTime=null) => {
      if(suspended || !usableViewport())return;
      selectedCache=null;getSelection().removeAllRanges();
      if ((direction>0 && page===lastPage()) || (direction<0 && page===0)) {
-       notify(direction>0?'next':'previous',visible()); return;
+       notify(direction>0?'next':'previous',visible(),wheelTime); return;
      }
      const previous=page;
      place(page+(direction>0?columns:-columns));
@@ -288,10 +340,10 @@ SCRIPT = r'''
          {transform:'translateX('+(-page*stride)+'px)'}],{duration:220,easing:'ease-out'});
      }
    },
-   dispose: () => {disposed=true;measureEpoch++;for(const root of measureNodes){root.replaceChildren();root.remove();}measureNodes.clear();stopMotion();contrastObserver.disconnect();reducedMotion.removeEventListener('change',motionChanged);textNodes=[];textEnds=[];textStarts=new WeakMap();if(viewport.isConnected){while(pages.firstChild) viewport.before(pages.firstChild);viewport.remove();}document.removeEventListener('touchstart',touchStart);document.removeEventListener('touchmove',touchMove);document.removeEventListener('touchend',touchEnd);document.removeEventListener('wheel',wheel);document.removeEventListener('keydown',key);removeEventListener('resize',resized);document.removeEventListener('selectionchange',rememberSelection);removeEventListener('pointerdown',clearSelectionCache);removeEventListener('keydown',clearSelectionCache);selectedCache=null;}
+   dispose: () => {disposed=true;measureEpoch++;for(const root of measureNodes){root.replaceChildren();root.remove();}measureNodes.clear();stopMotion();contrastObserver.disconnect();reducedMotion.removeEventListener('change',motionChanged);textNodes=[];textEnds=[];textStarts=new WeakMap();if(viewport.isConnected){while(pages.firstChild) viewport.before(pages.firstChild);viewport.remove();}document.removeEventListener('touchstart',touchStart);document.removeEventListener('touchmove',touchMove);document.removeEventListener('touchend',touchEnd);document.removeEventListener('touchcancel',cancelTouch);document.removeEventListener('wheel',wheel);document.removeEventListener('keydown',key);removeEventListener('resize',resized);document.removeEventListener('selectionchange',rememberSelection);removeEventListener('pointerdown',clearSelectionCache);selectedCache=null;}
  };
  addEventListener('resize',resized);
- document.addEventListener('selectionchange',rememberSelection);addEventListener('pointerdown',clearSelectionCache);addEventListener('keydown',clearSelectionCache);
+ document.addEventListener('selectionchange',rememberSelection);addEventListener('pointerdown',clearSelectionCache);
  // Images can settle after the reader has already turned or spoken a page.
  Promise.all([...document.images].map(i => i.complete ? Promise.resolve() : new Promise(r => {
    i.addEventListener('load',r,{once:true});i.addEventListener('error',r,{once:true});
@@ -312,6 +364,7 @@ class ChapterBridge:
         self.native_pagination = False
         self.input_suspended = False
         self.at_end = False
+        self.wheel_time = None
         self.geometry_provider = None
         self.geometry = None
         self.pagination_state = None
@@ -324,7 +377,7 @@ class ChapterBridge:
             return
         self.ready = True
         options = json.dumps(dict(root=self.root, offset=self.offset, motion=self.motion_enabled,
-                                  suspended=self.input_suspended))
+                                  suspended=self.input_suspended, wheelTime=self.wheel_time))
         self.view.evaluate_javascript(SCRIPT.replace('OPTIONS', options, 1))
         self.refresh_geometry(force=True)
 
@@ -365,6 +418,14 @@ class ChapterBridge:
             if action in {'position', 'next', 'previous'} and 0 <= offset <= 16 * 1024 * 1024:
                 query = parse_qs(urlsplit(url).query)
                 self.offset = offset
+                if action in {'next', 'previous'}:
+                    self.wheel_time = None
+                    try:
+                        candidate = int(query['wheelTime'][0])
+                        if 0 < candidate < 10**14:
+                            self.wheel_time = candidate
+                    except (KeyError, ValueError, IndexError):
+                        pass
                 try:
                     page, count, columns = (int(query[key][0]) for key in ('page', 'pages', 'columns'))
                     layout = query['layout'][0]
@@ -463,6 +524,7 @@ def chapter_view(content, view=None, *, offset=0, on_event=None, on_link=None, m
         previous.dispose()
     root = 'https://logistics.invalid/' + uuid4().hex + '/'
     bridge = ChapterBridge(view, root=root, offset=offset, on_event=on_event, on_link=on_link, motion_enabled=motion_enabled)
+    bridge.wheel_time = previous.wheel_time if previous else None
     bridge.native_pagination = backend.startswith(('toga_iOS.', 'toga_android.'))
     view._chapter_bridge = bridge
     _bind_chapter_navigation(view, bridge.navigation, backend)

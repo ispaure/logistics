@@ -31,6 +31,10 @@ positions can be restored.
 
 ## Work with a Markdown draft
 
+Use **Command-C/X/V** on iPhone or iPad, or **Ctrl-C/X/V** on Android, to
+copy, cut or paste in the focused editor. The session-only clipboard
+setting also applies to these shortcuts.
+
 Tap **Edit Markdown** to enter the editor. Choose **Format** for headings,
 lists, links, code and tables. Editing a formatted block can normalize its
 Markdown, so use **Source** when working with YAML properties, reference
