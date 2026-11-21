@@ -9,6 +9,7 @@ from commonUtils.filesystem.local_access import check_local_path
 from commonUtils.persistence.publication import mutation_lock, rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.resources.local import LocalFiles
+from commonUtils.runtime.resources.mutations import inventory
 from commonUtils.runtime.resources.paths import resource_name, resource_path
 from commonUtils.runtime.resources.provider import capabilities
 from commonUtils.runtime.streams import copy_stream, stream_signature
@@ -63,6 +64,18 @@ class ArchiveItem:
             require_writable(path.parent)
         return path
 
+    def resolve_source(self, cancelled):
+        check_cancelled(cancelled)
+        if not resource_path(self.path):
+            raise ValueError('Select a file or folder inside the storage location.')
+        path = self.resolve()
+        check_local_path(path, recursive=True)
+        if path.is_dir():
+            # Apply the resource provider's descendant checks before the shared
+            # archive engine opens a folder by its physical path.
+            inventory(self.provider, self.path, cancelled=cancelled)
+        return path
+
     def inspect(self, cancelled):
         path = self.resolve()
         if not path.is_file() or not archives.is_supported_archive(path):
@@ -77,7 +90,7 @@ class ArchiveItem:
             path = self.resolve(write=True)
             if not archives.is_zip_archive(path):
                 raise ValueError('Only ZIP and CBZ archives can be edited.')
-            additions = tuple(item.resolve() for item in sources)
+            additions = tuple(item.resolve_source(cancelled) for item in sources)
             if any(source == path or source in path.parents for source in additions):
                 raise ValueError('An archive cannot contain itself.')
             archives.update_zip(path, sources=additions, remove=remove, password=password, cancelled=cancelled)
@@ -103,7 +116,7 @@ def create_archive(sources, provider, folder, name, format, work_root, cancelled
         check_cancelled(cancelled)
         name = archive_name(name, format)
         target = output_path(provider, folder, name)
-        paths = tuple(item.resolve() for item in sources)
+        paths = tuple(item.resolve_source(cancelled) for item in sources)
         parent = target.parent.stat()
         parent_id = parent.st_dev, parent.st_ino
         if any(target == source or source in target.parents for source in paths):

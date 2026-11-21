@@ -104,6 +104,25 @@ class ArchiveOperationsTests(unittest.TestCase):
         with self.assertRaises(FileNotFoundError):
             item.inspect(lambda: False)
 
+    def test_ordinary_folder_cannot_include_protected_storage(self):
+        from commonUtils.filesystem.local_access import protect_local_root
+        path = self.create()
+        item, _ = ArchiveItem(self.provider, path.name).inspect(lambda: False)
+        before = path.read_bytes()
+        protected = self.root / 'nested' / 'protected'
+        protected.mkdir()
+        (protected / 'raw.bin').write_bytes(b'generated protected bytes')
+        release = protect_local_root(object(), protected, 'Use its protected provider.')
+        try:
+            with self.assertRaisesRegex(PermissionError, 'protected provider'):
+                self.create(name='guarded')
+            with self.assertRaisesRegex(PermissionError, 'protected provider'):
+                item.edit(lambda: False, sources=(self.sources[1],))
+        finally:
+            release()
+        self.assertFalse((self.root / 'guarded.zip').exists())
+        self.assertEqual(path.read_bytes(), before)
+
     def test_locked_zip_headers_and_password_gate(self):
         from commonUtils.archives.zip_access import ArchivePasswordError
         try:
