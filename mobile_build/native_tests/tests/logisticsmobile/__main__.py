@@ -93,6 +93,9 @@ async def exercise(app):
         choices = [row.value for row in app.file_storage.items]
         assert 'Local files' in choices, ('cold local roots', choices, app.file_status.value)
         assert app.file_provider is not None and not app.file_browser.closed
+        from .browser_thumbnail_checks import exercise_browser_thumbnails
+        await measure(app, 'file-browser-thumbnails', exercise_browser_thumbnails(app))
+        passed.append('native_local_browser_thumbnails')
         from .archive_checks import exercise_archives
         await measure(app, 'archive-management', exercise_archives(app))
         passed.append('native_archive_management')

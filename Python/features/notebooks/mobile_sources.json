@@ -47,6 +47,7 @@
     "protocol.py",
     "progress.py",
     "templates.py",
+    "thumbnail.py",
     "remarkable_export.py",
     "previews.py",
     "assets/base.css",

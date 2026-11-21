@@ -72,13 +72,17 @@ def highlight_entry(widget, selected):
 def sync_browser_population(app, body=None):
     """Resume retained search only when its owning view is visible again."""
     privacy = getattr(app, 'screen_privacy', None)
-    if (privacy is None or privacy.disposed or getattr(privacy, '_folder_work_paused', False)
-            or getattr(app, 'scene_active', True) is False or not app.active_host):
-        return
     body = body if body is not None else getattr(app, 'body', None)
-    if body is None:
-        return
+    ready = (body is not None and privacy is not None and not privacy.disposed
+             and not getattr(privacy, '_folder_work_paused', False)
+             and getattr(app, 'scene_active', True) is not False and app.active_host)
     from .routes import contains
+    file_browser = getattr(app, 'file_browser', None)
+    set_visible = getattr(file_browser, 'set_previews_visible', None)
+    if set_visible is not None:
+        set_visible(bool(ready and contains(body, file_browser.widget)))
+    if not ready:
+        return
     paused = getattr(privacy, '_paused_file_browsers', ())
     for browser in tuple(paused):
         if browser.closed or contains(body, browser.widget):
@@ -291,6 +295,7 @@ class FileBrowser(RecycledBrowser):
                 title = '✓ ' + name if identity in self.checked_entries else name
                 if button.text != title:
                     button.text = title
+                    self.presentation.middle_filename(button)
 
     def clear_selection(self):
         """Retire contextual selection without rebuilding the retained listing."""

@@ -107,9 +107,18 @@ Keep `RecycledFileList` in a bounded native viewport. Android uses the app's
 Java ListView adapter; iOS uses reusable UITableView cells. Rows bind from a
 complete filtered snapshot, validating the entry and render epoch before
 activation. Rebind the palette, image and accessibility on redisplay, including
-unlock of a retained window. Only visible cells request optional thumbnails,
-with bounded work and caching. Ordinary Local and LocalCrypt lists browse names
-and generic icons without thumbnail reads. Tiles use their own scroll surface.
+unlock of a retained window. The Local File Browser projects the same snapshot
+and selection into recycled rows or a windowed tile surface. The first visible
+entry anchors mode changes.
+
+The Logistics browser admits only revisioned entries from an offline
+filesystem provider. Two worker slots follow the viewport and remain occupied
+until cancelled reads retire. The shared browser cache keys thumbnails by
+entry identity and file revision. The browser prunes that cache on a new
+snapshot and clears it on provider or archive-password changes. Private
+reads use the provider's credential operation and recheck its grant at
+publication. Locking clears the listing, images and in-memory cache. The Cloud
+browser performs no automatic content reads.
 
 ## File operation ownership
 

@@ -36,6 +36,8 @@ async def exercise_connections(app, fixtures, background_comic, passed):
     assert row is not None, f'Native fixture folder missing: {list(app.cloud_rows.values())!r}; {app.cloud_status.value}'
     assert await app.browser_cloud_folder(row)
     row = next(row for row in app.cloud_rows.values() if row['path'].endswith('fixture.txt'))
+    from .browser_thumbnail_checks import assert_remote_placeholders
+    await assert_remote_placeholders(app, row)
     assert await app.open_remote_document(row), app.cloud_status.value
     owner = app.provider_sessions().active
     assert owner is not None and owner.crypt_text.readonly

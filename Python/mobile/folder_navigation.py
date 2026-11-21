@@ -1,6 +1,6 @@
 """Folder ancestry in UIKit's destination-local navigation stacks."""
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 from threading import Event
 
@@ -28,12 +28,14 @@ class FolderScreen:
     base: int = 0
     scope: str = ''
     root_title: str = ''
+    private: bool = field(init=False)
 
     def __post_init__(self):
-        if self.root_title:
-            return
         provider = getattr(self.browser, 'search_provider', None)
         provider = getattr(provider, 'provider', provider)
+        self.private = self.kind == 'remote-browser' or getattr(provider, 'private', False)
+        if self.root_title:
+            return
         if getattr(provider, 'private', False) and not getattr(provider, 'remote_storage', False):
             self.root_title = getattr(provider, 'remote', self.source)
         else:
@@ -233,7 +235,8 @@ class FolderNavigation:
         entry = self.screens.get((destination, screens[-1][0])) if screens else None
         if entry is not None:
             clear_snapshot(entry)
-            entry.snapshot = native_snapshot(screens[-1][1])
+            if not getattr(getattr(entry.browser, 'thumbnails', None), 'private', False):
+                entry.snapshot = native_snapshot(screens[-1][1])
             entry.query = entry.browser.search.value
             entry.selected = entry.browser.selected
             scroll = getattr(entry.browser, '_scroll', None)
@@ -252,9 +255,7 @@ class FolderNavigation:
 
     def invalidate_private(self):
         for entry in self.screens.values():
-            provider = getattr(entry.browser, 'search_provider', None)
-            owner = getattr(provider, 'provider', provider)
-            if entry.kind != 'remote-browser' and not getattr(owner, 'private', False):
+            if not entry.private:
                 continue
             clear_snapshot(entry)
             if entry.preview is not None:

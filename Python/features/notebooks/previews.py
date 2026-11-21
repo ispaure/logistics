@@ -11,11 +11,11 @@ STROKES = 256
 THUMBNAIL_EDGE = 288
 
 
-def page_previews(book, start, *, pdf_bounds=None, pdf_artwork=None):
+def page_previews(book, start, *, pdf_bounds=None, pdf_artwork=None, count=BATCH, include_images=True):
     if type(start) is not int or not 0 <= start < len(book.pages):
         raise ValueError('Invalid page overview range.')
     previews, remaining, image_budget = [], BATCH_POINTS, BATCH_IMAGE_BYTES
-    for index in range(start, min(start + BATCH, len(book.pages))):
+    for index in range(start, min(start + min(count, BATCH), len(book.pages))):
         ink = book.page(index)
         page = book.pages[index]
         order = {key: i for i, key in enumerate(ink.order)}
@@ -27,7 +27,7 @@ def page_previews(book, start, *, pdf_bounds=None, pdf_artwork=None):
         if len(strokes) > STROKES:
             strokes = [strokes[i * (len(strokes) - 1) // (STROKES - 1)] for i in range(STROKES)]
         total = sum(len(s.points) for s in strokes)
-        pictures = list(image_data(book, index, layers=visible))
+        pictures = list(image_data(book, index, layers=visible)) if include_images else []
         image_bytes = sum(len(data) for _, data in pictures)
         if min(total, POINTS) > remaining or (previews and image_bytes > image_budget):
             break

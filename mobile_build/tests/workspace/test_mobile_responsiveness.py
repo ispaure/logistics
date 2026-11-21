@@ -196,7 +196,7 @@ class ResponsivenessTests(unittest.TestCase):
             await browser.close()
         self.app.loop.run_until_complete(exercise())
 
-    def test_local_and_localcrypt_listings_do_not_read_content_in_list_or_tiles(self):
+    def test_virtual_listings_do_not_read_content_in_list_or_tiles(self):
         app = self.app
         app.show_cloud(present=False)
         app.loop.run_until_complete(app.show_files())
@@ -217,7 +217,7 @@ class ResponsivenessTests(unittest.TestCase):
                     app.populate_file_browser(rows)
                     await asyncio.sleep(.02)
                     self.assertEqual(len(app.file_browser.native_list.data) if mode == 'List' else len(app.file_browser.buttons), 4)
-                    self.assertIsNone(app.file_browser.thumbnail)
+                    self.assertFalse(app.file_browser.thumbnails.enabled)
                     self.assertIsNotNone(app.file_browser.details)
                     provider.open.assert_not_called()
                     client.request.assert_not_called()

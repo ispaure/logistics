@@ -605,14 +605,9 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
     await asyncio.gather(*tuple(browser.tasks))
     assert app.selected_file()[1] == 'large-browser.cbz'
     assert any('Title: Large native browser sentinel' == child.text for child in browser.info.children if hasattr(child, 'text'))
-    assert browser.thumbnail is None and not browser.icons
-    # Folder browsing must not decrypt covers automatically. Exercise the
-    # large-file native thumbnail API as an explicit preview request instead.
-    from mobile.browser_preview import callbacks
-    thumbnail, _ = callbacks(provider, app.cloud_client)
-    preview = await asyncio.to_thread(thumbnail, entry.payload, (160, 160), lambda: False)
-    assert preview.startswith(b'\x89PNG')
-    assert not browser.icons
+    from .browser_thumbnail_checks import cached, wait_for
+    await wait_for(lambda: cached(browser, 'large-browser.cbz').startswith(b'\x89PNG'),
+                   'The large encrypted comic did not use the native cover preview')
     await browser.activate_entry(entry)
     assert app.private_sessions.active.crypt_reader.name == 'large-browser.cbz'
     await app.show_files()
@@ -705,6 +700,8 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
     # is still live. Focused LocalCrypt-only probes retain their original scope.
     if notebook_images is not None:
         await notebook_images()
+        from .browser_thumbnail_checks import exercise_locked_thumbnails
+        await exercise_locked_thumbnails(app, app.file_provider_for(crypt_label), crypt_label)
     await app.clear_cloud()
     assert not browser.icons and not browser.info.children and not browser.entries
     passed.append('native_localcrypt_file_management')

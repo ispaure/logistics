@@ -59,6 +59,7 @@
     "feature_settings.py",
     "file_drawer.py",
     "file_items.py",
+    "file_browser_view.py",
     "file_operations.py",
     "filename_input.py",
     "files_ui.py",

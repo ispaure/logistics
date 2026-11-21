@@ -36,6 +36,9 @@ ICONS = {
     'notes_files': ('sidebar.left', '▤', (((3, 4), (21, 4), (21, 20), (3, 20), (3, 4)), ((9, 4), (9, 20)))),
     'notes_links': ('sidebar.right', '▥', (((3, 4), (21, 4), (21, 20), (3, 20), (3, 4)), ((15, 4), (15, 20)))),
     'contents': ('list.bullet', '≡', tuple(((7, y), (21, y)) for y in (6, 12, 18))),
+    'file_tiles': ('square.grid.2x2', '▦', tuple(
+        ((x, y), (x + 6, y), (x + 6, y + 6), (x, y + 6), (x, y))
+        for y in (4, 14) for x in (4, 14))),
     'appearance': ('textformat.size', 'Aa', (((3, 19), (9, 5), (15, 19)), ((5, 14), (13, 14)), ((16, 19), (19, 12), (22, 19)), ((17, 17), (21, 17)))),
     'more': ('ellipsis', '•••', ()),
     'overflow': ('ellipsis.circle', '⋮', ()),

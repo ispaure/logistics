@@ -13,27 +13,34 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class FileUITests(unittest.TestCase):
-    def test_private_local_images_never_bind_an_automatic_thumbnail_loader(self):
+    def test_automatic_thumbnails_refuse_unscoped_private_and_remote_providers(self):
         from types import SimpleNamespace
         from unittest.mock import Mock
         from commonUtils.runtime.resources.local import LocalFiles
         from mobile_build.tests.support.app import mobile_app
         class PrivateFiles(LocalFiles):
             private = True
+        class RemoteFiles(LocalFiles):
+            remote_storage = True
         with mobile_app() as app:
             app.loop.run_until_complete(app.show_files())
             root = app.private_root / 'Private images'
             root.mkdir()
             (root / 'private.png').write_bytes(b'Never decode automatically')
-            provider = PrivateFiles(root)
-            app.file_provider, app.file_path = provider, ''
+            app.file_path = ''
             app.cloud_client = SimpleNamespace(supports_streaming=True, cancel=Mock())
             decoder = Mock(side_effect=AssertionError('Private image was decoded automatically'))
-            with patch('mobile.browser_preview.callbacks', return_value=(decoder, None)):
-                app.populate_file_browser(provider.list())
-                app.file_browser.show_tiles()
-            self.assertIsNone(app.file_browser.thumbnail)
-            self.assertFalse(app.file_browser.icons)
+            for provider_type in (PrivateFiles, RemoteFiles):
+                provider = app.file_provider = provider_type(root)
+                row = provider.entry('private.png')
+                with patch('mobile.browser_preview.callbacks', return_value=(decoder, None)):
+                    app.populate_file_browser([row])
+                    app.file_browser.show_tiles()
+                source = app.file_browser.thumbnails
+                self.assertFalse(source.enabled)
+                with patch.object(provider, 'open', side_effect=AssertionError('Content was opened')):
+                    self.assertEqual(source.load(row, (160, 160), lambda: False), b'')
+                self.assertFalse(app.file_browser.icons)
             decoder.assert_not_called()
 
     def test_local_thumbnail_decoder_errors_keep_file_icon_and_cancellation_propagates(self):
@@ -56,12 +63,16 @@ class FileUITests(unittest.TestCase):
                 decoder = Mock(side_effect=ValueError('image exceeds decode dimensions'))
                 with patch('mobile.browser_preview.callbacks', return_value=(decoder, None)):
                     app.populate_file_browser(provider.list())
-                loader = app.file_browser.thumbnail
+                loader = app.file_browser.thumbnails.load
                 row = provider.entry('broken.png')
                 self.assertEqual(loader(row, (160, 160), lambda: False), b'')
                 decoder.side_effect = OperationCancelled()
                 with self.assertRaises(OperationCancelled):
                     loader(row, (160, 160), lambda: True)
+                (root / 'broken.png').write_bytes(b'Replaced before decoding')
+                decoder.reset_mock()
+                self.assertEqual(loader(row, (160, 160), lambda: False), b'')
+                decoder.assert_not_called()
                 (root / 'broken.png').unlink()
                 self.assertEqual(loader(row, (160, 160), lambda: False), b'')
             finally:

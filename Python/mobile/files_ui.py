@@ -209,8 +209,8 @@ class FilesUI:
         if location is not None:
             self.file_storage.value, self.file_location.value = location
         self.file_selection = toga.Selection(style=Pack(height=48))
-        from .browser_ui import FileBrowser as NativeBrowser
-        self.file_browser = NativeBrowser(folder_visible=self.folder_path_visible, selected=self.browser_file_selected, open_folder=self.browser_file_folder, navigate=self.browser_file_location, open_file=self.browser_file_open)
+        from .file_browser_view import LocalFileBrowser
+        self.file_browser = LocalFileBrowser(folder_visible=self.folder_path_visible, selected=self.browser_file_selected, open_folder=self.browser_file_folder, navigate=self.browser_file_location, open_file=self.browser_file_open)
         self.file_browser.install_item_commands(lambda row: self.file_item_commands(row=row))
         self.file_browser.navigation_controls.remove(self.file_browser.back_button)
         self.file_password = PasswordInput(placeholder='Inner archive password, when needed', style=Pack(height=48))
@@ -219,7 +219,7 @@ class FilesUI:
         self.file_destination = toga.Selection(items=list(self.file_roots), style=Pack(height=48))
         self.file_target = toga.TextInput(placeholder='Destination path including name', style=Pack(height=48))
         (collection_path(self.private_root)).mkdir(exist_ok=True)
-        self.file_status = NativeBrowser.status_label(style=Pack(height=20, margin_top=14, margin_bottom=14, font_size=15))
+        self.file_status = LocalFileBrowser.status_label(style=Pack(height=20, margin_top=14, margin_bottom=14, font_size=15))
         self.file_action_status = toga.Label('', style=Pack(font_size=12, margin_top=8))
         self.file_rows, self.file_provider = {}, None
         buttons = [toga.Button(label, on_press=handler, style=Pack(height=48)) for label, handler in (
@@ -261,7 +261,7 @@ class FilesUI:
             icon_button('back', 'Back to Workspaces', on_press=self.parent_file_folder))
         from .browser_ui import browser_command
         browser_command(self.file_actions_button)
-        self.file_browser.location_bar.add(self.file_actions_button)
+        self.file_browser.location_bar.add(self.file_browser.view_switch, self.file_actions_button)
         self.file_checked = {}
         self.file_cut_button = toga.Button('Cut', on_press=self.cut_files, style=Pack(height=48, flex=1))
         self.file_archive_button = toga.Button('Create archive…', on_press=self.create_file_archive,
@@ -690,30 +690,12 @@ class FilesUI:
         return await self.browse_local_during_transfer(self.file_location.value)
 
     def populate_file_browser(self, rows, password='', *, location=None):
-        from .browser_preview import callbacks, DIRECT_IMAGE_SUFFIXES
+        from .browser_preview import LocalThumbnails
         client = self.cloud_client
-        # Only ordinary local image rows load bounded thumbnails automatically.
-        # Private or virtual content and archive covers require explicit previews.
-        thumbnail, self.file_browser.details = callbacks(self.file_provider, client, password)
-        from commonUtils.filesystem.image_previews import local_provider_image, MAX_IMAGE_BYTES
         provider = self.file_provider
-        def local_thumbnail(row, size, cancelled):
-            try:
-                if row['directory'] or not local_provider_image(provider, row['path']):
-                    return b''
-                if provider.entry(row['path']).get('size', 0) > MAX_IMAGE_BYTES:
-                    return b''
-                if (getattr(client, 'supports_streaming', False)
-                        and Path(row['path']).suffix.lower() in DIRECT_IMAGE_SUFFIXES):
-                    return thumbnail(row, size, cancelled)
-                from commonUtils.filesystem.image_previews import local_native_image
-                return local_native_image(provider, row['path'], cancelled)
-            except (OSError, ValueError):
-                # Missing/unreadable files and native decoder rejection all use
-                # the same generic icon. Cancellation still propagates.
-                return b''
-        self.file_browser.thumbnail = (local_thumbnail
-            if isinstance(provider, LocalFiles) and not getattr(provider, 'private', False) else None)
+        source = LocalThumbnails(provider, client, password)
+        self.file_browser.configure_previews(source)
+        self.file_browser.details = source.details
         if location is None:
             self.file_browser.history.clear()
         self.file_browser.set_entries(self.file_provider, self.file_path, rows, location=location)
@@ -734,6 +716,8 @@ class FilesUI:
         from .folder_navigation import record
         record(getattr(self, 'app', self), self.files_view, self.file_browser, 'browser', label,
                self.file_path, self.browser_file_location, root_title=root_title)
+        from .browser_ui import sync_browser_population
+        sync_browser_population(self.app)
 
     def selected_file(self):
         row = self.file_rows.get(self.file_selection.value)

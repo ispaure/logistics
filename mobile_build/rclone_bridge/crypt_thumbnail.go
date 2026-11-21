@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"image"
+	_ "image/gif"
 	_ "image/jpeg"
 	"image/png"
 	"io"

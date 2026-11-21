@@ -73,7 +73,7 @@ class PDFDocument:
         return QtPDF(data)
 
     @classmethod
-    def render_page(cls, data, index, *, max_bytes=MAX_PDF):
+    def render_page(cls, data, index, *, max_bytes=MAX_PDF, edge=PAGE_EDGE):
         """Open one native renderer for a self-contained page request."""
         cls.check_size(data, max_bytes)
         with cls.backend(data) as document:
@@ -81,7 +81,7 @@ class PDFDocument:
                 raise ValueError('PDF must contain between 1 and 10,000 pages.')
             if not 0 <= index < document.count:
                 raise ValueError('Page does not exist.')
-            return document.render(index)
+            return document.render(index, edge=edge)
 
     def page(self, index):
         if not 0 <= index < self.count:

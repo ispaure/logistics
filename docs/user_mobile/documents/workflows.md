@@ -6,6 +6,19 @@ where changes can be saved. In a file list, hold an item or tap its **•••*
 to see its full name and available actions. In that menu, hold the name
 to see its full path.
 
+## Browse in rows or tiles
+
+In the Local File Browser, tap **Show tiles** in the folder toolbar for larger
+previews. Tap **Show rows** to switch back. The browser keeps your folder,
+selection and place in the listing. Tap a filename to open it or use its
+**•••** button for file actions.
+
+Images, notebooks, PDFs and comics in Local or unlocked LocalCrypt show
+thumbnails as you browse, including in synced folders on your device.
+Notebooks show a simplified first-page preview. A file icon appears while a
+thumbnail loads or if a preview is unavailable. Online-only files keep their
+file icons. Locking LocalCrypt clears its thumbnails.
+
 ## Receive files from another app
 
 On iOS, use **Share → Logisticks**, wait for the result, and tap **Done**.
