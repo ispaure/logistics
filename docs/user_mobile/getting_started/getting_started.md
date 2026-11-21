@@ -6,7 +6,7 @@ tablet before connecting an account or bringing in files from another app.
 ## Create and save a note
 
 1. Open **Home** and tap **New Document**. On iPhone Duo, look in
-   **Document actions** in the toolbar. If plain text is missing, enable
+   the **+** button in the toolbar. If plain text is missing, enable
    **Text Editor** in **Settings → Features**.
 2. Choose **Plain text (.txt)** and enter a name such as `Friday errands`.
    On a narrow screen, tap **Next**. On a wide screen, use the folder pane
@@ -26,9 +26,8 @@ the files in a folder. Documents keeps track of the readers and editors
 you are using.
 
 Tap **×** to close the editor. If you have added anything since saving, use
-**Save** in the close prompt to keep the changes. Return to **Home** and
-choose **Open Document**. Select `Friday errands.txt` from the same device
-location. The line you saved should appear in the editor.
+**Save** in the close prompt to keep the changes. Return to the same folder
+in **Workspaces** and select `Friday errands.txt`. The line you saved should appear in the editor.
 
 ## Keep working
 

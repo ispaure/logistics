@@ -1,0 +1,7 @@
+<resources>
+    <style name="AppTheme.Launcher" parent="AppTheme">
+        <item name="android:windowSplashScreenBackground">@color/logisticsLaunchBackground</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="android:windowBackground">@drawable/splash_screen_background</item>
+    </style>
+</resources>

@@ -92,7 +92,7 @@ for saved_document in (False, True):
     assert app.native_host.state.destination == 'home'
     assert not app._home_status_row.children
     assert app._home_status_row.parent is None
-    assert app.home_actions.children[0].text == 'Open Document'
+    assert app.home_actions.children[0].text == 'New Document'
     print('PACKAGED_PHASE: locations', flush=True)
     app.show_locations()
     assert app.loop.run_until_complete(app.refresh_folder_hub())

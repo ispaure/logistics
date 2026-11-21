@@ -21,14 +21,21 @@ from desktop.settings.feature_settings import FeatureSettingsPanel
 class SettingsPageTests(QtTestCase):
     def test_license_category_search_and_read_only_notice(self):
         from services.open_source import Notice
+        notices = [Notice('Example', '1.0', 'MIT', 'https://example.org', 'Copyright Example')]
+        notices.extend(Notice(f'Other component {index}', '', '', '', 'Other notice') for index in range(30))
         with patch.object(registry, 'get_feature_states', return_value=[]), \
-                patch('desktop.settings.licenses.installed_notices', return_value=[
-                    Notice('Example', '1.0', 'MIT', 'https://example.org', 'Copyright Example')]):
+                patch('desktop.settings.licenses.installed_notices', return_value=notices):
             page = SettingsPage(); self.addCleanup(page.deleteLater)
             page.show_category('licenses')
             panel = page.panels['licenses']
+            self.assertEqual(panel.components.count(), len(notices))
             self.assertTrue(panel.text.isReadOnly())
             self.assertIn('Copyright Example', panel.text.toPlainText())
+            panel.components.setCurrentRow(len(notices) - 1)
+            self.assertIn('Other notice', panel.text.toPlainText())
+            page.show_category('features')
+            page.show_category('licenses')
+            self.assertEqual(panel.components.count(), len(notices))
             panel.search.setText('missing')
             self.wait_until(lambda: panel.components.count() == 0)
             self.assertEqual(panel.components.count(), 0)

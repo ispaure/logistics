@@ -103,7 +103,7 @@ final class IncomingFilesUITests: XCTestCase {
         XCTAssertEqual(active.count, 1)
         XCTAssertTrue(active.first.map(isIPadHomeWindow) == true,
                       "Files Open With must foreground the new Home window")
-        XCTAssertTrue(receiver.buttons["Open Document"].firstMatch.isHittable,
+        XCTAssertTrue(receiver.buttons["New Document"].firstMatch.isHittable,
                       "The new Home window must be interactive")
         let originalSettings = delivered.filter { !$0.hasPrefix(" (Main),") && isIPadAppSettingsWindow($0) }
         XCTAssertEqual(originalSettings.filter { hasCloseWindow($0) }.count, 1,
@@ -162,7 +162,7 @@ final class IncomingFilesUITests: XCTestCase {
     }
 
     private func isIPadHomeWindow(_ window: String) -> Bool {
-        window.contains("label: 'Home', Selected") && window.contains("label: 'Open Document'")
+        window.contains("label: 'Home', Selected") && window.contains("label: 'New Document'")
     }
 
     func testInspectIPadWindowControls() throws {

@@ -31,20 +31,18 @@ def prepare(app, view, destination):
     unlock._toolbar_priority = True
     buttons = [unlock]
     if destination == 'documents':
-        opener = icon_button('folder_hub', 'Open document', on_press=app.open_hub_file)
         search = icon_button('find', 'Search documents', on_press=app.open_document_search)
         search._toolbar_symbol = 'magnifyingglass'
         view._document_search_button = search
         view._document_search_close = icon_button('close', 'Exit document search', on_press=app.close_document_search)
         new = action_button(icon_button('compose', 'New document', on_press=app.new_hub_document))
-        opener._toolbar_symbol, new._toolbar_symbol = 'folder', 'plus'
-        buttons.extend([opener, new, search])
+        new._toolbar_symbol = 'plus'
+        buttons.extend([new, search])
     view._destination_actions = (header, buttons)
     if destination == 'home' and hasattr(view, '_home_primary_actions'):
         from .fold_layout import is_iphone_duo
-        if is_iphone_duo():
-            from .home_header import use_document_menu
-            use_document_menu(app, view)
+        view._home_toolbar_only = is_iphone_duo()
+
     def apple_actions():
         actions = selected(app, buttons)
         if destination == 'documents':
@@ -52,18 +50,12 @@ def prepare(app, view, destination):
             view._ios_toolbar_leading = [view._document_search_close] if searching else []
             if searching:
                 actions = [button for button in actions if button is not search]
-        from .ios_toolbar import vertical_edge
-        controller = app.native_host.adapter.content_controller(destination)
-        # Horizontal groups run left-to-right; vertical groups run top-to-bottom.
-        # Keep Unlock outermost horizontally and first in a vertical action rail.
-        vertical = vertical_edge(controller)
         if destination == 'home':
-            more = getattr(view, '_home_document_menu', None)
-            if more is not None:
-                return [more, *actions]
-            if vertical:
-                return [*actions, *getattr(view, '_home_primary_buttons', ())]
-        if buttons[0] in actions and not vertical:
+            from .ios_toolbar import vertical_edge
+            controller = app.native_host.adapter.content_controller(destination)
+            if getattr(view, '_home_toolbar_only', False) or vertical_edge(controller):
+                return [*getattr(view, '_home_primary_buttons', ()), *actions]
+        if buttons[0] in actions:
             actions = [*actions[1:], actions[0]]
         return actions
     view._ios_toolbar_buttons = apple_actions
@@ -99,7 +91,7 @@ def refresh(app, view):
     if current == [*leading, *actions]:
         return
     header.clear()
-    if actions:
+    if leading or actions:
         header.add(*leading, toga.Box(style=Pack(flex=1)), *actions)
 
 

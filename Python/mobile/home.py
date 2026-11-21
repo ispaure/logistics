@@ -41,17 +41,12 @@ class HomeScreen:
             style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12))
         self.app._home_status_row = status_row
         self.home_continue = None
-        opener = action_button(toga.Button('Open Document', on_press=self.open_hub_file,
-                                          style=Pack(height=TOUCH_TARGET, flex=1)))
-        opener._toolbar_symbol = 'folder'
-        opener._toolbar_group = 'home-documents'
-        self.home_actions = toga.Box(children=[opener],
-            style=Pack(direction=ROW, align_items=CENTER))
+        self.home_actions = toga.Box(style=Pack(direction=ROW, align_items=CENTER))
         self.home_content = box
         from .document_choices import available_choices
         if available_choices(self.app):
             creator = action_button(toga.Button('New Document', on_press=self.new_hub_document,
-                                               style=Pack(height=TOUCH_TARGET, flex=1, margin_left=8)))
+                                               style=Pack(height=TOUCH_TARGET, flex=1)))
             creator._toolbar_symbol = 'plus'
             creator._toolbar_group = 'home-documents'
             self.home_actions.add(creator)

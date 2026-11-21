@@ -21,9 +21,8 @@ reconnect its remote, or unlock its credential.
 
 ## Find the file in its folder
 
-Use **Open document** in Documents or **Open Document** on Home to browse
-for a file. You can also start from a folder in
-[Workspaces](../folder_hub/folder_hub.md). **Search documents** finds
+Browse to a file in [Workspaces](../folder_hub/folder_hub.md). In
+Documents, **Search documents** finds
 on-device filenames and folders, including files you have never opened and
 files in unlocked LocalCrypt copies. Search reports locations it could
 not access. Tap **×** to leave search.

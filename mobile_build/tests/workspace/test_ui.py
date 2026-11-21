@@ -36,7 +36,7 @@ class MobileUITests(unittest.TestCase):
             self.assertEqual(app.native_host.state.destination, 'home')
             self.assertFalse(app._home_status_row.children)
             self.assertIsNone(app._home_status_row.parent)
-            self.assertEqual(app.home_actions.children[0].text, 'Open Document')
+            self.assertEqual(app.home_actions.children[0].text, 'New Document')
             app.show_settings()
             app.settings_navigation.sections['App']
             app.settings_navigation.sections['Text']

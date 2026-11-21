@@ -30,19 +30,39 @@ class HomeHeaderTests(TestCase):
         adapter.navigation_for.assert_called_once_with('documents')
         self.assertEqual([call.args[0] for call in configure.call_args_list], [outer, child])
 
-    def test_cold_duo_prepares_menu_without_a_hinge_or_native_navigation_adapter(self):
+    def test_cold_duo_projects_new_document_before_gated_unlock(self):
         from mobile.destination_actions import prepare
-        row = toga.Box(children=[toga.Button('Open Document'), toga.Button('New Document')])
+        creator = toga.Button('New Document')
+        row = toga.Box(children=[creator])
         content = toga.Box(children=[row])
         content._home_primary_actions = row
-        content._home_primary_buttons = tuple(row.children)
-        app = NS(routes=NS(apple=False), show_home_unlock=Mock(), home_unlock_candidates=lambda: [])
-        with patch('mobile.fold_layout.is_iphone_duo', return_value=True), patch(
-                'mobile.fold_layout.has_fold', side_effect=AssertionError('Home is not mounted yet')):
-            prepare(app, content, 'home')
-        self.assertIsNone(row.parent)
-        self.assertEqual([title for title, _ in content._home_document_menu._home_commands.actions],
-                         ['Open Document', 'New Document'])
+        content._home_primary_buttons = (creator,)
+        app = NS(routes=NS(apple=True), show_home_unlock=Mock(),
+                 native_host=NS(adapter=NS(content_controller=Mock(return_value=None))),
+                 home_unlock_candidates=Mock(return_value=[]))
+        with patch('mobile.fold_layout.is_iphone_duo', return_value=True):
+            view = prepare(app, content, 'home')
+        unlock = view._destination_actions[1][0]
+        for edge in (0, 2):
+            with patch('mobile.ios_toolbar.vertical_edge', return_value=edge):
+                self.assertEqual(view._ios_toolbar_buttons(), [creator])
+                app.home_unlock_candidates.return_value = ['fixture']
+                self.assertEqual(view._ios_toolbar_buttons(), [creator, unlock])
+                app.home_unlock_candidates.return_value = []
+
+    def test_documents_project_new_search_and_gated_unlock_in_order(self):
+        from mobile.destination_actions import prepare
+        app = NS(routes=NS(apple=True), show_home_unlock=Mock(), new_hub_document=Mock(),
+                 open_document_search=Mock(), close_document_search=Mock(),
+                 home_unlock_candidates=Mock(return_value=['fixture']))
+        view = prepare(app, toga.Box(), 'documents')
+        unlock, new, search = view._destination_actions[1]
+        self.assertEqual(view._ios_toolbar_buttons(), [new, search, unlock])
+        app.home_unlock_candidates.return_value = []
+        self.assertEqual(view._ios_toolbar_buttons(), [new, search])
+        app.documents_search_open = True
+        self.assertEqual(view._ios_toolbar_buttons(), [new])
+        self.assertEqual(view._ios_toolbar_leading, [view._document_search_close])
 
     def test_preparing_wrapped_home_keeps_header_metadata(self):
         from mobile.destination_actions import prepare
@@ -190,7 +210,7 @@ class HomeHeaderTests(TestCase):
         self.assertFalse(home_header.sync(app, view))
         self.assertEqual(view._ios_toolbar_buttons(), primary)
         app.home_unlock_candidates.return_value = ['fixture']
-        self.assertEqual(view._ios_toolbar_buttons(), [unlock, *primary])
+        self.assertEqual(view._ios_toolbar_buttons(), [*primary, unlock])
         for button in primary:
             row.remove(button)  # Shared toolbar projection detaches the targets.
 

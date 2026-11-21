@@ -1,4 +1,5 @@
 """Compact Notes Library drawers, with persistent Files on wide allocations."""
+import asyncio
 from dataclasses import dataclass
 from types import SimpleNamespace
 from typing import Callable
@@ -154,13 +155,23 @@ class NotesDrawers:
         drawer_gestures.install_dismiss_swipe(self, panel)
         drawer_motion.slide_in(self.overlay, -1 if side == 'files' else 1, eink=self.host.eink())
 
-    async def choose_action(self, dialog, window):
+    async def choose_action(self, dialog, window, *, apple_native=False):
         drawer = self.overlay
         backend = type(self.sidebar._impl).__module__
-        if drawer is None or not backend.startswith(('toga_iOS.', 'toga_android.')):
-            return await window.dialog(dialog)
         if self.action_choice is not None:
             return 'cancel'
+        if apple_native and backend.startswith('toga_iOS.'):
+            task = self.action_choice = self.host.loop.create_task(window.dialog(dialog))
+            try:
+                return await task
+            except asyncio.CancelledError:
+                if asyncio.current_task().cancelling():
+                    raise
+                return 'cancel'
+            finally:
+                self.action_choice = None
+        if drawer is None or not backend.startswith(('toga_iOS.', 'toga_android.')):
+            return await window.dialog(dialog)
 
         result = self.action_choice = self.host.loop.create_future()
         def finish(value):
@@ -197,7 +208,10 @@ class NotesDrawers:
 
     def cancel_action(self):
         if self.action_choice is not None and not self.action_choice.done():
-            self.action_choice.set_result('cancel')
+            if isinstance(self.action_choice, asyncio.Task):
+                self.action_choice.cancel()
+            else:
+                self.action_choice.set_result('cancel')
 
     def swipe(self, direction):
         if self.action_choice is not None:

@@ -55,7 +55,10 @@ From **Browse Notes Library** or **Links**, follow `VaultBrowser` to
 `mobile/drawers.py:NotesDrawers`. Files stays beside the document on wide or
 vertically folded layouts. Compact Files and Links use overlays. The feature
 owns those transitions, the pending File actions choice and Back. It cancels
-choices and retires overlays when the library closes.
+choices and retires overlays when the library closes. On iOS, Files and Search
+row actions open a UIKit alert after the selected file or folder has been
+validated. The alert displays that item's filename and can be cancelled by
+Back or drawer disposal. Android keeps the in-drawer action chooser.
 
 `drawer_gestures.py` binds UIKit recognizers and Android touch listeners.
 It defers to breadcrumbs, web content and embedded editors where those surfaces
@@ -80,7 +83,7 @@ keep their own gestures, and no private overlays while locked. Use the
 
 ## Data views and playlists
 
-Desktop and mobile `playlist_panel.py` keep playlist commands in a top icon toolbar and entry commands in trailing menus. Entries display basenames; drag position selects the gap before or after a row and paints an insertion line. Entry clicks use ordinary document opening. Queue speech opens each admitted foreground note, waits for its reader, and maps words to that rendered document. Document speech actions route to the active playlist controls while playing or paused. Locked continuation uses prepared passages without opening documents. The pane has no transcript or playback-status field. File actions resolve `NotesLibrary.playlist_note` to a Markdown file or the folder's same-named landing note, without listing descendants. `test_notes_library_desktop.py`, `test_notes_library_panels.py`, `test_playlist_speech.py` and `test_notes_playlists.py` cover these routes, cancellation, word mappings and queue editing.
+Desktop and mobile `playlist_panel.py` keep playlist commands in a top icon toolbar and entry commands in trailing menus. On iOS each entry's trailing button owns a UIKit menu, and the clicked entry ID stays bound to its commands until the row retires. Entries display basenames. Drag position selects the gap before or after a row and paints an insertion line. Entry clicks use ordinary document opening. Queue speech opens each admitted foreground note, waits for its reader, and maps words to that rendered document. Document speech actions route to the active playlist controls while playing or paused. Locked continuation uses prepared passages without opening documents. The pane has no transcript or playback-status field. File actions resolve `NotesLibrary.playlist_note` to a Markdown file or the folder's same-named landing note, without listing descendants. `test_notes_library_desktop.py`, `test_notes_library_panels.py`, `test_playlist_speech.py` and `test_notes_playlists.py` cover these routes, cancellation, word mappings and queue editing.
 
 `dataview.py` discovers top-level fences and brokers bounded read-only requests. `dataview_script.py` implements an independent API subset in a disposable worker without network or writes. Trust defaults on. Generated content stays outside source/save baselines. Navigation retires workers. `test_text_editor_dataview.py` checks Chromium execution and source preservation. [Supported script surface](../user/user.md#json-data-views-in-notes-library)
 

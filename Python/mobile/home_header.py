@@ -25,44 +25,20 @@ def place_unlock(row, unlock, visible):
         row.remove(unlock)
 
 
-def use_document_menu(app, view):
-    if getattr(view, '_home_document_menu', None) is not None:
-        return
-    restore(view)
-    row = view._home_primary_actions
-    from .action_menu import NativeMenu
-    from .control_icons import icon_button
-    more = icon_button('overflow', 'Document actions')
-    more._toolbar_priority = True
-    def invoke(callback):
-        if app.active_host and app.native_host.state.destination == 'home':
-            callback()
-    more._home_commands = NativeMenu(more,
-        [(button.text, button.on_press) for button in view._home_primary_buttons],
-        invoke=invoke, context=lambda: app._impl.native, fallback=lambda: None)
-    view._home_document_menu = more
-    row.parent.remove(row)
-
-
 def sync(app, view):
     row = getattr(view, '_home_primary_actions', None)
     if row is None:
         return False
     from .fold_layout import division, has_fold
-    if getattr(view, '_home_document_menu', None) is not None or has_fold(app, app.main_window):
-        use_document_menu(app, view)
-        place_unlock(row, view._destination_actions[1][0], False)
-        view._home_inline_unlock = False
-        return False
     from .ios_toolbar import vertical_edge, system_occlusions
     controller = app.native_host.adapter.content_controller('home')
     primary = view._home_primary_buttons
     unlock = view._destination_actions[1][0]
-    if vertical_edge(controller):
+    view._home_toolbar_only = getattr(view, '_home_toolbar_only', False) or has_fold(app, app.main_window)
+    if not primary or view._home_toolbar_only or vertical_edge(controller):
         restore(view)
         place_unlock(row, unlock, False)
         view._home_inline_unlock = False
-        # The shared toolbar renderer detaches and projects the original controls.
         return False
     for index, button in enumerate(primary):
         if button.parent is not row:

@@ -25,6 +25,39 @@ class NotesDrawerTests(unittest.TestCase):
     setUp = fixtures.set_up_vault
     run_async = fixtures.run_async
 
+    def test_native_ios_row_choice_cancels_with_the_drawer(self):
+        from features.notes_library.mobile.drawers import NotesDrawers
+
+        async def exercise():
+            started = asyncio.Event()
+            closed = asyncio.Event()
+            dialog = object()
+
+            async def show(value):
+                self.assertIs(value, dialog)
+                started.set()
+                try:
+                    await asyncio.Future()
+                finally:
+                    closed.set()
+
+            class AppleSidebar:
+                __module__ = 'toga_iOS.test'
+
+            drawer = NotesDrawers.__new__(NotesDrawers)
+            drawer.overlay = object()
+            drawer.sidebar = SimpleNamespace(_impl=AppleSidebar())
+            drawer.host = SimpleNamespace(loop=asyncio.get_running_loop())
+            drawer.action_choice = None
+            choosing = asyncio.create_task(drawer.choose_action(
+                dialog, SimpleNamespace(dialog=show), apple_native=True))
+            await started.wait()
+            drawer.cancel_action()
+            self.assertEqual(await choosing, 'cancel')
+            self.assertTrue(closed.is_set())
+            self.assertIsNone(drawer.action_choice)
+        self.run_async(exercise())
+
     def test_swipes_open_empty_library_and_duplicate_links_requests_do_not_toggle(self):
         async def exercise():
             owner = await open_vault(self.app, self.provider, 'Vault', 'files')

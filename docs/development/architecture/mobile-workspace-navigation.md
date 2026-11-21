@@ -318,8 +318,10 @@ Custom content uses the [UIKit reserved-region API](https://developer.apple.com/
 in local coordinates. `control_top_clearance` considers every intersecting
 region. Reclaim inset only for a measured free column. Track window position and
 bar edge as well as dimensions. Native prompts and titles retain their space.
-Home measures whether Open, New and conditional Unlock fit; Unlock falls back to
-the native bar when required.
+Home measures whether New Document and conditional Unlock fit. Unlock falls back
+to the native bar when required. On Duo, Home projects New Document and any
+available Unlock to the native bar in both poses. Documents orders its native
+actions as New Document, Search and conditional Unlock.
 
 `reader_top_band` can project the existing storage title and all native actions
 beside a tall edge reservation if measured space and touch targets fit. Keep

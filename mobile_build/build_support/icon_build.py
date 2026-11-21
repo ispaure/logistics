@@ -10,16 +10,27 @@ DENSITIES = {'mdpi': 1, 'hdpi': 1.5, 'xhdpi': 2, 'xxhdpi': 3, 'xxxhdpi': 4}
 
 def configure_ios(project):
     project = Path(project)
-    destination = project / 'LogisticsMobile/Images.xcassets'
+    app = project / 'LogisticsMobile'
+    destination = app / 'Images.xcassets'
     if not destination.is_dir():
         raise ValueError('Expected the generated iOS image catalog.')
     shutil.copytree(ROOT / 'ios', destination / 'AppIcon.appiconset', dirs_exist_ok=True)
-    # Briefcase uses the app icon for launch artwork too. Keep its scale metadata.
+    launch = ROOT / 'ios-launch'
+    shutil.copyfile(launch / 'Launch Screen.storyboard', app / 'Launch Screen.storyboard')
+    shutil.copytree(launch / 'LaunchBackground.colorset',
+                    destination / 'LaunchBackground.colorset', dirs_exist_ok=True)
     splash = destination / 'Splash.imageset'
-    metadata = json.loads((splash / 'Contents.json').read_text())
-    for entry in metadata['images']:
-        if entry.get('filename'):
-            shutil.copyfile(ROOT / 'ios/icon-1024.png', splash / entry['filename'])
+    splash.mkdir(exist_ok=True)
+    images = []
+    for appearance, source in [('light', 'icon-1024.png'), ('dark', 'icon-dark-1024.png')]:
+        filename = f'launch-{appearance}.png'
+        shutil.copyfile(ROOT / 'ios' / source, splash / filename)
+        entry = dict(idiom='universal', scale='1x', filename=filename)
+        if appearance == 'dark':
+            entry['appearances'] = [dict(appearance='luminosity', value='dark')]
+        images.append(entry)
+    (splash / 'Contents.json').write_text(json.dumps(
+        dict(images=images, info=dict(version=1, author='xcode')), indent=2) + '\n')
 
 
 def configure_android(project):

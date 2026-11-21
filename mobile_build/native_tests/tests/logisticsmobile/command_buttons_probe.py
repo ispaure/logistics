@@ -82,7 +82,7 @@ class Probe(LogisticsMobile):
     @staticmethod
     def assert_command(button, apple):
         impl = button._impl
-        roles = ('alternate', 'accent', True) if button.text == 'Open Document' else ('surface', 'text', True)
+        roles = ('surface', 'text', True)
         assert impl._surface_roles == roles, (button.text, impl._surface_roles)
         if apple:
             from rubicon.objc import CGPoint

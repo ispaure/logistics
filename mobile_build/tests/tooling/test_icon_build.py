@@ -11,6 +11,7 @@ import unittest
 import xml.etree.ElementTree as ET
 
 from mobile_build.build_support import icon_build
+from services.appearance_palette import LIGHT, DARK
 
 
 def png_header(path):
@@ -65,9 +66,36 @@ class IconBuildTests(unittest.TestCase):
             for _ in range(2):
                 icon_build.configure_ios(project)
                 icon_build.configure_android(project)
-            self.assertEqual((splash / 'splash.png').read_bytes(), (icon_build.ROOT / 'ios/icon-1024.png').read_bytes())
+            entries = json.loads((splash / 'Contents.json').read_text())['images']
+            self.assertEqual(len(entries), 2)
+            self.assertNotIn('appearances', entries[0])
+            self.assertEqual(entries[1]['appearances'], [{'appearance': 'luminosity', 'value': 'dark'}])
+            for entry, icon in zip(entries, ('icon-1024.png', 'icon-dark-1024.png')):
+                self.assertEqual((splash / entry['filename']).read_bytes(),
+                                 (icon_build.ROOT / 'ios' / icon).read_bytes())
+            storyboard = ET.parse(project / 'LogisticsMobile/Launch Screen.storyboard')
+            self.assertEqual(storyboard.find(".//view/color[@key='backgroundColor']").get('name'),
+                             'LaunchBackground')
+            self.assertEqual(storyboard.find('.//imageView').get('image'), 'Splash')
             self.assertTrue((catalog / 'AppIcon.appiconset/icon-dark-1024.png').is_file())
             self.assertTrue((project / 'app/src/main/res/mipmap-anydpi-v33/ic_launcher.xml').is_file())
+
+
+    def test_android_and_ios_launch_backgrounds_match_the_startup_screen(self):
+        colors = json.loads((icon_build.ROOT / 'ios-launch/LaunchBackground.colorset/Contents.json').read_text())
+        for palette, qualifier, entry in zip((LIGHT, DARK), ('', '-night'), colors['colors']):
+            android = icon_build.ROOT / 'android' / ('values' + qualifier) / 'launch_colors.xml'
+            self.assertEqual(ET.parse(android).find('color').text, palette['window'])
+            components = entry['color']['components']
+            rgb = ''.join(components[channel].removeprefix('0x') for channel in ('red', 'green', 'blue'))
+            self.assertEqual('#' + rgb.lower(), palette['window'])
+        android = icon_build.ROOT / 'android'
+        launcher = ET.parse(android / 'values-v31/launch_theme.xml').find('style')
+        self.assertEqual(launcher.get('name'), 'AppTheme.Launcher')
+        self.assertEqual(launcher.find("item[@name='android:windowSplashScreenAnimatedIcon']").text,
+                         '@mipmap/ic_launcher')
+        self.assertEqual(launcher.find("item[@name='android:windowSplashScreenBackground']").text,
+                         '@color/logisticsLaunchBackground')
 
 
 if __name__ == '__main__':

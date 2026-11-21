@@ -1,6 +1,6 @@
 # Video Player development
 
-Open a local video through **File Browser** on desktop or **Open Document**
+Open a local video through **File Browser** on desktop or **Workspaces**
 on Android/iOS. The same feature owns decoder selection, subtitles and resume.
 For visual controls, start in `ui/` on desktop or `mobile/` on the phone or tablet.
 For file behavior, start with the portable modules.

@@ -670,7 +670,7 @@ class HubDocumentTests(unittest.TestCase):
         self.assertNotIn('Markdown', labels(app.session_panel(app.editor_view.session)))
         actions = app.home_actions
         self.assertTrue(all(isinstance(button, toga.Button) for button in actions.children))
-        self.assertEqual([button.text for button in actions.children], ['Open Document', 'New Document'])
+        self.assertEqual([button.text for button in actions.children], ['New Document'])
         recent = next(widget for widget in widgets(content) if getattr(widget, 'text', '') == 'Focus.md')
         app.loop.run_until_complete(recent.on_press())
         self.assertIs(app.body.children[0], app.document_view)
@@ -680,7 +680,7 @@ class HubDocumentTests(unittest.TestCase):
         with patch('features.images.mobile.burst_camera.available', return_value=True):
             home = self.app.build_home()
         buttons = {widget.text: widget for widget in widgets(home.content) if hasattr(widget, 'on_press')}
-        for title in ('Open Document', 'New Document', 'Burst camera'):
+        for title in ('New Document', 'Burst camera'):
             with self.subTest(title=title):
                 self.assertEqual(buttons[title]._impl._surface_roles, ('surface', 'accent', False))
 

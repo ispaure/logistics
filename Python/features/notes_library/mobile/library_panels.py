@@ -644,7 +644,7 @@ class LibraryPanels:
             return
         dialog = DocumentTypeDialog(choices=choices)
         dialog.title, dialog.message = PurePosixPath(path).name, 'Choose a file action.'
-        action = await self.sidebar.choose_action(dialog, self.view.window)
+        action = await self.sidebar.choose_action(dialog, self.view.window, apple_native=True)
         if (not self.valid() or self.epoch != epoch or self.file_action_request != request
                 or self.host.destination() != destination):
             return

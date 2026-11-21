@@ -39,7 +39,12 @@ mobile_build/.venv/bin/python mobile_build/build_support/icon_build.py /path/to/
 python3 dev.py test mobile test_icon_build.py
 ```
 
-Preserve the full source tile, opaque iOS variants and Android monochrome alpha mask. Compile the iOS catalog after slot changes and verify launcher appearance on devices.
+Preserve the full source tile, opaque iOS variants and Android monochrome alpha mask.
+The iOS launch storyboard uses an appearance-aware image and color asset.
+Android uses a launcher theme and night resources for the system splash, with a
+drawable fallback before Android 12. Their background colors match the mobile
+startup screen's light and dark window colors. Compile the iOS catalog after
+slot changes and verify both cold-launch themes on devices.
 
 ## Runtime and native integration owners
 

@@ -1097,6 +1097,41 @@ class NotesLibraryPanelTests(unittest.TestCase):
             self.assertEqual(panel.header.text, '')
         self.run_async(exercise())
 
+    def test_native_playlist_menu_applies_to_the_tapped_entry_and_retires(self):
+        from dataclasses import replace
+        from unittest.mock import Mock
+
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            panel = owner.playlist_panel
+            owner.select_panel_tab('Playlist')
+            await panel.loading
+            record = await panel.change('create', 'Morning')
+            for path in ('Vault/Home.md', 'Vault/Projects/Plan.MD'):
+                await panel.change('add', record.id, path)
+            await panel.reload()
+            panel.open(record.id)
+            first, second = panel.playlist.entries
+            panel.selected = first.id
+            button = panel.entry_buttons[second.id]
+            native_menu = Mock()
+            presentation = replace(owner.host.presentation, NativeMenu=native_menu)
+            with patch.object(owner, 'host', replace(owner.host, presentation=presentation)):
+                panel.bind_entry_menu(button, record.id, second.id, 1)
+            anchor, actions = native_menu.call_args.args
+            self.assertIs(anchor, button)
+            self.assertEqual([title for title, _ in actions],
+                             ['Move up', 'Repair reference…', 'Remove entry'])
+            with patch.object(panel, 'apply_action', new=AsyncMock()) as dispatch:
+                await actions[-1][1]()
+                self.assertEqual(panel.selected, second.id)
+                dispatch.assert_awaited_once_with('remove')
+                panel.render()
+                native_menu.return_value.dispose.assert_called_once_with()
+                await actions[-1][1]()
+                dispatch.assert_awaited_once()
+        self.run_async(exercise())
+
     def test_playlist_speech_opens_note_and_document_action_uses_the_same_controls(self):
         from commonUtils.formats.markdown.speech import RenderedRun, prepare_rendered
         from mobile_build.tests.editing.test_markdown_speech import Engine

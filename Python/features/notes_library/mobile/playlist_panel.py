@@ -84,6 +84,7 @@ class PlaylistPanel:
         self.choice = None
         self.buttons = {}
         self.entry_buttons = {}
+        self.entry_menus = []
         self.drop_lines = []
         self.drop_slot = None
         self.drag = PlaylistDrag(self)
@@ -185,7 +186,13 @@ class PlaylistPanel:
             self.render()
         return True
 
+    def retire_entry_menus(self):
+        for menu in self.entry_menus:
+            menu.dispose()
+        self.entry_menus.clear()
+
     def clear_display(self):
+        self.retire_entry_menus()
         self.drag.clear()
         self.records = ()
         self.playlist_id = self.selected = self.picking = None
@@ -241,6 +248,7 @@ class PlaylistPanel:
         if not self.usable():
             self.clear_display()
             return
+        self.retire_entry_menus()
         self.drag.clear()
         self.buttons.clear()
         self.entry_buttons.clear()
@@ -263,7 +271,7 @@ class PlaylistPanel:
             return
         if self.entry_index(self.selected) is None:
             self.selected = playlist.active_id
-        for entry in playlist.entries:
+        for index, entry in enumerate(playlist.entries):
             async def select(widget, identity=entry.id, path=entry.path, **kwargs):
                 if self.can_edit():
                     self.selected = identity
@@ -275,6 +283,8 @@ class PlaylistPanel:
             async def actions(widget, identity=entry.id, **kwargs):
                 await self.entry_actions(identity)
             more = self.icon_button('more', 'Actions for ' + PurePosixPath(entry.path).name, actions)
+            if type(more._impl).__module__.startswith('toga_iOS.'):
+                self.bind_entry_menu(more, playlist.id, entry.id, index)
             self.entry_buttons[entry.id] = more
             line = toga.Box(style=Pack(height=2))
             self.drop_lines.append(line)
@@ -362,14 +372,36 @@ class PlaylistPanel:
             return
         self.selected = identity
         self.refresh_state()
-        choices = []
         index = self.entry_index(identity)
+        await self.choose_action(self.entry_choices(index), entry=self.playlist.entries[index])
+
+    def entry_choices(self, index):
+        choices = []
         if index > 0:
             choices.append(('Move up', 'up'))
         if index < len(self.playlist.entries) - 1:
             choices.append(('Move down', 'down'))
         choices.extend([('Repair reference…', 'repair'), ('Remove entry', 'remove')])
-        await self.choose_action(choices, entry=self.playlist.entries[index])
+        return choices
+
+    def bind_entry_menu(self, button, playlist, identity, index):
+        async def select(action):
+            if (not self.can_edit() or self.choice is not None or self.owner.panel_tab != 'Playlist'
+                    or self.playlist_id != playlist or self.entry_buttons.get(identity) is not button
+                    or self.entry_index(identity) is None):
+                return
+            self.selected = identity
+            self.refresh_state()
+            await self.apply_action(action)
+
+        def invoke(callback):
+            self.owner.host.loop.create_task(callback())
+
+        actions = [(label, lambda action=action: select(action))
+                   for label, action in self.entry_choices(index)]
+        menu = self.owner.host.presentation.NativeMenu(
+            button, actions, invoke=invoke, context=lambda: None, fallback=lambda: None)
+        self.entry_menus.append(menu)
 
     async def choose_action(self, choices, *, entry=None):
         if not self.can_edit() or self.choice is not None:
@@ -390,6 +422,9 @@ class PlaylistPanel:
             self.choice = None
         if not self.can_edit() or (self.playlist_id, self.selected) != (identity, selected):
             return
+        await self.apply_action(action)
+
+    async def apply_action(self, action):
         if action == 'rename':
             self.name()
         elif action == 'up':

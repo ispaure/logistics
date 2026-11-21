@@ -8,19 +8,6 @@ from commonUtils.runtime.platform import get_os, OS
 TEST_STAGE = TestStage.REGRESSION
 
 
-def home_document_menu(app):
-    view = app.routes.body('home').children[0]
-    button = getattr(view, '_home_document_menu', None)
-    assert button is not None and view._home_primary_actions.parent is None
-    adapter = app.native_host.adapter
-    assert not adapter.navigation_for('home').isNavigationBarHidden()
-    item = button._ios_action_item
-    nav = adapter.content_controller('home').navigationItem
-    assert any(item in group.barButtonItems for group in nav.trailingItemGroups)
-    assert [str(action.title) for action in item.menu.children] == ['Open Document', 'New Document']
-    return button._home_commands
-
-
 async def wait_for_file_entry(app, path):
     """Native navigation presents its page before its asynchronous listing."""
     for _ in range(600):
@@ -202,74 +189,12 @@ async def exercise_ui_review(app):
     (folder / 'Research').mkdir(exist_ok=True)
     (folder / 'WebP comic.cbz').write_bytes(original)
     (folder / 'Cover.webp').write_bytes(webp)
-    def home_browse_button(widget):
-        if isinstance(widget, toga.Button) and widget.text == 'Open Document':
-            return widget
-        children = list(widget.children)
-        if isinstance(widget, toga.ScrollContainer) and widget.content is not None:
-            children.append(widget.content)
-        return next((found for child in children if (found := home_browse_button(child)) is not None), None)
     for leave in (app.show_settings, app.show_documents_hub, app.show_cloud):
         await app.browser_file_location(('Local files', 'UI Review'))
         app.file_browser.search.value = 'Old filter with no matches'
         leave()
         app.show_home()
-        await asyncio.sleep(.2)
-        action = home_browse_button(app.body)
-        if action is None and getattr(app.routes.body('home').children[0], '_home_document_menu', None) is not None:
-            menu = home_document_menu(app)
-            menu.invoke(menu.actions[0][1])
-        elif action is None and get_os() is OS.IOS:
-            # In the Duo's vertical bar, UIKit projects the retained Home
-            # button as a native bar item outside the content widget tree.
-            from .fixtures import ios_toolbar_items
-            from mobile.ios_toolbar import vertical_edge
-            navigation = app.native_host.adapter.navigation_for('home')
-            controller = navigation.topViewController
-            assert vertical_edge(controller) and not navigation.isNavigationBarHidden()
-            action = next(button for button in app.home_sections._home_primary_buttons
-                          if button.text == 'Open Document')
-            item = action._ios_action_item
-            assert item in ios_toolbar_items(controller) and item.isEnabled()
-            item.target.performSelector(item.action, withObject=item)
-        elif get_os() is OS.IOS:
-            assert action is not None
-            native = action._impl.native
-            from rubicon.objc import CGPoint, ObjCClass
-            # Exercise the actual Home file-opening control through UIKit.
-            ancestor = native.superview
-            while ancestor is not None:
-                if callable(ancestor):
-                    ancestor = ancestor()
-                if ancestor is None:
-                    break
-                if ancestor.isKindOfClass(ObjCClass('UIScrollView')):
-                    ancestor.scrollRectToVisible(native.convertRect(native.bounds, toView=ancestor), animated=False)
-                    break
-                ancestor = ancestor.superview
-            await asyncio.sleep(.2)
-            window = app.main_window._impl.native
-            point = native.convertPoint(CGPoint(native.bounds.size.width / 2, native.bounds.size.height / 2), toView=window)
-            hit = window.hitTest(point, withEvent=None)
-            assert hit is not None and (hit == native or hit.isDescendantOfView(native)), f'Home Browse tap blocked at {point}: {hit}'
-            native.sendActionsForControlEvents(UIControlEventTouchUpInside)
-        else:
-            assert action is not None
-            native = action._impl.native
-            assert native.isShown() and native.isEnabled()
-            assert native.performClick()
-        for _ in range(200):
-            drawer = app.adaptive.browsers.get('home')
-            if (drawer is not None and getattr(drawer, 'page', None) in app.body.children
-                    and any(entry.label == 'UI Review' for entry in drawer.browser.entries)):
-                break
-            await asyncio.sleep(.05)
-        assert app.native_host.state.destination == 'home'
-        assert drawer.page in app.body.children
-        assert drawer.storage.value == 'Local files' and drawer.folder == ''
-        assert drawer.browser.search.value == ''
-        assert app.file_browser.search.value == 'Old filter with no matches'
-        drawer.cancel_browser()
+        assert [button.text for button in app.home_sections._home_primary_buttons] == ['New Document']
         app.show_locations()
         assert app.native_host.state.destination == 'files'
         assert await app.refresh_folder_hub()
@@ -472,8 +397,7 @@ async def exercise_ui_review(app):
         app.private_sessions.close(owner.session.id, discard=True)
         app.show_home()
         assert app.home_continue is None
-        assert [button.text for button in app.home_sections._home_primary_buttons] == [
-            'Open Document', 'New Document']
+        assert [button.text for button in app.home_sections._home_primary_buttons] == ['New Document']
         await capture('home-' + mode)
         app.show_locations()
         await capture('folder-picker-' + mode)
