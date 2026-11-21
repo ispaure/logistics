@@ -250,6 +250,8 @@ class HostLifecycle:
         """
         host = self.host
         host.active_host = False
+        from .outbound_share import cancel as cancel_outbound_share
+        cancel_outbound_share(host)
         for name in ('startup_task', 'startup_document_task', 'cloud_startup_task', 'incoming_task'):
             self._cancel_task(name)
         self._retire(self, 'stop_local_searches')

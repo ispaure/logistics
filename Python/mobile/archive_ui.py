@@ -175,10 +175,16 @@ class ArchiveWorkspace:
         commands = [('Extract all…', self.extract), ('Extract selected…', self.extract_selected)]
         if archives.is_zip_archive(self.item.path):
             commands.extend([('Add item…', self.add), ('Remove selected…', self.remove)])
-        commands.extend([('Favourite archive', self.favourite), ('Close archive', self.close)])
-        from .action_menu import FeatureCommands
+        commands.append(('Close archive', self.close))
+        from .file_items import native_menu, row_actions
         self.menu_button = icon_button('overflow', 'Archive actions')
-        self.menu = FeatureCommands(self.menu_button, self.app, commands, None)
+        item = self.item
+        def load_actions():
+            row = dict(path=item.path, revision=item.revision, directory=False)
+            return [*commands, *row_actions(self.app, item.provider, row,
+                                           anchor=self.menu_button, opener=dict(kind='archive'))]
+        native_menu(self.app, self.menu_button, load_actions)
+        self.menu = self.menu_button.document_actions
         self.cancel_button = toga.Button('Cancel operation', on_press=self.request_cancel, style=Pack(height=48))
         from commonUtils.ui.native.password_input import PasswordInput
         # Archive passwords are kept only in this workspace and cleared on close.

@@ -3,6 +3,7 @@ import inspect
 import weakref
 from pathlib import PurePosixPath
 from commonUtils.ui.native.menus import NativeMenu as SharedNativeMenu
+from .outbound_share import SEND
 
 
 def android_menu_context(context):
@@ -30,6 +31,11 @@ class NativeMenu(SharedNativeMenu):
             original_context = context
             context = lambda: android_menu_context(original_context())
         super().__init__(button, actions, context=context, **kwargs)
+        if type(button._impl).__module__.startswith('toga_iOS.') and any(title == SEND for title, _ in self.actions):
+            from rubicon.objc import ObjCClass
+            for (title, _), action in zip(self.actions, button._impl.native.menu.children):
+                if title == SEND:
+                    action.image = ObjCClass('UIImage').systemImageNamed('square.and.arrow.up')
 
 
 def ios_menu_actions(actions, invoke, blocks):
@@ -41,7 +47,8 @@ def ios_menu_actions(actions, invoke, blocks):
             invoke(target)
         block = Block(selected, None, objc_id)
         blocks.append(block)
-        action = ObjCClass('UIAction').actionWithTitle(title, image=None, identifier=None, handler=block)
+        image = ObjCClass('UIImage').systemImageNamed('square.and.arrow.up') if title == SEND else None
+        action = ObjCClass('UIAction').actionWithTitle(title, image=image, identifier=None, handler=block)
         if title.startswith('Delete'):
             action.attributes = 2
         children.append(action)
@@ -317,13 +324,21 @@ class ActionMenu:
         if self.disposed or self.owner() is None:
             return
         actions = list(self.raw_actions)
+        favourite_session = None
         if self.document:
             owner = self.owner()
             host = owner.app if isinstance(owner, FeatureOwner) else owner
             app = getattr(host, 'app', host)
             session = getattr(host, 'session', None)
-            from .favourites import favourite
-            actions.append(('Favourite file', lambda: favourite(app, host)))
+            from .favourites import favourite, reference
+            if session is not None:
+                try:
+                    reference(app, host, session=session)
+                except (OSError, ValueError):
+                    pass
+                else:
+                    favourite_session = session
+                    actions.append(('Favourite file', lambda: favourite(app, host, session=favourite_session)))
             from .document_sources import folder_action
             folder_titles = {'Show in folder', 'Show cached copy in folder'}
             if session is not None and session.provider == 'library':
@@ -342,11 +357,13 @@ class ActionMenu:
             redundant = {'New document', 'Open from Files…', 'Import…', 'Close document'}
             actions = [item for item in actions if item[0] not in redundant]
             actions.sort(key=lambda item: _COMMAND_ORDER.get(item[0], (2, 0)))
-        if self.menu is not None and [item[0] for item in actions] == [item[0] for item in self.actions]:
+        if (self.menu is not None and favourite_session is self._favourite_session
+                and [item[0] for item in actions] == [item[0] for item in self.actions]):
             return
         if self.menu is not None:
             self.menu.dispose()
         self.actions = actions
+        self._favourite_session = favourite_session
         menu_type = DocumentNativeMenu if self.document else NativeMenu
         self.menu = menu_type(self.button, actions, invoke=self.invoke,
                               context=self.native_context, fallback=self.show_fallback)

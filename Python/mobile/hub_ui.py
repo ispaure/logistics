@@ -145,18 +145,16 @@ class HubUI(HomeScreen, DocumentsHub):
         return reopen
 
     def document_row_menu(self, session):
-        from .action_menu import FeatureCommands
         from .document_sources import folder_location, ordinary_browser_location, show_folder_location
+        from .file_items import native_menu, reference_actions, reference_available, row_actions
 
         app = self.app
         try:
             location = folder_location(app, session)
         except (OSError, ValueError):
-            return []
-        if location is None:
-            return []
-        actions = [('Document location', lambda: show_folder_location(app, location))]
-        path, provider = location.get('path'), location.get('provider')
+            location = None
+        actions = [('Document location', lambda: show_folder_location(app, location))] if location else []
+        path, provider = (location or {}).get('path'), (location or {}).get('provider')
         if path is None and provider is not None and not provider.private:
             path = Path(provider.root) / location['key']
         matching = ordinary_browser_location(app, path) if path is not None else None
@@ -179,16 +177,35 @@ class HubUI(HomeScreen, DocumentsHub):
 
                     return await show_folder_location(app, location, on_selected=selected)
                 actions.append((title, invoke))
-        elif 'remote' in location:
+        elif location and 'remote' in location:
             async def remote_actions():
                 async def selected(browser, entry):
                     if browser.on_item_actions is not None:
                         browser.on_item_actions(entry.payload)
                 return await show_folder_location(app, location, on_selected=selected)
             actions.append(('File actions…', remote_actions))
-        button = icon_button('overflow', 'Document actions')
-        button.document_actions = FeatureCommands(button, app, actions, None, document=True)
-        return [button]
+        if location:
+            actions.append(('All documents', app.show_documents_hub))
+        source = (getattr(session, 'source', None) or getattr(session, 'history_source', None)
+                  or getattr(session, 'cache_source', None))
+        opener = getattr(session, 'history_opener', None) or dict(kind=session.kind)
+        if matching:
+            _, item_provider, item_row = matching
+        elif provider is not None:
+            item_provider, item_row = provider, dict(path=location['key'], directory=False)
+        elif path is not None:
+            from commonUtils.runtime.resources.local import LocalFiles
+            item_provider, item_row = LocalFiles(path.parent), dict(path=path.name, directory=False)
+        else:
+            item_provider, item_row = None, None
+        if not actions and not item_row and not reference_available(app, source):
+            return []
+        button = icon_button('overflow', 'File actions for ' + (session.title or 'document'))
+        def load_actions():
+            direct = (row_actions(app, item_provider, item_row, anchor=button, opener=opener)
+                      if item_row else reference_actions(app, source, session.title, opener, anchor=button))
+            return [*actions, *direct]
+        return [native_menu(app, button, load_actions)]
 
     def recent_row(self, session, summary, *, show_kind=False):
         title, kind, details = summary

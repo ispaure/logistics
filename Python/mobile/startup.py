@@ -174,6 +174,8 @@ async def finish_startup(app):
         app.resize_workspace()
         await app.startup_screen.reveal_workspace(app)
         app._startup_in_progress = False
+        from .outbound_share import prune_for_app
+        prune_for_app(app)
         start_cloud = getattr(app, '_start_background_cloud', None)
         if start_cloud is not None:
             start_cloud()

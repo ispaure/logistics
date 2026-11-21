@@ -782,7 +782,8 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
     gradle = project / 'app/build.gradle'
     gradle.write_text(re.sub(r'applicationId "[^"]+"', 'applicationId "' + bundle + '"', gradle.read_text()))
     manifest = project / 'app/src/main/AndroidManifest.xml'
-    manifest.write_text(manifest.read_text().replace('io.github.ispaure.logisticsmobile', bundle))
+    manifest.write_text(manifest.read_text().replace(
+        'io.github.ispaure.logisticsmobile.fileprovider', bundle + '.fileprovider'))
     if entry_point.endswith(('.notebook_input_probe', '.notebook_rapid_ink_probe')) or memory_probe:
         with gradle.open('a') as stream:
             stream.write('\nandroid.sourceSets.main.java.srcDir(' + json.dumps(str(REPO / 'mobile_build/native_tests/android/notebooks')) + ')\n')

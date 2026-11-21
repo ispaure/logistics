@@ -196,6 +196,15 @@ class DocumentCatalog(CredentialBuckets):
             value['favourites'] = [row for row in value['favourites'] if row['id'] != identity]
             self.save(value, cipher)
 
+    def favourite_id(self, source, opener=None, *, cipher=None):
+        if self.normalize is not None and cipher is None:
+            source, opener = self.normalize(source, opener or {})
+        return self.identity(source, opener)
+
+    def is_favourite(self, source, opener=None, *, cipher=None):
+        key = self.favourite_id(source, opener, cipher=cipher)
+        return any(row['id'] == key for row in self.read(cipher)['favourites'])
+
     def relocate(self, source, destination=None, *, cipher=None, names=None):
         """Follow an app-owned move/delete while retaining each opening context."""
         key = 'key' if 'key' in source else 'path'

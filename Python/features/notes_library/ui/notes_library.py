@@ -323,6 +323,17 @@ class NotesLibraryWindow(LibraryPanels, DocumentPresentation, qt.QMainWindow):
             self.publish_note(values, result)
         self.idle.emit()
 
+    def note_file_actions(self, menu, path):
+        from desktop.document_catalog import add_resource_menu
+        from services.documents.storage import FileItem
+        try:
+            row = FileItem(self.provider, path).validate()
+        except (OSError, ValueError):
+            return
+        root = self.library.root if self.provider.private else str((self.provider.root / self.library.root).resolve())
+        add_resource_menu(self, menu, FileItem(self.provider, path, row['revision']),
+                          opener=dict(editor='notes', root=root))
+
     def selected_parent(self):
         tree = self.search_results if self.panel_tabs.currentWidget() is self.search_panel else self.tree
         item = tree.currentItem()

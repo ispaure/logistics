@@ -1,8 +1,8 @@
-# Mobile file storage and incoming shares
+# Mobile file storage and sharing
 
 Use [mobile file storage settings](../../user_mobile/settings/settings.md#file-storage)
 for paths users see. This page covers collection locations, iOS storage
-migration and native file intake. For opening and saving documents through
+migration and native file sharing. For opening and saving documents through
 those locations, see [Document storage sessions](document-storage.md).
 
 ## Android collection drive selection
@@ -29,6 +29,24 @@ Verify SD-card writes and removal on hardware.
 Receivers stream private partial batches and atomically mark them ready. Bounds are 100 attachments, 1 GiB/file, 4 GiB queued and 2 GiB/Android batch. Incomplete forced exits expire after 24 hours. The consumer validates and hashes bytes, publishes with exclusive destination rename and receipts the result before retiring the handoff. Cancellation leaves unadmitted work queued; admitted work settles under the mutation lock. Retired hosts receive no UI updates.
 
 Run `python3 dev.py test mobile test_incoming_files.py` for retry and retirement contracts. The manager's `android.incoming` and `ios.incoming` suites build owned sender/receiver apps and exercise real Sharesheets or Files **Open With**. Check bytes, names, reopen after restart and ownership cleanup. iOS profiles distinguish Share extension receipt from main-app Open In; iPad additionally verifies scene routing with existing windows preserved. Physical App Group provisioning remains a device check.
+
+## Outgoing file shares
+
+File menus capture the row’s provider, logical path and available revision.
+`mobile/file_items.py` uses those references for favourites and handing off
+files. `mobile/outbound_share.py` checks the source before and after streaming
+saved bytes into an app-private cache. Protected providers use the document
+export confirmation. The source is checked again before the share sheet opens.
+
+UIKit receives a file URL and the cache copy is removed on completion or
+cancellation. Android hands off a read-only content URI scoped to one share.
+The Android provider rejects new opens after 15 minutes. The share flow
+cleans cancelled or expired staging, and startup prunes stale copies.
+
+Run `python3 dev.py test mobile test_document_menus.py` for item ownership and
+protected staging. Run `python -m mobile_build.validation.outbound_android
+--output tmp/test-results/<run-id>` in the mobile tooling environment for
+the Android share sheet, generated receiver, exact bytes and expiration.
 
 ## iOS shared Local storage
 

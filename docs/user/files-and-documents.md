@@ -172,11 +172,17 @@ editing controls.
 
 ## Favourite files
 
-On a document's storage row, choose **… → Favourite file** to put a shortcut
-on the landing page. Favouriting a note from Notes Library remembers both
-the library and the note. Use **×** on the landing page to remove a favourite.
-Session-only favourites appear after you unlock their credentials. To clear
-Recent instead, see [reader history](reader-history.md).
+Right-click a single file in File Browser or use **…** on its Recent row
+on the landing page. Choose **Add to Favourites** or **Remove from Favourites**.
+On an open document’s storage row, **… → Favourite file** adds that document.
+Favouriting a note from Notes Library remembers both the library and the note.
+Use **×** on the landing page to remove a favourite. Session-only favourites
+appear after you unlock their credentials. See [reader history](reader-history.md)
+for clearing Recent.
+
+Choose **Drag File to App…** on an ordinary file, then drag it from the
+handoff window to an app or file manager. In a remote or LocalCrypt browser,
+choose **Prepare File to Drag…** to save a readable copy to a folder you choose.
 
 ## Central settings
 

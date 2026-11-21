@@ -7,6 +7,13 @@ from services.documents.catalog import DocumentCatalog
 from services.documents.credential_state import DesktopCredentialCipher
 
 
+class _CatalogSignals(qt.QObject):
+    favourites_changed = qt.Signal()
+
+
+signals = _CatalogSignals()
+
+
 def catalog(*, recent=False):
     return DocumentCatalog(cache_directory(create=False), recent=recent)
 
@@ -83,6 +90,8 @@ def relocate_reference(origin, target=None):
 def remember(window, *, favourite=False):
     source, title, opener, cipher = reference(window)
     catalog(recent=not favourite).remember(source, title, opener, favourite=favourite, cipher=cipher)
+    if favourite:
+        signals.favourites_changed.emit()
 
 
 def favourite(window):
@@ -90,6 +99,65 @@ def favourite(window):
         remember(window, favourite=True)
     except (OSError, ValueError, PermissionError) as error:
         qt.QMessageBox.warning(window, 'Favourite file', str(error))
+
+
+def resource_favourite(path, provider=None):
+    source, cipher = source_reference(path, provider)
+    return catalog().is_favourite(source, cipher=cipher)
+
+
+def change_resource_favourite(parent, item, *, remove, opener=None):
+    provider = item.provider
+    title = 'Remove from Favourites' if remove else 'Add to Favourites'
+    try:
+        item.validate()
+        path = provider.root / item.path
+        source, cipher = source_reference(path, provider)
+        store = catalog()
+        if remove:
+            store.remove(store.identity(source), cipher=cipher)
+        else:
+            store.remember(source, path.name, opener or dict(editor=path.suffix.lower()),
+                           favourite=True, cipher=cipher)
+        signals.favourites_changed.emit()
+    except (OSError, ValueError) as error:
+        qt.QMessageBox.warning(parent, title, str(error))
+
+
+def resource_actions(parent, provider):
+    """Expose fixed labels to the provider browser's per-row actions API."""
+    from services.documents.storage import FileItem
+
+    def available(row, remove):
+        if row['directory']:
+            return False
+        try:
+            return resource_favourite(provider.root / row['path'], provider) == remove
+        except (OSError, ValueError):
+            return False
+
+    def invoke(path, remove):
+        change_resource_favourite(parent, FileItem(provider, provider.relative(path)), remove=remove)
+
+    return tuple((title, lambda row, remove=remove: available(row, remove),
+                  lambda path, remove=remove: invoke(path, remove))
+                 for title, remove in (('Add to Favourites', False), ('Remove from Favourites', True)))
+
+
+def add_resource_menu(parent, menu, item, *, opener=None, favourite=True):
+    from .browser_export import offer_local_file
+    from services.documents.storage import DocumentPolicy
+    provider = item.provider
+    if favourite:
+        try:
+            remove = resource_favourite(provider.root / item.path, provider)
+        except (OSError, ValueError):
+            pass
+        else:
+            menu.addAction('Remove from Favourites' if remove else 'Add to Favourites',
+                           lambda: change_resource_favourite(parent, item, remove=remove, opener=opener))
+    if DocumentPolicy.for_provider(provider).persistent:
+        menu.addAction('Drag File to App…', lambda: offer_local_file(parent, item))
 
 
 def provider_for(source):
@@ -193,6 +261,15 @@ def populate(layout, parent, *, recent=False):
         button.setToolTip(row['title'])
         button.clicked.connect(lambda checked=False, row=row: reopen(row, parent))
         line.addWidget(button, 1)
+        if recent or row['source']['type'] == 'local':
+            commands = qt.QToolButton()
+            commands.setText('…')
+            commands.setAccessibleName('File actions for ' + row['title'])
+            commands.setPopupMode(qt.QToolButton.ToolButtonPopupMode.InstantPopup)
+            menu = qt.QMenu(commands)
+            commands.setMenu(menu)
+            menu.aboutToShow.connect(lambda row=row, menu=menu: _catalog_row_menu(parent, menu, row, recent=recent))
+            line.addWidget(commands)
         if not recent:
             remove = qt.QToolButton()
             remove.setText('×')
@@ -202,9 +279,45 @@ def populate(layout, parent, *, recent=False):
                     cipher = next((value for value in unlocked_ciphers()
                         if any(item['id'] == row['id'] for item in catalog().read(value)['favourites'])), None)
                     catalog().remove(row['id'], cipher=cipher)
-                    populate(layout, parent)
+                    signals.favourites_changed.emit()
                 except (OSError, ValueError, PermissionError) as error:
                     qt.QMessageBox.warning(parent, 'Remove favourite', str(error))
             remove.clicked.connect(forget)
             line.addWidget(remove)
         layout.addWidget(container)
+
+
+def _catalog_row_menu(parent, menu, row, *, recent):
+    from services.documents.storage import FileItem
+
+    def change(remove):
+        try:
+            provider, path = provider_for(row['source'])
+        except (OSError, ValueError) as error:
+            qt.QMessageBox.warning(parent, 'File actions', str(error))
+            return
+        try:
+            change_resource_favourite(parent, FileItem(provider, path), remove=remove,
+                                      opener=row['opener'])
+        finally:
+            if hasattr(provider, 'close'):
+                provider.close()
+
+    menu.clear()
+    source = row['source']
+    if source['type'] == 'local':
+        try:
+            provider, path = provider_for(source)
+            selected = FileItem(provider, path).validate()
+        except (OSError, ValueError):
+            return
+        add_resource_menu(parent, menu, FileItem(provider, path, selected['revision']),
+                          opener=row['opener'], favourite=recent)
+        return
+    try:
+        cipher = next((value for value in unlocked_ciphers()
+                       if any(item['id'] == row['id'] for item in catalog(recent=True).read(value)['recent'])), None)
+        remove = catalog().is_favourite(source, cipher=cipher)
+    except (OSError, ValueError):
+        return
+    menu.addAction('Remove from Favourites' if remove else 'Add to Favourites', lambda: change(remove))

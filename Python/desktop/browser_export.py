@@ -12,10 +12,11 @@ from .native_file_drag import handoff_message, start_file_drag
 
 
 class PreparedFiles(qt.QListWidget):
-    def __init__(self, paths, status):
+    def __init__(self, paths, status, *, validate=lambda: None):
         super().__init__()
         self.paths = paths
         self.status = status
+        self.validate = validate
         self.setDragEnabled(True)
         self.setSelectionMode(qt.QAbstractItemView.SelectionMode.ExtendedSelection)
         self.setAccessibleName('Prepared files. Drag the selected items to your file manager.')
@@ -27,9 +28,30 @@ class PreparedFiles(qt.QListWidget):
         if not paths:
             return
         try:
+            self.validate()
             self.status.setText(handoff_message(start_file_drag(self, paths)))
         except (OSError, ValueError) as error:
             self.status.setText(str(error))
+
+
+def offer_local_file(parent, item):
+    """Present the existing local-file drag handoff for one captured row."""
+    path = item.provider.root / item.path
+    try:
+        item.validate()
+    except (OSError, ValueError) as error:
+        qt.QMessageBox.warning(parent, 'Drag File to App', str(error))
+        return
+    dialog = qt.QDialog(parent)
+    dialog.setAttribute(qt.Qt.WidgetAttribute.WA_DeleteOnClose)
+    dialog.setWindowTitle('Drag File to App')
+    layout = qt.QVBoxLayout(dialog)
+    status = qt.QLabel('Drag the file to another app or a file manager.')
+    status.setWordWrap(True)
+    status.setTextFormat(qt.Qt.TextFormat.PlainText)
+    layout.addWidget(status)
+    layout.addWidget(PreparedFiles((path,), status, validate=item.validate))
+    dialog.show()
 
 
 class BrowserExport(qt.QObject):
@@ -41,7 +63,11 @@ class BrowserExport(qt.QObject):
         self.operation.completed.connect(self._finish)
         self.release = None
         layout.addWidget(self.operation)
-        self.action = menu.addAction('Prepare Selected Items to Drag…', self.prepare)
+        from .document_catalog import resource_actions
+        browser = host.file_browser
+        browser.actions += (*resource_actions(host, host.provider),
+                            ('Prepare File to Drag…', lambda row: not row['directory'], self.prepare_file))
+        self.action = menu.addAction('Prepare Selected Items to Drag…', lambda: self.prepare())
         menu.aboutToShow.connect(self.update_action)
         host._private_view_guard.revoked.connect(self.operation.request_cancel)
 
@@ -55,12 +81,13 @@ class BrowserExport(qt.QObject):
     def update_action(self):
         self.action.setEnabled(self.available() and bool(self.host.file_browser.selected_rows()))
 
-    def prepare(self):
+    def prepare(self, sources=None):
         if not self.available():
             return
         provider = self.host.provider
-        sources = tuple(MoveSource(provider, row['path'], row.get('revision'))
-                        for row in self.host.file_browser.selected_rows())
+        if sources is None:
+            sources = tuple(MoveSource(provider, row['path'], row.get('revision'))
+                            for row in self.host.file_browser.selected_rows())
         if not sources:
             return
         folder = qt.QFileDialog.getExistingDirectory(self.host, 'Save local copies for dragging')
@@ -86,6 +113,18 @@ class BrowserExport(qt.QObject):
         window = present_browser_transfer(self.operation, title, provider=provider)
         window.runner.completed.connect(lambda _result: self._offer_drag(window),
                                         qt.Qt.ConnectionType.SingleShotConnection)
+
+    def prepare_file(self, path):
+        if not self.available():
+            return
+        provider = self.host.provider
+        from services.documents.storage import FileItem
+        try:
+            row = FileItem(provider, provider.relative(path)).validate()
+        except (OSError, ValueError) as error:
+            qt.QMessageBox.warning(self.host, 'Prepare local copy', str(error))
+            return
+        self.prepare((MoveSource(provider, row['path'], row['revision']),))
 
     def _finish(self, result, error):
         if self.release is not None:

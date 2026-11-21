@@ -9,7 +9,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest import TestCase
-from unittest.mock import Mock, patch
+from unittest.mock import AsyncMock, Mock, patch
 
 from commonUtils.runtime.resources.documents import LocalDocuments
 from mobile.app import LogisticsMobile
@@ -21,6 +21,21 @@ from mobile.action_menu import DocumentNativeMenu
 
 
 class NativeDocumentMenuTests(TestCase):
+    def test_apple_item_share_menu_uses_system_sharing_glyph(self):
+        from mobile.action_menu import ios_menu_actions
+        from mobile.outbound_share import SEND
+        image = Mock()
+        action = SimpleNamespace(actionWithTitle=lambda title, **kwargs: SimpleNamespace(title=title, **kwargs))
+        classes = {'UIImage': image, 'UIAction': action}
+        bridge = SimpleNamespace(ObjCClass=classes.__getitem__, Block=lambda handler, *_: handler, objc_id=object)
+        chosen = Mock()
+        with patch.dict('sys.modules', {'rubicon.objc': bridge}):
+            [row] = ios_menu_actions([(SEND, chosen)], lambda callback: callback(), [])
+        image.systemImageNamed.assert_called_once_with('square.and.arrow.up')
+        self.assertIs(row.image, image.systemImageNamed.return_value)
+        row.handler(None)
+        chosen.assert_called_once()
+
     def test_apple_sections_keep_command_handlers_and_use_inline_group_separators(self):
         calls = []
         actions = [(title, lambda title=title: calls.append(title))
@@ -97,6 +112,107 @@ class DocumentMenuTests(TestCase):
 
     def labels(self, menu):
         return [title for title, _ in menu.actions]
+
+    def test_home_and_browser_menus_share_and_favourite_selected_file(self):
+        from commonUtils.runtime.platform import OS
+        from mobile import favourites, outbound_share
+        from services.documents.mobile_storage import document_copies
+
+        app = self.app
+        self.assertTrue(self.run_async(app.show_files(location=('Local files', ''))))
+        provider = app.file_provider
+        first, second = provider.root / 'open-owner.txt', provider.root / 'selected-file.txt'
+        first.write_bytes(b'Open document')
+        expected = 'Selected file ☃\r\n'.encode()
+        second.write_bytes(expected)
+        self.assertTrue(self.run_async(app.open_crypt(copies=document_copies(provider), key=second.name)))
+        app.close_session(app.private_sessions.active.session.id, choice='discard')
+        self.assertTrue(self.run_async(app.open_crypt(copies=document_copies(provider), key=first.name)))
+        owner = app.private_sessions.active.session
+        selected = next(session for session, _ in app.recent_items()
+                        if session.title == second.name)
+        hub = app.hub_controller()
+        captured = []
+        staging = self.root / 'share-test'
+
+        async def receive(_app, path, validate, _anchor):
+            validate()
+            captured.append((path.name, path.read_bytes()))
+            return True
+
+        with patch.object(outbound_share, 'get_os', return_value=OS.IOS), \
+                patch.object(outbound_share, '_root', return_value=staging), \
+                patch.object(outbound_share, '_send_ios', side_effect=receive):
+            button, = hub.document_row_menu(selected)
+            commands = dict(button.document_actions.load_actions())
+            self.run_async(commands['Add to Favourites']())
+            self.assertEqual([row['title'] for row in favourites.catalog(app).entries()], [second.name])
+            self.assertTrue(self.run_async(commands[outbound_share.SEND]()))
+            button.document_actions.dispose()
+
+            self.assertTrue(self.run_async(app.show_files(location=('Local files', ''))))
+            actions = dict(app.file_item_commands(row=provider.entry(second.name)))
+            self.assertTrue(self.run_async(actions[outbound_share.SEND]()))
+            self.run_async(actions['Remove from Favourites']())
+            self.assertEqual(app.file_item_actions(provider, provider.entry('')), [])
+        self.assertEqual(captured, [(second.name, expected)] * 2)
+        self.assertEqual(favourites.catalog(app).entries(), [])
+        self.assertEqual(list(staging.iterdir()), [])
+        self.assertIn(owner.id, app.workspace.sessions)
+        self.assertEqual(first.read_bytes(), b'Open document')
+
+    def test_protected_shares_confirm_validate_and_clean_staging(self):
+        from commonUtils.runtime.platform import OS
+        from commonUtils.runtime.resources.local import LocalFiles
+        from mobile import outbound_share
+        from services.documents.storage import FileItem
+
+        class RemoteFixture(LocalFiles):
+            remote_storage = private = True
+            unlocked = True
+
+            def check(self):
+                if not self.unlocked:
+                    raise PermissionError('Connection locked')
+
+        provider = RemoteFixture(self.root)
+        file = self.root / 'fixture.bin'
+        payload = b'\xff\x00synthetic\r\n'
+        file.write_bytes(payload)
+        item = FileItem(provider, file.name, provider.entry(file.name)['revision'])
+        directory = self.root / 'send-cache'
+        app = self.app
+        app._outbound_share_sheet = None
+
+        async def cancel_sheet(_app, path, validate, _anchor):
+            self.assertEqual(path.read_bytes(), payload)
+            self.assertTrue(path.is_relative_to(directory))
+            validate()
+            return False
+
+        with patch.object(outbound_share, 'get_os', return_value=OS.IOS), \
+                patch.object(outbound_share, '_root', return_value=directory), \
+                patch.object(outbound_share, '_send_ios', side_effect=cancel_sheet) as sheet, \
+                patch.object(outbound_share, 'confirm_export', new=AsyncMock(return_value=False)) as confirm, \
+                patch.object(app.main_window, 'dialog', new=AsyncMock()), \
+                patch('toga.InfoDialog') as dialog:
+            self.assertFalse(self.run_async(outbound_share.send(app, item)))
+            self.assertFalse(directory.exists())
+            sheet.assert_not_called()
+            confirm.return_value = True
+            self.assertFalse(self.run_async(outbound_share.send(app, item)))
+            sheet.assert_awaited_once()
+            self.assertEqual(list(directory.iterdir()), [])
+
+            provider.unlocked = False
+            self.assertFalse(self.run_async(outbound_share.send(app, item)))
+            self.assertEqual(dialog.call_args.args[1], 'Connection locked')
+            provider.unlocked = True
+            file.write_bytes(b'Replacement bytes')
+            self.assertFalse(self.run_async(outbound_share.send(app, item)))
+            self.assertIn('selected file changed', dialog.call_args.args[1])
+            sheet.assert_awaited_once()
+            self.assertEqual(list(directory.iterdir()), [])
 
     def test_pair_command_tracks_rotation_and_picker_rejects_compact_layout(self):
         app = self.app

@@ -97,6 +97,12 @@ def notes_host(app):
             privacy_gates=privacy_gates,
         )
 
+    def file_actions(owner, row):
+        from ..file_items import row_actions
+        provider = owner.provider
+        root = owner.root if provider.private else str((provider.root / owner.root).resolve())
+        return row_actions(app, provider, row, anchor=owner.reader_actions_button, opener=dict(kind='notes', root=root))
+
     return NotesHost(
         playlists=partial(_playlists, app),
         playlist_speech=partial(_playlist_speech, app),
@@ -134,6 +140,7 @@ def notes_host(app):
         render=app.adaptive.render,
         speech=lambda *args, **kwargs: MarkdownSpeech(app, *args, **kwargs),
         commands=lambda button, *args: FeatureCommands(button, app, *args),
+        file_actions=file_actions,
         list_button=list_button,
         middle_filename=middle_filename,
         entry_icon=entry_icon,

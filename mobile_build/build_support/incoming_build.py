@@ -1,4 +1,4 @@
-"""Install native incoming-file targets into canonical generated projects."""
+"""Install native file-sharing components into canonical generated projects."""
 from hashlib import sha256
 from pathlib import Path
 import plistlib
@@ -9,6 +9,7 @@ import xml.etree.ElementTree as ET
 ROOT = Path(__file__).resolve().parents[2]
 GROUP = 'group.io.github.ispaure.logisticsmobile'
 ACTIVITY = 'io.github.ispaure.logisticsmobile.ReceiveActivity'
+OUTGOING = 'io.github.ispaure.logisticsmobile.OutgoingFiles'
 
 
 def configure_android(project):
@@ -31,6 +32,19 @@ def configure_android(project):
         ET.SubElement(intent, 'action', {attr('name'): 'android.intent.action.' + action})
         ET.SubElement(intent, 'category', {attr('name'): 'android.intent.category.DEFAULT'})
         ET.SubElement(intent, 'data', {attr('mimeType'): '*/*'})
+    def component(tag, name):
+        match = next((node for node in application.findall(tag) if node.get(attr('name')) == name), None)
+        return match if match is not None else ET.SubElement(application, tag, {attr('name'): name})
+
+    provider = component('provider', OUTGOING)
+    provider.attrib.update({attr('authorities'): '${applicationId}.outgoing-files',
+                            attr('exported'): 'false', attr('grantUriPermissions'): 'true'})
+    for child in list(provider):
+        provider.remove(child)
+    ET.SubElement(provider, 'meta-data', {attr('name'): 'android.support.FILE_PROVIDER_PATHS',
+                                         attr('resource'): '@xml/logistics_outgoing_paths'})
+    receiver = component('receiver', OUTGOING + '$TargetChosen')
+    receiver.set(attr('exported'), 'false')
     tree.write(path, encoding='utf-8', xml_declaration=True)
 
 

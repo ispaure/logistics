@@ -211,7 +211,7 @@ class FilesUI:
         self.file_selection = toga.Selection(style=Pack(height=48))
         from .browser_ui import FileBrowser as NativeBrowser
         self.file_browser = NativeBrowser(folder_visible=self.folder_path_visible, selected=self.browser_file_selected, open_folder=self.browser_file_folder, navigate=self.browser_file_location, open_file=self.browser_file_open)
-        self.file_browser.on_item_actions = lambda row: self.file_browser.show_item_menu(self.file_item_commands())
+        self.file_browser.install_item_commands(lambda row: self.file_item_commands(row=row))
         self.file_browser.navigation_controls.remove(self.file_browser.back_button)
         self.file_password = PasswordInput(placeholder='Inner archive password, when needed', style=Pack(height=48))
         from .filename_input import FilenameInput
@@ -376,12 +376,12 @@ class FilesUI:
         box.add(toga.Button('Return to files', on_press=self.show_files, style=Pack(height=48, margin_top=12)))
         self.show_view(self.file_operation_view, destination='files', route='file-actions', title='File actions')
 
-    def file_item_commands(self, *, context=None):
+    def file_item_commands(self, *, context=None, row=None):
         from commonUtils.runtime.resources.provider import capabilities
 
         if context is None:
             provider, storage = self.file_provider, self.file_storage.value
-            selected = self.file_rows.get(self.file_selection.value)
+            selected = row if row is not None else self.file_rows.get(self.file_selection.value)
         else:
             provider, storage, selected = context
         commands = [('New folder…', lambda: self.show_file_actions(operation='new'))]
@@ -395,6 +395,8 @@ class FilesUI:
                          *([('Move…', lambda: self.show_file_actions(operation='move'))] if access.delete else []),
                          *([('Copy', self.copy_file)] if self.can_copy_file(provider) else []),
                          ('Details', self.show_file_details), ('Delete…', self.delete_file)]
+        if context is None:
+            commands.extend(self.app.file_item_actions(provider, selected))
         from .archive_ui import archive_commands
         commands.extend(archive_commands(self.app, provider, selected))
         if context is None:

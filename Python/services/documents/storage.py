@@ -96,6 +96,33 @@ def document_operation(source, cancelled=lambda: False):
     return operation(cancelled) if operation else nullcontext()
 
 
+@dataclass(frozen=True)
+class FileItem:
+    """A file selected in a particular provider and, when known, at a revision."""
+    provider: object
+    path: str
+    revision: object = None
+
+    def validate(self):
+        check_document_access(self.provider)
+        row = self.provider.entry(self.path)
+        if row['directory']:
+            raise ValueError('Select a file.')
+        if self.revision is not None and row.get('revision') != self.revision:
+            raise ValueError('The selected file changed. Select it again.')
+        return row
+
+    def access_check(self):
+        capture = getattr(self.provider, 'capture_access', None)
+        if capture is not None:
+            return capture(self.path)
+
+        def check():
+            with document_operation(self.provider):
+                check_document_access(self.provider)
+        return check
+
+
 def local_document_provider(directory):
     """Select ordinary filesystem storage at the host document boundary."""
     from commonUtils.runtime.resources.local import LocalFiles

@@ -63,14 +63,20 @@ def require(condition, message):
 
 def build_sender(workspace, sdk, java, output):
     """Build in a caller-owned disposable workspace and record the sender APK hash."""
-    project = Path(workspace).resolve() / 'sendfile06-sender'
+    return build_fixture(workspace, sdk, java, output, source=SOURCE, package=SENDER,
+                         activity='IncomingSender', artifact='sender')
+
+
+def build_fixture(workspace, sdk, java, output, *, source, package, activity, artifact):
+    project = Path(workspace).resolve() / activity
     sdk, java, output = (Path(path).resolve() for path in (sdk, java, output))
     project.mkdir(parents=True)
     output.mkdir(parents=True, exist_ok=True)
     classes = project / 'classes'
     classes.mkdir()
-    for name in ('AndroidManifest.xml', 'IncomingSender.java'):
-        shutil.copyfile(SOURCE / name, project / name)
+    files = ('AndroidManifest.xml', activity + '.java')
+    for name in files:
+        shutil.copyfile(source / name, project / name)
     platform = sdk / 'platforms/android-36/android.jar'
     versions = sorted((path for path in (sdk / 'build-tools').iterdir()
                        if re.fullmatch(r'\d+(\.\d+)+', path.name)),
@@ -80,36 +86,35 @@ def build_sender(workspace, sdk, java, output):
     env = dict(os.environ, JAVA_HOME=str(java), PATH=str(java / 'bin') + os.pathsep + os.environ['PATH'])
 
     def build(*args):
-        with (output / 'sender-build.log').open('ab') as log:
+        with (output / (artifact + '-build.log')).open('ab') as log:
             log.write(('$ ' + shlex.join(map(str, args)) + '\n').encode())
             log.flush()
             subprocess.run(args, cwd=project, env=env, timeout=90, check=True,
                            stdout=log, stderr=subprocess.STDOUT)
 
-    (output / 'sender-build.log').write_bytes(b'')
+    (output / (artifact + '-build.log')).write_bytes(b'')
     build(tools / 'aapt2', 'link', '--manifest', 'AndroidManifest.xml', '-I', platform,
           '-o', 'resources.apk')
     build(java / 'bin/javac', '--release', '8', '-classpath', platform, '-d', classes,
-          'IncomingSender.java')
+          activity + '.java')
     build(tools / 'd8', '--min-api', '26', '--lib', platform, '--output', project,
           *sorted(classes.rglob('*.class')))
     build(tools / 'aapt', 'add', 'resources.apk', 'classes.dex')
     build(tools / 'zipalign', '-f', '4', 'resources.apk', 'aligned.apk')
     build(java / 'bin/keytool', '-genkeypair', '-keystore', 'debug.jks',
           '-storepass', 'android', '-keypass', 'android', '-alias', 'androiddebugkey',
-          '-keyalg', 'RSA', '-dname', 'CN=Disposable SendFile06 Sender', '-validity', '7')
-    apk = project / 'sender.apk'
+          '-keyalg', 'RSA', '-dname', 'CN=Disposable Logistics Transfer Fixture', '-validity', '7')
+    apk = project / (artifact + '.apk')
     build(tools / 'apksigner', 'sign', '--ks', 'debug.jks', '--ks-pass', 'pass:android',
           '--out', apk, 'aligned.apk')
     build(tools / 'apksigner', 'verify', '--verbose', apk)
     build(tools / 'aapt', 'dump', 'badging', apk)
-    badging = (output / 'sender-build.log').read_text(errors='replace')
-    require(f"package: name='{SENDER}'" in badging and '\napplication-debuggable\n' in badging,
-            'The sender APK must have the disposable package identity and allow run-as')
-    write_json(output / 'sender-apk.json', dict(apk=str(apk), package=SENDER, sdk=str(sdk),
+    badging = (output / (artifact + '-build.log')).read_text(errors='replace')
+    require(f"package: name='{package}'" in badging and '\napplication-debuggable\n' in badging,
+            'The fixture APK must have the disposable package identity and allow run-as')
+    write_json(output / (artifact + '-apk.json'), dict(apk=str(apk), package=package, sdk=str(sdk),
                java=str(java), build_tools=tools.name, **digest(apk.read_bytes()),
-               sources={name: digest((project / name).read_bytes())
-                        for name in ('AndroidManifest.xml', 'IncomingSender.java')}))
+               sources={name: digest((project / name).read_bytes()) for name in files}))
     return apk
 
 

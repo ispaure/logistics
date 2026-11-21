@@ -28,9 +28,10 @@ def unlocked_ciphers(app):
                 break
 
 
-def reference(app, host=None):
+def reference(app, host=None, *, session=None):
     from .document_sources import file_source, saved_connection
-    session = getattr(host, 'session', None) or app.workspace.sessions.get(app.workspace.active)
+    if session is None:
+        session = getattr(host, 'session', None) if host is not None else app.workspace.sessions.get(app.workspace.active)
     if session is None:
         raise ValueError('Open a file before adding it to favourites.')
     notes = getattr(app, 'vault_browser', None)
@@ -45,9 +46,12 @@ def reference(app, host=None):
         provider = notes.provider
         title = Path(notes.path).name
     else:
-        owner = app.private_sessions.controllers.get(session.id)
+        manager = getattr(app, 'private_sessions', None)
+        owner = manager.controllers.get(session.id) if manager is not None else None
         provider = getattr(owner, '_crypt_reader_store', None)
-        source = file_source(app, provider, owner.crypt_reader.key, session_only=True) if owner is not None else getattr(session, 'history_source', None)
+        reader = getattr(owner, 'crypt_reader', None)
+        source = (file_source(app, provider, reader.key, session_only=True) if provider is not None and reader is not None
+                  else getattr(session, 'history_source', None))
         opener, title = dict(kind=session.kind), session.title
         if source is None:
             panel = getattr(app, '_notebook_views', {}).get(session.id) or app.text_views.get(session.id)
@@ -74,13 +78,13 @@ def reference(app, host=None):
     return source, title, opener, cipher
 
 
-async def favourite(app, host=None):
+async def favourite(app, host=None, *, session=None):
+    if session is not None and app.workspace.sessions.get(session.id) is not session:
+        return
     try:
-        source, title, opener, cipher = reference(app, host)
+        source, title, opener, cipher = reference(app, host, session=session)
         await asyncio.to_thread(catalog(app).remember, source, title, opener, favourite=True, cipher=cipher)
-        app._favourites_version = getattr(app, '_favourites_version', 0) + 1
-        for destination in ('home', 'documents'):
-            app.refresh_hub(destination)
+        refresh(app)
     except (OSError, ValueError, PermissionError) as error:
         await app.main_window.dialog(toga.InfoDialog('Favourite file', str(error)))
 
@@ -89,9 +93,37 @@ async def favourite_resource(app, provider, path, *, kind):
     source, cipher = resource_reference(app, provider, path)
     await asyncio.to_thread(catalog(app).remember, source, Path(path).name,
                             dict(kind=kind), favourite=True, cipher=cipher)
+    refresh(app)
+
+
+def refresh(app):
     app._favourites_version = getattr(app, '_favourites_version', 0) + 1
     app.refresh_hub('home')
     app.refresh_hub('documents')
+
+
+def favourite_action(app, source, title, opener, cipher, *, validate=lambda: None):
+    store = catalog(app)
+    remove = store.is_favourite(source, opener, cipher=cipher)
+    key = store.favourite_id(source, opener, cipher=cipher)
+    label = 'Remove from Favourites' if remove else 'Add to Favourites'
+
+    def change():
+        validate()
+        if remove:
+            store.remove(key, cipher=cipher)
+        else:
+            store.remember(source, title, opener, favourite=True, cipher=cipher)
+
+    async def invoke():
+        try:
+            await asyncio.to_thread(change)
+            if app.active_host:
+                refresh(app)
+        except (OSError, ValueError) as error:
+            if app.active_host:
+                await app.main_window.dialog(toga.InfoDialog(label, str(error)))
+    return label, invoke
 
 
 def resource_reference(app, provider, path, *, require_cipher=True):
@@ -266,9 +298,7 @@ def populate(app, container, *, heading=True, row_font=None):
                 cipher = next((value for value in unlocked_ciphers(app)
                     if any(item['id'] == row['id'] for item in catalog(app).read(value)['favourites'])), None)
                 await asyncio.to_thread(catalog(app).remove, row['id'], cipher=cipher)
-                app._favourites_version = getattr(app, '_favourites_version', 0) + 1
-                app.refresh_hub('home')
-                app.refresh_hub('documents')
+                refresh(app)
             except (OSError, ValueError, PermissionError) as error:
                 await app.main_window.dialog(toga.InfoDialog('Remove favourite', str(error)))
         opener = toga.Button(row['title'], on_press=open_row, style=Pack(height=48, flex=1))
@@ -277,8 +307,18 @@ def populate(app, container, *, heading=True, row_font=None):
             from .browser_ui import middle_filename
             opener.style.font_size = row_font
             middle_filename(list_button(opener))
-        buttons.append(toga.Box(children=[opener,
-            toga.Button('Remove', on_press=remove, style=Pack(height=48))],
+        remove_button = toga.Button('Remove', on_press=remove, style=Pack(height=48))
+        from .appearance import accessible_name
+        accessible_name(remove_button, 'Remove ' + row['title'] + ' from Favourites')
+        controls = [opener, remove_button]
+        from . import outbound_share
+        if outbound_share.supported() and row['source']['type'] in {'local', 'remote', 'crypt', 'download'}:
+            from .control_icons import icon_button
+            from .file_items import native_menu, reference_actions
+            share_button = icon_button('overflow', 'File actions for ' + row['title'])
+            controls.append(native_menu(app, share_button, lambda row=row, button=share_button: reference_actions(
+                app, row['source'], row['title'], row['opener'], anchor=button, favourite=False)))
+        buttons.append(toga.Box(children=controls,
             style=Pack(direction=ROW)))
     if row_font is not None:
         from .hub_controls import document_list

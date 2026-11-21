@@ -28,6 +28,38 @@ def _install_browser_extension(host):
 
 
 class BrowserWindowTests(QtTestCase):
+    def test_item_menu_favourites_and_drags_the_clicked_file(self):
+        from desktop import document_catalog
+        from desktop.browser_export import PreparedFiles
+        from services.documents.catalog import DocumentCatalog
+
+        selected = self.root / 'selected.txt'
+        selected.write_bytes(b'Exact clicked file')
+        original = self.path.read_bytes()
+        store = DocumentCatalog(self.root / 'catalog')
+        window = FileBrowserWindow(root_path=self.root)
+        window.show()
+        self.addCleanup(self.close_window, window)
+        self.wait(window)
+        browser = window.file_browser
+        index = browser.model.index(str(selected))
+        self.assertTrue(index.isValid())
+        with patch.object(document_catalog, 'catalog', return_value=store), \
+                patch.object(document_catalog, 'reference', side_effect=AssertionError('Do not use the open document')):
+            menu = browser.context_menu_for(index)
+            actions = {action.text(): action for action in menu.actions()}
+            actions['Add to Favourites'].trigger()
+            self.assertEqual([row['title'] for row in store.entries()], [selected.name])
+            actions['Drag File to App…'].trigger()
+            widget, = browser.findChildren(PreparedFiles)
+            self.addCleanup(widget.window().close)
+            self.assertEqual(widget.paths, (selected,))
+            self.assertEqual(widget.paths[0].read_bytes(), b'Exact clicked file')
+            menu = browser.context_menu_for(index)
+            next(action for action in menu.actions() if action.text() == 'Remove from Favourites').trigger()
+            self.assertEqual(store.entries(), [])
+        self.assertEqual(self.path.read_bytes(), original)
+
     def test_new_unconstrained_tab_starts_at_home_and_can_go_up(self):
         from desktop.file_browser import FileBrowserPage
         home = self.root / 'home'

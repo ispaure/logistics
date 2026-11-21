@@ -110,6 +110,19 @@ class _LogisticsFileBrowser(FileBrowser):
         menu = super().context_menu_for(index, directory=directory)
         if menu is None:
             return None
+        source = self.views.source_index(index).siblingAtColumn(0) if index.isValid() else index
+        item = self.model.item(source) if source.isValid() else None
+        if item is not None and len(self.context(item).selection) == 1 and item.path.is_file():
+            from commonUtils.runtime.resources.local import LocalFiles
+            from services.documents.storage import FileItem
+            from .document_catalog import add_resource_menu
+            try:
+                provider = LocalFiles(item.path.parent)
+                row = provider.entry(item.path.name)
+            except (OSError, ValueError):
+                pass
+            else:
+                add_resource_menu(self, menu, FileItem(provider, row['path'], row['revision']))
         paste_key = qt.QKeySequence(qt.QKeySequence.StandardKey.Paste)
         paste = next((action for action in menu.actions() if action.shortcut() == paste_key), None)
         if paste is not None and self.move_actions is not None:

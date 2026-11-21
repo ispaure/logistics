@@ -64,7 +64,17 @@ which locations you can save to and where a copy goes.
 
 ## Favourite files
 
-Choose **••• → Favourite file** to add a shortcut under **Favourites**.
-Home shows favourites as well. A note favourited from Notes Library
-reopens there. Session-only favourites appear after you unlock the
-matching credential.
+Open a file’s item menu in Workspaces, Home or Documents and choose
+**Add to Favourites** or **Remove from Favourites**. The shortcut appears in
+Home and in **Documents → Favourites**. An open document also offers
+**Favourite file**. A note favourited from Notes Library reopens there.
+Session-only favourites appear after you unlock the matching credential.
+
+## Send a file to another app
+
+Choose **Send to App…** in the file’s item menu, then choose a destination in
+the iOS or Android share sheet. Logistics shares the selected file’s saved
+contents. Save any edits you want to include before sharing. If the file is
+in protected storage, approve the readable copy before choosing the destination.
+You can dismiss the share sheet to cancel. On Android, open the file in the
+destination within 15 minutes. A destination can keep its own copy.

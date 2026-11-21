@@ -22,12 +22,16 @@ def file_source(app, copies, key, *, session_only=False):
         root = getattr(provider, 'root', getattr(copies, 'root', None))
         return dict(type='local', path=str(Path(root) / key)) if root is not None else None
     if reading_capabilities(copies).remote:
+        if not hasattr(copies, 'remote') or not hasattr(copies, 'client'):
+            return None
         remote = copies.remote
-        identity = copies.client.connection_identity(remote)
+        identity = getattr(provider, 'identity', None) or copies.client.connection_identity(remote)
         source = dict(type='remote', remote=remote, identity=identity, key=key)
     elif provider is not None and hasattr(provider, 'remote'):
         source = dict(type='crypt', remote=provider.remote, identity=provider.identity, key=key, namespace=provider.storage_namespace)
     else:
+        if not hasattr(copies, 'record'):
+            return None
         record = copies.record(key)
         source = dict(type='download', remote=record['remote'], identity=record['identity'], key=key)
     return source if session_only or saved_connection(app, source['remote'], source['identity']) else None

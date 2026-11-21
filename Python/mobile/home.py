@@ -33,7 +33,9 @@ class HomeScreen:
 
     def build_home(self):
         if hasattr(self, 'home_sections'):
-            retire_document_actions(self.home_sections.trailing)
+            retire_document_actions(self.home_sections.content)
+            if self.home_sections.paired:
+                retire_document_actions(self.home_sections.trailing)
         overview = self._home_overview()
         self._home_content_state = _home_state(self, overview)
         box = toga.Box(style=Pack(direction=COLUMN, margin=(8, 16, 16, 16)))

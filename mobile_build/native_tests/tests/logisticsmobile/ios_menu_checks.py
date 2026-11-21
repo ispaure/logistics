@@ -1,4 +1,4 @@
-"""Exercise folder/file action sheets in an isolated native test app."""
+"""Exercise native folder and file cell menus in an isolated test app."""
 
 from commonUtils.testing.stages import TestStage
 
@@ -7,7 +7,7 @@ import asyncio
 
 
 async def exercise_ios_browser_menus(app):
-    """Use disposable storage and real cells, buttons and native action sheets."""
+    """Use disposable storage and real cells, buttons and UIKit menu actions."""
 
     root = app.private_root / 'LocalFiles'
     (root / 'Menu folder').mkdir(parents=True, exist_ok=True)
@@ -18,23 +18,23 @@ async def exercise_ios_browser_menus(app):
     async with asyncio.timeout(10):
         while not browser.native_list._impl.native.visibleCells:
             await asyncio.sleep(.05)
-    # Opening the sheet selects a row without opening its contents.
+    from mobile.outbound_share import SEND
+
+    # Loading a menu selects a row without opening its contents.
     checked = []
     for name in ('Menu folder', filename, 'Menu folder'):
         native = browser.native_list._impl.native
         cell = next(cell for cell in native.visibleCells if cell.accessoryView.row.title == name)
         button = cell.accessoryView
-        button.selectRow_(button)
-        async with asyncio.timeout(10):
-            while getattr(browser, '_item_menu', None) is None or browser._item_menu.native is None:
-                await asyncio.sleep(.05)
-        menu = browser._item_menu
-        labels = [str(action.title) for action in menu.native.actions]
+        actions = await browser.native_list.menu_provider(button.row)
+        labels = [str(action.title) for action in actions]
         assert 'Open' in labels and 'Details' in labels, (name, labels)
-        assert str(menu.native.title) == name
+        if name == filename:
+            share = next(action for action in actions if str(action.title) == SEND)
+            assert share.image is not None and 'Add to Favourites' in labels
+        else:
+            assert SEND not in labels and 'Add to Favourites' not in labels
         assert browser.selected == button.row.entry.identity
-        await asyncio.sleep(.2)
         browser.dismiss_item_menu()
-        await asyncio.sleep(.2)
         checked.append(name)
     return checked

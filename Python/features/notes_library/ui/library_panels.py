@@ -445,6 +445,8 @@ class LibraryPanels(LibraryConnections):
             menu.addAction('Add to playlist…', add)
         if not directory and getattr(self, 'document_tabs', None) is not None:
             menu.addAction('Open in new tab', lambda: self.open_note(path, new_tab=True))
+        if not directory:
+            self.note_file_actions(menu, path)
         if self.library.supports('rename'):
             menu.addAction('Rename…', lambda: self.rename_path(path))
             menu.addAction('Move…', lambda: self.move_path(path))

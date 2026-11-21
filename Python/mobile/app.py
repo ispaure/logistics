@@ -68,6 +68,10 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         from .keyboard import picker_keyboard_visible
         return picker_keyboard_visible(self, self.native_host.adapter)
 
+    def file_item_actions(self, provider, row):
+        from .file_items import row_actions
+        return row_actions(self, provider, row)
+
     def cloud_controller(self) -> CloudController:
         """Return the retained owner of this workflow."""
         if "_cloud_controller" not in self.__dict__:

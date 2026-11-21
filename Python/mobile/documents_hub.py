@@ -129,7 +129,8 @@ class DocumentsHub:
         self.document_categories = {}
         self.document_launchers = PanelGrid([], self.main_window.size.width)
         if hasattr(self, 'document_open_list'):
-            for section in (self.document_open_list, self.document_recent_list, self.document_saved_list):
+            for section in (self.document_open_list, self.document_recent_list, self.document_saved_list,
+                            self.document_favourites_list):
                 retire_document_actions(section)
         self.document_open_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_open_list._open_documents = True
@@ -218,6 +219,7 @@ class DocumentsHub:
             self.populate_document_libraries()
         if discover and not searching and self.documents_view == 'Favourites':
             from .favourites import populate
+            retire_document_actions(self.document_favourites_list)
             self.document_favourites_list.clear()
             populate(self.app, self.document_favourites_list, heading=False, row_font=FILENAME_FONT)
         self.reflow_documents_hub()
@@ -297,7 +299,7 @@ class DocumentsHub:
             button_icons(button, [('storage_local', 'Local document'), *(
                 [('storage_unlocked', 'Unlocked LocalCrypt')] if hit['private'] else [])])
             from .browser_ui import entry_icon
-            from .action_menu import ActionMenu
+            from .file_items import native_menu, reference_actions
             more = icon_button('more', 'File actions for ' + hit['name'])
             actions = [('Open folder' if hit.get('directory') else 'Open', open_result)]
             if hit['source']['type'] in {'local', 'crypt'}:
@@ -308,8 +310,12 @@ class DocumentsHub:
                     except (OSError, ValueError) as error:
                         await self.main_window.dialog(toga.InfoDialog('Could not show file', str(error)))
                 actions.append(('Show in folder', reveal))
-            more._document_search_menu = ActionMenu(more, self.app, actions, document=False)
-            self._document_search_menus.append(more._document_search_menu)
+            def load_actions(actions=tuple(actions), hit=hit, more=more):
+                direct = [] if hit.get('directory') else reference_actions(
+                    self.app, hit['source'], hit['name'], dict(kind='file'), anchor=more)
+                return [*actions, *direct]
+            native_menu(self.app, more, load_actions)
+            self._document_search_menus.append(more.document_actions)
             row = toga.Box(children=[entry_icon(hit.get('directory', False)), button, more],
                            style=Pack(direction=ROW, align_items=CENTER))
             rows.append(row)

@@ -99,7 +99,7 @@ class CloudUI(LocalCryptUI):
         self.cloud_entries = toga.Selection(style=Pack(height=44))
         NativeBrowser = self.rclone_ui.NativeBrowser
         self.remote_browser = NativeBrowser(bounded_pages=True, folder_visible=self.folder_path_visible, selected=self.browser_cloud_selected, open_folder=self.browser_cloud_folder, navigate=self.browser_cloud_location, open_file=self.open_remote_document)
-        self.remote_browser.on_item_actions = self.show_remote_item_actions
+        self.remote_browser.install_item_commands(self.remote_item_commands)
         self.remote_browser.navigation_controls.remove(self.remote_browser.back_button)
         self.remote_browser.search.placeholder = 'Search this folder'
         self.cloud_open = toga.Button('Open folder', on_press=self.open_cloud_folder, style=Pack(height=44))
@@ -157,15 +157,29 @@ class CloudUI(LocalCryptUI):
         if not self.cloud_busy:
             self.show_view(self.cloud_advanced_view, destination='files', route='remote-actions', title='Remote actions')
 
-    def show_remote_item_actions(self, row=None, *, password_required=False, **kwargs):
-        row = row if isinstance(row, dict) else self.cloud_rows.get(self.cloud_entries.value)
-        if not row:
-            return
-        from pathlib import Path
+    def remote_item_commands(self, row):
+        async def open_item():
+            if row['directory']:
+                return await self.browser_cloud_folder(row)
+            self.crypt_password.value = ''
+            return await self.open_remote_document(row)
+        actions = [('Open folder' if row['directory'] else 'Open preview', open_item),
+                   ('Download locally…', lambda: self.download_remote_item(row))]
+        provider = getattr(getattr(self, 'browser_state', None), 'resource', None)
+        if provider is not None:
+            actions.extend(self.app.file_item_actions(provider, row))
+        if not row['directory'] and Path(row['path']).suffix.lower() in {'.cbz', '.zip', '.epub'}:
+            actions.append(('Archive password…', lambda: self.show_remote_item_password(row)))
+        return actions
+
+    def show_remote_item_actions(self, row):
+        return self.remote_browser.show_item_menu(CloudUI.remote_item_commands(self, row))
+
+    def show_remote_item_password(self, row):
         private_label = self.rclone_ui.private_label
         remote, generation = self.cloud_open_remote, self.cloud_client.generation
         password = PasswordInput(placeholder='Inner ZIP password', style=Pack(height=48))
-        status = toga.Label('Enter the comic ZIP password.' if password_required else '', style=Pack(font_size=12))
+        status = toga.Label('Enter the comic ZIP password.', style=Pack(font_size=12))
         async def open_item(widget=None, **kw):
             if self.cloud_client.generation != generation or self.cloud_open_remote != remote:
                 password.value = ''
@@ -176,12 +190,6 @@ class CloudUI(LocalCryptUI):
             self.crypt_password.value, password.value = password.value, ''
             return await self.open_remote_document(row)
         password.on_confirm = open_item
-        if not password_required:
-            actions = [('Open folder' if row['directory'] else 'Open preview', open_item),
-                       ('Download locally…', lambda: self.download_remote_item(row))]
-            if not row['directory'] and Path(row['path']).suffix.lower() in {'.cbz', '.zip', '.epub'}:
-                actions.append(('Archive password…', lambda: self.show_remote_item_actions(row, password_required=True)))
-            return self.remote_browser.show_item_menu(actions)
         controls = [toga.Label(private_label(row['path']), style=Pack(font_size=18))]
         if not row['directory']:
             controls.append(toga.Label('Remote preview · Read-only'))
@@ -193,8 +201,7 @@ class CloudUI(LocalCryptUI):
         self.remote_item_view = toga.Box(children=controls, style=Pack(direction=COLUMN, margin=12, flex=1))
         self.remote_item_password = password
         self.show_view(self.remote_item_view, destination='files', route='remote-item', title=Path(row['path']).name)
-        if password_required:
-            password.focus()
+        password.focus()
 
     async def download_remote_item(self, row):
         if self.cloud_busy or getattr(self.app, 'transfer_busy', False):

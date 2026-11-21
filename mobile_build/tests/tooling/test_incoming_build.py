@@ -9,7 +9,7 @@ from tempfile import TemporaryDirectory
 import unittest
 import xml.etree.ElementTree as ET
 
-from mobile_build.build_support.incoming_build import configure_android, configure_ios, GROUP, ACTIVITY
+from mobile_build.build_support.incoming_build import configure_android, configure_ios, GROUP, ACTIVITY, OUTGOING
 
 
 class IncomingBuildTests(unittest.TestCase):
@@ -29,6 +29,15 @@ class IncomingBuildTests(unittest.TestCase):
             self.assertEqual(receiver.get(attr('exported')), 'true')
             self.assertEqual({a.get(attr('name')) for a in receiver.findall('intent-filter/action')},
                 {'android.intent.action.SEND', 'android.intent.action.SEND_MULTIPLE'})
+            provider, = root.findall('application/provider')
+            self.assertEqual(provider.get(attr('name')), OUTGOING)
+            self.assertEqual(provider.get(attr('authorities')), '${applicationId}.outgoing-files')
+            self.assertEqual(provider.get(attr('exported')), 'false')
+            self.assertEqual(provider.get(attr('grantUriPermissions')), 'true')
+            self.assertEqual(provider.find('meta-data').get(attr('resource')), '@xml/logistics_outgoing_paths')
+            callback, = root.findall('application/receiver')
+            self.assertEqual(callback.get(attr('name')), OUTGOING + '$TargetChosen')
+            self.assertEqual(callback.get(attr('exported')), 'false')
             self.assertEqual(root.findall('uses-permission'), [])
 
     def test_ios_extension_is_embedded_and_existing_entitlements_are_preserved(self):

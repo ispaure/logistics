@@ -72,6 +72,7 @@ class NotesHost:
     style_font: Callable = lambda size: size
     playlists: Callable = None
     playlist_speech: Callable = None
+    file_actions: Callable = lambda owner, row: ()
 
 
 from .library_file_forms import LibraryFileForms
@@ -613,6 +614,14 @@ class VaultBrowser(LibraryFileForms, LibraryPanels):
         if self.selected_path is not None and self.library.supports('rename'):
             actions.extend([("Rename selected…", lambda: self.manage_entry(move=True)),
                             ("Move selected…", self.move_selected)])
+        if self.selected_path is not None:
+            parent = posixpath.dirname(self.selected_path)
+            row = next((item for item in self.folders.get(parent, ())
+                        if item['path'] == self.selected_path), None)
+            if row is None and self.selected_path == self.path:
+                row = dict(path=self.selected_path, directory=False)
+            if row is not None:
+                actions.extend(self.host.file_actions(self, row))
         if self.embedded is not None:
             if self.library.writable and getattr(self.embedded, 'kind', None) != 'file':
                 actions.append(('Save', self.embedded.save))

@@ -145,6 +145,8 @@ class LandingPage(qt.QWidget):
         self._launcher_signature = None
         self._catalog_subscriptions = []
         self.saved_lists_changed.connect(self.refresh_saved_lists)
+        from .document_catalog import signals
+        signals.favourites_changed.connect(self.refresh_saved_lists)
         self.saved_files = qt.QWidget()
         saved_layout = qt.QVBoxLayout(self.saved_files)
         saved_layout.setContentsMargins(0, 0, 0, 0)
