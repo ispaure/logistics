@@ -1,5 +1,25 @@
 """Mount existing document controls in Android's single native action bar."""
+from functools import cache
+from weakref import ref
 from .palette import android_palette
+
+
+@cache
+def _layout_listener_type():
+    from android.view import View
+    from java import dynamic_proxy
+
+    class Layout(dynamic_proxy(View.OnLayoutChangeListener)):
+        def __init__(self, fit):
+            super().__init__()
+            self.fit = ref(fit)
+
+        def onLayoutChange(self, widget, left, top, right, bottom, *previous):
+            fit = self.fit()
+            if fit is not None:
+                fit(right - left)
+
+    return Layout
 
 
 def release_buttons(adapter):
@@ -8,12 +28,19 @@ def release_buttons(adapter):
         toolbar, start, end = saved
         toolbar.setContentInsetsRelative(start, end)
         adapter._reader_action_bar_insets = None
-    adapter._reader_action_bar_fit = None
+    fit = getattr(adapter, '_reader_action_bar_fit', None)
+    if fit is not None:
+        _, detach_layout = fit
+        detach_layout()
+        adapter._reader_action_bar_fit = None
     for button in getattr(adapter, '_reader_action_bar_buttons', ()):
         native = button._impl.native
         parent = native.getParent()
         if parent is not None:
             parent.removeView(native)
+        # The bar registered this detached control directly with Toga.
+        button.window = None
+        button.app = None
     adapter._reader_action_bar_buttons = ()
 
 
@@ -34,9 +61,7 @@ def set_bar_visibility(adapter, bar, visible):
 
 def fit_document_title(root, label, leading_count, trailing_count, *, notes_controls=()):
     """Keep a hold target even when Notes Library has more actions than fit."""
-    from android.view import View
     from android.widget import HorizontalScrollView
-    from java import dynamic_proxy
 
     density = root.getResources().getDisplayMetrics().density
     title_index = root.indexOfChild(label.getParent())
@@ -82,12 +107,9 @@ def fit_document_title(root, label, leading_count, trailing_count, *, notes_cont
             bounds.width = end
             scroll.setLayoutParams(bounds)
 
-    class Layout(dynamic_proxy(View.OnLayoutChangeListener)):
-        def onLayoutChange(self, widget, left, top, right, bottom, *previous):
-            fit(right - left)
-
-    root.addOnLayoutChangeListener(Layout())
-    return fit
+    listener = _layout_listener_type()(fit)
+    root.addOnLayoutChangeListener(listener)
+    return fit, lambda: root.removeOnLayoutChangeListener(listener)
 
 
 def sync(app, view, destination):
@@ -111,6 +133,7 @@ def sync(app, view, destination):
             adapter._reader_action_bar_status.setText('')
             adapter._reader_action_bar_status.setContentDescription('')
             bar.setCustomView(None)
+            adapter._reader_action_bar_title = adapter._reader_action_bar_status = None
             bar.setDisplayOptions(adapter._reader_action_bar_options)
             adapter._reader_action_bar_state = None
             adapter._reader_action_bar_active = False
@@ -176,7 +199,8 @@ def sync(app, view, destination):
         adapter._reader_action_bar_state = state
     label = adapter._reader_action_bar_title
     if getattr(view, '_notes_title_controls', ()) and adapter._reader_action_bar_fit is not None:
-        adapter._reader_action_bar_fit(label.getParent().getParent().getWidth())
+        fit, _ = adapter._reader_action_bar_fit
+        fit(label.getParent().getParent().getWidth())
     if hasattr(view, '_document_path'):
         from commonUtils.ui.native.panning_title import configure_android_title
         configure_android_title(label)

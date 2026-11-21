@@ -946,23 +946,10 @@ class NotebookPanel:
                 self.view._notebook_canvas = None
                 self.view._notebook_viewport_insets = (0, 0, 0)
             web.on_navigation_starting = None
-            android = native_backend(web).startswith('toga_android.')
-            private = callable(getattr(web, 'clear_private_content', None))
-            # A retained panel must not retain its retired native WebView too.
-            # Private retirement performs its own detach before clearing bytes.
-            if not private and web.parent is not None:
+            if web.parent is not None:
                 web.parent.remove(web)
             from services.documents.mobile_views import retire_webview
             retire_webview(web)
-            if android and not private:
-                # Blanking HTML alone leaves retired Chromium/GPU resources
-                # alive across repeated notebook opens. Private views already
-                # destroy their native view in clear_private_content().
-                native = web._impl.native
-                native.stopLoading()
-                native.clearHistory()
-                native.removeAllViews()
-                native.destroy()
         self.web = None
 
     def dispose(self):

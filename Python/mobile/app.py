@@ -145,7 +145,8 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
 
     def startup(self):
         if type(self._impl).__module__.startswith('toga_iOS.'):
-            from .cycle_collection import bind_ui_cycle_collection
+            from .cycle_collection import bind_ios_timer_ownership, bind_ui_cycle_collection
+            bind_ios_timer_ownership()
             bind_ui_cycle_collection(self.loop)
         if toga.Command.ABOUT in self.commands:
             del self.commands[toga.Command.ABOUT]

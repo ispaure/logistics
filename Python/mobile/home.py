@@ -5,7 +5,7 @@ from toga.style.pack import COLUMN, ROW, CENTER, START
 
 from .ui_metrics import TOUCH_TARGET
 from .appearance import accessible_name, action_button, surface
-from .hub_controls import HubSections, document_group, empty_document_row, heading
+from .hub_controls import HubSections, document_group, empty_document_row, heading, retire_document_actions
 
 
 def _home_state(hub, overview):
@@ -32,6 +32,8 @@ class HomeScreen:
         return len(sessions), opened, recent[:1]
 
     def build_home(self):
+        if hasattr(self, 'home_sections'):
+            retire_document_actions(self.home_sections.trailing)
         overview = self._home_overview()
         self._home_content_state = _home_state(self, overview)
         box = toga.Box(style=Pack(direction=COLUMN, margin=(8, 16, 16, 16)))
@@ -79,6 +81,7 @@ class HomeScreen:
 
     def _populate_home_overview(self, box, overview):
         count, opened, recent = overview
+        retire_document_actions(box)
         box.clear()
         self._home_open_buttons = self._home_document_preview(
             box, 'Open now', opened, 'No open documents.', 'Open' if count > 1 else None)

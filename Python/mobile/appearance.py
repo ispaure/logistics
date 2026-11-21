@@ -482,13 +482,32 @@ def _install_android_appearance(app):
     from android.content.res import ColorStateList
     from toga_android.widgets.label import TextViewWidget
     from toga_android.widgets.selection import Selection
-    from toga_android.widgets.button import Button
+    from toga_android.widgets import button as android_button
     from toga_android.widgets.textinput import TextInput
     from com.google.android.material import R as MaterialR
     from android.text import TextUtils
     from travertino.size import at_least
     from toga_android.widgets.base import Widget
     from toga_android.widgets.switch import Switch
+    from android.view import View
+    from java import dynamic_proxy
+
+    class ButtonClick(dynamic_proxy(View.OnClickListener)):
+        def __init__(self, button_impl):
+            super().__init__()
+            # The native Button retains its Java listener. A strong reference
+            # back to the implementation leaves the entire widget graph alive.
+            self.button = weakref.ref(button_impl)
+
+        def onClick(self, _view):
+            button = self.button()
+            if button is not None:
+                button.interface.on_press()
+
+    # Match the weak back-reference used by Toga's Android text and scroll
+    # callbacks. The pinned Button.create still resolves this listener here.
+    android_button.TogaOnClickListener = ButtonClick
+    Button = android_button.Button
     original_theme_color = Widget.get_theme_color
     roles = {R.attr.colorBackground: 'window', MaterialR.attr.colorSurface: 'surface',
              R.attr.colorButtonNormal: 'surface', R.attr.textColorPrimary: 'text',
@@ -651,7 +670,8 @@ def refresh_appearance(app):
     for impl in list(_android_boxes):
         impl.set_background_color(impl.interface.style.background_color)
     for impl in list(_android_webviews):
-        if not getattr(impl.interface, 'private_closed', False):
+        if not (getattr(impl.interface, 'private_closed', False)
+                or getattr(impl.interface, '_document_retired', False)):
             impl.native.evaluateJavascript(eink_script(), None)
     for impl in list(_widgets):
         impl.set_color(impl.interface.style.color)

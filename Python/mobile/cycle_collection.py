@@ -63,6 +63,37 @@ class UICycleCollection:
 _owner = None
 
 
+def bind_ios_timer_ownership():
+    """Balance the native timer reference owned by a Rubicon timer handle."""
+    from importlib.metadata import PackageNotFoundError, version
+
+    try:
+        pinned = version('rubicon-objc') == '0.5.7'
+    except PackageNotFoundError:
+        pinned = False
+    if not pinned:
+        return
+    from rubicon.objc import eventloop
+    base = eventloop.CFTimerHandle
+    if getattr(base, '_releases_native_timer', False):
+        return
+    release = eventloop.libcf.CFRelease
+
+    class TimerHandle(base):
+        _releases_native_timer = True
+
+        def __del__(self):
+            # Rubicon 0.5.7 creates a CFRunLoopTimer but drops only the loop's
+            # reference on fire/cancel. Keep the create reference until this
+            # handle retires so a later cancel still has a valid pointer.
+            timer = getattr(self, '_timer', None)
+            if timer:
+                self._timer = None
+                release(timer)
+
+    eventloop.CFTimerHandle = TimerHandle
+
+
 def bind_ui_cycle_collection(loop):
     """Bind once for the iOS process; secondary window hosts share its loop."""
     global _owner

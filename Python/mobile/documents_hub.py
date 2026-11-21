@@ -5,7 +5,7 @@ from toga.style.pack import COLUMN, ROW, CENTER
 
 from .appearance import accessible_name, batch_surfaces, list_button, surface
 from .control_icons import icon_button, button_icons
-from .hub_controls import PanelGrid, document_list, empty_document_row, text_document_kind
+from .hub_controls import PanelGrid, document_list, empty_document_row, retire_document_actions, text_document_kind
 from .ui_metrics import TOUCH_TARGET
 
 
@@ -128,6 +128,9 @@ class DocumentsHub:
         self.document_grids = []
         self.document_categories = {}
         self.document_launchers = PanelGrid([], self.main_window.size.width)
+        if hasattr(self, 'document_open_list'):
+            for section in (self.document_open_list, self.document_recent_list, self.document_saved_list):
+                retire_document_actions(section)
         self.document_open_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_open_list._open_documents = True
         self.document_recent_list = toga.Box(style=Pack(direction=COLUMN))
@@ -368,6 +371,7 @@ class DocumentsHub:
             return
         self._documents_file_search.stop_local_search()
         for section in (self.document_open_list, self.document_recent_list, self.document_saved_list):
+            retire_document_actions(section)
             for child in list(section.children):
                 section.remove(child)
         sessions = self.open_document_sessions()

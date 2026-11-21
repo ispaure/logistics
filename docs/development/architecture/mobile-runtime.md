@@ -228,6 +228,26 @@ on main routes and Back on tools routes. File titles and storage subtitles use t
 current container. For vertical bars and reader headers, see [system occlusion
 clearance](mobile-workspace-navigation.md#system-occlusion-clearance).
 
+Android's action bar mounts detached Toga controls. When rebuilding or hiding
+the bar, remove its layout listener and clear each control's window before
+clearing its app so the widget registry releases it. Native Android button and
+title callbacks keep weak references to their Python owners. Terminal document
+retirement detaches and destroys ordinary Android WebViews through
+`services.documents.mobile_views.retire_webview`. Use normal page replacement
+while a reader or preview can still be shown again. Check
+`test_android_reader_chrome.py` and `test_mobile_views.py` when changing these
+owners. On a disposable emulator, compare repeated foreground close and
+reopen against the same sequence with Home and resume. Sample registered
+widgets, retired views, descriptors by class, and app memory after settling.
+
+Home and Documents retire native command menus before replacing their document
+rows. This drops the UIKit actions that otherwise retain removed row trees.
+Retiring a menu also releases its saved command callbacks. On iOS with
+Rubicon 0.5.7, the timer handle releases its Core Foundation timer when Python
+collects the handle. The handle keeps the timer valid for cancellation through
+its lifetime. When profiling iOS, sample native UI and timer counts in the app
+and track WebKit child processes separately from app RSS.
+
 Use commonUtils' `READER_LAYOUT` for shared track, thumb and touch geometry.
 `reader_edges` consumes reported Android corners; iOS uses measured safe areas
 and remaining Home-indicator clearance. Preserve canvas space separately from

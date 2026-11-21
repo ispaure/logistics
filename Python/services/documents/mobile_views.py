@@ -4,6 +4,8 @@
 def retire_webview(view):
     from commonUtils.ui.native.text_size import native_backend
     from commonUtils.ui.native.inline_html import set_inline_html
+    if getattr(view, '_document_retired', False):
+        return
     binding = getattr(view, '_font_binding', None)
     if binding is not None:
         binding.dispose()
@@ -15,7 +17,20 @@ def retire_webview(view):
         clear_private()
         return
     native = getattr(view._impl, 'native', None)
-    if native_backend(view).startswith('toga_iOS.') and native is not None:
+    backend = native_backend(view)
+    if backend.startswith('toga_android.') and native is not None:
+        view._document_retired = True
+        view.on_webview_load = None
+        view.on_navigation_starting = None
+        if view.parent is not None:
+            view.parent.remove(view)
+        # A replacement page leaves Chromium's native resources alive.
+        view._impl._markdown_font_resource = None
+        native.stopLoading()
+        native.removeAllViews()
+        native.destroy()
+        return
+    if backend.startswith('toga_iOS.') and native is not None:
         native.stopLoading()
         native.navigationDelegate = None
         native.UIDelegate = None

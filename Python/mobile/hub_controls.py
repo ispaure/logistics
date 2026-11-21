@@ -69,6 +69,14 @@ def empty_document_row(text):
 def document_list(rows, empty_text):
     return document_group(rows) if rows else empty_document_row(empty_text)
 
+def retire_document_actions(widget):
+    """Release each row's menu before removing its containing section."""
+    menu = getattr(widget, 'document_actions', None)
+    if menu is not None:
+        menu.dispose()
+    for child in widget.children:
+        retire_document_actions(child)
+
 def panel(title, detail, glyph, actions):
     box = toga.Box(style=Pack(direction=COLUMN, margin=16))
     box.add(toga.Box(children=[

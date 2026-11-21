@@ -5,15 +5,47 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 import asyncio
 import gc
+import sys
 import threading
+from types import SimpleNamespace
 import unittest
 import weakref
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from mobile.cycle_collection import UICycleCollection
+from mobile.cycle_collection import UICycleCollection, bind_ios_timer_ownership
 
 
 class CycleCollectionTests(unittest.IsolatedAsyncioTestCase):
+    def test_rubicon_handle_owns_its_timer_until_collection(self):
+        native_timer = object()
+
+        class BaseTimer:
+            def __init__(self):
+                self._timer = native_timer
+                self.cycle = self
+
+            def cancel(self):
+                self.removed_timer = self._timer
+
+        release = Mock()
+        eventloop = SimpleNamespace(CFTimerHandle=BaseTimer, libcf=SimpleNamespace(CFRelease=release))
+        with patch.dict(sys.modules, {'rubicon.objc': SimpleNamespace(eventloop=eventloop)}), \
+                patch('importlib.metadata.version', return_value='0.5.7'):
+            bind_ios_timer_ownership()
+            handle_type = eventloop.CFTimerHandle
+            bind_ios_timer_ownership()
+            self.assertIs(eventloop.CFTimerHandle, handle_type)
+
+        handle = handle_type()
+        handle.cancel()
+        self.assertIs(handle.removed_timer, native_timer)
+        reference = weakref.ref(handle)
+        release.assert_not_called()
+        del handle
+        gc.collect()
+        self.assertIsNone(reference())
+        release.assert_called_once_with(native_timer)
+
     async def test_worker_allocations_leave_finalization_to_ui_loop(self):
         loop = asyncio.get_running_loop()
         was_enabled = gc.isenabled()

@@ -8,7 +8,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
 import asyncio
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, Mock, patch
 from mobile.app import LogisticsMobile
 
 
@@ -30,6 +30,39 @@ def open_documents(content):
 
 
 class HubDocumentTests(unittest.TestCase):
+    def test_replacing_a_hub_section_disposes_its_row_menus(self):
+        import toga
+        hub = self.app.hub_controller()
+
+        def row_menu(session):
+            button = toga.Button('Document actions')
+            button.document_actions = Mock()
+            return [button]
+
+        def menus(section):
+            return [widget.document_actions for widget in widgets(section)
+                    if hasattr(widget, 'document_actions')]
+
+        with patch.object(hub, 'document_row_menu', side_effect=row_menu):
+            home = hub.build_home()
+            hub.build_documents_hub()
+            old_home, old_documents = menus(home.trailing), menus(hub.document_open_list)
+            self.assertTrue(old_home and old_documents)
+
+            hub.refresh_home_documents()
+            hub.refresh_document_list()
+            for menu in old_home + old_documents:
+                menu.dispose.assert_called_once()
+            old_home, old_documents = menus(home.trailing), menus(hub.document_open_list)
+            self.assertTrue(old_home and old_documents)
+
+            new_home = hub.build_home()
+            hub.build_documents_hub()
+            for menu in old_home + old_documents:
+                menu.dispose.assert_called_once()
+            for menu in menus(new_home.trailing) + menus(hub.document_open_list):
+                menu.dispose.assert_not_called()
+
     def test_document_sections_have_one_outline_and_borderless_row_actions(self):
         import toga
         from mobile import palette

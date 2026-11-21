@@ -101,12 +101,13 @@ class AndroidReaderChromeTests(unittest.TestCase):
         allocations[0].setMarginEnd.assert_called_once_with(48)
 
     def test_notes_title_has_a_hold_target_and_all_actions_fit_or_scroll(self):
-        from mobile.android_reader_chrome import fit_document_title
+        from mobile.android_reader_chrome import _layout_listener_type, fit_document_title
         from android.view import View
         from unittest.mock import MagicMock
         import sys
         java = sys.modules['java']
         widgets = sys.modules['android.widget']
+        self.addCleanup(_layout_listener_type.cache_clear)
 
         root, titles, actions, scroll = [MagicMock() for _ in range(4)]
         root.getResources.return_value = Native().resources
@@ -118,7 +119,7 @@ class AndroidReaderChromeTests(unittest.TestCase):
         with patch.object(View, 'OnLayoutChangeListener', object, create=True), \
                 patch.object(java, 'dynamic_proxy', lambda interface: interface, create=True), \
                 patch.object(widgets, 'HorizontalScrollView', return_value=scroll, create=True):
-            fit_document_title(root, NS(getParent=lambda: titles), 2, 5)
+            fit, detach_layout = fit_document_title(root, NS(getParent=lambda: titles), 2, 5)
         layout = root.addOnLayoutChangeListener.call_args.args[0]
         for width, start, end in [(320, 96, 176), (390, 96, 240), (800, 96, 240)]:
             layout.onLayoutChange(root, 0, 0, width, 48, 0, 0, 0, 0)
@@ -129,15 +130,24 @@ class AndroidReaderChromeTests(unittest.TestCase):
             self.assertGreaterEqual(width - start - end, 48)
         layout.onLayoutChange(root, 0, 0, 390, 48, 0, 0, 0, 0)
         scroll.addView.assert_called_once_with(actions, -2, -1)
+        detach_layout()
+        root.removeOnLayoutChangeListener.assert_called_once_with(layout)
+        del fit
+        margins.reset_mock()
+        layout.onLayoutChange(root, 0, 0, 320, 48, 0, 0, 0, 0)
+        margins.setMarginStart.assert_not_called()
 
     def test_dirty_clean_dirty_releases_retired_save_before_reuse(self):
         sync(self.app, self.view, 'documents')
         self.buttons = [self.save, self.action]
         sync(self.app, self.view, 'documents')
         self.assertIsNotNone(self.save._impl.native.parent)
+        self.assertIs(self.save.window, self.app.main_window)
         self.buttons = [self.action]
         sync(self.app, self.view, 'documents')
         self.assertIsNone(self.save._impl.native.parent)
+        self.assertIsNone(self.save.window)
+        self.assertIsNone(self.save.app)
         self.buttons = [self.save, self.action]
         sync(self.app, self.view, 'documents')
         self.assertIsNotNone(self.save._impl.native.parent)
@@ -175,6 +185,10 @@ class AndroidReaderChromeTests(unittest.TestCase):
         sync(self.app, NS(), 'files')
         self.assertIsNone(self.action._impl.native.parent)
         self.assertIsNone(self.menu._impl.native.parent)
+        self.assertIsNone(self.action.window)
+        self.assertIsNone(self.menu.window)
+        self.assertIsNone(self.action.app)
+        self.assertIsNone(self.menu.app)
         self.assertFalse(self.adapter._reader_action_bar_active)
         label.setText.assert_called_with('')
         self.bar.setDisplayOptions.assert_called_with(11)
@@ -199,11 +213,13 @@ class AndroidReaderChromeTests(unittest.TestCase):
 
     def test_locked_window_cannot_republish_reader_title_or_controls(self):
         sync(self.app, self.view, 'documents')
+        label = self.adapter._reader_action_bar_title
         self.app.screen_privacy = NS(resume_locked=True)
         sync(self.app, self.view, 'documents')
         self.assertFalse(self.adapter._reader_action_bar_active)
         self.assertIsNone(self.action._impl.native.parent)
-        self.adapter._reader_action_bar_title.setText.assert_called_with('')
+        label.setText.assert_called_with('')
+        self.assertIsNone(self.adapter._reader_action_bar_title)
         self.app.screen_privacy.resume_locked = False
         sync(self.app, self.view, 'documents')
         self.assertTrue(self.adapter._reader_action_bar_active)

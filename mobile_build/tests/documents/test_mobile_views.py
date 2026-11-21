@@ -31,3 +31,22 @@ class MobileViewRetirementTests(unittest.TestCase):
         retire_webview(view)
         self.assertEqual(events, ['font', 'detach', 'clear'])
         view.set_content.assert_not_called()
+
+    def test_android_detaches_then_destroys_an_ordinary_webview_once(self):
+        events = []
+        native = SimpleNamespace(stopLoading=lambda: events.append('stop'),
+            removeAllViews=lambda: events.append('clear-children'),
+            destroy=lambda: events.append('destroy'))
+        backend = type('AndroidWebView', (), {'__module__': 'toga_android.widgets.webview'})()
+        backend.native, backend._markdown_font_resource = native, object()
+        view = SimpleNamespace(parent=SimpleNamespace(remove=lambda value: events.append('detach')),
+            _impl=backend, on_webview_load=object(), on_navigation_starting=object(), set_content=Mock())
+
+        retire_webview(view)
+        retire_webview(view)
+
+        self.assertEqual(events, ['detach', 'stop', 'clear-children', 'destroy'])
+        self.assertIsNone(view.on_webview_load)
+        self.assertIsNone(view.on_navigation_starting)
+        self.assertIsNone(backend._markdown_font_resource)
+        view.set_content.assert_not_called()

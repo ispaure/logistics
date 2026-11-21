@@ -360,8 +360,12 @@ class ActionMenu:
         return app._impl.native
 
     def dispose(self):
+        if self.disposed:
+            return
         self.disposed = True
         self.menu.dispose()
+        self.actions.clear()
+        self.raw_actions.clear()
 
     def invoke(self, callback):
         owner = self.owner()
