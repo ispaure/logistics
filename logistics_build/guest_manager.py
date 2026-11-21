@@ -10,6 +10,8 @@ import sys
 
 def focused_command(python, pattern, manager):
     """Route explicit diagnostic patterns; complete platform gates stay unchanged."""
+    if pattern == 'native_file_drag_windows.py':
+        return (python, 'Python/tests/platform/native_file_drag_windows.py')
     if pattern.startswith('notebooks:'):
         selected = pattern.removeprefix('notebooks:')
         if not selected or not selected.endswith('.py') or any(value in selected for value in ('/', '\\', '..')):

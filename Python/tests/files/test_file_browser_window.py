@@ -283,6 +283,7 @@ class BrowserWindowTests(QtTestCase):
         browser = host.file_browser
         self.wait(window)
         viewport = browser.views.navigation_views[0].viewport()
+        point = viewport.rect().bottomLeft() + qt.QPoint(4, -4)
         mime = qt.QMimeData()
         mime.setUrls([qt.QUrl.fromLocalFile(str(path)) for path in (source / 'tree', data, source / 'same.txt')])
         actions = qt.Qt.DropAction.CopyAction | qt.Qt.DropAction.MoveAction
@@ -290,10 +291,10 @@ class BrowserWindowTests(QtTestCase):
         before = set(_windows)
 
         def drop(modifiers):
-            enter = qt.QDragEnterEvent(qt.QPoint(2, 2), actions, mime, left, modifiers)
+            enter = qt.QDragEnterEvent(point, actions, mime, left, modifiers)
             qt.QApplication.sendEvent(viewport, enter)
             self.assertTrue(enter.isAccepted())
-            event = qt.QDropEvent(qt.QPointF(2, 2), actions, mime, left, modifiers)
+            event = qt.QDropEvent(qt.QPointF(point), actions, mime, left, modifiers)
             qt.QApplication.sendEvent(viewport, event)
             self.assertTrue(event.isAccepted())
             self.assertEqual(event.dropAction(), qt.Qt.DropAction.CopyAction)
