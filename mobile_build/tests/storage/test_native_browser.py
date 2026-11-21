@@ -110,6 +110,47 @@ class NativeBrowserTests(unittest.TestCase):
                 app.main_window.close()
                 close_loop(app.loop)
 
+    def test_scrolled_list_builds_only_the_anchored_tile_window(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from mobile_build.tests.support.app import create_app
+
+        app = create_app(self)
+        root = app.private_root / 'tile-anchor'
+        root.mkdir()
+        for index in range(165):
+            (root / f'{index:03}.txt').write_text('File')
+
+        async def exercise():
+            await app.show_files(location=('Local files', ''))
+            browser = app.file_browser
+            app.file_provider, app.file_path = LocalFiles(root), ''
+            app.populate_file_browser(app.file_provider.list(), location=('Ordinary fixture', ''))
+            index = 151  # The second card in its tile row must survive the round trip.
+            entry = browser._list_entries[index]
+            browser.selected = entry.identity
+            with patch.object(browser, '_visible_rows', return_value=range(index, 165)), \
+                    patch.object(browser._tile_scroll._impl, 'get_max_vertical_position', return_value=14000), \
+                    patch.object(browser, '_tile_card', wraps=browser._tile_card) as build:
+                browser.show_tiles()
+                built = [call.args[0].identity for call in build.call_args_list]
+                self.assertEqual(built, list(browser._tile_cards))
+                self.assertIn(entry.identity, built)
+                self.assertEqual(browser.vertical_position, (index // 2) * browser.TILE_ROW_HEIGHT)
+                self.assertEqual(browser.selected, entry.identity)
+
+            with patch.object(browser.native_list._impl, 'set_vertical_position', create=True) as scroll:
+                browser.show_list()
+                scroll.assert_called_once_with(index * browser.native_list.appearance.row_height)
+            self.assertEqual(browser.selected, entry.identity)
+
+            with patch.object(browser, '_visible_rows', return_value=range(6)):
+                browser.show_tiles()
+            self.assertEqual(browser._tile_range[0], 0)
+            self.assertEqual(browser.vertical_position, 0)
+            await browser.close()
+
+        app.loop.run_until_complete(exercise())
+
     def test_recycled_viewport_keeps_both_decoder_slots_until_workers_return(self):
         from threading import Event
         from commonUtils.runtime.resources.local import LocalFiles

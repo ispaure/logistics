@@ -29,6 +29,7 @@ class LocalFileBrowser(FileBrowser):
         self._preview_completed = set()
         self._tile_previews = {}
         self._mode_anchor = None
+        self._restoring_tile_anchor = False
         super().__init__(**kwargs)
         self.view_switch = browser_command(icon_button('file_tiles', 'Show tiles', on_press=self.switch_view))
 
@@ -160,14 +161,17 @@ class LocalFileBrowser(FileBrowser):
         anchor = entries[index].identity if 0 <= index < len(entries) else None
         self._mode_anchor = anchor if mode == 'Tiles' else None
         self.mode = mode
-        self.render()
+        self._restoring_tile_anchor = self._mode_anchor is not None
+        try:
+            self.render()
+        finally:
+            self._restoring_tile_anchor = False
         icon, label = ('contents', 'Show rows') if mode == 'Tiles' else ('file_tiles', 'Show tiles')
         apply_icon(self.view_switch, icon, label)
         if hasattr(self.view_switch, '_ios_action_item'):
             self._loop.call_soon(self._app.adaptive.render)
         if mode == 'Tiles':
-            index = next((i for i, entry in enumerate(self._tile_entries) if entry.identity == anchor), 0)
-            position = (index // 2) * self.TILE_ROW_HEIGHT
+            position = self._tile_anchor_position()
             self._update_tile_window(position)
             impl = self._tile_scroll._impl
             if type(impl).__module__.startswith('toga_iOS.'):
@@ -259,7 +263,15 @@ class LocalFileBrowser(FileBrowser):
             preview.image = None
         super()._retire_tile(identity)
 
+    def _tile_anchor_position(self):
+        index = next((i for i, entry in enumerate(self._tile_entries) if entry.identity == self._mode_anchor), 0)
+        return (index // 2) * self.TILE_ROW_HEIGHT
+
     def _update_tile_window(self, position):
+        if self._restoring_tile_anchor:
+            # The shared renderer starts at zero. Build the destination window
+            # immediately while switching from a scrolled list.
+            position = self._tile_anchor_position()
         super()._update_tile_window(position)
         self._schedule_previews()
 
