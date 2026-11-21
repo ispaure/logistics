@@ -8,10 +8,13 @@ const aliases = {
   5: 18,
   7: 13
 };
+// On Android, repeatedly reading an accelerated mask into the draft and
+// flattening that draft into the page can stall WebView's compositor.
+const previewContext = state.software_ink_preview ? {willReadFrequently: true} : undefined;
 const draft = $('draft'),
-  draftCtx = draft.getContext('2d');
+  draftCtx = draft.getContext('2d', previewContext);
 const mask = document.createElement('canvas'),
-  maskCtx = mask.getContext('2d');
+  maskCtx = mask.getContext('2d', previewContext);
 let draftCount = 0;
 let inkSettings = null;
 let frameBatchedInk = false;

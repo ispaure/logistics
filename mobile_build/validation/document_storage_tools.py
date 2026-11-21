@@ -27,6 +27,8 @@ UNIFIED_PROGRESS_RESULT = 'unified-progress-result.json'
 UNIFIED_PROGRESS_ANDROID_ENTRY = 'tests.logisticsmobile.unified_progress_android_probe'
 UNIFIED_PROGRESS_VIDEO_ENTRY = 'tests.logisticsmobile.unified_progress_video_probe'
 READER_APPEARANCE_ENTRY = 'tests.logisticsmobile.reader_appearance_probe'
+RAPID_INK_PROFILE = dict(bundle='io.github.ispaure.logisticsnotebookqa',
+    entry_point='tests.logisticsmobile.notebook_rapid_ink_probe', result_name='notebook-rapid-ink-result.json')
 COMIC_SCOPES = ('matrix', 'basic', 'lifecycle', 'library', 'readers', 'windows', 'fold', 'reduced-motion')
 QA_BUNDLES = {UNIFIED_PROGRESS_BUNDLE, BUNDLE, 'io.github.ispaure.logisticsnotesauditqa', 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
               'io.github.ispaure.logisticscomicqa',
@@ -779,7 +781,7 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
     gradle.write_text(re.sub(r'applicationId "[^"]+"', 'applicationId "' + bundle + '"', gradle.read_text()))
     manifest = project / 'app/src/main/AndroidManifest.xml'
     manifest.write_text(manifest.read_text().replace('io.github.ispaure.logisticsmobile', bundle))
-    if entry_point.endswith('.notebook_input_probe') or memory_probe:
+    if entry_point.endswith(('.notebook_input_probe', '.notebook_rapid_ink_probe')) or memory_probe:
         with gradle.open('a') as stream:
             stream.write('\nandroid.sourceSets.main.java.srcDir(' + json.dumps(str(REPO / 'mobile_build/native_tests/android/notebooks')) + ')\n')
     raw_ink = entry_point.endswith('.boox_raw_ink_probe')
@@ -1157,7 +1159,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('comic-guidance', 'workspace-edges', 'mobile-feedback', 'documents-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'notebook-geometry', 'editor-keyboard', 'storage', 'reader-space', 'reader-appearance', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'playlist-speech', 'native-suite', 'rotation-crash', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('comic-guidance', 'workspace-edges', 'mobile-feedback', 'documents-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'notebook-geometry', 'editor-keyboard', 'storage', 'reader-space', 'reader-appearance', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'playlist-speech', 'native-suite', 'rotation-crash', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-rapid-ink', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--retain-build', action='store_true', help='Pin this managed QA build for reruns; caller must remove the pin and workspace afterward.')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
@@ -1195,6 +1197,8 @@ def main():
         parser.error('Feedback acceptance uses disposable devices; omit --device.')
     if args.device and args.platform != 'android':
         parser.error('--device requires Android.')
+    if args.probe == 'notebook-rapid-ink' and args.device:
+        parser.error('Rapid ink acceptance uses a disposable target.')
     if args.probe == 'notebook-input' and args.platform != 'android':
         parser.error('The notebook-input native probe requires Android.')
     if args.probe in ('notebook-soak', 'notebook-load') and (args.platform != 'android' or not args.device):
@@ -1401,6 +1405,8 @@ def main():
             args.duoctl = folder / 'duoctl'
             env['XDG_CACHE_HOME'] = str(workspace / 'duo-tool-cache')
             (args.output / 'pose-tool.json').write_text(json.dumps(approved, indent=2))
+        if args.probe == 'notebook-rapid-ink':
+            creation_profile = RAPID_INK_PROFILE
         if args.platform == 'ios':
             profile = dict(bundle='io.github.ispaure.logisticsnotebookqa',
                            entry_point='tests.logisticsmobile.notebook_probe',

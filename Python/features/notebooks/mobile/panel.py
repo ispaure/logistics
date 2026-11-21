@@ -1,7 +1,6 @@
 """Installed Android/iOS notebook library and offline canvas workflow."""
 import asyncio
 import json
-import sys
 from io import BytesIO
 from pathlib import Path
 from services.documents.storage import read_local_bytes
@@ -274,7 +273,8 @@ class NotebookPanel:
         state['native_pen'] = self.pen_input is not None and bool(getattr(self.pen_input, 'enabled', True))
         if self.pen_input is not None and isinstance(getattr(self.pen_input, 'view_id', None), str):
             state['native_pen_nonce'] = self.pen_input.view_id
-        state['frame_batched_ink'] = sys.platform == 'ios'
+        state['frame_batched_ink'] = self.has_native_canvas
+        state['software_ink_preview'] = self.has_native_canvas and native_backend(self.web).startswith('toga_android.')
         from .viewport import tablet_viewport
         state['tablet'] = tablet_viewport(self.web)
         state['iphone_duo'] = self.app.presentation.is_iphone_duo()

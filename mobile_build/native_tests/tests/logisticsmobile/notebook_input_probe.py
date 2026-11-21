@@ -16,6 +16,25 @@ from .fixtures import capture_window
 TEST_STAGE = TestStage.REGRESSION
 
 
+async def visible_canvas_location(web):
+    geometry = json.loads(await web.evaluate_javascript(r'''(()=>{
+        const page = canvas.getBoundingClientRect();
+        const viewport = $('viewport').getBoundingClientRect();
+        const left = Math.max(page.left, viewport.left, 0);
+        const top = Math.max(page.top, viewport.top, 0);
+        const right = Math.min(page.right, viewport.right, innerWidth);
+        const bottom = Math.min(page.bottom, viewport.bottom, innerHeight);
+        const x = left + Math.min(40, (right - left) / 4);
+        const y = top + Math.min(140, (bottom - top) / 3);
+        return JSON.stringify({x,y,width:innerWidth,height:innerHeight,
+            visible:right>left&&bottom>top&&document.elementFromPoint(x,y)===canvas});
+    })()'''))
+    assert geometry['visible'], ('No visible canvas at the synthetic pen contact', geometry)
+    native = web._impl.native
+    return (native, geometry['x'] * native.getWidth() / geometry['width'],
+            geometry['y'] * native.getHeight() / geometry['height'])
+
+
 class NotebookInputProbe(NotebookProbe):
     async def check(self, app):
         output = Path(self.paths.cache) / 'notebook-input'
@@ -121,11 +140,16 @@ class NotebookInputProbe(NotebookProbe):
                 result['native_preview'] = dict(brush_fallback=True, menu_clipping=True, colors=tested_colors)
             await panel.web.evaluate_javascript("$('tool').value='12';$('tool').onchange()")
             await asyncio.sleep(.15)
-            geometry = json.loads(await panel.web.evaluate_javascript("JSON.stringify({r:canvas.getBoundingClientRect().toJSON(),width:innerWidth,height:innerHeight})"))
-            native = panel.web._impl.native
-            x = (geometry['r']['left'] + 40) * native.getWidth() / geometry['width']
-            y = (geometry['r']['top'] + 140) * native.getHeight() / geometry['height']
+            native, x, y = await visible_canvas_location(panel.web)
             from java import jclass, jarray, jint
+            await panel.web.evaluate_javascript(r'''(()=>{
+                const sendAction = send;
+                window.historyPoints = [];
+                send = action => {
+                    if (action.op === 'stroke') window.historyPoints = action.points;
+                    return sendAction(action);
+                };
+            })()''')
             jclass('io.github.ispaure.logistics.notebooks.NotebookInputChecks').stroke(native, x, y)
             for _ in range(200):
                 if panel.editor.notebook.page(0).strokes:
@@ -137,10 +161,15 @@ class NotebookInputProbe(NotebookProbe):
                                              first=s.points[0], last=s.points[-1]) for s in ink]
             assert len(ink) == 1, len(ink)
             stroke = ink[0]
-            assert len(stroke.points) == 22, len(stroke.points)
+            samples = json.loads(await panel.web.evaluate_javascript('JSON.stringify(window.historyPoints)'))
+            assert len(samples) == 22, samples
+            assert len(samples) >= len(stroke.points) > 2, len(stroke.points)
+            assert all(a[2] <= b[2] for a, b in zip(samples, samples[1:])), samples
+            assert abs(samples[0][2] - .2) < .01 and abs(samples[-1][2] - .8) < .01
             assert abs(stroke.points[0][2] - .2) < .01 and abs(stroke.points[-1][2] - .8) < .01
             assert stroke.points[0][3] < stroke.points[-1][3]
-            result['native_history'] = dict(points=len(stroke.points), pressure=[stroke.points[0][2], stroke.points[-1][2]],
+            result['native_history'] = dict(transport_points=len(samples), points=len(stroke.points),
+                                           pressure=[stroke.points[0][2], stroke.points[-1][2]],
                                            widths=[stroke.points[0][3], stroke.points[-1][3]], duplicate_strokes=False)
             if native_preview.get('created'):
                 await panel.web.evaluate_javascript("$('tool').value='17';$('tool').onchange();document.dispatchEvent(new Event('change'))")
@@ -166,10 +195,7 @@ class NotebookInputProbe(NotebookProbe):
                     except Exception:
                         pass
                     await asyncio.sleep(.05)
-                native = panel.web._impl.native
-                geometry = json.loads(await panel.web.evaluate_javascript("JSON.stringify({r:canvas.getBoundingClientRect().toJSON(),width:innerWidth,height:innerHeight})"))
-                x = (geometry['r']['left'] + 40) * native.getWidth() / geometry['width']
-                y = (geometry['r']['top'] + 140) * native.getHeight() / geometry['height']
+                native, x, y = await visible_canvas_location(panel.web)
                 ballpoints = []
                 for tool, color in ((15, 0), (15, 6), (15, 7)):
                     await panel.web.evaluate_javascript("$('tool').value=" + repr(str(tool)) + ";$('tool').onchange();$('color').value=" + repr(str(color)) + ";document.dispatchEvent(new Event('change'))")
@@ -234,8 +260,17 @@ class NotebookInputProbe(NotebookProbe):
             types = jclass('androidx.core.view.WindowInsetsCompat$Type')
             insets = jclass('androidx.core.view.ViewCompat').getRootWindowInsets(decor)
             cutout = insets.getInsets(types.displayCutout()).top
-            result['window'] = dict(top=int(location[1]), cutout=int(cutout), status_visible=bool(insets.isVisible(types.statusBars())))
-            assert location[1] <= cutout + 2, result['window']
+            status = insets.getInsets(types.statusBars()).top
+            build = jclass('android.os.Build')
+            maker = (str(build.MANUFACTURER) + ' ' + str(build.BRAND)).lower()
+            boox = 'onyx' in maker or 'boox' in maker
+            result['window'] = dict(top=int(location[1]), cutout=int(cutout), status_inset=int(status),
+                                    status_visible=bool(insets.isVisible(types.statusBars())), boox=boox)
+            # The app hides the status strip only under BooxWindow's device policy.
+            if boox:
+                assert location[1] <= cutout + 2, result['window']
+            else:
+                assert location[1] >= max(cutout, status) - 2, result['window']
             await capture_window(app, output / 'canvas.png')
             for _ in range(2):
                 await panel.web.evaluate_javascript("send({op:'add-page'})")

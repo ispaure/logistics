@@ -12,6 +12,10 @@ Explicit zoom preserves scale and center through rotation/folds within scroll bo
 
 Pen contact or proximity cancels unfinished touch input and blocks new touch gestures through a 250 ms post-release grace period. Toolbar controls remain active. Android uses hover MotionEvents and iPad can use a Pencil-only UIKit hover recognizer.
 
+Native mobile WebViews collect every delivered pressure sample. The drawing canvas paints the initial contact, coalesces move previews at display frames, and flushes the remaining samples at pen-up before queuing the stroke for recovery.
+
+On Android, the WebView listener groups move samples by frame and includes any remaining history with pen-up. The temporary mask and draft use software-backed contexts to reduce compositor work during blending.
+
 ## Native iOS Pencil transport
 
 `LogisticsNotebookInputWindow` forwards system events once and sends transient packets only to the bound WKWebView. Normal release checks require compiled transport and matching canvas nonce at open and reload. DOM input is the usability fallback. Bounded serialized requests preserve coalesced order. Overflow, focus loss and retirement cancel submitted contacts and discard unsubmitted starts. Save and ordinary close flush native packets before waiting for JavaScript idle. UIKit force uses a constant fallback when unusable.
@@ -29,3 +33,12 @@ PYTHONPATH=Python:. .venv/bin/python Python/tests/notebooks/notebook_viewport_pr
 ```
 
 Expect independent swipe, link tap and pinch routes, valid FIFO/nonce handling and stable zoom through relayout. The physical rapid-tap loss report remains open. Use [hardware acceptance](hardware-acceptance.md) for pen delivery, palm, hinge and optical checks.
+
+On a configured mobile build host, run the timed rapid-ink probe with the owning disposable targets.
+
+```sh
+PYTHONPATH=. mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools android --probe notebook-rapid-ink --output tmp/test-results/RUN_ID/android
+PYTHONPATH=. mobile_build/.venv/bin/python -m mobile_build.validation.document_storage_tools ios --family iPad --probe notebook-rapid-ink --output tmp/test-results/RUN_ID/ios
+```
+
+The probe replays short and long pressure strokes on three pages and checks ordered delivery, recovery, layer assignment, undo, redo, and Save/reopen. Android injects stylus MotionEvents into the real WebView listener. iOS replays the same sample sequence at the mounted canvas transport endpoint. The paint timing records a browser frame opportunity. Measure display refresh and physical pen delivery separately on the hardware.

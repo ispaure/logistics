@@ -100,6 +100,30 @@ public final class NotebookInputChecks {
         historyStroke(view, x, y, 22);
     }
 
+    /** Replay the shared fixture at its intended cadence, independently of WebView acknowledgements. */
+    public static org.json.JSONArray rapidTrace(WebView view, String trace, float sx, float sy)
+            throws org.json.JSONException {
+        org.json.JSONArray events = new org.json.JSONArray(trace);
+        org.json.JSONArray contacts = new org.json.JSONArray();
+        long start = SystemClock.uptimeMillis() + 80;
+        for (int i = 0; i < events.length(); i++) {
+            org.json.JSONArray event = events.getJSONArray(i);
+            long due = start + event.getInt(0);
+            int action = event.getInt(1);
+            float x = (float) event.getDouble(2) * sx;
+            float y = (float) event.getDouble(3) * sy;
+            float pressure = (float) event.getDouble(4);
+            view.getHandler().postAtTime(() -> {
+                if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP) {
+                    contacts.put(new org.json.JSONArray()
+                        .put(action).put(due).put(SystemClock.uptimeMillis()).put(System.currentTimeMillis()));
+                }
+                contact(view, action, x, y, pressure);
+            }, due);
+        }
+        return contacts;
+    }
+
     public static void historyStroke(WebView view, float x, float y, int count) {
         long start = SystemClock.uptimeMillis();
         MotionEvent.PointerProperties property = new MotionEvent.PointerProperties();

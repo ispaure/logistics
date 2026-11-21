@@ -184,8 +184,8 @@ canvas.onpointermove = e => {
   const previousEraseHits = wholeErasePreview.size;
   for (let event of events) sample(event, bounds);
   sample(e, bounds);
-  // Mobile paints the delivered batch immediately. Desktop coalesces batches
-  // to display frames, avoiding redundant canvas work during mouse bursts.
+  // Retain every sample, but rasterize at most once per display frame.
+  // Pen-up flushes any samples that arrived after the last preview.
   if (mode === 'ink') {
     if (frameBatchedInk) schedulePreview();
     else flushPreview()

@@ -39,11 +39,17 @@ try{
     window.logisticsNativePen('down',9,[[x,y,.2]],innerWidth,innerHeight);
     const before=paints;
     window.logisticsNativePen('move',9,[[x+10,y+5,.4],[x+20,y+10,.8],[x+30,y+15,.9]],innerWidth,innerHeight);
-    require(paints===before+1,'Native batch must paint immediately and only once '+JSON.stringify({paints,before,active,mode,pan,target:document.elementFromPoint(x,y)?.id,points:points.length,frameBatchedInk}));
-    window.logisticsNativePen('up',9,[[x+30,y+15,0]],innerWidth,innerHeight);
-    require(actions.length===3&&actions[2].op==='stroke'&&actions[2].points.length===4,'Native samples were lost or duplicated');
+    window.logisticsNativePen('move',9,[[x+35,y+15,.95]],innerWidth,innerHeight);
+    if(frameBatchedInk) {
+        require(paints===before&&previewFrame!==null,'Move rendered before its scheduled preview');
+        flushPreview();
+        require(paints===before+1&&previewFrame===null,'Two move batches should share one preview');
+    } else require(paints===before+2,'Each move should paint once without frame batching');
+    window.logisticsNativePen('up',9,[[x+38,y+15,.96]],innerWidth,innerHeight);
+    require(actions.length===3&&actions[2].op==='stroke'&&actions[2].points.length===6,'Native samples were lost or duplicated');
+    require(paints===(frameBatchedInk?before+2:before+3),'Pen-up did not preview the final sample');
     const pressures=actions[2].points.map(p=>p[2]);
-    require(JSON.stringify(pressures)==='[0.2,0.4,0.8,0.9]','Native pressure not retained');
+    require(JSON.stringify(pressures)==='[0.2,0.4,0.8,0.9,0.95,0.96]','Native pressure not retained');
     const widths=strokePoints(actions[2].points,12,2).map(p=>p[3]);
     require(widths[0]<widths[3],'Paintbrush pressure does not change width');
     window.logisticsNativePen('down',10,[[x,y,.5]],innerWidth,innerHeight);
@@ -65,7 +71,7 @@ try{
     window.logisticsNativePen('down',12,[[x,y,.5]],innerWidth,innerHeight);
     window.logisticsNativePen('cancel',12,[[x+5,y,0]],innerWidth,innerHeight);
     require(active===null&&!pendingErase&&actions.length===4,'Cancelled erase saved or left a mask');
-    return JSON.stringify({left_right_swipes:true,gesture_guards:true,native_samples:4,pressures,widths,immediate_batch_paint:true,incremental_eraser:true,eraser_max_batch:maxBatch,erase_preview_survives_pen_up:true});
+    return JSON.stringify({left_right_swipes:true,gesture_guards:true,native_samples:6,pressures,widths,frame_batched_ink:frameBatchedInk,incremental_eraser:true,eraser_max_batch:maxBatch,erase_preview_survives_pen_up:true});
 }finally{
     preview=original;previewErase=originalErase;ctx.clearRect=originalClear;
     send=saved.send;state=saved.state;active=saved.active;points=saved.points;pan=saved.pan;

@@ -10,6 +10,8 @@ public final class NotebookInput implements View.OnTouchListener, View.OnHoverLi
         View.OnAttachStateChangeListener, ViewTreeObserver.OnWindowFocusChangeListener {
     private final WebView view;
     private final BooxRefresh refresh;
+    private final StringBuilder pendingMoves = new StringBuilder();
+    private final Runnable deliverMoves = this::flushMoves;
     private int pointer = -1;
     private float x, y;
     private boolean closed;
@@ -137,7 +139,11 @@ public final class NotebookInput implements View.OnTouchListener, View.OnHoverLi
     }
 
     private void deliver(String action, MotionEvent event, int index) {
-        StringBuilder data = new StringBuilder();
+        boolean moving = action.equals("move");
+        boolean schedule = moving && pendingMoves.length() == 0;
+        // Up can carry the pending history. Deliver once, in order, even if
+        // Android hasn't run the next frame callback yet.
+        StringBuilder data = moving || action.equals("up") ? pendingMoves : new StringBuilder();
         for (int h = 0; h < event.getHistorySize(); h++) {
             point(data, event.getHistoricalX(index, h), event.getHistoricalY(index, h),
                 event.getHistoricalPressure(index, h));
@@ -145,7 +151,27 @@ public final class NotebookInput implements View.OnTouchListener, View.OnHoverLi
         x = event.getX(index);
         y = event.getY(index);
         point(data, x, y, event.getPressure(index));
-        evaluate(action, data.toString());
+        if (moving) {
+            if (data.length() >= 32_768) flushMoves();
+            else if (schedule && data.length() > 0) view.postOnAnimation(deliverMoves);
+        } else {
+            String samples = data.toString();
+            clearMoves();
+            evaluate(action, samples);
+        }
+    }
+
+    private void clearMoves() {
+        if (pendingMoves.length() == 0) return;
+        view.removeCallbacks(deliverMoves);
+        pendingMoves.setLength(0);
+    }
+
+    private void flushMoves() {
+        if (pendingMoves.length() == 0) return;
+        String samples = pendingMoves.toString();
+        clearMoves();
+        evaluate("move", samples);
     }
 
     private void evaluate(String action, String samples) {
@@ -156,6 +182,7 @@ public final class NotebookInput implements View.OnTouchListener, View.OnHoverLi
     }
 
     private void cancel() {
+        clearMoves();
         if (pointer < 0) return;
         StringBuilder data = new StringBuilder();
         point(data, x, y, 0);
