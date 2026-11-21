@@ -201,7 +201,7 @@ def _ios_file_provider(path):
     data = UTType.typeWithIdentifier('public.data')
     suffix = path.suffix[1:]
     content = UTType.typeWithFilenameExtension(suffix) if suffix else None
-    if content is None or content.dynamic or not content.conformsToType(data):
+    if content is None or content.isDynamic() or not content.conformsToType(data):
         content = data
     ItemProvider = ObjCClass('NSItemProvider')
     if ItemProvider.instancesRespondToSelector(SEL('initWithContentsOfURL:contentType:openInPlace:coordinated:visibility:')):

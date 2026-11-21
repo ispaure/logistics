@@ -27,7 +27,7 @@ class NativeDocumentMenuTests(TestCase):
         path = Path('cache/Selected file.bin')
         url, configuration = object(), object()
         data = SimpleNamespace(identifier='public.data')
-        inferred = SimpleNamespace(identifier='dyn.test-binary', dynamic=True)
+        inferred = SimpleNamespace(identifier='dyn.test-binary', isDynamic=lambda: True)
         types = SimpleNamespace(typeWithIdentifier=Mock(return_value=data),
                                 typeWithFilenameExtension=Mock(return_value=inferred))
         provider = Mock()
