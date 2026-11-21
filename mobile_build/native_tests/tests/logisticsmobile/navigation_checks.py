@@ -117,10 +117,9 @@ async def exercise_first_selection(app):
                     await asyncio.sleep(.15)
                     assert host.state.destination == 'home'
                     view = app.routes.body('home').children[0]
-                    assert view._home_primary_actions.parent is None
                     assert not home.isNavigationBarHidden()
                     creator, = view._home_primary_buttons
-                    assert creator.text == 'New Document'
+                    assert creator.text == 'New Document' and creator.parent is None
                     item = creator._ios_action_item
                     assert item in ios_toolbar_items(adapter.content_controller('home'))
                     assert item.isEnabled()
