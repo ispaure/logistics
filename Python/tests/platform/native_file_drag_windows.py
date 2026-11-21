@@ -72,8 +72,8 @@ class Desktop:
         ]
         self.user.SetForegroundWindow.argtypes = [wintypes.HWND]
         self.user.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
-        self.user.WindowFromPoint.argtypes = [wintypes.POINT]
-        self.user.WindowFromPoint.restype = wintypes.HWND
+        self.user.WindowFromPhysicalPoint.argtypes = [wintypes.POINT]
+        self.user.WindowFromPhysicalPoint.restype = wintypes.HWND
         self.user.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
         self.user.GetAncestor.restype = wintypes.HWND
         self.user.GetClientRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
@@ -104,7 +104,7 @@ class Desktop:
         self.user.keybd_event(key, 0, 2 if up else 0, 0)
 
     def window_at(self, point):
-        return self.user.GetAncestor(self.user.WindowFromPoint(wintypes.POINT(*point)), 2)
+        return self.user.GetAncestor(self.user.WindowFromPhysicalPoint(wintypes.POINT(*point)), 2)
 
     def window_info(self, window):
         bounds = wintypes.RECT()
@@ -143,6 +143,7 @@ class Desktop:
         finally:
             self.user.mouse_event(4, 0, 0, 0, 0)
             if key:
+                sleep(.25)
                 self.key(key, up=True)
 
 
@@ -189,13 +190,13 @@ def exercise(root, cleanup):
     explorer = folder['hwnd']
     cleanup.callback(desktop.user.PostMessageW, explorer, 0x10, 0, 0)
     desktop.user.ShowWindow(explorer, 9)
-    desktop.user.MoveWindow(explorer, 0, 0, width // 2, height - 20, True)
+    desktop.user.MoveWindow(explorer, 24, 30, width // 2 - 48, height - 80, True)
     cleanup.callback(QtTestCase()._release_windows, set())
     with patch.object(registry, 'get_browser_extensions', return_value=[]):
         window = FileBrowserWindow(local)
     window.show()
     logistics = int(window.winId())
-    desktop.user.MoveWindow(logistics, width // 2, 0, width // 2, height - 20, True)
+    desktop.user.MoveWindow(logistics, width // 2 + 24, 30, width // 2 - 48, height - 80, True)
     browser = window.file_browser
     view = browser.views.navigation_views[0]
     viewport = view.viewport()
@@ -210,11 +211,16 @@ def exercise(root, cleanup):
         raise AssertionError(description)
 
     def step(source, destination, source_window, target_window, *, key=None, escape=False):
-        for point, expected in ((source, source_window), (destination, target_window)):
-            actual = desktop.window_at(point)
-            if actual != expected:
-                raise RuntimeError(f'Generated test point {point} is outside its expected window. '
-                                   f'Expected {desktop.window_info(expected)}, observed {desktop.window_info(actual)}.')
+        windows = ((source, source_window), (destination, target_window))
+        # Let a transient shell overlay settle. Send no input while a point
+        # belongs to anything other than the generated test windows.
+        try:
+            until(lambda: all(desktop.window_at(point) == window for point, window in windows),
+                  'Windows shell overlays still cover a generated test window.', seconds=10)
+        except AssertionError as issue:
+            details = [(point, desktop.window_info(window), desktop.window_info(desktop.window_at(point)))
+                       for point, window in windows]
+            raise RuntimeError(f'{issue} Point, expected and observed: {details}') from None
         errors = []
 
         def gesture():
