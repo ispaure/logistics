@@ -23,6 +23,8 @@
     "crypt_write_buffer",
     "document_lists_open",
     "document_lists_seal",
+    "download_range",
+    "download_stat",
     "file_archive",
     "file_thumbnail",
     "forget_package",

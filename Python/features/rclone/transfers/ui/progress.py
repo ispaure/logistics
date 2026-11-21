@@ -4,7 +4,8 @@ from functools import partial
 from features.rclone import session
 
 
-def open_download_progress(provider, path, destination):
+def open_download_progress(provider, path, destination, *, published=lambda destination: None,
+                           resume_key=None, from_zero=False, approved=None):
     """Present a staged download using the same progress view as a Pull."""
     from threading import Event
 
@@ -27,6 +28,8 @@ def open_download_progress(provider, path, destination):
             self.release = release
             self.busy = False
             self.cancelled = Event()
+            self.restart_offered = False
+            self.checkpoint = None
             self.parser = RcloneProgressParser()
             self.worker = ProgressOperation(self)
             self.worker.thread.finished.connect(self.finish, qt.Qt.ConnectionType.QueuedConnection)
@@ -38,9 +41,14 @@ def open_download_progress(provider, path, destination):
             self.worker.start()
 
         def download(self):
+            from features.rclone.transfers.download_recovery import RestartRequired
             try:
                 return download_remote_item(provider, path, destination,
-                    cancelled=self.cancelled.is_set, progress=self.report)
+                    cancelled=self.cancelled.is_set, progress=self.report, resume_key=resume_key, from_zero=from_zero, approved=approved)
+            except RestartRequired as error:
+                self.restart_offered = True
+                self.checkpoint = error.checkpoint
+                raise
             except OperationCancelled:
                 return None
             finally:
@@ -66,8 +74,7 @@ def open_download_progress(provider, path, destination):
             if self.worker.result is not None:
                 result = ProcessResult('succeeded', 0, 1)
                 message = 'Downloaded successfully.'
-                from desktop.file_browser import refresh_download_directory
-                refresh_download_directory(destination)
+                published(destination)
             elif error:
                 result = ProcessResult('failed', None, 1, error)
                 self.output.emit(error)
@@ -83,6 +90,22 @@ def open_download_progress(provider, path, destination):
         window = ProcessProgressWindow('Pull · Download locally', runner=DownloadRunner(release),
             context={'operation': 'Pull', 'source': provider.storage_label, 'destination': str(destination)},
             presentation=transfer_presentation(dry_run=False))
+        def offer_restart(result):
+            if window.runner.restart_offered:
+                button = qt.QPushButton('Download from byte zero')
+                def restart():
+                    try:
+                        provider.check()
+                        open_download_progress(provider, path, destination, published=published, from_zero=True,
+                                               approved=window.runner.checkpoint)
+                        window.close()
+                    except (OSError, ValueError) as error:
+                        window.details.setText(str(error))
+                button.clicked.connect(restart)
+                window.layout().addWidget(button)
+        window.runner.completed.connect(offer_restart)
+        from services.documents.ui.private_views import protect_private_view
+        protect_private_view(window, provider)
         present_process_window(window)
         window.runner.start()
     except BaseException:

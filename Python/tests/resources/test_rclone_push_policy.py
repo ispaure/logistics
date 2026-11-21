@@ -23,7 +23,8 @@ class PushPolicyTests(unittest.TestCase):
             push_policy.save_excludes(['*.pdf', '.DS_Store', '*.pdf'])
             self.assertEqual(push_policy.load_excludes(), ('*.pdf', '.DS_Store'))
             args = sync.build_sync_arguments('rclone', 'source', 'Remote:', config_path='config', excludes=push_policy.load_excludes())
-            self.assertEqual(args[args.index('--exclude'):], ['--exclude', '*.pdf', '--exclude', '.DS_Store', '--', 'source', 'Remote:'])
+            self.assertEqual(args[args.index('--exclude'):], ['--exclude', '.logistics-' + '[0-9a-f]' * 32 + '.00000000.partial',
+                '--exclude', '*.pdf', '--exclude', '.DS_Store', '--', 'source', 'Remote:'])
             self.assertNotIn('--delete-excluded', args)
             with self.assertRaises(ValueError): push_policy.save_excludes(['a\nb'])
             push_policy.save_excludes([])

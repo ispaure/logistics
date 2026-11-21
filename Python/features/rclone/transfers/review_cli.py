@@ -8,7 +8,7 @@ from threading import Thread
 
 from features.rclone.transfers.review import replace_changes
 from features.rclone import session
-from features.rclone.transfers.transfer_options import TransferOptions
+from features.rclone.transfers.transfer_options import DOWNLOAD_PARTIAL, TransferOptions
 
 
 def _lines(arguments, environment, cancelled, consume):
@@ -125,7 +125,7 @@ def scanner(binary, source, destination, config_path, options=TransferOptions(),
         trees = []
         for is_destination, target in enumerate((src, dst)):
             # Excluded destination entries are in scope for deletion on Push.
-            excludes = () if is_destination and delete_excluded else options.excludes
+            excludes = () if is_destination and delete_excluded else (DOWNLOAD_PARTIAL, *options.excludes)
             chunks = []
             def inventory(line):
                 chunks.append(line)

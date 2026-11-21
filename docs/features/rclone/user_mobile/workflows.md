@@ -50,6 +50,17 @@ encrypted names and bytes. Use transfer details to follow or cancel the
 download. The destination listing updates after the item is saved. You can
 keep browsing the folder without reopening it.
 
+For a selected file of 8 MiB or more, open **Transfers → Interrupted downloads**
+after a stop or relaunch. Unlock the original connection to see its jobs. Choose
+**Resume** to check the saved bytes and fetch the remainder, or **Discard** to
+remove the partial file. A changed source or partial needs inspection. The
+destination listing refreshes when the verified file is published.
+
+A crypt source can resume into ordinary storage or into its own LocalCrypt
+destination. A destination that needs a fresh encryption stream, or a server
+without a usable content version, offers **Download from byte zero?** before
+starting the full copy.
+
 ## Restore access to a managed copy
 
 Forgetting a package preserves its downloaded files. A replacement ZIP can

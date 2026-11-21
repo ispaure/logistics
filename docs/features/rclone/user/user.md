@@ -63,6 +63,14 @@ locally…**. Select the destination folder and a new item name. An encrypted
 remote asks you to confirm that the new copy will be readable after locking.
 Use **Pull** for a managed copy. Opening a preview alone saves no local copy.
 
+For a selected file of 8 MiB or more, Logistics keeps verified progress when
+the source supports it. After a stop or relaunch, unlock the same account, open
+its remote browser, then choose **File → Interrupted downloads → Resume** for
+the original destination. The byte count includes the saved prefix. **Discard…**
+removes the partial copy and its queue entry. If the source or partial changed,
+inspect the destination before discarding. When the provider cannot verify
+ranges, **Download from byte zero** starts a full copy only when you choose it.
+
 If authorization fails, renew the underlying account, replace the ZIP and
 reopen the remote. Include the backing remote for a crypt connection.
 

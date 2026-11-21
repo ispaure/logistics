@@ -15,7 +15,8 @@ from toga.style import Pack
 from toga.style.pack import COLUMN
 
 ASSETS = Path(__file__).resolve().parents[1] / 'assets'
-ACTIONS = frozenset(('approve', 'early', 'filter', 'previous', 'next', 'background', 'stop', 'scope', 'start-review', 'settings'))
+ACTIONS = frozenset(('approve', 'early', 'filter', 'previous', 'next', 'background', 'stop', 'scope', 'start-review', 'settings',
+                     'downloads', 'resume-download', 'discard-download'))
 RENDER_TIMEOUT = 15
 JAVASCRIPT_TIMEOUT = 8
 HEALTH_INTERVAL = 5

@@ -1,5 +1,6 @@
 """Download one desktop remote item and publish it to an ordinary local folder."""
 
+from contextlib import ExitStack
 import json
 from pathlib import Path
 from queue import Empty, Queue
@@ -62,7 +63,8 @@ def _copy(arguments, environment, check, progress):
             raise OSError(remote_failure(error))
 
 
-def download_remote_item(provider, path, destination, *, cancelled, progress=lambda _stats: None):
+def download_remote_item(provider, path, destination, *, cancelled, progress=lambda _stats: None,
+                         resume_key=None, from_zero=False, approved=None):
     """Use the browser's credential generation throughout the staged transfer."""
     relative = provider.relative(path)
     if not relative:
@@ -71,11 +73,46 @@ def download_remote_item(provider, path, destination, *, cancelled, progress=lam
     validate_name(destination.name)
     destination = destination.parent.resolve(strict=True) / destination.name
     check_local_path(destination, recursive=True)
-    if destination.exists() or destination.is_symlink():
-        raise FileExistsError('An item with that name already exists. Choose another name.')
+    from .desktop_download_source import DesktopRanges, desktop_queue
+    from .download_recovery import MINIMUM, RestartRequired, recover
 
-    with provider.operation(cancelled):
-        directory = provider.entry(relative)['directory']
+    with provider.operation(cancelled), ExitStack() as work:
+        def check():
+            provider.check()
+            check_local_path(destination, recursive=True)
+            check_cancelled(cancelled)
+
+        selection = dict(path=relative)
+        try:
+            queue = desktop_queue(provider)
+        except RestartRequired:
+            if resume_key:
+                raise
+            queue = None
+        queued = None if from_zero else resume_key
+        if queue is not None and not queued and not from_zero:
+            matched = queue.matching(selection, destination)
+            if matched:
+                queued = matched['id']
+        entry = None if queued else provider.entry(relative)
+        if from_zero and entry['directory']:
+            raise ValueError('The selected file became a directory. Select the source again.')
+        if from_zero and queue is not None:
+            work.enter_context(queue.restart(selection, destination, approved, entry['size']))
+        if queued or (not from_zero and not entry['directory'] and
+                      (entry['size'] >= MINIMUM or entry['size'] < 0)):
+            queue = queue or desktop_queue(provider)
+            def report(done, total):
+                progress(dict(bytes=done, totalBytes=total, transfers=0, totalTransfers=1))
+            return recover(queue, selection, destination, lambda: DesktopRanges(provider, relative),
+                           check=check, progress=report, key=queued)
+        if destination.exists() or destination.is_symlink():
+            raise FileExistsError('An item with that name already exists. Choose another name.')
+        directory = entry['directory']
+        if from_zero and not directory:
+            from shutil import disk_usage
+            if entry['size'] > disk_usage(destination.parent).free:
+                raise OSError('Insufficient free space to restart the download.')
         launched = session.launch(provider.context, f'{provider.remote}:{relative}', '')
         if launched is None:
             raise ValueError('The remote credential session has ended. Reopen this remote.')

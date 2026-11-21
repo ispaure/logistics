@@ -57,6 +57,7 @@ class MobileHostUI:
     export_file: ExportFile
     accessible_name: Callable[[Any, str], Any]
     local_read_available: LocalReadAvailable
+    refresh_download_directory: Callable[[Any, str], Awaitable[None]]
     refresh_folder_source_actions: Callable[[], None] = lambda: None
     settings: "ConnectionPresentation | None" = None
     record_folder: RecordFolder = lambda *args, **kwargs: None

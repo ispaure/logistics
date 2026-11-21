@@ -8,6 +8,8 @@ from pathlib import Path
 # authorize deleting local files.
 CLEANUP_NAMES = frozenset({'.ds_store', 'thumbs.db', 'ehthumbs.db', 'ehthumbs_vista.db'})
 DEFAULT_EXCLUDES = ('.DS_Store', '[Tt]humbs.db', '[Ee]hthumbs.db', '[Ee]hthumbs_vista.db', '[Dd]esktop.ini', '._*')
+# Selected-file checkpoints live on the destination filesystem for atomic publish.
+DOWNLOAD_PARTIAL = '.logistics-' + '[0-9a-f]' * 32 + '.00000000.partial'
 
 
 def validate_excludes(values):
@@ -44,6 +46,7 @@ class TransferOptions:
 
     def cli_arguments(self, *, delete_excluded=False):
         arguments = ['--copy-links'] if self.copy_links else []
+        arguments += ['--exclude', DOWNLOAD_PARTIAL]
         if self.track_renames:
             arguments += ['--track-renames']
         if self.bw_limit is not None:

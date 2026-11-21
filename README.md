@@ -57,7 +57,7 @@ explains those parts of the app. Continue with
 | Read and edit documents | [Text Editor](docs/features/text_editor/text_editor.md), [Notes Library](docs/features/notes_library/notes_library.md), [Books](docs/features/books/books.md), [Comics](docs/features/comics/comics.md), [PDF](docs/features/pdf/pdf.md) and experimental [Notebooks](docs/features/notebooks/notebooks.md) |
 | View and process media | [Images](docs/features/images/images.md), [Video Player](docs/features/video/video.md) and [audio chapter tools](docs/features/media/media.md) |
 | Organize files | [File Browser](docs/user/files-and-documents.md), [Bulk Rename](docs/features/bulk_rename/bulk_rename.md) and [Archives](docs/features/archives/archives.md) |
-| Connect storage and keep offline copies | [rclone connections and LocalCrypt](docs/features/rclone/rclone.md), [FUSE mounts](docs/features/fuse/fuse.md) and [Dropbox tools](docs/features/dropbox/dropbox.md) |
+| Connect storage, keep offline copies and resume interrupted downloads | [rclone connections and LocalCrypt](docs/features/rclone/rclone.md), [FUSE mounts](docs/features/fuse/fuse.md) and [Dropbox tools](docs/features/dropbox/dropbox.md) |
 | Work with code and language models | [Git](docs/features/git/git.md), [IDE](docs/features/ide/ide.md) and [LM Chat](docs/features/lm/lm.md) |
 | Use configured applications and utilities | [Feature catalog](docs/features/features.md), including Calibre, Blender, Plex, Obsidian and platform tools |
 

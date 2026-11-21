@@ -81,6 +81,8 @@ func executeRequest(ctx context.Context, action string, request bridgeRequest) (
 		result, err = cacheRemoteComic(ctx, request.Run, request.Remote, request.Path, request.Identity, request.Expected)
 	case "remote_cache_archive":
 		result, err = cachedRemoteArchive(ctx, request.Run, request.Remote, request.Path, request.Identity, request.Expected, request.Password, request.Member)
+	case "download_stat", "download_range":
+		result, err = downloadRange(ctx, request, action == "download_range")
 	case "remote_stat", "remote_range", "remote_archive":
 		result, err = remoteDocumentRequest(ctx, action, request.Remote, request.Path, request.Identity,
 			request.Expected, request.Password, request.Member, request.Offset, request.Count)

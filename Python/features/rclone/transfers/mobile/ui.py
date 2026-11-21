@@ -124,6 +124,9 @@ class MirrorUI(TransferReviewUI):
         from types import SimpleNamespace
         from .surface import TransferSurface
         old = getattr(self, '_progress_surface', None)
+        credentials = getattr(self.cloud_client, 'credential_state', None)
+        if old is not None and old._credential_state is not credentials:
+            old.dispose()
         if old is not None and not old.closed:
             self.transfer_view = old
         else:
@@ -144,6 +147,9 @@ class MirrorUI(TransferReviewUI):
                         'Files already copied, replaced or deleted will stay changed.'))
                     if confirmed and self.transfer_busy and epoch == self.transfer_epoch:
                         self.cancel_mirror_transfer()
+                elif action in ('downloads', 'resume-download', 'discard-download') and not self.transfer_busy:
+                    from features.rclone.mobile.download_recovery import queue_command
+                    await queue_command(self, action, args, visible)
                 elif action == 'settings' and not self.transfer_busy:
                     self.show_transfer_options()
             def visible():
@@ -173,6 +179,9 @@ class MirrorUI(TransferReviewUI):
     def render_transfer_summary(self):
         from features.rclone.transfers.presentation import progress_model
         model = progress_model(self.state)
+        if (not self.transfer_busy and getattr(self.cloud_client, 'package_records', ())
+                and (self.private_root / 'DownloadQueue').is_dir()):
+            model['can_list_downloads'] = True
         if self.mirror_store().error:
             model.update(phase='failed', message=self.mirror_store().error)
         self.transfer_notice.text = import_hint(self.transfer_message)

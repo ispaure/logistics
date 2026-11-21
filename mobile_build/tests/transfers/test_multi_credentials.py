@@ -86,6 +86,7 @@ class MultiCredentialUITests(unittest.TestCase):
             async def browse(*, preserve_path):
                 app.cloud_open_remote = app.cloud_remote.value
                 app.cloud_path = app.cloud_location.value
+                return True
             with patch.object(app, 'browse_cloud', side_effect=browse):
                 self.assertTrue(app.loop.run_until_complete(app.open_picker_folder(entry)))
             setup.assert_not_called()

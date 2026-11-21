@@ -37,11 +37,12 @@ class RemoteBrowserView(qt.QMainWindow):
     idle = qt.Signal()
     close_in_background = True
 
-    def __init__(self, location, parent=None):
+    def __init__(self, location, parent=None, *, published=lambda destination: None):
         super().__init__(parent)
         from features.rclone.desktop_service import service
         from features.rclone.remote_access import DesktopRemoteLocation
         self.location, self.closing = location, False
+        self.download_published = published
         self.extensions, self._extensions_by_feature = [], {}
         self.provider = service.remotes.open(DesktopRemoteLocation(location.config, location.remote))
         self._release = self.provider.acquire()
@@ -76,6 +77,7 @@ class RemoteBrowserView(qt.QMainWindow):
         self.menuBar().setNativeMenuBar(False)
         menu = self.menuBar().addMenu('File')
         menu.addAction('Open Remote…', lambda: choose_remote(self))
+        menu.aboutToShow.connect(lambda: self.interrupted_downloads(menu))
         from services.documents.ui.private_views import protect_private_view
         protect_private_view(self, self.provider)
         self._private_view_guard.revoked.connect(self.file_browser.storage_location.refresh)
@@ -122,9 +124,50 @@ class RemoteBrowserView(qt.QMainWindow):
 
         from features.rclone.transfers.ui.progress import open_download_progress
         try:
-            return open_download_progress(self.provider, path, Path(folder) / name)
+            return open_download_progress(self.provider, path, Path(folder) / name, published=self.download_published)
         except (OSError, ValueError) as error:
             qt.QMessageBox.warning(self, title, str(error))
+
+    def interrupted_downloads(self, menu):
+        from features.rclone.transfers.desktop_download_source import desktop_queue
+        from features.rclone.transfers.download_recovery import RestartRequired
+        from features.rclone.transfers.ui.progress import open_download_progress
+        previous = getattr(self, '_download_menu', None)
+        if previous is not None:
+            menu.removeAction(previous.menuAction())
+            previous.deleteLater()
+            self._download_menu = None
+        try:
+            queue = desktop_queue(self.provider)
+            jobs = queue.jobs()
+        except RestartRequired:
+            return
+        except (OSError, ValueError) as error:
+            self.file_browser.notice.setText(str(error))
+            return
+        if jobs:
+            self._download_menu = menu.addMenu('Interrupted downloads')
+        for job in jobs:
+            path, target = job['selection']['path'], Path(job['target'])
+            item = self._download_menu.addMenu(f"{path} → {target} ({job['offset']:,} bytes verified)")
+            def resume(_checked=False, key=job['id'], source=path, dest=target):
+                try:
+                    self.provider.check()
+                    open_download_progress(self.provider, source, dest, resume_key=key, published=self.download_published)
+                except (ValueError, OSError) as error:
+                    qt.QMessageBox.warning(self, 'Interrupted downloads', str(error))
+            def discard(_checked=False, key=job['id'], dest=target, snapshot=(job['id'], job['offset'], job['digest'])):
+                if qt.QMessageBox.question(self, 'Discard interrupted download?',
+                        'Remove this job and its partial file?', qt.QMessageBox.StandardButton.Yes |
+                        qt.QMessageBox.StandardButton.Cancel, qt.QMessageBox.StandardButton.Cancel) == qt.QMessageBox.StandardButton.Yes:
+                    try:
+                        from commonUtils.filesystem.local_access import check_local_path
+                        check_local_path(dest, recursive=True)
+                        queue.discard(key, dest, expected=snapshot)
+                    except (OSError, ValueError) as error:
+                        qt.QMessageBox.warning(self, 'Interrupted downloads', str(error))
+            item.addAction('Resume', resume)
+            item.addAction('Discard…', discard)
 
     def open_document(self, path):
         if self.closing or self.operation.busy:

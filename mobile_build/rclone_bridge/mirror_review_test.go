@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/rclone/rclone/fs"
-	"github.com/rclone/rclone/fs/operations"
 	"github.com/rclone/rclone/fs/object"
+	"github.com/rclone/rclone/fs/operations"
 )
 
 func TestLargeComparisonKeepsEveryRowAndRevision(t *testing.T) {
@@ -145,6 +145,8 @@ func TestTransferOptionsFollowOrdinaryFileLinksAndKeepExcludedDestination(t *tes
 		t.Fatal(err)
 	}
 	os.WriteFile(filepath.Join(local, "new.skip"), []byte("excluded source"), 0600)
+	checkpoint := ".logistics-" + strings.Repeat("a", 32) + ".00000000.partial"
+	os.WriteFile(filepath.Join(local, checkpoint), []byte("verified prefix"), 0600)
 	for name, text := range map[string]string{"retained.skip": "excluded destination", "delete.txt": "delete"} {
 		if _, err := f.Put(ctx, strings.NewReader(text), object.NewStaticObjectInfo("policy/"+name, time.Now(), int64(len(text)), true, nil, f)); err != nil {
 			t.Fatal(err)
@@ -174,14 +176,21 @@ func TestTransferOptionsFollowOrdinaryFileLinksAndKeepExcludedDestination(t *tes
 	if _, err := f.NewObject(ctx, "policy/new.skip"); err == nil {
 		t.Fatal("excluded file uploaded")
 	}
+	if _, err := f.NewObject(ctx, "policy/"+checkpoint); err == nil {
+		t.Fatal("interrupted download uploaded")
+	}
 	if _, err := f.NewObject(ctx, "policy/delete.txt"); err == nil {
 		t.Fatal("destination-only file retained")
 	}
 	// Filters are request-local, and Pull never inherits Push exclusions.
 	destination := filepath.Join(local, "pulled")
 	os.Mkdir(destination, 0700)
+	os.WriteFile(filepath.Join(destination, checkpoint), []byte("verified prefix"), 0600)
 	if _, err := mirrorSync(ctx, "Cloud", "policy", identity, destination, run, false); err != nil {
 		t.Fatal(err)
+	}
+	if data, err := os.ReadFile(filepath.Join(destination, checkpoint)); err != nil || string(data) != "verified prefix" {
+		t.Fatal("interrupted download damaged by Pull", err)
 	}
 	if _, err := os.Stat(filepath.Join(destination, "retained.skip")); err != nil {
 		t.Fatal("push filter leaked into pull", err)

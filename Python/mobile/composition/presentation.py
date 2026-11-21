@@ -6,7 +6,7 @@ from .notes import notes_drawer_host as notes_drawer_host, notes_host as notes_h
 def rclone_host_ui(app):
     from features.rclone.mobile.host import MobileHostUI, ConnectionPresentation
     from mobile.control_icons import icon_button
-    from mobile.browser_ui import FileBrowser as NativeBrowser
+    from mobile.browser_ui import FileBrowser as NativeBrowser, refresh_download_directory
     from mobile.action_menu import FeatureCommands
     from mobile.provider_ui import private_label
     from mobile.folder_hub import visible_remotes
@@ -51,6 +51,7 @@ def rclone_host_ui(app):
             app, **kwargs
         ),
         refresh_folder_source_actions=lambda: source_actions(app),
+        refresh_download_directory=lambda provider, target: refresh_download_directory(app, provider, target),
         settings=ConnectionPresentation(
             page=lambda *args: ConnectionSettingsPage(app, *args),
             group=connection_group,

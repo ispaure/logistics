@@ -122,7 +122,7 @@ def _browser_view(path=None, *, root_path=None, filesystem_scope=False):
     initial = path or root_path or Path.home()
     from features.rclone.ui.remote_browser import RemoteLocation, RemoteBrowserView
     if isinstance(initial, RemoteLocation):
-        return RemoteBrowserView(initial)
+        return RemoteBrowserView(initial, published=refresh_download_directory)
     if isinstance(initial, _PrivateBrowserLocation):
         from features.rclone.localcrypt.ui.views import CryptBrowserView, ensure_session
         if not ensure_session(initial.item.context, package=initial.item.package, parent=qt.QApplication.activeWindow()):

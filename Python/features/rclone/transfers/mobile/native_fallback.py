@@ -80,6 +80,12 @@ class NativeTransferFallback(toga.Box):
             rows = tuple(str(row.get('name', '')) for row in model.get('active_files', ()))
             if model.get('busy'):
                 buttons.append(('Stop transfer', 'stop', phase != 'stopping', {}))
+            elif model.get('can_list_downloads'):
+                buttons.append(('Interrupted downloads', 'downloads', True, {}))
+                for job in model.get('downloads', ()):
+                    label = f"{job['path']} → {job['name']} ({job['offset']:,} / {job['size']:,} bytes)"
+                    buttons.append(('Resume ' + label, 'resume-download', True, dict(id=job['id'])))
+                    buttons.append(('Discard ' + job['name'] + '…', 'discard-download', True, dict(id=job['id'])))
             buttons.append(('Continue browsing', 'background', True, {}))
         elif mode == 'review':
             self.status.text = model.get('notice', '')
@@ -145,6 +151,8 @@ class NativeTransferFallback(toga.Box):
             elif isinstance(child, toga.Selection):
                 child.items = []
         self.rows.clear()
+        for button in self.buttons.children:
+            button.text = ''
         self.buttons.clear()
         self.row_signature = self.button_signature = None
         self.scope = self.remote = None

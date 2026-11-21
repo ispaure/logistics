@@ -304,6 +304,7 @@
           "test_localcrypt*.py",
           "test_local_crypt*.py",
           "test_remote_browser.py",
+          "test_download_recovery.py",
           "test_credential*.py",
           "test_review_session.py",
           "test_transfer_adapters.py",

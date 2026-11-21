@@ -90,6 +90,10 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 		return 0, filterErr
 	}
 	ctx = filter.ReplaceConfig(ctx, rules)
+	// Preserve interrupted selected downloads on Pull and keep their bytes off Push.
+	if err := rules.AddRule("- .logistics-" + strings.Repeat("[0-9a-f]", 32) + ".00000000.partial"); err != nil {
+		return 0, err
+	}
 	if len(opts.Excludes) > 200 {
 		return 0, errors.New("use at most 200 exclusions")
 	}

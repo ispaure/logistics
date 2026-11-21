@@ -100,6 +100,9 @@ class CloudClient:
                 raise CredentialBusyError(reply.get('error'))
             if reply.get('error_code') == 'remote_file_not_found':
                 raise FileNotFoundError('The remote file was not found.')
+            if reply.get('error_code') == 'download_range_unavailable':
+                from features.rclone.transfers.download_recovery import RestartRequired
+                raise RestartRequired('The source did not honor the requested range. Download from byte zero?')
             if reply.get('error_code') == 'archive_password':
                 from commonUtils.archives.zip_access import ArchivePasswordError
                 raise ArchivePasswordError(reply.get('error', 'Inner ZIP password required.'))

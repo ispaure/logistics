@@ -12,21 +12,54 @@ Desktop **Workspaces → Cloud → Pull** follows `ui_contributions.py:_get_acti
 ## Download selected items
 
 Desktop **Download locally…** runs `transfers/remote_download.py` under the browser's
-credential grant. It uses rclone `copyto` for files and `copy` for folders,
-including empty directories. The worker stages beside the chosen destination
-and publishes with an exclusive rename after checking cancellation and access.
-The desktop Pull progress view shows rclone transfer statistics and reports
-completion after publication.
-The desktop browser relists tabs at the published item's parent. Its filesystem
-model retains the existing selection and navigation.
+credential grant. Mobile starts in `mobile/remote_downloads.py` and uses the
+existing Transfers execution, cancellation and progress controls. Small files,
+directories and explicitly approved full restarts use the staged CLI or native
+rclone copy. Folder downloads include empty directories. Completion refreshes
+the published parent and preserves the retained browser selection.
 
-On mobile, `mobile/remote_downloads.py` captures path, kind and generation.
-Go `download_sync.go` stages file Copy or folder Sync in independent storage,
-encrypted for LocalCrypt. Python publishes without clobber and retires staging
-on cancel or failure. The destination picker tells the mobile browser owner
-to refresh retained listings of the same parent after completion. Selected
-downloads leave mirror records unchanged. Check `test_remote_downloads.py`
-and native `TestDownload*`.
+For files of at least 8 MiB, `transfers/download_recovery.py` records the job
+ID, selection, physical destination, parent and partial inode, source version,
+logical offset, stored-prefix SHA-256 and publication state. The worker syncs
+each range before advancing the atomic journal. An inode-bound reservation
+recovers a stage created just before a crash. An unrelated replacement is
+preserved. Workspace sync filters out the reserved partial names. Restart verifies the local
+prefix, trims an uncommitted tail and checks space for the remainder. A
+publishing job verifies the complete stage or the exclusively renamed target
+before retiring its journal. A destination lock serializes competing workers.
+
+Desktop binds journals to the active configuration and uses the credential ZIP
+cipher for session-only accounts or the existing credential-derived cipher for
+saved settings. The mobile bridge uses credential-password encryption for
+session jobs and device-protected encryption for saved credentials. The queue
+is loaded only through a current grant. The remote File menu on desktop and
+the Transfers screen on mobile reopen or discard a selected job.
+
+Plain HTTP recovery requires a strong ETag, identity encoding and an exact
+conditional range response. The desktop adapter also supports a local alias,
+crypt over supported range backends and selected cloud files with a usable
+checksum. On mobile, `download_range.go` binds ordinary bytes to a provider
+checksum. Crypt reads bind to the file header and authenticate each complete
+64 KiB block and the final short block. For a matching LocalCrypt destination
+the worker persists those original ciphertext bytes, including the header
+once. A transfer that needs fresh encryption offers the existing full copy.
+
+The recovery regression tests cover changed sources and partials, disk space,
+writer contention, stage creation, explicit restart approval, repeated interruption
+and both sides of publication. The
+host acceptance probe runs workers in separate processes against generated
+loopback HTTP or TLS WebDAV data. It measures server payload bytes and compares
+the final digest with the independent generator. Run from the repository root
+with the desktop environment, `PYTHONPATH=Python:.` and the checkout's pinned
+Go, desktop rclone and mobile environment installed.
+
+```sh
+.venv/bin/python -m mobile_build.validation.download_recovery_probe --mode desktop-http --receipt tmp/test-results/recovery/http.json
+.venv/bin/python -m mobile_build.validation.download_recovery_probe --mode native-crypt --receipt tmp/test-results/recovery/crypt.json
+```
+
+The probe checks free capacity and removes its managed scratch directory.
+The default fixture is 64 MiB plus 137 bytes. Use `--size` for larger runs.
 
 ## Review and progress presentation
 

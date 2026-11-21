@@ -66,6 +66,8 @@
     "transfers/transfer_options.py",
     "localcrypt/mobile/content.py",
     "mobile/remote_downloads.py",
+    "mobile/download_recovery.py",
+    "transfers/download_recovery.py",
     "transfers/presentation.py",
     "transfers/mobile/surface.py",
     "transfers/mobile/native_fallback.py",

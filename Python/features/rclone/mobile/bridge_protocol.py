@@ -31,6 +31,8 @@ ACTIONS = frozenset(
         "crypt_thumbnail",
         "document_lists_open",
         "document_lists_seal",
+        "download_range",
+        "download_stat",
         "file_archive",
         "file_thumbnail",
         "forget_package",
@@ -98,6 +100,21 @@ def validate_result(action, value):
             invalid()
         cipher = value.get("cipher_identity")
         if not (digest(cipher) if value["crypt"] else cipher == ""):
+            invalid()
+    elif action == "download_stat":
+        if (not isinstance(value, dict) or type(value.get("supported")) is not bool
+                or type(value.get("size")) is not int or value["size"] < 0):
+            invalid()
+        if value["supported"]:
+            if not digest(value.get("version")) or type(value.get("encoded")) is not bool:
+                invalid()
+            lengths = {"": 0, "md5": 32, "sha1": 40, "sha256": 64}
+            algorithm, checksum = value.get("algorithm"), value.get("checksum")
+            if (not isinstance(algorithm, str) or algorithm not in lengths or not isinstance(checksum, str)
+                    or len(checksum) != lengths[algorithm] or any(c not in "0123456789abcdef" for c in checksum)):
+                invalid()
+    elif action == "download_range":
+        if not isinstance(value, str) or len(value) > 6 * PACKAGE_LIMIT:
             invalid()
     elif action == "crypt_path":
         if not isinstance(value, dict) or not isinstance(value.get("path"), str):

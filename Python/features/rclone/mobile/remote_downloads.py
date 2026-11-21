@@ -1,4 +1,5 @@
 """Single remote-item pulls into a chosen ordinary or unlocked encrypted folder."""
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 from uuid import uuid4
@@ -19,15 +20,34 @@ class RemoteDownload:
     title: str = 'Download locally'
     primary: str = 'Download here'
 
-    async def complete(self, app, destination, target):
+    async def complete(self, app, destination, target, *, resume_key=None):
         options = app.transfer_options()
+        from features.rclone.transfers.download_recovery import RestartRequired
+        from_zero = False
+        reason = None
+        approved = None
         def work(client, cancelled, progress):
-            return self.execute(client, destination, target, cancelled, progress, options=options)
-        return await app.run_mirror_work(work, 'download',
-            source=f'{self.provider.remote}:{self.path}',
-            destination=f'{getattr(destination, "remote", "Local")} / {target}')
+            nonlocal reason
+            try:
+                return self.execute(client, destination, target, cancelled, progress, options=options,
+                                    root=app.private_root, resume_key=resume_key, from_zero=from_zero, approved=approved)
+            except RestartRequired as error:
+                reason = error
+                raise
+        async def run():
+            return await app.run_mirror_work(work, 'download',
+                source=f'{self.provider.remote}:{self.path}',
+                destination=f'{getattr(destination, "remote", "Local")} / {target}')
+        result = await run()
+        if not result and reason and self.provider.client is app.cloud_client and self.provider.generation == app.cloud_client.generation:
+            import toga
+            if await app.main_window.dialog(toga.ConfirmDialog('Download from byte zero?', str(reason))):
+                from_zero, approved, resume_key = True, reason.checkpoint, None
+                return await run()
+        return result
 
-    def execute(self, client, destination, target, cancelled, progress, *, options=None):
+    def execute(self, client, destination, target, cancelled, progress, *, options=None,
+                root=None, resume_key=None, from_zero=False, approved=None):
         target = resource_path(target)
         if not target or getattr(destination, 'remote_storage', False):
             raise ValueError('Choose a local destination folder and item name.')
@@ -36,8 +56,15 @@ class RemoteDownload:
         source = self.provider.reopen()
         temporary = '/'.join(p for p in (target.rpartition('/')[0], '.download-' + uuid4().hex) if p)
         created = False
+        work = ExitStack()
         try:
             source.check()
+            root = root or getattr(destination, 'private_root', None) or getattr(destination, 'collection_storage_root', None)
+            if not self.directory and root is not None:
+                from .download_recovery import run_download
+                if run_download(root, source, self.path, destination, target, cancelled, progress,
+                                options, work, resume_key, from_zero, approved):
+                    return TransferOutcome('download', status='complete')
             try:
                 destination.entry(target)
             except FileNotFoundError:
@@ -45,6 +72,12 @@ class RemoteDownload:
             else:
                 raise ValueError('An item with that name already exists. Choose another name.')
             check_cancelled(cancelled)
+            if from_zero and not self.directory:
+                from shutil import disk_usage
+                size = source.entry(self.path)['size']
+                required = size + (32 + 16 * ((size + 65535) // 65536) if destination.private else 0)
+                if required > disk_usage(destination.transfer_location(target).parent).free:
+                    raise OSError('Insufficient free space to restart the download.')
             destination.mkdir(temporary)
             created = True
             encrypted = bool(getattr(destination, 'private', False))
@@ -66,7 +99,11 @@ class RemoteDownload:
                     destination_identity=destination.identity if encrypted else ''))
             check(client, job, cancelled)
             staged = temporary if self.directory else temporary + '/' + PurePosixPath(self.path).name
-            destination.rename(staged, target)
+            if from_zero:
+                from commonUtils.persistence.publication import rename_exclusive
+                rename_exclusive(destination.transfer_location(staged), destination.transfer_location(target))
+            else:
+                destination.rename(staged, target)
             return TransferOutcome('download', status='complete')
         finally:
             try:
@@ -80,4 +117,5 @@ class RemoteDownload:
                     else:
                         delete_resource(destination, temporary)
             finally:
+                work.close()
                 source.close()
