@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 import AppIntents
 
 /// Compiled only into the containing iPhone app: Watch Connectivity needs that process.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // All zoom paths resize the paper, never the toolbar or the document geometry.
 const minZoom = .1, maxZoom = 4;
 let documentPaperView = null;

@@ -1,4 +1,8 @@
 // Wire decoding, operation admission and credential-state response publication.
+
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 package main
 
 import (

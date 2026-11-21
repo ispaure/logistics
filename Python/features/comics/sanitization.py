@@ -1,5 +1,14 @@
 """Established CBZ cleanup and numeric page-padding rules."""
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from pathlib import Path
 from typing import List
 from commonUtils.filesystem import files as fileUtils, directories as dirUtils

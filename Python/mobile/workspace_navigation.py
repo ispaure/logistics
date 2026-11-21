@@ -3,6 +3,16 @@
 The native tab and Back stacks stay authoritative. A pane moves existing widget
 owners rather than copying editor buffers or mounting a widget twice.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import weakref
 
 import toga

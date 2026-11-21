@@ -3,6 +3,16 @@
 An owned-device runner supplies the existing read-only fixture capability URLs.
 No source movie is copied into the application or modified by this probe.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION

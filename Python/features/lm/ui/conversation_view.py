@@ -1,4 +1,14 @@
 """Incremental conversation bubbles with native, selectable Markdown bodies."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.ui.appearance.typography import point_size
 import math
 from datetime import datetime

@@ -1,6 +1,10 @@
 //!HOOK OUTPUT
 //!BIND HOOKED
 //!DESC Convert absolute PQ output to extended sRGB without clipping HDR
+
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 vec4 hook() {
     vec4 colour = HOOKED_tex(HOOKED_pos);
     // ST 2084 encodes absolute luminance; 203 cd/m2 is SDR reference white.

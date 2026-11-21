@@ -5,6 +5,15 @@ LOGISTICS_CYCLE_COLLECTION_CONTROL=1 only to reproduce the unsafe automatic
 collector; the default exercises the application's UI-loop collection owner.
 """
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION

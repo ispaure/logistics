@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 #import <math.h>
 // Feature-owned controls layered over the decoder/lifecycle controller.
 @interface LGVideoCachedRanges : UIView

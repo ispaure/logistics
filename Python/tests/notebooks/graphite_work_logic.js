@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Operation-count checks for the actual renderer under a host V8 runtime.
 // Canvas calls are instrumented stubs: timings describe JavaScript tile work,
 // never raster throughput, Android SDK behavior or physical pen latency.

@@ -5,6 +5,16 @@ those finalizers during an unrelated executor allocation, so the iOS process
 collects eligible generations from its UI loop instead. Reference counting is
 unchanged; background jobs must not explicitly collect native widget cycles.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import asyncio
 import atexit
 import gc

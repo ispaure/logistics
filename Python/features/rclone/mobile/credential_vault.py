@@ -3,6 +3,16 @@
 Native calls are made on a worker thread by CloudUI. There is no plaintext or
 password fallback when a protected key is inaccessible.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import base64
 import json
 import os

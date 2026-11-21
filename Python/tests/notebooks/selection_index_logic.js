@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Indexed production containment against an exhaustive geometric oracle.
 const vm = require('node:vm');
 const assert = require('node:assert/strict');

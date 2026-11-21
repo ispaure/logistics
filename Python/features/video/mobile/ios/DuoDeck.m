@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Included by VideoPlayer.m. UIKit controls and settings scoped to the lower
 // reserved region; the ordinary player keeps its existing native menus.
 #import <objc/runtime.h>

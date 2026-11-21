@@ -3,6 +3,16 @@
 Keep real bar items, not horizontal custom-view stacks: UIKit owns their axis,
 shared glass and overflow. Android/content controls retain their existing owners.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import weakref
 
 

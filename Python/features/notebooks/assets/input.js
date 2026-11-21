@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 const fallbackPressure = .5;
 let constantPenPressure = false;
 // Bounded content-free input diagnostics: no coordinates, labels or stroke data.

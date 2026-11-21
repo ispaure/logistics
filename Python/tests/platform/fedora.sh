@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
+
+# Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+# SPDX-License-Identifier: MIT
+
 set -euo pipefail
 
 # Run in fedora.Containerfile's prepared, disposable CI container at /workspace.

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 renderEraserChoices();
 // Keep eraser settings beside the toolbar without blocking the document.
 function positionEraserSettings() {

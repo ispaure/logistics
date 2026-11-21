@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // TEST_STAGE = TestStage.EXTENDED
 import UIKit
 import XCTest

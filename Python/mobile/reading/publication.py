@@ -1,4 +1,14 @@
 """Prepare before retiring pixels; reject work belonging to a retired reader."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from contextlib import contextmanager
 from .sources import capture_library, capture_provider
 

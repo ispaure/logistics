@@ -1,5 +1,14 @@
 """Construct Qt's audio output without a Python virtual-method trampoline."""
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 
 def audio_output(parent):
     from PySide6.QtCore import QUrl

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Single-finger navigation owns no ink.
 let pageTouch = null, offeredPage = null, addingSwipePage = false;
 const swipeAddPage = document.createElement('button');

@@ -1,4 +1,14 @@
 """Local mobile folder providers; crypt naming/bytes stay in the native bridge."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from services.folders.labels import encrypted_copy_label
 from services.documents.locations import collection_path, _modified_time
 from services.documents.mobile_locations import ENCRYPTED_ALIAS

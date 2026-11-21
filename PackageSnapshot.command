@@ -1,4 +1,8 @@
 #!/bin/bash
+
+# Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+# SPDX-License-Identifier: MIT
+
 # Double-click in Finder, or run from Terminal. Requires git and python3.
 set -eu
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"

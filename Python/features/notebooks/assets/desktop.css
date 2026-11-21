@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+SPDX-License-Identifier: MIT */
+
 body{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr) 30px;font-size:12px;color:var(--ink);background:#e6e9e3}
 button,select,input{font:inherit;color:inherit;background:#fcfdfb;border:1px solid var(--line);border-radius:4px;min-height:28px;padding:4px 7px}
 button{cursor:pointer}button:hover:not(:disabled),summary:hover{background:var(--wash)}button:disabled{cursor:default;opacity:.35}

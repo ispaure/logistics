@@ -3,6 +3,16 @@
 Synthetic imported/provider documents only. Reports retain failed samples so a
 matrix run can distinguish missing coverage from a measured layout defect.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.testing.stages import TestStage
 
 import asyncio

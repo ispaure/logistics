@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+SPDX-License-Identifier: MIT */
+
 /* Mobile transfer type: 15px file names, 16px primary actions, 12–13px supporting text.
    Keep the existing font scale, compact spacing and landscape hierarchy. */
 /* Transfer color defaults are shared by light-dark() and the legacy fallback. */

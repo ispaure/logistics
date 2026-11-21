@@ -4,6 +4,16 @@ Plans use raw records, never the browser's repaired display hierarchy. A device
 adapter must still obtain writer exclusion, verify every guard, publish safely
 and verify native acceptance before reporting a completed operation.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from collections.abc import Mapping
 from dataclasses import dataclass
 from hashlib import sha256

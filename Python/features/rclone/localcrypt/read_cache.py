@@ -4,6 +4,16 @@ Every lookup and publication validates access under the retirement lock. Workers
 may finish after a provider closes, but cannot put private data back into it.
 The provider owns credential revocation and physical revision validation.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from collections import OrderedDict
 from threading import RLock
 from typing import Callable

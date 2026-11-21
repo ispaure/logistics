@@ -4,6 +4,16 @@ The host retains startup and aggregate checkpoint/navigation guards. This mixin
 owns no additional state: views retain per-document controls and the workspace
 retains identities and generations, including picker completion admission.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import asyncio
 from hashlib import sha256
 from uuid import uuid4

@@ -3,6 +3,16 @@
 The view retains command and worker ownership. This controller owns history limits,
 reload selection and deferred search/focus state; it never starts another worker.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.ui import pyside as qt
 from ..repository import Repository
 

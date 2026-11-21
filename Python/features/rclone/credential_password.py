@@ -1,4 +1,14 @@
 """Verified credential ZIP re-encryption with no plaintext staging files."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from hashlib import sha256
 from io import BytesIO
 from pathlib import Path

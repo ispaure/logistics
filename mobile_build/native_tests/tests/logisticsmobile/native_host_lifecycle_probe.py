@@ -4,6 +4,15 @@ Use only the separate QA bundle below. Synthetic drafts live in its cache.
 Retain old Android hosts deliberately so GC cannot conceal missing retirement.
 """
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.EXTENDED

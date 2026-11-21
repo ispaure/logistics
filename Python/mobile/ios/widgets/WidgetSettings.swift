@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 enum LogisticsWidgetSettings {
     static let appGroup = "group.io.github.ispaure.logisticsmobile"
     static let kind = "LogisticsValueWidget"

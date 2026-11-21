@@ -3,6 +3,16 @@
 Generated QA projects live in retention-owned scratch. Their only app overlay is
 the disposable bundle identity; the ordinary launcher and native intake remain.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import argparse
 from hashlib import sha256
 import json

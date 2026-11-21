@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Two real AAC languages through the production VLCKit controller. No physical
 // speaker/receiver claim: playedAudioBuffers verifies native output delivery.
 @interface LGVideoNonseekablePlayer : VLCMediaPlayer

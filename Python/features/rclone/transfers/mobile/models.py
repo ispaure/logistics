@@ -1,5 +1,14 @@
 """Validated copy identity and named transfer outcomes; JSON stays at the boundary."""
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from collections.abc import Mapping, Iterator
 from dataclasses import dataclass, fields, asdict
 from typing import NamedTuple

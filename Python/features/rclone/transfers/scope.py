@@ -1,5 +1,14 @@
 """Folder-name inference, independent of either host's storage layout."""
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 
 def folder_name(name):
     if (not isinstance(name, str) or not name or name.startswith('.') or name.endswith((' ', '.'))

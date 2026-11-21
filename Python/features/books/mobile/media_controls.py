@@ -1,4 +1,14 @@
 """One Now Playing owner; private readers never publish titles or passage text."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from weakref import WeakSet
 from services.access_policy import speech_allowed
 

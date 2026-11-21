@@ -1,4 +1,14 @@
 """Private offline transfer UI, with bounded messages and retired callbacks."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.search.policy import SEARCH_DEBOUNCE_MS
 from services.appearance_palette import css_variables
 import asyncio

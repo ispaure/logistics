@@ -4,6 +4,15 @@ Only the primary TIFF IFD is inspected. Malformed optional metadata does not
 make otherwise decodable pixels unavailable; native decoders validate pixels.
 """
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 
 def _tiff_orientation(data):
     if data.startswith(b'Exif\0\0'):

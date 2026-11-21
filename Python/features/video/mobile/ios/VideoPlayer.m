@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Logistics native video owner. VLCKit is linked by the mobile build manager.
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>

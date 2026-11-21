@@ -4,6 +4,16 @@ One retained worker owns each operation; switching repositories, mutating action
 and refreshes cannot overlap. Failures remain visible and trigger a fresh snapshot
 after writes, including conflicts and cancelled network operations.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from pathlib import Path
 import sys
 import shlex

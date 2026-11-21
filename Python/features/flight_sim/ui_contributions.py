@@ -2,6 +2,15 @@
 UI contributions exposed by the Logistics Flight Simulator feature.
 """
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from features.contributions import DebugActionContribution, Feature, SettingsContribution
 from pathlib import Path
 from features.flight_sim import actions

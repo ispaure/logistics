@@ -3,6 +3,16 @@
 Sources report existing challenges; they do not validate grants or perform I/O.
 The host disposes its window scope. No UI observer inventory defines privacy.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from weakref import WeakSet
 from threading import RLock
 

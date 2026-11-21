@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Resolve the same runtime graph that the variant packages, including transitive AARs/JARs.
 import groovy.json.JsonOutput
 import groovy.xml.XmlSlurper

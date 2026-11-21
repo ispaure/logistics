@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+# SPDX-License-Identifier: MIT
+
 PROJECT_ROOT="$(cd -- "$(dirname -- "$0")" && pwd)"
 CONFIG_FILE="$PROJECT_ROOT/launch_config.ini"
 export COMMONUTILS_PERSONAL_CONFIG_FILE="${HOME}/Library/Application Support/Logistics/configuration/launch_config.ini"

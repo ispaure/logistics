@@ -3,6 +3,16 @@
 A native credential runtime supplies gates and publication notifications. It does
 not create the scope. Separate runtimes (including isolated hosts) remain isolated.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from threading import RLock
 from weakref import WeakKeyDictionary, ref
 from services.protection import ProtectionScope

@@ -4,6 +4,16 @@ Uses an explicit existing VLCKit simulator framework; outputs and the simulator
 are removed through build_manager even when the probe fails. No personal app or
 simulator is modified. Results cover UIKit/decoder behavior, not physical touch.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import argparse
 from functools import partial
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer

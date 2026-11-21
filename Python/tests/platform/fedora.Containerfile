@@ -1,3 +1,6 @@
+# Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+# SPDX-License-Identifier: MIT
+
 ARG FEDORA_IMAGE=fedora:44
 FROM ${FEDORA_IMAGE}
 # Shared by hosted CI and the manager's local rootless Fedora container.

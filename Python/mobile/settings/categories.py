@@ -3,6 +3,16 @@
 Substantial panels live in modules named for their visible Settings entry.
 The owner methods remain the entry points for existing host integrations.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from dataclasses import dataclass
 
 import toga

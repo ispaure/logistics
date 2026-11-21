@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 const fs=require('fs'),vm=require('vm'),assert=require('assert');
 const path=require('path');
 const src=fs.readFileSync(process.argv[2] || path.resolve(__dirname,'../../features/notebooks/assets/mobile.js'),'utf8');

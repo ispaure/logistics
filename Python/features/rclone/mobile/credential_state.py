@@ -4,6 +4,16 @@ Every mobile scene shares one instance. This feature policy is independent of
 ctypes transport and widgets, so publication and identity resolution can be tested
 without loading the native library.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import weakref
 from threading import RLock, local
 from contextlib import contextmanager

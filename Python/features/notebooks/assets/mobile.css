@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+SPDX-License-Identifier: MIT */
+
 /* Canvas gestures must not enter WebKit's page/text selection mode. */
 html,body,#viewport,#paperWrap,canvas{-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 input,textarea,[contenteditable=true]{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}

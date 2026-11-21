@@ -4,6 +4,16 @@ Generic CSS families are resolved by Chromium, independently of OEM font
 customization. Android 12's public text shaper exposes the selected native font,
 including OEM replacements. Only marked Markdown surfaces opt into this bridge.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import logging
 import re
 import struct

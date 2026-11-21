@@ -3,6 +3,16 @@
 Run from any directory with the desktop development interpreter. Native mobile
 controls and desktop Qt use the vectors directly; these PNGs serve ImageViews.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import argparse
 from base64 import b64encode
 from io import BytesIO

@@ -1,3 +1,6 @@
+rem Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+rem SPDX-License-Identifier: MIT
+
 :: BatchGotAdmin
 :-------------------------------------
 REM  --> Check for permissions

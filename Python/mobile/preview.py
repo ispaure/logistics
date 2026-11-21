@@ -1,4 +1,14 @@
 """Mobile Markdown renderer with Logistics appearance roles."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.ui.native.markdown_preview import markdown_body, markdown_preview as _markdown_preview
 from .palette import css_variables
 from services.documents.markdown_media import reader_media_source

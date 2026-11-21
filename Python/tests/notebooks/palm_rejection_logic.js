@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Run with Node, or require this driver from the host V8 tool. This checks the
 // production palm guard with an explicit clock, not UIKit/Android hardware.
 const vm = require('node:vm');

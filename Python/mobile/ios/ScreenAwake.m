@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Shared by transfers and video players across all application scenes.
 #import <UIKit/UIKit.h>
 

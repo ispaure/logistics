@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // A real MKV with three seconds of video and ten seconds of audio. Reopening
 // at six seconds must not require a video frame that does not exist.
 @interface LGVideoDurationTailChecks : UIResponder <UIApplicationDelegate, UIWindowSceneDelegate>

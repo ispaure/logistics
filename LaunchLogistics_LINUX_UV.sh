@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+# SPDX-License-Identifier: MIT
+
 PROJECT_ROOT="$(cd -- "$(dirname -- "$0")" && pwd)"
 CONFIG_FILE="$PROJECT_ROOT/launch_config.ini"
 LOGISTICS_CONFIG_HOME="${XDG_CONFIG_HOME:-${HOME}/.config}"

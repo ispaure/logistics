@@ -1,5 +1,14 @@
 """Mobile host composition for document adapters; formats see provider sessions."""
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 
 def document_source(provider, path):
     """The sole mobile choice of provider-backed reader adapter and mapped key."""

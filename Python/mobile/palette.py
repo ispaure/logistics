@@ -1,4 +1,14 @@
 """Native palette adaptation over shared Logistics appearance policy."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from services.appearance_palette import (
     LIGHT, DARK, EINK, argb, DEFAULT_ACCENT, validate_accent, accent_colors, set_accent, css_variables, themed_chapter, set_eink_enabled, eink_enabled,
 )

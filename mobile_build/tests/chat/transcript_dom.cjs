@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Disposable browser verification of synthetic transcript updates; no network.
 const fs = require('fs');
 const assert = require('assert/strict');

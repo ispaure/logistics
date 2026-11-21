@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Capture uses a private editor clipboard, retained across page changes. PNGs
 // and native image quads travel through the same durable command queue as ink.
 let imageClipboard = null, imageSelection = null, imageGesture = null, forceImageLasso = false;

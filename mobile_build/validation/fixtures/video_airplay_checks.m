@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Production controller with deterministic receiver events, plus real VLC audio.
 // No physical route is changed by this simulator regression fixture.
 @interface LGReceiverItem : AVPlayerItem

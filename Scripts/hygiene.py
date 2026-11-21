@@ -3,6 +3,16 @@
 Report paths and categories only, never matching values. This supplements careful
 review; arbitrary provider tokens cannot all be identified from their syntax.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from pathlib import Path
 import re
 import subprocess

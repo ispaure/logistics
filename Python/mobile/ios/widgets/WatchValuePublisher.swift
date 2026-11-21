@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 import Foundation
 #if !LOGISTICS_WIDGET_ACTIONS
 import WatchConnectivity

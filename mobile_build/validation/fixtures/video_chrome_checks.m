@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Compiled with the production video controller in a disposable UIKit app.
 // Supply locations to the real gesture delegate without private event injection.
 @interface LGVideoMenuTouch : UITouch

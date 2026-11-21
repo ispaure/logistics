@@ -1,4 +1,14 @@
 """Explicit desktop credential retention choice; publication remains service-owned."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.ui import pyside as qt
 from features.rclone.credential_storage import (
     SESSION_TITLE, SESSION_DESCRIPTION, PERSISTENT_TITLE, PERSISTENT_DESCRIPTION,

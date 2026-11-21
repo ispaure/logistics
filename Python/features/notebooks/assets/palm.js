@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // OS palm cancellation remains authoritative. This guard also keeps a resting
 // hand from starting a canvas gesture while a detected pen is nearby/in use.
 const penReleaseGrace = 250;

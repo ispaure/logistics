@@ -1,5 +1,14 @@
 """Check mirror review controls and progress delivery across worker and UI callbacks."""
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from contextlib import ExitStack
 from commonUtils.testing.event_loop import close_loop
 from commonUtils.testing.stages import TestStage

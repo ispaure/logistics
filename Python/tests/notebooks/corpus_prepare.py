@@ -2,6 +2,16 @@
 
 Run via build_retention --scratch. There is deliberately no tablet/host option.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import argparse
 from contextlib import contextmanager
 from io import BufferedReader, BytesIO

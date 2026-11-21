@@ -4,6 +4,16 @@ Screen IDs are stable report/filter keys. Titles follow visible navigation; a
 group keeps dependent actions together without opening unrelated features in a
 focused run. Native geometry and retention assertions live in rotation_checks.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from dataclasses import dataclass
 from functools import cached_property
 

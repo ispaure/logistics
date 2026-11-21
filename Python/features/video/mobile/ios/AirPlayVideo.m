@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Keep the Logistics deck in front of AVKit so the phone and Siri Remote
 // control the same playback clock during native AirPlay.
 @implementation LGVideoController (AirPlay)

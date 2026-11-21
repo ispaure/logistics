@@ -3,6 +3,16 @@
 Resources stay inside their ZIP; no book content is extracted to disk. Limits
 bound decompression and XML parsing. Metadata writes live in metadata.py.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from dataclasses import dataclass
 from contextlib import contextmanager
 from pathlib import Path

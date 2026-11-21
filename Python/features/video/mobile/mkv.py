@@ -1,4 +1,14 @@
 """Session-scoped HLS access to the iOS Matroska/MP4 stream-copy adapter."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from base64 import b64decode
 from bisect import bisect_left, bisect_right
 from html import escape, unescape

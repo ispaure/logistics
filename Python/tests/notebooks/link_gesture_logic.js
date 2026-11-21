@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Pure V8 checks of production link handlers; no native/browser acceptance.
 const vm = require('node:vm');
 function checkLinkGestures(source) {

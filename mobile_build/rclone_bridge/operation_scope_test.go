@@ -1,4 +1,8 @@
 // TEST_STAGE = TestStage.SMOKE
+
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 package main
 
 import (

@@ -4,6 +4,16 @@ Each row retains incoming/outgoing lane segments. Parents outside the loaded pag
 continue off its bottom. Active lanes keep their columns; shared parents end
 lanes without shifting unrelated branches. Empty columns are reused.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from dataclasses import dataclass
 
 

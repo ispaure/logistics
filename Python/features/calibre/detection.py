@@ -2,6 +2,15 @@
 Detection helpers for the Logistics Calibre feature.
 """
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from pathlib import Path
 
 from models.local_folder import LocalFolder

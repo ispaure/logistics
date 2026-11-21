@@ -4,6 +4,16 @@ Run only in a granted browser slot. Events are synthetic DOM PointerEvents;
 physical pointer capture, hardware input and native mobile SDKs are not tested.
 The controller bounds total work to 110 seconds and uses off-record profiles.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import argparse
 from copy import deepcopy
 from hashlib import sha256

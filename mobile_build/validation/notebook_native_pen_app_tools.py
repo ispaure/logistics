@@ -3,6 +3,16 @@
 No reusable-shell option: compiled producer must be built from selected source.
 Run only in a coordinator-granted native slot; no personal device is selected.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import argparse
 from contextlib import ExitStack
 from hashlib import sha256

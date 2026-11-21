@@ -1,4 +1,14 @@
 """Rooted library search, daily-note discovery and verified file commands."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from pathlib import PurePosixPath
 from sqlite3 import Error as DatabaseError
 from commonUtils.runtime.operations import OperationCancelled, check_cancelled

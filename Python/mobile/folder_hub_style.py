@@ -1,4 +1,14 @@
 """Workspaces presentation using native controls and dynamic app colour roles."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from .appearance import surface as app_surface
 from .ui_metrics import TOUCH_TARGET, BODY_TEXT
 

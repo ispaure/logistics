@@ -1,4 +1,14 @@
 """Credential package selection, retention, unlock and restoration presentation."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import asyncio
 from contextlib import contextmanager
 from dataclasses import dataclass, field

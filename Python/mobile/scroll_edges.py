@@ -1,5 +1,14 @@
 """Keep browser clearance inside scrolling content, below its final row."""
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 
 def fill_bottom(view, *scrolls):
     """Declare a page whose bottom edge belongs entirely to scrolling lists."""

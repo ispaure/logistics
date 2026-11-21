@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Execute the native QA fixture with the actual shared input/palm/zoom owners.
 // The outer clock models elapsed time; the fixture never changes production time.
 const vm = require('node:vm');

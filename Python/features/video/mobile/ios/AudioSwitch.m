@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // A newly selected decoder starts at the demuxer's read-ahead position. Seeking
 // back to the displayed time flushes those queues and lets VLC preroll audio and
 // video together, rather than playing several seconds of silent queued video.

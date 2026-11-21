@@ -3,6 +3,16 @@
 This is a syntax/API check, not device playback acceptance. Downloads and compiler
 outputs live only inside the build manager's disposable scratch lease.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import argparse
 from datetime import datetime, timezone
 from hashlib import sha256

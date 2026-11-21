@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Opus is linked into VLCKit even when its libavcodec decoder is omitted.
 #import <libavcodec/avcodec.h>
 #import <libavutil/channel_layout.h>

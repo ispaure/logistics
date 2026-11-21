@@ -4,6 +4,16 @@ Run with PYTHONPATH=Python python Python/tests/portable_documents.py.
 These fixtures are suitable for a future embedded testbed too; this host command
 alone is not mobile verification. There are no OS mocks in this module.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import importlib.abc
 from pathlib import Path
 import sys

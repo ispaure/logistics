@@ -4,6 +4,16 @@ The caller collects UI values before saving, checks transport availability befor
 switching records, and retains this owner until asynchronous work has settled.
 Store failures propagate so the presentation can offer retry/export/discard.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from copy import deepcopy
 from time import monotonic
 

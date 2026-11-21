@@ -5,6 +5,16 @@ and assignment aliases; reject backend dependencies, policy inspection and raw
 publication APIs. Explicit exceptions identify an operation and owning function,
 never an entire editor. New descendants of a document package inherit the rules.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import ast
 import importlib.util
 import re

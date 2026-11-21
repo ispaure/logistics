@@ -1,4 +1,14 @@
 """Memory-only native EPUB navigation when a private WebView is unsuitable."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from bisect import bisect_left
 from array import array
 import toga

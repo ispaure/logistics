@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Project-owned UIWindow; UIKit remains the sole system event dispatcher.
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>

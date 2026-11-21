@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 static NSArray *LGPiPViewTree(UIView *view) {
     NSMutableArray *children = [NSMutableArray array];
     for (UIView *child in view.subviews) [children addObject:LGPiPViewTree(child)];

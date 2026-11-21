@@ -1,5 +1,14 @@
 """Source-specific validity captures; no source bytes or persistence cross here."""
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 
 def capture_library(owner):
     reader, epoch = owner.book_reader, owner.book_epoch

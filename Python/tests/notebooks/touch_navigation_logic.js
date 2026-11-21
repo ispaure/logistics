@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Execute production touch arbitration, input, zoom and links in a tiny DOM.
 const vm = require('node:vm');
 function checkTouchNavigation(sources) {

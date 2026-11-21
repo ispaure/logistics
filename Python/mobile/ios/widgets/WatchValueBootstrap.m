@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 #import <UIKit/UIKit.h>
 
 // Start the Swift bridge after UIApplication has launched; no Python callbacks or session access.

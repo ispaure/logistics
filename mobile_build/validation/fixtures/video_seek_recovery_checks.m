@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Recover a real VLC input error and a stopped input using the production
 // timeline/actions, then require decoded pictures at the replacement target.
 @interface LGVideoSeekRecoveryChecks : UIResponder <UIApplicationDelegate, UIWindowSceneDelegate>

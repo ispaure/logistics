@@ -1,4 +1,14 @@
 """Index/worktree separation, selection-driven staging, and a commit draft."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.ui import pyside as qt
 from .chrome import status_icon
 from ..models import status_label

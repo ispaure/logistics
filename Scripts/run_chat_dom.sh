@@ -1,4 +1,8 @@
 #!/bin/sh
+
+# Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+# SPDX-License-Identifier: MIT
+
 # Run the optional DOM check with explicit, disposable browser configuration.
 set -eu
 

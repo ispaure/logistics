@@ -3,6 +3,16 @@
 The extension owns an image-only view, never the real canvas or a snapshot of
 text/controls. Routes, privacy shields and fullscreen remove its pixel reference.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from dataclasses import dataclass
 import weakref
 

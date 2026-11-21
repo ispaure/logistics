@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // A real MKV with ten seconds of video and two three-second audio tracks.
 // Language selection after audio EOF must not trap valid video playback.
 @interface LGVideoVideoTailChecks : UIResponder <UIApplicationDelegate, UIWindowSceneDelegate>

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Included by the generated launcher. Source of truth remains in the images owner.
 #import <AVFoundation/AVFoundation.h>
 #import <Photos/Photos.h>

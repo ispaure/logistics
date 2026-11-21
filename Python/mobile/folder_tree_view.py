@@ -3,6 +3,16 @@
 One view owns one source tab's rows and menus. Render inputs describe the current
 visible folders; callbacks resolve host actions only when the user invokes them.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from dataclasses import dataclass
 import toga
 from toga.style import Pack

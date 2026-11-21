@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 const fs = require('fs'), vm = require('vm'), assert = require('assert');
 const path=process.argv[2] || require('path').join(__dirname,'../../features/notebooks/assets/input.js'), source=fs.readFileSync(path,'utf8');
 new vm.Script(source); // Parse the full actual candidate asset.

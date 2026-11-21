@@ -5,6 +5,16 @@ before that marker has no verified original PID here: retain explicit unavailabl
 metadata and host evidence, without claiming PID-bound IPS coverage. The local
 manager backend owns a different lease/collector and is outside this module.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from datetime import datetime
 import json
 from pathlib import Path

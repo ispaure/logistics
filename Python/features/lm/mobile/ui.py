@@ -1,4 +1,14 @@
 """Native text chat controls; only explicit user actions contact a server."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.ui.native.forms import FittedLabel, fit_text
 import asyncio
 import inspect

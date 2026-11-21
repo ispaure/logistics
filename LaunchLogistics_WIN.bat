@@ -1,4 +1,8 @@
 @echo off
+
+rem Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+rem SPDX-License-Identifier: MIT
+
 setlocal EnableExtensions DisableDelayedExpansion
 
 set "PROJECT_ROOT=%~dp0"

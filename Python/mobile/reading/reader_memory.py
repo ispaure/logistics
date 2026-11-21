@@ -4,6 +4,16 @@ Managed reserves exclude interpreter, WebKit and operating-system allocations.
 Go's native archive pool has the matching 128 MiB admission limit. The original
 128 MiB per-archive limit remains supported; a second snapshot needs free space.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 MIB = 1024 * 1024
 NATIVE_ARCHIVE_POOL = 128 * MIB
 PRIVATE_BUFFERS = 32 * MIB

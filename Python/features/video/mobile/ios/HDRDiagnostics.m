@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // On-demand diagnostics only: never copy pixels on the playback timer.
 @implementation LGVideoController (HDRDiagnostics)
 - (AVSampleBufferDisplayLayer *)sampleBufferLayer:(CALayer *)layer {

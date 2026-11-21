@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Notebook object selection. Keep gesture previews visible until the host acknowledges them.
 let selectionGesture = null, pendingSelection = null, selectionPage = state.page_id ?? state.index;
 const selectionActions = document.createElement('div');

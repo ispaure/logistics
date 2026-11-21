@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Appended to the real controller only in an owned native QA build. This
 // supplies a horizontal reserved division, without claiming hardware posture.
 @interface LGVideoQADivision : NSObject

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Link gestures own no ink commands. Only completed taps can navigate.
 let linkGesture = null, pendingPageFeedback = null, linkReturn = null, pageFeedbackTimer = null;
 const pageFeedback = document.createElement('div');

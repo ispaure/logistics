@@ -1,4 +1,14 @@
 """Read-only tablet navigation using the shared identity-based browser views."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from collections import deque
 
 from commonUtils.runtime.browsing import BrowseEntry, BrowseColumn, BrowseRole

@@ -1,3 +1,6 @@
+/* Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+SPDX-License-Identifier: MIT */
+
 /* Match Logistics Slate chrome and keep the paper preview separate from saved colors. */
 :root{--ink:var(--text);--paper:var(--surface);--edge:var(--border);--line:var(--border);--wash:var(--hover);--selected:var(--hover);--dropdown-hover:var(--hover);--control-radius:6px;--panel-radius:12px}
 html,body{background:var(--window);color:var(--text)}

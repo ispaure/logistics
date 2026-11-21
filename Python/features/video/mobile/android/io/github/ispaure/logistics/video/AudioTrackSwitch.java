@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 package io.github.ispaure.logistics.video;
 
 /** Tracks the native events for one audio selection and seek. */

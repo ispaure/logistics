@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // The pinned sample-buffer output draws VLC's subpictures in a transparent
 // view next to the video layer. The OpenGL fallback blends them into the video.
 static UIView *LGSubtitleSurface(UIView *container) {

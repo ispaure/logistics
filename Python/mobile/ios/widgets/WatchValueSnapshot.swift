@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 import Foundation
 
 /// A bounded display-only transport. Never contains application documents or credentials.

@@ -1,5 +1,14 @@
 """Embedded documents retain state, detach safely and protect dirty buffers on close."""
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION

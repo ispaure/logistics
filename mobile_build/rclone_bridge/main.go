@@ -1,4 +1,8 @@
 // Package main is a scoped mobile rclone C bridge with verified copy operations.
+
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 package main
 
 /*

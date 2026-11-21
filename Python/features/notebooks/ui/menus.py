@@ -1,4 +1,14 @@
 """Notebook commands published through the shared desktop document menu host."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.document_host import close_document, document_creation_scope
 

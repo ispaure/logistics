@@ -1,5 +1,14 @@
 """Project-owned browser behavior contributed by CBZFile objects."""
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.filesystem import BrowserPanel, BrowserDetails
 from commonUtils.archives.zip_access import ArchivePasswordError
 from features.comics.locked_preview import locked_preview

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Execute production Select handlers in V8. This is independent of native UI/raster acceptance.
 const vm = require('node:vm');
 const assert = require('node:assert/strict');

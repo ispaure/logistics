@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // PiP receives one composited sample, including VLC's rendered subtitle planes.
 // All pixels remain volatile. UIKit/layer capture runs on MAIN, only during PiP.
 #import <AVKit/AVKit.h>

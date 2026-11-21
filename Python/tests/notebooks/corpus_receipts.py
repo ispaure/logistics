@@ -3,6 +3,16 @@
 The caller supplies retrieval and editor checks. This module has no connection
 options and never overwrites an export, including unverified interrupted output.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from collections import Counter
 from dataclasses import asdict
 import hashlib

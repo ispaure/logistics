@@ -1,5 +1,14 @@
 """IDE disk reconciliation through editor actions and native filesystem notifications."""
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import os
 from pathlib import Path
 from unittest.mock import patch

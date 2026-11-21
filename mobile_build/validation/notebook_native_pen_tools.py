@@ -4,6 +4,16 @@ This is transport/ABI evidence, never a physical Pencil or Logistics release pas
 No existing simulator is selected, no personal device is queried, no package is
 installed outside the newly created SDK-owned disposable Simulator.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import argparse
 import hashlib
 import json

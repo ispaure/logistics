@@ -1,5 +1,14 @@
 """Responsive writing surface; formatting overlays never resize the document."""
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 READING_CSS = '''
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 html body{max-width:800px;margin:0 auto;padding:20px 24px 32px;box-sizing:border-box;line-height:1.65}

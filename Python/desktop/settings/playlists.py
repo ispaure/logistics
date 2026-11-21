@@ -1,5 +1,14 @@
 """Confirmed playlist cleanup across libraries, without touching source notes."""
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.filesystem.storage import cache_directory
 from commonUtils.ui import pyside as qt
 from desktop.document_catalog import unlocked_ciphers

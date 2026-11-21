@@ -5,6 +5,16 @@ sweeps outer scene rotations. --observe-folds subsequently monitors a retained
 comic while the operator opens/closes/rotates/folds the device. Results never
 claim unobserved poses. This tool does not install over the main application.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import argparse
 import json
 from pathlib import Path

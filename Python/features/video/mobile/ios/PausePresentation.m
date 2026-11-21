@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Hold the visible frame and clock immediately while VLC acknowledges Pause.
 // The render-server snapshot is volatile and is discarded on privacy/lifetime edges.
 @implementation LGVideoController (PausePresentation)

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Synthetic native transport contracts only: no UITouch private ivars, swizzles,
 // injected real UIKit events, physical hardware, accounts or document content.
 #import <UIKit/UIKit.h>

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 'use strict';
 (()=>{
 const root=document.getElementById('transfer-root'),overlay=document.getElementById('overlay');

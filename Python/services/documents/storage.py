@@ -4,6 +4,16 @@ Providers retain encoding, credentials and publication mechanics. This session
 adds a document baseline, bounded input, independent lifetime and host privacy
 policy, without introducing a second storage backend or writing recovery data.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from contextlib import contextmanager, nullcontext
 from dataclasses import dataclass
 from hashlib import sha256

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 #import <VLCKit/vlc/libvlc_media_player.h>
 @interface VLCMediaPlayer (LGClockProbe)
 - (libvlc_media_player_t *)libVLCMediaPlayer;

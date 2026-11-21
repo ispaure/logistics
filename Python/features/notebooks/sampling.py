@@ -5,6 +5,16 @@ new stroke's calibrated widths have been computed, never on native scene rows.
 Every retained row is an original sample. Error bounds use the original path's
 cumulative arc length, including both raw and codec-rounded pressure.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import math
 import struct
 

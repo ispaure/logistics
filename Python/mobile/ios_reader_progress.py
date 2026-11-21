@@ -1,4 +1,14 @@
 """Lower the reader's visible track inside its full native touch area."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from rubicon.objc import CGRect, SEL, objc_method, send_super
 from toga_iOS.widgets.slider import Slider, TogaSlider
 from toga_iOS.libs import (

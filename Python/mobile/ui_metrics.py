@@ -6,6 +6,15 @@ once when a style reaches the native renderer; leave styles in design units.
 Android's subsequent system sp scaling remains the backend's responsibility.
 """
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from functools import wraps
 
 from commonUtils.ui.native.presentation import TOUCH_TARGET as TOUCH_TARGET

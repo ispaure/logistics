@@ -1,4 +1,14 @@
 """Small libmpv ABI and serialized worker; no native calls in renderer callbacks."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import ctypes as C
 from queue import Empty, Queue
 from threading import Thread

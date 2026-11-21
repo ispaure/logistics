@@ -1,4 +1,14 @@
 """Device feature switches and safe updates across mobile windows."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import json
 
 from services.mobile_features import FEATURES, BY_NAME, enabled, group_enabled, disabled_features, document_feature, selection_preferences

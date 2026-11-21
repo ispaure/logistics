@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Synthetic offline chapter; count DOM walks and verify UTF-16 passage anchors.
 const fs = require('fs'), assert = require('assert/strict');
 const {chromium} = require('playwright');

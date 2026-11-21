@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Exercise production zoom functions with a deterministic clock, without a GUI.
 const assert = require('node:assert/strict'), fs = require('node:fs'), vm = require('node:vm'), path = require('node:path');
 const source = fs.readFileSync(process.argv[2] || path.resolve(__dirname, '../../features/notebooks/assets/zoom.js'), 'utf8');

@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // Stream-copy indexed Matroska/MP4 into independently requested fMP4 fragments.
 // The build supplies FFmpeg headers matching the pinned VLCKit binary.
 #if __has_include(<libavformat/avformat.h>)

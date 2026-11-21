@@ -1,3 +1,12 @@
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import math
 from commonUtils.runtime.diagnostics import log, Severity
 from features.aviation_tools.mathUtils.mathStuff import (Vector2D, calculate_net_vector_2d_direction, calculate_net_vector2d_magnitude, invert_direction)

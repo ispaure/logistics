@@ -3,6 +3,16 @@
 Matches the desktop Slate defaults (including its 6% blue dark tint). Light
 cards use a near-white surface so large mobile screens avoid a stark white fill.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 DEFAULT_ACCENT = (221, 60)
 DEFAULT_ACCENT_COLOR = '#3363cc'
 FILE_ICON_BLUE = '#315ea8'

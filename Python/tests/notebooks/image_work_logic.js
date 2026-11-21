@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 /* Pure JS gesture regression. Native raster and file-picker acceptance is separate. */
 export default function(source, vm, assert, inputSource = '') {
   const controls = new Map(), commands = [], paint = [], listeners = new Map();

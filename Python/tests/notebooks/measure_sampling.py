@@ -4,6 +4,16 @@ The manifest supplies task rectangles. Speed groups mean the left/right halves
 of the requested slow-then-fast cell, not a measured clock or firmware rule.
 No handwriting coordinates, stroke IDs or per-point records are emitted.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import argparse
 from collections import Counter, defaultdict
 from hashlib import sha256

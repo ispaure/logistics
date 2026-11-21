@@ -1,5 +1,14 @@
 """Remaining reader adapters through actual Qt reopening and a fresh process."""
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from contextlib import closing, ExitStack
 from dataclasses import asdict
 from pathlib import Path

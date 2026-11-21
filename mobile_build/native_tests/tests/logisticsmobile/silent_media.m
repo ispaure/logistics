@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 // TEST_STAGE = TestStage.EXTENDED
 // Silent, app-local playback drives real system activity; no network or user media.
 #import <UIKit/UIKit.h>

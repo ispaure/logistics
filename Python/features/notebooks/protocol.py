@@ -4,6 +4,16 @@ The bridge consumes an ordered envelope. Hosts validate its action inside their
 error/acknowledgement boundary so a malformed action cannot strand the JS queue.
 Model validation remains authoritative for page bounds and native ink values.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import json
 import math
 

@@ -3,6 +3,16 @@
 Encrypted names and references exist only in this owner and its live widgets.
 No search index, file content reads or remote-storage providers are involved.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import asyncio
 from contextlib import ExitStack
 from pathlib import Path, PurePosixPath

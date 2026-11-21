@@ -1,4 +1,14 @@
 """Ordinary mobile browse roots, excluding private control and encrypted storage."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.runtime.resources.local import LocalFiles
 from services.documents.locations import MobileLocalFiles, local_folder_snapshot, shared_documents_path
 from services.documents.mobile_locations import enabled, phone_path, reserved_phone_name

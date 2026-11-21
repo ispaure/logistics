@@ -5,6 +5,16 @@ ExtensionKit launch then cannot run, although the application's UI loop continue
 Qualification requires that exact sampled stack, a zero-process private WebView,
 the current failed native report, and an unchanged prebuilt test application.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import ast
 import hashlib
 import json

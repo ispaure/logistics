@@ -1,3 +1,6 @@
+// Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
+// SPDX-License-Identifier: MIT
+
 typedef NS_ENUM(NSInteger, LGBackgroundStage) {
     LGWaitForVideo, LGForegroundPause, LGEnterPausedBackground, LGPausedBackground,
     LGReturnPaused, LGExplicitResume, LGEnterBackground, LGWaitInBackground, LGReturnToVideo,

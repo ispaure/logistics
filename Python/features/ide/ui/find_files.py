@@ -1,4 +1,14 @@
 """Retained, nonmodal Find in Files with cancellable search and source preview."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.search.policy import SEARCH_DEBOUNCE_MS
 from concurrent.futures import Future, ThreadPoolExecutor
 from html import escape

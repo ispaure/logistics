@@ -1,4 +1,14 @@
 """Android AES bridge bytes follow Chaquopy's documented buffer contract."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from array import array
 import importlib.util
 from pathlib import Path

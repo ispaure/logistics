@@ -3,6 +3,16 @@
 Only explicitly admitted physical local callers reach this service. Private
 provider metadata remains owned by its credential-scoped provider.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from pathlib import Path
 from contextlib import contextmanager
 from threading import Event, RLock, Thread

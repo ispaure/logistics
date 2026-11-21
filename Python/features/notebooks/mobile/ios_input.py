@@ -3,6 +3,16 @@
 PointerEvents continue to own contact/cancel and work without hover hardware.
 The UIKit recognizer is Pencil-only and permits simultaneous native gestures.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 import json
 import math
 from weakref import ref

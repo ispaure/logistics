@@ -1,4 +1,14 @@
 """Compose native credentials, resource sessions and transfers for one client."""
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from features.rclone.service import CredentialService, LocalCryptService, RcloneService
 from features.rclone.remote_access import NativeRemoteLocation, RemoteService
 from features.rclone.localcrypt.mobile.locations import LocalCryptLocation, OfflineCryptLocation

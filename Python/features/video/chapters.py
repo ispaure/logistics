@@ -4,6 +4,16 @@ Native players enumerate chapters through VLC. Qt has no chapter API, so read
 Matroska ChapterAtoms and the MP4 chpl atom without staging the movie or spawning
 an external decoder. Unsupported chapter-track formats return an empty list.
 """
+
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from dataclasses import dataclass
 from itertools import islice
 from pathlib import PurePosixPath

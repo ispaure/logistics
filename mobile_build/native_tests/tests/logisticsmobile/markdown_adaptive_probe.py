@@ -4,6 +4,15 @@ The operator or UI test drives UIKit. No hinge or keyboard geometry is injected.
 Write ``finish`` in the evidence directory to end the bounded observation.
 """
 
+# AUTHORSHIP INFORMATION
+
+__author__ = "Marc-André Voyer"
+__copyright__ = "Copyright (C) 2026, Marc-André Voyer"
+__license__ = "MIT License"
+__maintainer__ = "Marc-André Voyer"
+__email__ = "marcandre.voyer@gmail.com"
+__status__ = "Production"
+
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
