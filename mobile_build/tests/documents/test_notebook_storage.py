@@ -462,7 +462,7 @@ class NotebookStorageTests(unittest.TestCase):
         [(session, summary)] = self.app.recent_items()
         self.assertEqual(summary[0], 'Renamed.rmdoc')
         [menu_button] = self.app.hub_controller().document_row_menu(session)
-        commands = dict(menu_button.document_actions.raw_actions)
+        commands = dict(menu_button.document_actions.load_actions())
         self.assertIn('Rename…', commands)
         self.assertIn('Delete…', commands)
         self.assertTrue(self.run_async(commands['Document location']()))

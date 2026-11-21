@@ -88,9 +88,9 @@ class LocalDocumentSearchTests(TestCase):
         self.assertEqual(len(titles), len(hits))
         self.assertTrue(all(button.style.flex == 1 for button in titles))
         self.assertFalse(any(isinstance(w, toga.Label) and 'Nested/' in w.text for w in rows))
-        menus = [w._document_search_menu for w in rows if hasattr(w, '_document_search_menu')]
+        menus = [w.document_actions for w in rows if hasattr(w, 'document_actions')]
         self.assertEqual(len(menus), len(hits))
-        self.assertTrue(all('Show in folder' in [name for name, _ in menu.raw_actions] for menu in menus))
+        self.assertTrue(all('Show in folder' in [name for name, _ in menu.load_actions()] for menu in menus))
         app.hub_controller().clear_document_search_results()
         self.assertTrue(all(menu.disposed for menu in menus))
 
@@ -306,15 +306,11 @@ class LocalDocumentSearchTests(TestCase):
             header, buttons = root._destination_actions
             self.assertIsNone(buttons[0].parent)
 
-    def test_vertical_bar_exposes_each_command_to_native_overflow(self):
+    def test_apple_toolbar_exposes_current_document_commands(self):
         app = self.app
         with patch.object(app, 'home_unlock_candidates', return_value=[('fixture', {})]):
             app.show_documents_hub()
             root = app.body.children[0]
-            child, parent = object(), object()
-            adapter = SimpleNamespace(parent=parent, content_controller=lambda destination: child)
-            with (patch.object(app.native_host, 'adapter', adapter),
-                  patch('mobile.ios_toolbar.vertical_edge', return_value=2)):
-                actions = root._ios_toolbar_buttons()
+            actions = root._ios_toolbar_buttons()
             self.assertEqual([button.accessible_name for button in actions],
-                             ['Unlock LocalCrypt', 'Open document', 'New document', 'Search documents'])
+                             ['New document', 'Search documents', 'Unlock LocalCrypt'])
