@@ -45,16 +45,19 @@ class NotesDrawerTests(unittest.TestCase):
                 __module__ = 'toga_iOS.test'
 
             drawer = NotesDrawers.__new__(NotesDrawers)
-            drawer.overlay = object()
+            outside_tap = SimpleNamespace(enabled=True)
+            drawer.overlay = SimpleNamespace(outside_tap=outside_tap)
             drawer.sidebar = SimpleNamespace(_impl=AppleSidebar())
             drawer.host = SimpleNamespace(loop=asyncio.get_running_loop())
             drawer.action_choice = None
             choosing = asyncio.create_task(drawer.choose_action(
                 dialog, SimpleNamespace(dialog=show), apple_native=True))
             await started.wait()
+            self.assertFalse(outside_tap.enabled)
             drawer.cancel_action()
             self.assertEqual(await choosing, 'cancel')
             self.assertTrue(closed.is_set())
+            self.assertTrue(outside_tap.enabled)
             self.assertIsNone(drawer.action_choice)
         self.run_async(exercise())
 

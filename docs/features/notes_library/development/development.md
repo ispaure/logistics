@@ -58,7 +58,8 @@ owns those transitions, the pending File actions choice and Back. It cancels
 choices and retires overlays when the library closes. On iOS, Files and Search
 row actions open a UIKit alert after the selected file or folder has been
 validated. The alert displays that item's filename and can be cancelled by
-Back or drawer disposal. Android keeps the in-drawer action chooser.
+Back or drawer disposal. The drawer pauses its window-level dismissal gesture
+while a row alert is active so UIKit receives the alert's taps. Android keeps the in-drawer action chooser.
 
 `drawer_gestures.py` binds UIKit recognizers and Android touch listeners.
 It defers to breadcrumbs, web content and embedded editors where those surfaces

@@ -161,6 +161,10 @@ class NotesDrawers:
         if self.action_choice is not None:
             return 'cancel'
         if apple_native and backend.startswith('toga_iOS.'):
+            outside_tap = drawer.outside_tap if drawer is not None else None
+            if outside_tap is not None:
+                # The drawer's window-level recognizer also sees taps on UIKit alerts.
+                outside_tap.enabled = False
             task = self.action_choice = self.host.loop.create_task(window.dialog(dialog))
             try:
                 return await task
@@ -169,6 +173,8 @@ class NotesDrawers:
                     raise
                 return 'cancel'
             finally:
+                if outside_tap is not None and self.overlay is drawer:
+                    outside_tap.enabled = True
                 self.action_choice = None
         if drawer is None or not backend.startswith(('toga_iOS.', 'toga_android.')):
             return await window.dialog(dialog)
