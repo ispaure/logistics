@@ -11,7 +11,7 @@ from tempfile import TemporaryDirectory
 from threading import Event, get_ident
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 from commonUtils.runtime.resources.local import LocalFiles
 from commonUtils.runtime.operations import OperationCancelled
@@ -190,6 +190,28 @@ class SavedSearchPublicationTests(unittest.TestCase):
     async def finish_tasks(self):
         while pending := tuple(task for task in self.browser.tasks if not task.done()):
             await asyncio.wait_for(asyncio.gather(*pending), 5)
+
+    def test_index_completion_preserves_pending_typeahead_and_replays_submitted_text(self):
+        from commonUtils.search.policy import SEARCH_DEBOUNCE_SECONDS
+
+        browser = self.browser
+        self.show_folder('')
+        apply = AsyncMock()
+
+        async def check():
+            browser.search.value = 'Match'
+            pending = browser.search_epoch
+            await browser._prepare_local_search(self.provider, '', Event())
+            self.assertEqual(browser.search_epoch, pending)
+            await browser._search_subfolders(pending, browser.search_cancelled)
+            await browser._prepare_local_search(self.provider, '', Event())
+            await self.finish_tasks()
+            self.assertEqual(browser.search_epoch, pending + 1)
+            self.assertEqual([call.args[-1] for call in apply.await_args_list],
+                             [SEARCH_DEBOUNCE_SECONDS, 0])
+
+        with patch.object(browser, '_apply_query', apply):
+            self.loop.run_until_complete(check())
 
     def test_saved_page_is_displayed_before_later_validation_with_writer_held(self):
         browser, provider = self.browser, self.provider

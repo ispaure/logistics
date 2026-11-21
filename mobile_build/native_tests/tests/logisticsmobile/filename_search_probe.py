@@ -241,8 +241,12 @@ class SearchProbe(LogisticsMobile):
                     if provider.private:
                         timer(provider._directory_index, '_fingerprint', 'index_validation')
                         timer(provider, '_note_decode', 'decrypt')
+                        timer(provider._directory_index.cipher, 'transform', 'sealed_cache_crypto')
+                        if hasattr(provider, '_list_inventory'):
+                            timer(provider, '_list_inventory', 'inventory_recheck_and_metadata')
                     else:
                         timer(search, '_prepare', 'index_prepare')
+                        timer(provider, 'list_names', 'enumerate_names')
                     for cold in (True, False, False):
                         sample = await self.sample(view, provider, cold, phases)
                         result['samples'].append(dict(sample, size=size, source=source, files=folders*count+1))

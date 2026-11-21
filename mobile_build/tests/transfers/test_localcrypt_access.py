@@ -319,6 +319,30 @@ class LocalCryptAccessTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 search.search(provider, '', 'private')
 
+    def test_filename_search_does_not_cache_an_inventory_changed_while_decoding(self):
+        from mobile.local_search import LocalSearch
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            provider = self.provider(root, Client())
+            self.addCleanup(provider.close)
+            before, after = (provider.root / name for name in ('old-private.txt', 'new-private.txt'))
+            before.touch()
+            search = LocalSearch(root / 'ordinary.sqlite3')
+            self.addCleanup(search.cache.close)
+            decode = provider._note_decode
+
+            def rename_after_decoding(entries):
+                names = decode(entries)
+                before.rename(after)
+                return names
+
+            with patch.object(provider, '_note_decode', side_effect=rename_after_decoding):
+                self.assertEqual(search.search(provider, '', 'private').rows, [])
+            self.assertFalse(provider._directory_index.rows)
+            self.assertEqual([row['path'] for row in search.search(provider, '', 'private').rows],
+                             ['new-private.txt'])
+
     def test_last_lease_retires_indexed_names(self):
         with TemporaryDirectory() as root:
             provider = self.provider(root, Client())

@@ -41,7 +41,7 @@ Use separate cancellation for mobile search preparation and query delivery.
 Navigation, close and privacy transitions retire their hints. Hidden or locked
 hosts pause admission while an active sibling can keep working. Prepared
 snapshots can be partial. Actions on provisional saved rows recheck the
-provider. A cold scan loads full metadata only for matching rows. Test alongside Notes filename searches when
+provider. A cold scan loads full metadata only for matching rows. Reconciliation leaves a pending typing delay in place and replays an already-submitted query without another delay. Test alongside Notes filename searches when
 changing the shared queue. Covered descendant requests can follow an ancestor
 job. Reader snapshots use separate SQLite connections.
 

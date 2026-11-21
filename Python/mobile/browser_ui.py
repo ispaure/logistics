@@ -246,6 +246,7 @@ class FileBrowser(RecycledBrowser):
         self._index_cancel = Event()
         self._index_error = None
         self._index_started = False
+        self._submitted_search_epoch = -1
         self._search_suspended = False
         self._index_hint = object()
         if local_search is not None:
@@ -295,14 +296,17 @@ class FileBrowser(RecycledBrowser):
             previous()
         self._foreground_folder(not self._search_suspended)
         if self.search_open and not self._search_suspended:
-            preparing = self._start_local_index()
-            if self.search.value and not preparing:
+            self._start_local_index()
+            if self.search.value:
                 self.query_changed()
 
     async def _search_subfolders(self, epoch, cancelled):
         # Online search filters the loaded listing; recursive I/O is explicit.
         if self._search_suspended or getattr(self.search_provider, 'remote_storage', False):
             return
+        if self.closed or epoch != self.search_epoch or cancelled.is_set():
+            return
+        self._submitted_search_epoch = epoch
         await super()._search_subfolders(epoch, cancelled)
 
     def _start_local_index(self):
@@ -312,8 +316,6 @@ class FileBrowser(RecycledBrowser):
             self._index_started = True
             self._index_cancel = Event()
             self._spawn(self._prepare_local_search(provider, self.search_directory, self._index_cancel))
-            return True
-        return False
 
     def query_changed(self, widget=None, **kwargs):
         if not self._search_suspended or widget is self.sort:
@@ -334,10 +336,11 @@ class FileBrowser(RecycledBrowser):
                 self._index_error = str(error)
                 self.page_label.text = 'Search index update failed: ' + self._index_error[:80]
             return
-        if not self.closed and not cancelled.is_set() and self.search.value:
-            # Replace partial/cached results after reconciliation, including
-            # updates which keep the same number of matching files.
-            self.query_changed()
+        if (not self.closed and not cancelled.is_set() and self.search.value
+                and self._submitted_search_epoch == self.search_epoch):
+            # A waiting typeahead will read the reconciled index. Replay only
+            # if this text was already submitted, without a second typing delay.
+            self._queue_query(delay=0)
 
     def stop(self):
         header = getattr(self, 'location_bar', None)

@@ -269,10 +269,11 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
                     children.append((entry.name, info, directory))
                 except FileNotFoundError:
                     continue
-        return self._list_inventory(folder, path, children, cancelled)
+        rows, _ = self._list_inventory(folder, path, children, cancelled)
+        return rows
 
     def _list_inventory(self, folder, path, children, cancelled):
-        rows = []
+        rows, unchanged = [], True
         for offset in range(0, len(children), 256):
             check_cancelled(cancelled)
             batch = [(name, info, directory) for name, info, directory in children[offset:offset + 256]
@@ -294,11 +295,17 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
                 try:
                     current = (folder / name).stat(follow_symlinks=False)
                 except FileNotFoundError:
+                    unchanged = False
                     continue  # A concurrent Pull retired this entry during decode.
                 if (current.st_dev, current.st_ino, current.st_mode) != (info.st_dev, info.st_ino, info.st_mode):
+                    unchanged = False
                     continue
                 if not directory and current.st_nlink != 1:
+                    unchanged = False
                     continue
+                if (current.st_size, current.st_mtime_ns, current.st_ctime_ns) != (
+                        info.st_size, info.st_mtime_ns, info.st_ctime_ns):
+                    unchanged = False
                 info = current
                 revision = ((info.st_dev, info.st_ino) if directory else
                     (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns))
@@ -307,7 +314,8 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
                     modified=_modified_time(info.st_mtime)))
         check_cancelled(cancelled)
         self._guard(folder)
-        return sorted(rows, key=lambda row: (not row['directory'], row['name'].casefold()))
+        rows.sort(key=lambda row: (not row['directory'], row['name'].casefold()))
+        return rows, unchanged
 
     @contextmanager
     def open(self, path):

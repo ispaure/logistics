@@ -11,6 +11,10 @@ from commonUtils.runtime.operations import check_cancelled
 from services.documents.credential_state import LIMIT, credential_authority
 
 
+def _directory_revision(info):
+    return info.st_dev, info.st_ino, info.st_mode, info.st_mtime_ns, info.st_ctime_ns
+
+
 class DirectoryIndex:
     def __init__(self, provider, folder, cipher):
         self.provider, self.folder, self.cipher = provider, folder, cipher
@@ -56,12 +60,12 @@ class DirectoryIndex:
         self._check(cancelled)
         self.provider._note_guard(folder)
         after = folder.stat(follow_symlinks=False)
-        keys = ('st_dev', 'st_ino', 'st_mode', 'st_mtime_ns', 'st_ctime_ns')
-        if any(getattr(before, key) != getattr(after, key) for key in keys):
+        parent_revision = _directory_revision(after)
+        if _directory_revision(before) != parent_revision:
             return None
         inode = before.st_dev, before.st_ino
         revision = sha256(json.dumps([inode, sorted(entries)], ensure_ascii=True).encode()).hexdigest()
-        return inode, revision
+        return inode, revision, parent_revision
 
     def _record_path(self, inode):
         if self.folder is None:
@@ -89,7 +93,7 @@ class DirectoryIndex:
                 signature = None
             if signature is None:
                 return provider.list(path, cancelled=cancelled)
-            inode, revision = signature
+            inode, revision, parent_revision = signature
             with self.lock:
                 cached = self.rows.pop(path, None)
                 if cached is not None and cached[0] == revision:
@@ -115,16 +119,26 @@ class DirectoryIndex:
                                 return rows
             except (OSError, ValueError, TypeError, KeyError, RuntimeError):
                 pass  # A disposable cache can always be rebuilt from the provider.
-            rows = (provider.list(path, cancelled=cancelled) if from_inventory is None
-                    else from_inventory(folder, path, inventory, cancelled))
+            if from_inventory is None:
+                rows = provider.list(path, cancelled=cancelled)
+                try:
+                    unchanged = self._fingerprint(folder, cancelled) == signature
+                except FileNotFoundError:
+                    unchanged = False
+            else:
+                rows, unchanged = from_inventory(folder, path, inventory, cancelled)
+                # The loader rechecks each decoded entry against the same
+                # metadata used for the fingerprint. Check the parent too so
+                # additions, moves and removals prevent a saved publication.
+                try:
+                    unchanged = unchanged and _directory_revision(
+                        folder.stat(follow_symlinks=False)) == parent_revision
+                except FileNotFoundError:
+                    unchanged = False
             # Keep only search metadata. Live opens still validate the resource.
             rows = [{key: row[key] for key in ('name', 'path', 'directory', 'size', 'modified') if key in row}
                     for row in rows]
             self._check(cancelled)
-            try:
-                unchanged = self._fingerprint(folder, cancelled) == (inode, revision)
-            except FileNotFoundError:
-                unchanged = False
             if unchanged:
                 self._remember(path, revision, rows, cancelled)
                 if file is not None:

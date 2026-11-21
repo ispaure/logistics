@@ -90,18 +90,29 @@ with patch.object(registry, 'get_browser_extensions', return_value=[]):
                 count_complete = until(lambda: model.rowCount(browser.views.currentWidget().rootIndex()) == count) - start
                 index_idle = until(lambda: not browser.folder_busy) - start
                 enumeration_signal = loaded.get(str(folder))
-            browser.navigate(root / 'next')
-            until(lambda: select(root / 'next') and not browser.folder_busy)
-            browser.navigate(root / (size + '-leave'))
-            leave = monotonic()
-            browser.navigate(root / 'next')
-            next_action = until(lambda: select(root / 'next')) - leave
-            until(lambda: not browser.folder_busy)
-            assert Path(model.filePath(browser.views.source_index(browser.views.currentWidget().currentIndex()))).name == 'select-next.txt'
             samples.append(dict(size=size, count=count, cold=cold, first=first,
                                 folder_open_return=navigation_return, enumeration_complete=count_complete,
                                 directory_loaded_signal=(enumeration_signal-start if enumeration_signal is not None else None),
-                                index_idle=index_idle, leave_to_action=next_action, phases=phases))
+                                index_idle=index_idle, phases=phases))
+            browser.navigate(root / 'next')
+            until(lambda: select(root / 'next') and not browser.folder_busy)
+
+        leave_folder = root / (size + '-leave')
+        for sample in samples[-3:]:
+            browser.navigate(leave_folder)
+            if sample['cold']:
+                parent = model.browse_index(leave_folder)
+                if model.canFetchMore(parent):
+                    model.fetchMore(parent)
+                assert str(leave_folder) not in loaded
+            leave = monotonic()
+            browser.navigate(root / 'next')
+            sample['leave_to_action'] = until(lambda: select(root / 'next')) - leave
+            if sample['cold']:
+                until(lambda: str(leave_folder) in loaded)
+            until(lambda: not browser.folder_busy)
+            current = browser.views.source_index(browser.views.currentWidget().currentIndex())
+            assert Path(model.filePath(current)).name == 'select-next.txt'
     last = root / 'small' / 'file-00000.txt'
     browser.navigate(last.parent)
     until(lambda: model.browse_index(last).isValid())
