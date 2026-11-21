@@ -26,6 +26,10 @@ class NativeDocumentMenuTests(TestCase):
 
         path = Path('cache/Selected file.bin')
         url, configuration = object(), object()
+        data = SimpleNamespace(identifier='public.data')
+        inferred = SimpleNamespace(identifier='dyn.test-binary')
+        types = SimpleNamespace(typeWithIdentifier=Mock(return_value=data),
+                                typeWithFilenameExtension=Mock(return_value=inferred))
         provider = Mock()
         sheet = SimpleNamespace(popoverPresentationController=None)
         app = SimpleNamespace()
@@ -36,21 +40,28 @@ class NativeDocumentMenuTests(TestCase):
 
         presenter = SimpleNamespace(presentViewController=present)
         provider_factory = Mock()
-        provider_factory.alloc.return_value.initWithContentsOfURL.return_value = provider
+        provider_factory.alloc.return_value.init.return_value = provider
         config_factory = Mock()
         config_factory.alloc.return_value.initWithItemProviders.return_value = configuration
         controller_factory = Mock()
         controller_factory.alloc.return_value.initWithActivityItemsConfiguration.return_value = sheet
-        classes = {'NSURL': SimpleNamespace(fileURLWithPath=Mock(return_value=url)),
+        classes = {'NSURL': SimpleNamespace(fileURLWithPath=Mock(return_value=url)), 'UTType': types,
                    'NSItemProvider': provider_factory, 'UIActivityItemsConfiguration': config_factory,
                    'UIActivityViewController': controller_factory}
+        completion = Mock()
         bridge = SimpleNamespace(ObjCClass=classes.__getitem__, Block=lambda handler, *_: handler,
-                                 CGRect=object, objc_id=object)
+                                 ObjCBlock=Mock(return_value=completion), CGRect=object,
+                                 objc_id=object, objc_block=object)
         with patch.dict('sys.modules', {'rubicon.objc': bridge}), \
                 patch.object(outbound_share, '_ios_presenter', new=AsyncMock(return_value=(None, presenter))):
             self.assertTrue(asyncio.run(outbound_share._send_ios(app, path, lambda: None, None)))
-        provider_factory.alloc.return_value.initWithContentsOfURL.assert_called_once_with(url)
-        provider.registerObject.assert_not_called()
+        types.typeWithFilenameExtension.assert_called_once_with('bin', conformingToType=data)
+        register = provider.registerFileRepresentationForTypeIdentifier
+        register.assert_called_once()
+        self.assertEqual(register.call_args.args, (inferred.identifier,))
+        self.assertEqual(register.call_args.kwargs['fileOptions'], 0)
+        register.call_args.kwargs['loadHandler'](object())
+        completion.assert_called_once_with(url, False, None)
         self.assertEqual(provider.suggestedName, path.name)
         config_factory.alloc.return_value.initWithItemProviders.assert_called_once_with([provider])
         controller_factory.alloc.return_value.initWithActivityItemsConfiguration.assert_called_once_with(configuration)

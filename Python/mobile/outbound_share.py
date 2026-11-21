@@ -193,17 +193,33 @@ async def _ios_presenter(app, validate):
     return window, presenter
 
 
+def _ios_file_provider(path):
+    from rubicon.objc import Block, ObjCBlock, ObjCClass, objc_block, objc_id
+
+    url = ObjCClass('NSURL').fileURLWithPath(str(path))
+    UTType = ObjCClass('UTType')
+    data = UTType.typeWithIdentifier('public.data')
+    suffix = path.suffix[1:]
+    # For an unregistered extension, declare a dynamic type that still
+    # conforms to file data so document receivers can load its contents.
+    content = UTType.typeWithFilenameExtension(suffix, conformingToType=data) if suffix else None
+    provider = ObjCClass('NSItemProvider').alloc().init()
+    provider.suggestedName = path.name
+    provider.preferredPresentationStyle = 2  # UIPreferredPresentationStyleAttachment
+
+    def load(completion):
+        ObjCBlock(completion, None, objc_id, c_bool, objc_id)(url, False, None)
+        return None
+
+    provider.registerFileRepresentationForTypeIdentifier((content or data).identifier,
+        fileOptions=0, visibility=0, loadHandler=Block(load, objc_id, objc_block))
+    return provider
+
+
 async def _send_ios(app, path, validate, anchor):
     from rubicon.objc import Block, CGRect, ObjCClass, objc_id
     window, presenter = await _ios_presenter(app, validate)
-    url = ObjCClass('NSURL').fileURLWithPath(str(path))
-    # A bare NSURL can be offered as a serialized URL to a Share extension.
-    # Advertise the file's content type and let iOS supply its scoped copy.
-    provider = ObjCClass('NSItemProvider').alloc().initWithContentsOfURL(url)
-    if provider is None:
-        raise OSError('iOS could not prepare the selected file for sharing.')
-    provider.suggestedName = path.name
-    provider.preferredPresentationStyle = 2  # UIPreferredPresentationStyleAttachment
+    provider = _ios_file_provider(path)
     configuration = ObjCClass('UIActivityItemsConfiguration').alloc().initWithItemProviders([provider])
     sheet = ObjCClass('UIActivityViewController').alloc().initWithActivityItemsConfiguration(configuration)
     popover = sheet.popoverPresentationController
