@@ -204,7 +204,6 @@ async def _send_ios(app, path, validate, anchor):
         raise OSError('iOS could not prepare the selected file for sharing.')
     provider.suggestedName = path.name
     provider.preferredPresentationStyle = 2  # UIPreferredPresentationStyleAttachment
-    provider.registerObject(url, visibility=0)  # NSItemProviderRepresentationVisibilityAll
     configuration = ObjCClass('UIActivityItemsConfiguration').alloc().initWithItemProviders([provider])
     sheet = ObjCClass('UIActivityViewController').alloc().initWithActivityItemsConfiguration(configuration)
     popover = sheet.popoverPresentationController

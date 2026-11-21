@@ -21,7 +21,7 @@ from mobile.action_menu import DocumentNativeMenu
 
 
 class NativeDocumentMenuTests(TestCase):
-    def test_ios_share_offers_file_contents_before_the_url(self):
+    def test_ios_share_offers_file_contents_as_an_attachment(self):
         from mobile import outbound_share
 
         path = Path('cache/Selected file.bin')
@@ -50,7 +50,7 @@ class NativeDocumentMenuTests(TestCase):
                 patch.object(outbound_share, '_ios_presenter', new=AsyncMock(return_value=(None, presenter))):
             self.assertTrue(asyncio.run(outbound_share._send_ios(app, path, lambda: None, None)))
         provider_factory.alloc.return_value.initWithContentsOfURL.assert_called_once_with(url)
-        provider.registerObject.assert_called_once_with(url, visibility=0)
+        provider.registerObject.assert_not_called()
         self.assertEqual(provider.suggestedName, path.name)
         config_factory.alloc.return_value.initWithItemProviders.assert_called_once_with([provider])
         controller_factory.alloc.return_value.initWithActivityItemsConfiguration.assert_called_once_with(configuration)
