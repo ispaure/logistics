@@ -20,9 +20,29 @@ _providers = weakref.WeakSet()
 _providers_lock = threading.RLock()
 
 
-def remote_failure(error):
+def remote_failure(error, *, smb=False):
     """Translate provider diagnostics to fixed text; never echo secrets or paths."""
     detail = error.stderr.decode('utf-8', errors='replace').casefold()
+    if smb:
+        if any(value in detail for value in ('logon_failure', 'logon failure', 'attempted logon is invalid', 'wrong_password',
+                                             'account_disabled', 'account_restriction', 'password_expired',
+                                             'authentication failed', 'login failure', 'current password is not correct',
+                                             'account is currently disabled', 'invalid logon attempts')):
+            return 'The SMB server declined sign-in. Check the username, password, domain, or guest access.'
+        if any(value in detail for value in ('bad_network_name', 'bad network name', 'network name not found',
+                                             'network_name_deleted', 'network name was deleted', 'directory not found',
+                                             'object_path_not_found', 'path not found', 'share not found')):
+            return 'The SMB share or folder was not found. Refresh the server’s shares and check the share name.'
+        if any(value in detail for value in ('object not found', 'file not found', 'object name is not found')):
+            return 'The SMB file was not found. Refresh the folder and choose the file again.'
+        if any(value in detail for value in ('access_denied', 'access denied', 'permission denied')):
+            return 'The SMB server denied access. Check your account and share permissions.'
+        if any(value in detail for value in ('dial tcp', 'no such host', 'timed out', 'timeout',
+                                             'connection refused', 'network is unreachable', 'connection reset')):
+            return 'Could not reach the SMB server. Check its address, port, and network connection, then retry.'
+        if 'couldn\'t connect smb:' in detail:
+            return 'The SMB server did not complete sign-in. Check the credentials and the server’s SMB settings.'
+        return 'The SMB operation failed. Check server availability, sign-in, and share permissions.'
     if any(value in detail for value in ('invalid_grant', 'invalid_client', 'unauthorized_client',
                                          'token has been expired or revoked',
                                          'empty token found', 'invalid authentication credentials')):
@@ -91,6 +111,7 @@ class RemoteResources:
         if remote not in values:
             raise ValueError('This remote is no longer available in the selected account.')
         self.encrypted = values[remote].get('type') == 'crypt'
+        self.smb = values[remote].get('type') == 'smb'
         self.storage_label = ('Home Server' if self.config_path.stem.casefold()
                               in {'network shares', 'session network shares'} else 'Cloud')
         from features.rclone.storage import install_local_storage_policy
@@ -158,8 +179,14 @@ class RemoteResources:
         except BinaryCommandError as error:
             self._check_active()
             if operation == 'lsjson' and '--stat' in flags and error.returncode in {3, 4}:
-                raise FileNotFoundError('The remote file was not found.') from None
-            raise OSError(remote_failure(error)) from None
+                message = remote_failure(error, smb=True) if self.smb else 'The remote file was not found.'
+                raise FileNotFoundError(message) from None
+            raise OSError(remote_failure(error, smb=self.smb)) from None
+        except TimeoutError:
+            self._check_active()
+            if self.smb:
+                raise TimeoutError('The SMB server did not respond in time. Check the connection and retry.') from None
+            raise
         self._check_active()
         return result
 

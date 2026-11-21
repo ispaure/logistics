@@ -18,6 +18,10 @@ directories and explicitly approved full restarts use the staged CLI or native
 rclone copy. Folder downloads include empty directories. Completion refreshes
 the published parent and preserves the retained browser selection.
 
+Desktop SMB uses this full-copy path for every selected item. A staged copy
+publishes to the chosen local destination only after the worker rechecks the
+credential grant. The remote browser exposes download and export operations.
+
 For files of at least 8 MiB, `transfers/download_recovery.py` records the job
 ID, selection, physical destination, parent and partial inode, source version,
 logical offset, stored-prefix SHA-256 and publication state. The worker syncs

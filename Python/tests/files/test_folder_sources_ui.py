@@ -510,7 +510,9 @@ class FolderSourceTests(QtTestCase):
         self.wait(page)
         self.assertFalse(page.cloud_source_tabs.isVisible())
         self.assertFalse(page.local_source_tabs.isVisible())
-        self.assertFalse(page.refresh_button.isVisible())
+        self.assertTrue(page.refresh_button.isVisible())
+        self.assertTrue(page.add_server_button.isVisible())
+        self.assertFalse(page.add_server_button.isEnabled())
         page.source_tabs.setCurrentIndex(self.tab(page, 'Local'))
         self.wait(page)
         self.assertFalse(page.refresh_button.isVisible())
@@ -991,9 +993,11 @@ class FolderSourceTests(QtTestCase):
         self.wait(page)
         self.assertTrue(page.credential_combo.isHidden())
         self.assertTrue(page.rclone_credentials_button.isHidden())
-        self.assertTrue(page.home_server_notice.isVisible())
-        self.assertEqual(page.home_server_notice.text(), 'Pending Implementation')
-        self.assertTrue(page.home_server_notice.font().italic())
+        self.assertTrue(page.add_server_button.isVisible())
+        self.assertTrue(page.add_server_button.isEnabled())
+        self.assertTrue(page.refresh_button.isVisible())
+        self.assertFalse(page.server_actions_button.isEnabled())
+        self.assertIn('Add server', page.browser_notice.text())
 
     def test_home_server_uses_explicit_package_identity(self):
         self.remote(['CloudFolder'], 'ordinary')
@@ -1006,6 +1010,31 @@ class FolderSourceTests(QtTestCase):
         page.source_tabs.setCurrentIndex(self.tab(page, 'Cloud'))
         self.wait(page)
         self.assertEqual([entry.name for entry in self.entries(page)], ['CloudFolder'])
+
+    def test_managed_server_stays_visible_when_locked_and_never_matches_a_local_copy(self):
+        import json
+        from features.rclone import desktop_smb
+        from features.rclone.ui.smb_connection import ServerReconnectView
+
+        self.enterContext(patch.object(desktop_smb, 'application_root', return_value=self.root))
+        self.browser_patcher.stop()
+        record = desktop_smb.ServerRecord.new('Legacy-Fixture')
+        record.path.parent.mkdir(parents=True)
+        record.path.write_text(json.dumps({'schema': 1, 'name': record.name, 'encrypted': ''}))
+        self.local_folders = [self.folder(record.name)]
+        self.remote([record.name], str(record.context), feature='rclone')
+        page = self.page()
+        page.show()
+        page.source_tabs.setCurrentIndex(self.tab(page, 'Home Server'))
+        self.wait(page)
+        entry, = self.entries(page)
+        self.assertEqual(entry.remote_context, record.context)
+        self.assertIsNone(entry.local)
+        self.select_first(page)
+        self.assertIsInstance(page._browser_view, ServerReconnectView)
+        page._populate_server_menu()
+        self.assertEqual([action.text() for action in page.server_menu.actions()],
+                         ['Reconnect…', 'Forget connection…'])
 
     def test_local_account_copies_become_cloud_destinations_only_after_loading(self):
         from types import SimpleNamespace

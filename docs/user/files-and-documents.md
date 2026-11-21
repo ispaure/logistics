@@ -108,9 +108,9 @@ Use **Workspaces** to browse folders you use with an integration. **Local**
 offers **Dropbox**, **Rclone Copies** and **On This Computer**. A managed
 rclone copy is a separate folder on your computer. Its contents can differ
 from the online folder until you sync them. **Cloud → Rclone Remotes** lists
-online folders from loaded credentials. **Home Server** groups packages named
-**Network shares** or **Session network shares** and can show **Pending
-Implementation**.
+online folders from loaded credentials. **Home Server** lets you add an SMB
+server and open its shared folders in **Files**. It also lists remotes from
+packages named **Network shares** or **Session network shares**.
 
 Use **Credential** to narrow the list of copies or remotes. If the one you
 want is missing, use **+ rclone** to open credential settings or unlock the
@@ -123,6 +123,31 @@ Select a workspace to fill **Files**, then open any subfolders you need.
 contains commands for the selected workspace. Push and Pull use the
 workspace named in **Actions**, even if **Files** is showing a subfolder.
 Right-click a local folder to reveal it in your system file manager.
+
+### Browse an SMB server
+
+1. Open **Workspaces → Home Server → Add server…**. Enter a connection name and
+   the server hostname or IP address. Use your SMB account or choose **Connect
+   as guest** if the server allows it. Change the domain or port if your server
+   uses different settings.
+2. Choose **Connect & browse** and open a share in **Files**. Open supported
+   documents read-only. To keep a local copy, right-click a file or folder and
+   choose **Download locally…**. You can also prepare readable copies for
+   dragging to another window from the browser's **File** menu.
+3. Choose **Server actions → Disconnect** to lock the connection in every
+   browser window. Select the server and choose **Reconnect…** to sign in
+   again. **Forget connection…** removes the connection and any saved
+   credentials from this device.
+
+Session-only connections remember their name and ask you to enter the server
+address and sign-in again after disconnecting or quitting. To keep the
+connection details and account credentials, select **Save credentials on this
+device** and choose a credential passphrase. Logistics encrypts those details
+and asks for the passphrase when reconnecting.
+
+If the server is unreachable, check its address, port and network connection.
+If it declines sign-in, check the account, domain and guest setting. If a
+share is missing, return to the server root and refresh the listing.
 
 **Locked** and **Unlocked** tell you whether the protected source is
 accessible. A **Session-Only** view needs an unlock again after the session

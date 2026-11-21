@@ -64,12 +64,20 @@ class FolderTreePresentation:
                 for entry in source_entries:
                     entry_labels[page._entry_key(entry)] = source.source.name
 
+        from features.rclone.desktop_smb import is_server_context
+        managed_servers = {page._entry_key(entry) for entry in entries if entry.remote_source == 'rclone'
+                           and entry.remote_context is not None and is_server_context(entry.remote_context)}
         if source_type != 'local':
             # Shared names in several credential packages denote the same remote.
-            entries = list({entry.name: entry for entry in reversed(entries)}.values())
+            unique = {}
+            for entry in reversed(entries):
+                key = page._entry_key(entry)
+                unique[key if key in managed_servers else entry.name] = entry
+            entries = list(unique.values())
 
         if not page.visibility.show_legacy:
-            entries = [entry for entry in entries if not entry.name.casefold().startswith('legacy-')]
+            entries = [entry for entry in entries if not entry.name.casefold().startswith('legacy-')
+                       or page._entry_key(entry) in managed_servers]
         entries.sort(key=lambda entry: (entry.name.casefold(), str(entry.remote_context)))
         return entries, entry_labels
 

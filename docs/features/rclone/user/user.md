@@ -5,6 +5,10 @@ Use **Workspaces → Cloud → Rclone Remotes** to browse online folders. Use
 Local files or encrypted LocalCrypt files. **Locked** and **Unlocked** describe
 whether the matching credentials are available.
 
+To connect directly to a Mac, PC or NAS, use **Workspaces → Home Server →
+Add server…**. See [Browse an SMB server](../../../user/files-and-documents.md#browse-an-smb-server)
+for sign-in, reconnecting and local copies.
+
 ## Set up credentials
 
 1. Open **Settings → rclone → Credential packages** or choose **+ rclone** in
@@ -73,6 +77,9 @@ ranges, **Download from byte zero** starts a full copy only when you choose it.
 
 If authorization fails, renew the underlying account, replace the ZIP and
 reopen the remote. Include the backing remote for a crypt connection.
+
+SMB downloads use the staged full-copy transfer. If the download stops, start
+it again from the file or folder in the server browser.
 
 ## Transfer files
 

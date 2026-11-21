@@ -19,7 +19,7 @@ from features.rclone import session
 from features.rclone.remote_resources import remote_failure
 
 
-def _copy(arguments, environment, check, progress):
+def _copy(arguments, environment, check, progress, *, smb=False):
     require_capability(Capability.SUBPROCESS, 'remote download')
     check()
     child = subprocess.Popen(arguments, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
@@ -60,7 +60,7 @@ def _copy(arguments, environment, check, progress):
         check()
         if child.returncode:
             error = BinaryCommandError(child.returncode, (diagnostics + pending)[-65536:])
-            raise OSError(remote_failure(error))
+            raise OSError(remote_failure(error, smb=smb))
 
 
 def download_remote_item(provider, path, destination, *, cancelled, progress=lambda _stats: None,
@@ -68,6 +68,8 @@ def download_remote_item(provider, path, destination, *, cancelled, progress=lam
                          expected_revision=None):
     """Use the browser's credential generation throughout the staged transfer."""
     relative = provider.relative(path)
+    smb = getattr(provider, 'smb', False)
+    recoverable = recoverable and not smb
     if not relative:
         raise ValueError('Choose a file or folder in the remote browser.')
     destination = Path(destination)
@@ -132,9 +134,12 @@ def download_remote_item(provider, path, destination, *, cancelled, progress=lam
         with TemporaryDirectory(prefix='.logistics-download-', dir=destination.parent) as temporary:
             staged = Path(temporary) / 'item'
             command = ['copy', '--create-empty-src-dirs'] if directory else ['copyto']
-            _copy([str(provider.binary), '--config', session.NULL_CONFIG,
+            limits = ['--retries', '1', '--low-level-retries', '1',
+                      '--contimeout', '15s', '--timeout', '30s'] if smb else []
+            arguments = [str(provider.binary), '--config', session.NULL_CONFIG,
                 '--log-level', 'ERROR', '--use-json-log', '--stats', '1s', '--stats-log-level', 'ERROR',
-                *command, '--', source, str(staged)], environment, provider.check, progress)
+                *limits, *command, '--', source, str(staged)]
+            _copy(arguments, environment, provider.check, progress, **({'smb': True} if smb else {}))
             provider.check()
             if not (staged.is_dir() if directory else staged.is_file()):
                 raise OSError('The remote download did not produce the selected item.')

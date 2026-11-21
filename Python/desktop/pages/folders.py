@@ -78,6 +78,16 @@ class FoldersPage(pyside.QWidget):
         self.rclone_credentials_button.setAccessibleName('Open rclone credentials')
         self.rclone_credentials_button.setAutoRaise(True)
         self.rclone_credentials_button.clicked.connect(self._add_rclone)
+        self.add_server_button = pyside.QPushButton('Add server…')
+        self.add_server_button.hide()
+        self.add_server_button.clicked.connect(lambda: self._connect_server())
+        self.server_actions_button = pyside.QToolButton()
+        self.server_actions_button.hide()
+        self.server_actions_button.setText('Server actions')
+        self.server_actions_button.setPopupMode(pyside.QToolButton.ToolButtonPopupMode.InstantPopup)
+        self.server_menu = pyside.QMenu(self.server_actions_button)
+        self.server_menu.aboutToShow.connect(self._populate_server_menu)
+        self.server_actions_button.setMenu(self.server_menu)
         self.discovery = OperationProgress(self)
         self.discovery.completed.connect(self._discovered)
         self.details = OperationProgress(self)
@@ -125,6 +135,8 @@ class FoldersPage(pyside.QWidget):
         credential_row = pyside.QHBoxLayout()
         credential_row.addWidget(self.credential_combo, 1)
         credential_row.addWidget(self.rclone_credentials_button)
+        credential_row.addWidget(self.add_server_button, 1)
+        credential_row.addWidget(self.server_actions_button)
         credential_row.addWidget(self.refresh_button)
         left_layout.addLayout(credential_row)
         self.folder_list_panel = pyside.QFrame()
@@ -133,12 +145,6 @@ class FoldersPage(pyside.QWidget):
         folder_list_layout = pyside.QVBoxLayout(self.folder_list_panel)
         folder_list_layout.setContentsMargins(0, 0, 0, 0)
         folder_list_layout.setSpacing(0)
-        self.home_server_notice = pyside.QLabel('Pending Implementation')
-        pending_font = self.home_server_notice.font()
-        pending_font.setItalic(True)
-        self.home_server_notice.setFont(pending_font)
-        self.home_server_notice.setAlignment(pyside.Qt.AlignmentFlag.AlignCenter)
-        folder_list_layout.addWidget(self.home_server_notice)
         folder_list_layout.addWidget(self.folder_tree, 1)
         left_layout.addWidget(self.folder_list_panel, 1)
 
@@ -205,6 +211,12 @@ class FoldersPage(pyside.QWidget):
         item = self.folder_tree.itemAt(position)
         entry = item.data(0, pyside.Qt.ItemDataRole.UserRole) if item is not None else None
         source = self._get_selected_source()
+        record = self._server_record(entry)
+        if record is not None and source is not None and source[0] == 'remote':
+            menu = pyside.QMenu(self)
+            self._server_actions(menu, record)
+            menu.exec(self.folder_tree.viewport().mapToGlobal(position))
+            return
         if entry is None or entry.local is None or source is None or source[0] != 'local':
             return
         menu = pyside.QMenu(self)
@@ -233,6 +245,7 @@ class FoldersPage(pyside.QWidget):
     def _start_discovery(self):
         # Resolve declarations on the GUI thread; only provider I/O runs in the worker.
         remotes = tuple(registry.get_remote_folder_sources())
+        self.add_server_button.setEnabled(any(source.feature_name == 'rclone' for source in remotes))
         locals_ = tuple(registry.get_local_folder_sources())
         self._folder_features = sorted(registry.get_folder_features(),
             key=lambda registered: (registered.contribution.order, registered.contribution.name.casefold()))
@@ -330,6 +343,7 @@ class FoldersPage(pyside.QWidget):
         category = self.source_tabs.tabText(self.source_tabs.currentIndex())
         local_rclone = not is_remote and self.local_source_tabs.tabData(self.local_source_tabs.currentIndex()) == 'Rclone'
         cloud = is_remote and category == 'Cloud'
+        server = is_remote and category == 'Home Server'
         sources = (selected_source[2] if cloud else
                    [source for source in self._sources.remote_sources if source.feature_name == 'rclone'])
         with pyside.QSignalBlocker(self.credential_combo):
@@ -357,8 +371,10 @@ class FoldersPage(pyside.QWidget):
         self.credential_label.setVisible(cloud or local_rclone)
         self.credential_combo.setVisible(cloud or local_rclone)
         self.rclone_credentials_button.setVisible(cloud or local_rclone)
-        self.refresh_button.setVisible(cloud or local_rclone)
-        self.home_server_notice.setVisible(category == 'Home Server')
+        self.refresh_button.setVisible(cloud or local_rclone or server)
+        self.add_server_button.setVisible(server)
+        self.server_actions_button.setVisible(server)
+        self.server_actions_button.setEnabled(False)
 
     @staticmethod
     def _entry_key(entry):
@@ -381,6 +397,7 @@ class FoldersPage(pyside.QWidget):
 
         self.selected_entry_name = entry.name
         self._selected_entry_key = self._entry_key(entry)
+        self.server_actions_button.setEnabled(self._server_record(entry) is not None)
         self._show_entry(entry)
         if self.isVisible():
             self._browse_entry(entry)
@@ -424,7 +441,10 @@ class FoldersPage(pyside.QWidget):
     def _browse_entry(self, entry, *, force=False):
         source = self._get_selected_source()
         online = source is not None and source[0] == 'remote'
+        server = self._server_record(entry)
         key = (online, self._entry_key(entry))
+        if server is not None:
+            key += (server.connected,)
         if key == self._browser_key and not force:
             return
         self._clear_browser('Opening workspace…')
@@ -467,7 +487,8 @@ class FoldersPage(pyside.QWidget):
         if view is None:
             return None
         from features.rclone.ui.workspace_unlock import WorkspaceUnlockView
-        self.panes.set_actions_available(not isinstance(view, WorkspaceUnlockView))
+        from features.rclone.ui.smb_connection import ServerReconnectView
+        self.panes.set_actions_available(not isinstance(view, (WorkspaceUnlockView, ServerReconnectView)))
         self._browser_view = view
         self.browser_stack.addWidget(view)
         self.browser_stack.setCurrentWidget(view)
@@ -476,7 +497,13 @@ class FoldersPage(pyside.QWidget):
 
     def _create_browser(self, location, *, package=None):
         from desktop.file_browser import _browser_view
+        from features.rclone.desktop_smb import record_for
+        from features.rclone.ui.smb_connection import ServerReconnectView
         from features.rclone.ui.workspace_unlock import unlock_target, WorkspaceUnlockView
+        config = getattr(location, 'config', None)
+        server = record_for(config) if config is not None else None
+        if server is not None and not server.connected:
+            return ServerReconnectView(self, server, lambda: self._connect_server(server))
         target = unlock_target(location, package=package)
         if target is not None:
             name = getattr(location, 'remote', None) or getattr(getattr(location, 'item', None), 'remote', None)
@@ -484,6 +511,10 @@ class FoldersPage(pyside.QWidget):
             view.unlocked.connect(lambda: self._workspace_unlocked(view, location))
             return view
         view = _browser_view(location)
+        if server is not None:
+            guard = view._private_view_guard
+            guard.revoked.connect(
+                lambda: pyside.QTimer.singleShot(0, self, lambda: self._server_view_revoked(view)))
         browser = getattr(view, 'file_browser', None)
         if browser is not None:
             browser.preview_toggle.setChecked(False)
@@ -575,11 +606,78 @@ class FoldersPage(pyside.QWidget):
                         tabs.setCurrentWidget(widget)
                 widget.import_button.setFocus()
 
+    @staticmethod
+    def _server_record(entry):
+        from features.rclone.desktop_smb import record_for
+        if entry is not None and entry.remote_source == 'rclone' and entry.remote_context is not None:
+            return record_for(Path(entry.remote_context))
+        return None
+
+    def _populate_server_menu(self):
+        self.server_menu.clear()
+        item = self.folder_tree.currentItem()
+        entry = item.data(0, pyside.Qt.ItemDataRole.UserRole) if item is not None else None
+        record = self._server_record(entry)
+        if record is not None:
+            self._server_actions(self.server_menu, record)
+
+    def _server_actions(self, menu, record):
+        if record.connected:
+            menu.addAction('Disconnect', lambda: self._disconnect_server(record))
+        else:
+            menu.addAction('Reconnect…', lambda: self._connect_server(record))
+        menu.addAction('Forget connection…', lambda: self._disconnect_server(record, forget=True))
+
+    def _connect_server(self, record=None):
+        from features.rclone.ui.smb_connection import ServerConnectionDialog
+        dialog = ServerConnectionDialog(self, record)
+        if dialog.exec() == pyside.QDialog.DialogCode.Accepted:
+            from models.folder_entry import FolderEntry
+            entry = FolderEntry(dialog.record.name, remote_name=dialog.record.name,
+                                remote_source='rclone', remote_context=dialog.record.context)
+            self._selected_entry_key = self._entry_key(entry)
+            self._browser_key = None
+            self.refresh()
+        dialog.deleteLater()
+
+    def _disconnect_server(self, record, *, forget=False):
+        from features.rclone import desktop_smb
+        from features.rclone.desktop_service import service
+        from services.documents.ui.private_views import prepare_credential_lock
+        if forget:
+            buttons = pyside.QMessageBox.StandardButton
+            answer = pyside.QMessageBox.question(self, 'Forget server connection',
+                'Remove this server connection and any saved credentials from this device?',
+                buttons.Yes | buttons.Cancel, buttons.Cancel)
+            if answer != buttons.Yes:
+                return
+        if not prepare_credential_lock([record.context]):
+            pyside.QMessageBox.information(self, 'Disconnect from server',
+                'Finish or cancel the active file operation, then try again.')
+            return
+        try:
+            if forget:
+                desktop_smb.forget(record)
+            else:
+                service.credentials.lock(record.context)
+        except (OSError, ValueError) as error:
+            pyside.QMessageBox.warning(self, 'Server connection', str(error))
+        else:
+            self._browser_key = None
+            self.refresh()
+
+    def _server_view_revoked(self, view):
+        if self._closing or self._browser_view is not view or not view._private_view_guard.locked:
+            return
+        self._clear_browser('Server credentials were locked. Reconnect to browse.')
+        self.refresh()
+
     def _show_empty_state(self, message=None):
         self.panes.set_actions_available(True)
         self._retire_actions_unlock()
         self.selected_entry_name = None
         self._selected_entry_key = None
+        self.server_actions_button.setEnabled(False)
         self.controller.clear_detail()
         self.details.request_cancel()
         self._tools_status = None
@@ -591,7 +689,11 @@ class FoldersPage(pyside.QWidget):
         source_type = selected_source[0] if selected_source is not None else 'local'
 
         if message is None:
-            message = ('No local copies were found for this source. Choose another source to browse its workspaces.'
+            if self.source_tabs.tabText(self.source_tabs.currentIndex()) == 'Home Server':
+                message = ('Choose Add server to connect to a Mac, PC, or NAS over SMB.'
+                           if self.add_server_button.isEnabled() else 'Enable rclone in Settings to add an SMB server.')
+            else:
+                message = ('No local copies were found for this source. Choose another source to browse its workspaces.'
                        if source_type == 'local' else
                        'No visible remote folders. Add an account, choose another credential, or enable Legacy in Settings if needed.')
 
@@ -779,7 +881,12 @@ class FoldersPage(pyside.QWidget):
             )
             status_layout.addWidget(remote_label, next_row, 1)
 
-        if entry.remote_source == 'rclone' and entry.remote_context is not None:
+        server = self._server_record(entry)
+        if server is not None:
+            retention = 'Encrypted credentials saved on this device.' if server.encrypted else 'Session-only credentials.'
+            status = 'Connected.' if server.connected else 'Disconnected.'
+            status_layout.addWidget(pyside.QLabel(f'{status} {retention}'), next_row + 1, 0, 1, 2)
+        elif entry.remote_source == 'rclone' and entry.remote_context is not None:
             if Path(entry.remote_context).suffix == '.session':
                 note = pyside.QLabel(
                     'Session-only credentials enable Cloud browsing and transfers. '

@@ -117,6 +117,9 @@ class DesktopCredentials:
         return removed
 
     def prepare(self, request, password):
+        from . import desktop_smb
+        if isinstance(request, desktop_smb.DesktopSMBLoad):
+            return desktop_smb.prepare(request, password)
         if not isinstance(request, DesktopCredentialLoad):
             raise TypeError('Choose a desktop credential package.')
         existing = session.names(request.config) is not None

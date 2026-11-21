@@ -1,6 +1,8 @@
 # Read-only remote browsing
 
-Enter through **Workspaces → Cloud** or desktop **File Browser → File → Open Remote…**. See [Transfers](transfers.md) for Push/Pull and [LocalCrypt](localcrypt.md) for encrypted offline copies.
+Enter through **Workspaces → Cloud**, **Workspaces → Home Server** or desktop
+**File Browser → File → Open Remote…**. See [Transfers](transfers.md) for Push/Pull
+and [LocalCrypt](localcrypt.md) for encrypted offline copies.
 
 ## Desktop browser and unlock
 
@@ -9,6 +11,14 @@ Enter through **Workspaces → Cloud** or desktop **File Browser → File → Op
 Use isolated child credentials, process-private aliases and null config. Check saved revisions and live grants before/after I/O. Readers keep leases beyond tab closure; revocation retires existing readers. CLI failures expose sanitized recovery or exit status, with revocation taking precedence. Keep remote paths out of local mutations, indexes and external launchers.
 
 For **Download locally…**, see [selected-item transfers](transfers.md#download-selected-items).
+
+Direct SMB connections open the same `RemoteLocation` and read-only provider as
+other rclone remotes. The connection row lists the shares and keeps browse scope
+independent of local folders with the same name. SMB diagnostics distinguish
+unreachable servers, rejected sign-in and missing shares without exposing raw
+rclone output. Validate with loopback-only generated shares and a disposable
+profile. Compare path and directory flags with the mobile native bridge and
+exercise credential revocation while the desktop browser and a reader are open.
 
 ## Mobile listings and connection admission
 

@@ -1,5 +1,7 @@
 """Desktop source categories without losing provider-owned action contexts."""
 
+from pathlib import Path
+
 from services.folders.entries import get_folder_entries
 from .catalog import FolderCopy, project_catalog, source_category as catalog_category
 
@@ -16,6 +18,13 @@ def source_category(source):
 
 
 def remote_entries(source, local_folders):
+    if source.feature_name == 'rclone':
+        from features.rclone.desktop_smb import is_server_context
+        from models.folder_entry import FolderEntry
+        context = source.source.context
+        if isinstance(context, Path) and is_server_context(context):
+            return [FolderEntry(name, remote_name=name, remote_source='rclone', remote_context=context)
+                    for name in source.remote_names]
     return get_folder_entries(source.remote_names, remote_source=source.feature_name,
         remote_context=source.source.context, include_local_only=False,
         local_folders=source.local_folders if source.local_folders is not None else local_folders)

@@ -32,7 +32,9 @@ def _get_config_path(entry: FolderEntry) -> Path | None:
 def _is_available(entry: FolderEntry) -> bool:
     """Return whether rclone has sync actions for this logical folder."""
 
-    return entry.has_remote and _get_config_path(entry) is not None
+    from .desktop_smb import is_server_context
+    path = _get_config_path(entry)
+    return entry.has_remote and path is not None and not is_server_context(path)
 
 
 def _get_actions(entry: FolderEntry) -> list[UIAction]:
@@ -142,6 +144,13 @@ def _get_remote_sources() -> list[RemoteFolderSource]:
             context=config_path,
             get_local_folders=lambda folders=folders: folders,
             get_encrypted_remote_names=lambda path=config_path: configuration.get_crypt_remote_names(path)))
+    from .desktop_smb import records
+    for server in records():
+        sources.append(RemoteFolderSource(
+            name=server.name,
+            context=server.context,
+            get_remote_names=lambda name=server.name: [name],
+            get_local_folders=list))
     from models.local_folder import LocalFolder
     from . import session
     for item in links:

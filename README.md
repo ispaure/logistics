@@ -42,7 +42,8 @@ project folder to fetch any missing shared files.
 
 After opening Logistics, start with **File Browser** and a local text or Markdown
 file. **Documents** brings you back to open readers and editors. **Workspaces**
-collects configured local libraries, cloud locations and home servers; **Settings**
+collects local libraries, cloud locations and SMB servers. Use **Home Server →
+Add server…** to browse and download files from a Mac, PC or NAS. **Settings**
 controls feature availability and configuration.
 
 The [desktop guide](docs/user/user.md) walks through the first local document and

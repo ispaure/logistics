@@ -131,6 +131,8 @@ class RemoteBrowserView(qt.QMainWindow):
             qt.QMessageBox.warning(self, title, str(error))
 
     def interrupted_downloads(self, menu):
+        if self.provider.smb:
+            return
         from features.rclone.transfers.desktop_download_source import desktop_queue
         from features.rclone.transfers.download_recovery import RestartRequired
         from features.rclone.transfers.ui.progress import open_download_progress
@@ -281,10 +283,14 @@ def open_remote(config, remote, parent=None, directory='', *, package=None):
 
 def choose_remote(parent=None):
     from features.rclone import credentials, configuration
+    from features.rclone.desktop_smb import records
     choices = {}
     for config in credentials.get_loaded_credential_config_paths():
         for remote in configuration.get_rclone_remote_names(config):
             choices[f'{config.stem} / {remote} ({config.suffix[1:]})'] = config, remote
+    for record in records():
+        if record.connected:
+            choices[f'Home Server / {record.name}'] = record.context, record.name
     if not choices:
         qt.QMessageBox.information(parent, 'Open Remote', 'Load a credential package in rclone settings first.')
         return

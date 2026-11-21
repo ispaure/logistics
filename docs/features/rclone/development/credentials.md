@@ -24,6 +24,21 @@ python3 dev.py test desktop --exact-file Python/tests/resources/test_credential_
 
 `desktop_catalog` stores schema, ZIP path and remote names in `<account>.session.json`. Lock retains it; Forget removes it. Saved configs suppress duplicate inactive placeholders. Legacy visibility still applies. `WorkspaceUnlockView` resumes the selected route. Check `test_credential_catalog_desktop.py` and `test_folder_sources_ui.py`.
 
+## Desktop SMB connections
+
+`desktop_smb.py` validates SMB host and NTLM account settings, obscures the
+password via rclone's standard input and probes the share root with private
+credentials. `CredentialService` admits the result only after a successful probe.
+The Home Server record keeps the connection name and, when requested, an
+AES-256 ZIP encrypted with the user's passphrase. Each connection has its own
+virtual session path under the app profile. Disconnect and Lock All revoke its
+grant and retire dependent browsers, readers and transfers. Reconnect admits a
+new generation. Forget also removes the connection record.
+
+```sh
+python3 dev.py test desktop --exact-file Python/tests/resources/test_desktop_smb.py
+```
+
 ## Mobile credential import
 
 `mobile/credential_panels.py` builds the buttons; `cloud_ui.py` presents connection, picker and password routes. `credentials_ui.py:CredentialWorkflow` opens the system picker first. Protected ZIPs take the password route; plain ZIPs go directly to Session-Only/Persistent. Retries reuse the admitted ZIP and choice. Route retirement advances the import epoch and clears pending ZIP, choice and password. Guard callbacks by epoch, client, route and generation through native submission. A stale view skips presentation, metadata and retention after commit. Compatibility callers can import without widgets. A mismatched unlocked package cannot resume a transfer.

@@ -44,8 +44,9 @@ def get_loaded_credential_config_paths() -> list[Path]:
 
     # Generated configs remain usable after the original ZIP is moved away.
     from . import session, desktop_catalog
+    from .desktop_smb import is_server_context
     saved = configuration.get_all_conf_paths()
-    active = session.paths()
+    active = [path for path in session.paths() if not is_server_context(path)]
     locked = [path for path in desktop_catalog.contexts()
               if path not in active and path.with_suffix('.conf') not in saved]
     return saved + active + locked
