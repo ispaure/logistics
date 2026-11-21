@@ -26,9 +26,11 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
         self.library = AddonLibrary(self.manager)
         self.releases = []
         self._operation = ''
+        self._launch_step = ''
         self._select_preset = None
         self._choices_context = None
         self.task = OperationProgress(self)
+        self.task.message.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.task.completed.connect(self._finished)
         self.task.completed.connect(lambda *args: self.idle.emit())
         build_layout(self)
@@ -168,6 +170,7 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
         if self.task.busy:
             return
         self._operation = operation
+        self._launch_step = ''
         self.stack.setEnabled(False)
         self.controls.setEnabled(False)
         self.table.setEnabled(False)
@@ -178,6 +181,8 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
         self.controls.setEnabled(True)
         self.table.setEnabled(True)
         cancelled = self.task.cancelled.is_set() and (not error or error == 'Operation cancelled')
+        if self._launch_step and result is not None and not error:
+            cancelled = False  # The process started before a late cancellation could stop it.
         if self._operation == 'Refreshing addons' and not error and not cancelled:
             rows, message = result
             self._show_rows(rows)
@@ -189,11 +194,21 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
                 if self._operation == 'Copying preset':
                     with qt.QSignalBlocker(self.version):
                         self.version.setCurrentText(result.parent.name)
-            self._version_changed()
-            self.status.setText('Cancelled.' if cancelled else
-                                f'{self._operation} failed: {error}' if error else f'{self._operation} finished.')
-            if cancelled:
-                self.task.message.setText('Cancelled.')
+            if self._launch_step and not self.settings_mode:
+                self._rebuild_cards()
+                self._update_controls()
+            else:
+                self._version_changed()
+            message = ('Cancelled.' if cancelled else
+                       f'{self._operation} failed: {error}' if error else f'{self._operation} finished.')
+            if self._launch_step and (cancelled or error):
+                message = (f'Cancelled during: {self._launch_step}' if cancelled else
+                           f'{self._launch_step} failed: {error}')
+            self.status.setText(message)
+            if cancelled or self._launch_step:
+                self.task.message.setText(message)
+            if self._launch_step and self.task.cancelled.is_set() and not error and not cancelled:
+                self.task.bar.setValue(self.task.bar.maximum())
 
     def _remove(self):
         release = self.release
@@ -202,33 +217,51 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
             self._run('Removing Blender', lambda report, cancelled: self.manager.remove(release))
 
     def _launch(self):
+        self._start_launch(self.release, self.preset.currentText())
+
+    def _start_launch(self, release, name):
         if self.task.busy:
             return
-        release, name = self.release, self.preset.currentText()
         if not release or not name:
             return
         try:
-            state = self.library.selection(self.manager.preset(release, name))
             needs_install = not self.manager.ready(release)
             if needs_install and not self._confirm(f'Download and install Blender {release.version}?\n\n'
                                                   f'Destination: {self.manager.installation(release)}'):
                 return
-            bluehole_choice = bluehole.validate(state.get('bluehole', bluehole.DEFAULT))
-            if needs_install or state['selected'] or state['installed'] or bluehole_choice['enabled'] or self.manager.launch_settings(release, name)['console']:
-                def work(report, cancelled):
-                    if needs_install:
-                        self.manager.install(release, report=report, cancelled=cancelled)
-                    check_cancelled(cancelled)
-                    if state['selected'] or state['installed'] or bluehole_choice['enabled']:
-                        self.library.apply(release, name, state['selected'], bluehole=bluehole_choice, cancelled=cancelled)
-                    check_cancelled(cancelled)
-                    return self.manager.launch(release, name)
-                self._run('Installing and launching Blender' if needs_install else 'Launching Blender', work)
-            else:
-                pid = self.manager.launch(release, name)
-                self.status.setText(f'Launched Blender {release.version} with {name} (PID {pid}).')
         except (OSError, ValueError) as error:
             self.status.setText(str(error))
+            return
+
+        def work(report, cancelled):
+            def publish(done, total, message):
+                stage = message.removesuffix('…')
+                if stage != self._launch_step:
+                    self._launch_step = stage
+                    # Deliver every step transition on the existing queued channel.
+                    # Only repeated byte-count updates need the worker's throttle.
+                    self.task.progress_changed.emit(done, total, message)
+                else:
+                    report(done, total, message)
+
+            def step(message):
+                check_cancelled(cancelled)
+                self._launch_step = message
+                self.task.progress_changed.emit(0, 0, f'{message}…')
+
+            step(f'Checking Blender preset “{name}”')
+            state = self.library.selection(self.manager.preset(release, name))
+            choice = bluehole.validate(state.get('bluehole', bluehole.DEFAULT))
+            if needs_install:
+                step(f'Installing Blender {release.version}')
+                self.manager.install(release, report=publish, cancelled=cancelled)
+            if state['selected'] or state['installed'] or choice['enabled']:
+                self.library.apply(release, name, state['selected'], bluehole=choice,
+                                   cancelled=cancelled, step=step)
+            step(f'Starting Blender {release.version} with “{name}”')
+            return self.manager.launch(release, name)
+
+        self._run('Installing and launching Blender' if needs_install else 'Launching Blender', work)
 
     def _create(self, *, name=None):
         if name is None:
@@ -340,9 +373,7 @@ class BlenderPage(qt.QWidget, PresetAddonPresentation):
         self.stack.setCurrentWidget(self.preset_splitter if self.settings_mode else self.manage)
 
     def _launch_card(self, release, name):
-        self.version.setCurrentText(release.version)
-        self.preset.setCurrentText(name)
-        self._launch()
+        self._start_launch(release, name)
 
     def _mark_selected_preset(self):
         if self.preset_list is None:

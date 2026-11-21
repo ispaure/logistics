@@ -427,9 +427,54 @@ class BlenderPageTests(QtTestCase):
         page = BlenderPage(manager=self.manager)
         with patch.object(self.manager, 'ready', return_value=True), patch.object(page, '_confirm') as confirm, patch.object(self.manager, 'install') as install, patch.object(self.manager, 'launch', return_value=42) as launch:
             page._launch()
+            self._wait_for_operation(page)
         confirm.assert_not_called()
         install.assert_not_called()
         launch.assert_called_once_with(self.builds[0], 'Art')
+
+    def test_launch_card_names_each_payload_and_keeps_the_worker_cancellable(self):
+        import zipfile
+
+        release = self.builds[0]
+        self.manager.create_preset(release, 'Art')
+        preset = self.manager.create_preset(release, 'Other')
+        page = BlenderPage(manager=self.manager)
+        page.library.provided_root.mkdir()
+        for module, name in [('mesh', 'Mesh Tools'), ('paint', 'Paint Tools')]:
+            with zipfile.ZipFile(page.library.provided_root / f'{module}.zip', 'w') as archive:
+                archive.writestr(f'{module}.py', f'bl_info={{"name": "{name}", "version": (1, 0), "blender": (3, 0)}}')
+        page.library.save_pending_selection(release, 'Other', ['legacy:mesh', 'legacy:paint'],
+                                            bluehole={'enabled': False, 'branch': 'main'})
+        steps = []
+        page.task.progress_changed.connect(lambda done, total, message: steps.append((total, message)))
+        from features.blender.addons import library
+        original_copy = library.copy_stream
+
+        def slow_copy(source, output, *, cancelled):
+            if Path(output.name) == preset / 'scripts/addons/paint.py':
+                while not cancelled():
+                    Event().wait(.005)
+            return original_copy(source, output, cancelled=cancelled)
+
+        with patch.object(self.manager, 'ready', return_value=True), \
+                patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch.object(library, 'copy_stream', side_effect=slow_copy), \
+                patch.object(self.manager, 'launch') as launch:
+            page.launch_cards[1].click()
+            try:
+                self.wait_until(lambda: page.task.message.text() == 'Syncing Paint Tools files to the preset…',
+                                timeout=2, message='The active add-on did not reach the progress footer')
+                self.assertEqual(page.task.bar.maximum(), 0)
+                self.assertTrue((preset / 'scripts/addons/mesh.py').exists())
+            finally:
+                page.task.request_cancel()
+                self._wait_for_operation(page)
+        self.assertEqual([message for total, message in steps if 'Syncing' in message],
+                         ['Syncing Mesh Tools files to the preset…', 'Syncing Paint Tools files to the preset…'])
+        self.assertEqual(page.status.text(), 'Cancelled during: Syncing Paint Tools files to the preset')
+        self.assertFalse((preset / 'scripts/addons/mesh.py').exists())
+        self.assertFalse((preset / 'scripts/addons/paint.py').exists())
+        launch.assert_not_called()
 
     def test_bluehole_launch_quietly_keeps_offline_channel_pending_and_retries(self):
         from dataclasses import replace

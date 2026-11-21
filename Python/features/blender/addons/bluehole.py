@@ -199,10 +199,12 @@ def download(commit, destination, cancelled):
             write_all(output, chunk, cancelled=cancelled)
 
 
-def update(manager, release, branch, *, cancelled=lambda: False):
+def update(manager, release, branch, *, cancelled=lambda: False, step=lambda message: None):
     check_cancelled(cancelled)
+    step(f'Checking Blue Hole {branch} on GitHub')
     with _offline_on_network_error(f'Could not reach GitHub to check Blue Hole {branch}'):
         remote_branch = resolve_branch(branch, release.version)
+        check_cancelled(cancelled)
         commit = branch_commit(remote_branch)  # Always compare branch head, even with a warm cache.
     check_cancelled(cancelled)
     root = manager.root / 'addons' / 'bluehole'
@@ -220,7 +222,9 @@ def update(manager, release, branch, *, cancelled=lambda: False):
                 with TemporaryDirectory(prefix='.github-', dir=destination.parent) as temp:
                     workspace = Path(temp)
                     archive_path = workspace / 'github.zip'
+                    step('Downloading Blue Hole from GitHub')
                     download(commit, archive_path, cancelled)
+                    step('Preparing the Blue Hole GitHub package')
                     staged = workspace / 'release'
                     staged.mkdir()
                     # GitHub archive roots include a commit suffix; the addon module
@@ -245,6 +249,7 @@ def update(manager, release, branch, *, cancelled=lambda: False):
                         raise ValueError('Unexpected Blue Hole addon identity')
                     check_cancelled(cancelled)
                     rename_exclusive(staged, destination)
+    step('Checking the Blue Hole package')
     addon = replace(inspect_package(package), source=f'GitHub · {remote_branch}', branch=remote_branch)
     if addon.identity != IDENTITY or addon.name != 'Blue Hole':
         raise ValueError('Unexpected Blue Hole addon identity')

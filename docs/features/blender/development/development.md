@@ -34,7 +34,13 @@ Per-preset `.logistics-launch.json` stores the `console` launch option (default
 false). `presets/console_launch.py` uses commonUtils' native terminal launcher.
 Blender's bundled Python runs the stdlib-only bridge, transferring only explicit
 Blender environment variables and recording the real Blender PID and exit status.
-Console launches run through the page's worker, including presets with no addons.
+All launches run through the page's worker, including presets with no addons.
+Add-on preparation reports named comparisons, package verification, checkout
+linking and payload changes at their call sites. The launch footer delivers each
+phase change through the worker's progress signal. Download byte counts use
+the worker's normal rate limit. The launch-card regression holds the second
+of two payload copies open to check that its name appears before cancellation
+and that cancellation restores the preset.
 Addon selection changes save immediately; rendering a new preset invalidates the
 previous selection context before projecting controls, so refreshes do not save.
 Manager, page and console regression tests cover persistence, failures and process tracking.

@@ -57,6 +57,11 @@ extension maxima exclusive. Unsafe, ambiguous or conflicting ZIPs are rejected.
 Matched legacy/extension packages share a selection, but Blender preference
 migration depends on the addon.
 
+The launch footer names the add-on being checked or synced. An unchanged
+package can be compared without being copied. Steps without a measurable total
+show a moving progress bar. If preparation fails or you cancel, the footer
+identifies the step that stopped.
+
 Close Blender before applying changes. Deselecting removes managed addon files
 on the next launch and keeps the ZIP. Move conflicting unmanaged module files
 manually. Versions that change replace package files, so back up important data
