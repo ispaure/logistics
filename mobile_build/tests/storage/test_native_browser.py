@@ -50,7 +50,8 @@ class NativeBrowserTests(unittest.TestCase):
                     # presentation must never open/decrypt a private image.
                     with patch.object(provider, 'open', side_effect=AssertionError('Automatic private read')):
                         app.populate_file_browser(provider.list(), location=('Private fixture', ''))
-                        self.assertIsNone(browser.thumbnail)
+                        self.assertFalse(browser.thumbnails.enabled)
+                        self.assertFalse(browser.thumbnails.supports(browser.entries[0]))
                         browser.show_tiles()
                         app.loop.run_until_complete(browser.select(browser.entries[0]))
                         if browser.tasks:
@@ -68,8 +69,9 @@ class NativeBrowserTests(unittest.TestCase):
                         provider.thumbnail.assert_called_once()
                 else:
                     app.populate_file_browser(provider.list(), location=('Ordinary fixture', ''))
-                    self.assertTrue(callable(browser.thumbnail))
-                    self.assertEqual(browser.thumbnail(provider.entry('image.png'), (160, 160), lambda: False), data)
+                    self.assertTrue(browser.thumbnails.enabled)
+                    self.assertTrue(browser.thumbnails.supports(browser.entries[0]))
+                    self.assertTrue(browser.native_list.observe_rows)
 
     def test_information_preview_reuses_thumbnail_and_rejects_late_selection(self):
         from base64 import b64decode
@@ -107,6 +109,57 @@ class NativeBrowserTests(unittest.TestCase):
             finally:
                 app.main_window.close()
                 close_loop(app.loop)
+
+    def test_recycled_viewport_keeps_both_decoder_slots_until_workers_return(self):
+        from threading import Event
+        from commonUtils.runtime.resources.local import LocalFiles
+        from mobile_build.native_tests.tests.logisticsmobile.browser_thumbnail_checks import png
+        from mobile_build.tests.support.app import create_app
+
+        app = create_app(self)
+        root = app.private_root / 'held-previews'
+        root.mkdir()
+        data = png(30, (10, 50, 100))
+        for index in range(6):
+            (root / f'{index}.png').write_bytes(data)
+        viewport = [0, 1, 2]
+        gate = Event()
+        calls = []
+
+        def load(_source, row, _size, _cancelled):
+            calls.append(row['path'])
+            gate.wait()
+            return data
+
+        async def wait_for(predicate):
+            async with asyncio.timeout(5):
+                while not predicate():
+                    await asyncio.sleep(.01)
+
+        async def exercise():
+            await app.show_files(location=('Local files', ''))
+            browser = app.file_browser
+            app.file_provider, app.file_path = LocalFiles(root), ''
+            app.populate_file_browser(app.file_provider.list(), location=('Local files', ''))
+            with patch.object(type(browser.thumbnails), 'load', load), \
+                    patch.object(browser, '_visible_rows', lambda: viewport):
+                try:
+                    await wait_for(lambda: len(calls) == 2)
+                    self.assertCountEqual(calls, ['0.png', '1.png'])
+                    held = tuple(browser._preview_jobs.values())
+                    viewport[:] = [3, 4, 5]
+                    browser._row_visible(browser.native_list.data[3])
+                    await wait_for(lambda: all(job.is_set() for job in held))
+                    self.assertCountEqual(calls, ['0.png', '1.png'])
+                    self.assertEqual(len(browser._preview_jobs), 2)
+                    gate.set()
+                    await wait_for(lambda: browser.native_list.data[5].thumbnail)
+                    self.assertEqual({key[0].name for key in browser.icons}, {'3.png', '4.png', '5.png'})
+                finally:
+                    gate.set()
+                    await browser.close()
+
+        app.loop.run_until_complete(exercise())
 
     def test_native_search_callback_recurses_without_running_loop_context(self):
         from services.documents.locations import CollectionFiles

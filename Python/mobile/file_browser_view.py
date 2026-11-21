@@ -47,6 +47,33 @@ class LocalFileBrowser(FileBrowser):
         self._reset_previews()
         self.thumbnails = source
 
+    def preview_selected_image(self):
+        """Show the explicit Details preview without starting row decoders."""
+        from .browser_preview import DIRECT_IMAGE_SUFFIXES
+        from .routes import contains
+
+        source = self.thumbnails
+        entry = self.tree.entries.get(self.selected) if self.tree is not None else None
+        if (source is None or source.private or entry is None or not source.supports(entry)
+                or entry.suffix.lower() not in DIRECT_IMAGE_SUFFIXES):
+            return
+        epoch = self.epoch
+
+        def publish(data):
+            body = self._app.body
+            if (self.closed or source is not self.thumbnails or self.selected != entry.identity
+                    or self.epoch != epoch or body is None or not contains(body, self.info)):
+                return
+            if not any(isinstance(child, toga.ImageView) for child in self.info.children):
+                self.info.add(toga.ImageView(toga.Image(src=data), style=Pack(width=160, height=160)))
+
+        cached = self.icons.get((entry.identity, entry.revision))
+        if cached:
+            publish(cached)
+        else:
+            self._spawn(self.work.thumbnail(entry, source.load, publish,
+                epoch=epoch, cancelled=self.cancelled))
+
     def set_previews_visible(self, visible):
         if self._previews_visible != visible:
             self._previews_visible = visible

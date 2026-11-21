@@ -65,7 +65,7 @@ class PDFLinkTests(unittest.TestCase):
         from types import SimpleNamespace
         from unittest.mock import Mock, patch
         from features.notebooks.editor import Editor
-        from features.pdf.document import PDFDocument
+        from features.pdf.document import PAGE_EDGE, PDFDocument
 
         render = Mock(return_value=b'synthetic raster')
         data = linked_pdf()
@@ -73,7 +73,7 @@ class PDFLinkTests(unittest.TestCase):
                 SimpleNamespace(count=3, render=render))) as open_renderer:
             self.assertTrue(Editor.render_background((data, 2)).startswith('data:image/png;base64,'))
         open_renderer.assert_called_once_with(data)
-        render.assert_called_once_with(2)
+        render.assert_called_once_with(2, edge=PAGE_EDGE)
 
     def test_explicit_named_and_rotation(self):
         expected = {0: [.1,.1,.5,.3], 90: [.7,.1,.9,.5], 180: [.5,.7,.9,.9], 270: [.1,.5,.3,.9]}

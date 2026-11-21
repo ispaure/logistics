@@ -237,7 +237,7 @@ class ValidationPlanTests(unittest.TestCase):
 
 @unittest.skipUnless(os.name == 'posix', 'Fedora launcher requires a POSIX shell')
 class FedoraLauncherTests(unittest.TestCase):
-    def run_launcher(self, failure):
+    def run_launcher(self, failure, *, results=None):
         script = Path(__file__).resolve().parents[1] / 'platform/fedora.sh'
         with TemporaryDirectory() as directory:
             root = Path(directory)
@@ -282,11 +282,18 @@ shutil.copyfile(os.environ['FIXTURE_PYTHON'], venv / 'bin/python')
             env = dict(os.environ, PATH=str(tools) + os.pathsep + os.environ['PATH'],
                        TMPDIR=str(root), FIXTURE_LOG=str(root / 'calls'),
                        FIXTURE_PYTHON=str(interpreter), FIXTURE_FAILURE=failure)
+            env.pop('LOGISTICS_PLATFORM_RESULTS', None)
+            if results is not None:
+                env['LOGISTICS_PLATFORM_RESULTS'] = results
             result = subprocess.run(['bash', str(script)], cwd=root, env=env,
                                     capture_output=True, text=True, timeout=15)
             calls = (root / 'calls').read_text()
             self.assertFalse(list(root.glob('logistics-platform.*')), 'Temporary environment leaked')
-            [setup_log] = (root / 'tmp/test-results').glob('fedora.*/fedora-setup.log')
+            if results is None:
+                [setup_log] = (root / 'tmp/test-results').glob('fedora.*/fedora-setup.log')
+            else:
+                setup_log = root / results / 'fedora-setup.log'
+                self.assertFalse(list((root / 'tmp/test-results').glob('fedora.*')))
             timing = setup_log.read_text()
             self.assertFalse((root / 'test-results').exists())
             if 'platform finished' in timing:
@@ -313,5 +320,10 @@ shutil.copyfile(os.environ['FIXTURE_PYTHON'], venv / 'bin/python')
 
     def test_successful_preparation_and_both_suites_pass(self):
         result, _, timing = self.run_launcher('')
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('release-tooling finished', timing)
+
+    def test_hosted_results_directory_receives_setup_and_platform_evidence(self):
+        result, _, timing = self.run_launcher('', results='tmp/test-results/desktop-fixture')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertIn('release-tooling finished', timing)

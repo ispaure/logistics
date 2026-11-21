@@ -10,7 +10,10 @@ __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
 import asyncio
+from base64 import b64encode
 import inspect
+from io import BytesIO
+import os
 from pathlib import Path
 from tempfile import TemporaryDirectory
 import unittest
@@ -45,6 +48,7 @@ class FeedbackProbeTests(unittest.TestCase):
         from unittest.mock import AsyncMock, patch
         self.assertIs(HostProbe.checkpoint, LogisticsMobile.checkpoint)
         with TemporaryDirectory() as directory:
+            self.enterContext(patch.dict(os.environ, {'TOGA_DUMMY_HOME': directory}))
             LogisticsMobile.storage_root = Path(directory)
             self.addCleanup(setattr, LogisticsMobile, 'storage_root', None)
             app = HostProbe('Feedback probe fixture', 'io.github.ispaure.logisticsnotebookqa')
@@ -60,7 +64,27 @@ class FeedbackProbeTests(unittest.TestCase):
                 self.assertIn('16-information', app.screenshots)
                 self.assertIn('17-settings', app.screenshots)
             try:
-                with patch.object(fixture, 'rotate', new=AsyncMock()):
+                from mobile.file_browser_view import LocalFileBrowser
+                # The dummy list has no native viewport. Admit the mounted rows
+                # through the same viewport scheduler that the real probe uses.
+                def visible_rows(browser):
+                    return range(len(browser.native_list.data))
+
+                def decode_file(action, *, fd, width, height):
+                    from PIL import Image
+                    self.assertEqual(action, 'file_thumbnail')
+                    with os.fdopen(os.dup(fd), 'rb') as stream, Image.open(stream) as image:
+                        image.thumbnail((width, height))
+                        result = BytesIO()
+                        image.save(result, format='PNG')
+                    return {'data': b64encode(result.getvalue()).decode('ascii')}
+
+                # Swap the unavailable native decoder for a real host decoder;
+                # provider reads, corrupt-file handling and publication stay real.
+                with patch.object(fixture, 'rotate', new=AsyncMock()), \
+                        patch.object(LocalFileBrowser, '_visible_rows', visible_rows), \
+                        patch('mobile.browser_preview.local_image_bridge') as bridge:
+                    bridge.return_value.request.side_effect = decode_file
                     app.loop.run_until_complete(exercise())
             finally:
                 app.main_window.close()

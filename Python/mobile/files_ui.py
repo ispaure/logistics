@@ -599,6 +599,7 @@ class FilesUI:
             style=Pack(direction=COLUMN, margin=12))
         self.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)), destination='files',
                        route='file-details', title='File details')
+        self.file_browser.preview_selected_image()
 
     async def parent_file_folder(self, widget=None, **kwargs):
         if (self.file_storage.value, self.file_path) == getattr(self.files_view, '_folder_entry_location', None):

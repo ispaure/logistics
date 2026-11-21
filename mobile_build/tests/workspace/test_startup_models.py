@@ -236,6 +236,7 @@ class ReplacementAdmissionTests(TestCase):
             pass
         host = Host()
         host.private_root, host.window_id, host.active_host = root, window, True
+        host._impl = NS()
         host._async_startup = True
         host.store = NS(flush_checkpoints=Mock())
         host.credential_document_lists = NS(flush_writes=Mock())

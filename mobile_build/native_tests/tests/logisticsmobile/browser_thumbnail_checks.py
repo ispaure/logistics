@@ -132,7 +132,9 @@ async def exercise_browser_thumbnails(app):
     def slow(source, row, size, cancelled):
         if row['path'].startswith(folder.name + '/'):
             calls.append(Path(row['path']).name)
-            gate.wait(3)
+            # Only the test retires the hold. A wall-clock release can admit
+            # more decodes while the runner is still scheduling the viewport.
+            gate.wait()
         return original(source, row, size, cancelled)
 
     with patch.object(type(source), 'load', slow):
@@ -144,13 +146,21 @@ async def exercise_browser_thumbnails(app):
             browser.native_list.scroll_to_bottom()
             await wait_for(lambda: all(job.is_set() for job in jobs), 'Recycled rows kept thumbnail work',
                            timeout=2)
+            cancelled_at = monotonic()
             first = browser._visible_rows()[0]
             assert first > 100, first
             anchor = browser._list_entries[first]
             nearby_image = next(entry for entry in browser._list_entries[first:] if entry.suffix == '.png')
             browser.view_switch.on_press()
             assert browser.mode == 'Tiles' and browser.location == location
-            assert monotonic() - started < 2 and len(calls) == 2
+            switched_at = monotonic()
+            timing = dict(cancel_seconds=cancelled_at - started,
+                          switch_seconds=switched_at - cancelled_at,
+                          elapsed_seconds=switched_at - started,
+                          decoder_starts=len(calls), elapsed_limit=2, decoder_limit=2)
+            print('LOGISTICS_NATIVE_DETAIL=' + json.dumps(dict(thumbnail_view_switch=timing)), flush=True)
+            assert timing['decoder_starts'] == 2, ('Decoder started while both slots were held', timing)
+            assert timing['elapsed_seconds'] < 2, ('Scroll and mode switch exceeded two seconds', timing)
             await wait_for(lambda: browser.vertical_position > 0, 'Tile mode lost the scrolled viewport')
             gate.set()
             await wait_for(lambda: bool(cached(browser, nearby_image.label)),

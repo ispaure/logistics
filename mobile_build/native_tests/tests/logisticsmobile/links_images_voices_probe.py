@@ -140,8 +140,7 @@ class LinksImagesVoicesProbe(LogisticsMobile):
         browser._row_visible(row)
         await self.until(lambda: row.thumbnail, 'Local image row did not receive a thumbnail')
         await self.screenshot('16-list')
-        browser.mode = 'Tiles'
-        browser.render()
+        browser.show_tiles()
         await self.until(lambda: any(key[0].name == 'Texture.PNG' for key in browser.icons), 'Tile thumbnail missing')
         await self.screenshot('16-tiles')
         entry = next(entry for entry in browser.entries if entry.label == 'Texture.PNG')
@@ -153,7 +152,7 @@ class LinksImagesVoicesProbe(LogisticsMobile):
         await rotate(self, 'landscape-left')
         await self.screenshot('16-landscape-left')
         await rotate(self, 'portrait')
-        loader = browser.thumbnail
+        loader = browser.thumbnails.load
         await asyncio.gather(*tuple(browser.tasks), return_exceptions=True)
         image_row = provider.entry('Texture.PNG')
         with patch('commonUtils.filesystem.network.is_network_location', return_value=True), \
@@ -164,7 +163,8 @@ class LinksImagesVoicesProbe(LogisticsMobile):
                                   open=lambda *args: (_ for _ in ()).throw(AssertionError('Cloud content was opened')))
         self.file_provider = virtual
         self.populate_file_browser([image_row], location=('QA cloud', ''))
-        assert browser.thumbnail is None
+        assert not browser.thumbnails.enabled
+        assert browser.thumbnails.load(image_row, (160, 160), lambda: False) == b''
         self.file_provider = provider
         self.populate_file_browser(provider.list(), location=('QA local', ''))
         self.report['task16'] = dict(success=True, native_row_thumbnail=True, tile_thumbnail=True,
