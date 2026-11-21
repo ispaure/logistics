@@ -61,9 +61,19 @@ preserve exact syntax. Local links open another tab. **Save As** requires
 `.md` or `.markdown`.
 
 **Save** preserves encoding, BOM and line endings. A failed decode offers an
-encoding choice. Binary files and files over 16 MiB are refused. If a file
-changes on disk, choose **Reload** to read it or **Save As** to keep both versions. Failed saves
-retain the buffer. Closing offers Save/Discard/Cancel.
+encoding choice. Binary files and files over 16 MiB are refused.
+
+The project tree updates as files are added, renamed or removed. IDE reloads
+clean tabs when the file changes on disk and keeps the tab and cursor positions
+where possible. A file that disappears keeps its tab and open text. If it returns
+at the same path, IDE checks it again.
+
+When a file changes on disk while you have a draft, **Save** offers **Save As…**
+to keep both versions, **Discard Draft and Reload** to read the disk version,
+or **Cancel** to keep editing the draft. Autosave pauses if it encounters a
+conflict. If a file was moved or deleted, use **Save As…** to keep the open text.
+If a competing save prevents IDE from restoring a displaced file, the error
+shows the recovery copy’s path. Closing offers Save/Discard/Cancel.
 
 [Git](../../git/user/user.md) opens working files in the most specific enabled,
 registered IDE project, reopening it if necessary. Unregistered files use Text Editor.

@@ -52,7 +52,8 @@ class MarkdownTabTests(QtTestCase):
             self.assertTrue(second.document().isModified())
             self.assertTrue(second.title.endswith(' *'))
             path.write_text('external\n')
-            self.assertFalse(workspace.save_document(second))
+            with patch.object(qt.QMessageBox, 'exec', return_value=0):
+                self.assertFalse(workspace.save_document(second))
             self.assertEqual(path.read_text(), 'external\n')
             workspace.close_document(first)
             qt.QCoreApplication.sendPostedEvents(None, qt.QEvent.Type.DeferredDelete)

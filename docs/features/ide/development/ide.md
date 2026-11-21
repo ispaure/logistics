@@ -13,6 +13,9 @@ Git validates the working path before routing. IDE chooses the deepest registere
 ## Tree, search and navigation
 
 `ui/browser.py` wraps the shared lazy model. Rename blocks pending opens, autosave, cross-project ownership and collisions. It retargets open descendants, snapshots and watchers. Delete allows closed files and empty folders. `ui/git_status.py` overlays dirty buffers and clears stale data on failure. Project splits stay inside their workspace and cap at three columns.
+On macOS the browser uses the shared vnode watcher to re-list affected expanded
+directories through the existing model. Model indexes, filters and selection
+stay in place.
 
 `ui/find_files.py` searches bounded snapshots, including live buffers, and rejects stale search/preview generations. Keep worker retirement on close. `analysis.py` serializes Jedi calls. Publish only for the current revision, caret, project and view. Usage navigation caps at 200 project results. Editing remains available without Jedi.
 
@@ -28,6 +31,16 @@ Markdown splits share source and source undo. Formatted undo is per-view. Positi
 
 Markers use a verified Git index or saved baseline. Hunk revert is undoable. Staging requires buffer/disk agreement and reviewed complete Git hunks. Autosave captures a snapshot and keeps newer changes dirty. Active writes block final close, manual save and reload. Explicit save or reload resumes autosave after failure.
 
+The workspace watches open files and available parent directories. On replacement
+or recreation it re-arms the file watch. Worker reads apply only to the same
+buffer and baseline. Clean reload preserves each view’s cursor, selection and
+scroll where possible. Dirty buffers keep their draft and show a notice.
+Manual and delayed saves use the same guarded publication. The writer stages
+the draft beside the target, moves the actual disk entry into private staging
+and verifies it, then publishes without replacing an entry created by another
+writer. If restoration is blocked, staging retains the displaced file and the
+conflict reports its path.
+
 ## Validation
 
 Run from the repo root.
@@ -36,4 +49,4 @@ Run from the repo root.
 python3 dev.py test desktop --exact-file Python/tests/ide/test_ide_find_files.py
 ```
 
-Expect live-buffer navigation, shared-index reuse, retry, stale-result suppression and close cancellation. Shared `test_search.py` covers changed-folder fallback, exclusions, links and result limits. For other changes, use `Python/tests/ide/test_ide_browser.py`, `test_ide_markdown.py`, `test_ide_links.py`, `test_ide_usages.py` or `test_ide_drag.py`. Shared markers and autosave use `Python/tests/editing/test_editor_changes.py`.
+Expect live-buffer navigation, shared-index reuse, retry, stale-result suppression and close cancellation. Shared `test_search.py` covers changed-folder fallback, exclusions, links and result limits. For other changes, use `Python/tests/ide/test_ide_browser.py`, `test_ide_markdown.py`, `test_ide_links.py`, `test_ide_usages.py` or `test_ide_drag.py`. Use `Python/tests/ide/test_ide_external_edits.py` for watcher and save-race coverage. Shared markers and autosave use `Python/tests/editing/test_editor_changes.py`.

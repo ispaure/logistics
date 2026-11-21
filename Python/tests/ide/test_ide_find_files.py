@@ -32,6 +32,7 @@ class FindFilesTests(QtTestCase):
 
     def test_live_results_preview_and_exact_navigation_from_unsaved_buffer(self):
         self.workspace.current.setPlainText('😀 LiveTag\n')
+        self.workspace.current.document().setModified(True)
         excluded = self.root / '.git'
         excluded.mkdir()
         (excluded / 'hidden.py').write_text('LiveTag\n')

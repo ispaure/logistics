@@ -1,12 +1,14 @@
 """Debounced saves owned by a shared IDE buffer; writes run on the host worker."""
 from commonUtils.ui import pyside as qt
-from commonUtils.persistence.text import decode_bytes, write_text_file
+from commonUtils.persistence.text import decode_bytes
+from features.ide.ui.file_save import save_existing
 
 
 def write_snapshot(snapshot, text):
     content = snapshot.encode(text)
-    write_text_file(snapshot.path, content, expected=snapshot.original)
-    return decode_bytes(content, path=snapshot.path, encoding=snapshot.encoding)
+    saved = decode_bytes(content, path=snapshot.path, encoding=snapshot.encoding)
+    save_existing(snapshot.path, content, snapshot.original)
+    return saved
 
 
 class AutoSave(qt.QObject):
@@ -43,6 +45,7 @@ class AutoSave(qt.QObject):
             self.save()
 
     def reset(self):
+        self.timer.stop()
         self.error = ''
         self.workspace.refresh_autosave_notice()
 
@@ -64,7 +67,7 @@ class AutoSave(qt.QObject):
             # source text must remain dirty and receive a subsequent save.
             if buffer.text.toPlainText() == text:
                 buffer.text.setModified(False)
-            workspace.watch.addPath(str(saved.path))
+            workspace.external_change(str(saved.path))
             workspace.update_buffer_titles(buffer)
             if buffer.text.isModified():
                 self.schedule()
@@ -76,6 +79,7 @@ class AutoSave(qt.QObject):
             self.busy = False
             self.error = f'Autosave paused for {snapshot.path.name}: {error}. Use Save, Reload or Save As.'
             workspace.refresh_autosave_notice()
+            workspace.external_change(str(snapshot.path))
         workspace.run(lambda: write_snapshot(snapshot, text), done, failed)
 
 

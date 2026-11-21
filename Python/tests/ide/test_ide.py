@@ -611,7 +611,8 @@ class WorkspaceTests(WorkspaceFixture):
             self.assertEqual(set(view.documents), {target})
             target.write_text('external\n')
             right.insertPlainText('mine')
-            self.assertFalse(view.save_document(left))
+            with patch.object(qt.QMessageBox, 'exec', return_value=0):
+                self.assertFalse(view.save_document(left))
             with patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Discard):
                 view.reload_current()
             self.assertEqual(left.toPlainText(), 'external\n')
@@ -998,8 +999,7 @@ class RestoreTests(WorkspaceFixture):
             self.wait(view)
             self.assertEqual(view.status.text(), 'Saved.')
             path.write_text('external\n')
-            view.external_change(str(path))
-            self.wait(view)
-            self.assertIn('externally', view.status.text())
+            self.wait_until(lambda: view.current.toPlainText() == 'external\n')
+            self.assertIn('external change', view.status.text())
             self.assertTrue(view.prepare_close())
             view.close()

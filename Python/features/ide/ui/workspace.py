@@ -8,11 +8,21 @@ from commonUtils.ui.appearance.status_line import StatusLine
 from commonUtils.ui.tasks.operations import ResultWorker
 from commonUtils.ui.code_editor.search import SearchPanel
 from commonUtils.ui.workspaces.scoped_tabs import ScopedTabBar
-from commonUtils.persistence.text import read_text_file
-from features.ide.ui.documents import EditorDocument
+from commonUtils.persistence.text import FileConflictError, MAX_BYTES, read_text_file
+from commonUtils.ui.file_browser.index_watcher import create_index_watcher
+from features.ide.ui.documents import EditorDocument, read_disk_version
 from features.ide.ui.browser import ProjectBrowser
 from features.ide.ui.navigation import Navigation
 from features.ide.ui.autosave import pause_autosave
+
+
+def _read_disk_change(snapshot):
+    try:
+        return read_disk_version(snapshot), ''
+    except FileNotFoundError:
+        return None, 'The file was removed or renamed on disk.'
+    except (OSError, ValueError) as error:
+        return None, str(error)
 
 
 class _FileTabBar(ScopedTabBar):
@@ -163,8 +173,16 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         self.editors.splitterMoved.connect(self.changed)
         self.add_group()
         self.reset_root()
-        self.watch = qt.QFileSystemWatcher(self)
+        self.watch = create_index_watcher(self)
         self.watch.fileChanged.connect(self.external_change)
+        self.watch.directoryChanged.connect(self.external_directory_change)
+        self.disk_parents = {}
+        self.disk_pending = set()
+        self.disk_timer = qt.QTimer(self)
+        self.disk_timer.setSingleShot(True)
+        self.disk_timer.setInterval(75)
+        self.disk_timer.timeout.connect(self.check_external_changes)
+        qt.QApplication.instance().applicationStateChanged.connect(self.application_state_changed)
         self.restore(project.layout)
 
     def action(self, label, callback, shortcut=None):
@@ -317,7 +335,8 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                 buffer.autosave = AutoSave(self, buffer)
                 buffer.markers.run = self.run
                 buffer.text.modificationChanged.connect(lambda _: self.update_buffer_titles(buffer))
-                self.watch.addPath(str(path))
+                self.sync_disk_watches()
+                self.external_change(str(path))
             if isinstance(doc, EditorDocument):
                 doc.link_requested.connect(lambda request, doc=doc: self.query_link(doc, request))
                 doc.viewport().installEventFilter(self)
@@ -368,13 +387,14 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                  if path.is_relative_to(old)]
         for path, target, doc in moved:
             self.documents.pop(path)
-            self.watch.removePath(str(path))
             doc.buffer.snapshot = replace(doc.buffer.snapshot, path=target)
             self.documents[target] = doc.buffer.views[0]
             doc.buffer.configure()
             doc.buffer.markers.changed()
-            self.watch.addPath(str(target))
+            self.external_change(str(target))
             self.update_buffer_titles(doc.buffer)
+        if moved:
+            self.sync_disk_watches()
         self.history = [(str(updated(Path(path))), position, scroll, group)
                         for path, position, scroll, group in self.history]
         self.browser.refresh_unsaved()
@@ -383,9 +403,11 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         self.update_buffer_titles(doc.buffer)
 
     def refresh_autosave_notice(self):
-        errors = [doc.buffer.autosave.error for doc in self.documents.values() if doc.buffer.autosave.error]
-        self.autosave_notice.setText('\n'.join(errors))
-        self.autosave_notice.setVisible(bool(errors))
+        notices = [doc.buffer.autosave.error or doc.buffer.external_notice
+                   for doc in self.documents.values()]
+        message = '\n'.join(filter(None, notices))
+        self.autosave_notice.setText(message)
+        self.autosave_notice.setVisible(bool(message))
 
     def set_autosave(self, mode):
         self.project.autosave = mode
@@ -427,7 +449,6 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         old = doc.path
         try:
             if target and target != old and target.exists():
-                from commonUtils.persistence.text import MAX_BYTES
                 with target.open('rb') as stream:
                     expected = stream.read(MAX_BYTES + 1)
                 if len(expected) > MAX_BYTES:
@@ -437,17 +458,43 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                         qt.QMessageBox.StandardButton.Cancel) != qt.QMessageBox.StandardButton.Yes:
                     return False
             doc.save(target, expected=expected)
+        except FileConflictError as error:
+            doc.buffer.autosave.error = f'Save paused for {old.name}: {error}'
+            self.refresh_autosave_notice()
+            self.external_change(str(old))
+            if target is not None and target != old:
+                self.error(f'Save As failed: {error} Your draft is still open.')
+                return False
+            return self.resolve_save_conflict(doc, error)
         except (OSError, ValueError) as error:
             self.error(f'Save failed: {error}. Reload or Save As a new file to preserve both versions.')
             return False
         self.documents.pop(old, None)
         self.documents[doc.path] = doc.buffer.views[0]
-        self.watch.removePath(str(old))
-        self.watch.addPath(str(doc.path))
+        self.sync_disk_watches()
+        self.external_change(str(doc.path))
+        doc.buffer.external_notice = ''
         self.update_title(doc)
         doc.buffer.autosave.reset()
         self.status.setText('Saved.')
         return True
+
+    def resolve_save_conflict(self, doc, error):
+        dialog = qt.QMessageBox(qt.QMessageBox.Icon.Warning, 'File changed on disk',
+                                str(error), parent=self)
+        dialog.setTextFormat(qt.Qt.TextFormat.PlainText)
+        dialog.setInformativeText('Save your draft to another file, or discard your draft and reload the current file.')
+        save_copy = dialog.addButton('Save As…', qt.QMessageBox.ButtonRole.ActionRole)
+        reload_disk = dialog.addButton('Discard Draft and Reload', qt.QMessageBox.ButtonRole.DestructiveRole)
+        cancel = dialog.addButton(qt.QMessageBox.StandardButton.Cancel)
+        dialog.setDefaultButton(cancel)
+        dialog.setEscapeButton(cancel)
+        dialog.exec()
+        if dialog.clickedButton() is save_copy:
+            return self.save_document(doc, True)
+        if dialog.clickedButton() is reload_disk:
+            return self.reload_document(doc)
+        return False
 
     @pause_autosave
     def confirm_document(self, doc):
@@ -474,7 +521,8 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
             self.documents[doc.path] = remaining[0]
         else:
             self.documents.pop(doc.path, None)
-            self.watch.removePath(str(doc.path))
+            self.disk_pending.discard(doc.path)
+            self.sync_disk_watches()
         doc.release()
         self.browser.refresh_unsaved()
         self.refresh_autosave_notice()
@@ -598,24 +646,73 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
         if self.current:
             self.browser.locate(self.current.path)
 
+    def sync_disk_watches(self):
+        """Watch open files and their closest available parent for recreation."""
+        parents = {}
+        for path in self.documents:
+            parent = path.parent
+            while parent != parent.parent and not parent.is_dir():
+                parent = parent.parent
+            parents[path] = parent
+        self.disk_parents = parents
+        desired = {str(parent) for parent in parents.values()}
+        desired.update(str(path) for path in self.documents if path.is_file())
+        watching = set(self.watch.files()) | set(self.watch.directories())
+        if watching - desired:
+            self.watch.removePaths(sorted(watching - desired))
+        if desired - watching:
+            self.watch.addPaths(sorted(desired - watching))
+
+    def application_state_changed(self, state):
+        if state == qt.Qt.ApplicationState.ApplicationActive:
+            for path in self.documents:
+                self.external_change(path)
+
+    def external_directory_change(self, directory):
+        directory = Path(directory)
+        for path, parent in self.disk_parents.items():
+            if directory == parent:
+                self.external_change(path)
+
     def external_change(self, path):
         path = Path(path)
+        if path in self.documents and not self.closing:
+            self.disk_pending.add(path)
+            # Bound the delay under sustained writes to a watched directory.
+            if not self.disk_timer.isActive():
+                self.disk_timer.start()
+
+    def check_external_changes(self):
+        paths, self.disk_pending = self.disk_pending, set()
+        self.sync_disk_watches()
+        for path in paths:
+            doc = self.documents.get(path)
+            if doc is not None and not doc.buffer.autosave.busy:
+                buffer, snapshot = doc.buffer, doc.snapshot
+                self.run(lambda snapshot=snapshot: _read_disk_change(snapshot),
+                         lambda result, buffer=buffer, snapshot=snapshot: self.apply_disk_change(buffer, snapshot, result))
+
+    def apply_disk_change(self, buffer, snapshot, result):
+        path = snapshot.path
         doc = self.documents.get(path)
-        if doc is None:
+        if doc is None or doc.buffer is not buffer or buffer.autosave.busy:
             return
-        snapshot, buffer = doc.snapshot, doc.buffer
-        def changed_on_disk():
-            try:
-                with path.open('rb') as stream:
-                    return stream.read(len(snapshot.original) + 1) != snapshot.original
-            except FileNotFoundError:
-                return True
-        def checked(changed):
-            if path in self.documents and self.documents[path].buffer is buffer and buffer.snapshot is snapshot and changed:
-                self.status.setText(f'File changed or removed externally: {path}. Reload to read it; saving checks for conflicts.')
-        self.run(changed_on_disk, checked)
-        if path.exists():
-            self.watch.addPath(str(path))
+        if buffer.snapshot is not snapshot:
+            self.external_change(path)
+            return
+        replacement, error = result
+        if error:
+            buffer.external_notice = f'{path.name}: {error} Use Save As to keep the open text.'
+        elif replacement is snapshot:
+            buffer.external_notice = ''
+        elif buffer.text.isModified():
+            buffer.external_notice = f'{path.name} changed on disk. Save to review your options.'
+        else:
+            buffer.reload(replacement)
+            buffer.autosave.reset()
+            buffer.external_notice = ''
+            self.status.setText(f'Reloaded {path.name} after an external change.')
+        self.refresh_autosave_notice()
 
     @pause_autosave
     def reload_current(self):
@@ -630,11 +727,18 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
                 qt.QMessageBox.StandardButton.Discard | qt.QMessageBox.StandardButton.Cancel,
                 qt.QMessageBox.StandardButton.Cancel) != qt.QMessageBox.StandardButton.Discard:
             return
+        return self.reload_document(doc)
+
+    def reload_document(self, doc):
         try:
             doc.reload()
-            doc.buffer.autosave.reset()
         except (OSError, ValueError) as error:
             self.error(error)
+            return False
+        doc.buffer.external_notice = ''
+        doc.buffer.autosave.reset()
+        self.external_change(str(doc.path))
+        return True
 
     def state(self):
         if self.restoring:
@@ -733,6 +837,8 @@ class ProjectWorkspace(Navigation, qt.QMainWindow):
             ready = self.project_find.prepare_close() and ready
         self.closing = ready
         if ready:
+            self.disk_timer.stop()
+            self.disk_pending.clear()
             self.browser.git_status.stop()
             for doc in self.views():
                 doc.buffer.autosave.timer.stop()

@@ -4,6 +4,7 @@ import sys
 from subprocess import SubprocessError
 from commonUtils.ui import pyside as qt
 from commonUtils.ui import desktop_actions
+from commonUtils.ui.file_browser.index_watcher import create_macos_watcher
 from commonUtils.ui.file_browser.model import BrowserFileSystemModel, ByteSortModel
 from commonUtils.filesystem.transfers import validate_name
 from features.ide.projects import is_excluded
@@ -128,6 +129,14 @@ class ProjectBrowser(qt.QWidget):
         self.expanded_paths = set()
         self.pending_expansion = set()
         self.pending_selection = None
+        self.folder_watch = create_macos_watcher(self)
+        if self.folder_watch is not None:
+            self.changed_folders = set()
+            self.folder_timer = qt.QTimer(self)
+            self.folder_timer.setSingleShot(True)
+            self.folder_timer.setInterval(80)
+            self.folder_timer.timeout.connect(self.refresh_watched_folders)
+            self.folder_watch.directoryChanged.connect(self.folder_changed)
         self.model.fileRenamed.connect(self.renamed)
         self.tree.selectionModel().currentChanged.connect(self.selection_changed)
         self.tree.expanded.connect(self.expanded)
@@ -144,6 +153,7 @@ class ProjectBrowser(qt.QWidget):
         self.proxy.invalidateFilter()
         self.tree.setRootIndex(self.proxy.mapFromSource(self.model.index(str(self.project.root))))
         self.tree.setEnabled(self.project.root.is_dir())
+        self.sync_folder_watches()
         if hasattr(self, 'git_status'):
             self.git_status.refresh()
 
@@ -164,6 +174,7 @@ class ProjectBrowser(qt.QWidget):
         self.pending_expansion = {updated(path) for path in self.pending_expansion}
         if self.pending_selection:
             self.pending_selection = updated(self.pending_selection)
+        self.sync_folder_watches()
         self.git_status.refresh()
         self.changed.emit()
 
@@ -290,13 +301,46 @@ class ProjectBrowser(qt.QWidget):
         except OSError as error:
             self.workspace.error(error)
 
+    def sync_folder_watches(self):
+        if self.folder_watch is None:
+            return
+        root = self.project.root
+        desired = {path for path in self.expanded_paths if Path(path) != root
+                   and Path(path).is_relative_to(root) and Path(path).is_dir()}
+        existing = set(self.folder_watch.directories())
+        if existing - desired:
+            self.folder_watch.removePaths(sorted(existing - desired))
+        if desired - existing:
+            self.folder_watch.addPaths(sorted(desired - existing))
+
+    def folder_changed(self, path):
+        self.changed_folders.add(path)
+        if not self.folder_timer.isActive():
+            self.folder_timer.start()
+
+    def refresh_watched_folders(self):
+        paths, self.changed_folders = self.changed_folders, set()
+        root = self.model.rootPath()
+        # Use the lazy model's existing nodes and re-list only the affected
+        # expanded folders. Qt's macOS notifications can leave their rows stale.
+        with qt.QSignalBlocker(self.model):
+            for path in sorted(paths & self.expanded_paths):
+                if Path(path).is_dir() and Path(path).is_relative_to(root):
+                    self.model.setRootPath(path)
+                    self.model.setRootPath(root)
+                    self.model.setRootPath(path)
+            self.model.setRootPath(root)
+        self.sync_folder_watches()
+
     def expanded(self, index):
         self.expanded_paths.add(str(self.path(index)))
+        self.sync_folder_watches()
         self.changed.emit()
 
     def collapsed(self, index):
         self.expanded_paths.discard(str(self.path(index)))
         self.pending_expansion.discard(str(self.path(index)))
+        self.sync_folder_watches()
         self.changed.emit()
 
     def selection_changed(self, current, previous):

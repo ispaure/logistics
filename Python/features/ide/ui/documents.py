@@ -1,10 +1,29 @@
 """Project-owned shared buffers with independently navigable editor views."""
 from pathlib import Path
 import re
+import stat
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.code_editor import CodeEdit
 from commonUtils.ui.code_editor.syntax import SyntaxHighlighter, detect_language
-from commonUtils.persistence.text import read_text_file, write_text_file, decode_bytes
+from commonUtils.filesystem.local_access import check_local_path
+from commonUtils.persistence.text import BOMS, MAX_BYTES, decode_bytes, write_text_file
+from features.ide.ui.file_save import save_existing
+
+
+def read_disk_version(snapshot):
+    """Read the current bytes at the buffer's path and decode only changes."""
+    path = snapshot.path
+    check_local_path(path)
+    if not stat.S_ISREG(path.lstat().st_mode):
+        raise ValueError('The file was replaced by a different type of entry.')
+    with path.open('rb') as stream:
+        data = stream.read(MAX_BYTES + 1)
+    if data == snapshot.original:
+        return snapshot
+    if len(data) > MAX_BYTES:
+        raise ValueError('The disk version exceeds the 16 MiB editing limit.')
+    encoding = None if any(data.startswith(prefix) for prefix, _ in BOMS) else snapshot.encoding
+    return decode_bytes(data, path=path, encoding=encoding)
 
 
 class DocumentBuffer(qt.QObject):
@@ -12,6 +31,7 @@ class DocumentBuffer(qt.QObject):
     def __init__(self, snapshot, editor, parent=None):
         super().__init__(parent)
         self.snapshot = snapshot
+        self.external_notice = ''
         self.text = editor.document()
         self.text.setParent(self)
         self.views = []
@@ -30,6 +50,35 @@ class DocumentBuffer(qt.QObject):
             self.highlighter.configure(language)
         for view in self.views:
             view.comment_prefix = editor.comment_prefix
+
+
+    def reload(self, snapshot):
+        # Capture each view before replacing the shared document. Markdown's
+        # visible editor may be formatted or in Read mode.
+        states = []
+        for view in self.views:
+            source = getattr(view, 'editor', view)
+            editors = [source]
+            if source is not view:
+                visible = view.active_editor() if view.edit_button.isChecked() else view.browser
+                if visible is not source:
+                    editors.append(visible)
+            for editor in editors:
+                cursor = editor.textCursor()
+                states.append((editor, cursor.anchor(), cursor.position(),
+                               editor.verticalScrollBar().value(), editor.horizontalScrollBar().value()))
+        self.snapshot = snapshot
+        self.text.setPlainText(snapshot.text)
+        self.text.setModified(False)
+        self.configure()
+        for editor, anchor, position, vertical, horizontal in states:
+            cursor = editor.textCursor()
+            end = cursor.document().characterCount() - 1
+            cursor.setPosition(min(end, anchor))
+            cursor.setPosition(min(end, position), qt.QTextCursor.MoveMode.KeepAnchor)
+            editor.setTextCursor(cursor)
+            editor.verticalScrollBar().setValue(vertical)
+            editor.horizontalScrollBar().setValue(horizontal)
 
 
 class EditorDocument(CodeEdit):
@@ -165,16 +214,14 @@ class EditorDocument(CodeEdit):
     def save(self, path=None, *, expected=None):
         target = Path(path).resolve() if path else self.path
         content = self.snapshot.encode(self.toPlainText())
-        write_text_file(target, content,
-                        expected=self.snapshot.original if target == self.path else expected,
-                        allow_overwrite=expected is not None)
-        self.buffer.snapshot = decode_bytes(content, path=target, encoding=self.snapshot.encoding)
+        saved = decode_bytes(content, path=target, encoding=self.snapshot.encoding)
+        if target == self.path or expected is not None:
+            save_existing(target, content, self.snapshot.original if target == self.path else expected)
+        else:
+            write_text_file(target, content)
+        self.buffer.snapshot = saved
         self.document().setModified(False)
         self.buffer.configure()
 
     def reload(self):
-        snapshot = read_text_file(self.path, encoding=self.snapshot.encoding)
-        self.setPlainText(snapshot.text)
-        self.buffer.snapshot = snapshot
-        self.document().setModified(False)
-        self.buffer.configure()
+        self.buffer.reload(read_disk_version(self.snapshot))
