@@ -30,7 +30,7 @@ def main():
         os.environ['LOGISTICS_MANAGER_LEGACY_PROFILE'] = str(ROOT / 'mobile_build/.tools/build-manager/profile.json')
     if request.get('manager_checkout'):
         os.environ['LOGISTICS_MANAGER_CHECKOUT'] = request['manager_checkout']
-    project = LogisticsProject(ROOT)
+    project = LogisticsProject(ROOT, results_directory=request.get('results_directory'))
     values = request.get('values', {})
     action = request['action']
     with contextlib.redirect_stdout(sys.stderr):

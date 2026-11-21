@@ -36,7 +36,7 @@ class LogisticsProject:
     operations = ('Test', 'Build', 'Prepare TestFlight', 'Prepare Firebase', 'Reviewed TestFlight workflow', 'Reviewed Firebase workflow', 'Release')
     description = 'Select source, platform and execution location; inspect the ordered plan before running.'
 
-    def __init__(self, root):
+    def __init__(self, root, *, results_directory=None):
         self.root = Path(root).resolve()
         descriptor = self.root / 'build-project.json'
         metadata = json.loads(descriptor.read_text()) if descriptor.is_file() else {}
@@ -54,7 +54,18 @@ class LogisticsProject:
         self.interpreter = self.root / '.venv' / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
         self.runner_directory = self.root
         self.private = self.mobile / '.tools/build-manager'
-        self.results_directory = self.root / 'test-results/build-manager'
+        legacy_results = self.root / metadata.get('results', 'test-results/build-manager')
+        self.results_directory = legacy_results
+        if results_directory is not None:
+            from build_manager.retention import linked
+            selected = Path(results_directory)
+            if (selected not in (legacy_results, self.root / 'tmp/test-results/build-manager')
+                    or not selected.is_relative_to(self.root) or selected == self.root
+                    or '..' in selected.parts
+                    or any(linked(path) or (path.exists() and not path.is_dir())
+                           for path in (selected, *selected.parents))):
+                raise ValueError('Invalid Manager result storage for this checkout.')
+            self.results_directory = selected
 
     def backend_options(self, target, operation='Test'):
         from build_manager.adapter_sdk import backend_options

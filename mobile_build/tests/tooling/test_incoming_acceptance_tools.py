@@ -7,7 +7,6 @@ from copy import deepcopy
 from pathlib import Path
 import plistlib
 from tempfile import TemporaryDirectory
-from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
@@ -146,18 +145,19 @@ class IncomingAcceptanceToolsTests(unittest.TestCase):
                 verify_window_routing(xctest, publication, root)
 
     def test_android_plan_keeps_phone_tablet_cleanup_and_normal_build_separate(self):
+        from logistics_build.build_project import LogisticsProject
         with TemporaryDirectory() as directory:
-            root = Path(directory)
+            root = Path(directory).resolve()
             java = root / 'java'
             (java / 'bin').mkdir(parents=True)
             (java / 'bin/java').touch()
-            project = SimpleNamespace(root=root, mobile=root / 'mobile_build',
-                                      results_directory=root / 'test-results/build-manager',
-                                      backend_options=lambda *args: ['This Mac — Android Emulator'])
+            results = root / 'tmp/test-results/build-manager'
+            project = LogisticsProject(root, results_directory=results)
             workspace = root / 'mobile_build/.tools/build-manager/workspaces/android'
             options = {'tools.xcode': '', 'tools.android_sdk': str(root / 'sdk'),
                        'tools.java': str(java), 'tools.mobile_python': '/selected/python', 'android.avd': ''}
-            with patch('build_manager.android_emulators.AndroidEmulator.inspect', return_value='HVF usable') as inspect:
+            with patch('build_manager.android_emulators.AndroidEmulator.inspect', return_value='HVF usable') as inspect, \
+                    patch.object(project, 'backend_options', return_value=['This Mac — Android Emulator']):
                 result = plan(project, 'android', {'fingerprint': 'a' * 64}, root, workspace, options, {})
             inspect.assert_called_once()
             phases = {phase.id: phase for phase in result.phases}
@@ -165,6 +165,10 @@ class IncomingAcceptanceToolsTests(unittest.TestCase):
                 'android-incoming-phone-cleanup', 'android-incoming-tablet-cleanup', 'android-incoming-build-cleanup'})
             self.assertIn('prepare', phases['android-build'].argv)
             self.assertNotIn('--test', phases['android-build'].argv)
+            evidence = Path(phases['android-build'].artifacts[0]).parents[1]
+            self.assertEqual(evidence.parent, results / 'incoming/android')
+            for phase in phases.values():
+                self.assertTrue(all(Path(path).is_relative_to(evidence) for path in phase.artifacts))
             self.assertEqual(phases['android-incoming-tablet'].dependencies,
                              ('android-build', 'android-incoming-phone-cleanup'))
             for name in ('android-incoming-phone-cleanup', 'android-incoming-tablet-cleanup', 'android-incoming-build-cleanup'):

@@ -15,14 +15,17 @@ Write new checkout-local evidence under `tmp/test-results/<run-id>/` and use `tm
 | Desktop platform checks | `tmp/test-results/desktop-<run-id>/` or the supplied `--results-dir`. Hosted desktop jobs use the GitHub run ID and attempt. |
 | Hosted native mobile test evidence | `tmp/test-results/native-<run-id>-<attempt>/`. The device job artifact also carries Briefcase diagnostics. |
 | Local Manager mobile test evidence | `tmp/test-results/emulator-<run-id>/` and `tmp/test-results/simulators-<run-id>/` |
-| Manager history | `test-results/build-manager/` |
+| Manager history | `test-results/build-manager/` by default. With the Manager checkout-local layout selected, fresh runs use `tmp/test-results/build-manager/` and history includes both roots. |
 | Mobile deployment diagnostics | `mobile_build/logs/` |
 
-Use the path recorded by the producer for overrides and older runs. Manager
-history stays at its registered path so saved plans can replay and run
-automatic maintenance with their trusted project descriptor. Retention still
-recognizes owned scratch, compiler caches and device workspaces at both
-generations of paths. See [automatic storage retention](../build-release/build-manager.md#automatic-storage-retention).
+Use the path recorded by the producer for overrides and older runs. On Manager
+versions that support checkout-local results, select the registered project
+with `build-manager set-results-layout REGISTRATION_ID tmp` and reopen its
+project tab. The setting preserves the trusted project descriptor and original
+saved-run locations. New incoming mobile acceptance plans use the selected
+results location. The Manager resumes older runs at their recorded paths.
+Retention recognizes owned scratch, compiler caches and device workspaces at
+both generations of paths. See [automatic storage retention](../build-release/build-manager.md#automatic-storage-retention).
 
 ## Find a completed test run
 
