@@ -1,6 +1,6 @@
 """Retained, nonmodal Find in Files with cancellable search and source preview."""
 from commonUtils.search.policy import SEARCH_DEBOUNCE_MS
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor
 from html import escape
 from pathlib import Path
 from threading import Event
@@ -52,6 +52,7 @@ class FindFiles(qt.QFrame):
         self.resize(1000, 720)
         self.setMinimumSize(680, 440)
         self.search_future = self.preview_future = None
+        self.search_first_hit = None
         self.search_cancel, self.preview_cancel = Event(), Event()
         self.pending_search = False
         self.pending_preview = None
@@ -178,11 +179,14 @@ class FindFiles(qt.QFrame):
         self.search_cancel.set(); self.preview_cancel.set()
         self.pending_search = bool(self.query.text())
         self.pending_preview = None
+        self.clear_results()
+        self.summary.setText('Searching…' if self.pending_search else 'Enter text to search')
+        self.debounce.start(SEARCH_DEBOUNCE_MS)
+
+    def clear_results(self):
         self.results.clear(); self.open_button.setEnabled(False)
         self.preview.clear(); self.preview_title.setText('Select a result to preview its source')
         self.preview.search_selections = []
-        self.summary.setText('Searching…' if self.pending_search else 'Enter text to search')
-        self.debounce.start(SEARCH_DEBOUNCE_MS)
 
     def start_search(self):
         if self.closing or not self.pending_search or self.search_future is not None:
@@ -198,18 +202,37 @@ class FindFiles(qt.QFrame):
         self.job_generation = self.generation
         self.search_cancel = Event()
         buffers = {path: doc.toPlainText() for path, doc in self.workspace.documents.items()}
+        first_hit = Future()
         try:
             self.search_future = _executor.submit(search_files, roots, tuple(project.excluded_paths),
                 self.query.text(), self.masks.text(), buffers=buffers,
                 project_root=project.root, excluded_patterns=tuple(project.excluded_patterns),
                 cancelled=self.search_cancel.is_set,
+                on_first_hit=first_hit.set_result,
                 **{key: button.isChecked() for key, button in self.options.items()})
         except (OSError, RuntimeError) as error:
             self.search_cancel.set()
             self.summary.setText('Cannot search files: ' + (str(error) or type(error).__name__))
             return
+        self.search_first_hit = first_hit
         self.jobs.append((self.search_future, self.search_cancel))
         self.poll.start()
+
+    def append_hits(self, hits):
+        root = self.workspace.project.root
+        items = []
+        for hit in hits:
+            try:
+                path = str(hit.path.relative_to(root))
+            except ValueError:
+                path = str(hit.path)
+            item = qt.QTreeWidgetItem([hit.excerpt, path, str(hit.line)])
+            item.setData(0, qt.Qt.ItemDataRole.UserRole, hit)
+            item.setToolTip(1, str(hit.path))
+            items.append(item)
+        self.results.addTopLevelItems(items)
+        if items and self.results.currentItem() is None:
+            self.results.setCurrentItem(items[0])
 
     def selected(self, item, previous=None):
         hit = item.data(0, qt.Qt.ItemDataRole.UserRole) if item else None
@@ -240,26 +263,22 @@ class FindFiles(qt.QFrame):
     def completed(self):
         if self.search_future is not None and self.search_future.done():
             future, self.search_future = self.search_future, None
+            self.search_first_hit = None
             self.jobs[:] = [(f, c) for f, c in self.jobs if f is not future]
             if not self.closing and self.job_generation == self.generation:
                 try:
                     result = future.result()
+                    self.append_hits(result.hits[self.results.topLevelItemCount():])
                     self.summary.setText(f'{len(result.hits)} matches in {result.files} files' + (' · results limited' if result.limited else ''))
-                    for hit in result.hits:
-                        try:
-                            path = str(hit.path.relative_to(self.workspace.project.root))
-                        except ValueError:
-                            path = str(hit.path)
-                        item = qt.QTreeWidgetItem([hit.excerpt, path, str(hit.line)])
-                        item.setData(0, qt.Qt.ItemDataRole.UserRole, hit)
-                        item.setToolTip(1, str(hit.path))
-                        self.results.addTopLevelItem(item)
-                    if result.hits:
-                        self.results.setCurrentItem(self.results.topLevelItem(0))
                 except Exception as error:
+                    self.clear_results()
                     self.summary.setText('Cannot search files: ' + (str(error) or type(error).__name__))
             if self.pending_search:
                 self.start_search()
+        elif (self.search_first_hit is not None and self.search_first_hit.done()
+              and not self.closing and self.job_generation == self.generation
+              and not self.results.topLevelItemCount()):
+            self.append_hits((self.search_first_hit.result(),))
         if self.preview_future is not None and self.preview_future.done():
             future, self.preview_future = self.preview_future, None
             self.jobs[:] = [(f, c) for f, c in self.jobs if f is not future]

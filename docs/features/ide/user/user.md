@@ -98,7 +98,8 @@ In **Find in Files**, choose a project, source or folder scope, then use **Cc**,
 **W**, **.*** or a **File mask** such as `*.py; *.txt`. Open buffers supply
 unsaved text. Search skips binary files, files over 1 MiB, excluded folders and
 directory symlinks. It examines at most 10,000 files or 100,000 entries and
-returns up to 500 matches. Open a result with Enter.
+returns up to 500 matches. The first match is available while the search
+continues. Press **Enter** to open the selected result.
 
 ## Languages and initial limits
 

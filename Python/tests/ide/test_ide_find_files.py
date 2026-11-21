@@ -77,6 +77,37 @@ class FindFilesTests(QtTestCase):
                                 and dialog.preview_future is None)
                 self.assertEqual(dialog.preview.toPlainText(), 'old\n')
 
+    def test_first_hit_can_be_opened_while_the_worker_is_still_searching(self):
+        from commonUtils.search.files import SearchResult
+
+        hit = search_files([self.root], [], 'old').hits[0]
+        published, release = Event(), Event()
+
+        def search(*args, on_first_hit, **kwargs):
+            on_first_hit(hit)
+            published.set()
+            if not release.wait(5):
+                raise RuntimeError('Search fixture timed out')
+            return SearchResult((hit,), 1, False)
+
+        self.workspace.find_project()
+        dialog = self.workspace.project_find
+        with patch('features.ide.ui.find_files.search_files', side_effect=search):
+            try:
+                dialog.query.setText('old')
+                self.wait_until(lambda: published.is_set() and dialog.open_button.isEnabled())
+                self.assertFalse(dialog.search_future.done())
+                self.assertEqual(dialog.summary.text(), 'Searching…')
+                doc = self.workspace.current
+                doc.moveCursor(qt.QTextCursor.MoveOperation.End)
+                dialog.open_button.click()
+                self.assertFalse(dialog.isVisible())
+                self.assertEqual(doc.textCursor().position(), 0)
+                self.assertTrue(dialog.search_cancel.is_set())
+            finally:
+                release.set()
+                self.wait_until(lambda: dialog.search_future is None and dialog.preview_future is None)
+
     def test_project_patterns_prune_files_and_subtrees_in_nested_scopes(self):
         bundle = self.root / 'Example.dSYM' / 'Contents'
         bundle.mkdir(parents=True)
@@ -106,6 +137,38 @@ class FindFilesTests(QtTestCase):
         factory.assert_called_once_with()
         self.assertEqual([hit.path for hit in result.hits], [self.path])
         self.assertEqual(self.path.read_text(), 'old\n')
+
+    def test_warm_search_reads_external_changes_renames_and_read_only_files(self):
+        from commonUtils.filesystem.index import DirectoryCache
+        from features.ide.search import search_files as project_search
+
+        source = self.root / 'src'
+        source.mkdir()
+        original = source / 'original.py'
+        original.write_text('original\n')
+        database = Path(self.temporary_directory().name) / 'index.sqlite3'
+        with DirectoryCache(database=database) as cache:
+            cache.get(source).close()
+        with patch('features.ide.search.cache_for', side_effect=lambda: DirectoryCache(database=database)):
+            def hits(excluded=()):
+                result = project_search([source], excluded, 'target', project_root=self.root)
+                return [hit.path for hit in result.hits]
+
+            self.assertEqual(hits(), [])
+            original.write_text('target\n')
+            self.assertEqual(hits(), [original])
+            renamed = original.with_name('renamed.py')
+            original.rename(renamed)
+            renamed.chmod(0o444)
+            source.chmod(0o555)
+            try:
+                self.assertEqual(hits(), [renamed])
+                self.assertEqual(hits(['src/renamed.py']), [])
+                self.assertEqual(hits(['src']), [])
+                self.assertEqual(list(source.iterdir()), [renamed])
+            finally:
+                source.chmod(0o755)
+                renamed.chmod(0o644)
 
     def test_exact_exclusion_stays_project_relative_in_nested_scopes(self):
         from features.ide.search import search_files as project_search
@@ -195,8 +258,12 @@ class FindFilesTests(QtTestCase):
             # Keep the old request running so cancellation cannot discard it
             # before the generation check gets exercised.
             self.assertTrue(stale.set_running_or_notify_cancel())
+            report_first = submit.call_args.kwargs['on_first_hit']
             dialog.query.setText('missing')
             dialog.debounce.stop()
+            report_first(hit)
+            dialog.completed()
+            self.assertFalse(dialog.open_button.isEnabled())
             stale.set_result(SearchResult((hit,), 1, False))
             dialog.completed()
             self.assertFalse(dialog.closing)

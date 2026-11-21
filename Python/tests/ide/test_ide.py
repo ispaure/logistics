@@ -331,6 +331,41 @@ class WorkspaceFixture(IDEQtTests):
 
 
 class WorkspaceTests(WorkspaceFixture):
+    def test_clicked_file_tab_accepts_first_key_at_saved_caret(self):
+        from PySide6.QtTest import QTest
+        from commonUtils.ui import pyside as qt
+        from features.ide.projects import Project
+        from features.ide.ui.workspace import ProjectWorkspace
+
+        with self.temporary_directory() as directory:
+            root = Path(directory).resolve()
+            first, second = root / 'first.py', root / 'second.py'
+            first.write_text('line\n' * 300)
+            second.write_text('another file\n')
+            view = ProjectWorkspace(Project('test', directory, autosave='off'))
+            view.resize(900, 600)
+            view.show()
+            view.activateWindow()
+            view.open_path(first)
+            self.wait(view)
+            editor = view.current
+            view.place_view(editor, line=150, column=2)
+            position = editor.textCursor().position()
+            scroll = editor.verticalScrollBar().value()
+            view.open_path(second)
+            self.wait(view)
+            other = view.current
+            bar = view.active_group.tabBar()
+            QTest.mouseClick(bar, qt.Qt.MouseButton.LeftButton, pos=bar.tabRect(0).center())
+            self.assertIs(view.current, editor)
+            self.assertIs(self.app.focusWidget(), editor)
+            self.assertEqual(editor.textCursor().position(), position)
+            self.assertEqual(editor.verticalScrollBar().value(), scroll)
+            QTest.keyClicks(self.app.focusWidget(), 'x')
+            self.assertEqual(editor.document().findBlockByNumber(149).text(), 'lixne')
+            self.assertEqual(other.toPlainText(), 'another file\n')
+            editor.undo()
+
     def test_file_tabs_keep_type_icons_and_neutral_close_on_right_after_reorder(self):
         from commonUtils.ui import pyside as qt
         from features.ide.projects import Project

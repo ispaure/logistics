@@ -33,6 +33,18 @@ class _FileTabBar(ScopedTabBar):
             button.setFixedSize(20, 20)
             button.setIconSize(qt.QSize(16, 16))
 
+    def mouseReleaseEvent(self, event):
+        clicked = None
+        if event.button() == qt.Qt.MouseButton.LeftButton and not self.dragging:
+            index = self.tabAt(event.position().toPoint())
+            if index >= 0 and self.group.widget(index) is self.view:
+                clicked = self.view
+        super().mouseReleaseEvent(event)
+        # A click finishes tab navigation. Keyboard navigation and drag gestures
+        # still use the tab bar's own focus handling.
+        if clicked is not None and clicked is self.group.currentWidget():
+            clicked.setFocus(qt.Qt.FocusReason.MouseFocusReason)
+
 
 class _OpenTarget(NamedTuple):
     """Captured destination intent; groups are revalidated when a read completes."""

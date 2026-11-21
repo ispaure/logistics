@@ -17,7 +17,7 @@ On macOS the browser uses the shared vnode watcher to re-list affected expanded
 directories through the existing model. Model indexes, filters and selection
 stay in place.
 
-`ui/find_files.py` searches bounded snapshots, including live buffers, and rejects stale search/preview generations. Keep worker retirement on close. `analysis.py` serializes Jedi calls. Publish only for the current revision, caret, project and view. Usage navigation caps at 200 project results. Editing remains available without Jedi.
+`ui/find_files.py` searches bounded snapshots, including live buffers, and rejects stale search and preview generations. The first match can be selected and opened while the worker scans the remaining files. Opening a result closes the popup and requests cancellation. Keep the existing worker retirement on close. `analysis.py` serializes Jedi calls. Publish only for the current revision, caret, project and view. Usage navigation caps at 200 project results. Editing remains available without Jedi.
 
 `search.py` supplies the shared directory cache to `commonUtils.search.files`.
 Find in Files reuses saved child names for unchanged folders and enumerates
