@@ -144,5 +144,4 @@ def run_blender_script(executable, env, script, request, *, cancelled=lambda: Fa
                 detail = detail[start:]
             if len(detail) > 6000:
                 detail = detail[:4500] + '\n… (see full log) …\n' + detail[-1500:]
-            raise ValueError(f'Blender could not apply addons (exit {process.returncode}). '
-                             f'Previous files and preferences were restored.{location}\n{detail}')
+            raise ValueError(f'Blender could not apply addons (exit {process.returncode}).{location}\n{detail}')

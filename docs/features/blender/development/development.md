@@ -41,8 +41,34 @@ Manager, page and console regression tests cover persistence, failures and proce
 
 Resolve compatible add-ons by version, then legacy format, then dated revision. Preset packages override provided packages of the same identity/version. Retain undated imports, selected legacy imports and confirmed migration aliases. Quarantine conflicting revisions.
 
-Saving writes pending intent. Under the preset lock, Apply resolves the sources, rejects unmanaged collisions and verifies ZIP snapshots before provisioning or changing preset resources. It keeps a backup of managed resources and moves a recorded local Blue Hole link without following it. Apply repairs missing managed entrypoints, runs Blender preparation and publishes the installed selection only after preparation succeeds and cancellation is checked. Failure or cancellation restores the managed resources and link; add-on side effects outside those resources can survive. Background preparation suppresses imports of GPU-dependent add-ons. Interactive launch activates them while preserving saved preferences. Check preset `blender-addons-error-*.log` or `blender-launch-*.log`.
+Saving writes pending intent. Under the preset lock, Apply resolves the sources, rejects unmanaged collisions and verifies ZIP snapshots before provisioning or changing preset resources. It keeps a backup of managed resources and moves a recorded local Blue Hole link without following it. Apply repairs missing managed entrypoints, runs Blender preparation and publishes the installed selection only after preparation succeeds and cancellation is checked. Failure or cancellation rolls back the managed resources, manifest and link. Add-on side effects outside those resources can survive. Background preparation suppresses imports of GPU-dependent add-ons. Interactive launch activates them while preserving saved preferences. Check preset `blender-addons-error-*.log` or `blender-launch-*.log`.
 
 For targeted regressions, use `test_blender_manager.py` for installation, `test_blender_library.py` for apply, `test_blender_activation.py` for launch and [Blue Hole validation](blue-hole-maintenance.md#validation-limits) for branch and cache behavior.
 
 See [user workflows](../user/user.md) and [mobile availability](../user_mobile/user_mobile.md). Native evidence covers Apple Silicon 4.5.1 and 5.2.2. Hair Tool on 4.5.1 required forced termination on quit. Windows, Linux and Intel Mac acceptance remains open.
+
+## Recover a preset after a failed rollback
+
+Close Blender and Logistics before working on the preset. The launch error
+identifies the preset's hidden `.addon-update-recovery` folder and both failures.
+Keep that folder in place during recovery so the preset stays blocked.
+
+1. Check for `backup-complete` in the recovery folder. Without it, Apply stopped
+   before it began changing the preset. Keep any partial backup until you have
+   verified the live preset.
+2. For a complete backup, move the live `config`, `scripts`, `extensions`,
+   `addon-data` and `.logistics-addons.json` aside where present. Restore copies
+   of those entries from the backup, preserving links as links. An entry absent
+   from the backup should be absent from the recovered preset. Leave `datafiles`
+   in place.
+3. For a previous Local Blue Hole install, use the restored manifest's recorded
+   checkout path to verify the old link. If `BlueHole-link` is in the recovery
+   folder, move the link itself into the restored `scripts/addons/BlueHole`
+   location. If the original link was still live when rollback failed, retrieve
+   it from the live files you moved aside. On Windows, move the junction itself
+   without copying or changing its target checkout.
+4. Compare the restored files with the backup, including the preferences,
+   personal profile and manifest. Verify that any restored checkout link
+   resolves to the recorded path. Then move `.addon-update-recovery` out of the
+   preset and reopen Logistics. Keep the moved backup until you confirm the
+   recovered preset works.

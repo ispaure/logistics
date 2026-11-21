@@ -23,6 +23,7 @@ from commonUtils.runtime.streams import copy_stream
 from features.blender.installation.releases import relative_path
 
 SELECTION_FILE = '.logistics-addons.json'
+RECOVERY_DIRECTORY = '.addon-update-recovery'
 
 
 def version_tuple(value):
@@ -346,6 +347,9 @@ class AddonLibrary:
                    default=None)
 
     def selection(self, root):
+        recovery = root / RECOVERY_DIRECTORY
+        if recovery.exists() or recovery.is_symlink() or is_junction(recovery):
+            raise OSError(f'Blender preset needs recovery before it can be used. Recovery folder: {recovery}')
         path = root / SELECTION_FILE
         if not path.exists():
             return {'selected': [], 'installed': {}}
@@ -558,44 +562,67 @@ class AddonLibrary:
     def _apply_transaction(self, release, name, root, workspace, plan):
         """Restore preset resources if provisioning, preparation or publication fails."""
         folders = [root / folder for folder in ('config', 'scripts', 'extensions', 'addon-data')]
-        existing = {path for path in folders if path.exists() or path.is_symlink() or is_junction(path)}
+        if any(path.is_symlink() or is_junction(path) for path in folders):
+            raise ValueError('Preset resource folders cannot be links')
+        existing = {path for path in folders if path.exists()}
         datafiles = root / 'datafiles'
         had_datafiles = datafiles.exists() or datafiles.is_symlink() or is_junction(datafiles)
-        saved_link = workspace / 'BlueHole-link'
-        backed_up = False
+        manifest = self.manager._contained(root, SELECTION_FILE)
+        recovery = root / RECOVERY_DIRECTORY
+        saved_link = recovery / 'BlueHole-link'
+        recovery.mkdir()
+        keep_recovery = False
         try:
-            environment = self.manager.environment(release, name)
             for path in folders:
                 if path in existing:
                     ignore = self.ignore_checkout if plan.old_checkout and path.name == 'scripts' else None
-                    shutil.copytree(path, workspace / path.name, symlinks=True, ignore=ignore)
-            backed_up = True
-            yield environment, saved_link
-        except BaseException:
-            if backed_up:
-                # The backup omits the linked checkout. Save or remove only the link itself.
-                if plan.old_checkout is not None and (plan.old_checkout.is_symlink() or is_junction(plan.old_checkout)):
-                    if saved_link.is_symlink() or is_junction(saved_link):
-                        self.remove_checkout_link(plan.old_checkout)
-                    else:
+                    shutil.copytree(path, recovery / path.name, symlinks=True, ignore=ignore)
+            saved_manifest = recovery / SELECTION_FILE
+            if manifest.exists():
+                shutil.copy2(manifest, saved_manifest)
+            (recovery / 'backup-complete').touch()
+            try:
+                yield self.manager.environment(release, name), saved_link
+            except BaseException as error:
+                try:
+                    # The backup omits the linked checkout. Save or remove only the link itself.
+                    if plan.old_checkout is not None and not (saved_link.is_symlink() or is_junction(saved_link)):
+                        if not (plan.old_checkout.is_symlink() or is_junction(plan.old_checkout)):
+                            raise OSError(f'Previous Blue Hole checkout link is missing: {plan.old_checkout}')
                         plan.old_checkout.rename(saved_link)
-                elif plan.new_checkout is not None:
-                    self.remove_checkout_link(plan.new_checkout)
-            for path in folders:
-                if path in existing and not backed_up:
-                    continue  # Provisioning or backup failed before existing files could change.
-                if path.exists():
-                    shutil.rmtree(path)
-                if path in existing:
-                    shutil.copytree(workspace / path.name, path, symlinks=True)
-            if plan.old_checkout is not None and (saved_link.is_symlink() or is_junction(saved_link)):
-                saved_link.rename(plan.old_checkout)
-            # Existing datafiles and any contents written there are outside addon ownership.
-            if not had_datafiles and datafiles.is_dir() and not datafiles.is_symlink() and not is_junction(datafiles):
-                if not any(datafiles.iterdir()):
-                    datafiles.rmdir()
-            raise
-        self.remove_checkout_link(saved_link)
+                    elif plan.new_checkout is not None:
+                        self.remove_checkout_link(plan.new_checkout)
+                    for path in folders:
+                        if path.is_symlink() or is_junction(path):
+                            self.remove_checkout_link(path)
+                        elif path.exists():
+                            shutil.rmtree(path)
+                        if path in existing:
+                            shutil.copytree(recovery / path.name, path, symlinks=True)
+                    if saved_manifest.exists():
+                        previous = saved_manifest.read_bytes()
+                        if not manifest.exists() or manifest.read_bytes() != previous:
+                            atomic_write_bytes(manifest, previous)
+                    else:
+                        manifest.unlink(missing_ok=True)
+                    # Existing datafiles and anything written there are outside addon ownership.
+                    if not had_datafiles and datafiles.is_dir() and not datafiles.is_symlink() and not is_junction(datafiles):
+                        if not any(datafiles.iterdir()):
+                            datafiles.rmdir()
+                    if plan.old_checkout is not None:
+                        saved_link.rename(plan.old_checkout)
+                except BaseException as restore_error:
+                    keep_recovery = True
+                    raise OSError(f'Blender addon update failed: {error}\n'
+                                  f'Rollback failed: {restore_error}\n'
+                                  f'Recovery folder: {recovery}') from restore_error
+                raise
+        finally:
+            if not keep_recovery:
+                # Release the recovery guard only once commit or rollback has finished.
+                discarded = workspace / 'discarded-backup'
+                recovery.rename(discarded)
+                self.remove_checkout_link(discarded / saved_link.name)
 
     @staticmethod
     def ignore_checkout(folder, _names):

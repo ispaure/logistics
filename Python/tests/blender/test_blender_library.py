@@ -155,6 +155,138 @@ class BlenderLibraryTests(unittest.TestCase):
             self.assertEqual(entry.read_text(), downloaded)
             self.assertEqual(profile.read_text(), '{"edited": true}')
 
+    def test_failed_bluehole_restore_keeps_previous_install_until_recovery(self):
+        import shutil
+
+        from features.blender.addons.library import RECOVERY_DIRECTORY, SELECTION_FILE
+
+        release = replace(self.release, version='5.2.2')
+        preset = self.manager.create_preset(release, 'Rollback Fault')
+        choice = {'enabled': True, 'source': 'github', 'branch': 'alpha', 'auto_update': True}
+        one, two = [(replace(inspect_package(self.package(f'{version}.zip', (version, 0, 0), (5, 2, 2),
+                                                         module='BlueHole')), branch='blender-5.2.2/alpha'),
+                     f'{version:040x}') for version in (1, 2)]
+        manifest = Path(SELECTION_FILE)
+        prefs = Path('config/userpref.blend')
+        profile = Path('config/bluehole/keymaps.json')
+        payload = Path('scripts/addons/BlueHole/__init__.py')
+        recovery = preset / RECOVERY_DIRECTORY
+        copytree = shutil.copytree
+
+        def fail_restore(source, destination, *args, **kwargs):
+            if source == recovery / 'config':
+                raise OSError('Injected rollback restore failure')
+            return copytree(source, destination, *args, **kwargs)
+
+        with patch.object(self.manager, 'executable', return_value=Path('/unused/blender')), \
+                patch('features.blender.addons.bluehole.update', return_value=one) as update, \
+                patch('features.blender.addons.scanning.run_blender_script') as provision:
+            self.library.apply(release, 'Rollback Fault', [], bluehole=choice)
+            (preset / profile).parent.mkdir()
+            (preset / profile).write_bytes(b'fixture personal edits')
+            (preset / prefs).write_bytes(b'fixture Blender preferences')
+            previous = {path: (preset / path).read_bytes() for path in (manifest, prefs, profile, payload)}
+            self.assertFalse(recovery.exists())
+            update.return_value = two
+            provision.side_effect = OSError('Injected Blender provisioning failure')
+            with self.assertRaisesRegex(OSError, 'Injected Blender provisioning failure'):
+                self.library.apply(release, 'Rollback Fault', [], bluehole=choice)
+            self.assertEqual({path: (preset / path).read_bytes() for path in previous}, previous)
+            self.assertFalse(recovery.exists())
+
+            with patch.object(shutil, 'copytree', side_effect=fail_restore), self.assertRaises(OSError) as failure:
+                self.library.apply(release, 'Rollback Fault', [], bluehole=choice)
+            self.assertEqual(str(failure.exception).splitlines(), [
+                'Blender addon update failed: Injected Blender provisioning failure',
+                'Rollback failed: Injected rollback restore failure',
+                f'Recovery folder: {recovery}',
+            ])
+            self.assertEqual({path: (recovery / path).read_bytes() for path in previous}, previous)
+            self.assertEqual((preset / manifest).read_bytes(), previous[manifest])
+            self.assertNotEqual((preset / payload).read_bytes(), previous[payload])
+            self.assertFalse((preset / profile).exists())
+
+            reopened = AddonLibrary(BlenderManager(self.manager.root), provided_root=self.library.provided_root)
+            with self.assertRaisesRegex(OSError, 'Blender preset needs recovery'):
+                reopened.selection(preset)
+            with self.assertRaisesRegex(OSError, 'Blender preset needs recovery'):
+                self.manager.launch(release, 'Rollback Fault')
+            calls = update.call_count
+            with self.assertRaisesRegex(OSError, 'Blender preset needs recovery'):
+                self.library.apply(release, 'Rollback Fault', [], bluehole=choice)
+            self.assertEqual(update.call_count, calls)
+
+            # Restore from copies while the guard remains in place. Retire it only after verification.
+            for folder in ('config', 'scripts', 'extensions', 'addon-data'):
+                live = preset / folder
+                if live.exists():
+                    live.rename(self.root / f'candidate-{folder}')
+                if (recovery / folder).exists():
+                    copytree(recovery / folder, live, symlinks=True)
+            shutil.copy2(recovery / manifest, preset / manifest)
+            self.assertEqual({path: (preset / path).read_bytes() for path in previous}, previous)
+            recovery.rename(self.root / 'recovered')
+            self.assertEqual(reopened.selection(preset)['installed_bluehole']['version'], '1.0.0')
+            provision.side_effect = None
+            self.library.apply(release, 'Rollback Fault', [], bluehole=choice)
+            self.assertEqual(reopened.selection(preset)['installed_bluehole']['version'], '2.0.0')
+            self.assertEqual((preset / profile).read_bytes(), previous[profile])
+            self.assertEqual((preset / prefs).read_bytes(), previous[prefs])
+            self.assertFalse(recovery.exists())
+
+    def test_failed_local_restore_removes_candidate_link_and_keeps_original_link(self):
+        import shutil
+
+        from commonUtils.filesystem.links import is_junction
+        from features.blender.addons.library import RECOVERY_DIRECTORY
+
+        checkouts = [self.root / name for name in ('original', 'candidate')]
+        for version, checkout in enumerate(checkouts, 1):
+            subprocess.run(['git', 'init', '-q', str(checkout)], check=True)
+            (checkout / '__init__.py').write_text(
+                f'bl_info={{"name":"Blue Hole","version":({version},0,0),"blender":(5,2,2)}}')
+            (checkout / 'keymaps').mkdir()
+            (checkout / 'keymaps/deluxe-defaults.json').write_text('{}')
+            (checkout / 'personal.bin').write_bytes(bytes([version]))
+
+        def snapshot():
+            return {path: path.read_bytes() for checkout in checkouts
+                    for path in checkout.rglob('*') if path.is_file()}
+
+        original = snapshot()
+        recovery = self.preset / RECOVERY_DIRECTORY
+        live_link = self.preset / 'scripts/addons/BlueHole'
+        saved_link = recovery / 'BlueHole-link'
+        copytree = shutil.copytree
+
+        def fail_restore(source, destination, *args, **kwargs):
+            if source == recovery / 'config':
+                raise OSError('Injected rollback restore failure')
+            return copytree(source, destination, *args, **kwargs)
+
+        choice = {'enabled': True, 'source': 'local', 'branch': 'alpha'}
+        with patch.object(self.manager, 'executable', return_value=Path('/unused/blender')), \
+                patch('features.blender.addons.scanning.run_blender_script') as provision:
+            self.library.apply(self.release, 'Art', [], bluehole={**choice, 'path': str(checkouts[0])})
+            provision.side_effect = OSError('Injected Blender provisioning failure')
+            with patch.object(shutil, 'copytree', side_effect=fail_restore), \
+                    self.assertRaisesRegex(OSError, 'Rollback failed'):
+                self.library.apply(self.release, 'Art', [], bluehole={**choice, 'path': str(checkouts[1])})
+            self.assertFalse(live_link.exists())
+            self.assertTrue(saved_link.is_symlink() or is_junction(saved_link))
+            self.assertEqual(saved_link.resolve(), checkouts[0].resolve())
+            self.assertEqual(snapshot(), original)
+
+            copytree(recovery / 'config', self.preset / 'config', symlinks=True)
+            saved_link.rename(live_link)
+            recovery.rename(self.root / 'verified-link-backup')
+            self.assertEqual(live_link.resolve(), checkouts[0].resolve())
+            provision.side_effect = None
+            self.library.apply(self.release, 'Art', [], bluehole={**choice, 'path': str(checkouts[1])})
+            self.assertEqual(live_link.resolve(), checkouts[1].resolve())
+            self.assertFalse(recovery.exists())
+            self.assertEqual(snapshot(), original)
+
 
     def test_import_refuses_destination_created_during_copy(self):
         from features.blender.addons import library

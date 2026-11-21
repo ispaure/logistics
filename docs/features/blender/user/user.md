@@ -63,8 +63,12 @@ manually. Versions that change replace package files, so back up important data
 stored inside them. Managed addons activate alphabetically in interactive
 Blender and can run their own startup code.
 
-Failed or cancelled preparation restores preset files and preferences. Use
-`blender-addons-error-*.log` for preparation failures or
+Failed or cancelled preparation rolls back preset files and preferences. If
+rollback also fails, Logistics shows both errors and the path to the backup
+and blocks that preset from launching. Keep the backup and follow
+[the recovery steps](../development/development.md#recover-a-preset-after-a-failed-rollback).
+
+Use `blender-addons-error-*.log` for preparation failures or
 `blender-launch-*.log` for activation failures. Deselect or update a failed addon
 before relaunching. If no compatible ZIP remains, deselect it in Manage.
 
