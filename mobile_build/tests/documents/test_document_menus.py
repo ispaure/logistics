@@ -25,7 +25,7 @@ class NativeDocumentMenuTests(TestCase):
         from mobile import outbound_share
 
         path = Path('cache/Selected file.bin')
-        url, configuration = object(), object()
+        url, configuration, payload = object(), object(), object()
         data = SimpleNamespace(identifier='public.data')
         inferred = SimpleNamespace(identifier='dyn.test-binary', isDynamic=lambda: True)
         types = SimpleNamespace(typeWithIdentifier=Mock(return_value=data),
@@ -49,7 +49,8 @@ class NativeDocumentMenuTests(TestCase):
         controller_factory.alloc.return_value.initWithActivityItemsConfiguration.return_value = sheet
         classes = {'NSURL': SimpleNamespace(fileURLWithPath=Mock(return_value=url)), 'UTType': types,
                    'NSItemProvider': provider_factory, 'UIActivityItemsConfiguration': config_factory,
-                   'UIActivityViewController': controller_factory}
+                   'UIActivityViewController': controller_factory,
+                   'NSData': SimpleNamespace(dataWithContentsOfURL=Mock(return_value=payload))}
         completion = Mock()
         bridge = SimpleNamespace(ObjCClass=classes.__getitem__, Block=lambda handler, *_: handler,
                                  ObjCBlock=Mock(return_value=completion), CGRect=object,
@@ -57,16 +58,30 @@ class NativeDocumentMenuTests(TestCase):
         with patch.dict('sys.modules', {'rubicon.objc': bridge}), \
                 patch.object(outbound_share, '_ios_presenter', new=AsyncMock(return_value=(None, presenter))):
             self.assertTrue(asyncio.run(outbound_share._send_ios(app, path, lambda: None, None)))
+            register_data = provider.registerDataRepresentationForTypeIdentifier
+            self.assertEqual(register_data.call_args.args, (data.identifier,))
+            register_data.call_args.kwargs['loadHandler'](object())
+            completion.assert_called_once_with(payload, None)
+            completion.reset_mock()
+            self.assertEqual(provider.suggestedName, path.name)
+            self.assertEqual([call[0] for call in provider.mock_calls],
+                             ['registerDataRepresentationForTypeIdentifier', 'registerObject'])
+            provider.reset_mock()
+            known = SimpleNamespace(identifier='com.adobe.pdf', isDynamic=lambda: False,
+                                    conformsToType=lambda _: True)
+            types.typeWithFilenameExtension.return_value = known
+            path = path.with_suffix('.pdf')
+            outbound_share._ios_file_provider(path)
             provider_factory.alloc.return_value.initWithContentsOfURL.assert_called_once_with(
-                url, contentType=data, openInPlace=False, coordinated=False, visibility=0)
+                url, contentType=known, openInPlace=False, coordinated=False, visibility=0)
             provider.registerObject.assert_called_once_with(url, visibility=0)
             provider.reset_mock()
             provider_factory.instancesRespondToSelector.return_value = False
             outbound_share._ios_file_provider(path)
-        self.assertEqual(types.typeWithFilenameExtension.call_args.args, ('bin',))
+        self.assertEqual(types.typeWithFilenameExtension.call_args.args, ('pdf',))
         register = provider.registerFileRepresentationForTypeIdentifier
         register.assert_called_once()
-        self.assertEqual(register.call_args.args, (data.identifier,))
+        self.assertEqual(register.call_args.args, (known.identifier,))
         self.assertEqual(register.call_args.kwargs['fileOptions'], 0)
         provider.registerObject.assert_called_once_with(url, visibility=0)
         self.assertEqual([call[0] for call in provider.mock_calls],

@@ -201,10 +201,23 @@ def _ios_file_provider(path):
     data = UTType.typeWithIdentifier('public.data')
     suffix = path.suffix[1:]
     content = UTType.typeWithFilenameExtension(suffix) if suffix else None
-    if content is None or content.isDynamic() or not content.conformsToType(data):
-        content = data
     ItemProvider = ObjCClass('NSItemProvider')
-    if ItemProvider.instancesRespondToSelector(SEL('initWithContentsOfURL:contentType:openInPlace:coordinated:visibility:')):
+    if content is None or content.isDynamic() or not content.conformsToType(data):
+        provider = ItemProvider.alloc().init()
+
+        def load_data(completion):
+            # A file-backed generic type cannot always be opened by a separate
+            # Share extension. Offer mapped bytes for unregistered formats.
+            payload = ObjCClass('NSData').dataWithContentsOfURL(url, options=8, error=None)
+            error = (ObjCClass('NSError').errorWithDomain('NSCocoaErrorDomain', code=256, userInfo=None)
+                     if payload is None else None)
+            ObjCBlock(completion, None, objc_id, objc_id)(payload, error)
+            return None
+
+        provider.registerDataRepresentationForTypeIdentifier(data.identifier,
+            visibility=0, loadHandler=Block(load_data, objc_id, objc_block))
+    elif ItemProvider.instancesRespondToSelector(
+            SEL('initWithContentsOfURL:contentType:openInPlace:coordinated:visibility:')):
         provider = ItemProvider.alloc().initWithContentsOfURL(
             url, contentType=content, openInPlace=False, coordinated=False, visibility=0)
     else:
