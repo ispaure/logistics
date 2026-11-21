@@ -193,6 +193,20 @@ public final class VideoAudioTailQAActivity extends Activity {
         if (!condition) throw new AssertionError(message);
     }
 
+    private void checkTailRecoveryDuringAudioSwitch(long clock) throws ReflectiveOperationException {
+        require(video.selectAudioTrack(1, true), "Could not begin the ordinary audio switch");
+        require(spinnerShown(video.root, "Switching audio"), "Audio switch did not enter preroll");
+        Class<?> tail = Class.forName(VideoPlayer.class.getName() + "$Tail");
+        java.lang.reflect.Field videoOnly = tail.getDeclaredField("VIDEO");
+        videoOnly.setAccessible(true);
+        // Inject the fallback trigger while the live decoder is switching
+        // tracks, without depending on a device-specific scheduling stall.
+        java.lang.reflect.Method recover = VideoPlayer.class.getDeclaredMethod("recoverTail", long.class, tail);
+        recover.setAccessible(true);
+        require(!((Boolean) recover.invoke(video, clock, videoOnly.get(null))),
+            "Video-only tail recovery replaced an active audio switch");
+    }
+
     private boolean capture(String kind, long clock) throws Exception {
         if (!captions) return true;
         require(video.player.getSpuTrack() >= 0, "No embedded subtitle selected for " + kind);
@@ -247,6 +261,7 @@ public final class VideoAudioTailQAActivity extends Activity {
                 if (playing && frames > 0 && audio > 0 && clock > 300) {
                     require(video.player.getVideoTrack() >= 0 && video.player.getAudioTrack() == 2,
                         "Ordinary startup control did not open the matching picture and audio tracks");
+                    checkTailRecoveryDuringAudioSwitch(clock);
                     video.dispose();
                     openPlayer(false);
                     video.startByUser();

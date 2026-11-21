@@ -1113,8 +1113,11 @@ public final class VideoPlayer {
 
     private boolean recoverTail(long clock, Tail continuing) {
         boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
+        // Audio switching seeks through a new preroll cycle. Pictures can
+        // arrive before the selected audio and clock are ready.
         if (tail != Tail.NONE || casting || pip || !playRequested || manualResumeRequired ||
-                pausePending || !focusHeld || networkWaiting || transportFailure != null || lockHidden ||
+                pausePending || !focusHeld || audioTrackSwitch != null ||
+                networkWaiting || transportFailure != null || lockHidden ||
                 !inputHasVideoAndAudio || !allowed(false)) return false;
         long duration = durationMilliseconds();
         long target = progressSeek >= 0 ? progressSeek : clock;

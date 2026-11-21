@@ -69,6 +69,9 @@ AirPlay retains its separate AVPlayer selection and playback lifecycle.
 Replacement selections, user seeks, pauses, failures and retirement invalidate
 or restart the pending operation. A readiness deadline pauses playback and
 reports a retryable error instead of claiming success.
+On Android, the selected track's preroll owns recovery until the switch
+finishes or fails. The unequal-stream fallback waits because pictures can
+arrive while the audio and playback clock are still recovering from the seek.
 
 `video_chrome_tools --audio-switch` builds a two-language AAC fixture and checks
 the production iOS controller on an owned disposable simulator: visible wait,
