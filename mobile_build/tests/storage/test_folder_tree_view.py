@@ -16,8 +16,8 @@ def local(name):
 class FolderTreeViewTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
         self.browse = AsyncMock()
-        self.choose, self.actions, self.invoke, self.context = (Mock() for _ in range(4))
-        self.view = FolderTreeView(browse=self.browse, choose=self.choose,
+        self.actions, self.invoke, self.context = (Mock() for _ in range(3))
+        self.view = FolderTreeView(browse=self.browse,
             actions=self.actions, invoke=self.invoke, native_context=self.context)
 
     def render(self, *names):
@@ -34,7 +34,7 @@ class FolderTreeViewTests(unittest.IsolatedAsyncioTestCase):
         for path, record in records.items():
             self.assertIs(self.view.nodes[path], record)
             self.assertIs(record.guide, guides[path])
-        for callback in (self.browse, self.choose, self.actions, self.invoke, self.context):
+        for callback in (self.browse, self.actions, self.invoke, self.context):
             callback.assert_not_called()
 
     async def test_removed_descendants_retire_menus_and_leave_retained_parent_usable(self):
@@ -79,8 +79,8 @@ class FolderTreeViewTests(unittest.IsolatedAsyncioTestCase):
         self.actions.assert_called_once_with('Team-Books')
         self.actions.return_value = []
         self.assertEqual(record.commands.load_actions(), [])
-        record.commands.fallback()
-        self.choose.assert_called_once_with('Team-Books')
+        record.commands.show()
+        self.invoke.assert_not_called()
 
     async def test_empty_and_browse_all_controls_reuse_identity_across_source_refreshes(self):
         entries = {'All files': dict(local('All files'), browser_root=True)}

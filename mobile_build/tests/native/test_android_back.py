@@ -468,6 +468,8 @@ class AndroidBackTests(unittest.TestCase):
                 self.assertIs(app.body, panel)
                 self.assertTrue(self.routes.system_back())
                 self.settle()
+                if owner._exit_task is not None:
+                    app.loop.run_until_complete(owner._exit_task)
                 self.assertNotIn(owner.session.id, app.workspace.sessions)
             else:
                 owner = app.private_sessions.active
@@ -532,9 +534,10 @@ class AndroidBackTests(unittest.TestCase):
         folder.mkdir()
         epub, _ = make_books(folder)
         private = PrivateReader('Private.epub', epub.read_bytes())
+        private.key = 'a' * 32
         with patch.object(app.crypt_copies, 'open', return_value=private), patch(
                 'features.books.mobile.provider_reader.private_webview_supported', return_value=False):
-            app.loop.run_until_complete(app.open_crypt(copies=app.crypt_copies, key='a' * 32))
+            app.loop.run_until_complete(app.open_crypt(copies=app.crypt_copies, key=private.key))
         reader = app.private_sessions.active
         tools = reader.provider_epub_view.tools
         tools.toggle()

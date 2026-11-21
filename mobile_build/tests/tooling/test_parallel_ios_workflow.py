@@ -290,6 +290,7 @@ else:
 '''
         with TemporaryDirectory() as directory:
             root = Path(directory)
+            evidence = Path('tmp/test-results/native-fixture')
             (root / 'validation').mkdir()
             (root / 'validation/ui_tools.py').write_text(fixture)
             command = ('python() { ' + shlex.quote(sys.executable) + ' "$@"; }\n'
@@ -301,11 +302,13 @@ else:
                     with self.subTest(device=device, code=code):
                         (root / 'exit-code').write_text(str(code))
                         result = subprocess.run(['bash', '-e', '-c', command], cwd=root,
-                            env=dict(os.environ, IOS_DEVICE=device,
+                            env=dict(os.environ, IOS_DEVICE=device, GITHUB_WORKSPACE=str(root),
+                                     LOGISTICS_MOBILE_EVIDENCE=str(evidence),
                                      BRIEFCASE_HOME=str(root / 'fresh-homes' / f'{device}-{code}')),
                             capture_output=True)
                         self.assertEqual(result.returncode, code)
                         self.assertEqual((root / 'keyboard-setting.txt').read_text(),
                             'write com.apple.iphonesimulator ConnectHardwareKeyboard -bool false\n')
                         self.assertEqual(json.loads((root / 'invocation.json').read_text()),
-                            ['run', 'ios', '--device', 'synthetic-device-' + selector, '--no-update', *flags])
+                            ['run', 'ios', '--device', 'synthetic-device-' + selector, '--no-update',
+                             '--logs', str(root / evidence), *flags])

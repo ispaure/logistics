@@ -50,7 +50,8 @@ def reference(app, host=None, *, session=None):
         owner = manager.controllers.get(session.id) if manager is not None else None
         provider = getattr(owner, '_crypt_reader_store', None)
         reader = getattr(owner, 'crypt_reader', None)
-        source = (file_source(app, provider, reader.key, session_only=True) if provider is not None and reader is not None
+        key = getattr(reader, 'key', None)
+        source = (file_source(app, provider, key, session_only=True) if provider is not None and key is not None
                   else getattr(session, 'history_source', None))
         opener, title = dict(kind=session.kind), session.title
         if source is None:

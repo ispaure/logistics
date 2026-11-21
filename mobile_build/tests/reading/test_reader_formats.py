@@ -206,9 +206,8 @@ class ReaderFormatTests(unittest.TestCase):
                                     patch.object(provider.manager, 'available', return_value=False):
                                 await provider.show_provider_comic_info()
                                 dialog.assert_not_awaited()
-                            # This synthetic encrypted reader has no backing
-                            # folder; the imported library copy does.
-                            unsupported = {'Show in folder'}
+                            # The synthetic encrypted reader has no saved opening reference.
+                            unsupported = {'Show in folder', 'Favourite file'}
                             if read_only:
                                 unsupported.add('Edit metadata…')
                             self.assertEqual([title for title, _ in provider.crypt_actions_menu.actions],

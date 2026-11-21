@@ -107,8 +107,9 @@ class ComicSplitTests(unittest.TestCase):
                             if provider:
                                 app.show_cloud()
                                 reader = PrivateReader('wide.cbz', source.read_bytes())
+                                reader.key = 'c' * 32
                                 with patch.object(app.crypt_copies, 'open', return_value=reader):
-                                    await app.open_crypt(copies=app.crypt_copies, key='c' * 32)
+                                    await app.open_crypt(copies=app.crypt_copies, key=reader.key)
                                 owner = app.private_sessions.active
                                 await owner.read_crypt_page()
                                 nav = reader.comic_navigation

@@ -14,7 +14,7 @@ class ReaderHost:
             if isinstance(error, ArchivePasswordError):
                 row = next((row for row in self.app.cloud_rows.values() if row['path'] == key),
                            dict(path=key, directory=False, size=0))
-                self.app.show_remote_item_actions(row, password_required=True)
+                self.app.cloud_controller().show_remote_item_password(row)
                 return
             from features.rclone.remote_policy import LOCAL_COPY_MESSAGE
             await self.main_window.dialog(toga.InfoDialog('Remote preview unavailable',

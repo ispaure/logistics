@@ -165,7 +165,7 @@ class StartupTraceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(report['source'], source)
         self.assertEqual(report['cases'], [])
         self.assertEqual(report['expected_cases'], list(CASES))
-        self.assertEqual(len(CASES), 36)
+        self.assertIn('native_archive_management', report['expected_cases'])
         self.assertIn('native_notebook_images', report['expected_cases'])
         self.assertEqual(report['target'], 'android')
         self.assertEqual(report['suite'], 'logistics-native-ui')
