@@ -33,6 +33,7 @@ class BrowserMoveResult:
     completed: tuple
     issues: tuple
     cancelled: bool
+    failed: bool = False
 
 
 PRIVATE_MOVE_MIME = 'application/x-logistics-private-move'
@@ -58,6 +59,7 @@ def move_selection(sources, destination, folder, state_root, *, cancelled, repor
     from services.documents.progress_identity import ordinary_local_provider
 
     completed, issues = [], []
+    failed = False
     paths = {item.physical for item in sources}
     sources = tuple(item for item in sources if not any(parent in paths for parent in item.physical.parents))
     total = len(sources)
@@ -115,11 +117,45 @@ def move_selection(sources, destination, folder, state_root, *, cancelled, repor
                     if not ordinary:
                         issues.append(f'{name}: Reading history stays in its original storage. The old Home reference was removed.')
         except OperationCancelled:
-            return BrowserMoveResult(tuple(completed), tuple(issues), True)
+            return BrowserMoveResult(tuple(completed), tuple(issues), True, failed)
         except (OSError, ValueError) as error:
             issues.append(f'{name}: {error}')
+            failed = True
         report(index + 1, total, f'Processed {name}')
-    return BrowserMoveResult(tuple(completed), tuple(issues), cancelled())
+    return BrowserMoveResult(tuple(completed), tuple(issues), False, failed)
+
+
+def copy_selection(sources, destination, folder, *, cancelled, report):
+    from .browser_copy import copy_item
+
+    completed, issues = [], []
+    paths = {item.physical for item in sources}
+    sources = tuple(item for item in sources if not any(parent in paths for parent in item.physical.parents))
+    for index, item in enumerate(sources, 1):
+        name = Path(item.path).name
+        target = '/'.join(filter(None, (folder, name)))
+
+        def progress(*, phase, done=0, total=0):
+            report(done, total, f'{phase} · {name} ({index}/{len(sources)})')
+
+        try:
+            if getattr(item.provider, 'remote_storage', False):
+                from features.rclone.transfers.remote_download import download_remote_item
+
+                def remote_progress(stats):
+                    progress(phase='Downloading', done=stats.get('bytes') or 0, total=stats.get('totalBytes') or 0)
+
+                download_remote_item(item.provider, item.path, destination.root / target, cancelled=cancelled,
+                                     progress=remote_progress, recoverable=False, expected_revision=item.revision)
+            else:
+                copy_item(item.provider, item.path, destination, target, cancelled=cancelled, progress=progress,
+                          revision=item.revision)
+            completed.append((item, destination.root / target))
+        except OperationCancelled:
+            return BrowserMoveResult(tuple(completed), tuple(issues), True, bool(issues))
+        except (OSError, ValueError) as error:
+            issues.append(f'{name}: {error}')
+    return BrowserMoveResult(tuple(completed), tuple(issues), False, bool(issues))
 
 
 class BrowserMoves(qt.QObject):
@@ -130,6 +166,7 @@ class BrowserMoves(qt.QObject):
         self.host = host
         self.browser = host.file_browser
         self.operation = OperationProgress(host)
+        self.operation.message.setTextFormat(qt.Qt.TextFormat.PlainText)
         self.operation.completed.connect(self._finished)
         layout.addWidget(self.operation)
         self.releases = []
@@ -146,8 +183,17 @@ class BrowserMoves(qt.QObject):
 
     def available(self):
         actions = getattr(self.browser, 'file_actions', None)
+        export = getattr(self.host, 'browser_export', None)
         return (not self.host.closing and self.host.isEnabled() and self.browser.isEnabled()
-                and not self.busy and not (actions.busy if actions is not None else self.browser.busy))
+                and not self.busy and not (export and export.operation.busy)
+                and not (actions.busy if actions is not None else self.browser.busy))
+
+    def handoff(self, message):
+        if message and not self.busy and not self.host.closing:
+            self.operation.bar.hide()
+            self.operation.cancel_button.hide()
+            self.operation.message.setText(message)
+            self.operation.show()
 
     def _provider(self, directory):
         provider = getattr(self.host, 'provider', None)
@@ -187,7 +233,8 @@ class BrowserMoves(qt.QObject):
         if isinstance(mime, PrivateMoveMime) and any(item.provider is self.host.provider for item in mime.sources):
             qt.QApplication.clipboard().clear()
 
-    def start(self, sources, directory=None, *, destination=None, name=None, clipboard_request=None):
+    def start(self, sources, directory=None, *, destination=None, name=None, clipboard_request=None,
+              native=False, copy=False):
         from commonUtils.filesystem.storage import cache_directory
         from commonUtils.runtime.resources.provider import capabilities
 
@@ -211,12 +258,21 @@ class BrowserMoves(qt.QObject):
             self.clipboard_request = clipboard_request
             self.affected = {provider.root / folder, *(item.physical.parent for item in sources)}
             self.browser.setEnabled(False)
-            self.operation.start(lambda report, cancelled: move_selection(sources, provider, folder, root,
-                                 report=report, cancelled=cancelled, name_override=name), message='Moving files…')
+            self.operation.bar.show()
+            self.operation.cancel_button.show()
+            if copy:
+                self.operation.start(lambda report, cancelled: copy_selection(sources, provider, folder,
+                                     report=report, cancelled=cancelled), message='Copying files…')
+            else:
+                self.operation.start(lambda report, cancelled: move_selection(sources, provider, folder, root,
+                                     report=report, cancelled=cancelled, name_override=name), message='Moving files…')
         except BaseException:
             self.browser.setEnabled(True)
             self._release()
             raise
+        if native:
+            from .browser_transfer_view import present_browser_transfer
+            present_browser_transfer(self.operation, 'Copy files' if copy else 'Move files', provider=provider)
         return True
 
     def _release(self):

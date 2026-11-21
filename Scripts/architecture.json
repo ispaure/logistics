@@ -103,12 +103,20 @@
       "desktop.browser_moves"
     ],
     [
+      "Python/features/rclone/localcrypt/ui/views.py",
+      "desktop.browser_export"
+    ],
+    [
       "Python/features/rclone/ui/remote_browser.py",
       "desktop.file_browser"
     ],
     [
       "Python/features/rclone/ui/remote_browser.py",
       "desktop.location_context"
+    ],
+    [
+      "Python/features/rclone/ui/remote_browser.py",
+      "desktop.browser_export"
     ],
     [
       "Python/features/rclone/ui/workspace_unlock.py",

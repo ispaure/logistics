@@ -9,6 +9,7 @@ from commonUtils.ui import pyside as qt
 from commonUtils.ui.file_browser.drag_drop import MIME, SESSION
 from commonUtils.ui.workspaces.workspace import WorkspaceDock
 from .browser_moves import MoveSource, PrivateMoveMime
+from .native_file_drag import LocalFileDrag, handoff_message, local_drag_paths, native_drop_action, start_file_drag
 
 
 class BrowserDropTargets(qt.QObject):
@@ -106,6 +107,8 @@ class BrowserDropTargets(qt.QObject):
             return False
         provider = getattr(moves.host, 'provider', None)
         try:
+            for path in paths:
+                check_local_path(path, recursive=True)
             if provider is not None:
                 folder = provider.relative(directory)
                 return not any(item.provider.storage_namespace == provider.storage_namespace
@@ -120,15 +123,39 @@ class BrowserDropTargets(qt.QObject):
         except (OSError, ValueError):
             return False
 
-    def start_private_drag(self, widget, moves, view, event):
-        if not moves.host.isEnabled() or moves.busy or moves.browser.busy or not self.press:
+    def start_drag(self, widget, moves, view, event):
+        if not self.press:
             return False
         viewport, origin = self.press
         if viewport is not widget or (event.position().toPoint() - origin).manhattanLength() < qt.QApplication.startDragDistance():
             return False
         self.press = None
+        # The common browser has its own fallback gesture. Once Logistics has
+        # consumed this press, the fallback must not publish unguarded URLs.
+        actions = getattr(moves.browser, 'file_actions', None)
+        if actions is not None:
+            actions.drag_drop.press = None
+        if not moves.available():
+            return True
         if not view.indexAt(origin).isValid():
             return False
+        if getattr(moves.host, 'provider', None) is None:
+            browser = moves.browser
+            selection = view.selectionModel()
+            indices = selection.selectedRows(0) or selection.selectedIndexes()
+            names = (browser.model.filePath(browser.views.source_index(index))
+                     for index in indices if index.column() == 0)
+            paths = tuple(dict.fromkeys(Path(name) for name in names if name and Path(name).is_absolute()))
+            if not paths:
+                return False
+            try:
+                action = start_file_drag(view, paths, internal=True)
+                moves.handoff(handoff_message(action))
+            except (OSError, ValueError) as error:
+                moves.handoff(str(error))
+            finally:
+                self.clear()
+            return True
         sources = moves.selected_sources()
         if not sources:
             return False
@@ -164,27 +191,23 @@ class BrowserDropTargets(qt.QObject):
             return False
         if kind in (qt.QEvent.Type.MouseButtonPress, qt.QEvent.Type.MouseButtonRelease, qt.QEvent.Type.MouseMove):
             moves, view = self.view_target(widget)
-            if moves is not None and getattr(moves.host, 'provider', None) is not None:
+            if moves is not None:
                 left = qt.Qt.MouseButton.LeftButton
-                if kind == qt.QEvent.Type.MouseButtonPress and event.button() == left:
-                    self.press = widget, event.position().toPoint()
+                if kind == qt.QEvent.Type.MouseButtonPress:
+                    self.press = (widget, event.position().toPoint()) if event.button() == left else None
                 elif kind == qt.QEvent.Type.MouseButtonRelease:
                     self.press = None
                 elif kind == qt.QEvent.Type.MouseMove and event.buttons() & left:
-                    return self.start_private_drag(widget, moves, view, event)
+                    return self.start_drag(widget, moves, view, event)
             return False
         if kind not in (qt.QEvent.Type.DragEnter, qt.QEvent.Type.DragMove, qt.QEvent.Type.Drop):
             return False
         mime = event.mimeData()
         sources = mime.sources if isinstance(mime, PrivateMoveMime) else ()
-        paths = ()
-        if not sources:
-            if bytes(mime.data(MIME)) != SESSION:
-                return False
-            urls = mime.urls()
-            if not urls or any(not url.isLocalFile() for url in urls):
-                return False
-            paths = tuple(Path(url.toLocalFile()) for url in urls)
+        internal = bool(sources) or bytes(mime.data(MIME)) == SESSION
+        paths = () if sources else local_drag_paths(mime)
+        if not sources and not paths and not mime.hasUrls():
+            return False
         point = event.position().toPoint()
         dock = None
         if bar and workspace in self.workspaces:
@@ -200,7 +223,7 @@ class BrowserDropTargets(qt.QObject):
                 if dock in workspace.docks:
                     dock.raise_()
                     workspace._activate(dock)
-            return self.drop_event(event, widget, moves, directory, sources, paths, rect, dock, open_target)
+            return self.drop_event(event, widget, moves, directory, sources, paths, internal, rect, dock, open_target)
         moves, view = self.view_target(widget)
         if moves is None:
             return False
@@ -218,31 +241,48 @@ class BrowserDropTargets(qt.QObject):
             directory = moves.host.provider.root / row['path'] if on_folder else browser.navigation.directory
         rect = view.visualRect(index) if on_folder else widget.rect()
         opener = (lambda: browser.navigate(directory)) if on_folder else None
-        return self.drop_event(event, widget, moves, directory, sources, paths, rect, directory, opener)
+        return self.drop_event(event, widget, moves, directory, sources, paths, internal, rect, directory, opener)
 
-    def drop_event(self, event, widget, moves, directory, sources, paths, rect, key, open_target):
+    def drop_event(self, event, widget, moves, directory, sources, paths, internal, rect, key, open_target):
         modifiers = qt.Qt.KeyboardModifier.ControlModifier | qt.Qt.KeyboardModifier.AltModifier
-        copy = bool(event.modifiers() & modifiers)
-        private = bool(sources) or moves is not None and getattr(moves.host, 'provider', None) is not None
-        action = qt.Qt.DropAction.CopyAction if copy else qt.Qt.DropAction.MoveAction
-        if (not self.available(moves, directory, paths, sources) or copy and private
-                or not event.possibleActions() & action):
+        actions = qt.Qt.DropAction
+        protected = moves is not None and getattr(moves.host, 'provider', None) is not None
+        if (not (paths or sources) or not self.available(moves, directory, paths, sources)):
             self.clear(widget)
             event.ignore()
             return True
-        event.setDropAction(action)
+        if internal:
+            action = actions.CopyAction if event.modifiers() & modifiers else actions.MoveAction
+        else:
+            action = native_drop_action(event, paths, directory, protected=protected)
+        copy = action == actions.CopyAction
+        if (action == actions.IgnoreAction or not event.possibleActions() & action
+                or internal and copy and (sources or protected)
+                or not internal and not event.possibleActions() & actions.CopyAction):
+            self.clear(widget)
+            event.ignore()
+            return True
+        # A native source must never interpret acceptance as permission to
+        # delete anything before our worker has published and verified it.
+        event.setDropAction(action if internal else actions.CopyAction)
         event.accept()
         if event.type() == qt.QEvent.Type.Drop:
             self.clear()
-            if copy:
+            mime = event.mimeData()
+            if isinstance(mime, LocalFileDrag):
+                mime.handled = True
+            if copy and internal:
                 moves.browser.file_actions.transfer(paths, directory)
             else:
                 # Return from the native drag before asking about decrypted output.
                 def apply():
                     try:
-                        moves.start(sources or tuple(MoveSource.local(path) for path in paths), directory)
+                        started = moves.start(sources or tuple(MoveSource.local(path) for path in paths), directory,
+                                              native=not internal, copy=copy)
+                        if not started and not internal:
+                            moves.handoff('The destination became unavailable before the transfer started.')
                     except (OSError, ValueError) as error:
-                        qt.QMessageBox.warning(moves.host, 'Cannot move files', str(error))
+                        qt.QMessageBox.warning(moves.host, 'File transfer', str(error))
                 qt.QTimer.singleShot(0, moves, apply)
         else:
             self.hover(widget, key, rect, open_target)

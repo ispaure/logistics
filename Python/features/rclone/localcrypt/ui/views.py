@@ -96,6 +96,7 @@ class CryptBrowserView(qt.QMainWindow):
         from desktop.browser_moves import install_private_browser_moves
         self.move_actions = install_private_browser_moves(self, self.centralWidget().layout())
         self._private_view_guard.revoked.connect(self.move_actions.clear_private_cut)
+        self._private_view_guard.revoked.connect(self.move_actions.stop)
         self._move_shortcuts = []
         for key, callback in ((qt.QKeySequence.StandardKey.Cut, self.move_actions.cut_selected),
                               (qt.QKeySequence.StandardKey.Paste, self.move_actions.paste)):
@@ -123,7 +124,10 @@ class CryptBrowserView(qt.QMainWindow):
         self.folder_sizes = qt.QCheckBox('Background indexing')
         self.folder_sizes.setEnabled(False)
         self.folder_sizes.hide()
-        self.menuBar().addMenu('File').addAction('Close', self._close_tab, qt.QKeySequence(qt.QKeySequence.StandardKey.Close))
+        file_menu = self.menuBar().addMenu('File')
+        file_menu.addAction('Close', self._close_tab, qt.QKeySequence(qt.QKeySequence.StandardKey.Close))
+        from desktop.browser_export import BrowserExport
+        self.browser_export = BrowserExport(self, self.centralWidget().layout(), file_menu)
         edit = self.menuBar().addMenu('Edit')
         edit.addAction('Cut Selected Items', self.move_actions.cut_selected)
         edit.addAction('Paste into Current Folder', lambda: self.move_actions.paste())
@@ -400,7 +404,9 @@ class CryptBrowserView(qt.QMainWindow):
         if move_actions is not None:
             move_actions.clear_private_cut()
         move_busy = move_actions is not None and move_actions.stop()
-        ready = not (browser_busy or self.open_operation.busy or move_busy) and notes_ready
+        browser_export = getattr(self, 'browser_export', None)
+        export_busy = browser_export is not None and browser_export.stop()
+        ready = not (browser_busy or self.open_operation.busy or move_busy or export_busy) and notes_ready
         if ready and self.provider is not None:
             self._release_provider()
         return ready

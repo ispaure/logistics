@@ -34,6 +34,29 @@ edits through **Enable editing → Save changes**. A failed save keeps the
 database and pending edits. Managed databases stay read-only. See the
 [SQLite guide](../../Python/commonUtils/docs/user/sqlite_browser/sqlite_browser.md).
 
+### Exchange files with your file manager
+
+Drag existing local files and folders between File Browser and Finder,
+Explorer, or Dolphin. You can drop them on a folder, a File Browser tab, or the
+folder you are viewing. For drops into Logistics, hold **Option** to copy or
+**Command** to move on macOS. On Windows and Linux, hold **Ctrl** to copy or
+**Shift** to move. Without a modifier, ordinary drops on macOS and Windows
+move items on the same volume and copy across volumes. On Linux the desktop
+proposes the action. Drops into unlocked LocalCrypt default to copying.
+
+Open **Workspace actions** to see transfer progress and errors or to cancel.
+An incoming drop preserves any destination with the same name. A batch can
+leave some items transferred after cancellation or a conflict. For a drop
+into a file manager, check that file manager for progress, conflict prompts,
+and the final result.
+
+To export from a remote or LocalCrypt tab, select items and choose
+**File → Prepare Selected Items to Drag…**. Choose a local folder and approve
+creating readable copies there. Drag the prepared selection from its transfer
+view. The files in your chosen folder remain there if you cancel that second
+drag or lock the source. Remote tabs accept browsing and export, and remain
+read-only.
+
 ## Search and inspect storage
 
 Search and size charts use saved folder metadata. If you can see a file in

@@ -19,6 +19,42 @@ reader checkpoints. A protected route retires old opening references after
 confirmed removal and keeps reading state within its original storage. After
 partial source cleanup, only confirmed removals retire old Home references.
 
+### Native desktop exchange
+
+`Python/desktop/browser_drop.py` recognizes local-file URLs on the same
+folder, tab and detached-window targets. Qt maps `text/uri-list` to file URLs
+on macOS and `CF_HDROP` on Windows. Dolphin consumes the URI list on Linux.
+The path list may contain multiple files, folders or both. Finder file promises,
+Explorer virtual-file descriptors and Dolphin URLs without local paths fall
+outside this contract. Local provider copies require independent regular
+files and ordinary folders, within the shared inventory size and depth limits.
+
+Native imports acknowledge receipt as a copy so the source cannot interpret an
+asynchronous drop as permission to delete data. Logistics performs the
+requested move through its verified provider mutation. Sources offering only
+a move or link are rejected. Partial results, conflicts and cancellation appear
+in the desktop Workspace actions process view. Native local exports offer
+durable file URLs and leave file-manager transfer progress and conflict
+handling with the receiver. The drag return value alone establishes handoff.
+Logistics cannot reconcile Home references with an external move because the
+receiver does not report the final destination to the browser.
+
+LocalCrypt drag payloads stay inside Logistics. The explicit **Prepare
+Selected Items to Drag…** action in protected and remote tabs publishes
+user-approved readable copies in a chosen ordinary folder. Logistics owns the
+unpublished staging paths and removes them on normal cancellation or failure.
+The user owns the published files. Their locations stay valid for asynchronous
+file-manager reads. Drag preparation uses non-resumable rclone downloads and
+the existing credential checks. A forced credential revocation can block
+provider cleanup and leave an encrypted temporary item in the provider.
+
+The desktop browser tests exercise real Qt widget dispatch with generated URI
+lists. They cover action and volume selection, nested bytes, collisions,
+cancellation, path handoff, encrypted imports, and remote export preparation.
+Native desktop acceptance also requires testing the real drag in both
+directions with Finder, Explorer and Dolphin, including actual cross-volume
+behavior and file-manager conflict or cancellation results.
+
 The desktop File Browser host tests cover hover, Escape, window arrangements
 and keyboard actions. The mobile destination and document-mutation tests cover
 conflicts, interrupted cleanup, and Home references. The managed

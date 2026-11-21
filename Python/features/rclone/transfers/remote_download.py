@@ -64,7 +64,8 @@ def _copy(arguments, environment, check, progress):
 
 
 def download_remote_item(provider, path, destination, *, cancelled, progress=lambda _stats: None,
-                         resume_key=None, from_zero=False, approved=None):
+                         resume_key=None, from_zero=False, approved=None, recoverable=True,
+                         expected_revision=None):
     """Use the browser's credential generation throughout the staged transfer."""
     relative = provider.relative(path)
     if not relative:
@@ -82,24 +83,35 @@ def download_remote_item(provider, path, destination, *, cancelled, progress=lam
             check_local_path(destination, recursive=True)
             check_cancelled(cancelled)
 
+        def selected_entry():
+            if expected_revision is None:
+                return provider.entry(relative)
+            # A remote's --stat result for a folder can describe it as a
+            # synthetic root. Compare like-for-like with the browser listing.
+            for row in provider.list(relative.rpartition('/')[0], cancelled=cancelled):
+                if row['path'] == relative and row['revision'] == expected_revision:
+                    return row
+            raise ValueError('The selected item changed. Select it again before downloading.')
+
         selection = dict(path=relative)
-        try:
-            queue = desktop_queue(provider)
-        except RestartRequired:
-            if resume_key:
-                raise
-            queue = None
+        queue = None
+        if recoverable:
+            try:
+                queue = desktop_queue(provider)
+            except RestartRequired:
+                if resume_key:
+                    raise
         queued = None if from_zero else resume_key
         if queue is not None and not queued and not from_zero:
             matched = queue.matching(selection, destination)
             if matched:
                 queued = matched['id']
-        entry = None if queued else provider.entry(relative)
+        entry = None if queued else selected_entry()
         if from_zero and entry['directory']:
             raise ValueError('The selected file became a directory. Select the source again.')
         if from_zero and queue is not None:
             work.enter_context(queue.restart(selection, destination, approved, entry['size']))
-        if queued or (not from_zero and not entry['directory'] and
+        if queued or (recoverable and not from_zero and not entry['directory'] and
                       (entry['size'] >= MINIMUM or entry['size'] < 0)):
             queue = queue or desktop_queue(provider)
             def report(done, total):
@@ -126,7 +138,7 @@ def download_remote_item(provider, path, destination, *, cancelled, progress=lam
             provider.check()
             if not (staged.is_dir() if directory else staged.is_file()):
                 raise OSError('The remote download did not produce the selected item.')
-            if provider.entry(relative)['directory'] != directory:
+            if selected_entry()['directory'] != directory:
                 raise ValueError('The selected item changed during the download. Select it again.')
             check_local_path(destination, recursive=True)
             check_cancelled(cancelled)

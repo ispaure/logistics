@@ -402,6 +402,8 @@ class BrowserView(_BrowserHost, qt.QMainWindow):
         self.folder_sizes.hide()  # Legacy API; the browser toolbar now offers Pause/Resume.
         layout.addWidget(self.file_browser, 1)
         from .browser_moves import BrowserMoves
+        from .browser_drop import BrowserDropTargets
+        BrowserDropTargets.instance()
         self.move_actions = BrowserMoves(self, layout)
         self.file_browser.move_actions = self.move_actions
         paste_key = qt.QKeySequence(qt.QKeySequence.StandardKey.Paste)

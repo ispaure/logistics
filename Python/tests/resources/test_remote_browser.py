@@ -282,7 +282,8 @@ class RemoteBrowserTests(QtTestCase):
                 register_process_host(actions)
                 self.wait_until(lambda: not view.file_browser.busy, timeout=15)
                 menu = view.menuBar().actions()[0].menu()
-                self.assertEqual([action.text() for action in menu.actions()], ['Open Remote…'])
+                self.assertEqual([action.text() for action in menu.actions()],
+                                 ['Open Remote…', 'Prepare Selected Items to Drag…'])
                 with patch.object(qt.QMessageBox, 'information') as dialog:
                     view.open_document(view.provider.root / 'unsupported.bin')
                     self.wait_until(lambda: not view.operation.busy, timeout=15)
@@ -341,6 +342,33 @@ class RemoteBrowserTests(QtTestCase):
                 self.assertEqual({path.name for path in copies.iterdir()}, {'renamed.txt', 'folder', 'keep.txt'})
                 self.assertEqual((copies / 'renamed.txt').read_text(), 'Explicit local copy')
                 self.assertEqual((source / 'unsupported.bin').read_bytes(), b'unsupported')
+                from desktop.browser_export import PreparedFiles
+                prepared = copies / 'export'
+                prepared.mkdir()
+                browser = view.file_browser
+                index = browser.model.browse_index(view.provider.root / 'nested')
+                browser.views.select_source(index)
+                with patch.object(qt.QFileDialog, 'getExistingDirectory', return_value=str(prepared)), \
+                     patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Cancel):
+                    view.browser_export.action.trigger()
+                self.assertEqual(list(prepared.iterdir()), [])
+                with patch.object(qt.QFileDialog, 'getExistingDirectory', return_value=str(prepared)), \
+                     patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Yes):
+                    view.browser_export.action.trigger()
+                export = actions.workspace.active_view.document
+                self.wait_until(lambda: export.result is not None, timeout=15)
+                self.assertTrue(export.result.succeeded, export.details.text())
+                self.assertEqual((prepared / 'nested' / 'child.txt').read_bytes(), b'child')
+                self.assertTrue((prepared / 'nested' / 'empty').is_dir())
+                self.assertEqual({path.name for path in prepared.iterdir()}, {'nested'})
+                offer = export.findChild(PreparedFiles)
+                self.assertEqual(offer.paths, (prepared / 'nested',))
+                with patch('desktop.browser_export.start_file_drag', return_value=qt.Qt.DropAction.IgnoreAction) as drag:
+                    offer.startDrag(qt.Qt.DropAction.CopyAction)
+                    drag.assert_called_once_with(offer, (prepared / 'nested',))
+                    self.assertIn('No file-manager handoff', offer.status.text())
+                self.assertTrue((prepared / 'nested' / 'child.txt').is_file())
+                export.close()
                 capture = os.environ.get('LOGISTICS_REMOTE_CAPTURE')
                 if capture:
                     window.grab().save(capture)

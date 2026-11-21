@@ -268,6 +268,161 @@ class BrowserWindowTests(QtTestCase):
             self.assertFalse((source / path.name).exists())
             self.assertEqual((destination / path.name).read_text(), 'move across windows')
 
+    def test_native_drop_uses_transfer_view_and_preserves_a_collision(self):
+        from commonUtils.ui.tasks.process_progress import _windows
+
+        source, target = self.root / 'Outside', self.root / 'Destination'
+        (source / 'tree' / 'nested').mkdir(parents=True)
+        target.mkdir()
+        data = source / 'tree' / 'nested' / 'spaces #.txt'
+        data.write_bytes(b'native drop bytes')
+        (source / 'same.txt').write_bytes(b'source')
+        (target / 'same.txt').write_bytes(b'existing')
+        window = self.window([])
+        host = window.workspace.add_view(target)
+        browser = host.file_browser
+        self.wait(window)
+        viewport = browser.views.navigation_views[0].viewport()
+        mime = qt.QMimeData()
+        mime.setUrls([qt.QUrl.fromLocalFile(str(path)) for path in (source / 'tree', data, source / 'same.txt')])
+        actions = qt.Qt.DropAction.CopyAction | qt.Qt.DropAction.MoveAction
+        left = qt.Qt.MouseButton.LeftButton
+        before = set(_windows)
+
+        def drop(modifiers):
+            enter = qt.QDragEnterEvent(qt.QPoint(2, 2), actions, mime, left, modifiers)
+            qt.QApplication.sendEvent(viewport, enter)
+            self.assertTrue(enter.isAccepted())
+            event = qt.QDropEvent(qt.QPointF(2, 2), actions, mime, left, modifiers)
+            qt.QApplication.sendEvent(viewport, event)
+            self.assertTrue(event.isAccepted())
+            self.assertEqual(event.dropAction(), qt.Qt.DropAction.CopyAction)
+            self.wait_until(lambda: bool(set(_windows) - before))
+            transfer, = set(_windows) - before
+            self.addCleanup(self.close_window, transfer)
+            self.wait_until(lambda: transfer.result is not None)
+            return transfer
+
+        import sys
+        flags = qt.Qt.KeyboardModifier
+        copied = drop(flags.AltModifier if sys.platform == 'darwin' else flags.ControlModifier)
+        self.assertEqual(copied.result.state, 'failed')
+        self.assertIn('already exists', copied.result.error)
+        self.assertIn('1 item(s) transferred', copied.details.text())
+        self.assertEqual((target / 'tree' / 'nested' / data.name).read_bytes(), data.read_bytes())
+        self.assertEqual((target / 'same.txt').read_bytes(), b'existing')
+        self.assertEqual((source / 'same.txt').read_bytes(), b'source')
+
+        before = set(_windows)
+        moving = source / 'moving'
+        moving.mkdir()
+        (moving / 'one').write_bytes(b'move bytes')
+        mime.setUrls([qt.QUrl.fromLocalFile(str(moving))])
+        with patch('commonUtils.runtime.resources.mutations.try_rename', return_value=False) as cross_volume:
+            moved = drop(flags.ControlModifier if sys.platform == 'darwin' else flags.ShiftModifier)
+            cross_volume.assert_called_once()
+        self.assertEqual(moved.result.state, 'succeeded')
+        self.assertFalse(moving.exists())
+        self.assertEqual((target / 'moving' / 'one').read_bytes(), b'move bytes')
+        self.assertEqual(list(target.glob('.drag-*')), [])
+
+    def test_outbound_mouse_drag_offers_local_urls_and_does_not_delete_sources(self):
+        from PySide6.QtTest import QTest
+        from commonUtils.filesystem.local_access import protect_local_root
+
+        nested = self.root / 'Native folder' / 'sub'
+        nested.mkdir(parents=True)
+        (nested / 'sample.txt').write_bytes(b'selection')
+        window = self.window([])
+        browser = window.file_browser
+        view = browser.views.navigation_views[0]
+        self.wait_until(lambda: browser.model.browse_index(nested.parent).isValid())
+        target = browser.sort_model.mapFromSource(browser.model.browse_index(nested.parent))
+        self.wait_until(lambda: not view.visualRect(target).isEmpty())
+        point = view.visualRect(target).center()
+        left = qt.Qt.MouseButton.LeftButton
+        modifiers = qt.Qt.KeyboardModifier.NoModifier
+        viewport = view.viewport()
+        def gesture():
+            QTest.mousePress(viewport, left, modifiers, point)
+            end = point + qt.QPoint(qt.QApplication.startDragDistance() + 1, 0)
+            movement = qt.QMouseEvent(qt.QEvent.Type.MouseMove, qt.QPointF(end),
+                                      qt.QPointF(viewport.mapToGlobal(end)), qt.Qt.MouseButton.NoButton, left, modifiers)
+            qt.QApplication.sendEvent(viewport, movement)
+            QTest.mouseRelease(viewport, left, modifiers, end)
+
+        accepted = []
+
+        def receive(drag, actions, default):
+            from desktop.native_file_drag import local_drag_paths
+            self.assertEqual(local_drag_paths(drag.mimeData()), (nested.parent,))
+            self.assertTrue(actions & qt.Qt.DropAction.MoveAction)
+            self.assertEqual(default, qt.Qt.DropAction.CopyAction)
+            accepted.append(True)
+            return qt.Qt.DropAction.MoveAction
+
+        with patch.object(qt.QDrag, 'exec', receive):
+            gesture()
+        self.assertEqual(accepted, [True])
+        self.assertEqual((nested / 'sample.txt').read_bytes(), b'selection')
+        status = window.workspace.active_view.move_actions.operation.message
+        self.assertIn('Check the file manager', status.text())
+        release = protect_local_root(object(), nested, 'Use the protected provider.')
+        try:
+            with patch.object(qt.QDrag, 'exec', side_effect=AssertionError('Protected URLs must not be exported')):
+                gesture()
+            self.assertEqual(status.text(), 'Use the protected provider.')
+        finally:
+            release()
+
+    def test_native_copy_cancellation_retires_nested_staging(self):
+        from threading import Event
+        from commonUtils.runtime.resources.local import LocalFiles
+        from desktop.browser_moves import MoveSource, copy_selection
+
+        cancelled = Event()
+        nested = self.root / 'tree' / 'sub'
+        nested.mkdir(parents=True)
+        data = nested / 'file'
+        data.write_bytes(b'cancel copy' * 90000)
+        target = self.root / 'output'
+        target.mkdir()
+
+        def report(done, total, message):
+            if done and message.startswith('Copying'):
+                cancelled.set()
+
+        result = copy_selection((MoveSource.local(nested.parent),), LocalFiles(target), '',
+                                cancelled=cancelled.is_set, report=report)
+        self.assertTrue(result.cancelled)
+        self.assertEqual(result.completed, ())
+        self.assertEqual(list(target.iterdir()), [])
+        self.assertEqual(data.read_bytes(), b'cancel copy' * 90000)
+
+    def test_native_intent_and_cross_volume_protocol(self):
+        from types import SimpleNamespace
+        from desktop.native_file_drag import local_drag_paths, native_drop_action
+
+        actions = qt.Qt.DropAction
+        flags = qt.Qt.KeyboardModifier
+        possible = actions.CopyAction | actions.MoveAction
+        event = qt.QDragEnterEvent(qt.QPoint(), possible, qt.QMimeData(),
+                                   qt.Qt.MouseButton.LeftButton, flags.NoModifier)
+        source = SimpleNamespace(lstat=lambda: SimpleNamespace(st_dev=1))
+        other = SimpleNamespace(lstat=lambda: SimpleNamespace(st_dev=2))
+        destination = SimpleNamespace(stat=lambda: SimpleNamespace(st_dev=1))
+        for platform in ('darwin', 'win32'):
+            self.assertEqual(native_drop_action(event, [source], destination, platform=platform), actions.MoveAction)
+            self.assertEqual(native_drop_action(event, [source, other], destination, platform=platform), actions.CopyAction)
+            self.assertEqual(native_drop_action(event, [source], destination, protected=True, platform=platform),
+                             actions.CopyAction)
+        linux = qt.QDragEnterEvent(qt.QPoint(), possible, qt.QMimeData(), qt.Qt.MouseButton.LeftButton,
+                                   flags.ShiftModifier)
+        self.assertEqual(native_drop_action(linux, [other], destination, platform='linux'), actions.MoveAction)
+        mime = qt.QMimeData()
+        mime.setUrls([qt.QUrl.fromLocalFile(str(self.path)), qt.QUrl('smb://example.invalid/file')])
+        self.assertEqual(local_drag_paths(mime), ())
+
     def test_keyboard_move_relocates_reader_progress_and_home_for_a_folder(self):
         from PySide6.QtTest import QTest
         from commonUtils.runtime.resources.local import LocalFiles

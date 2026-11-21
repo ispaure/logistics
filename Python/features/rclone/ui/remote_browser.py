@@ -81,6 +81,8 @@ class RemoteBrowserView(qt.QMainWindow):
         from services.documents.ui.private_views import protect_private_view
         protect_private_view(self, self.provider)
         self._private_view_guard.revoked.connect(self.file_browser.storage_location.refresh)
+        from desktop.browser_export import BrowserExport
+        self.browser_export = BrowserExport(self, layout, menu)
 
     @property
     def view_title(self):
@@ -96,7 +98,7 @@ class RemoteBrowserView(qt.QMainWindow):
         return CryptBrowserView._details(self, row, cancelled)
 
     def _can_download(self, _row=None):
-        return not self.closing and not self.operation.busy and self.isEnabled()
+        return not self.closing and not self.operation.busy and not self.browser_export.operation.busy and self.isEnabled()
 
     def download_locally(self, path):
         if not self._can_download():
@@ -170,7 +172,7 @@ class RemoteBrowserView(qt.QMainWindow):
             item.addAction('Discard…', discard)
 
     def open_document(self, path):
-        if self.closing or self.operation.busy:
+        if self.closing or self.operation.busy or self.browser_export.operation.busy:
             return
         suffix = Path(path).suffix.lower()
         if suffix in VIDEO_EXTENSIONS:
@@ -233,9 +235,10 @@ class RemoteBrowserView(qt.QMainWindow):
     def prepare_close(self):
         self.closing = True
         self.operation.request_cancel()
+        export_busy = self.browser_export.stop()
         browser_busy = self.file_browser.stop()
         notes_ready = self.notes_offer is None or self.notes_offer.prepare_close()
-        ready = not browser_busy and not self.operation.busy and notes_ready
+        ready = not browser_busy and not self.operation.busy and not export_busy and notes_ready
         if ready:
             self._release()
         return ready

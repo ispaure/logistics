@@ -20,6 +20,49 @@ from tests.resources.localcrypt_cases import LocalCryptCase
 
 
 class LocalCryptBrowserTests(LocalCryptCase):
+    def test_native_drop_copies_nested_files_into_unlocked_storage(self):
+        from commonUtils.ui.tasks.process_progress import _windows
+        from features.rclone.localcrypt.ui.views import CryptBrowserView
+
+        with self.temporary_directory() as directory, crypt_fixture(directory, self.binary, pull=False) as f, \
+             patch('features.rclone.localcrypt.ui.views.executable.get_rclone_path', return_value=self.binary):
+            source = f.root / 'Incoming'
+            (source / 'sub').mkdir(parents=True)
+            original = source / 'sub' / 'data.txt'
+            original.write_bytes(b'generated private drop')
+            host = CryptBrowserView(f.item)
+            host.show()
+            try:
+                self.wait(lambda: not host.file_browser.busy)
+                viewport = host.file_browser.views.navigation_views[0].viewport()
+                point = viewport.rect().bottomRight() - qt.QPoint(2, 2)
+                mime = qt.QMimeData()
+                mime.setUrls([qt.QUrl.fromLocalFile(str(source))])
+                copy = qt.Qt.DropAction.CopyAction
+                left = qt.Qt.MouseButton.LeftButton
+                flags = qt.Qt.KeyboardModifier.NoModifier
+                before = set(_windows)
+                enter = qt.QDragEnterEvent(point, copy, mime, left, flags)
+                qt.QApplication.sendEvent(viewport, enter)
+                self.assertTrue(enter.isAccepted())
+                drop = qt.QDropEvent(qt.QPointF(point), copy, mime, left, flags)
+                qt.QApplication.sendEvent(viewport, drop)
+                self.assertTrue(drop.isAccepted())
+                self.wait(lambda: bool(set(_windows) - before))
+                transfer, = set(_windows) - before
+                try:
+                    self.wait(lambda: transfer.result is not None)
+                    self.assertEqual(transfer.result.state, 'succeeded', transfer.details.text())
+                    self.assertEqual(original.read_bytes(), b'generated private drop')
+                    with host.provider.open('Incoming/sub/data.txt') as source_stream:
+                        self.assertEqual(source_stream.read(), original.read_bytes())
+                    self.assertNotIn(original.read_bytes(), host.provider.encrypted_path('Incoming/sub/data.txt').read_bytes())
+                finally:
+                    transfer.close()
+            finally:
+                self.wait(host.prepare_close)
+                host.close()
+
     def test_browser_move_verifies_localcrypt_and_preserves_source_on_locked_destination(self):
         from commonUtils.runtime.resources.local import LocalFiles
         from desktop.browser_moves import MoveSource, move_selection
