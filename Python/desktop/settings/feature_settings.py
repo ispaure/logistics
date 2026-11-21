@@ -1,7 +1,7 @@
 """Settings contributed by enabled desktop features."""
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.typography import point_size, setting_size
-from commonUtils.ui.markdown import open_markdown
+from services.documentation import open_guide as open_markdown
 from commonUtils.ui.settings.settings_sections import ScopedSettings, SettingsSection
 from .configuration import ConfigurationPanel
 from features.application import registry

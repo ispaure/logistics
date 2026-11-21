@@ -57,6 +57,21 @@ view. The files in your chosen folder remain there if you cancel that second
 drag or lock the source. Remote tabs accept browsing and export, and remain
 read-only.
 
+## Clipboard in protected sessions
+
+Enable **Logistics Settings → Privacy & Security → Restrict clipboard in
+protected sessions** to block supported Cut, Copy and Paste commands in
+editors, selectable readers and chat. The setting is off by default. When
+enabled, protection applies across every window in the current Logistics
+process as soon as session-only credentials are active. Locking or removing the
+last credentials restores these commands when the last retained protected view
+has released its content.
+
+Existing clipboard contents stay available to other apps. Clipboard history
+and device sync are controlled by the operating system. On X11, selecting
+text can still publish it to the separate primary selection. File Browser
+copy and move commands remain available and can use the file-manager clipboard.
+
 ## Search and inspect storage
 
 Search and size charts use saved folder metadata. If you can see a file in

@@ -153,11 +153,11 @@ button { touch-action:manipulation } button:focus-visible { outline:2px solid va
 <button id="latest" hidden>Latest message ↓</button><div id="copy-status" role="status"></div></body></html>'''
 
 
-def transcript_update(key, entries, font_size, *, configured, force_latest=False, start=0):
+def transcript_update(key, entries, font_size, *, configured, force_latest=False, start=0, native_clipboard=False):
     """Patch changed message nodes, retaining selection and a reader's scroll."""
     payload = json.dumps(dict(key=key, entries=entries, start=start, count=start + len(entries),
                               font_size=int(font_size), configured=configured,
-                              force_latest=force_latest), ensure_ascii=True)
+                              force_latest=force_latest, native_clipboard=native_clipboard), ensure_ascii=True)
     return '''(() => {
 const data = ''' + payload + ''';
 const root = document.getElementById('messages');
@@ -173,7 +173,7 @@ if (!window.chatView) {
 const state = window.chatView;
 const changed = state.key !== data.key;
 const follow = changed || data.force_latest || nearBottom();
-if (changed) { root.replaceChildren(); state.entries = []; window.scrollTo(0,0); }
+if (changed) { root.replaceChildren(); state.entries = []; delete state.clipboardText; window.scrollTo(0,0); }
 document.body.style.fontSize = data.font_size + 'px';
 document.getElementById('empty').hidden = data.count !== 0;
 document.getElementById('hint').textContent = data.configured ? 'Write a message below.' : 'Use Set up chat above to choose an on-device model or a server.';
@@ -207,6 +207,11 @@ data.entries.forEach((entry, offset) => {
   article.chatCopy = copy;
   copy.setAttribute('aria-label', 'Copy assistant message');
   copy.onclick = () => {
+   if (data.native_clipboard) {
+    state.clipboardText = content.innerText;
+    window.location.href = 'https://logistics.invalid/chat/copy';
+    return;
+   }
    const selection = window.getSelection(); const range = document.createRange(); range.selectNodeContents(content);
    selection.removeAllRanges(); selection.addRange(range);
    let copied = false;

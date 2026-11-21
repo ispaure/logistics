@@ -14,6 +14,30 @@ def privacy(app):
     box.add(SettingsLabel(
         'When the screen sleeps or you leave the app, Logistics hides protected content. '
         'Enter the credential or session password when you return.'))
+    from mobile.clipboard import controller, KEY
+    from services.clipboard_policy import DESCRIPTION, LABEL
+    policy = controller(app)
+    if policy is not None:
+        from .forms import save_boolean_switch
+
+        def change(widget, **kwargs):
+            if save_boolean_switch(policy.preferences, widget, KEY, change, app.settings_status):
+                policy.publish()
+                app.settings_status.text = ''
+
+        choice = toga.Switch(LABEL, value=policy.preferences.values[KEY] == 'true',
+                             on_change=change, style=Pack(height=48))
+        def refresh():
+            choice.on_change = None
+            try:
+                choice.value = policy.preferences.values[KEY] == 'true'
+            finally:
+                choice.on_change = change
+
+        box._settings_on_open = refresh
+        limits = (' The keyboard’s clipboard tools and File Browser moves are separate.'
+                  if policy.android else ' Web previews, keyboard tools and File Browser moves are separate.')
+        box.add(switch_row(app, LABEL, choice, DESCRIPTION + limits))
     box.add(SettingsLabel('Trusted Wi-Fi', style=Pack(font_weight='bold')))
     from .trusted_wifi import controls as trusted_wifi_controls
     trusted_wifi_controls(app, box)

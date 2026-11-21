@@ -28,6 +28,36 @@ Consume explicit provider `session_only` declarations through wrappers. Unknown
 private providers conservatively refuse external playback. Keep grant validation
 at the I/O boundary. Storage rows label session-only content beneath the title.
 
+## Clipboard commands
+
+The opt-in **Restrict clipboard in protected sessions** preference gates
+clipboard commands at execution. It makes no clipboard writes on activation,
+lock, preference changes or final release. A blocked Cut leaves the selection
+and document intact, and blocked Paste inserts nothing. File Browser clipboard
+transfers and the notebook canvas's internal ink and image operations have their
+own scope.
+
+| Surface | Enforcement and limits |
+| --- | --- |
+| Qt desktop | Standard focused shortcuts and Qt context actions for text widgets and embedded WebEngine. Logistics Edit actions and chat and Git clipboard writes consult the same decision. X11 primary-selection publication, direct accessibility text access, and OS clipboard history and sync are separate. |
+| Android | Toga EditText covers text menu commands through the native edit handler. WebView intercepts standard shortcuts, Chromium selection actions routed through Android ActionMode, and DOM clipboard events on WebView versions with document-start scripts. Keyboard providers can still insert content as typed text. |
+| iPhone and iPad | UIKit fields, text views and WebKit standard clipboard responder actions check the current process scope. WebKit link and image preview menus and system keyboard services are separate. |
+| Mobile Chat | The transcript requests Copy through its host. The host rechecks the scope before writing rendered text to the platform clipboard. |
+
+The desktop protection scope queries the existing session credential registry
+and retains desktop private-view guards. A hidden view whose plaintext has
+yet to retire counts until its window is destroyed. Mobile uses the existing
+credential runtime and retained-owner protection scope shared by its scenes.
+The mobile preference is stored with the primary host so it has one effective
+value across scenes. Android publishes the current decision to native controls
+at protection and preference changes. UIKit queries it in the responder.
+
+The Qt regression runs on the offscreen clipboard. The mobile probe uses
+generated strings and Manager-owned disposable devices. It checks native text
+context handlers and focused shortcuts, embedded text editing, Chat Copy,
+credential lock and final owner release. A second scope models process-wide
+retention independently of a visible secondary scene.
+
 ## Resume challenges and asynchronous callbacks
 
 `services.session_auth.ResumePassword` separates setup, manual and lifecycle

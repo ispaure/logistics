@@ -3,6 +3,7 @@
   "modules": [
     "__init__.py",
     "access_policy.py",
+    "clipboard_policy.py",
     "appearance_palette.py",
     "audio_output.py",
     "build_version.py",

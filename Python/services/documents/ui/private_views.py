@@ -42,6 +42,9 @@ class PrivateViewGuard(qt.QObject):
         window.installEventFilter(self)
         self.bind(provider)
         _guards.add(self)
+        from desktop.clipboard import PROTECTION
+        self._release_process_protection = PROTECTION.retain(self, lambda: (), protected=self.retains_protection)
+        window.destroyed.connect(self._release_process_protection)
         window.destroyed.connect(lambda: _guards.discard(self))
         window.destroyed.connect(self.unsubscribe)
         idle = getattr(window, 'idle', None)
@@ -71,6 +74,15 @@ class PrivateViewGuard(qt.QObject):
             # A failed handoff must not leave newly private content interactive.
             self.retire()
             raise
+
+    def retains_protection(self):
+        from services.access_policy import session_only
+        if self._retired and hasattr(self.window, 'retire_private_content'):
+            return False
+        try:
+            return session_only(self.provider) or session_only(self.current_provider())
+        except Exception:
+            return True
 
     def current_provider(self):
         resolve = getattr(self.window, 'resource_provider', None)

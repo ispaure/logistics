@@ -34,6 +34,8 @@ def main() -> int:
     app = pyside.initialize_q_app()
     configure(presenter=present_diagnostic)
     initialize_settings()
+    from desktop.clipboard import install as install_clipboard
+    install_clipboard(app)
     indexing = IndexService()
     main_window = None
     try:

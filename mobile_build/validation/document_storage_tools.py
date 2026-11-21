@@ -32,7 +32,7 @@ RAPID_INK_PROFILE = dict(bundle='io.github.ispaure.logisticsnotebookqa',
     entry_point='tests.logisticsmobile.notebook_rapid_ink_probe', result_name='notebook-rapid-ink-result.json')
 COMIC_SCOPES = ('matrix', 'basic', 'lifecycle', 'library', 'readers', 'windows', 'fold', 'reduced-motion')
 QA_BUNDLES = {UNIFIED_PROGRESS_BUNDLE, BUNDLE, 'io.github.ispaure.logisticsnotesauditqa', 'io.github.ispaure.logisticscreationqa', 'io.github.ispaure.logisticsrawinkqa',
-              'io.github.ispaure.logisticscomicqa',
+              'io.github.ispaure.logisticscomicqa', 'io.github.ispaure.logisticsclipboardqa',
               'io.github.ispaure.logisticsnotebookqa', 'io.github.ispaure.logisticsfeaturesqa',
               'io.github.ispaure.logisticsreaderspaceqa', 'io.github.ispaure.logisticsviewerlayoutqa'}
 NATIVE_DIAGNOSTICS = ('pdf-edge-left.png', 'pdf-edge-right.png', 'logistics-native-ui-timings.json', 'logistics-native-ui-error.txt', 'logistics-native-ui-webview-counts.json', 'notes-discovery.png', 'notes-file-hold.png', 'notes-compact-files.png',

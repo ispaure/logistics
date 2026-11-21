@@ -10,6 +10,7 @@ from .image_view import ScreenshotView
 from .changes import EditedFilesCard
 from .icons import action_button, chat_icon
 from .user_message import set_user_document
+from desktop.clipboard import clipboard_blocked, guarded
 
 
 def message_palette(user=False):
@@ -130,6 +131,8 @@ class MessageBrowser(MarkdownBrowser):
         visit(self.document().rootFrame())
 
     def copy_code(self, frame):
+        if clipboard_blocked():
+            return
         cursor = qt.QTextCursor(self.document())
         cursor.setPosition(frame.firstPosition())
         cursor.setPosition(frame.lastPosition(), qt.QTextCursor.MoveMode.KeepAnchor)
@@ -186,7 +189,7 @@ class Bubble(qt.QFrame):
         header.addWidget(self.work_button)
         header.addStretch()
         self.copy_button = action_button('Copy message as written',
-            lambda: qt.QApplication.clipboard().setText(self.browser.source or ''), 'copy', size=16)
+            guarded(lambda: qt.QApplication.clipboard().setText(self.browser.source or '')), 'copy', size=16)
         self.browser = MessageBrowser(self, literal_prose=self.role == 'user')
         self.error = qt.QLabel()
         self.error.setTextFormat(qt.Qt.TextFormat.PlainText)

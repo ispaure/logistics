@@ -1,5 +1,7 @@
 """Conventional menus, published by the existing workspace menu router."""
 from commonUtils.ui import pyside as qt
+from desktop.clipboard import guarded
+from services.clipboard_policy import CLIPBOARD_COMMANDS
 
 
 def add(view, menu, title, callback, shortcut=None):
@@ -40,7 +42,13 @@ def build_menus(view):
         ('Cut', 'cut', key.Cut), ('Copy', 'copy', key.Copy), ('Paste', 'paste', key.Paste),
         ('Select All', 'selectAll', key.SelectAll),
     ):
-        add(view, 'Edit', title, lambda method=method: (view.current.edit_command(method) if hasattr(view.current, 'edit_command') else getattr(view.current, method)()) if view.current else None, shortcut)
+        def command(method=method):
+            if view.current:
+                if hasattr(view.current, 'edit_command'):
+                    view.current.edit_command(method)
+                else:
+                    getattr(view.current, method)()
+        add(view, 'Edit', title, guarded(command) if method in CLIPBOARD_COMMANDS else command, shortcut)
     add(view, 'Edit', 'Find / Replace', view.find, key.Find)
     for title, callback in (
         ('Split Editor Right', view.split_right), ('Move File Left', lambda: view.move(-1)),

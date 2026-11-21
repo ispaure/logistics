@@ -124,6 +124,8 @@ class SettingsPage(qt.QWidget):
                 editor.pending.clear()
                 if not editor.reload(initial=True):
                     raise ValueError('A personal settings editor could not reload')
+        if privacy := self.panels.get('privacy'):
+            privacy.reload()
         appearance = self.panels.get('commonutils')
         if appearance is not None:
             appearance._load_snow()
@@ -165,7 +167,7 @@ class SettingsPage(qt.QWidget):
             self.sidebar.clear()
             items = {}
             for key, title in (('features', 'Features'), ('reader-history', 'Reader history'), ('workspaces', 'Workspaces'), ('indexing', 'File indexing'), ('configuration', 'Configuration'),
-                               ('commonutils', 'Appearance & shared controls'), ('licenses', 'Open-source licenses')):
+                               ('commonutils', 'Appearance & shared controls'), ('privacy', 'Privacy & Security'), ('licenses', 'Open-source licenses')):
                 item = qt.QTreeWidgetItem([title])
                 item.setData(0, qt.Qt.ItemDataRole.UserRole, key)
                 self.sidebar.addTopLevelItem(item)
@@ -212,6 +214,9 @@ class SettingsPage(qt.QWidget):
                                             scope=self.scope_selector.currentData())
             elif key == 'commonutils':
                 panel = AppearanceSettingsPanel(self, layered=True, scope=self.scope_selector.currentData())
+            elif key == 'privacy':
+                from desktop.settings.privacy_security import PrivacyPanel
+                panel = PrivacyPanel(self, scope=self.scope_selector.currentData())
             elif key == 'licenses':
                 from desktop.settings.licenses import LicensesPanel
                 panel = LicensesPanel(self)
@@ -220,7 +225,10 @@ class SettingsPage(qt.QWidget):
                 panel = FeatureSettingsPanel(state, self, scope=self.scope_selector.currentData())
             self.panels[key] = panel
             self.stack.addWidget(panel)
-        self.stack.setCurrentWidget(self.panels[key])
+        panel = self.panels[key]
+        if key == 'privacy':
+            panel.reload()
+        self.stack.setCurrentWidget(panel)
 
     def can_close(self):
         return all(getattr(panel, 'can_close', lambda: True)() for panel in self.panels.values())

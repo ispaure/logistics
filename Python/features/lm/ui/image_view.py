@@ -42,7 +42,8 @@ class ScreenshotView(qt.QLabel):
             scroll.setWidget(label)
             layout.addWidget(scroll)
             copy = qt.QPushButton('Copy image')
-            copy.clicked.connect(lambda: qt.QApplication.clipboard().setPixmap(self.original))
+            from desktop.clipboard import guarded
+            copy.clicked.connect(guarded(lambda: qt.QApplication.clipboard().setPixmap(self.original)))
             layout.addWidget(copy)
             dialog.resize(min(1000, self.original.width() + 50), min(800, self.original.height() + 90))
             dialog.exec()

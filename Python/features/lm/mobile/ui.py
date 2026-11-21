@@ -72,7 +72,7 @@ class ChatUI(ChatSettingsPanel):
         self.transcript.key = None
         self.transcript.entries = []
         self.transcript.force_latest = False
-        self.chat_transcript = ChatTranscript(on_navigation_starting=lambda widget, url, **kw: False,
+        self.chat_transcript = ChatTranscript(on_navigation_starting=self.chat_transcript_navigation,
             on_webview_load=self.chat_transcript_loaded, style=Pack(flex=1))
         self.presentation.bind_font(self.chat_transcript, 'markdown', web=True)
         self.presentation.surface(self.chat_transcript, radius=0, background='window', outlined=False)
@@ -508,6 +508,36 @@ class ChatUI(ChatSettingsPanel):
         self.update_chat_header()
         self.schedule_chat_render()
 
+    def chat_transcript_navigation(self, widget, url, **kwargs):
+        if self.active_host and widget is self.chat_transcript and url == 'https://logistics.invalid/chat/copy':
+            from mobile.clipboard import controller
+            if policy := controller(self.app):
+                self.loop.create_task(self.copy_transcript(widget, policy, self.transcript.generation))
+        return False
+
+    async def copy_transcript(self, widget, policy, generation):
+        copied = False
+        if not policy.restricted():
+            text = await widget.evaluate_javascript("""(() => {
+                const state = window.chatView;
+                if (!state) return null;
+                const text = state.clipboardText;
+                delete state.clipboardText;
+                return text ?? null;
+            })()""")
+            if not self.active_host or widget is not self.chat_transcript or generation != self.transcript.generation:
+                return
+            if isinstance(text, str) and text:
+                copied = policy.copy_text(text)
+        if self.active_host and widget is self.chat_transcript and generation == self.transcript.generation:
+            message = 'Copied' if copied else 'Clipboard unavailable'
+            await widget.evaluate_javascript(f"""(() => {{
+                const notice = document.getElementById('copy-status');
+                if (!notice) return;
+                notice.textContent = '{message}';
+                setTimeout(() => {{ if (notice.textContent === '{message}') notice.textContent = ''; }}, 3000);
+            }})()""")
+
     def chat_transcript_loaded(self, widget=None, **kwargs):
         if not self.active_host:
             return
@@ -550,10 +580,11 @@ class ChatUI(ChatSettingsPanel):
                 start = 0
                 while start < min(len(entries), len(previous)) and entries[start] is previous[start]:
                     start += 1
+                from mobile.clipboard import supported
                 script = transcript_update(data['id'], entries[start:],
                     self.presentation.font_size('markdown'),
                     configured=configured(self.chat_profile),
-                    force_latest=force_latest, start=start)
+                    force_latest=force_latest, start=start, native_clipboard=supported(self.app))
                 ready = await self.chat_transcript.evaluate_javascript(script)
                 if not self.active_host:
                     return

@@ -1,5 +1,6 @@
 """Desktop conversation menu assembly; actions and session state stay on the page."""
 from commonUtils.ui import pyside as qt
+from desktop.clipboard import guarded
 
 
 def build_menus(page, layout):
@@ -15,8 +16,8 @@ def build_menus(page, layout):
     edit = page.menu_bar.addMenu('Edit')
     page.draft_actions = []
     for label, callback in [('Undo draft', page.composer.undo), ('Redo draft', page.composer.redo),
-                            ('Cut draft selection', page.composer.cut), ('Copy draft selection', page.composer.copy),
-                            ('Paste into draft', page.composer.paste), ('Select draft', page.composer.selectAll)]:
+                            ('Cut draft selection', guarded(page.composer.cut)), ('Copy draft selection', guarded(page.composer.copy)),
+                            ('Paste into draft', guarded(page.composer.paste)), ('Select draft', page.composer.selectAll)]:
         page.draft_actions.append(edit.addAction(label, callback))
     chat = page.menu_bar.addMenu('Conversation')
     chat.addAction(page.pin_action)

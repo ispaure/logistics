@@ -257,6 +257,8 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         preferences = models['preferences'] if models is not None else Preferences(workspace_root)
         owner.require_startup_claim(identity)
         self.preferences = preferences
+        from .clipboard import install as install_clipboard
+        install_clipboard(self)
         from .palette import set_accent
         set_accent(self.preferences.values['accent_hue'], self.preferences.values['accent_saturation'])
         manager = getattr(self, 'scene_manager', None)
@@ -936,6 +938,10 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
 
     def reload_preferences(self, widget=None, **kwargs):
         self.preferences.reload()
+        from .clipboard import controller
+        policy = controller(self)
+        if policy is not None:
+            policy.publish()
         from .palette import set_accent
         set_accent(self.preferences.values['accent_hue'], self.preferences.values['accent_saturation'])
         from .magnifier import refresh

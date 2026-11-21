@@ -75,6 +75,23 @@ on screenshots, and this setting's effect on that path is unverified.
 Ordinary local files and readable exports stay readable after
 credentials lock. See [resuming a locked session](../../features/rclone/user_mobile/connections.md#resuming-a-locked-session).
 
+## Clipboard in protected sessions
+
+Enable **Privacy & Security → Restrict clipboard in protected sessions** on
+Android, iPhone or iPad to block supported Cut, Copy and Paste commands in native
+text controls, embedded readers and editors, and Chat. The setting is off by
+default. When enabled, it applies to all Logistics windows while any session-only
+credentials or retained protected content remain. A resume lock keeps the
+restriction active. Clipboard commands return after the last credential and
+retained owner are gone. The switch takes effect immediately.
+
+The setting leaves existing clipboard contents in place. System clipboard
+history, device sync, other apps, and keyboard clipboard tools that insert
+text remain under system control. On iPhone and iPad, WebKit's native link
+and image previews have separate actions. Android WebView coverage depends on
+the installed WebView's selection command paths. File Browser moves and
+Notebooks' internal ink and image actions use their own commands.
+
 ## Trusted Wi-Fi session resume
 
 Open **Privacy & Security → Skip session password on trusted Wi-Fi** and add

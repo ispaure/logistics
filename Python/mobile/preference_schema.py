@@ -6,6 +6,7 @@ DEFAULTS and exposes validate() for existing callers.
 import json
 
 from services.appearance_palette import DEFAULT_ACCENT
+from .clipboard import KEY as CLIPBOARD_KEY
 
 from .magnifier import LEVELS, RANGE_ERROR
 from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_SIZES, validate as validate_reading
@@ -34,6 +35,7 @@ DEFAULTS = {
     'disabled_features': '[]',
     'markdown_justify': 'false',
     'clear_unmodified_documents_on_restart': 'true',
+    CLIPBOARD_KEY: 'false',
     'session_speech_when_locked': 'false',
     'playlist_speech_when_locked': 'false',
     'session_trusted_wifi': 'false',
@@ -70,6 +72,8 @@ def validate(values):
         raise ValueError('Invalid read-aloud voice.')
     from .trusted_wifi import network_names
     network_names(values['trusted_wifi_networks'])
+    if values[CLIPBOARD_KEY] not in {'true', 'false'}:
+        raise ValueError('Invalid protected clipboard preference.')
     if values['session_trusted_wifi'] not in {'true', 'false'}:
         raise ValueError('Invalid trusted Wi-Fi session preference.')
     if any(values[key] not in {'true', 'false'}

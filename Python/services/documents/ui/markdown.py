@@ -166,6 +166,8 @@ class ProgressMarkdownWindow(MarkdownWindow):
         from .text_position import TextPosition
 
         viewer = self.viewer
+        from desktop.clipboard import guard_markdown_actions
+        guard_markdown_actions(viewer)
         self.position = TextPosition(
             self, {'preview': viewer.browser, 'source': viewer.editor, 'formatted': viewer.formatted_editor},
             active=lambda: viewer.edit_mode.currentData() if viewer.edit_button.isChecked() else 'preview',
