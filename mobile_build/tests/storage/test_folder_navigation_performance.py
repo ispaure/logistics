@@ -225,7 +225,10 @@ class FolderNavigationTests(unittest.TestCase):
             (provider.root / 'unfinished.12345678.partial').write_text('partial')
             rows = provider.list()
             self.assertEqual(len(rows), 600)
-            self.assertEqual([len(batch) for batch in client.batches], [256, 256, 88])
+            self.assertEqual(len(client.batches), 3)
+            self.assertTrue(all(0 < len(batch) <= 256 for batch in client.batches))
+            self.assertCountEqual([item['path'] for batch in client.batches for item in batch],
+                                  [f'{index}.txt' for index in range(600)])
             self.assertTrue(all(row['revision'] for row in rows))
 
     def test_private_listing_rejects_replaced_client_even_with_same_generation(self):

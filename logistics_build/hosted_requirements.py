@@ -16,9 +16,9 @@ REQUIRED = {
 # Update deliberately alongside a workflow change; unknown contracts never adopt.
 PUSH_DEFAULTS = {
     'archive-platform-checks.yml': dict(family='validate', targets=('macos', 'linux', 'windows'),
-        sha256='522d0b8f4ca2c216b1a4d40bae367e435e94934317293dfbf4ea34f945bed283'),
+        sha256='781d621d91bbae85fddc8f5ae84515c3fc6528fa9d6d545521e935056863f15a'),
     'mobile-build.yml': dict(family='mobile-build', targets=('ios', 'android'),
-        sha256='0ff8dddc90a0d9929720bd54fe5c80557876e1a710cb20f33f3058f2f1f88f19'),
+        sha256='12e7190ae52f183bc728a94e459caf9ae267a4a8a262ac206c956c9076b0aa5d'),
     'mobile-runtime.yml': dict(family='mobile-runtime', targets=('ios', 'android'),
         sha256='2ee75804da9812bdd5fc81d779e4e011ce0748563bce024e20cc59e79279814d'),
 }
