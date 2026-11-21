@@ -110,7 +110,7 @@ class LandingAppearanceTests(QtTestCase):
         from types import SimpleNamespace
         from unittest.mock import patch
         title = 'A very long favourite filename ' * 15 + '.md'
-        row = dict(title=title, source={}, opener={})
+        row = dict(title=title, source=dict(type='local', path=title), opener={})
         store = SimpleNamespace(entries=lambda *args, **kwargs: [row], errors=[])
         with patch('desktop.document_catalog.catalog', return_value=store), \
                 patch('desktop.document_catalog.unlocked_ciphers', return_value=[]), \

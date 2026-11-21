@@ -122,6 +122,6 @@ class ProjectEditDispatcher(qt.QObject):
             buffer.configure()
             buffer.autosave.last_text = saved.text
             buffer.autosave.timer.stop()
-            workspace.watch.addPath(str(saved.path))
+            workspace.sync_disk_watches()
             workspace.update_buffer_titles(buffer)
             workspace.status.setText(f'Saved model edit: {saved.path.name}')
