@@ -751,7 +751,7 @@ def prepare_chat_notes_emulator(emulator, serial, output):
 def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
                 entry_point='tests.logisticsmobile.document_storage_probe',
                 result_name='document-storage-result.json', device=None, tablet=False, reuse_project=False,
-                observe=None, probe_timeout=None, comic_scope=None):
+                observe=None, probe_timeout=None, comic_scope=None, gpu='swiftshader'):
     validate_comic_scope(entry_point, comic_scope, platform='android')
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
@@ -796,13 +796,13 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
     return exercise_android_app(project / 'app/build/outputs/apk/debug/app-debug.apk',
         workspace, output, env, options, bundle=bundle, entry_point=entry_point,
         result_name=result_name, device=device, tablet=tablet, reuse_project=reuse_project,
-        observe=observe, probe_timeout=probe_timeout, comic_scope=comic_scope)
+        observe=observe, probe_timeout=probe_timeout, comic_scope=comic_scope, gpu=gpu)
 
 
 def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
         entry_point='tests.logisticsmobile.document_storage_probe',
         result_name='document-storage-result.json', device=None, tablet=False, startup_timeout=600, install_timeout=180, reuse_project=False,
-        observe=None, probe_timeout=None, comic_scope=None):
+        observe=None, probe_timeout=None, comic_scope=None, gpu='swiftshader'):
     """Run a verified QA APK on an owned device, independently of its build phase."""
     from hashlib import file_digest
     from mobile_build.deployment.android_deploy import build_tools
@@ -832,7 +832,9 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
     import inspect
     emulator_options = dict(environment=env)
     parameters = inspect.signature(AndroidEmulator).parameters
-    for key, value in (('startup_timeout', startup_timeout), ('gpu', 'swiftshader')):
+    if gpu != 'swiftshader' and (device is not None or 'gpu' not in parameters):
+        raise ValueError('The selected GPU mode requires a supported disposable Android emulator.')
+    for key, value in (('startup_timeout', startup_timeout), ('gpu', gpu)):
         if key in parameters:
             emulator_options[key] = value
     emulator = AndroidEmulator(options['tools.android_sdk'], emulator_workspace, **emulator_options)
@@ -1162,6 +1164,8 @@ def main():
     parser.add_argument('--probe', choices=('comic-guidance', 'workspace-edges', 'mobile-feedback', 'documents-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'notebook-geometry', 'editor-keyboard', 'storage', 'reader-space', 'reader-appearance', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'playlist-speech', 'native-suite', 'rotation-crash', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-rapid-ink', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--retain-build', action='store_true', help='Pin this managed QA build for reruns; caller must remove the pin and workspace afterward.')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
+    parser.add_argument('--android-gpu', choices=('host', 'swiftshader'), default='swiftshader',
+                        help='GPU renderer for a disposable Android emulator')
     parser.add_argument('--family', choices=('iPhone', 'iPhone 17e', 'iPad', 'iPhone Duo', 'all'), default='iPhone')
     parser.add_argument('--ios-runtime', help='Explicit installed CoreSimulator runtime identifier for a disposable iOS probe.')
     parser.add_argument('--external-subtitle-only', action='store_true',
@@ -1197,6 +1201,8 @@ def main():
         parser.error('Feedback acceptance uses disposable devices; omit --device.')
     if args.device and args.platform != 'android':
         parser.error('--device requires Android.')
+    if args.android_gpu == 'host' and (args.platform != 'android' or args.device):
+        parser.error('--android-gpu host requires a disposable Android emulator.')
     if args.probe == 'notebook-rapid-ink' and args.device:
         parser.error('Rapid ink acceptance uses a disposable target.')
     if args.probe == 'notebook-input' and args.platform != 'android':
@@ -1437,7 +1443,8 @@ def main():
             if args.probe == 'boox-preview':
                 profile = dict(bundle='io.github.ispaure.logisticsrawinkqa',
                     entry_point='tests.logisticsmobile.boox_preview_probe', result_name='boox-preview-result.json')
-            run_android(workspace, payload, args.output, env, options, device=args.device, tablet=args.android_tablet, **profile)
+            run_android(workspace, payload, args.output, env, options,
+                        device=args.device, tablet=args.android_tablet, gpu=args.android_gpu, **profile)
 
 
 if __name__ == '__main__':

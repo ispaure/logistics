@@ -42,3 +42,5 @@ PYTHONPATH=. mobile_build/.venv/bin/python -m mobile_build.validation.document_s
 ```
 
 The probe replays short and long pressure strokes on three pages and checks ordered delivery, recovery, layer assignment, undo, redo, and Save/reopen. Android injects stylus MotionEvents into the real WebView listener. iOS replays the same sample sequence at the mounted canvas transport endpoint. The paint timing records a browser frame opportunity. Measure display refresh and physical pen delivery separately on the hardware.
+
+Add `--android-gpu host` to use host graphics acceleration. For a comparison, keep the APK and emulator profile the same and verify the graphics adapter in each emulator log. The default renderer is SwiftShader.
