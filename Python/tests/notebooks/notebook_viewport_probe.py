@@ -16,8 +16,10 @@ from features.notebooks.bridge import Bridge
 from features.notebooks.brushes import EXPANDED_BRUSHES
 from features.notebooks.editor import Editor
 from features.notebooks.mobile.surface import mobile_editor_html
-from features.notebooks.notebook import Notebook
+from features.notebooks.notebook import Notebook, read_archive
 from features.notebooks.protocol import update_script
+from features.notebooks.remarkable_export import export_rmdoc
+from features.notebooks.templates import settings
 from logistics_build.build_retention import scratch
 from tests.notebooks.webengine_driver import javascript, wait_until
 
@@ -138,8 +140,80 @@ def main(output):
             assert 0 <= reset['rect']['left'] < reset['rect']['right'] <= view.width() + 1, value
             assert 0 <= reset['rect']['top'] < reset['rect']['bottom'] <= view.height() + 1, value
 
+        def check_forms():
+            nonlocal editor
+            original = editor
+            results = []
+            try:
+                for template, paper_format, nominal in [
+                    ('Restaurant review', 'move', (291.5, 821, 1460)),
+                    ('Restaurant review', 'pro', (0, 1404, 1872)),
+                    ('Checklist', 'move', (291.5, 821, 1460)),
+                ]:
+                    source = Notebook.new('Synthetic form', template='Logistics ' + template,
+                                          paper_format=paper_format)
+                    source.page(0).add([[600, 173, .5], [700, 173, .5]])
+                    source_bytes = source.to_bytes()
+                    source_state = Editor(source).snapshot()
+                    before = (source.pages[0].id, source.page(0).to_bytes(), source.page(0).layers)
+                    for stage, book in [('create', source), ('reopen', Notebook.read(source_bytes)),
+                                        ('export', Notebook.read(export_rmdoc(source)))]:
+                        editor = Editor(book)
+                        assert (book.pages[0].id, book.page(0).to_bytes(), book.page(0).layers) == before
+                        if stage != 'export':
+                            assert (editor.state()['width'], editor.state()['height']) == (1404, 1872)
+                            assert book.content['orientation'] == 'portrait'
+                            assert settings(book, book.pages[0])['format'] == paper_format
+                        portrait = load(390, 844, native_actions=True)
+                        wait_until(lambda: js("$('pdfBackground').naturalWidth > 0"), 'form artwork')
+                        for width, height in [(390, 844), (844, 390), (390, 844)]:
+                            view.resize(width, height)
+                            value = snapshot()
+                            b, wrap = value['paper'], value['wrap']
+                            assert all(abs(b[key] - expected) < .01 for key, expected in
+                                       zip(('x', 'width', 'height'), nominal)), (template, paper_format, stage, value)
+                            room = json.loads(js('JSON.stringify(pageViewportSpace())'))
+                            expected_scale = min(room['width'] / nominal[1], room['height'] / nominal[2])
+                            assert abs(value['scale'] - expected_scale) < .002, (stage, value, room)
+                            assert abs((wrap['left'] + wrap['right']) / 2 - value['contentCenter'][0]) < 2
+                            xy = json.loads(js("""JSON.stringify((()=>{
+                              const r=canvas.getBoundingClientRect();
+                              return coord({clientX:r.left+600*r.width/state.width,
+                                clientY:r.top+173*r.height/state.height,pointerType:'mouse'});
+                            })())"""))
+                            assert abs(xy[0] - 600) < .01 and abs(xy[1] - 173) < .01, xy
+                            artwork = json.loads(js('JSON.stringify(backgroundContentBounds())'))
+                            if stage != 'export':
+                                assert artwork == dict(x=0, y=0, width=1404, height=1872), artwork
+                            else:
+                                assert abs(artwork['x'] - nominal[0]) < 1, artwork
+                                assert abs(artwork['y']) < 1, artwork
+                            results.append(dict(template=template, format=paper_format, stage=stage, measured=value))
+                            if template == 'Restaurant review' and stage in ('reopen', 'export'):
+                                view.grab().save(str(output / f'restaurant-{paper_format}-{stage}-{width}.png'))
+                        assert not js('queue.length'), 'Fitting changed the notebook'
+                        assert abs(value['scale'] - portrait['scale']) < .002
+                        if stage == 'reopen':
+                            assert read_archive(book.to_bytes()) == read_archive(source_bytes)
+                    assert Editor(source).snapshot() == source_state
+
+                # Imported lower ink can grow the canvas. The source SVG must
+                # still start at the same origin and retain its native scale.
+                source.page(0).strokes[0].points[0][1] = 2200
+                editor = Editor(Notebook.read(source.to_bytes()))
+                value = load(390, 844, native_actions=True)
+                wait_until(lambda: js("$('pdfBackground').naturalWidth > 0"), 'tall form artwork')
+                assert value['paper']['height'] > 2200, value
+                artwork = json.loads(js('JSON.stringify(backgroundContentBounds())'))
+                assert artwork == dict(x=0, y=0, width=1404, height=1872), artwork
+                results.append(dict(template='Checklist with lower ink', measured=value, artwork=artwork))
+            finally:
+                editor = original
+            return results
+
         report = dict(success=False, defaults=[], transitions=[], physical_hardware=False)
         try:
+            report['formatted_pages'] = check_forms()
             for name, width, height, tablet, kind in [
                 ('closed-phone-portrait', 390, 844, False, 'move'),
                 ('closed-phone-landscape', 844, 390, False, 'width'),

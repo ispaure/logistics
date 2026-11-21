@@ -43,7 +43,8 @@ def pdf_highlighter(view, desktop):
     wait_until(lambda: javascript(view, "typeof state !== 'undefined' && state.name === 'PDF highlighter order' && "
                                   "!!$('pdfBackground').naturalWidth"))
     pixels = json.loads(javascript(view, r"""(()=>{
-      draw();
+      // Keep pixel sampling independent of the initial viewport fit.
+      setZoom(1);
       function pixel(x,y){
         return [...ctx.getImageData(Math.floor(x*canvas.width/state.width),
                                     Math.floor(y*canvas.height/state.height),1,1).data];
@@ -156,11 +157,16 @@ def main(output):
                             assert js(view, "$('templateFormat').value") == paper_format
                         assert js(view, "$('pdfBackground').hidden") == (template == 'Blank')
                         if template == 'Logistics Restaurant review':
+                            expected = (dict(x=291.5, y=0, width=821, height=1460) if paper_format == 'move'
+                                        else dict(x=0, y=0, width=1404, height=1872))
+                            assert json.loads(js(view, 'JSON.stringify(paperBounds())')) == expected
                             view.grab().save(str(output / f'{name}-restaurant-{paper_format}.png'))
                 # Crop starts centered and at the top; switching views leaves
                 # model points untouched and maps pointer input to the full scene.
                 editor.apply(dict(op='template', name='P Lines small', format='pro', visible=True))
                 js(view, update_script(editor.state()))
+                if desktop:
+                    assert js(view, "paperView==='pro'&&paperBounds().width===1404")
                 report = json.loads(js(view, r'''(()=>{
                     const check=(v,m)=>{if(!v)throw Error(m)};
                     $('paperView').value='move';$('paperView').dispatchEvent(new Event('change'));

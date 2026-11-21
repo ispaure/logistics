@@ -19,20 +19,25 @@ function viewportLayoutKey() {
 function compactPaper() {
   return state.compact_paper || state.move_paper || {width: 821, height: 1460}
 }
+function formattedTemplate() {
+  return state.template_editable && state.template_formats?.includes(state.template_name)
+}
 function compactTemplate() {
-  return state.template_editable && state.template_settings?.format === 'move'
+  return formattedTemplate() && state.template_settings.format === 'move'
 }
 function defaultViewportChoice() {
-  if (!mobileViewport()) return {view: paperView, zoom: 'fit'};
+  if (formattedTemplate() || state.exported_template_paper)
+    return {view: compactTemplate() ? 'move' : 'pro', zoom: 'page'};
+  if (!mobileViewport()) return {view: 'pro', zoom: 'fit'};
   if (document.body.classList.contains('notebook-laptop')) return {view: 'pro', zoom: 'fit'};
   if (innerWidth > innerHeight) {
     if (state.iphone_duo && innerHeight >= 560)
-      return {view: compactTemplate() ? 'move' : 'pro', zoom: 'compact-height'};
+      return {view: 'pro', zoom: 'compact-height'};
     return {view: 'pro', zoom: 'fit'}
   }
   const widePortrait = state.iphone_duo ? innerWidth >= 650 : innerWidth >= 700;
   if (state.tablet === true || widePortrait)
-    return {view: state.iphone_duo && compactTemplate() ? 'move' : 'pro', zoom: 'page'};
+    return {view: 'pro', zoom: 'page'};
   return {view: 'move', zoom: 'fit'}
 }
 function assignZoomValue(value) {
@@ -139,10 +144,10 @@ function setZoom(value, anchor = null, paperPoint = null, touch = null) {
     y = anchor?.y ?? box.top + viewport.clientHeight / 2;
   const px = paperPoint?.[0] ?? Math.max(0, Math.min(1, (x - before.left) / before.width)),
     py = paperPoint?.[1] ?? Math.max(0, Math.min(1, (y - before.top) / before.height));
-  // Move is the default phone framing, not a permanent crop. Once the user
-  // magnifies that framing, make the full native paper available for panning;
-  // the old paper anchor below keeps the viewed area in the same place.
-  if (documentPaperView === null && defaultViewportZoom && mobileViewport() && !['page', 'fit'].includes(value)) {
+  // Promote the default phone strip to the full page when the user zooms.
+  // Form templates keep their selected paper bounds while zooming.
+  if (documentPaperView === null && defaultViewportZoom && mobileViewport() &&
+      !formattedTemplate() && !['page', 'fit'].includes(value)) {
     paperView = 'pro';
     if ($('paperView')) $('paperView').value = paperView
   }

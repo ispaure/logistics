@@ -189,8 +189,7 @@ function resize() {
   displayedPaperBounds = bounds;
   const zoom = $('zoom').value;
   const {width: availableWidth, height: availableHeight} = pageViewportSpace();
-  const pageHeight = compactTemplate() && documentPaperView !== 'pro' ? compactPaper().height : bounds.height;
-  const heightFit = availableHeight / pageHeight;
+  const heightFit = availableHeight / bounds.height;
   let fitWidth = bounds.width;
   if (documentPaperView === null && defaultViewportZoom && mobileViewport()) {
     if (paperView === 'move' && zoom === 'fit') fitWidth = compactPaper().width;
@@ -209,8 +208,8 @@ function resize() {
   wrap.style.margin = mobileViewport() || paperView === 'move' ? '0 auto auto' : 'auto';
   layers.style.left = (-bounds.x * scale) + 'px';
   layers.style.width = (state.width * scale) + 'px';
-  const imageBounds = state.pdf_paper || {x: 0, width: state.width, height: state.height};
-  for (const [key, value] of Object.entries({left: (imageBounds.x - bounds.x) * scale, top: 0,
+  const imageBounds = backgroundPaperBounds();
+  for (const [key, value] of Object.entries({left: (imageBounds.x - bounds.x) * scale, top: imageBounds.y * scale,
     width: imageBounds.width * scale, height: imageBounds.height * scale})) background.style[key] = value + 'px';
   let ratio = Math.min(devicePixelRatio || 1, 2);
   let backingScale = Math.min(scale * ratio, Math.sqrt(canvasPixelLimit / (state.width * state.height))),
@@ -255,7 +254,11 @@ function previewErase(samples, radius = pageEraserRadius()) {
 
 function backgroundContentBounds(image = $('pdfBackground')) {
   if (!state.background || !image.complete || !image.naturalWidth) return null;
-  return containedBackgroundBounds(image, state.pdf_paper || {x: 0, y: 0, width: state.width, height: state.height});
+  return containedBackgroundBounds(image, backgroundPaperBounds());
+}
+
+function backgroundPaperBounds() {
+  return state.pdf_paper || state.template_bounds || {x: 0, y: 0, width: state.width, height: state.height};
 }
 
 function containedBackgroundBounds(image, bounds) {

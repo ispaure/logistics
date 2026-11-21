@@ -207,7 +207,7 @@ def svg(name, paper_format='pro'):
     if name not in CATALOG or name == 'Blank':
         return ''
     paths, texts = geometry(name, paper_format)
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {WIDTH} {HEIGHT}">'
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{WIDTH}" height="{HEIGHT}" viewBox="0 0 {WIDTH} {HEIGHT}">'
             '<g fill="none" stroke="#a6aaa8" stroke-width="1.5">'
             + ''.join(f'<path d="{path}"/>' for path in paths) + '</g>'
             + ''.join(f'<text x="{x:g}" y="{y:g}" font-size="{size}" '

@@ -42,7 +42,7 @@ iOS and Android can stream local, unencrypted PDF-backed RMDOC files over 256 Mi
 
 Use **Page → Page Template…** or the toolbar's **Page template** to change the current page. **Template format** selects Pro or Move on supported layouts. **Show template** hides the background only. These edits support Undo and are inherited by inserted pages. PDF backgrounds are fixed.
 
-**Paper view** selects display framing for all pages in the open notebook. Move centers the smaller writing area and expands for existing outlying ink. Pro shows the margins. Reopening restores device defaults.
+**Paper view** selects display framing for all pages in the open notebook. Move centers the smaller writing area and expands for existing outlying ink. Pro shows the margins. Reopen to restore automatic framing, which fits the saved Pro or Move format on supported layouts.
 
 **Save / Save As** keeps editable template settings. **Export Copy…** embeds custom layouts as fixed vector PDF backgrounds with separate native ink. Keep the original to change templates later. Export can refuse unavailable artwork, unsupported object bounds or ink above the top edge. Choose supported artwork or hide it when appropriate. Existing PDF-backed copies retain their original PDF.
 

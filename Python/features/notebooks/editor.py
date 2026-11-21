@@ -597,6 +597,8 @@ class Editor:
         return dict(stroke_clipboard=bool(self._selection_clipboard), selection_ids=self._selection_ids, links=self.page_links() if pdf and not locked else [], password_required=locked, images=images,
                     scene_order=ink.order, page_id=page.id, name=self.notebook.name, index=self.index, count=len(self.notebook.pages),
                     width=WIDTH - 2 * left, height=self.page_height(), pdf_paper=paper_bounds, tools=TOOLS, colors=COLORS,
+                    template_bounds=None if pdf else view_bounds([]),
+                    exported_template_paper=paper_bounds is not None and not expanded,
                     brushes=EXPANDED_BRUSHES if expanded else BRUSHES, palette=PALETTE, highlights=HIGHLIGHTS,
                     highlight_ids=HIGHLIGHT_IDS, native_highlights=NATIVE_HIGHLIGHTS,
                     shaders=SHADERS, widths=WIDTHS, eraser_scale=self.eraser_scale(),

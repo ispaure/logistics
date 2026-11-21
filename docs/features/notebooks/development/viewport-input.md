@@ -1,6 +1,8 @@
 # Notebook viewport and pen input
 
-`assets/viewport.js` maps native page units to the display. Narrow portrait fits the centered 821-unit Move strip, wide portrait fits the whole page and opened landscape Duo fits compact height. Other landscape layouts fit width. Format-2 `fitToHeight` notebooks use the embedded PDF crop box at 226 dpi and retain the native horizontal center.
+`assets/viewport.js` maps native page units to the display. Layouts with a Pro or Move template format fit the selected page on open and rotation. The template and ink share a 1404 × 1872 coordinate space. Move shows the centered 821 × 1460 region and expands that region for existing ink and images. If imported ink increases canvas height, the template still starts at the native origin. Portable template exports fit the embedded PDF box.
+
+For other notebooks, narrow portrait frames the centered 821-unit strip, wide portrait fits the whole page and opened landscape Duo fits compact height. Other landscape layouts fit width. Format-2 `fitToHeight` notebooks use the embedded PDF crop box at 226 dpi and retain the native horizontal center.
 
 Explicit zoom preserves scale and center through rotation/folds within scroll bounds. Default framing adapts. Fold changes wait for pen-up. Page changes and Reset restore fit while retaining an explicit Paper view for the open document. Reopening restores automatic framing.
 

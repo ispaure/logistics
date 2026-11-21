@@ -16,7 +16,7 @@ Choose **New document → Notebook (.rmdoc)**, enter a name and select a templat
 
 Use **Notebook actions → Layers** or **Pages Overview → Page template…** to select a template, Pro or Move format where supported, and background visibility. Added pages inherit the current settings. PDF-backed pages keep their PDF background and can be duplicated within that notebook.
 
-Choose **Paper view** in Layers for framing across the open notebook. Phones default to Move framing. Larger screens and Duo layouts adapt to size and posture. Reset keeps a manual choice and reopening restores automatic framing. See [page templates and paper sizes](../user/user.md#page-templates-and-paper-sizes).
+Choose **Paper view** in Layers for framing across the open notebook. Automatic framing fits the saved Pro or Move format on supported layouts. Other pages adapt to screen size and posture, with Move framing on narrow portrait phones. Reset keeps a manual choice and reopening restores automatic framing. See [page templates and paper sizes](../user/user.md#page-templates-and-paper-sizes).
 
 **Save / Save As** retains editable template settings. **Export .rmdoc** uses fixed PDF backgrounds for custom and hidden templates, with separate native ink. Keep the original to change templates later. Export can refuse unavailable artwork, unsupported object bounds or ink above the top edge.
 
