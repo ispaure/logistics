@@ -52,6 +52,19 @@ class LocalSearchTests(unittest.TestCase):
         self.assertEqual(self.names('100%_literal'), {'100%_literal.txt'})
         self.assertEqual(self.names('100*'), set())
 
+    def test_cold_progress_uses_live_names_and_loads_only_matching_metadata(self):
+        updates = []
+        with patch.object(self.search, '_prepare', side_effect=AssertionError('Cold search waited for index')), \
+                patch.object(self.provider, 'entry', wraps=self.provider.entry) as load:
+            result = self.search.search(self.provider, '', '"end eternity"', progress=updates.append)
+        self.assertTrue(result.complete, result.errors)
+        self.assertEqual([row['path'] for row in result.rows], ['Books/END_ETERNITY.pdf'])
+        self.assertEqual(load.call_args_list[0].args, ('Books/END_ETERNITY.pdf',))
+        self.assertEqual(load.call_count, 1)
+        self.assertTrue(updates)
+        self.assertFalse(updates[0].cached)
+        self.assertEqual(updates[0].rows, result.rows)
+
     def test_reopened_database_answers_without_directory_enumeration(self):
         self.prepare()
         restarted = LocalSearch(self.database)

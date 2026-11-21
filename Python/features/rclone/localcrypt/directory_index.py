@@ -31,21 +31,24 @@ class DirectoryIndex:
         if self.closed:
             raise ValueError('Encrypted directory index closed.')
 
-    def _fingerprint(self, folder, cancelled):
+    def _fingerprint(self, folder, cancelled, inventory=None):
         self.provider._note_guard(folder)
         before = folder.stat(follow_symlinks=False)
         entries = []
+        windows = os.name == 'nt'
         with os.scandir(folder) as children:
             for child in children:
                 check_cancelled(cancelled)
-                path = folder / child.name
-                if child.is_symlink() or (hasattr(path, 'is_junction') and path.is_junction()):
+                path = folder / child.name if windows else None
+                if child.is_symlink() or (windows and hasattr(path, 'is_junction') and path.is_junction()):
                     raise ValueError('Linked encrypted storage is not supported.')
                 # Windows DirEntry.stat omits the hard-link count and file ID.
-                info = (path.stat(follow_symlinks=False) if os.name == 'nt'
-                        else child.stat(follow_symlinks=False))
-                if not stat.S_ISDIR(info.st_mode) and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
+                info = (path.stat(follow_symlinks=False) if windows else child.stat(follow_symlinks=False))
+                directory = stat.S_ISDIR(info.st_mode)
+                if not directory and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
                     raise ValueError('Choose an independent regular file or folder.')
+                if inventory is not None:
+                    inventory.append((child.name, info, directory))
                 entries.append((child.name, info.st_mode, info.st_ino, info.st_size,
                                 info.st_mtime_ns, info.st_ctime_ns))
                 if len(entries) > 10000:
@@ -73,13 +76,15 @@ class DirectoryIndex:
             raise ValueError('Linked encrypted directory index is not supported.')
         return file, scope
 
-    def listing(self, path, *, cancelled):
+    def listing(self, path, *, cancelled, from_inventory=None):
         provider = self.provider
         with provider.operation(cancelled):
             self._check(cancelled)
             folder = provider._locate(path)
+            inventory = [] if from_inventory is not None else None
             try:
-                signature = self._fingerprint(folder, cancelled)
+                signature = (self._fingerprint(folder, cancelled, inventory)
+                             if inventory is not None else self._fingerprint(folder, cancelled))
             except FileNotFoundError:
                 signature = None
             if signature is None:
@@ -110,7 +115,8 @@ class DirectoryIndex:
                                 return rows
             except (OSError, ValueError, TypeError, KeyError, RuntimeError):
                 pass  # A disposable cache can always be rebuilt from the provider.
-            rows = provider.list(path, cancelled=cancelled)
+            rows = (provider.list(path, cancelled=cancelled) if from_inventory is None
+                    else from_inventory(folder, path, inventory, cancelled))
             # Keep only search metadata. Live opens still validate the resource.
             rows = [{key: row[key] for key in ('name', 'path', 'directory', 'size', 'modified') if key in row}
                     for row in rows]

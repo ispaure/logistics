@@ -24,6 +24,9 @@ from features.rclone.localcrypt.mobile.locations import LocalCryptLocation, Offl
 from features.rclone.mobile.service import native_service
 
 
+_PARTIAL_NAME = re.compile(r'.+\.[0-9a-f]{8}\.partial')
+
+
 @contextmanager
 def write_progress(client, output, stream, cancelled):
     """Observe native fd writes without buffering plaintext or touching widgets."""
@@ -238,9 +241,13 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
             self._access.check()
         return found
 
+    def search_listing(self, path='', *, cancelled=lambda: False):
+        """Reuse the credential-scoped index inventory for filename search."""
+        return self._directory_index.listing(self.relative(path), cancelled=cancelled,
+                                             from_inventory=self._list_inventory)
+
     def list(self, path='', *, cancelled=lambda: False):
         path = self.relative(path)
-        rows = []
         # Bound native requests while sharing the credential lookup and JSON
         # boundary across filenames. Keep plaintext names only in this snapshot.
         folder = self._locate(path)
@@ -259,28 +266,33 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
                     directory = stat.S_ISDIR(info.st_mode)
                     if not directory and (not stat.S_ISREG(info.st_mode) or info.st_nlink != 1):
                         raise ValueError('Choose an independent regular file or folder.')
-                    if re.fullmatch(r'.+\.[0-9a-f]{8}\.partial', child.name):
-                        continue
-                    children.append((child, info, directory))
+                    children.append((entry.name, info, directory))
                 except FileNotFoundError:
                     continue
+        return self._list_inventory(folder, path, children, cancelled)
+
+    def _list_inventory(self, folder, path, children, cancelled):
+        rows = []
         for offset in range(0, len(children), 256):
             check_cancelled(cancelled)
-            batch = children[offset:offset + 256]
+            batch = [(name, info, directory) for name, info, directory in children[offset:offset + 256]
+                     if not _PARTIAL_NAME.fullmatch(name)]
+            if not batch:
+                continue
             names = self._note_decode(
                 # The parent path was already located and validated. Decode
                 # each basename once, rather than its ancestors for every row.
-                [dict(path=child.name, directory=directory) for child, _, directory in batch])
+                [dict(path=name, directory=directory) for name, _, directory in batch])
             if len(names) != len(batch):
                 raise ValueError('Incomplete encrypted folder listing.')
-            for plain, (child, info, directory) in zip(names, batch):
+            for plain, (name, info, directory) in zip(names, batch):
                 check_cancelled(cancelled)
                 plain = self.relative(plain)
                 if not plain or '/' in plain:
                     raise ValueError('Invalid encrypted folder entry.')
                 plain = '/'.join(part for part in (path, plain) if part)
                 try:
-                    current = child.stat(follow_symlinks=False)
+                    current = (folder / name).stat(follow_symlinks=False)
                 except FileNotFoundError:
                     continue  # A concurrent Pull retired this entry during decode.
                 if (current.st_dev, current.st_ino, current.st_mode) != (info.st_dev, info.st_ino, info.st_mode):

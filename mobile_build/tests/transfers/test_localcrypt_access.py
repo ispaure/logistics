@@ -296,6 +296,29 @@ class LocalCryptAccessTests(unittest.TestCase):
                 ['Start.md'], 2, (3, 0))
             self.assertFalse(list(root.rglob('*.sqlite*')))
         return metrics
+    def test_filename_search_reuses_inventory_and_rechecks_rename(self):
+        from mobile.local_search import LocalSearch
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            provider = self.provider(root, Client())
+            self.addCleanup(provider.close)
+            (provider.root / 'private-before.txt').touch()
+            search = LocalSearch(root / 'ordinary.sqlite3')
+            self.addCleanup(search.cache.close)
+            with patch.object(provider, 'list', side_effect=AssertionError('Duplicate listing')):
+                before = search.search(provider, '', 'private')
+                (provider.root / 'private-before.txt').rename(provider.root / 'private-after.txt')
+                after = search.search(provider, '', 'private')
+            self.assertEqual([row['path'] for row in before.rows], ['private-before.txt'])
+            self.assertEqual([row['path'] for row in after.rows], ['private-after.txt'])
+            self.assertFalse(search.cache.database.exists())
+            self.assertTrue(provider._directory_index.rows)
+            provider.close()
+            self.assertFalse(provider._directory_index.rows)
+            with self.assertRaises(ValueError):
+                search.search(provider, '', 'private')
+
     def test_last_lease_retires_indexed_names(self):
         with TemporaryDirectory() as root:
             provider = self.provider(root, Client())

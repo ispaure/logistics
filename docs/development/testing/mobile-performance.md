@@ -8,6 +8,13 @@ separate archive reads, decode and rendering.
 
 ## Run focused probes
 
+Use `mobile_build.validation.document_storage_tools` with `--probe filename-search`
+for matched native Local and LocalCrypt fixtures on a disposable device. The
+probe records first actionable match, completion, cancellation, rename and
+credential-lock behavior. Run `Python/tests/platform/benchmark_folder_open.py`
+with a Manager scratch path and a separate evidence output path for desktop
+folder opening, navigation and rename.
+
 Use `performance_probe.py` for Android first draw and navigation,
 `performance_workloads.py` for loop delay and Python allocations, and
 `BenchmarkCryptArchivePage` in `mobile_build/rclone_bridge/archive_blocks_test.go`
