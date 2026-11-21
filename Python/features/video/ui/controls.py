@@ -59,8 +59,7 @@ class PlaybackTools:
         self.seek.setRange(0, min(self.progress.duration, 2147483647))
         self.seek.setEnabled(self.progress.duration > 0)
         self.seek.setValue(self.resume_at or 0)
-        from .player import clock
-        self.time.setText(f'{clock(self.resume_at or 0)} / {clock(self.progress.duration) if self.progress.duration else "Loading duration…"}')
+        self.update_time(self.resume_at or 0, self.progress.duration)
 
     def refresh_cache(self):
         if self.closing:

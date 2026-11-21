@@ -162,12 +162,14 @@ class VideoTransport:
                             transport.failed('busy')
                         self.send_error(503)
                         return
+                provider_io = True
                 try:
                     transport.check(resource)
                     value = self.headers.get('Range')
                     try:
                         start, end = byte_range(value, resource.size)
                     except (ValueError, OverflowError):
+                        provider_io = False
                         self.send_response(416)
                         self.send_header('Content-Range', f'bytes */{resource.size}')
                         self.send_header('Content-Length', '0')
@@ -177,6 +179,7 @@ class VideoTransport:
                     # must never turn into a successful response with zero bytes.
                     with resource.open() as stream:
                         stream.seek(start)
+                        provider_io = False
                         self.send_response(206 if value is not None else 200)
                         from mimetypes import guess_type
                         mime = guess_type(resource.path)[0] or 'application/octet-stream'
@@ -193,6 +196,7 @@ class VideoTransport:
                             return
                         remaining = end - start + 1
                         if getattr(resource, 'remote', False):
+                            provider_io = True
                             token = object()
                             notify = (lambda active: transport.waiting(token, active)) if resource is transport.content else (lambda active: None)
                             with read_ahead(stream, remaining,
@@ -200,20 +204,30 @@ class VideoTransport:
                                     policy=getattr(resource, 'buffering', DEFAULT_BUFFERING)) as chunks:
                                 for data in chunks:
                                     transport.check(resource, metadata=False)
+                                    provider_io = False
                                     self.wfile.write(data)
+                                    provider_io = True
                             return
                         while remaining:
+                            provider_io = True
                             transport.check(resource, metadata=False)
                             data = stream.read(min(256 * 1024, remaining))
                             transport.check(resource, metadata=False)
                             if not data:
                                 raise OSError('Incomplete video range.')
+                            provider_io = False
                             self.wfile.write(data)
                             remaining -= len(data)
-                except (BrokenPipeError, ConnectionResetError, TimeoutError, OperationCancelled):
+                except (TimeoutError, ConnectionError):
+                    if (provider_io and resource is transport.content and not
+                            (transport.closed.is_set() or transport.paused.is_set())):
+                        transport.failed('read')
+                    self.close_connection = True
+                except OperationCancelled:
                     self.close_connection = True
                 except (OSError, ValueError, PermissionError) as error:
-                    if resource is transport.content:
+                    if (resource is transport.content and not
+                            (transport.closed.is_set() or transport.paused.is_set())):
                         transport.failed('access' if isinstance(error, PermissionError) else
                                          'changed' if isinstance(error, ValueError) else 'read')
                     self.close_connection = True

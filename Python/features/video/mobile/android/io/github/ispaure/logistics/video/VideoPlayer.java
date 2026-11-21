@@ -67,6 +67,8 @@ public final class VideoPlayer {
     final Activity activity;
     private final String sourceURL;
     private String transportFailure;
+    private long openDeadline;
+    private boolean aviFromBeginning;
     private boolean playbackFailed, optionsReloadPending;
     Listener listener;
     private final boolean restricted;
@@ -944,6 +946,14 @@ public final class VideoPlayer {
             if (ended) return;
             IMedia.Stats stats = playbackStats();
             long clock = Math.max(observedClock, player.getTime());
+            if (playRequested && !casting && aviVideoFailed(stats)) {
+                failOpening("The video track could not be decoded. Try another copy or a supported video codec.");
+                return;
+            }
+            if (playRequested && !casting && openDeadline != 0 && !hasDecodedMedia(stats)) {
+                failOpening(false);
+                return;
+            }
             if (recoverTerminalTail(clock, stats)) return;
             if (playRequested && progressSeek >= 0 && durationMilliseconds() - progressSeek > EARLY_END_MARGIN_MS) {
                 failProgressSeek();
@@ -963,6 +973,7 @@ public final class VideoPlayer {
                     recoverTerminalTail(Math.max(observedClock, player.getTime()), playbackStats())) return;
             if (audioTrackSwitch != null) failAudioTrackSwitch();
             else if (progressSeek >= 0) failProgressSeek();
+            else if (playRequested && !casting && openDeadline != 0) failOpening(false);
             else {
                 playbackFailed = true;
                 long position = Math.max(0, lastPosition);
@@ -985,6 +996,40 @@ public final class VideoPlayer {
         }
     }
 
+    private boolean hasDecodedMedia(IMedia.Stats stats) {
+        return inputDisplayedVideo || inputPlayedAudio || (stats != null &&
+                (stats.decodedVideo > 0 || stats.decodedAudio > 0));
+    }
+
+    private boolean aviVideoFailed(IMedia.Stats stats) {
+        if (!aviFromBeginning || inputWithoutVideo || inputDisplayedVideo || stats == null ||
+                stats.decodedVideo > 0 || stats.decodedAudio <= 0) return false;
+        IMedia media = player.getMedia();
+        if (media == null) return false;
+        try {
+            for (int index = 0; index < media.getTrackCount(); index++)
+                if (media.getTrack(index) instanceof IMedia.VideoTrack) return true;
+            return false;
+        } finally { media.release(); }
+    }
+
+    private void failOpening(boolean timedOut) {
+        String failure;
+        if (timedOut) failure = networkWaiting
+                ? "The video source did not respond in time. Check the connection and press Play to retry."
+                : "Playback did not start in time. Press Play to retry or open another copy.";
+        else failure = durationMilliseconds() > 0
+                ? "No playable audio or video was found. Try a supported codec or another copy."
+                : "Could not open this video. Its container or codecs may be unsupported, or the file may be damaged.";
+        failOpening(failure);
+    }
+
+    private void failOpening(String failure) {
+        playbackFailed = true;
+        pause();
+        status(transportFailure != null ? transportFailure : failure);
+    }
+
     private void installMedia() {
         cancelAudioTrackSwitch();
         boolean restoringVideo = inputWithoutVideo && tail == Tail.NONE && resume >= 0;
@@ -994,7 +1039,10 @@ public final class VideoPlayer {
         if (tools != null && !tools.settings.isNull("subtitle_track")) selectedSubtitleURL = null;
         pendingSubtitleURL = tail == Tail.AUDIO ? null : selectedSubtitleURL;
         inlineSubtitles.inputChanged(pendingSubtitleURL != null && isSrt(Uri.parse(pendingSubtitleURL)));
-        Media media = new Media(vlc, Uri.parse(sourceURL));
+        Uri source = Uri.parse(sourceURL);
+        Media media = new Media(vlc, source);
+        String path = source.getPath();
+        aviFromBeginning = resume <= 0 && path != null && path.toLowerCase(java.util.Locale.ROOT).endsWith(".avi");
         inputHasVideoAndAudio = inputPlayedAudio = inputDisplayedVideo = false;
         observedClock = -1;
         observedFrames = observedAudio = audioAtClock = framesAtClock = 0;
@@ -1104,6 +1152,7 @@ public final class VideoPlayer {
         if (!allowed(false)) return;
         long duration = durationMilliseconds();
         target = Math.max(0, duration > 0 ? Math.min(target, duration - 1) : target);
+        if (target > 0) aviFromBeginning = false;
         Tail targetTail = declaredTail(target);
         if (startupVideoSeek >= 0 && tail == Tail.NONE && targetTail == Tail.NONE) {
             // A scrub during video restoration replaces the held target.
@@ -1237,6 +1286,7 @@ public final class VideoPlayer {
         pausePending = false;
         if (audioSuppressed) { player.setVolume(resumeVolume); audioSuppressed = false; }
         playRequested = true;
+        openDeadline = inputDisplayedVideo || inputPlayedAudio ? 0 : android.os.SystemClock.elapsedRealtime() + 20000;
         pausePresentation.clear();
         if (audioTrackSwitch == null && startupVideoSeek < 0 && resume >= 0 && player.isPlaying()) {
             player.setTime(resume);
@@ -1270,6 +1320,13 @@ public final class VideoPlayer {
         IMedia.Stats stats = playbackStats();
         long frames = stats == null ? 0 : stats.displayedPictures;
         long audio = stats == null ? 0 : stats.playedAbuffers;
+        if (openDeadline != 0) {
+            if (frames > 0 || audio > 0 || (liveVideoOutput && clock > 0)) openDeadline = 0;
+            else if (playRequested && !casting && (transportFailure != null || now >= openDeadline)) {
+                failOpening(true);
+                return;
+            }
+        }
         if (inputWithoutVideo && audio > 0) {
             int track = player.getAudioTrack();
             if (track >= 0) lastAudioOnlyTrack = track;
@@ -1397,7 +1454,7 @@ public final class VideoPlayer {
             seek.setVisibility(View.VISIBLE);
             seek.setEnabled(length > 0 && (tools == null || !tools.locked) && allowed(false));
             updatePlayIcon();
-            timeLabel.setText(clock(time) + " / " + (length > 0 ? clock(length) : "Loading duration…") + (tools != null && tools.cacheApproximate ? " · Cache ≈" : ""));
+            timeLabel.setText(clock(time) + " / " + (length > 0 ? clock(length) : "Duration unknown") + (tools != null && tools.cacheApproximate ? " · Cache ≈" : ""));
             seek.setContentDescription("Video position: " + timeLabel.getText());
             boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
             if (pip != wasPip) { wasPip = pip; setControlsVisible(true); }
@@ -1729,7 +1786,7 @@ public final class VideoPlayer {
         if (knownDuration > 0) seek.setProgress((int)(time * 10000 / knownDuration));
         seek.setVisibility(View.VISIBLE);
         seek.setEnabled(knownDuration > 0 && (tools == null || !tools.locked) && allowed(false));
-        timeLabel.setText(clock(time) + " / " + (knownDuration > 0 ? clock(knownDuration) : "Loading duration…"));
+        timeLabel.setText(clock(time) + " / " + (knownDuration > 0 ? clock(knownDuration) : "Duration unknown"));
     }
     public long durationMilliseconds() {
         if (declaredDuration > 0) return declaredDuration;
@@ -1740,6 +1797,7 @@ public final class VideoPlayer {
     public boolean completed() { return ended; }
     public void pause() {
         if (done) return;
+        openDeadline = 0;
         if (!audioSuppressed) {
             int current = player.getVolume();
             resumeVolume = current >= 0 ? current : 100;

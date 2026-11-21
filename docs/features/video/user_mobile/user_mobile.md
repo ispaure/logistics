@@ -4,6 +4,8 @@ Enable **Video Player**, then open a video from Local, unlocked LocalCrypt or Cl
 
 Tap for controls. Use Play/Pause, ten-second skips and the timeline. **Chapters** jumps to an embedded chapter without resuming a paused video. **Audio tracks** and **Subtitles** choose embedded tracks or matching sidecars. Use matching stems, such as `Movie.mkv`, `Movie.srt` and `Movie.en.srt`. Up to 32 sidecars of 8 MiB each are supported. See [playback tools](controls.md) for exact time, speed, sizing and touch controls.
 
+When the player reports **Duration unknown**, the file can still play and show elapsed time. If the player cannot open the container or decode its tracks, close the video and try another copy or a version encoded with supported codecs.
+
 On iOS, the fullscreen deck fades after three seconds while playing. On Android, choose **Fullscreen** or **Exit fullscreen**. With an active horizontal Duo fold, the picture sits above the hinge and controls below it. Tap **Fill view** to crop or **Fit view** to restore the whole picture.
 
 During supported inline playback, a text subtitle lifts above the controls when they cover it and returns to its original position after the fade. Positioned ASS and bitmap subtitles keep their authored placement.

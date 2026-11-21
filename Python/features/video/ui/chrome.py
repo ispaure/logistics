@@ -109,7 +109,7 @@ class DockedChrome:
         layout = qt.QVBoxLayout(self.chrome)
         layout.setContentsMargins(12, 6, 12, 6)
         layout.setSpacing(2)
-        self.time = qt.QLabel('0:00:00 / Loading duration…')
+        self.time = qt.QLabel('0:00:00 / Duration unknown')
         self.time.setAccessibleName('Elapsed and total time')
         layout.addWidget(self.time)
         self.seek = CachedSlider(qt.Qt.Orientation.Horizontal)

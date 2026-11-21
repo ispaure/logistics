@@ -17,7 +17,9 @@ def clock(milliseconds):
 
 
 from .controls import PlaybackTools
-from .backend import SEEK_ERROR, QtPlayback
+from .backend import (
+    AUDIO_VIDEO_ERROR, OPEN_ERROR, OPEN_TIMEOUT, SEEK_ERROR, UNKNOWN_DURATION, VIDEO_TRACK_ERROR, QtPlayback,
+)
 from .presentation import PlaybackPresentation
 from .chrome import DockedChrome
 from .panels import PlaybackPanels
@@ -49,6 +51,9 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
         self.chapter_cancelled, self.chapter_worker = Event(), None
         self.chapter_data, self.chapter_menu = None, None
         self.transport_failure = None
+        self.open_deadline = None
+        self.open_failed = False
+        self.has_playback_output = False
         self.resource_changed = False
         self.resume_guard = None
         self.sidecar_worker = None
@@ -204,15 +209,20 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
             self.pause_requested()
             self.checkpoint()
         else:
-            if self.player.error() != QMediaPlayer.Error.NoError or self.transport_failure:
-                self.resume_at = self.player.position()
+            if self.player.error() != QMediaPlayer.Error.NoError or self.transport_failure or self.open_failed:
+                self.resume_at = self.resume_at or self.player.position() or None
                 self.player.setSource(qt.QUrl())
                 self.player.setSource(qt.QUrl(self.transport.url))
-                self.player.setPosition(self.resume_at)
+                if self.resume_at:
+                    self.player.setPosition(self.resume_at)
             self.transport_failure = None
+            self.open_failed = False
             self.requested_play = True
             self.last_frame = self.last_clock = monotonic()
             self.last_audio = 0
+            if not self.has_playback_output:
+                self.open_deadline = self.last_clock + OPEN_TIMEOUT
+                self.status.setText('Opening video…')
             self.player.play()
             self.update_play(self.player.playbackState())
             self.show_controls()
@@ -236,10 +246,14 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
 
     def position_changed(self, position):
         self.last_clock = monotonic()
+        if (position > 0 and self.open_deadline is not None and self.requested_play
+                and not hasattr(self.player, 'audioProgress') and self.player.hasAudio()
+                and not self.player.hasVideo()):
+            self.clear_playback_wait()
         if not self.seek.isSliderDown():
             self.seek.setValue(position)
         duration = self.player.duration() or self.progress.duration
-        self.time.setText(f'{clock(position)} / {clock(duration) if duration else "Loading duration…"}')
+        self.update_time(position, duration)
         self.caption.setText(self.subtitles.at(position - self.settings.subtitle_delay_ms) if self.external and self.subtitles else '')
         self.caption.setVisible(bool(self.caption.text()))
         if (not self.closing and self.resume_at is None and not self.ended and self.player.duration() > 0
@@ -428,23 +442,28 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
             'read': 'Video data could not be read. Check the connection, then press Play to retry.',
             'busy': 'The video connection is busy. Press Play to retry.',
         }
-        self.transport_failure = messages.get(category, messages['read'])
+        self.transport_failure = messages['changed'] if self.resource_changed else messages.get(category, messages['read'])
 
     def playback_error(self, *args):
+        if self.closing:
+            return
+        self.open_deadline = None
         self.requested_play = False
         self.network_hold = False
         self.show_controls()
         self.wait_indicator.hide()
         messages = {
-            QMediaPlayer.Error.FormatError: 'This video format could not be decoded.',
+            QMediaPlayer.Error.FormatError: AUDIO_VIDEO_ERROR if self.player.duration() > 0 else OPEN_ERROR,
             QMediaPlayer.Error.AccessDeniedError: 'Video access was denied. Unlock the source and press Play to retry.',
             QMediaPlayer.Error.NetworkError: 'The video connection failed. Press Play to retry.',
         }
-        if self.player.errorString() == SEEK_ERROR and not self.transport_failure:
-            self.status.setText(SEEK_ERROR)
-        else:
-            self.status.setText(self.transport_failure or messages.get(self.player.error(),
-                'Playback could not continue. Press Play to retry from this position.'))
+        detail = self.player.errorString()
+        self.status.setText(self.transport_failure or (
+            detail if detail in (SEEK_ERROR, VIDEO_TRACK_ERROR) else messages.get(self.player.error(),
+                'Playback could not continue. Press Play to retry from this position.')))
+
+    def update_time(self, position, duration):
+        self.time.setText(f'{clock(position)} / {clock(duration) if duration else UNKNOWN_DURATION}')
 
     def show_chapters(self):
         if not self.controls_allowed():
@@ -562,11 +581,14 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
 
     def media_status(self, status):
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
+            self.open_deadline = None
             if self.transport_failure:
                 self.playback_error()
                 return
             was_requested = self.requested_play
             self.requested_play = False
+            if self.status.text() == 'Opening video…':
+                self.status.setText('Playback finished.')
             self.show_controls()
             self.ended = True
             self.checkpoint(completed=True)

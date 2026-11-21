@@ -182,12 +182,19 @@ def refresh_bundled(ffmpeg='ffmpeg'):
         subprocess.run([ffmpeg, '-nostdin', '-v', 'error', '-f', 'lavfi', '-i',
             'color=c=black:s=320x180:r=15:d=12', '-c:v', 'libx264', '-preset', 'ultrafast',
             '-threads', '1', str(black)], check=True, timeout=30)
+        durationless = root / 'unknown-duration.mkv'
+        with durationless.open('wb') as output:
+            subprocess.run([ffmpeg, '-nostdin', '-v', 'error', '-f', 'lavfi', '-i',
+                'testsrc2=size=48x32:rate=12:duration=2', '-f', 'lavfi', '-i',
+                'sine=frequency=440:sample_rate=48000:duration=2', '-c:v', 'mpeg4',
+                '-threads', '1', '-c:a', 'libmp3lame', '-f', 'matroska', 'pipe:1'],
+                stdout=output, check=True, timeout=30)
         destination.mkdir(parents=True, exist_ok=True)
         manifest = dict(schema=1, source='Generated testsrc2/color patterns and sine tones.',
             generator='tests.readers.video_fixtures.refresh_bundled',
             ffmpeg_version=subprocess.check_output([ffmpeg, '-version'], text=True).splitlines()[0],
             codec_matrix=[dict(container=c, video=v, audio=a, file=p.name) for c, v, a, p in matrix], files={})
-        for path in [*(row[3] for row in matrix), chapter, speed, black]:
+        for path in [*(row[3] for row in matrix), chapter, speed, black, durationless]:
             data = path.read_bytes()
             (destination / path.name).write_bytes(data)
             manifest['files'][path.name] = dict(bytes=len(data), sha256=sha256(data).hexdigest())

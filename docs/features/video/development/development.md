@@ -298,6 +298,15 @@ starvation, present a wait state, hold the clock, and resume only if the latest
 intent allows it. Test slow headers, delayed body and recovery with
 `test_video_stream_latency.py` and the native `video_stall_probe.py`.
 
+Initial inline playback has a 20-second startup deadline while Play is
+requested. Output can start before a duration is available. A provider read
+failure takes precedence over a decoder error. VLC can report end of media
+without decoding any tracks, so the desktop adapter classifies that as a
+failed open. Desktop VLC can also report an AVI video track that yielded no
+frames while its audio decoded. Generic decoder results can leave the exact
+container, codec or corruption cause unknown. The focused desktop regressions
+in `test_video_open.py` exercise the window, transport and decoder together.
+
 ## Playback tool ownership
 
 `session.py` validates times and preferences. `services/documents/video_settings.py`

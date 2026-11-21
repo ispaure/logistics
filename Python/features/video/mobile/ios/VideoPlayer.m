@@ -146,6 +146,8 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic, strong) NSLayoutConstraint *movieWidth, *movieHeight, *movieCenterY, *deckCenterY, *controlsHeightLimit;
 
 @property(nonatomic) BOOL networkWaiting, networkResumePending, playRequested;
+@property(nonatomic) NSTimeInterval openDeadline;
+@property(nonatomic) BOOL aviFromBeginning;
 @property(nonatomic) int64_t bufferPosition;
 @property(nonatomic) int64_t observedClock, lastRenderedClock;
 @property(nonatomic) uint64_t observedFrames, observedAudio;
@@ -675,6 +677,7 @@ typedef struct {
     if (!self.player.isSeekable && duration <= 0) return;
     target = MAX(0, target);
     if (duration > 0) target = MIN(target, MAX(0, duration - 1));
+    if (target > 0) self.aviFromBeginning = NO;
     if (self.audioOnlyInput || [self isDeclaredAudioTail:target]) {
         self.audioOnlyInput = NO; // Every explicit seek gives video another chance.
         self.inputNeedsRestart = YES;
@@ -730,6 +733,7 @@ typedef struct {
 }
 - (void)done:(id)sender { if (self.closed) self.closed(); }
 - (void)pause {
+    self.openDeadline = 0;
     [self cancelAudioSwitch];
     if ([self hasAirPlay]) {
         [self.airPlayPlayer pause];
@@ -808,6 +812,8 @@ typedef struct {
     return videoEnd > 0 && target >= videoEnd && target < audioEnd;
 }
 - (VLCMedia *)playbackMedia {
+    self.aviFromBeginning = self.startMilliseconds <= 0 &&
+        [[NSURL URLWithString:self.videoURL].pathExtension.lowercaseString isEqualToString:@"avi"];
     if ([self isDeclaredAudioTail:self.startMilliseconds]) {
         self.audioOnlyInput = YES;
     }
@@ -871,6 +877,25 @@ typedef struct {
     self.startMilliseconds = position;
     [self showStatus:self.transportFailure ?: @"Playback stopped unexpectedly. Press Play to retry from this position."];
 }
+- (BOOL)hasDecodedMedia {
+    VLCMediaStats stats = [self playbackStats];
+    return stats.decodedVideo > 0 || stats.decodedAudio > 0 ||
+        stats.displayedPictures > 0 || stats.playedAudioBuffers > 0;
+}
+- (void)failOpening:(BOOL)timedOut {
+    NSString *message = self.transportFailure;
+    if (!message) {
+        if (timedOut) message = self.networkWaiting
+            ? @"The video source did not respond in time. Check the connection and press Play to retry."
+            : @"Playback did not start in time. Press Play to retry or open another copy.";
+        else message = [self durationMilliseconds] > 0
+            ? @"No playable audio or video was found. Try a supported codec or another copy."
+            : @"Could not open this video. Its container or codecs may be unsupported, or the file may be damaged.";
+    }
+    [self playbackFailed];
+    self.inputNeedsRestart = YES;
+    [self showStatus:message];
+}
 - (void)startByUser {
     if ([self hasAirPlay]) { [self startAirPlayPlayback]; return; }
     if ([self holdLocalPlayForAirPlay]) return;
@@ -905,6 +930,9 @@ typedef struct {
     self.pausePending = NO;
     if (self.audioSuppressed) { self.player.audio.muted = self.resumeMuted; self.audioSuppressed = NO; }
     self.playRequested = YES;
+    VLCMediaStats stats = [self playbackStats];
+    self.openDeadline = stats.displayedPictures > 0 || stats.playedAudioBuffers > 0
+        ? 0 : NSProcessInfo.processInfo.systemUptime + 20;
     if (self.startMilliseconds >= 0) self.seekDeadline = NSProcessInfo.processInfo.systemUptime + 20;
     if (self.audioSwitchTrack.length) {
         // Paused preroll can advance VLC's reported clock while the displayed
@@ -1188,6 +1216,16 @@ typedef struct {
         return;
     }
     [self updateAirPlayRoute];
+    if (self.openDeadline > 0) {
+        VLCMediaStats stats = [self playbackStats];
+        if (stats.displayedPictures > 0 || stats.playedAudioBuffers > 0) self.openDeadline = 0;
+        else if (self.playRequested && !self.casting &&
+            (self.transportFailure || NSProcessInfo.processInfo.systemUptime >= self.openDeadline)) {
+            [self failOpening:YES];
+            [self updateTimeline];
+            return;
+        }
+    }
     if ([self declaredMediaEnd] > 0 && self.startMilliseconds < 0 &&
         self.playRequested && [self nativeTimeMilliseconds] >= [self declaredMediaEnd]) {
         [self pause]; [self.player stop]; self.ended = YES;
@@ -1303,7 +1341,7 @@ typedef struct {
     };
     [self.view bringSubviewToFront:self.controlsScroll];
     [self.view bringSubviewToFront:self.bufferOverlay];
-    self.timeLabel.text = [NSString stringWithFormat:@"%@ / %@%@", time(position), duration > 0 ? time(duration) : @"Loading duration…", self.cacheApproximate ? @" · Cache ≈" : @""];
+    self.timeLabel.text = [NSString stringWithFormat:@"%@ / %@%@", time(position), duration > 0 ? time(duration) : @"Duration unknown", self.cacheApproximate ? @" · Cache ≈" : @""];
     self.timeLabel.accessibilityValue = self.timeLabel.text;
     self.seek.accessibilityValue = self.timeLabel.text;
     self.lastPosition = position;
@@ -1346,6 +1384,25 @@ typedef struct {
             [self scheduleControls];
         }
         int64_t duration = [self durationMilliseconds];
+        if (self.playRequested && !self.casting && self.player.state == state &&
+            (state == VLCMediaPlayerStateStopped || state == VLCMediaPlayerStateError)) {
+            if (self.openDeadline > 0 && ![self hasDecodedMedia]) {
+                [self failOpening:NO];
+                [self updateTimeline];
+                return;
+            }
+            if (self.aviFromBeginning && !self.audioOnlyInput && !self.transportFailure) {
+                VLCMediaStats stats = [self playbackStats];
+                if (stats.decodedAudio > 0 && stats.decodedVideo == 0 && stats.displayedPictures == 0 &&
+                    self.player.media.videoTracks.count > 0) {
+                    [self playbackFailed];
+                    self.inputNeedsRestart = YES;
+                    [self showStatus:@"The video track could not be decoded. Try another copy or a supported video codec."];
+                    [self updateTimeline];
+                    return;
+                }
+            }
+        }
         if (state == VLCMediaPlayerStateStopped && self.player.state == VLCMediaPlayerStateStopped &&
             [self recoverEarlyAudioEnd]) return;
         if (state == VLCMediaPlayerStateStopped && (self.player.position >= .999 ||

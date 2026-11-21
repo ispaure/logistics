@@ -5,7 +5,8 @@ from time import monotonic
 from commonUtils.ui import pyside as qt
 from PySide6.QtMultimedia import QMediaPlayer, QMediaMetaData
 from .backend import (
-    AUDIO_SWITCH_ERROR, AUDIO_SWITCH_TIMEOUT, SEEK_ERROR, SEEK_TIMEOUT, VIDEO_WITHOUT_AUDIO, PlaybackCapabilities,
+    AUDIO_SWITCH_ERROR, AUDIO_SWITCH_TIMEOUT, SEEK_ERROR, SEEK_TIMEOUT, VIDEO_TRACK_ERROR, VIDEO_WITHOUT_AUDIO,
+    PlaybackCapabilities,
 )
 from .mpv_binding import API, Core
 from .mpv_surface import ColourSurface
@@ -68,6 +69,7 @@ class ColourPlayer(qt.QObject):
         self._seek_deadline, self._seek_error, self._audio_pts = None, False, None
         self._audio_switch, self._audio_switch_serial = None, 0
         self._frames = 0
+        self._advanced_start = self._video_track_failed = self._decoded_video = False
         self._state, self._error = self.PlaybackState.StoppedState, self.Error.NoError
         self.generation, self.retired, self.presented, self._ended = 0, False, False, False
         self._tracks, self._chapters, self._settings, self._subtitles = [], [], None, set()
@@ -105,6 +107,7 @@ class ColourPlayer(qt.QObject):
         self._seek_deadline, self._seek_error, self._audio_pts = None, False, None
         self._tracks, self._chapters, self._subtitles = [], [], set()
         self._error = self.Error.NoError
+        self._advanced_start = self._video_track_failed = self._decoded_video = False
         self.audio.suppress(True)
         self.video.clear()
         self.set_state(self.PlaybackState.StoppedState)
@@ -172,6 +175,7 @@ class ColourPlayer(qt.QObject):
                 self._ended = False
                 self.mediaStatusChanged.emit(self.MediaStatus.BufferedMedia)
             target = max(0, int(value))
+            self._advanced_start |= target > 0
             if self._audio_switch is not None:
                 self.switch_audio(self._audio_switch.track, target)
                 self.positionChanged.emit(target)
@@ -191,6 +195,8 @@ class ColourPlayer(qt.QObject):
         return self._error
 
     def errorString(self):
+        if self._video_track_failed:
+            return VIDEO_TRACK_ERROR
         if self._seek_error:
             return SEEK_ERROR
         return 'The colour video renderer could not read or present this video.'
@@ -215,6 +221,7 @@ class ColourPlayer(qt.QObject):
             return
         self._loaded = state['loaded']
         output = state.get('video-out-params') or {}
+        self._decoded_video |= bool(output)
         self.source_colour = state.get('video-params') or {}
         self.output_colour = {key: state.get(key) for key in ('target-peak', 'target-trc')}
         was_ready = self.video.source_ready
@@ -262,6 +269,11 @@ class ColourPlayer(qt.QObject):
         if self.video.source_ready != was_ready:
             self.video.update()
         if state.get('eof-reached') and not self._ended and self._error == self.Error.NoError:
+            if (not self._advanced_start and not self._decoded_video and self._source.path().lower().endswith('.avi')
+                    and any(track.get('type') == 'video' and not track.get('albumart') for track in tracks)):
+                self._video_track_failed = True
+                self.failed(VIDEO_TRACK_ERROR)
+                return
             self._ended = True
             self.set_state(self.PlaybackState.StoppedState)
             self.mediaStatusChanged.emit(self.MediaStatus.EndOfMedia)

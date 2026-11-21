@@ -9,7 +9,8 @@ from commonUtils.ui import pyside as qt
 from PySide6.QtMultimedia import QMediaPlayer, QMediaMetaData
 
 from .backend import (
-    AUDIO_SWITCH_ERROR, AUDIO_SWITCH_TIMEOUT, SEEK_ERROR, SEEK_TIMEOUT, VIDEO_WITHOUT_AUDIO, PlaybackCapabilities,
+    AUDIO_SWITCH_ERROR, AUDIO_SWITCH_TIMEOUT, SEEK_ERROR, SEEK_TIMEOUT, VIDEO_TRACK_ERROR, VIDEO_WITHOUT_AUDIO,
+    PlaybackCapabilities,
 )
 
 
@@ -158,6 +159,8 @@ class VLCPlayer(qt.QObject):
         self._audio_info = {}
         self._font_scale = 1.0
         self._opened = False
+        self._advanced_start = False
+        self._video_track_failed = False
         self.presentation_current = False
         self.stats = vlc.MediaStats()
         self._displayed = 0
@@ -287,6 +290,8 @@ class VLCPlayer(qt.QObject):
         self._error = self.Error.NoError
         self._tracks = ((), ())
         self._opened = False
+        self._advanced_start = bool(start_position)
+        self._video_track_failed = False
         self.presentation_current = False
         self._displayed = 0
         self._source_size = None
@@ -422,6 +427,7 @@ class VLCPlayer(qt.QObject):
         self.play(preserve_pause=not playing)
 
     def seek_at(self, target):
+        self._advanced_start |= target > 0
         self._end_observation = None
         if self._audio_switch is not None:
             self._audio_switch.position = target
@@ -454,7 +460,23 @@ class VLCPlayer(qt.QObject):
         return self._error
 
     def errorString(self):
+        if self._video_track_failed:
+            return VIDEO_TRACK_ERROR
         return SEEK_ERROR if self._seek_error else ''
+
+    def failed_at_end(self):
+        if self._external_route:
+            return False
+        if not self.media.get_stats(self.stats):
+            return not (self._displayed or self._played_audio)
+        if self._displayed or self.stats.decoded_video:
+            return False
+        if not (self._played_audio or self.stats.decoded_audio):
+            return True
+        if not self._audio_only and not self._advanced_start and self._source.path().lower().endswith('.avi'):
+            self._video_track_failed = any(
+                track.type == self.vlc.TrackType.video for track in (self.media.tracks_get() or ()))
+        return self._video_track_failed
 
     def issue_seek(self):
         self._seek_has_audio_and_video = self.native.audio_get_track() >= 0 and self.native.video_get_track() >= 0
@@ -959,6 +981,10 @@ class VLCPlayer(qt.QObject):
                 return
             if self._state != self.PlaybackState.StoppedState and self._error == self.Error.NoError:
                 self.set_state(self.PlaybackState.StoppedState)
+                if self.failed_at_end():
+                    self._error = self.Error.FormatError
+                    self.errorOccurred.emit()
+                    return
                 self._completed = True
                 self.mediaStatusChanged.emit(self.MediaStatus.EndOfMedia)
             return

@@ -151,9 +151,11 @@ class PlaybackPresentation:
             self.clear_playback_wait()
 
     def clear_playback_wait(self):
+        self.has_playback_output = True
+        self.open_deadline = None
         if not self.network_hold:
             self.wait_indicator.hide()
-            if self.status.text() == 'Waiting for video data…':
+            if self.status.text() in ('Opening video…', 'Waiting for video data…'):
                 self.status.setText('Playing.' if self.requested_play else 'Paused.')
 
     def audio_only_changed(self, active):
@@ -212,10 +214,13 @@ class PlaybackPresentation:
         return self.casting or ((self.isVisible() or not self.presented_once) and not self.window().isMinimized())
 
     def pause_requested(self):
+        self.open_deadline = None
         self.requested_play = False
         self.network_hold = False
         self.player.pause()
         self.wait_indicator.hide()
+        if self.status.text() == 'Opening video…':
+            self.status.setText('Paused.')
         self.update_play(self.player.playbackState())
         self.show_controls()
 
@@ -239,6 +244,15 @@ class PlaybackPresentation:
             self.show_controls()
             return
         now = monotonic()
+        if self.requested_play and not self.casting and self.open_deadline is not None and (
+                self.transport_failure or now >= self.open_deadline):
+            self.open_failed = True
+            self.pause_requested()
+            self.status.setText(self.transport_failure or (
+                'The video source did not respond in time. Check the connection and press Play to retry.'
+                if self.network_waits or self.content.remote else
+                'Playback did not start in time. Press Play to retry or open another copy.'))
+            return
         last_output = max(self.last_frame, self.last_clock, self.last_audio)
         waiting = (self.requested_play and not self.casting and (
             now - last_output >= 3 or self.network_hold))

@@ -147,6 +147,11 @@
     "black.mkv": {
       "bytes": 4501,
       "sha256": "8262b360765ee52f2899556f32559699a9b4655ef3b56b83fea7a74e0a177cb8"
+    },
+    "unknown-duration.mkv": {
+      "bytes": 21747,
+      "sha256": "5b026fe23dd7990304a8f63744fd196b43a366da94d708e981b982b065557b6c",
+      "ffmpeg_version": "ffmpeg version 7.1 Copyright (c) 2000-2024 the FFmpeg developers"
     }
   }
 }

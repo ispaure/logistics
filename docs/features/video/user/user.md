@@ -11,6 +11,8 @@ Use **Space** to play/pause, **Left/Right** to skip ten seconds, **M** to mute a
 
 On macOS, **Picture → Output** uses available HDR headroom or tone maps to SDR. Choose **SDR** to force it. **Picture → Renderer → Compatibility (VLC)** selects the SDR fallback. Windows and Linux use VLC SDR. Physical HDR output remains under validation.
 
+AVI playback depends on the video and audio codecs inside the file. If playback cannot start, try another copy or a version encoded with supported codecs. When the player reports **Duration unknown**, playback can still start and show elapsed time. The timeline becomes available when the player knows the duration.
+
 **Cast…** switches to VLC compatibility playback and retains the held position. **Refresh receivers** retries discovery. Casting is unavailable while session-only credentials are loaded. Leaving the app conceals session-only video. Unlock with the credential ZIP password, then press Play. If necessary, set a temporary password before first playback. Revoked credentials require reopening after unlocking the source.
 
 Sleep, lock or loss of audio output pauses playback. Press Play after returning. Resume saves periodically, on pause and on close. Private resume is encrypted, and replacing the file invalidates its checkpoint. See [mobile controls](../user_mobile/user_mobile.md) for mobile behavior.

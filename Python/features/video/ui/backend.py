@@ -12,6 +12,11 @@ AUDIO_SWITCH_TIMEOUT = 8
 AUDIO_SWITCH_ERROR = 'Could not switch audio. Choose another track or press Play to retry.'
 VIDEO_WITHOUT_AUDIO = 'Audio has not started here. Video continues.'
 SEEK_TIMEOUT = 8
+OPEN_TIMEOUT = 20
+UNKNOWN_DURATION = 'Duration unknown'
+OPEN_ERROR = 'Could not open this video. Its container or codecs may be unsupported, or the file may be damaged.'
+AUDIO_VIDEO_ERROR = 'No playable audio or video was found. Try a supported codec or another copy.'
+VIDEO_TRACK_ERROR = 'The video track could not be decoded. Try another copy or a supported video codec.'
 SEEK_ERROR = 'Could not seek to this position. Use Playback → Start over or Go to time.'
 AUDIO_ONLY_MESSAGE = 'Continuing audio. Seek back to restore video.'
 
