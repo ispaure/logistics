@@ -62,8 +62,14 @@ def reference(window):
 
 
 def relocate(provider, source, destination, *, deleted=None):
-    source, cipher = source_reference(provider.root / (deleted or source), provider)
-    target = None if deleted is not None else source_reference(provider.root / destination, provider)[0]
+    origin = source_reference(provider.root / (deleted or source), provider)
+    target = (None if deleted is not None else
+              source_reference(provider.root / destination, provider)[0])
+    relocate_reference(origin, target)
+
+
+def relocate_reference(origin, target=None):
+    source, cipher = origin
     errors = []
     for recent in (False, True):
         try:

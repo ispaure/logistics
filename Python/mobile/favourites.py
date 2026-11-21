@@ -117,13 +117,18 @@ def resource_reference(app, provider, path, *, require_cipher=True):
 
 
 def relocate(app, provider, source, destination=None):
+    origin = resource_reference(app, provider, source, require_cipher=False)
+    target = (resource_reference(app, provider, destination, require_cipher=False)[0]
+              if destination is not None else None)
+    relocate_reference(app, origin, target, names=(Path(source).name, Path(destination).name) if target else None)
+
+
+def relocate_reference(app, origin, target=None, *, names=None):
     from .document_sources import saved_connection
-    old_name, new_name = Path(source).name, Path(destination).name if destination is not None else ''
-    source, cipher = resource_reference(app, provider, source, require_cipher=False)
-    target = resource_reference(app, provider, destination, require_cipher=False)[0] if destination is not None else None
+    source, cipher = origin
     # Offline single-file copies have a stable record key. Rename their display
     # title without changing that key or replacing a custom favourite label.
-    names = (old_name, new_name) if source == target else None
+    names = names if source == target else None
     def update_history():
         from services.documents.catalog import relocated_source, relocated_title, relocated_opener
         notes = getattr(app, 'vault_browser', None)

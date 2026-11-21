@@ -12,8 +12,18 @@ the available actions. For example, with the corresponding features enabled,
 an EPUB opens in Books, a CBZ opens in Comics, and a ZIP or TAR opens in
 Archives.
 
-Use the context menu to copy, cut, paste, rename or remove items. If a name
-collides on paste, the existing item is kept. Use [Bulk
+Select one or more files or folders and drag them onto a folder, another tab,
+or a detached File Browser window. The highlighted folder or tab pulses twice
+before opening. Move away to stop the timer or press **Escape** to cancel the
+drag.
+
+Use **Cut** and **Paste** from the context or Edit menu, or press **Ctrl/⌘+X**
+and **Ctrl/⌘+V**. A move leaves both items in place when the destination already
+has that name. A batch can finish some items before a conflict or cancellation.
+Unlocked LocalCrypt folders accept moves. Moving out to ordinary storage asks
+before creating decrypted files. Browsed rclone remotes are read-only.
+
+Use the context menu to copy, rename or remove items. Use [Bulk
 Rename](../features/bulk_rename/user/user.md) to preview a rename across many
 files. Trash or Recycle Bin requires confirmation. If the location cannot
 use Trash, the originals stay in place. Permanent deletion has no Undo.

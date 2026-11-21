@@ -177,6 +177,162 @@ class BrowserWindowTests(QtTestCase):
         self.assertEqual(len(window.workspace.docks), 1)
         self.assertEqual(first.file_browser.navigation.directory, child)
 
+    def test_file_drop_pulses_then_opens_folder_and_escape_cancels_pending_hover(self):
+        from PySide6.QtGui import QDragEnterEvent, QKeyEvent
+        from desktop.browser_drop import BrowserDropTargets, MIME, SESSION
+
+        target = self.root / 'Target'
+        target.mkdir()
+        window = self.window([])
+        browser = window.file_browser
+        controller = BrowserDropTargets.instance()
+        self.addCleanup(controller.clear)
+        view = browser.views.navigation_views[0]
+        viewport = view.viewport()
+        self.wait_until(lambda: browser.model.browse_index(target).isValid())
+        index = browser.model.browse_index(target)
+        self.wait_until(lambda: not view.visualRect(index).isEmpty())
+        point = view.visualRect(index).center()
+        mime = qt.QMimeData()
+        mime.setUrls([qt.QUrl.fromLocalFile(str(self.path))])
+        mime.setData(MIME, SESSION)
+
+        def enter():
+            event = QDragEnterEvent(point, qt.Qt.DropAction.MoveAction, mime,
+                                    qt.Qt.MouseButton.LeftButton, qt.Qt.KeyboardModifier.NoModifier)
+            self.assertTrue(controller.eventFilter(viewport, event))
+            self.assertTrue(event.isAccepted())
+
+        enter()
+        controller.eventFilter(viewport, QKeyEvent(qt.QEvent.Type.KeyPress, qt.Qt.Key.Key_Escape,
+                                                   qt.Qt.KeyboardModifier.NoModifier))
+        self.assertFalse(controller.timer.isActive())
+        self.assertEqual(browser.navigation.directory, self.root)
+        enter()
+        controller.eventFilter(viewport, qt.QEvent(qt.QEvent.Type.DragLeave))
+        self.assertFalse(controller.timer.isActive())
+        enter()
+        for visible in (False, True, False, True):
+            controller.advance()
+            self.assertEqual(controller.band.isVisible(), visible)
+            self.assertEqual(browser.navigation.directory, self.root)
+        controller.advance()
+        self.assertEqual(browser.navigation.directory, target)
+        self.assertTrue(self.path.is_file())
+
+    def test_drop_transfers_between_internal_and_detached_browser_destinations(self):
+        from PySide6.QtGui import QDropEvent
+        from desktop.browser_drop import BrowserDropTargets, MIME, SESSION
+
+        first, second, third, fourth = (self.root / name for name in ('First', 'Second', 'Third', 'Fourth'))
+        for folder in (first, second, third, fourth):
+            folder.mkdir()
+        path = first / 'selection.txt'
+        path.write_text('move across windows')
+        window = self.window([])
+        workspace = window.workspace
+        views = [workspace.add_view(folder) for folder in (first, second, third, fourth)]
+        self.wait(window)
+        detached = workspace.detach_active()
+        self.addCleanup(self.close_window, detached)
+        self.app.processEvents()
+        self.assertIs(detached.workspace.active_view, views[3])
+        previous = next(dock for dock in workspace.docks if dock.widget() is views[2])
+        previous.raise_()
+        self.app.processEvents()
+        workspace._activate(previous)
+        another = workspace.detach_active()
+        self.addCleanup(self.close_window, another)
+        self.app.processEvents()
+        self.assertIs(another.workspace.active_view, views[2])
+        controller = BrowserDropTargets.instance()
+        self.addCleanup(controller.clear)
+
+        owners = {views[2]: another.workspace, views[3]: detached.workspace}
+        for source, destination, host in ((first, second, views[1]), (second, third, views[2]),
+                                          (third, fourth, views[3]), (fourth, first, views[0])):
+            owner = owners.get(host, workspace)
+            dock = next(dock for dock in owner.docks if dock.widget() is host)
+            mime = qt.QMimeData()
+            mime.setUrls([qt.QUrl.fromLocalFile(str(source / path.name))])
+            mime.setData(MIME, SESSION)
+            bar, tab = next(((bar, index) for bar in owner.findChildren(qt.QTabBar) if bar.isVisible()
+                             for index in range(bar.count()) if owner._tab_dock(bar, index) is dock), (None, None))
+            widget = bar if bar is not None else dock
+            point = bar.tabRect(tab).center() if bar is not None else dock.rect().center()
+            drop = QDropEvent(qt.QPointF(point), qt.Qt.DropAction.MoveAction, mime,
+                              qt.Qt.MouseButton.LeftButton, qt.Qt.KeyboardModifier.NoModifier)
+            self.assertTrue(controller.eventFilter(widget, drop))
+            self.assertTrue(drop.isAccepted(), (str(destination), type(widget), point))
+            self.wait_until(lambda: (destination / path.name).exists() and not host.move_actions.busy)
+            self.assertFalse((source / path.name).exists())
+            self.assertEqual((destination / path.name).read_text(), 'move across windows')
+
+    def test_keyboard_move_relocates_reader_progress_and_home_for_a_folder(self):
+        from PySide6.QtTest import QTest
+        from commonUtils.runtime.resources.local import LocalFiles
+        from desktop.document_catalog import catalog
+        from features.books.preferences import ReadingState
+        from services.documents.progress import open_progress
+
+        class Clipboard:
+            mime = None
+
+            def mimeData(self):
+                return self.mime
+
+            def setMimeData(self, data):
+                self.mime = data
+
+            def clear(self):
+                self.mime = None
+
+        reading, destination, state_root = (self.root / name for name in ('Reading', 'Destination', 'State'))
+        for folder in (reading, destination, state_root):
+            folder.mkdir()
+        original = reading / 'fixture.epub'
+        original.write_bytes(b'Generated book state fixture')
+        window = self.window([])
+        host = window.workspace.active_view
+        browser = host.file_browser
+        target_browser = window.workspace.add_view(destination).file_browser
+        self.wait(window)
+        provider = LocalFiles(self.root)
+        state = {'position': 37, 'epub_bookmarks': ['passage']}
+        reference = dict(type='local', path=str(original.resolve()))
+        clipboard = Clipboard()
+        with patch.object(qt.QApplication, 'clipboard', return_value=clipboard), \
+                patch('desktop.document_catalog.cache_directory', return_value=state_root), \
+                patch('commonUtils.filesystem.storage.cache_directory', return_value=state_root):
+            def progress(path):
+                return open_progress(provider, path, state_root, kind='desktop-epub',
+                                     revision=provider.entry(path)['revision'])
+
+            self.assertEqual(progress('Reading/fixture.epub').save(state).value, 'saved')
+            legacy = ReadingState(original, folder=state_root / 'Books')
+            legacy.save({'path': 'old-chapter.xhtml', 'position': 5})
+            catalog(recent=True).remember(reference, original.name, dict(editor='epub'))
+            window.workspace.docks[0].raise_()
+            self.app.processEvents()
+            browser.views.select_source(browser.model.browse_index(reading))
+            view = browser.views.navigation_views[0]
+            view.setFocus()
+            QTest.keySequence(view, qt.QKeySequence(qt.QKeySequence.StandardKey.Cut))
+            window.workspace.docks[1].raise_()
+            self.app.processEvents()
+            view = target_browser.views.navigation_views[0]
+            view.setFocus()
+            QTest.keySequence(view, qt.QKeySequence(qt.QKeySequence.StandardKey.Paste))
+            moved = destination / 'Reading' / original.name
+            self.wait_until(lambda: moved.exists() and not window.workspace.active_view.move_actions.busy)
+            self.assertIsNone(clipboard.mime)
+            self.assertEqual(progress('Destination/Reading/fixture.epub').load(), state)
+            self.assertEqual(catalog(recent=True).entries('recent')[0]['source']['path'], str(moved.resolve()))
+            reading.mkdir()
+            original.write_bytes(b'Replacement')
+            self.assertEqual(progress('Reading/fixture.epub').load(), {})
+            self.assertEqual(legacy.legacy_load(), {})
+
     def test_detach_split_and_reattach_preserve_view_identity(self):
         source = self.window([])
         target = self.window([])

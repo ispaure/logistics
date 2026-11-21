@@ -103,6 +103,27 @@ class _PrivateBrowserLocation:
     directory: Path
 
 
+class _LogisticsFileBrowser(FileBrowser):
+    move_actions = None
+
+    def context_menu_for(self, index, *, directory=None):
+        menu = super().context_menu_for(index, directory=directory)
+        if menu is None:
+            return None
+        paste_key = qt.QKeySequence(qt.QKeySequence.StandardKey.Paste)
+        paste = next((action for action in menu.actions() if action.shortcut() == paste_key), None)
+        if paste is not None and self.move_actions is not None:
+            source = self.views.source_index(index)
+            target = (Path(self.model.filePath(source)) if source.isValid()
+                      else directory or self.views.browsing_directory())
+            from .browser_moves import PrivateMoveMime
+            if isinstance(qt.QApplication.clipboard().mimeData(), PrivateMoveMime):
+                paste.setEnabled(target is not None and not self.stopping and not self.move_actions.busy)
+            paste.triggered.disconnect()
+            paste.triggered.connect(lambda: self._run(lambda: self.move_actions.paste(target)))
+        return menu
+
+
 def _sqlite_write_allowed(path):
     """Opt ordinary host files in; encrypted-copy paths remain provider-owned."""
     if _crypt_location(path)[1]:
@@ -152,6 +173,8 @@ def _new_browser_tab(workspace):
 
 def _browser_container(workspace):
     workspace.index_status = BrowserIndexStatus(workspace)
+    from .browser_drop import BrowserDropTargets
+    BrowserDropTargets.register(workspace)
 
 
 class _BrowserHost:
@@ -161,7 +184,7 @@ class _BrowserHost:
         self.filesystem_scope = filesystem_scope
         from desktop.bulk_rename import bulk_rename_actions
         from features.pdf.ui.annotation import annotation_actions
-        self.file_browser = FileBrowser(parent=self, action_providers=(bulk_rename_actions, annotation_actions),
+        self.file_browser = _LogisticsFileBrowser(parent=self, action_providers=(bulk_rename_actions, annotation_actions),
                                        directory_handler=self._route_directory,
                                        directory_boundary=self._directory_boundary,
                                        calculate_folder_sizes=calculate_folder_sizes,
@@ -378,6 +401,14 @@ class BrowserView(_BrowserHost, qt.QMainWindow):
         self.folder_sizes.toggled.connect(self.file_browser.set_folder_sizes_enabled)
         self.folder_sizes.hide()  # Legacy API; the browser toolbar now offers Pause/Resume.
         layout.addWidget(self.file_browser, 1)
+        from .browser_moves import BrowserMoves
+        self.move_actions = BrowserMoves(self, layout)
+        self.file_browser.move_actions = self.move_actions
+        paste_key = qt.QKeySequence(qt.QKeySequence.StandardKey.Paste)
+        for shortcut in self.file_browser.file_actions.shortcuts:
+            if shortcut.key() == paste_key:
+                shortcut.activated.disconnect()
+                shortcut.activated.connect(lambda: self.file_browser._run(self.move_actions.paste))
         self.workspace_controls = self.file_browser.workspace_controls
         self.file_browser.views.directory_changed.connect(lambda path: self.title_changed.emit(self.view_title))
         self.file_browser.idle.connect(self.idle)
@@ -394,6 +425,12 @@ class BrowserView(_BrowserHost, qt.QMainWindow):
     def _retry_close(self):
         if self.closing and self.file_browser.sqlite_browser.can_retire:
             self.idle.emit()
+
+    def prepare_close(self):
+        if self.move_actions.stop():
+            self.closing = True
+            return False
+        return super().prepare_close()
 
 
 class _WorkspaceHost:
@@ -438,7 +475,8 @@ class FileBrowserPage(_WorkspaceHost, qt.QWidget):
         layout = qt.QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(self.workspace)
-        self.index_status = BrowserIndexStatus(self.workspace)
+        _browser_container(self.workspace)
+        self.index_status = self.workspace.index_status
         self.workspace.add_view(root_path or Path.home())
 
 
@@ -458,7 +496,8 @@ class FileBrowserWindow(_WorkspaceHost, qt.QMainWindow):
         self.workspace_menu_document = lambda: self.workspace.active_view
         self.workspace.tabs_changed.connect(self._update_title)
         self.setCentralWidget(self.workspace)
-        self.index_status = BrowserIndexStatus(self.workspace)
+        _browser_container(self.workspace)
+        self.index_status = self.workspace.index_status
         view = self.workspace.add_view(root_path)
         if view.file_browser is not None and getattr(view.file_browser, 'persistent_index', True):
             view.folder_sizes.setChecked(True)

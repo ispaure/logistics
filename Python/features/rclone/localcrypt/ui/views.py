@@ -93,6 +93,16 @@ class CryptBrowserView(qt.QMainWindow):
             ('Edit EPUB metadata…', lambda row: not row['directory'] and Path(row['path']).suffix.lower() == '.epub', self.edit_epub_metadata),))
         self.centralWidget().layout().addWidget(self.file_browser)
         self.centralWidget().layout().addWidget(self.open_operation)
+        from desktop.browser_moves import install_private_browser_moves
+        self.move_actions = install_private_browser_moves(self, self.centralWidget().layout())
+        self._private_view_guard.revoked.connect(self.move_actions.clear_private_cut)
+        self._move_shortcuts = []
+        for key, callback in ((qt.QKeySequence.StandardKey.Cut, self.move_actions.cut_selected),
+                              (qt.QKeySequence.StandardKey.Paste, self.move_actions.paste)):
+            shortcut = qt.QShortcut(qt.QKeySequence(key), self.file_browser)
+            shortcut.setContext(qt.Qt.ShortcutContext.WidgetWithChildrenShortcut)
+            shortcut.activated.connect(callback)
+            self._move_shortcuts.append(shortcut)
         self.file_browser.activated.connect(self.open_document)
         self.file_browser.directory_changed.connect(lambda path: self.title_changed.emit(self.view_title))
         self.file_browser.idle.connect(self.idle)
@@ -114,6 +124,9 @@ class CryptBrowserView(qt.QMainWindow):
         self.folder_sizes.setEnabled(False)
         self.folder_sizes.hide()
         self.menuBar().addMenu('File').addAction('Close', self._close_tab, qt.QKeySequence(qt.QKeySequence.StandardKey.Close))
+        edit = self.menuBar().addMenu('Edit')
+        edit.addAction('Cut Selected Items', self.move_actions.cut_selected)
+        edit.addAction('Paste into Current Folder', lambda: self.move_actions.paste())
         qt.QApplication.instance().aboutToQuit.connect(self.provider.close)
 
     def _thumbnail(self, relative, size, cancelled):
@@ -194,8 +207,7 @@ class CryptBrowserView(qt.QMainWindow):
             return ()
 
     def import_item(self, folder=False):
-        from commonUtils.runtime.resources.local import LocalFiles
-        from commonUtils.runtime.resources.mutations import move_resource
+        from desktop.browser_moves import MoveSource
         from features.rclone.localcrypt.mapping import for_path, storage_root
         if self.file_browser.operation.busy:
             return
@@ -208,22 +220,19 @@ class CryptBrowserView(qt.QMainWindow):
         if for_path(path) or path == boundary or boundary in path.parents:
             qt.QMessageBox.warning(self, 'Move', 'Use Move to from the unlocked encrypted-copy browser for encrypted files.')
             return
-        source = LocalFiles(path.parent)
-        target = '/'.join(p for p in (self.provider.relative(self.file_browser.navigation.directory), path.name) if p)
-        self.file_browser.mutate(lambda cancelled: move_resource(source, path.name, self.provider, target, cancelled=cancelled))
+        self.move_actions.start((MoveSource.local(path),), self.file_browser.navigation.directory)
 
     def move_item(self, path):
-        from commonUtils.runtime.resources.mutations import move_resource
+        from desktop.browser_moves import MoveSource
         selected = choose_destination(self, self.provider, Path(path).name, 'Move')
         if selected is None:
             return
         destination, target, release = selected
-        def work(cancelled):
-            try:
-                move_resource(self.provider, self.provider.relative(path), destination, target, cancelled=cancelled)
-            finally:
-                release()
-        if not self.file_browser.mutate(work):
+        try:
+            folder, _, name = target.rpartition('/')
+            self.move_actions.start((MoveSource(self.provider, self.provider.relative(path)),),
+                                    destination=(destination, folder), name=name)
+        finally:
             release()
 
     @property
@@ -387,7 +396,11 @@ class CryptBrowserView(qt.QMainWindow):
         browser_busy = self.file_browser.stop() if self.file_browser else False
         notes = getattr(self, 'notes_offer', None)
         notes_ready = notes is None or notes.prepare_close()
-        ready = not (browser_busy or self.open_operation.busy) and notes_ready
+        move_actions = getattr(self, 'move_actions', None)
+        if move_actions is not None:
+            move_actions.clear_private_cut()
+        move_busy = move_actions is not None and move_actions.stop()
+        ready = not (browser_busy or self.open_operation.busy or move_busy) and notes_ready
         if ready and self.provider is not None:
             self._release_provider()
         return ready

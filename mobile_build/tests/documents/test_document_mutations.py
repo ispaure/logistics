@@ -54,10 +54,10 @@ class DocumentMutationTests(unittest.TestCase):
         async def execute():
             plan = await prepare_document_mutation(self.app, request)
             try:
-                await retiring_work(plan.execute, Event(), completed=plan.apply)
+                return await retiring_work(plan.execute, Event(), completed=plan.apply)
             finally:
                 plan.release()
-        self.run_async(execute())
+        return self.run_async(execute())
 
     def test_move_retains_draft_widget_session_and_subsequent_save_targets_destination(self):
         owner = self.open()
@@ -133,6 +133,83 @@ class DocumentMutationTests(unittest.TestCase):
         self.move(self.move_request('renamed.epub', conflict.name))
         self.assertEqual(state(self.destination, conflict.name).load(), {'page': 7, 'bookmarks': [2]})
 
+    def test_folder_move_updates_persisted_home_rows_and_keeps_replacement_history_empty(self):
+        from types import SimpleNamespace
+        from mobile.favourites import catalog
+        from mobile.recent_documents import RecentDocuments
+
+        folder = self.source.root / 'Reading'
+        folder.mkdir()
+        saved = {'comic.cbz': {'page': 36}, 'book.epub': {'position': 42, 'epub_bookmarks': ['passage']}}
+        for name, state in saved.items():
+            path = folder / name
+            path.write_bytes(name.encode())
+            source = dict(type='local', path=str(path))
+            kind = 'comic' if path.suffix == '.cbz' else 'epub'
+            self.app.recent_documents.remember_file(SimpleNamespace(kind=kind, title=name), source)
+            catalog(self.app).remember(source, name, dict(kind=kind), favourite=True)
+            self.assertIs(open_progress(self.source, 'Reading/' + name, self.root, kind=kind,
+                                        app=self.app).save(state), ProgressStatus.SAVED)
+
+        self.move(self.move_request('Reading', 'Moved'))
+        folder.mkdir()
+        for name, state in saved.items():
+            (folder / name).write_bytes(b'Replacement')
+            kind = 'comic' if name.endswith('.cbz') else 'epub'
+            self.assertEqual(open_progress(self.destination, 'Moved/' + name, self.root,
+                                           kind=kind, app=self.app).load(), state)
+            self.assertEqual(open_progress(self.source, 'Reading/' + name, self.root,
+                                           kind=kind, app=self.app).load(), {})
+        expected = {str(self.destination.root / 'Moved' / name) for name in saved}
+        recent = RecentDocuments(self.root)
+        self.assertEqual({item['source']['path'] for item in recent.items}, expected)
+        self.assertEqual({row['source']['path'] for row in catalog(self.app).entries()}, expected)
+
+    def test_partial_source_cleanup_keeps_surviving_home_row_and_does_not_retarget_removed_row(self):
+        from types import SimpleNamespace
+        from commonUtils.runtime.operations import MutationIncomplete
+        from mobile.favourites import catalog
+
+        class StreamDestination(LocalFiles):
+            def local_move_path(self, path):
+                return None
+
+        self.destination = StreamDestination(self.destination.root)
+        folder = self.source.root / 'Reading'
+        folder.mkdir()
+        for name in ('one.epub', 'two.epub'):
+            path = folder / name
+            path.write_bytes(name.encode())
+            source = dict(type='local', path=str(path))
+            self.app.recent_documents.remember_file(SimpleNamespace(kind='epub', title=name), source)
+            catalog(self.app).remember(source, name, dict(kind='epub'), favourite=True)
+            provider = self.source
+            key = 'Reading/' + name
+            with_state = open_progress(provider, key, self.root, kind='epub',
+                                        revision=provider.entry(key)['revision'], app=self.app)
+            self.assertIs(with_state.save({'position': 37}), ProgressStatus.SAVED)
+        remove = self.source.remove_empty
+
+        def stop_at_first(path, revision):
+            if path == 'Reading/one.epub':
+                raise PermissionError('Fixture source became read-only')
+            return remove(path, revision)
+
+        with patch.object(self.source, 'remove_empty', side_effect=stop_at_first):
+            with self.assertRaises(MutationIncomplete) as failure:
+                self.move(self.move_request('Reading', 'Moved'))
+        self.assertTrue(failure.exception.result.destination_published)
+        self.assertEqual(failure.exception.result.removed_paths, ('Reading/two.epub',))
+        self.assertEqual((folder / 'one.epub').read_bytes(), b'one.epub')
+        self.assertFalse((folder / 'two.epub').exists())
+        (folder / 'two.epub').write_bytes(b'Replacement')
+        expected = {str(folder / 'one.epub')}
+        self.assertEqual({item['source']['path'] for item in self.app.recent_documents.items}, expected)
+        self.assertEqual({row['source']['path'] for row in catalog(self.app).entries()}, expected)
+        for provider, key in ((self.source, 'Reading/two.epub'), (self.destination, 'Moved/two.epub')):
+            self.assertEqual(open_progress(provider, key, self.root, kind='epub', app=self.app,
+                                           revision=provider.entry(key)['revision']).load(), {})
+
     def test_unreadable_progress_does_not_turn_a_completed_move_into_a_file_error(self):
         source = self.source.root / 'first.epub'
         source.write_bytes(b'Synthetic document for mutation testing')
@@ -140,11 +217,11 @@ class DocumentMutationTests(unittest.TestCase):
         self.assertIs(state.save({'page': 7}), ProgressStatus.SAVED)
         path, = (self.root / 'ReaderPositions').rglob('*.json')
         path.write_bytes(b'Unrecognized progress')
-        self.move(self.move_request(source.name, 'moved.epub'))
+        result = self.move(self.move_request(source.name, 'moved.epub'))
         self.assertFalse(source.exists())
         self.assertTrue((self.destination.root / 'moved.epub').is_file())
         self.assertEqual(path.read_bytes(), b'Unrecognized progress')
-        self.assertIn('Files moved.', self.app.recovery_notice.text)
+        self.assertIn('Files moved.', result.notice)
 
     def test_external_change_and_destination_conflict_preserve_draft_and_bindings(self):
         owner = self.open()

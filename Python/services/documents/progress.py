@@ -115,7 +115,7 @@ def _fence_local_document(root, identity):
                 _channels.pop(key, None)
 
 
-def prepare_local_progress_move(app, provider, source, destination, target, *, cancelled):
+def prepare_local_progress_move(app, provider, source, destination, target, *, cancelled, state_root=None):
     """Capture a local mutation's source file identities before publication.
 
     The mutation owner calls this inside its existing mutation lock, then calls
@@ -126,16 +126,26 @@ def prepare_local_progress_move(app, provider, source, destination, target, *, c
     from commonUtils.runtime.resources.mutations import inventory
 
     provider, destination = ordinary_local_provider(provider), ordinary_local_provider(destination)
-    if provider is None or destination is None:
+    if provider is None:
         return lambda: None
-    root = Path(app.private_root).resolve()
-    if not any((root / section / 'Local').is_dir() for section in ('ReaderPositions', 'ReaderBookmarks')):
+    root = Path(app.private_root if state_root is None else state_root).resolve()
+    durable = destination is not None and any(
+        (root / section / 'Local').is_dir() for section in ('ReaderPositions', 'ReaderBookmarks'))
+    legacy = app is None and any((root / section).is_dir() for section in ('Books', 'Comics'))
+    if not durable and not legacy:
         return lambda: None
-    generation = position_generation(root)
-    candidates = []
-    may_stream = provider.storage_id != destination.storage_id or get_os() is OS.ANDROID
+    generation = position_generation(root) if durable else None
+    candidates, legacy_records = [], []
+    may_stream = durable and (provider.storage_id != destination.storage_id or get_os() is OS.ANDROID)
     for relative, row in inventory(provider, source, cancelled=cancelled).items():
         if row['directory']:
+            continue
+        if legacy:
+            path = provider.transfer_location(row['path'])
+            legacy_path = _desktop_legacy_path(root, path)
+            if legacy_path is not None and legacy_path.is_file():
+                legacy_records.append(legacy_path)
+        if not durable:
             continue
         old = document_identity(provider, row['path'], app=app)
         if any(LocalCheckpoints.directory(root, old, bookmarks=marked).is_dir() for marked in (False, True)):
@@ -148,6 +158,13 @@ def prepare_local_progress_move(app, provider, source, destination, target, *, c
             candidates.append((old, row['revision'], key, digest))
 
     def relocate():
+        # These older records are keyed only by a pathname. Preserve their
+        # bytes without letting a replacement import them as its own state.
+        from commonUtils.persistence.publication import rename_exclusive
+        from uuid import uuid4
+
+        for path in legacy_records:
+            rename_exclusive(path, path.with_suffix('.moved-' + uuid4().hex))
         for old, original_revision, key, digest in candidates:
             current = destination.entry(key)['revision']
             if current[:4] != original_revision[:4]:
@@ -168,6 +185,15 @@ def prepare_local_progress_move(app, provider, source, destination, target, *, c
                 _relocate_local_checkpoints(root, old, new, original_revision, current, generation, validate)
 
     return relocate
+
+
+def _desktop_legacy_path(root, path):
+    from hashlib import sha256
+
+    suffix = path.suffix.lower()
+    section = 'Books' if suffix == '.epub' else 'Comics' if suffix in {'.cbz', '.zip'} else None
+    if section is not None:
+        return root / section / (sha256(str(path).encode()).hexdigest() + '.json')
 
 
 def _relocate_local_checkpoints(root, old, new, original_revision, current_revision, generation, validate):

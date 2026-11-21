@@ -561,7 +561,8 @@ class EditorPicker(DestinationForm):
             from .file_operations import FileOperationRequest, FileDestination
             destination = FileDestination(self.app.private_root, work.client, provider, work.credential_generation)
             request = FileOperationRequest('move', source, action.path, target, destination,
-                                           plaintext_approved=source.private and not provider.private)
+                                           plaintext_approved=source.private and not provider.private,
+                                           expected_revision=action.expected_revision)
             # Use the same guarded, verified mutation as other file commands.
             from .document_mutations import prepare_document_mutation
             from .file_operations import retiring_work
@@ -570,14 +571,14 @@ class EditorPicker(DestinationForm):
             def completed(result):
                 work.committed = True
                 plan.apply(result)
-            await retiring_work(plan.execute, work.cancel, completed=completed)
+            result = await retiring_work(plan.execute, work.cancel, completed=completed)
             if not self._accepts(work):
                 return
             self._finish_work(work)
             self.clear()
             await self.app.show_files()
             await self.app.browse_files()
-            self.app.file_status.value = 'Move finished. Destination verified before removing the source.'
+            self.app.file_status.value = result.notice or 'Move finished. Destination verified before removing the source.'
         except Exception as error:
             if work.operation is self.operation and self.active_host and work.cancel.is_set():
                 self.save_as_status.value = ('Move stopped after leaving the app or locking the device.'

@@ -22,7 +22,7 @@ class BrowserMenus(qt.QObject):
         self.selection_source = None
         self.copy = self.add('Edit', 'Copy Selected Items', lambda: self.browser.file_actions.copy(self.browser.selected_objects()))
         self.cut = self.add('Edit', 'Cut Selected Items', lambda: self.browser.file_actions.copy(self.browser.selected_objects(), move=True))
-        self.paste = self.add('Edit', 'Paste into Current Folder', self.browser.file_actions.paste_current)
+        self.paste = self.add('Edit', 'Paste into Current Folder', self.view.move_actions.paste)
         self.menus['Edit'].addSeparator()
         self.rename = self.add('Edit', 'Rename Selected Item', self.browser.file_actions.rename_selected)
         self.trash = self.add('Edit', 'Move Selected Items to Trash / Recycle Bin…',
@@ -104,11 +104,13 @@ class BrowserMenus(qt.QObject):
         self.pause.setText('Resume Indexing' if self.browser._index_paused else 'Pause Indexing')
         self.selection.setEnabled(bool(self.browser.selected_objects()))
         from commonUtils.ui.file_browser.file_actions import clipboard_files
+        from .browser_moves import PrivateMoveMime
         selected = self.browser.selected_objects()
-        idle = not self.browser.file_actions.busy and not self.browser.stopping
+        idle = not self.browser.file_actions.busy and not self.view.move_actions.busy and not self.browser.stopping
         self.copy.setEnabled(bool(selected) and not self.browser.stopping)
         self.cut.setEnabled(bool(selected) and idle)
-        self.paste.setEnabled(idle and bool(clipboard_files()[0]))
+        self.paste.setEnabled(idle and (bool(clipboard_files()[0])
+            or isinstance(qt.QApplication.clipboard().mimeData(), PrivateMoveMime)))
         self.rename.setEnabled(len(selected) == 1 and idle)
         self.trash.setEnabled(bool(selected) and idle)
         workspace = self.workspace()

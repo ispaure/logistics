@@ -98,6 +98,8 @@ class FilesUI:
                         or not listing.accepts(work, request)):
                     restore_location()
                     return False
+                if getattr(self, 'file_loaded_location', None) != (label, path):
+                    self.end_file_selection()
                 self.file_provider, self.file_path = provider, path
                 self.file_rows = FilesUI.file_browser_rows(rows)
                 # set_entries publishes selection reset once with the new snapshot.
@@ -259,6 +261,12 @@ class FilesUI:
         from .browser_ui import browser_command
         browser_command(self.file_actions_button)
         self.file_browser.location_bar.add(self.file_actions_button)
+        self.file_checked = {}
+        self.file_cut_button = toga.Button('Cut', on_press=self.cut_files, style=Pack(height=48, flex=1))
+        self.file_select_done = toga.Button('Done selecting', on_press=self.end_file_selection,
+                                           style=Pack(height=48, flex=1))
+        self.file_select_bar = toga.Box(children=[self.file_cut_button, self.file_select_done],
+                                        style=Pack(direction=ROW))
         self.file_source_tabs = toga.Box(style=Pack(direction=ROW, height=48))
         self.files_view = toga.Box(children=[
             self.file_browser.location_bar,
@@ -322,7 +330,8 @@ class FilesUI:
             if not self.file_operations().host.allowed(False):
                 return
             from .file_operations import FileOperationRequest
-            request = FileOperationRequest('move', provider, path)
+            row = self.file_rows.get(self.file_selection.value)
+            request = FileOperationRequest('move', provider, path, expected_revision=row.get('revision'))
             return self.loop.create_task(self.editor_picker().show_destination(
                 path.rpartition('/')[2], request))
         box = self.file_operation_view.content
@@ -364,24 +373,143 @@ class FilesUI:
         self.show_view(self.file_operation_view, destination='files', route='file-actions', title='File actions')
 
     def file_item_commands(self, *, context=None):
+        from commonUtils.runtime.resources.provider import capabilities
+
         if context is None:
             provider, storage = self.file_provider, self.file_storage.value
             selected = self.file_rows.get(self.file_selection.value)
         else:
             provider, storage, selected = context
         commands = [('New folder…', lambda: self.show_file_actions(operation='new'))]
+        access = capabilities(provider)
         from services.documents.mobile_locations import enabled
         if storage == 'Local files' or (storage == 'Shared files' and enabled(self.private_root)):
             commands.append(('Pin this folder', self.locations_controller().pin_local_folder))
         if selected:
             commands += [('Open', self.enter_file_folder if selected['directory'] else self.read_managed_file),
                          ('Rename…', lambda: self.show_file_actions(operation='rename')),
-                         ('Move…', lambda: self.show_file_actions(operation='move')),
+                         *([('Move…', lambda: self.show_file_actions(operation='move'))] if access.delete else []),
                          *([('Copy', self.copy_file)] if self.can_copy_file(provider) else []),
                          ('Details', self.show_file_details), ('Delete…', self.delete_file)]
+        if context is None:
+            if access.delete:
+                commands.append(('Select items', self.begin_file_selection))
+                if selected:
+                    commands.append(('Cut', self.cut_files))
+            if access.create and access.rename and access.delete and self.pending_file_cut():
+                commands.append(('Paste move here', self.paste_files))
         if isinstance(provider, LocalFiles) and (not provider.private or getattr(provider, 'supports_metadata_collections', False)):
             commands += [('Edit comics in this folder…', self.edit_local_comic_folder)]
         return commands + [('Archive password…', lambda: self.show_file_actions(operation='password'))]
+
+    def begin_file_selection(self):
+        if self.cloud_busy or self.file_select_bar.parent is not None:
+            return
+        self.file_browser.on_check_entry = self.check_file_entry
+        self.file_browser.highlight_selection()
+        self.file_cut_button.enabled = False
+        self.files_view.insert(1, self.file_select_bar)
+
+    def check_file_entry(self, entry):
+        if self.cloud_busy:
+            return
+        if entry.identity in self.file_checked:
+            del self.file_checked[entry.identity]
+        else:
+            self.file_checked[entry.identity] = entry.payload
+        self.file_browser.checked_entries = set(self.file_checked)
+        self.file_browser.highlight_selection()
+        self.file_cut_button.enabled = bool(self.file_checked)
+        self.file_cut_button.text = f'Cut ({len(self.file_checked)})'
+
+    def end_file_selection(self, widget=None, **kwargs):
+        if self.file_select_bar.parent is not None:
+            self.file_select_bar.parent.remove(self.file_select_bar)
+        self.file_checked.clear()
+        self.file_browser.on_check_entry = None
+        self.file_browser.checked_entries.clear()
+        self.file_browser.highlight_selection()
+
+    def pending_file_cut(self):
+        cut = getattr(self, '_file_cut', None)
+        client = self.cloud_client
+        if cut is not None and cut[0].private and cut[2] != (client, getattr(client, 'generation', None)):
+            self._file_cut = cut = None
+        return cut
+
+    def cut_files(self, widget=None, **kwargs):
+        provider = self.file_provider
+        from commonUtils.runtime.resources.provider import capabilities
+        if self.cloud_busy or not capabilities(provider).delete:
+            return
+        selected = self.file_rows.get(self.file_selection.value)
+        rows = list(self.file_checked.values()) or ([selected] if selected else [])
+        entries = {}
+        for row in rows:
+            path = row['path']
+            if 'revision' not in row:
+                self.file_status.value = 'Refresh this folder before cutting these items.'
+                return
+            entries[path] = row['revision']
+        if entries:
+            client = self.cloud_client
+            self._file_cut = provider, entries, (client, getattr(client, 'generation', None))
+            self.end_file_selection()
+            if self.file_operation_view is self.body:
+                self.loop.create_task(self.show_files())
+            self.file_status.value = f'{len(entries)} item(s) cut. Browse to the destination and choose Paste move here.'
+
+    async def paste_files(self, widget=None, **kwargs):
+        from .file_operations import FileDestination, FileOperationRequest
+
+        cut = self.pending_file_cut()
+        destination = self.file_provider
+        from commonUtils.runtime.resources.provider import capabilities
+        access = capabilities(destination)
+        if cut is None or self.cloud_busy or not (access.rename and access.create and access.delete):
+            return
+        source, entries, (client, generation) = cut
+        folder = self.file_path
+        plaintext = source.private and not destination.private
+        if plaintext and not await self.main_window.dialog(toga.ConfirmDialog(
+                'Move to unencrypted storage?', 'The destination will contain decrypted files. Continue?')):
+            return
+        if (self.pending_file_cut() is not cut or self.file_provider is not destination or self.file_path != folder
+                or self.cloud_busy):
+            return
+        reopened = None
+        if getattr(source, 'closed', False):
+            try:
+                source = reopened = source.reopen()
+            except (OSError, ValueError):
+                self.file_status.value = 'The source is no longer open. Select its items again.'
+                return
+        captured = FileDestination(self.private_root, client, destination, generation)
+        requests = [FileOperationRequest('move', source, path, '/'.join(filter(None, (folder, Path(path).name))),
+                                        captured, plaintext_approved=plaintext, expected_revision=revision)
+                    for path, revision in entries.items()
+                    if not any(parent.as_posix() in entries for parent in Path(path).parents)]
+
+        def completed(request):
+            for path in tuple(entries):
+                if path == request.path or Path(request.path) in Path(path).parents:
+                    del entries[path]
+            if not entries:
+                self._file_cut = None
+
+        cancel = toga.Button('Cancel move', on_press=self.cancel_cloud, style=Pack(height=48))
+        self.file_browser.location_bar.add(cancel)
+        try:
+            result = await self.file_operations().move_selection(requests, completed)
+        finally:
+            self.file_browser.location_bar.remove(cancel)
+            if reopened is not None:
+                reopened.close()
+        if result is not None:
+            failures, notice, cancelled = result
+            await self.browse_files()
+            self.file_status.value = ('Move stopped. Inspect both locations.' if cancelled else
+                                      '\n'.join(failures) if failures else notice or 'Move finished.')
 
     def can_copy_file(self, provider=None):
         from services.documents.storage import document_writable

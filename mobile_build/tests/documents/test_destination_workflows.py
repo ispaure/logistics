@@ -65,6 +65,30 @@ class DestinationWorkflowTests(unittest.TestCase):
         self.assertEqual((self.root / 'First/Nested/résumé.md').read_bytes(), b'# Unsaved')
         self.assertEqual(self.app.private_sessions.active.crypt_reader.name, 'résumé.md')
 
+    def test_cut_selection_paste_moves_only_successful_items_and_leaves_conflicts_cut(self):
+        destination = self.root / 'Destination'
+        destination.mkdir()
+        for name in ('first.txt', 'conflict.txt'):
+            (self.root / name).write_text(name)
+        (destination / 'conflict.txt').write_text('Keep destination')
+        self.run_async(self.app.show_files(location=('Local files', '')))
+        browser = self.app.file_browser
+        self.app.begin_file_selection()
+        for entry in list(browser.tree.entries.values()):
+            if not entry.container:
+                self.run_async(browser.activate_entry(entry))
+        self.assertEqual(len(self.app.file_checked), 2)
+        self.assertIsNone(self.app.provider_sessions().active)
+        self.app.cut_files()
+        self.run_async(self.app.browser_file_location(('Local files', 'Destination')))
+        self.assertIn('Paste move here', dict(self.app.file_item_commands()))
+        self.run_async(self.app.paste_files())
+        self.assertEqual((destination / 'first.txt').read_text(), 'first.txt')
+        self.assertFalse((self.root / 'first.txt').exists())
+        self.assertEqual((self.root / 'conflict.txt').read_text(), 'conflict.txt')
+        self.assertEqual((destination / 'conflict.txt').read_text(), 'Keep destination')
+        self.assertEqual(set(self.app.pending_file_cut()[1]), {'conflict.txt'})
+
     def test_failed_folder_creation_keeps_folder_filename_and_draft(self):
         (self.root / 'Exists').mkdir()
         for name in ('Exists', '../escape', ''):

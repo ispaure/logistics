@@ -18,7 +18,11 @@ Automatic language detection uses installed system voices and falls back to book
 
 ## Keep your place
 
-Reopen the same path to resume at your passage. Use **Navigate → Add bookmark…** and the sidebar **Bookmarks** tab, up to 50 per book. Moving the book starts a new history. Disable `remember_position_bool` in Books & Comics settings to stop saving and restoring positions in new readers.
+Reopen a book to resume at your passage. Use **Navigate → Add bookmark…** and the sidebar **Bookmarks** tab, up to 50 per book. A verified File Browser move between ordinary local folders carries saved positions, bookmarks and Home references with the book or its parent folder. Older path-only checkpoints are preserved separately. Copies start with their own history.
+
+Moves involving LocalCrypt keep saved reading state in its original storage boundary and clear the old Home reference after the source is removed. Open the destination from File Browser to start reading there. Browsed rclone remotes are read-only.
+
+Disable `remember_position_bool` in Books & Comics settings to stop saving and restoring positions in new readers.
 
 ## Edit the book's metadata
 

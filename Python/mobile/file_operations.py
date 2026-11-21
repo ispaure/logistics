@@ -25,6 +25,8 @@ class FileDestination:
 
     def resolve(self):
         if isinstance(self.location, LocalFiles):
+            if self.location.private and getattr(self.client, 'generation', None) != self.generation:
+                raise ValueError('Connection changed. Browse the destination again.')
             if getattr(self.location, 'closed', False) and hasattr(self.location, 'reopen'):
                 return self.location.reopen()
             return self.location
@@ -127,21 +129,15 @@ class FileOperations:
         cancel = self.cancel_event = Event()
         self.task = asyncio.current_task()
         view = None
-        plan = None
         try:
             view = self.host.begin(cancel)
             # Capture inputs on the UI thread; execution never reads widgets.
             self.request = capture()
-            import inspect
-            prepared = self.host.prepare(self.request, mutation)
-            plan = await prepared if inspect.isawaitable(prepared) else prepared
-            command = plan or self.request
-            work = command.execute if plan or isinstance(command, FileOperationRequest) else command
-            await retiring_work(work, cancel, completed=plan.apply if plan else lambda result: None,
-                                failed=lambda error: self.report_failure(view, error))
+            result = await self._execute(self.request, mutation, view, cancel)
             if not self.host.current(view):
                 return False
-            self.host.report(view, 'Finished. Destination verified before removing the source.')
+            self.host.report(view, getattr(result, 'notice', '') or
+                             'Finished. Destination verified before removing the source.')
             return True
         except Exception as error:
             if view is None:
@@ -151,10 +147,58 @@ class FileOperations:
         finally:
             try:
                 if view is not None:
-                    try:
-                        if plan is not None:
-                            plan.release()
-                    finally:
-                        self.host.finish(view, cancel)
+                    self.host.finish(view, cancel)
+            finally:
+                self.cancel_event = self.task = self.request = None
+
+    async def _execute(self, request, mutation, view, cancel, *, completed=lambda: None):
+        import inspect
+
+        prepared = self.host.prepare(request, mutation)
+        plan = await prepared if inspect.isawaitable(prepared) else prepared
+        try:
+            command = plan or request
+            work = command.execute if plan or isinstance(command, FileOperationRequest) else command
+
+            def apply(result):
+                completed()
+                if plan:
+                    plan.apply(result)
+
+            return await retiring_work(work, cancel, completed=apply,
+                                       failed=lambda error: self.report_failure(view, error))
+        finally:
+            if plan:
+                plan.release()
+
+    async def move_selection(self, requests, completed):
+        from commonUtils.runtime.operations import OperationCancelled
+
+        if self.cancel_event is not None or not self.host.allowed(False):
+            return None
+        cancel = self.cancel_event = Event()
+        self.task = asyncio.current_task()
+        view = None
+        failures = []
+        notice = ''
+        try:
+            view = self.host.begin(cancel)
+            for index, request in enumerate(requests, 1):
+                if cancel.is_set() or not self.host.current(view):
+                    break
+                self.request = request
+                self.host.report(view, f'Moving item {index} of {len(requests)}…')
+                try:
+                    result = await self._execute(request, True, view, cancel, completed=lambda: completed(request))
+                    notice = result.notice or notice
+                except OperationCancelled:
+                    break
+                except (OSError, ValueError) as error:
+                    failures.append(f'{request.path.rpartition("/")[2]}: {error}')
+            return failures, notice, cancel.is_set() or not self.host.current(view)
+        finally:
+            try:
+                if view is not None:
+                    self.host.finish(view, cancel)
             finally:
                 self.cancel_event = self.task = self.request = None

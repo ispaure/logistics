@@ -42,6 +42,13 @@ Choose **••• → Move…**, pick a writable folder, and tap **Move here**.
 Moving a file out of an encrypted copy into ordinary storage requires
 confirmation because the destination will be readable as an ordinary file.
 
+In File Browser, use an item's actions to move a single file or folder.
+To move several items together, choose **Select items**, tap each item,
+then tap **Cut**. Browse to the destination and choose **Paste move here**.
+Items that conflict stay at the source and remain cut. **Cancel move**
+stops remaining work. Inspect both folders if a move stops after publishing
+a verified destination.
+
 Moving or renaming an open text file keeps its draft, and the next **Save**
 writes to the new path. Moving a folder updates the open text files inside
 it. Close affected readers or documents in other windows before moving

@@ -99,6 +99,10 @@
       "desktop.location_context"
     ],
     [
+      "Python/features/rclone/localcrypt/ui/views.py",
+      "desktop.browser_moves"
+    ],
+    [
       "Python/features/rclone/ui/remote_browser.py",
       "desktop.file_browser"
     ],

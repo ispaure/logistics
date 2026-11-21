@@ -5,6 +5,25 @@
 examples live in the [feature guide](../../../Python/commonUtils/docs/development/reference/ui/features/features.md).
 Embedded and standalone Workspace hosts keep bindings with each view on detach.
 
+## Moving files and folders
+
+The desktop host owns file-drop targets and spring-loaded folder and tab
+navigation. Ordinary and LocalCrypt browsers use the same move controller,
+including in detached workspaces. It retains provider leases through completion.
+Mobile File Browser captures selected revisions, then runs each cut item through
+the existing move and document-mutation worker.
+
+The shared provider mutation verifies staged cross-provider copies before source
+cleanup. A completed ordinary local move reconciles Home references and durable
+reader checkpoints. A protected route retires old opening references after
+confirmed removal and keeps reading state within its original storage. After
+partial source cleanup, only confirmed removals retire old Home references.
+
+The desktop File Browser host tests cover hover, Escape, window arrangements
+and keyboard actions. The mobile destination and document-mutation tests cover
+conflicts, interrupted cleanup, and Home references. The managed
+`workspace-move` probe exercises the native mobile file menus and LocalCrypt.
+
 ## SQLite inspection boundary
 
 Inspect SQLite is an explicit action. Only approved ordinary local files can

@@ -20,6 +20,47 @@ from tests.resources.localcrypt_cases import LocalCryptCase
 
 
 class LocalCryptBrowserTests(LocalCryptCase):
+    def test_browser_move_verifies_localcrypt_and_preserves_source_on_locked_destination(self):
+        from commonUtils.runtime.resources.local import LocalFiles
+        from desktop.browser_moves import MoveSource, move_selection
+        from features.rclone import session
+
+        with self.temporary_directory() as directory, crypt_fixture(directory, self.binary, pull=False) as f:
+            source = f.root / 'ordinary.txt'
+            source.write_bytes(b'Generated LocalCrypt move fixture')
+            state = f.root / 'state'
+            state.mkdir()
+            with patch('desktop.document_catalog.cache_directory', return_value=state):
+                result = move_selection((MoveSource.local(source),), f.provider, '', state,
+                                        cancelled=lambda: False, report=lambda *args: None)
+                self.assertEqual(len(result.completed), 1, result.issues)
+                self.assertFalse(source.exists())
+                self.assertIn('original storage', '\n'.join(result.issues))
+                with f.provider.open(source.name) as stream:
+                    self.assertEqual(stream.read(), b'Generated LocalCrypt move fixture')
+                self.assertNotIn(b'Generated LocalCrypt move fixture',
+                                 f.provider.encrypted_path(source.name).read_bytes())
+
+                target = f.root / 'Exported fixture'
+                target.mkdir()
+                item = MoveSource(f.provider, source.name, f.provider.entry(source.name)['revision'])
+                result = move_selection((item,), LocalFiles(target), '', state,
+                                        cancelled=lambda: False, report=lambda *args: None)
+                self.assertEqual(len(result.completed), 1, result.issues)
+                self.assertEqual((target / source.name).read_bytes(), b'Generated LocalCrypt move fixture')
+                self.assertFalse(f.provider.encrypted_path(source.name).exists())
+
+                source.write_bytes(b'Keep this on a rejected or cancelled move')
+                for cancelled in (True, False):
+                    if not cancelled:
+                        session.forget(f.context)
+                    result = move_selection((MoveSource.local(source),), f.provider, '', state,
+                                            cancelled=lambda: cancelled, report=lambda *args: None)
+                    self.assertEqual(result.completed, ())
+                    self.assertEqual(result.cancelled, cancelled)
+                    self.assertEqual(source.read_bytes(), b'Keep this on a rejected or cancelled move')
+                self.assertIn('locked', '\n'.join(result.issues).lower())
+
     def test_regular_browser_routes_navigation_and_reuses_private_tab(self):
         from desktop.file_browser import FileBrowserPage, _browser_view, _new_browser_tab, _crypt_location
         from features.rclone.localcrypt.ui.views import CryptBrowserView

@@ -14,6 +14,10 @@ Wide landscape panes and a reported vertical fold show spreads. The fold stays c
 
 Imported, remote and LocalCrypt books offer rich pages, internal links and chapter search. Book scripts and external resources are blocked. Provider positions use encrypted checkpoints when a credential ZIP password is available. Passwordless private state stays in memory. Locking retires decrypted state. See [private reading state](../../../development/architecture/reader-state.md).
 
+After a verified move between ordinary local folders in File Browser, use Home to reopen the book at its saved passage or the comic at its saved page. Bookmarks follow a moved file or its parent folder. Copies start with their own history. Close an active reader before moving its files.
+
+For a move involving LocalCrypt, positions and bookmarks stay in their original storage boundary. After source removal, Home clears the old reference. Open the destination directly to start reading there. Browsed rclone remotes are read-only.
+
 **Edit metadata…** updates the ordinary imported copy. A failed save keeps form edits, while reopening can recover an interrupted archive/checksum publication.
 
 For an EPUB in an unlocked LocalCrypt folder, use **Edit metadata… → Save encrypted metadata**. See [encrypted archive saves](../../rclone/user_mobile/localcrypt.md#edit-encrypted-archive-metadata).

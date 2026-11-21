@@ -15,6 +15,8 @@ def file_list_icon(folder):
 
 
 class RecycledFileList(RecycledList):
+    _checking_rows = False
+
     def __init__(self, *, row_kind='File', icon_kind='documents', icon_size=28, title_lines=1,
                  row_height=None, body_text=BODY_TEXT, caption_text=CAPTION_TEXT, selection_role='hover', **kwargs):
         self.icon_kind = icon_kind
@@ -40,6 +42,43 @@ class RecycledFileList(RecycledList):
         if not hasattr(app, '_recycled_file_lists'):
             app._recycled_file_lists = weakref.WeakSet()
         app._recycled_file_lists.add(self)
+
+    def show_checked_rows(self, active, indices):
+        if self.factory.DetailedList.__module__.startswith('toga_android.'):
+            self._checking_rows = active
+            from android.widget import AbsListView
+            native = self._impl.native
+            mode = AbsListView.CHOICE_MODE_MULTIPLE if active else AbsListView.CHOICE_MODE_SINGLE
+            if native.getChoiceMode() != mode:
+                native.clearChoices()
+                native.setChoiceMode(mode)
+            if active:
+                native.clearChoices()
+                for index in indices:
+                    native.setItemChecked(index, True)
+                native.invalidateViews()
+
+    @property
+    def selection(self):
+        if self._checking_rows:
+            # The native click selects exactly the activated row before
+            # calling Toga. Android's single-selection getter is disabled in
+            # multiple choice mode, so retrieve the clicked position directly.
+            checked = self._impl.native.getCheckedItemPositions()
+            if checked is not None and checked.size() == 1 and checked.valueAt(0):
+                return self.data[checked.keyAt(0)]
+            return None
+        return super().selection
+
+    def update_checked_title(self, row, title):
+        row.title = title
+        if self.factory.DetailedList.__module__.startswith('toga_iOS.'):
+            from toga_iOS.libs import NSIndexPath
+            path = NSIndexPath.indexPathForRow(row.index, inSection=0)
+            cell = self._impl.native.cellForRowAtIndexPath(path)
+            if cell is not None:
+                cell.textLabel.text = title
+                cell.accessibilityLabel = title + ('. Folder' if row.folder else '. ' + self.row_kind)
 
 
 def summary_list(*, kind, icon_kind, on_select, **kwargs):

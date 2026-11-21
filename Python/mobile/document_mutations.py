@@ -83,6 +83,15 @@ class DocumentMutationHandoff:
     notebooks: tuple
     reference_error: OSError | ValueError | None
     progress_error: OSError | ValueError | None
+    history_kept_at_source: bool = False
+
+    @property
+    def notice(self):
+        if self.progress_error is not None:
+            return 'Files moved. Some reading progress could not be carried forward.'
+        if self.history_kept_at_source:
+            return 'Move finished. Reading positions and bookmarks stay in their original storage.'
+        return ''
 
 
 class DocumentMutation:
@@ -143,27 +152,55 @@ class DocumentMutation:
             raise ValueError('Use Move to confirm moving private content to unencrypted storage.')
         copies, destination_key = document_source(destination, target) if self.bindings else (None, target)
         with mutation_lock:
+            if (request.expected_revision is not None
+                    and request.provider.entry(request.path)['revision'] != request.expected_revision):
+                raise ValueError('The selected item changed. Select it again before moving.')
             self._verify_text_bindings(target, cancelled)
             self.notebooks.prepare(destination, target, cancelled)
             reference_error = progress_error = None
             relocate_progress = None
+            from services.documents.progress_identity import ordinary_local_provider
+            from .favourites import relocate, relocate_reference, resource_reference
+
+            ordinary_move = (ordinary_local_provider(request.provider) is not None
+                             and ordinary_local_provider(destination) is not None)
+            origin = None
+            if request.kind == 'move':
+                try:
+                    origin = resource_reference(self.app, request.provider, request.path, require_cipher=False)
+                except (OSError, ValueError) as error:
+                    reference_error = error
             try:
                 relocate_progress = prepare_local_progress_move(
                     self.app, request.provider, request.path, destination, target, cancelled=cancelled,
                 )
             except (OSError, ValueError) as error:
                 progress_error = error
-            result = request.execute(cancelled, destination=destination, progress=self.progress)
+            try:
+                result = request.execute(cancelled, destination=destination, progress=self.progress)
+            except MutationIncomplete as error:
+                # A verified destination can coexist with a partially removed
+                # source. Retire references to confirmed deletions only.
+                for removed in error.result.removed_paths:
+                    try:
+                        relocate(self.app, request.provider, removed)
+                    except (OSError, ValueError):
+                        pass
+                raise
             if (relocate_progress is not None and result.destination_published
                     and result.source_state == 'removed'):
                 try:
                     relocate_progress()
                 except (OSError, ValueError) as error:
                     progress_error = error
-            if request.kind == 'rename':
+            if result.source_state == 'removed':
                 try:
-                    from .favourites import relocate
-                    relocate(self.app, request.provider, request.path, target)
+                    if request.kind == 'rename':
+                        relocate(self.app, request.provider, request.path, target)
+                    elif origin is not None:
+                        reference = (resource_reference(self.app, destination, target, require_cipher=False)[0]
+                                     if ordinary_move else None)
+                        relocate_reference(self.app, origin, reference)
                 except (OSError, ValueError, PermissionError) as error:
                     reference_error = error
             text_documents = []
@@ -195,6 +232,7 @@ class DocumentMutation:
                     MutationResult(destination_published=True, source_state='removed')) from error
         return DocumentMutationHandoff(
             tuple(text_documents), tuple(notebooks), reference_error, progress_error,
+            request.kind == 'move' and not ordinary_move,
         )
 
     def _verify_text_bindings(self, target, cancelled):
@@ -213,8 +251,8 @@ class DocumentMutation:
             self._adopt_text_document(document)
         self.notebooks.apply(handoff.notebooks)
         self.app.save_workspace()
-        if handoff.progress_error is not None:
-            self.app.recovery_notice.text = 'Files moved. Some reading progress could not be carried forward.'
+        if handoff.notice:
+            self.app.recovery_notice.text = handoff.notice
         if handoff.reference_error is not None:
             raise ValueError('Files changed; some saved references could not be updated.') from handoff.reference_error
 
