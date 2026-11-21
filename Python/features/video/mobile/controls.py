@@ -130,7 +130,7 @@ class PlaybackControls:
                     self.busy = True
                     self.task = asyncio.current_task()
                     try:
-                        await open_video(owner.app, owner.content.provider, path)
+                        await open_video(owner.app, owner.content.provider, path, continuation=name == "ended")
                     finally:
                         self.busy = False
                         self.task = None

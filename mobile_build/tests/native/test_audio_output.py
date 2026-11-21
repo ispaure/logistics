@@ -191,13 +191,109 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.owner.permitted())
         self.assertEqual(self.owner.approved(), {})
 
+    async def test_play_cannot_follow_an_approved_route_switch_during_activation(self):
+        self.owner.save({HEADSET.identity: HEADSET.label, CAR.identity: CAR.label})
+        self.route = (HEADSET,)
+        self.owner.refresh()
+        def activate():
+            self.route = (CAR,)
+            return True
+        self.native.prepare = activate
+        self.assertFalse(self.owner.request_play())
+        self.assertFalse(self.owner.permitted())
+        self.assertTrue(self.owner.request_play())
+
+    async def test_return_before_monitor_delivery_requires_a_new_play(self):
+        self.owner.save({HEADSET.identity: HEADSET.label})
+        self.route = (HEADSET,)
+        self.assertTrue(self.owner.request_play())
+        self.pause_video.reset_mock()
+        self.route = (CAR,)
+        self.assertFalse(self.owner.permitted())
+        self.route = (HEADSET,)
+        self.assertFalse(self.owner.permitted())
+        self.pause_video.assert_not_called()
+        await asyncio.sleep(0)
+        self.pause_video.assert_called_once()
+        self.assertTrue(self.owner.request_play())
+
+    async def test_delayed_video_open_does_not_play_on_a_new_approved_headset(self):
+        from features.video.mobile.player import open_video, MobileVideo
+        self.owner.save({CAR.identity: CAR.label, HEADSET.identity: HEADSET.label})
+        self.route = (HEADSET,)
+        self.app.require_feature = self.app.checkpoint = lambda *args: True
+        attempts = []
+        player = NS(allowed=lambda: True, audio_output=self.owner, prepare=lambda: (0, []),
+                    present=Mock(), transport=NS(resume=Mock()), closed=False)
+        async def wait_ready():
+            self.route = (CAR,)
+            self.assertTrue(self.owner.request_play())  # New, separate user gesture.
+            return True
+        player.native = NS(wait_ready=wait_ready, play=lambda: attempts.append(MobileVideo.request_play(player)))
+        with patch('features.video.mobile.player.VideoContent', return_value=NS(remote=False)), patch(
+                'features.video.mobile.player.MobileVideo', return_value=player), patch(
+                'services.documents.mobile_storage.remember_video'):
+            self.assertTrue(await open_video(self.app, NS(), 'Orchid-Frame-491.mp4'))
+        self.assertEqual(attempts, [False])
+        self.assertTrue(self.owner.permitted())  # Old open left the newer grant alone.
+        self.assertTrue(MobileVideo.request_play(player))
+
+    async def test_paused_publication_and_late_timer_follow_protected_consent(self):
+        from features.books.mobile.media_controls import SpeechPlayback
+        from features.books.mobile.speech import SpeechSession
+        from mobile_build.tests.editing.test_speech_media import Media
+        engine = NS(ready=True, speak=Mock(), stop=Mock())
+        panel = NS(document_title=lambda: 'Cobalt-Finch-731.epub')
+        playback = SpeechPlayback(panel, self.app, audio_output=self.owner, factory=Media)
+        self.addCleanup(playback.dispose)
+        session = panel.session = SpeechSession(engine, on_range=Mock(), on_state=lambda state, _: playback.changed(state))
+        session.can_speak = playback.can_start
+        self.protected = False
+        self.route = (CAR,)
+        self.assertTrue(playback.request_start())
+        session.play('Copper satellites whisper violet marmalade.')
+        session.pause()
+        ordinary = playback.media
+        self.assertEqual(ordinary.title, 'Cobalt-Finch-731.epub')
+        self.protected = True
+        self.owner.scope.changed()
+        self.assertTrue(ordinary.closed)
+        self.assertIsNone(playback.media)
+        self.assertFalse(playback.command('play'))
+        self.assertEqual(engine.speak.call_count, 1)
+
+        self.owner.save({HEADSET.identity: HEADSET.label})
+        self.route = (HEADSET,)
+        self.owner.refresh()
+        self.assertTrue(playback.request_start())
+        session.resume()
+        session.pause()
+        private = playback.media
+        self.assertEqual(private.title, 'Read aloud')
+        with patch.object(self.app, 'screen_privacy', None):
+            self.assertEqual(playback.content(), 'Read aloud')
+        # A timer fires after selection changes but before monitor delivery.
+        self.route = (CAR,)
+        playback.timer_changed('Time remaining: 14:59')
+        self.assertTrue(private.closed)
+        self.assertIsNone(playback.media)
+        self.owner.refresh()
+        await self.prompt_done()
+        self.assertEqual(session.state, 'paused')
+        self.assertFalse(playback.command('play'))
+        self.protected = False
+        self.owner.scope.changed()
+        self.assertTrue(playback.request_start())
+        session.resume()
+        self.assertEqual(playback.media.title, 'Cobalt-Finch-731.epub')
+
     async def test_reconnect_blocks_decoder_before_notification_and_allows_retry(self):
         from features.books.mobile.media_controls import SpeechPlayback
         from features.books.mobile.speech import SpeechSession
         from features.video.mobile.player import MobileVideo
         engine = NS(ready=True, speak=Mock(), stop=Mock())
         session = SpeechSession(engine, on_range=Mock(), on_state=Mock())
-        video = NS(allowed=lambda *args: True, audio_output=self.owner,
+        video = NS(allowed=lambda *args: True, audio_output=self.owner, opening_play_context=None,
                    transport=NS(resume=Mock()), failure_message=None)
         speech = SpeechPlayback(NS(session=session), self.app, audio_output=self.owner)
         self.addCleanup(speech.dispose)
@@ -416,6 +512,19 @@ class ConsentTests(unittest.IsolatedAsyncioTestCase):
         self.protected = False
         self.owner.scope.changed()
         self.assertFalse(self.owner.permitted())
+        self.assertTrue(self.owner.request_play())
+
+    async def test_worker_protection_change_finishes_pausing_before_another_play(self):
+        from threading import Thread
+        self.protected = False
+        self.assertTrue(self.owner.request_play())
+        self.protected = True
+        worker = Thread(target=self.owner.scope.changed)
+        worker.start()
+        worker.join(2)
+        self.assertFalse(worker.is_alive())
+        self.assertFalse(self.owner.request_play())
+        await asyncio.sleep(0)
         self.assertTrue(self.owner.request_play())
 
     async def test_ordinary_permission_query_skips_native_routes_and_pause_effects(self):

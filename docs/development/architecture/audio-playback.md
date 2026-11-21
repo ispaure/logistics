@@ -14,6 +14,20 @@ playback, speech before each utterance. iOS uses scene capture reports and
 shields above modals. Android uses secure-window protection and queries anticipated
 media outputs where available. Ambiguous external routes fail protected consent.
 
+Protected Play binds to the selected output before audio activation. A video
+opening also carries that selection across provider reads and presentation.
+If a fresh query observes a different output, returning to the original
+headset requires another Play, even when both headsets have approval.
+
+Read-aloud owns the app's speech media session. Losing protected output
+consent withdraws iOS Now Playing and the Android media session and notification,
+including for an already-paused passage. Timer updates recheck consent. On an
+admitted protected output, published speech controls use **Read aloud**, the app
+label or sleep timer, and transport state. The adapters omit passage text,
+source author, artwork and queue entries. The mobile VLC video surfaces keep
+their titles and folder queues in the player. Ordinary iOS AirPlay uses a
+separate AVKit player item with a title.
+
 OS rerouting may precede notification and receivers can retain buffered audio.
 iOS general still screenshots and external cameras remain outside app shielding.
 Desktop capture protection is best effort. Mobile owns Bluetooth consent.

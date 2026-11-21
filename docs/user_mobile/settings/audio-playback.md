@@ -12,5 +12,10 @@ cannot identify the output, choose another in system controls and retry.
 Ordinary playback needs no approval. Interruptions or loss of the output pause
 it, and reconnecting leaves it paused.
 
+When a protected route loses consent, Logistics removes read-aloud from
+system media controls, even if you already paused it. After selecting an
+approved output, press **Play** in Logistics to continue the passage. Protected
+speech controls display **Read aloud** and any active sleep timer.
+
 During detected capture, iOS hides content and pauses audio when session-only
 protection is active. See [privacy and validation limits](../../development/architecture/audio-playback.md).

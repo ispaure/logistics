@@ -45,6 +45,7 @@ class MobileVideo:
         self.switching_player = False
         self._release_retirement = None
         self.audio_output = app.audio_output
+        self.opening_play_context = None
         self.protection = app.protection
         # Until construction succeeds, unwind every acquired handle locally.
         # open_video still owns and closes content on construction failure.
@@ -95,7 +96,7 @@ class MobileVideo:
         return self.allowed(external) and self.audio_output.permitted()
 
     def request_play(self):
-        if not self.allowed() or not self.audio_output.request_play():
+        if not self.allowed() or not self.audio_output.request_play(context=self.opening_play_context):
             return False
         self.transport.resume()
         self.failure_message = None
@@ -444,11 +445,12 @@ class MobileVideo:
         await asyncio.shield(self.retire())
 
 
-async def open_video(app, provider, path, *, fullscreen=False):
+async def open_video(app, provider, path, *, fullscreen=False, continuation=False):
     if not app.require_feature('video') or not app.checkpoint():
         return False
     previous = getattr(app, 'video_player', None)
     navigation = getattr(app, 'navigation_generation', None)
+    play_context = app.audio_output.play_context()
     acquisition = asyncio.create_task(asyncio.to_thread(VideoContent, provider, path))
     try:
         content = await asyncio.shield(acquisition)
@@ -493,7 +495,14 @@ async def open_video(app, provider, path, *, fullscreen=False):
                 or getattr(app, 'navigation_generation', None) != navigation):
             await player.close()
             return False
-        player.native.play()
+        # Native startByUser calls request_play synchronously. Bind the initial
+        # request to the selection before provider I/O and modal presentation.
+        if not continuation or app.audio_output.permitted():
+            player.opening_play_context = play_context
+            try:
+                player.native.play()
+            finally:
+                player.opening_play_context = None
         if content.remote:
             player.discovery = asyncio.create_task(player.discover_sidecars())
         progress = getattr(player, 'progress', None)

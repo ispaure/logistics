@@ -59,9 +59,9 @@ protection and denies new commands.
 Video captures its source policy with its retained grant. Removing credentials
 cannot relax a player's own restriction. Audio Play uses the current selected
 route and invalidates pending approval across lifecycle, route or settings
-changes. Passive policy checks leave transport effects to the native monitors
-and explicit commands. A late metadata notification must preserve a newer,
-currently authorized Play.
+changes. If a submission check sees a route change before the monitor does,
+it revokes consent immediately and queues the player pause on the UI loop.
+A late callback must preserve a newer, currently authorized Play.
 
 For speech, retain the accepted document and reading position if output consent
 is lost. Recheck before submitting each utterance. Apply capture/call/output

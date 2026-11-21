@@ -1,6 +1,7 @@
 """App audio consent owner; native adapters report routes, players supply pause."""
 import json
 import logging
+from threading import get_ident
 from weakref import WeakSet
 from services.audio_output import OutputPolicy, approvals
 
@@ -21,6 +22,8 @@ class AudioOutput:
         self.players = {}
         self.closed = False
         self.pausing = False
+        self.ui_thread = get_ident()
+        self.protection_pause_pending = False
         self.prompt = None
         self.prompted_revision = None
         self.native = native
@@ -66,15 +69,16 @@ class AudioOutput:
             return
         self.policy.revision += 1
         self.policy.pause()  # Close permission before scheduling native/UI work.
-        import asyncio
-        try:
-            on_ui_loop = asyncio.get_running_loop() is self.app.loop
-        except RuntimeError:
-            on_ui_loop = False
-        if on_ui_loop:
-            self.pause()
+        self.protection_pause_pending = True
+        if get_ident() == self.ui_thread:
+            self._apply_protection_pause()
         elif not self.app.loop.is_closed():
-            self.app.loop.call_soon_threadsafe(self.pause)
+            self.app.loop.call_soon_threadsafe(self._apply_protection_pause)
+
+    def _apply_protection_pause(self):
+        if self.protection_pause_pending:
+            self.protection_pause_pending = False
+            self.pause()
 
     def refresh(self, *, lost=False, display_lost=False):
         if self.closed:
@@ -83,6 +87,8 @@ class AudioOutput:
         protected = self.protected()
         outputs = self.outputs()
         changed = self.policy.observe(outputs, require_consent=protected)
+        if lost and not changed:
+            self.policy.revision += 1
         if lost or (protected and changed):
             continuing = ()
             if display_lost and outputs and not protected and self.policy.manual_play:
@@ -128,7 +134,7 @@ class AudioOutput:
         if self.closed:
             return
         self.interrupted = bool(active)
-        self.pause()  # Ending an interruption does not grant playback permission.
+        self.invalidate()  # Ending an interruption does not grant playback permission.
 
     def capture_changed(self, blocked):
         if self.closed:
@@ -138,13 +144,14 @@ class AudioOutput:
         if changed:
             for owner in tuple(_owners):
                 if owner.scope is self.scope:
-                    owner.pause()
+                    owner.invalidate()
 
     def available(self):
         captured = any(owner.captured for owner in tuple(_owners)
                        if owner.scope is self.scope)
         try:
-            return (not self.closed and not self.pausing and not self.interrupted and not captured
+            return (not self.closed and not self.pausing and not self.protection_pause_pending
+                    and not self.interrupted and not captured
                     and getattr(self.app, 'active_host', True) and not self.native.in_call())
         except Exception:
             return False
@@ -154,9 +161,19 @@ class AudioOutput:
             return False
         if not self.protected():
             return True
-        # Check audio submission and native restarts even if route delivery is
-        # queued. Only refresh() may update consent state or pause other players.
-        return self.policy.permitted(self.approved()) and self.policy.matches(self.outputs())
+        # A query at audio submission can beat the monitor. Remember the loss
+        # even if the original route returns before a callback is delivered.
+        if self.policy.matches(self.outputs()):
+            return self.policy.permitted(self.approved())
+        self.policy.pause()
+        self.policy.revision += 1
+        self.app.loop.call_soon_threadsafe(self._deliver_route_loss, self.policy.revision)
+        return False
+
+    def _deliver_route_loss(self, revision):
+        # A native callback or a fresh Play may already have handled this change.
+        if not self.closed and revision == self.policy.revision and not self.policy.manual_play:
+            self.refresh(lost=True)
 
     def prepare(self):
         try:
@@ -169,9 +186,23 @@ class AudioOutput:
         self.pause()
         return False
 
-    def request_play(self):
+    def play_context(self):
+        # Incorporate changes already observable at selection time, including
+        # an undelivered callback in another scene.
+        if not self.protected():
+            return None, None
+        self.refresh()
+        return self.policy.revision, self.policy.identities(self.policy.route)
+
+    def request_play(self, *, context=None):
         if not self.available():
             return False
+        # Bind a protected Play to the output selected at the gesture. Audio
+        # activation may switch even between two individually approved headsets.
+        current = self.play_context()
+        if context is not None and context != current:
+            return False
+        revision, selected = current
         if not self.prepare():
             self.offer(explicit=True)
             return False
@@ -179,8 +210,17 @@ class AudioOutput:
         if not self.available():
             return False
         if not self.protected():
+            if selected is not None:
+                return False
             self.policy.manual_play = True
             return True
+        live = self.outputs()
+        if not self.policy.matches(live):
+            self.refresh()
+            return False
+        if revision != self.policy.revision or selected != self.policy.identities(live):
+            # An old opening must not cancel a newer, intentional Play either.
+            return False
         if self.policy.request_play(self.approved()):
             return True
         self.offer(explicit=True)

@@ -182,7 +182,13 @@ public final class SpeechMediaService extends Service {
         return START_NOT_STICKY;
     }
     private void cleanup() {
-        if (session != null) { session.setActive(false); session.release(); session = null; }
+        if (session != null) {
+            session.setMetadata(null);
+            session.setPlaybackState(null);
+            session.setActive(false);
+            session.release();
+            session = null;
+        }
         if (wake != null && wake.isHeld()) wake.release();
         if (focused && Build.VERSION.SDK_INT >= 26) audio.abandonAudioFocusRequest(focus);
         focused = false;

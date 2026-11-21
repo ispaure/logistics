@@ -20,8 +20,14 @@ class SpeechPlayback:
             audio_output.register(self, self.pause_audio)
 
     def pause_audio(self):
-        if self.panel.session.state in {'speaking', 'paused'}:
-            getattr(self.panel, 'pause_playback', self.panel.session.pause)()
+        try:
+            if self.panel.session.state in {'speaking', 'paused'}:
+                getattr(self.panel, 'pause_playback', self.panel.session.pause)()
+        finally:
+            # An already-paused utterance emits no state change. Retire its
+            # system session too when protection or the selected output changed.
+            if self.media is not None and not self.can_publish():
+                self.clear()
 
     def request_start(self):
         return self.credential_start() and (self.audio_output is None or self.audio_output.request_play())
@@ -39,6 +45,10 @@ class SpeechPlayback:
 
     def active(self):
         return self.allowed() and self.panel.session.state in {'speaking', 'paused'}
+
+    def can_publish(self):
+        output = self.audio_output
+        return self.allowed() and (output is None or not output.protected() or output.permitted())
 
     def credential_start(self):
         playback_allowed = getattr(self.panel, 'playback_allowed', None)
@@ -65,10 +75,14 @@ class SpeechPlayback:
                 previous = _active.panel
                 getattr(previous, 'stop_playback', previous.session.stop)()
             _active = self
-            if self.allowed():
+            if self.can_publish():
                 try:
                     if self.media is None:
                         self.media = self.factory(self.app.loop, self.command)
+                        # Creating native controls can activate a different audio route.
+                        if not self.can_publish():
+                            self.clear()
+                            return
                     self.media.update_content(self.content())
                     self.media.update(state, timer_text=self.timer_text)
                 except Exception as error:
@@ -85,8 +99,10 @@ class SpeechPlayback:
         # Hosts opt ordinary readers in with a title provider. Private hosts leave
         # it empty; credential-session readers remain generic even with opt-in audio.
         privacy = getattr(self.app, 'screen_privacy', None)
+        protected = (self.audio_output.protected() if self.audio_output is not None
+                     else privacy is not None and getattr(privacy, 'sensitive', lambda: False)())
         private = (getattr(self.panel, 'private_metadata', False) or self.gate() is not None
-                   or bool(privacy is not None and getattr(privacy, 'sensitive', lambda: False)()))
+                   or protected)
         title = getattr(self.panel, 'document_title', lambda: '')() if not private else ''
         if not title:
             return 'Read aloud'
@@ -95,7 +111,11 @@ class SpeechPlayback:
 
     def timer_changed(self, text):
         """Refresh existing system controls without activating audio or an owner."""
-        if self.closed or text == self.timer_text:
+        if self.closed:
+            return
+        if self.media is not None and not self.can_publish():
+            self.clear()
+        if text == self.timer_text:
             return
         self.timer_text = text
         if self.media is not None and self.active():
@@ -106,7 +126,7 @@ class SpeechPlayback:
                 self.clear()
 
     def command(self, action):
-        if not self.active():
+        if not self.can_publish() or self.panel.session.state not in {'speaking', 'paused'}:
             self.enforce()
             return False
         session = self.panel.session
@@ -145,17 +165,14 @@ class SpeechPlayback:
         enforce = getattr(self.panel, 'enforce_playlist_access', None)
         if enforce is not None:
             enforce()
-            if not self.allowed():
-                self.clear()
-            elif self.media is not None:
-                self.media.update_content(self.content())
-            return
-        if not self.credential_start():
+        elif not self.credential_start():
             self.pause_audio()
         if self.media is not None:
-            self.media.update_content(self.content())
-        if not self.allowed():
-            self.clear()
+            if self.can_publish():
+                self.media.update_content(self.content())
+            else:
+                self.clear()
+        if enforce is None and not self.allowed():
             gate = self.gate()
             inactive = getattr(getattr(self.app, 'screen_privacy', None), 'inactive', False)
             if not getattr(self.app, 'active_host', True) or not self.valid() or (gate is not None and (gate.locked or inactive)):

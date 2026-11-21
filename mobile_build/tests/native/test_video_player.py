@@ -996,7 +996,7 @@ class VideoPresentationReadinessTests(unittest.IsolatedAsyncioTestCase):
 
         ready, closing, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
         content = Mock(remote=False)
-        app = SimpleNamespace(require_feature=lambda name: True, checkpoint=lambda: True,
+        app = SimpleNamespace(audio_output=Mock(), require_feature=lambda name: True, checkpoint=lambda: True,
             active_host=True, video_player=None)
 
         async def wait_ready():
@@ -1047,7 +1047,7 @@ class VideoPresentationReadinessTests(unittest.IsolatedAsyncioTestCase):
             with self.subTest(fails=fails):
                 loop = asyncio.get_running_loop()
                 entered, release = asyncio.Event(), Event()
-                app = SimpleNamespace(require_feature=lambda name: True, checkpoint=lambda: True)
+                app = SimpleNamespace(audio_output=Mock(), require_feature=lambda name: True, checkpoint=lambda: True)
                 content = Mock()
 
                 def acquire(*args):
@@ -1084,7 +1084,7 @@ class VideoPresentationReadinessTests(unittest.IsolatedAsyncioTestCase):
         loop = asyncio.get_running_loop()
         preparing, closing, finish_close = asyncio.Event(), asyncio.Event(), asyncio.Event()
         finish_prepare, prepared = Event(), Event()
-        app = SimpleNamespace(require_feature=lambda name: True, checkpoint=lambda: True,
+        app = SimpleNamespace(audio_output=Mock(), require_feature=lambda name: True, checkpoint=lambda: True,
             active_host=True, video_player=None)
         content = Mock()
 
@@ -1139,7 +1139,7 @@ class VideoPresentationReadinessTests(unittest.IsolatedAsyncioTestCase):
     async def test_open_waits_for_native_presentation_and_rechecks_navigation(self):
         from unittest.mock import AsyncMock
         from features.video.mobile.player import open_video
-        app = SimpleNamespace(require_feature=lambda name: True, checkpoint=lambda: True,
+        app = SimpleNamespace(audio_output=Mock(), require_feature=lambda name: True, checkpoint=lambda: True,
             active_host=True, navigation_generation=1, video_player=None)
         ready = AsyncMock(return_value=True)
         player = SimpleNamespace(prepare=lambda: (0, []), allowed=lambda: True, closed=False,
