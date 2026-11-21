@@ -1580,7 +1580,8 @@ public final class VideoPlayer {
     private void pip() {
         if (!allowed(true)) return;
         if (Build.VERSION.SDK_INT >= 26 && activity.getPackageManager().hasSystemFeature("android.software.picture_in_picture")) {
-            activity.enterPictureInPictureMode(pipParams());
+            inlineSubtitles.reset();
+            if (!activity.enterPictureInPictureMode(pipParams())) inlineSubtitles.refresh();
         } else status("Picture in picture is unavailable on this device.");
     }
 
