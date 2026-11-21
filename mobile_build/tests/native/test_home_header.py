@@ -92,6 +92,36 @@ class HomeHeaderTests(TestCase):
             regions.return_value = ((443, 0, 226, 82),)
         self.assertEqual([button.on_press for button in buttons], callbacks)
 
+    def test_workspaces_returns_the_same_transfer_host_to_the_body(self):
+        from mobile.destination_actions import project_workspace_header
+        tabs = toga.Box(children=[toga.Button(label) for label in ('Local', 'Cloud', 'Home Server')])
+        transfer = toga.Button('Transfer', style=Pack(width=48, height=48, margin_left=8))
+        row = toga.Box(children=[tabs, transfer], style=Pack(direction='row', margin_bottom=4))
+        unlock = toga.Button('Unlock', style=Pack(width=48, height=48))
+        header = toga.Box()
+        body = toga.Box(children=[row])
+        view = toga.Box(children=[header, body], style=Pack(margin=(8, 16, 12, 16)))
+        view._destination_actions = header, [unlock]
+        view._workspaces_source_row = row
+        frame = NS(origin=NS(x=0, y=0), size=NS(width=669, height=951))
+        controller = NS(view=NS(bounds=frame))
+        window = NS(_impl=NS(native=NS(safeAreaInsets=NS(top=82))))
+        app = NS(main_window=window, widgets=Mock())
+        window.app = app
+        self.enterContext(patch('mobile.ios_toolbar.vertical_edge', return_value=0))
+        self.enterContext(patch('mobile.ios_toolbar.system_occlusions', return_value=((535, 0, 134, 82),)))
+
+        self.assertTrue(project_workspace_header(app, view, controller, row, [unlock], frame.origin, divided=False))
+        self.assertIs(row.parent, header)
+        self.assertEqual(list(row.children), [tabs, unlock, transfer])
+        self.assertEqual(row.style.margin_top, 22)
+
+        self.assertFalse(project_workspace_header(app, view, controller, row, [unlock], frame.origin, divided=True))
+        self.assertIs(row.parent, body)
+        self.assertEqual(list(row.children), [tabs, transfer])
+        self.assertEqual(row.style.margin, (0, 0, 4, 0))
+        self.assertIsNone(unlock.parent)
+
     def test_activity_rotation_and_large_text_restore_original_actions(self):
         actions = [toga.Button(title, on_press=Mock(), style=Pack(height=72, flex=1))
                    for title in ('Open Document', 'New Document')]

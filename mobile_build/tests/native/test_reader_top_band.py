@@ -24,6 +24,13 @@ class BandGeometryTests(unittest.TestCase):
         value = band.free_top_band(((535, 0, 134, 82),), 669, 82, 5 * 48 + 44 + 32)
         self.assertEqual(value, dict(left=0, right=535, width=669, row_height=60, row_top=11, reserve=90))
 
+    def test_notebook_centerline_rechecks_clearance_at_the_shifted_position(self):
+        regions = ((535, 0, 134, 82),)
+        options = dict(center_offset=band.NATIVE_TOOLBAR_CENTER_OFFSET)
+        geometry = band.free_top_band(regions, 669, 82, 220, **options)
+        self.assertEqual(geometry['row_top'] + geometry['row_height'] / 2, 48)
+        self.assertIsNone(band.free_top_band((*regions, (100, 72, 569, 18)), 669, 82, 220, **options))
+
     def test_lowered_controls_still_avoid_expanded_activity_and_restore(self):
         regions = ((535, 0, 134, 82), (200, 64, 469, 30))
         self.assertIsNone(band.free_top_band(regions, 669, 82, 316))
@@ -122,6 +129,33 @@ class NativeBandOwnershipTests(unittest.TestCase):
         self.assertTrue(band.project(self.app, self.view, 'documents', self.controller))
         row = self.view._reader_top_band_state['header'].children[0]
         self.assertEqual(list(row.children), [self.buttons[0], menu, row._title_content, *self.buttons[1:]])
+
+    def test_notes_returns_title_controls_to_the_article_before_native_fallback(self):
+        import toga
+        close, files, links = self.buttons[:3]
+        self.view._notes_title_controls = (close, files, links)
+        del self.view._document_storage_status
+        self.view._native_reader_buttons = lambda: []
+        for button in (files, links):
+            button.parent.remove(button)
+        title_host = toga.Box()
+        original = toga.Box(children=[close, files, title_host, links])
+        article = toga.Box(children=[original])
+        self.view.add(article)
+        self.view._document_title_parent = article
+        self.view._document_title_header = original
+
+        self.assertTrue(band.project(self.app, self.view, 'documents', self.controller))
+        header = self.view._document_title_header
+        row = header.children[0]
+        self.assertIs(header.parent, self.view)
+        self.assertEqual(list(row.children), [close, files, row._title_content, links])
+        self.assertEqual(self.view._reader_top_band_state['geometry']['row_top'], 18)
+
+        self.edge.return_value = 2
+        self.assertFalse(band.project(self.app, self.view, 'documents', self.controller))
+        self.assertIs(self.view._document_title_header, original)
+        self.assertEqual(list(original.children), [close, files, title_host, links])
 
     def test_vertical_rotation_and_new_route_restore_owned_header_and_controls(self):
         import toga

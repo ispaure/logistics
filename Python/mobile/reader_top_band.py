@@ -2,9 +2,12 @@
 import weakref
 
 NOTEBOOK_TOOLBAR_CLEARANCE = (48, 352)
+# UIKit's horizontal notebook toolbar sits seven points below the center of
+# the unfolded portrait status band (48pt in the measured 82pt band).
+NATIVE_TOOLBAR_CENTER_OFFSET = 7
 
 
-def free_top_band(regions, width, safe_top, required_width, *, row_height=60):
+def free_top_band(regions, width, safe_top, required_width, *, row_height=60, center_offset=0):
     """Choose only a wide edge column; missing/central/full-width data declines."""
     if safe_top < row_height or required_width <= 0 or width <= 0:
         return None
@@ -15,7 +18,7 @@ def free_top_band(regions, width, safe_top, required_width, *, row_height=60):
     # Centre the controls in the actual system band, rather than pinning their
     # 48pt targets six points below the display edge. Recheck the entire moved
     # row against live reserved regions, including detached activity bubbles.
-    row_top = (safe_top - row_height) / 2
+    row_top = min(safe_top - row_height, (safe_top - row_height) / 2 + center_offset)
     row_bottom = row_top + row_height
     intervals = [(0., float(width))]
     for x, y, w, h in regions:
@@ -89,11 +92,17 @@ def restore(view, *, preserve_content=False):
     for button in state['buttons']:
         if button.parent is not None:
             button.parent.remove(button)
+    previous = state['previous_header']
+    if getattr(view, '_notes_title_controls', ()) and previous is not None:
+        close, files, links = state['buttons']
+        previous.insert(0, close)
+        previous.insert(1, files)
+        previous.add(links)
     frame = getattr(view, '_reading_frame_owner', None)
     if frame is not None and header in frame.controls:
         frame.controls.remove(header)
         frame.top_controls -= 1
-    view._document_title_header = state['previous_header']
+    view._document_title_header = previous
     view._reader_top_band_state = None
 
 
@@ -123,21 +132,25 @@ def project(app, view, destination, controller):
                                        'book import failed', 'could not '))
     close = getattr(view, '_reader_close_button', None)
     notebook_tools = getattr(view, '_native_drawing_tools', None)
+    notes_controls = getattr(view, '_notes_title_controls', ())
     if (vertical_edge(controller) or getattr(view, '_reader_fullscreen', False)
             or getattr(app, '_reader_chrome_hidden', False) or prompt or close is None
             or (notebook_tools is not None and (notebook_tools.stacked_portrait(controller)
                                                 or notebook_tools.wide_landscape(controller)))
-            or abs(float(origin.y)) > .5 or not hasattr(view, '_document_storage_status')
-            or hasattr(view, '_document_title_controls')):
+            or abs(float(origin.y)) > .5
+            or (not notes_controls and (not hasattr(view, '_document_storage_status')
+                                        or hasattr(view, '_document_title_controls')))):
         restore(view)
         return False
     from .reader_chrome import reader_buttons
-    buttons = [close]
+    actions = reader_buttons(app, view)
+    if notes_controls and actions:
+        # An embedded notebook still needs its native editing actions.
+        restore(view)
+        return False
     workspace = getattr(view, '_workspace_frame', None)
     menu = workspace.menu if workspace is not None else getattr(view, '_workspace_menu_button', None)
-    if menu is not None:
-        buttons.append(menu)
-    buttons.extend(reader_buttons(app, view))
+    buttons = list(notes_controls) if notes_controls else [close, *([menu] if menu is not None else []), *actions]
     # Never collapse/drop commands to make the new row fit.
     if len({id(button) for button in buttons}) != len(buttons):
         restore(view)
@@ -152,7 +165,9 @@ def project(app, view, destination, controller):
     regions = system_occlusions(controller)
     geometry = free_top_band(regions, width,
                              float(native_value(window.safeAreaInsets).top),
-                             sum(size[0] for size in sizes) + 44 + 32, row_height=row_height)
+                             sum(size[0] for size in sizes) + 44 + 32, row_height=row_height,
+                             center_offset=NATIVE_TOOLBAR_CENTER_OFFSET if (
+                                 notes_controls or getattr(view, '_comic_reader', False)) else 0)
     if geometry is None:
         restore(view)
         return False
@@ -164,8 +179,9 @@ def project(app, view, destination, controller):
     candidate_token = (getattr(view, '_notebook_dom_epoch', 0), tuple(sorted(candidate.items()))) if candidate is not None else None
     if candidate_token is not None and getattr(view, '_notebook_dom_ready', None) == candidate_token:
         geometry = candidate
+    subtitle = getattr(view, '_document_storage_status', '')
     signature = (tuple(sorted(geometry.items())), tuple(id(button) for button in buttons), title,
-                 str(view._document_storage_status), tuple(view._document_storage_kinds), margins, candidate_token)
+                 subtitle, tuple(getattr(view, '_document_storage_kinds', ())), margins, candidate_token)
     state = getattr(view, '_reader_top_band_state', None)
     if state is not None and state['controller'] == controller and state['signature'] == signature:
         navigation = app.native_host.adapter.navigation_for(destination)
@@ -198,7 +214,7 @@ def project(app, view, destination, controller):
     # Native/window safe-area insets are never made negative or rewritten.
     header = toga.Box(children=[row], style=Pack(direction=COLUMN, height=geometry['reserve'],
         margin_top=-margins[0], margin_right=-margins[1], margin_left=-margins[2]))
-    leading_count = 1 + (menu is not None)
+    leading_count = 2 if notes_controls or menu is not None else 1
     for index, button in enumerate(buttons):
         if button.parent is not None:
             button.parent.remove(button)
@@ -209,7 +225,7 @@ def project(app, view, destination, controller):
         if index + 1 == leading_count:
             row.add(title_host)
     row._title_content = title_host
-    place_title_in_header(row, view._document_title_view, view._document_storage_status)
+    place_title_in_header(row, view._document_title_view, subtitle)
     row.style.height = row_height - 12  # Title sizing must not clip an existing 52pt menu.
     frame = getattr(view, '_reading_frame_owner', None)
     if frame is not None:

@@ -165,6 +165,7 @@ class WorkspacesScreen:
         box = toga.Box(children=[self.app._files_status_row, self.folder_subtab_header, self.folder_picker_header, self.folder_source_actions,
             self.folder_loading_box, self.app.incoming_notice, scroll],
             style=Pack(direction=COLUMN, margin=(8, 16, 12, 16), flex=1))
+        box._workspaces_source_row = self.app._files_status_row
         from .scroll_edges import fill_bottom
         fill_bottom(box, scroll)
         self.update_folder_list(choices)

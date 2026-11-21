@@ -90,6 +90,7 @@ def sync_reader_toolbar(app, view, destination=None):
         view._notebook_inline_notice = None
     if project(app, view, destination, controller):
         band = view._reader_top_band_state
+        view._reader_close_button._native_reader_close_item = None
         title = getattr(view, '_native_reader_title', '')
         title = str(title() if callable(title) else title or '').replace('\n', ' ')
         if str(controller.navigationItem.title or '') != title:

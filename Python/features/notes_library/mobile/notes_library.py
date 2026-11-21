@@ -437,7 +437,8 @@ class VaultBrowser(LibraryFileForms, LibraryPanels):
             if self.toolbar.parent is not None:
                 self.toolbar.parent.remove(self.toolbar)
             parent.insert(0, self.toolbar)
-        if header is not None and (header.parent is not parent or parent.children[0] is not header):
+        if (header is not None and not getattr(self.view, '_reader_top_band_state', None)
+                and (header.parent is not parent or parent.children[0] is not header)):
             if header.parent is not None:
                 header.parent.remove(header)
             parent.insert(0, header)

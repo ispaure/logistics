@@ -330,6 +330,14 @@ row still identifies the file and storage above reading content. Older systems
 use safe insets. Image background extension behind vertical bars stays separate
 from interactive page, footer and header geometry.
 
+On unfolded Duo portrait, Notes Library places Close, Files, the title and
+Links in the measured strip above the article and drawers. Comics aligns its
+Close and actions to the notebook toolbar's centerline. Workspaces uses that
+line for the retained Local, Cloud and Home Server selectors, Unlock when
+available, and the transfer shortcut when active. The source row returns to
+the Workspaces body when the strip no longer fits. Check optical alignment
+against the notebook separately from native hit testing and accessibility labels.
+
 ## Offline documentation wiki
 
 `documentation_ui` mounts commonUtils' `MarkdownWikiView` over bundled

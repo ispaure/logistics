@@ -79,7 +79,7 @@ def remove_location_row(view):
 
 def side_title_header(view):
     header = getattr(view, '_document_title_header', None)
-    parent = getattr(view, '_document_title_parent', view)
+    parent = view if getattr(view, '_reader_top_band_state', None) else getattr(view, '_document_title_parent', view)
     return header if header is not None and header.parent is parent else None
 
 

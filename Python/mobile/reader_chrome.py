@@ -198,6 +198,7 @@ class ReaderChrome:
             self.library_view._native_reader_status = self.book_status
             self.library_view._native_reader_buttons = lambda: [self.reader_speech_button, self.reader_actions_button]
         else:
+            self.library_view._comic_reader = True
             self.library_view._native_reader_buttons = lambda: [
                 self.comic_header.previous, self.comic_header.following, self.reader_actions_button]
         if comic:

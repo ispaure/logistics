@@ -114,6 +114,10 @@ def sync_native_host(app, view, destination):
     adapter = app.native_host.adapter
     overview = (not app.routes.screens[destination]
                 and hasattr(view, '_destination_actions'))
+    if destination == 'files' and not overview:
+        root = app.routes.roots['files']
+        if root.children:
+            restore_workspace_header(root.children[0])
     if overview and destination == 'home':
         from .home_header import sync
         overview = not sync(app, view) and bool(view._ios_toolbar_buttons())
@@ -149,8 +153,12 @@ def project_header(app, view, destination):
     origin = native.convertRect(native.bounds, toView=window).origin
     buttons = list(view._ios_toolbar_buttons())
     buttons = [*view._ios_toolbar_leading, *buttons]
-    sizes = [(max(44, button.style.width or 48), max(44, button.style.height or 48)) for button in buttons]
     from .fold_layout import division
+    source_row = getattr(view, '_workspaces_source_row', None)
+    if source_row is not None:
+        return project_workspace_header(app, view, controller, source_row, buttons, origin,
+                                        divided=division(app, view) is not None)
+    sizes = [(max(44, button.style.width or 48), max(44, button.style.height or 48)) for button in buttons]
     geometry = None
     if (buttons and not vertical_edge(controller) and abs(float(origin.y)) <= .5
             and division(app, view) is None):
@@ -196,3 +204,72 @@ def project_header(app, view, destination):
     if container is not None:
         app.native_host.adapter.layout_content(container)
     return True
+
+
+def project_workspace_header(app, view, controller, row, buttons, origin, *, divided):
+    """Move the retained source and transfer controls together into the measured strip."""
+    from .ios_toolbar import vertical_edge, system_occlusions
+    from .reader_top_band import free_top_band, NATIVE_TOOLBAR_CENTER_OFFSET
+    from .ui_metrics import TOUCH_TARGET
+
+    header = view._destination_actions[0]
+    state = getattr(view, '_destination_top_band', None)
+    width = float(controller.view.bounds.size.width)
+    window = app.main_window._impl.native
+    tabs = list(row.children[0].children)
+    # The equal-width selectors need room for Home Server. Always budget the
+    # transfer shortcut so starting one cannot shrink other hit targets.
+    required = 72 * len(tabs) + TOUCH_TARGET * (len(buttons) + 1) + 24
+    geometry = None
+    if not divided and not vertical_edge(controller) and abs(float(origin.y)) <= .5:
+        geometry = free_top_band(system_occlusions(controller), width, float(window.safeAreaInsets.top),
+                                 required, row_height=TOUCH_TARGET + 16,
+                                 center_offset=NATIVE_TOOLBAR_CENTER_OFFSET)
+    if geometry is None:
+        restore_workspace_header(view)
+        return False
+    if state is None:
+        parent = row.parent
+        state = dict(source_parent=parent, source_index=list(parent.children).index(row),
+                     source_margin=row.style.margin, actions=[])
+        parent.remove(row)
+        header.add(row)
+    elif geometry == state['geometry'] and buttons == state['actions']:
+        return True
+    for button in state['actions']:
+        row.remove(button)
+    for index, button in enumerate(buttons, start=1):
+        if button.parent is not None:
+            button.parent.remove(button)
+        button.app, button.window = app, app.main_window
+        row.insert(index, button)
+    # The outer box reserves the full system region. The source row keeps its
+    # usual height and is centered on the same line as the reader controls.
+    del header.style.align_items
+    header.style.update(direction=COLUMN, height=geometry['reserve'],
+        margin=(-view.style.margin_top, -view.style.margin_right, 0, -view.style.margin_left))
+    row.style.margin = (geometry['row_top'] + 6, width - geometry['right'] + 8,
+                        4, geometry['left'] + 8)
+    if header.parent is None:
+        view.insert(0, header)
+    state.update(geometry=geometry, actions=buttons, buttons=[*tabs, *buttons], header=header)
+    view._destination_top_band = state
+    container = getattr(view._impl, 'container', None)
+    if container is not None:
+        app.native_host.adapter.layout_content(container)
+    return True
+
+
+def restore_workspace_header(view):
+    row = getattr(view, '_workspaces_source_row', None)
+    state = getattr(view, '_destination_top_band', None)
+    if row is None or state is None:
+        return
+    for button in state['actions']:
+        row.remove(button)
+    header = state['header']
+    header.remove(row)
+    row.style.margin = state['source_margin']
+    state['source_parent'].insert(state['source_index'], row)
+    view.remove(header)
+    view._destination_top_band = None
