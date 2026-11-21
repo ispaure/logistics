@@ -24,15 +24,25 @@ async def exercise_archives(app):
     (root / 'Two.bin').write_bytes(b'\0two')
     (root / 'Three.txt').write_bytes(b'three')
     try:
+        # Cold File Browser reads can proceed while the initial connection
+        # restore is busy. Selection and picker commands use the idle guard.
+        for _ in range(240):
+            if not app.cloud_busy:
+                break
+            await asyncio.sleep(.05)
+        assert not app.cloud_busy, 'Initial storage restore did not settle'
         await app.show_files(location=('Local files', folder))
         assert app.file_path == folder, app.file_status.value
         app.begin_file_selection()
+        assert app.file_browser.on_check_entry is not None, ('Selection unavailable', app.cloud_busy)
         for row in app.file_rows.values():
             if row['name'] in ('One.txt', 'Two.bin'):
                 app.check_file_entry(SimpleNamespace(identity=row['path'], payload=row))
+        assert len(app.file_checked) == 2, (list(app.file_rows), list(app.file_checked))
         await app.create_file_archive()
         picker = app.editor_picker()
-        assert picker.visible(), app.native_host.state.destination
+        assert picker.visible(), (app.native_host.state.destination, app.cloud_busy,
+                                  picker.operation.mode, app.native_host.state.routes['files'])
         assert picker.save_as_storage.value == 'Source location'
         assert picker.picker_folder.value == folder
         picker.save_as_name.value = 'Bundle'
