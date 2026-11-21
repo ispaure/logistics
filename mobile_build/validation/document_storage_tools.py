@@ -753,8 +753,8 @@ def run_android(workspace, payload, output, env, options, *, bundle=BUNDLE,
     validate_comic_scope(entry_point, comic_scope, platform='android')
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
-    if entry_point.endswith('.comic_guidance_probe') and device is not None:
-        raise ValueError('Comic guidance acceptance requires an owned disposable emulator.')
+    if (entry_point == READER_APPEARANCE_ENTRY or entry_point.endswith('.comic_guidance_probe')) and device is not None:
+        raise ValueError('Native reader input probes require an owned disposable emulator.')
     if entry_point in (UNIFIED_PROGRESS_ANDROID_ENTRY, UNIFIED_PROGRESS_VIDEO_ENTRY) and device is not None:
         raise ValueError('Unified progress restart acceptance requires an owned emulator.')
     if probe_timeout is not None and (type(probe_timeout) is not int or not 1 <= probe_timeout <= 3600):
@@ -807,8 +807,8 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
     validate_comic_scope(entry_point, comic_scope, platform='android')
     if bundle not in QA_BUNDLES:
         raise ValueError('Use an isolated QA bundle; the main app is not a probe target.')
-    if entry_point.endswith('.comic_guidance_probe') and device is not None:
-        raise ValueError('Comic guidance acceptance requires an owned disposable emulator.')
+    if (entry_point == READER_APPEARANCE_ENTRY or entry_point.endswith('.comic_guidance_probe')) and device is not None:
+        raise ValueError('Native reader input probes require an owned disposable emulator.')
     if probe_timeout is not None and (type(probe_timeout) is not int or not 1 <= probe_timeout <= 3600):
         raise ValueError('Probe timeout must be 1 to 3600 seconds.')
     output.mkdir(parents=True, exist_ok=True)
@@ -850,6 +850,9 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
             emulator.invoke('-s', serial, 'shell', 'wm', 'density', '320')
         if device is None and entry_point.endswith(('.document_creation_probe', '.lockscreen_probe')):
             emulator.invoke('-s', serial, 'shell', 'settings', 'put', 'secure', 'show_ime_with_hard_keyboard', '1')
+        if entry_point == READER_APPEARANCE_ENTRY:
+            emulator.invoke('-s', serial, 'shell', 'settings', 'put', 'secure',
+                            'immersive_mode_confirmations', 'confirmed')
         if tablet:
             emulator.invoke('-s', serial, 'shell', 'wm', 'size', '1600x2400')
             emulator.invoke('-s', serial, 'shell', 'wm', 'density', '320')
@@ -881,6 +884,25 @@ def exercise_android_app(apk, workspace, output, env, options, *, bundle=BUNDLE,
         while time.monotonic() < deadline:
             if observe is not None:
                 observe('poll', emulator, record, output)
+            if entry_point == READER_APPEARANCE_ENTRY:
+                request = 'cache/reader-appearance-swipe.json'
+                pending = subprocess.run([str(emulator.adb), '-s', serial, 'exec-out', 'run-as', bundle,
+                    'cat', request], env=env, capture_output=True, timeout=15)
+                try:
+                    swipe = json.loads(pending.stdout) if pending.returncode == 0 else None
+                except (ValueError, UnicodeError):
+                    swipe = None
+                if swipe is not None:
+                    points = swipe.get('points') if isinstance(swipe, dict) else None
+                    if (not isinstance(points, list) or len(points) != 4
+                            or any(type(point) is not int or point < 0 for point in points)):
+                        raise ValueError('Expected four nonnegative reader swipe coordinates.')
+                    emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'rm', request)
+                    emulator.invoke('-s', serial, 'shell', 'input', 'swipe', *map(str, points), '250')
+                    with (output / 'android-reader-swipes.jsonl').open('a') as log:
+                        log.write(json.dumps(dict(serial=serial, points=points)) + '\n')
+                    emulator.invoke('-s', serial, 'shell', 'run-as', bundle, 'touch',
+                                    'cache/reader-appearance-swipe-done')
             if entry_point.endswith('.rclone_transfer_probe'):
                 request = subprocess.run([str(emulator.adb), '-s', serial, 'shell', 'run-as', bundle,
                     'test', '-f', 'cache/transfer-background'], env=env, capture_output=True, timeout=15)
@@ -1169,7 +1191,7 @@ def main():
         parser.error('--android-tablet requires the disposable Android emulator.')
     if args.pose and (args.platform != 'ios' or args.family != 'iPhone Duo'):
         parser.error('--pose requires an iOS iPhone Duo run')
-    if args.probe in ('comic-guidance', 'mobile-feedback') and args.device:
+    if args.probe in ('comic-guidance', 'mobile-feedback', 'reader-appearance') and args.device:
         parser.error('Feedback acceptance uses disposable devices; omit --device.')
     if args.device and args.platform != 'android':
         parser.error('--device requires Android.')

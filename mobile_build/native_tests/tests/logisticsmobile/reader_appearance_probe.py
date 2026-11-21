@@ -36,7 +36,8 @@ class ReaderAppearanceProbe(LogisticsMobile):
         if self.routes.apple:
             destination = self.native_host.state.destination
             navigation = self.native_host.adapter.navigation_for(destination)
-            navigation.popViewControllerAnimated(False)
+            await asyncio.sleep(.25)
+            assert navigation.popViewControllerAnimated(True) is not None
         else:
             from org.beeware.android import MainActivity
             MainActivity.singletonThis.getOnBackPressedDispatcher().onBackPressed()
@@ -64,24 +65,31 @@ class ReaderAppearanceProbe(LogisticsMobile):
             assert swipe.view == native and swipe.isEnabled()
             native.pageSwipe(swipe)
         else:
-            from android.os import SystemClock
-            from android.view import MotionEvent
+            from java import jarray, jint
+            await until(lambda: native.getWidth() > 100 and native.getHeight() > 100
+                        and native.hasWindowFocus())
             assert native.isAttachedToWindow() and native.isShown() and native.getDrawable() is not None
             width, height = native.getWidth(), native.getHeight()
+            location = jarray(jint)(2)
+            native.getLocationOnScreen(location)
             start, end = (.75, .25) if direction > 0 else (.25, .75)
-            down = SystemClock.uptimeMillis()
-            for action, x in ((0, start), (2, .5), (1, end)):
-                event = MotionEvent.obtain(down, SystemClock.uptimeMillis(), action, x * width, .5 * height, 0)
-                try:
-                    assert native.dispatchTouchEvent(event)
-                finally:
-                    event.recycle()
-                await asyncio.sleep(.04)
+            x, y = location
+            done = self.cache / 'reader-appearance-swipe-done'
+            write_result(self.cache / 'reader-appearance-swipe.json',
+                         dict(points=[round(x + start * width), round(y + height / 2),
+                                      round(x + end * width), round(y + height / 2)]))
+            await until(done.exists)
+            done.unlink()
 
     async def turn_comic(self, owner, direction, index):
         await until(lambda: not owner.cloud_busy and owner._provider_progress.worker is None)
         await self.swipe(owner.provider_spread.canvas, direction)
-        await until(lambda: not owner.cloud_busy and owner._provider_displayed_index == index)
+        try:
+            await until(lambda: not owner.cloud_busy and owner._provider_displayed_index == index)
+        except TimeoutError as error:
+            raise AssertionError(('Comic swipe did not turn', direction, index,
+                                  owner._provider_displayed_index, owner.cloud_busy,
+                                  owner.provider_spread.canvas.zoom_scale)) from error
 
     async def open_reader(self, provider, filename):
         assert await self.show_files(local_root=True)
@@ -99,6 +107,7 @@ class ReaderAppearanceProbe(LogisticsMobile):
         owner = await self.open_reader(provider, 'Fixture.cbz')
         await self.turn_comic(owner, 1, 1)
         for action in ('cancel', 'unchanged', 'changed', 'cancel'):
+            self.result['step'] = action
             await until(lambda: not owner.cloud_busy and owner._provider_progress.worker is None)
             owner.show_provider_layout()
             panel = owner.provider_appearance
@@ -110,13 +119,24 @@ class ReaderAppearanceProbe(LogisticsMobile):
             else:
                 if action == 'changed':
                     panel.split_wide.value = False
-                await self.press(panel.content.children[-1])
-            await until(lambda: self.visible_reader() == owner.session.id and not owner.cloud_busy)
+                if self.routes.apple:
+                    button, = panel._ios_toolbar_buttons
+                else:
+                    button = next(control for control in panel.content.children
+                                  if getattr(control, 'text', None) == 'Apply and return')
+                await self.press(button)
+            try:
+                await until(lambda: self.visible_reader() == owner.session.id and not owner.cloud_busy)
+            except TimeoutError as error:
+                destination = self.native_host.state.destination
+                raise AssertionError(('Appearance did not return', action, destination, self.visible_reader(),
+                                      [route for route, _, _ in self.routes.screens[destination]])) from error
             assert owner._provider_displayed_index == 1
             await self.turn_comic(owner, -1, 0)
             await self.turn_comic(owner, 1, 1)
         assert self.preferences.values['comic_split_wide'] == 'false'
         if label == 'localcrypt':
+            self.result['step'] = 'locked during Appearance'
             owner.show_provider_layout()
             privacy = self.screen_privacy
             privacy.conceal()
@@ -135,18 +155,26 @@ class ReaderAppearanceProbe(LogisticsMobile):
             await self.turn_comic(owner, -1, 0)
             await self.turn_comic(owner, 1, 1)
         await self.close_reader(owner)
+        self.result['step'] = 'saved position on reopen'
         owner = await self.open_reader(provider, 'Fixture.cbz')
         assert owner._provider_displayed_index == 1
         await capture_window(self, self.cache / f'appearance-{label}-comic.png')
         await self.turn_comic(owner, 1, 2)
         await self.turn_comic(owner, -1, 1)
         await self.close_reader(owner)
+        self.result.pop('step', None)
 
     async def epub(self, provider, label):
         owner = await self.open_reader(provider, 'Fixture.epub')
         await wait_for_text(owner.provider_epub_view.webview, 'Native EPUB first')
-        await self.press(owner.next_page)
-        await wait_for_text(owner.provider_epub_view.webview, 'Native EPUB second')
+
+        async def turn(button, index, chapter):
+            await until(lambda: not owner.cloud_busy and owner._provider_progress.worker is None)
+            await self.press(button)
+            await until(lambda: owner.provider_epub_view.index == index)
+            await wait_for_text(owner.provider_epub_view.webview, 'Native EPUB ' + chapter)
+
+        await turn(owner.next_page, 1, 'second')
         for change in (False, True):
             assert owner.show_provider_layout()
             if change:
@@ -158,10 +186,8 @@ class ReaderAppearanceProbe(LogisticsMobile):
                 await owner._epub_resume_task
             await wait_for_text(owner.provider_epub_view.webview, 'Native EPUB second')
         await capture_window(self, self.cache / f'appearance-{label}-epub.png')
-        await self.press(owner.previous_page)
-        await wait_for_text(owner.provider_epub_view.webview, 'Native EPUB first')
-        await self.press(owner.next_page)
-        await wait_for_text(owner.provider_epub_view.webview, 'Native EPUB second')
+        await turn(owner.previous_page, 0, 'first')
+        await turn(owner.next_page, 1, 'second')
         await self.close_reader(owner)
 
     async def wait_for_pdf(self, owner, index):
@@ -176,9 +202,14 @@ class ReaderAppearanceProbe(LogisticsMobile):
 
     async def pdf(self, provider, label):
         owner = await self.open_reader(provider, 'Fixture.pdf')
+
+        async def turn(button, index):
+            await until(lambda: not owner.cloud_busy and owner._provider_progress.worker is None)
+            await self.press(button)
+            await self.wait_for_pdf(owner, index)
+
         await self.wait_for_pdf(owner, 0)
-        await self.press(owner.next_page)
-        await self.wait_for_pdf(owner, 1)
+        await turn(owner.next_page, 1)
         assert owner.show_provider_layout() is None  # PDF has no Appearance action.
         assert self.visible_reader() == owner.session.id
         # Exercise an actual secondary reader route above the PDF.
@@ -189,15 +220,13 @@ class ReaderAppearanceProbe(LogisticsMobile):
                     and not owner.cloud_busy)
         await self.wait_for_pdf(owner, 1)
         await capture_window(self, self.cache / f'appearance-{label}-pdf.png')
-        await self.press(owner.next_page)
-        await self.wait_for_pdf(owner, 2)
-        await self.press(owner.previous_page)
-        await self.wait_for_pdf(owner, 1)
+        await turn(owner.next_page, 2)
+        await turn(owner.previous_page, 1)
         await self.close_reader(owner)
 
     async def probe(self):
         self.cache = Path(self.paths.cache)
-        result = dict(success=False, cases=[])
+        result = self.result = dict(success=False, cases=[])
         try:
             await until(lambda: not getattr(self, '_startup_in_progress', False))
             from features.rclone.localcrypt.mobile.resources import encrypted_storage
@@ -208,17 +237,20 @@ class ReaderAppearanceProbe(LogisticsMobile):
                 for index, color in enumerate(((170, 24, 22), (35, 171, 63), (38, 61, 200))):
                     archive.writestr(f'{index}.png', solid_page(*color))
             (root / 'Fixture.pdf').write_bytes(pdf_bytes())
-            self.show_cloud(present=False)
-            if task := getattr(self, 'cloud_restore_task', None):
-                await task
-            self.cloud_client.request('import', password=PASSWORD, package=load_aes_localcrypt_package(),
-                                      package_name='AppearanceFixture.zip', session_only=True)
-            assert any(not record.get('saved') and record.get('document_cache_id')
-                       for record in self.cloud_client.package_records)
-            encrypted = encrypted_storage(self.private_root / 'appearance-crypt', self.cloud_client, 'Secret')
-            for path in root.iterdir():
-                assert encrypted.create_file(path.name, BytesIO(path.read_bytes())) is not False
-            for label, provider in (('local', LocalFiles(root)), ('localcrypt', encrypted)):
+            for label in ('local', 'localcrypt'):
+                if label == 'local':
+                    provider = LocalFiles(root)
+                else:
+                    self.show_cloud(present=False)
+                    if task := getattr(self, 'cloud_restore_task', None):
+                        await task
+                    self.cloud_client.request('import', password=PASSWORD, package=load_aes_localcrypt_package(),
+                                              package_name='AppearanceFixture.zip', session_only=True)
+                    assert any(not record.get('saved') and record.get('document_cache_id')
+                               for record in self.cloud_client.package_records)
+                    provider = encrypted_storage(self.private_root / 'appearance-crypt', self.cloud_client, 'Secret')
+                    for path in root.iterdir():
+                        assert provider.create_file(path.name, BytesIO(path.read_bytes())) is not False
                 for check in (self.comic, self.epub, self.pdf):
                     self.preferences.save(reading_margin='16')
                     result['running'] = f'{label}-{check.__name__}'
