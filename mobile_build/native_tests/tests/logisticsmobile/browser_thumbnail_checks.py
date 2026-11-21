@@ -48,7 +48,7 @@ def mixed_content():
 async def wait_for(predicate, message, *, timeout=12):
     deadline = monotonic() + timeout
     while not predicate():
-        assert monotonic() < deadline, message
+        assert monotonic() < deadline, message() if callable(message) else message
         await asyncio.sleep(.025)
 
 
@@ -170,28 +170,39 @@ async def exercise_locked_thumbnails(app, provider, label):
     folder = 'p8-thumbnail-lock'
     provider.mkdir(folder)
     physical = provider._physical(folder, directory=True)
-    for name, data in mixed_content().items():
+    contents = mixed_content()
+    for name, data in contents.items():
         provider.create_file(folder + '/' + name, BytesIO(data))
-    provider.create_file(folder + '/080-delayed.png', BytesIO(png(18, (70, 20, 220))))
     assert await app.show_files(location=(label, folder)), app.file_status.value
     browser = app.file_browser
-    source = browser.thumbnails
     gate, started = Event(), Event()
-    original = source.load
+    original = type(browser.thumbnails).load
 
-    def delayed(row, size, cancelled):
-        data = original(row, size, cancelled)
-        if row['path'].endswith('delayed.png'):
+    def delayed(source, row, size, cancelled):
+        data = original(source, row, size, cancelled)
+        if row['path'] == folder + '/080-delayed.png' and data:
             started.set()
             gate.wait(8)
         return data
 
+    def state():
+        return dict(visible=browser._previews_visible, mode=browser.mode,
+                    active=app.active_host, paused=app.screen_privacy._folder_work_paused,
+                    private=browser.thumbnails.private, valid=browser.thumbnails.can_publish(),
+                    entries=[entry.label for entry in browser.entries],
+                    tiles=[path.name for path in browser._tile_previews],
+                    cached=[name for name in contents if cached(browser, name)],
+                    active_workers=len(browser._preview_jobs))
+
     try:
-        with patch.object(source, 'load', delayed):
-            browser.show_tiles()
-            await wait_for(lambda: started.is_set() and cached(browser, '001-image.png')
-                           and cached(browser, '002-notebook.rmdoc') and cached(browser, '003-document.pdf')
-                           and cached(browser, '004-comic.cbz'), 'Unlocked LocalCrypt thumbnails did not render')
+        browser.show_tiles()
+        await wait_for(lambda: all(cached(browser, name) for name in contents),
+                       lambda: ('Unlocked LocalCrypt thumbnails did not render', state()))
+        with patch.object(type(browser.thumbnails), 'load', delayed):
+            await asyncio.to_thread(provider.create_file, folder + '/080-delayed.png', BytesIO(png(18, (70, 20, 220))))
+            browser.refresh_entries(await asyncio.to_thread(provider.list, folder))
+            await wait_for(started.is_set, lambda: ('Private decode did not start', state()))
+            source = browser.thumbnails
             prior_tiles = [image for image, *_ in browser._tile_previews.values()]
             await app.lock_cloud()
             # Release simulated late plaintext only after the catalog has been cleared.

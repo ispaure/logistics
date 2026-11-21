@@ -95,8 +95,10 @@ def callbacks(provider, client, password=''):
             if suffix in ARCHIVE_SUFFIXES:
                 from services.documents.readers import PrivateReader
                 with closing(source(row, cancelled)) as content:
-                    reader = PrivateReader(Path(row['path']).name, source=content)
+                    reader = PrivateReader(Path(row['path']).name, source=content, path=row['path'])
                     member = reader.book.cover_path() if reader.book else reader.pages[0]
+                if not member:
+                    return b''
             return native_thumbnail(row['path'], size, member=member, password=password, cancelled=cancelled)
         bridge = client if getattr(client, 'supports_streaming', False) else local_image_bridge()
         if suffix in DIRECT_IMAGE_SUFFIXES:
@@ -138,7 +140,7 @@ def callbacks(provider, client, password=''):
             if getattr(provider, 'private', False):
                 from services.documents.readers import PrivateReader
                 with closing(source(row, cancelled)) as content:
-                    reader = PrivateReader(Path(row['path']).name, source=content)
+                    reader = PrivateReader(Path(row['path']).name, source=content, path=row['path'])
                     if reader.book:
                         fields = [('Title', reader.book.title), ('Author', ', '.join(reader.book.values('creator')))]
                     else:
