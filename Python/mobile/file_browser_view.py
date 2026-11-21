@@ -113,6 +113,18 @@ class LocalFileBrowser(FileBrowser):
             index = next((i for i, entry in enumerate(self._tile_entries) if entry.identity == anchor), 0)
             position = (index // 2) * self.TILE_ROW_HEIGHT
             self._update_tile_window(position)
+            impl = self._tile_scroll._impl
+            if type(impl).__module__.startswith('toga_iOS.'):
+                # The Toga setter animates on iOS. Finish this mode change
+                # immediately so a second tap captures the intended tile row.
+                from rubicon.objc import CGPoint
+                restore = getattr(self, '_tile_restore', None)
+                if restore is not None:
+                    restore.cancel()
+                impl.native.layoutIfNeeded()
+                position = min(position, self._tile_scroll.max_vertical_position)
+                impl.native.setContentOffset(CGPoint(0, position), animated=False)
+                return
         else:
             index = self._list_indices.get(anchor, 0)
             impl = self.native_list._impl
