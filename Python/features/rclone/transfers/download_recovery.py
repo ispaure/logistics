@@ -215,7 +215,7 @@ def _reserved_inode(stage, job):
     try:
         stream, identity = _open_stage(stage, os.O_RDONLY)
         with stream:
-            before = os.fstat(stream.fileno())
+            before = _stage_snapshot(stage, stream)
             if stream.read(33) == _reservation(job, identity) and _unchanged(stage, before):
                 return identity
     except ValueError:
@@ -340,7 +340,7 @@ def recover(queue, selection, target, source, *, check, progress, key=None):
 def _retire_published(queue, job, target, check):
     stream, _ = _open_stage(target, os.O_RDONLY, job['inode'])
     with stream:
-        before = os.fstat(stream.fileno())
+        before = _stage_snapshot(target, stream)
         length = _stored(job['offset'], job['source']['encoded'])
         if (before.st_size != length or _prefix(stream, length, '', check)[0].hexdigest() != job['digest']
                 or not _unchanged(target, before)):
@@ -399,8 +399,11 @@ def _complete_stage(queue, job, stage, target, source, check, progress):
                     raise ValueError('The source changed during download. Discard the interrupted job.')
             except RestartRequired as error:
                 raise error.bind(job)
-        stream.seek(0)
-        before = os.fstat(stream.fileno())
+    # Windows can update a file's timestamps when the write handle closes.
+    # Verify a settled file using path metadata on both sides of the read.
+    stream, _ = _open_stage(stage, os.O_RDONLY, job['inode'])
+    with stream:
+        before = _stage_snapshot(stage, stream)
         if (before.st_size != _stored(size, encoded)
                 or _prefix(stream, before.st_size, '', check)[0].hexdigest() != job['digest']):
             raise ValueError('Staged download verification failed.')
@@ -412,6 +415,13 @@ def _complete_stage(queue, job, stage, target, source, check, progress):
     rename_exclusive(stage, target)
     _sync_directory(target.parent)
     queue.remove(job)
+
+
+def _stage_snapshot(path, stream):
+    info = path.lstat()
+    if _independent(info) != _independent(os.fstat(stream.fileno())):
+        raise ValueError('The partial file was replaced. Inspect the interrupted download.')
+    return info
 
 
 def _unchanged(path, before):
