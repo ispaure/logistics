@@ -56,6 +56,26 @@ def cached(browser, name):
     return next((data for (path, _), data in browser.icons.items() if path.name == name), b'')
 
 
+async def expect_formats(browser, names, message):
+    try:
+        await wait_for(lambda: all(cached(browser, name) for name in names), message)
+    except AssertionError as error:
+        # Capture whether the failure is native viewport admission or decoding.
+        source = browser.thumbnails
+        rows = {entry.label: entry.payload for entry in browser.entries}
+        missing = {}
+        for name in names:
+            if name in rows and not cached(browser, name):
+                try:
+                    data = await asyncio.to_thread(source._load, rows[name], (160, 160), lambda: False)
+                    missing[name] = 'direct decode succeeded' if data else 'direct decode returned no image'
+                except Exception as failure:
+                    missing[name] = type(failure).__name__ + ': ' + str(failure)[:200]
+        raise AssertionError(dict(message=message, missing=missing, visible=browser._previews_visible,
+            visible_rows=list(browser._visible_rows()), tiles=[path.name for path in browser._tile_previews],
+            jobs=len(browser._preview_jobs))) from error
+
+
 async def assert_remote_placeholders(app, sample):
     """Mount previewable names in an already listed native Cloud browser."""
     browser = app.remote_browser
@@ -138,8 +158,7 @@ async def exercise_browser_thumbnails(app):
 
             native = browser.native_list._impl
             native.set_vertical_position(0)
-            await wait_for(lambda: all(cached(browser, name) for name in contents),
-                           'The four preview formats did not all render')
+            await expect_formats(browser, contents, 'The four preview formats did not all render')
             assert image_header(cached(browser, '001-image.png'), max_bytes=1024 * 1024).width == 160
             assert image_header(cached(browser, '004-comic.cbz'), max_bytes=1024 * 1024).height == 108
             image_entry = next(entry for entry in browser.entries if entry.label == '001-image.png')
@@ -196,8 +215,7 @@ async def exercise_locked_thumbnails(app, provider, label):
 
     try:
         browser.show_tiles()
-        await wait_for(lambda: all(cached(browser, name) for name in contents),
-                       lambda: ('Unlocked LocalCrypt thumbnails did not render', state()))
+        await expect_formats(browser, contents, 'Unlocked LocalCrypt thumbnails did not render')
         with patch.object(type(browser.thumbnails), 'load', delayed):
             await asyncio.to_thread(provider.create_file, folder + '/080-delayed.png', BytesIO(png(18, (70, 20, 220))))
             browser.refresh_entries(await asyncio.to_thread(provider.list, folder))
