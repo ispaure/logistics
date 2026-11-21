@@ -4,6 +4,7 @@ from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
 from dataclasses import replace
+import errno
 import json
 from pathlib import Path
 import subprocess
@@ -30,7 +31,7 @@ class BlenderLibraryTests(unittest.TestCase):
     def package(self, filename, version=(1, 0, 0), minimum=(3, 2, 0), body='', module='tool'):
         path = self.root / filename
         with zipfile.ZipFile(path, 'w') as archive:
-            info = {'name': 'Artist Tool', 'version': version}
+            info = {'name': 'Blue Hole' if module == 'BlueHole' else 'Artist Tool', 'version': version}
             if minimum:
                 info['blender'] = minimum
             archive.writestr(f'{module}/__init__.py', f'bl_info={info!r}\n' + body)
@@ -701,7 +702,6 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertEqual(state['installed_bluehole']['branch'], 'blender-4.5.1/main')
         self.assertEqual(state['installed_bluehole']['commit'], 'a' * 40)
         self.assertFalse(state['bluehole']['auto_update'])
-        self.assertEqual(self.library.warnings, [])
 
     def test_bluehole_auto_update_off_allows_branch_changes_and_reenabling_updates(self):
         from features.blender.addons import bluehole
@@ -846,7 +846,7 @@ class BlenderLibraryTests(unittest.TestCase):
         self.library.for_preset(self.preset).add(self.package('tool.zip'))
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
                 patch('features.blender.addons.scanning.run_blender_script'), \
-                patch.object(bluehole, 'resolve_branch', side_effect=ConnectionError('offline')):
+                patch.object(bluehole, 'resolve_branch', side_effect=OSError(errno.ENETUNREACH, 'network unreachable')):
             self.library.apply(self.release, 'Art', ['legacy:tool'], bluehole={**config, 'branch': 'beta', 'deluxe': True})
         state = self.library.selection(self.preset)
         self.assertEqual(state['bluehole']['branch'], 'beta')
@@ -855,18 +855,31 @@ class BlenderLibraryTests(unittest.TestCase):
         self.assertEqual(artist.read_text(), 'preserve me')
         self.assertEqual(prefs.read_bytes(), b'artist preferences')
         self.assertTrue((self.preset / 'scripts/addons/tool/__init__.py').exists())
-        self.assertIn('Using installed Blue Hole main', self.library.warnings[0])
         (self.preset / 'scripts/addons/BlueHole/__init__.py').unlink()
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
-                patch.object(bluehole, 'resolve_branch', side_effect=ConnectionError('offline')):
+                patch.object(bluehole, 'resolve_branch', side_effect=OSError(errno.ENETUNREACH, 'network unreachable')):
             with self.assertRaisesRegex(ValueError, 'entrypoint is missing'):
                 self.library.apply(self.release, 'Art', [], bluehole=config)
         self.assertEqual(self.library.selection(self.preset), state)
 
+        entrypoint = self.preset / 'scripts/addons/BlueHole/__init__.py'
+        for info, message in (
+            ({'name': 'Other Addon', 'version': (1, 0, 0), 'blender': (4, 2, 0)}, 'not Blue Hole'),
+            ({'name': 'Blue Hole', 'blender': (4, 2, 0)}, 'version is missing'),
+            ({'name': 'Blue Hole', 'version': (1, 0, 0), 'blender': (99, 0, 0)}, 'not declared compatible'),
+        ):
+            with self.subTest(info=info), \
+                    patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                    patch.object(bluehole, 'resolve_branch', side_effect=OSError(errno.ENETUNREACH, 'network unreachable')):
+                entrypoint.write_text(f'bl_info={info!r}')
+                with self.assertRaisesRegex(ValueError, message):
+                    self.library.apply(self.release, 'Art', [], bluehole=config)
+                self.assertEqual(self.library.selection(self.preset), state)
+
     def test_offline_bluehole_first_install_still_reports_failure(self):
         from features.blender.addons import bluehole
         with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
-                patch.object(bluehole, 'resolve_branch', side_effect=ConnectionError('offline')):
+                patch.object(bluehole, 'resolve_branch', side_effect=OSError(errno.ENETUNREACH, 'network unreachable')):
             with self.assertRaisesRegex(ValueError, 'No recorded installed Blue Hole'):
                 self.library.apply(self.release, 'Art', [], bluehole={'enabled': True, 'branch': 'main'})
         self.assertFalse((self.preset / '.logistics-addons.json').exists())

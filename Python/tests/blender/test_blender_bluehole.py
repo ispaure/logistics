@@ -3,6 +3,10 @@
 from commonUtils.testing.stages import TestStage
 
 TEST_STAGE = TestStage.REGRESSION
+import errno
+import socket
+import ssl
+from urllib.error import HTTPError, URLError
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -137,15 +141,36 @@ class BlueHoleTests(unittest.TestCase):
 
     def test_network_failure_is_distinct_from_invalid_download_and_cancellation(self):
         from commonUtils.runtime.operations import OperationCancelled
-        with patch.object(bluehole, 'branch_commit', side_effect=ConnectionError('offline')):
-            with self.assertRaises(bluehole.UpdateUnavailable):
+        offline = URLError(OSError(errno.ENETUNREACH, 'network unreachable'))
+        with patch.object(bluehole, 'branch_commit', side_effect=offline):
+            with self.assertRaisesRegex(bluehole.UpdateOffline, 'check Blue Hole main'):
                 bluehole.update(self.manager, self.release, 'main')
         with patch.object(bluehole, 'branch_commit', return_value='a' * 40), \
-                patch.object(bluehole, 'download', side_effect=ConnectionError('offline')):
-            with self.assertRaises(bluehole.UpdateUnavailable):
+                patch.object(bluehole, 'urlopen', side_effect=offline):
+            with self.assertRaisesRegex(bluehole.UpdateOffline, 'download Blue Hole'):
+                bluehole.update(self.manager, self.release, 'main')
+        with patch.object(bluehole, 'branch_commit', side_effect=URLError(socket.gaierror(socket.EAI_AGAIN, 'DNS unavailable'))):
+            with self.assertRaises(bluehole.UpdateOffline):
                 bluehole.update(self.manager, self.release, 'main')
         with self.assertRaises(OperationCancelled):
             bluehole.update(self.manager, self.release, 'main', cancelled=lambda: True)
+
+    def test_github_and_local_failures_do_not_allow_offline_fallback(self):
+        failures = (HTTPError('https://api.github.com/', 503, 'unavailable', {}, None),
+                    URLError(ssl.SSLError('certificate validation failed')),
+                    URLError(TimeoutError('request timed out')),
+                    ValueError('malformed GitHub metadata'))
+        for error in failures:
+            with self.subTest(error=error), patch.object(bluehole, 'branch_commit', side_effect=error):
+                with self.assertRaises(type(error)) as raised:
+                    bluehole.update(self.manager, self.release, 'main')
+                self.assertIs(raised.exception, error)
+        disk_error = OSError(errno.ENETUNREACH, 'package destination is on an unavailable volume')
+        with patch.object(bluehole, 'branch_commit', return_value='a' * 40), \
+                patch.object(bluehole, 'urlopen'), patch.object(Path, 'open', side_effect=disk_error):
+            with self.assertRaises(OSError) as raised:
+                bluehole.update(self.manager, self.release, 'main')
+            self.assertIs(raised.exception, disk_error)
 
     def test_versioned_branch_resolution_uses_latest_baseline_for_selected_channel(self):
         self.resolver.stop()

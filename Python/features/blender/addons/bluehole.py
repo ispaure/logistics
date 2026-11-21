@@ -1,17 +1,21 @@
 """Blue Hole packages from pinned GitHub commits or a local working tree."""
 import ast
+from contextlib import contextmanager
 from dataclasses import replace
+import errno
 from pathlib import Path, PurePosixPath
 import re
+import socket
 import subprocess
 from tempfile import TemporaryDirectory
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 from urllib.parse import quote
 import zipfile
 
 from commonUtils.persistence.publication import rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
-from commonUtils.runtime.streams import copy_stream
+from commonUtils.runtime.streams import copy_stream, iter_chunks, write_all
 from features.blender.addons.library import Addon, inspect_package, legacy_version, version_string, version_tuple
 from features.blender.installation.releases import relative_path
 
@@ -22,8 +26,33 @@ DEFAULT = {'enabled': True, 'branch': 'main', 'deluxe': False, 'auto_update': Tr
 VERSION_BRANCH = re.compile(r'blender-(\d+\.\d+\.\d+)/(main|beta|alpha)')
 
 
-class UpdateUnavailable(ValueError):
-    """A remote check/download failed, allowing an installed-copy fallback."""
+class UpdateOffline(ValueError):
+    """GitHub could not be reached, allowing an installed-copy fallback."""
+
+
+_UNREACHABLE = {
+    getattr(errno, name)
+    for name in ('ENETDOWN', 'ENETUNREACH', 'EHOSTDOWN', 'EHOSTUNREACH',
+                 'WSAENETDOWN', 'WSAENETUNREACH', 'WSAEHOSTDOWN', 'WSAEHOSTUNREACH')
+    if hasattr(errno, name)
+}
+
+
+@contextmanager
+def _offline_on_network_error(message):
+    try:
+        yield
+    except OSError as error:
+        reason = error.reason if isinstance(error, URLError) else error
+        if isinstance(error, HTTPError) or not isinstance(reason, OSError):
+            raise
+        if isinstance(reason, socket.gaierror):
+            unreachable = reason.errno in (socket.EAI_AGAIN, socket.EAI_NONAME)
+        else:
+            unreachable = reason.errno in _UNREACHABLE
+        if not unreachable:
+            raise
+        raise UpdateOffline(message) from error
 
 
 class NoCompatibleBranch(ValueError):
@@ -147,7 +176,9 @@ def branch_commit(branch):
     if not valid_branch(branch):
         raise ValueError('Invalid Blue Hole branch')
     from commonUtils.runtime.updates.github import json_get
-    commit = json_get(f'https://api.github.com/repos/ispaure/BlueHole/branches/{quote(branch, safe="")}')['commit']['sha']
+    record = json_get(f'https://api.github.com/repos/ispaure/BlueHole/branches/{quote(branch, safe="")}')
+    head = record.get('commit') if isinstance(record, dict) else None
+    commit = head.get('sha') if isinstance(head, dict) else None
     if not isinstance(commit, str) or not re.fullmatch(r'[a-f0-9]{40}', commit):
         raise ValueError('GitHub returned an invalid Blue Hole commit')
     return commit
@@ -156,19 +187,23 @@ def branch_commit(branch):
 def download(commit, destination, cancelled):
     request = Request(f'https://codeload.github.com/ispaure/BlueHole/zip/{commit}',
                       headers={'User-Agent': 'Logistics-Blender'})
-    with urlopen(request, timeout=30) as response, destination.open('wb') as output:
-        copy_stream(response, output, cancelled=cancelled)
+    with _offline_on_network_error('Could not reach GitHub to download Blue Hole'):
+        response = urlopen(request, timeout=30)
+    with response, destination.open('wb') as output:
+        chunks = iter_chunks(response, cancelled=cancelled)
+        while True:
+            with _offline_on_network_error('Lost access to GitHub while downloading Blue Hole'):
+                chunk = next(chunks, None)
+            if chunk is None:
+                break
+            write_all(output, chunk, cancelled=cancelled)
 
 
 def update(manager, release, branch, *, cancelled=lambda: False):
     check_cancelled(cancelled)
-    try:
+    with _offline_on_network_error(f'Could not reach GitHub to check Blue Hole {branch}'):
         remote_branch = resolve_branch(branch, release.version)
         commit = branch_commit(remote_branch)  # Always compare branch head, even with a warm cache.
-    except NoCompatibleBranch:
-        raise
-    except (OSError, ValueError, KeyError, TypeError) as error:
-        raise UpdateUnavailable(f'Could not check Blue Hole {branch}: {error}') from error
     check_cancelled(cancelled)
     root = manager.root / 'addons' / 'bluehole'
     destination = manager._contained(root, remote_branch, commit)
@@ -185,10 +220,7 @@ def update(manager, release, branch, *, cancelled=lambda: False):
                 with TemporaryDirectory(prefix='.github-', dir=destination.parent) as temp:
                     workspace = Path(temp)
                     archive_path = workspace / 'github.zip'
-                    try:
-                        download(commit, archive_path, cancelled)
-                    except OSError as error:
-                        raise UpdateUnavailable(f'Could not download Blue Hole {branch}: {error}') from error
+                    download(commit, archive_path, cancelled)
                     staged = workspace / 'release'
                     staged.mkdir()
                     # GitHub archive roots include a commit suffix; the addon module
@@ -209,12 +241,14 @@ def update(manager, release, branch, *, cancelled=lambda: False):
                             with source.open(member) as inp, output.open(info, 'w') as out:
                                 copy_stream(inp, out, cancelled=cancelled)
                     addon = inspect_package(staged / 'addon.zip')
-                    if addon.identity != IDENTITY:
+                    if addon.identity != IDENTITY or addon.name != 'Blue Hole':
                         raise ValueError('Unexpected Blue Hole addon identity')
                     check_cancelled(cancelled)
                     rename_exclusive(staged, destination)
     addon = replace(inspect_package(package), source=f'GitHub · {remote_branch}', branch=remote_branch)
-    if addon.identity != IDENTITY or not addon.compatible(release):
+    if addon.identity != IDENTITY or addon.name != 'Blue Hole':
+        raise ValueError('Unexpected Blue Hole addon identity')
+    if not addon.compatible(release):
         raise ValueError(f'Blue Hole ({branch}) is not declared compatible with Blender {release.version}')
     return addon, commit
 
@@ -235,7 +269,13 @@ def installed_fallback(manager, release, root, state):
     if not script.is_file() or script.stat().st_size > 1024 ** 2:
         raise ValueError('The installed Blue Hole entrypoint is missing or invalid')
     info = addon_info(script.read_bytes(), script)
-    addon = Addon(IDENTITY, str(info.get('name') or 'Blue Hole'), legacy_version(info.get('version', '')),
+    if info.get('name') != 'Blue Hole':
+        raise ValueError('The installed addon is not Blue Hole')
+    try:
+        version = legacy_version(info.get('version'))
+    except ValueError as error:
+        raise ValueError('The installed Blue Hole version is missing or invalid') from error
+    addon = Addon(IDENTITY, info['name'], version,
                   version_string(info['blender']) if info.get('blender') else '', '', 'Legacy addon',
                   'BlueHole', 'BlueHole/', (), None, entry['digest'], source=entry.get('source', f"GitHub · {current['branch']}"),
                   published=entry.get('published', ''), package_name=entry.get('package_name', ''))

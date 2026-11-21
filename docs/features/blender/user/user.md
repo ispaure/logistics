@@ -80,8 +80,9 @@ to on, including for existing presets, and saves immediately for this preset.
 With it on, launch resolves the newest
 compatible Blender baseline (for example `blender-4.5.1/main`), checks its head
 and downloads that exact commit if needed. An incompatible update stops launch.
-On network failure, an already installed compatible copy can launch with a
-warning showing its actual commit. Deluxe changes wait for a successful online
+If GitHub is unreachable while offline, Logistics quietly launches an already
+installed compatible copy. A selected channel change stays pending and is
+retried on the next launch. Legacy Deluxe changes wait for a successful online
 update. First installs need internet access.
 
 Turn **Auto-update on launch** off to keep the installed GitHub version without

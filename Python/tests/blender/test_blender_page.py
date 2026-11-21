@@ -431,30 +431,84 @@ class BlenderPageTests(QtTestCase):
         install.assert_not_called()
         launch.assert_called_once_with(self.builds[0], 'Art')
 
-    def test_offline_bluehole_launches_installed_copy_and_displays_warning(self):
+    def test_bluehole_launch_quietly_keeps_offline_channel_pending_and_retries(self):
+        from dataclasses import replace
+        import errno
+        from urllib.error import HTTPError, URLError
         import zipfile
+
         from features.blender.addons import bluehole
         from features.blender.addons.library import inspect_package
-        self.manager.create_preset(self.builds[0], 'Art')
+
+        release = self.builds[0]
+        preset = self.manager.create_preset(release, 'Art')
         page = BlenderPage(manager=self.manager)
         package = Path(self.temporary.name) / 'bluehole.zip'
         with zipfile.ZipFile(package, 'w') as archive:
             archive.writestr('BlueHole/__init__.py', 'bl_info={"name":"Blue Hole","version":(1,0,0),"blender":(3,0,0)}')
-        with patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
-                patch('features.blender.addons.scanning.run_blender_script'), \
-                patch.object(bluehole, 'update', return_value=(inspect_package(package), 'a' * 40)):
-            page.library.apply(self.builds[0], 'Art', [], bluehole={'enabled': True, 'branch': 'main'})
-        package.unlink()
+        addon = inspect_package(package)
+        choice = {'enabled': True, 'branch': 'main', 'auto_update': False}
+        commits = {'main': 'a' * 40, 'beta': 'b' * 40, 'alpha': 'c' * 40}
+        def online(channel, _version):
+            return channel
+
         with patch.object(self.manager, 'ready', return_value=True), \
                 patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
                 patch('features.blender.addons.scanning.run_blender_script'), \
-                patch.object(bluehole, 'resolve_branch', side_effect=ConnectionError('offline')), \
+                patch.object(bluehole, 'update', return_value=(replace(addon, branch='main'), commits['main'])):
+            page.library.apply(release, 'Art', [], bluehole=choice)
+
+        def assert_installed(selected, installed):
+            state = page.library.selection(preset)
+            self.assertEqual(state['bluehole']['branch'], selected)
+            self.assertFalse(state['bluehole']['auto_update'])
+            self.assertEqual(state['installed_bluehole']['branch'], installed)
+            self.assertEqual(state['installed_bluehole']['commit'], commits[installed])
+
+        with patch.object(self.manager, 'ready', return_value=True), \
+                patch.object(self.manager, 'executable', return_value=Path('/fixture/blender')), \
+                patch('features.blender.addons.scanning.run_blender_script'), \
+                patch.object(bluehole, 'resolve_branch', side_effect=online) as resolve, \
+                patch.object(bluehole, 'branch_commit', side_effect=commits.__getitem__), \
                 patch.object(self.manager, 'launch', return_value=42) as launch:
+            for channel, commit in commits.items():
+                cache = self.manager.root / 'addons/bluehole' / channel / commit / 'addon.zip'
+                cache.parent.mkdir(parents=True)
+                cache.write_bytes(package.read_bytes())
+            choice['branch'] = 'beta'
+            page.library.save_pending_selection(release, 'Art', [], bluehole=choice)
             page._launch()
             self._wait_for_operation(page)
-        launch.assert_called_once_with(self.builds[0], 'Art')
-        self.assertIn('Using installed Blue Hole main', page.status.text())
-        self.assertIn('a' * 12, page.status.text())
+            assert_installed('beta', 'beta')
+            resolve.assert_called_once_with('beta', release.version)
+
+            choice['branch'] = 'alpha'
+            page.library.save_pending_selection(release, 'Art', [], bluehole=choice)
+            resolve.side_effect = URLError(OSError(errno.ENETUNREACH, 'network unreachable'))
+            page._launch()
+            self._wait_for_operation(page)
+            assert_installed('alpha', 'beta')
+            self.assertEqual(page.status.text(), 'Launching Blender finished.')
+
+            resolve.side_effect = online
+            page._launch()
+            self._wait_for_operation(page)
+            assert_installed('alpha', 'alpha')
+
+            resolve.reset_mock()
+            page._launch()
+            self._wait_for_operation(page)
+            resolve.assert_not_called()
+            self.assertEqual(launch.call_count, 4)
+
+            choice['branch'] = 'main'
+            page.library.save_pending_selection(release, 'Art', [], bluehole=choice)
+            resolve.side_effect = HTTPError('https://api.github.com/', 503, 'unavailable', {}, None)
+            page._launch()
+            self._wait_for_operation(page)
+            assert_installed('main', 'alpha')
+            self.assertIn('HTTP Error 503', page.status.text())
+            self.assertEqual(launch.call_count, 4)
 
     def test_close_cancels_worker_and_emits_idle_after_retirement(self):
         page = BlenderPage(manager=self.manager)

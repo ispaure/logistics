@@ -243,7 +243,6 @@ class AddonLibrary:
     def __init__(self, manager, *, provided_root=None, preset_root=None):
         self.manager = manager
         self.errors = []
-        self.warnings = []
         self.legacy_root = manager.root / 'addons' / 'blender'
         self.preset_root = preset_root
         self.root = manager._contained(preset_root, 'addon-library') if preset_root is not None else self.legacy_root
@@ -424,7 +423,6 @@ class AddonLibrary:
         atomic_write_bytes(path, json.dumps(state, indent=2).encode('utf-8'))
 
     def apply(self, release, name, identities, *, bluehole=None, cancelled=lambda: False):
-        self.warnings = []
         from features.blender.installation.install import installation_lock
         root = self.manager.preset(release, name)
         with installation_lock(root), TemporaryDirectory(prefix='.addon-update-', dir=root.parent) as temp:
@@ -545,12 +543,10 @@ class AddonLibrary:
                 try:
                     addon, commit = bluehole_source.update(self.manager, release, config['branch'], cancelled=cancelled)
                     installed_branch = addon.branch or config['branch']
-                except bluehole_source.UpdateUnavailable as error:
+                except bluehole_source.UpdateOffline:
                     check_cancelled(cancelled)
                     addon, installed_branch, commit = bluehole_source.installed_fallback(self.manager, release, root, state)
                     fallback = True
-                    pending = 'update and Deluxe changes' if stamp_deluxe else 'update'
-                    self.warnings.append(f'{error}. Using installed Blue Hole {installed_branch} · {commit[:12]}; {pending} will be retried next launch.')
             if commit:
                 installed = {'branch': installed_branch, 'commit': commit, 'version': addon.version}
         config['commit'] = commit
