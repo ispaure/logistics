@@ -169,9 +169,20 @@ class ReaderAppearanceProbe(LogisticsMobile):
         await wait_for_text(owner.provider_epub_view.webview, 'Native EPUB first')
 
         async def turn(button, index, chapter):
-            await until(lambda: not owner.cloud_busy and owner._provider_progress.worker is None)
+            panel = owner.provider_epub_view
+            bridge = panel.webview._chapter_bridge
+            # Body text can render before the native chapter bridge publishes
+            # position. The footer deliberately consumes input during that gap.
+            await until(lambda: not owner.cloud_busy and owner._provider_progress.worker is None
+                        and panel.position_ready and not bridge.input_suspended)
             await self.press(button)
-            await until(lambda: owner.provider_epub_view.index == index)
+            try:
+                await until(lambda: owner.provider_epub_view.index == index)
+            except TimeoutError as error:
+                sample = await panel.webview.evaluate_javascript(
+                    "JSON.stringify(window.reader?.pagination() || null)")
+                raise AssertionError(('EPUB footer did not reach chapter', index,
+                                      owner.provider_epub_view.index, sample)) from error
             await wait_for_text(owner.provider_epub_view.webview, 'Native EPUB ' + chapter)
 
         await turn(owner.next_page, 1, 'second')
