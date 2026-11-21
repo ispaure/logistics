@@ -38,11 +38,12 @@ class CycleCollectionTests(unittest.IsolatedAsyncioTestCase):
 
         def run_callback(arg):
             calls_at_dispatch.extend(cf.mock_calls)
-            fired.cancel()
+            firing_handle().cancel()
             gc.collect()
 
         callback = Mock(side_effect=run_callback)
         fired = handle_type(loop=loop, timeout=1, callback=callback, args=('fired',))
+        firing_handle = weakref.ref(fired)
         cancelled = handle_type(loop=loop, timeout=2, callback=callback, args=('cancelled',))
         first, second = fired._timer, cancelled._timer
         dispatch = cf.CFRunLoopTimerCreate.call_args_list[0].args[5]
