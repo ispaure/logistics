@@ -92,16 +92,21 @@ class WorkspaceColumns:
         self.layout()
         self.app.native_host.activate(self.app.native_host.state.destination)
 
-    def layout_sidebar(self, container):
+    def layout_sidebar(self, container, *, insets_only=False):
         if self.closed:
             return
         # navigationController can resolve to the window's outer navigation
         # controller through the tab hierarchy. This column owns its own frame.
+        previous_insets = (container.top_inset, container.bottom_inset,
+                           container.left_inset, container.right_inset) if insets_only else None
         safe = container.native.safeAreaInsets
         container.top_inset, container.bottom_inset = safe.top, safe.bottom
         container.left_inset, container.right_inset = safe.left, safe.right
         from .ios_system_occlusions import compact_content_top
         compact_content_top(container)
+        if previous_insets == (container.top_inset, container.bottom_inset,
+                               container.left_inset, container.right_inset):
+            return
         from .folder_hub_ui import reflow_folder_notice
         reflow_folder_notice(self.app, float(container.native.bounds.size.width - safe.left - safe.right) - 24)
         if container.content is not None:
@@ -175,9 +180,13 @@ class WorkspaceColumns:
         # pane and can strand its actions across the top.
         targets = tuple((float(frame.origin.x), float(frame.origin.y),
                          float(frame.size.width), float(frame.size.height)) for frame in frames)
-        if targets == getattr(self, '_layout_targets', None):
-            return
         previous = getattr(self, '_layout_targets', None)
+        if targets == previous:
+            # The window occlusion observer can wake Workspaces without a
+            # sidebar layout callback or any change in the pane allocation.
+            if not document:
+                self.layout_sidebar(self.sidebar, insets_only=True)
+            return
         self._layout_targets = targets
         children = (self.sidebar.controller, self.navigation)
         from ctypes import CDLL, c_bool

@@ -19,6 +19,7 @@ from unittest.mock import Mock, patch
 import toga
 
 from mobile.ios_workspace_columns import WorkspaceColumns, sync
+from mobile.ios_system_occlusions import observe_window_occlusions
 from mobile.workspace_navigation import WorkspaceFrame
 
 
@@ -121,6 +122,7 @@ class WorkspaceColumnsTests(TestCase):
         columns.app = NS(routes=NS(screens={'files': []}))
         columns.sidebar = NS(controller=NS(view=NS(hidden=False)))
         columns.controller = NS(view=native)
+        columns.layout_sidebar = Mock()
         columns._layout_targets = ((62, 0, 367, 402), (445, 0, 429, 402))
         def rect(origin, size):
             return NS(origin=NS(x=origin[0], y=origin[1]), size=NS(width=size[0], height=size[1]))
@@ -130,6 +132,99 @@ class WorkspaceColumnsTests(TestCase):
             columns.layout()
         self.assertIs(native.frame, bounds)
         self.assertEqual(native.bounds.size.height, 402)
+
+    def test_cold_landscape_replays_sidebar_insets_on_root_only_occlusion_update(self):
+        def rect(origin, size):
+            return NS(origin=NS(x=origin[0], y=origin[1]), size=NS(width=size[0], height=size[1]))
+
+        columns = object.__new__(WorkspaceColumns)
+        columns.closed = False
+        callbacks = []
+        navigation = NS(view=NS(setNeedsLayout=Mock(), layoutIfNeeded=Mock()), navigationBar=Mock())
+
+        class Adapter(NS):
+            pass
+
+        adapter = Adapter(navigation=[navigation])
+        columns.app = NS(active_host=True, routes=NS(screens={'files': []}),
+                         native_host=NS(adapter=adapter), loop=NS(call_soon=callbacks.append),
+                         resize_workspace=columns.layout)
+        columns.navigation = navigation
+        columns.master = NS(mount_native_folder_prompt=Mock())
+        columns.sidebar_box = object()
+        safe = NS(top=84, bottom=20, left=0, right=0)
+        window = NS(safeAreaInsets=safe)
+        root = NS(superview=None, bounds=rect((0, 0), (951, 669)),
+                  safeAreaInsets=safe, window=window, convertRect=lambda bounds, **kwargs: bounds)
+        columns.controller = NS(view=root)
+        native = NS(bounds=rect((0, 0), (374, 669)), safeAreaInsets=safe, window=window,
+                    convertRect=lambda bounds, **kwargs: bounds,
+                    respondsToSelector=lambda selector: True, layoutIfNeeded=Mock())
+        refresh = Mock()
+        columns.sidebar = NS(native=native, controller=NS(view=native),
+                             top_inset=0, bottom_inset=0, left_inset=0, right_inset=0,
+                             content=NS(interface=NS(refresh=refresh)))
+        bridge = NS(CGRect=rect, SEL=lambda value: value)
+        with patch.dict('sys.modules', {'rubicon.objc': bridge}), \
+                patch('mobile.fold_layout.division', return_value=None), \
+                patch('mobile.fold_layout.has_fold', return_value=True), \
+                patch('ctypes.CDLL') as library, \
+                patch('mobile.ios_toolbar.vertical_edge', return_value=2) as edge, \
+                patch('mobile.appearance.reserve_navigation'), \
+                patch('mobile.folder_hub_ui.reflow_folder_notice'), \
+                patch('mobile.ios_system_occlusions.reserve_bar_clearance'), \
+                patch('mobile.ios_reader_chrome.occlusion_geometry', return_value=()) as regions:
+            library.return_value.UIAccessibilityIsReduceMotionEnabled.return_value = True
+            # The first layout is already landscape. UIKit has supplied the safe
+            # area and bar edge, but has yet to report the trailing system cluster.
+            columns.layout()
+            initial_frame = native.frame
+            self.assertEqual(columns.sidebar.top_inset, 84)
+            refresh.assert_called_once_with()
+            observe_window_occlusions(columns.app, root)
+            callbacks.pop()()
+            refresh.assert_called_once_with()
+
+            # Only the root is notified. Neither Toga's sidebar callback nor
+            # a rotation runs before the observer replays workspace layout.
+            regions.return_value = ((867, 0, 84, 84),)
+            observe_window_occlusions(columns.app, root)
+            callbacks.pop()()
+            self.assertEqual(columns.sidebar.top_inset, 0)
+            self.assertEqual(columns.sidebar.bottom_inset, 20)
+            self.assertIs(native.frame, initial_frame)
+            self.assertEqual(refresh.call_count, 2)
+
+            # A later cluster that overlaps the sidebar must restore clearance,
+            # still with the same frame and UIKit safe-area rectangle.
+            regions.return_value = ((300, 0, 52, 96),)
+            observe_window_occlusions(columns.app, root)
+            callbacks.pop()()
+            self.assertEqual(columns.sidebar.top_inset, 104)
+            regions.return_value = ()
+            observe_window_occlusions(columns.app, root)
+            callbacks.pop()()
+            self.assertEqual(columns.sidebar.top_inset, 84)
+            self.assertEqual(refresh.call_count, 4)
+            self.assertIs(native.frame, initial_frame)
+            native.layoutIfNeeded.assert_called_once_with()
+
+            # A warm rotation uses the changed-frame path. Horizontal bars
+            # keep their native inset, even with a side-only reserved region.
+            edge.return_value = 0
+            regions.return_value = ((867, 0, 84, 84),)
+            root.bounds = rect((0, 0), (669, 951))
+            safe.top = 116
+            columns.layout()
+            self.assertEqual(columns.sidebar.top_inset, 116)
+            edge.return_value = 2
+            root.bounds = rect((0, 0), (951, 669))
+            safe.top = 84
+            columns.layout()
+            self.assertEqual(columns.sidebar.top_inset, 0)
+            self.assertEqual(native.frame, initial_frame)
+            self.assertEqual(refresh.call_count, 6)
+            columns.master.mount_native_folder_prompt.assert_called_once_with()
 
     def test_documents_and_their_tools_use_whole_column_container_then_restore_browser(self):
         def rect(origin, size):
