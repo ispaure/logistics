@@ -54,18 +54,32 @@ def blocked_workers(sample):
 def stalled_view(error):
     """A failed DOM assertion or a live/unattached process is never infrastructure proof."""
     for line in error.splitlines():
-        if not (line.startswith('RuntimeError: WebView did not render ')
-                and "url='app-document://" in line and ', native=' in line):
+        if not line.startswith('RuntimeError: WebView did not render '):
+            continue
+        report, separator, native = line.partition(', native=')
+        _, _, live_url = report.rpartition(', url=')
+        if not separator or (not live_url.startswith("'app-document://") and live_url != 'None'):
             continue
         try:
-            state = ast.literal_eval(line.split(', native=', 1)[1])
+            state = ast.literal_eval(native)
         except (ValueError, SyntaxError, RecursionError):
             return False
-        return (isinstance(state, dict) and state.get('platform_backend') == 'toga_iOS.widgets.webview'
+        if not (isinstance(state, dict) and state.get('platform_backend') == 'toga_iOS.widgets.webview'
                 and state.get('parent') is True and state.get('window') is True
                 and state.get('loading') is True and state.get('progress') == .1
                 and type(state.get('web_process_pid')) is int and state['web_process_pid'] == 0
-                and type(state.get('provisional_process_pid')) is int and state['provisional_process_pid'] == 0)
+                and type(state.get('provisional_process_pid')) is int and state['provisional_process_pid'] == 0):
+            return False
+        if live_url != 'None':
+            return True
+        # Before its first commit, the generated Documentation view can have
+        # an approved navigation target without a current URL.
+        allowed_url = state.get('allowed_url')
+        return (report == "RuntimeError: WebView did not render 'Retain the current help page.'; last value=None, url=None"
+                and isinstance(allowed_url, str)
+                and re.fullmatch(r'app-document://markdown\.invalid/wiki/[a-f0-9]{32}/docs\.md', allowed_url) is not None
+                and state.get('load_events') == []
+                and 'url_error' not in state)
     return False
 
 

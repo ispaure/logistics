@@ -52,6 +52,7 @@ class NativeStartupRecoveryTests(unittest.TestCase):
             device=self.device, started_ns=started)))
         state = dict(platform_backend='toga_iOS.widgets.webview', parent=True, window=True,
                      loading=True, progress=.1, web_process_pid=0, provisional_process_pid=0)
+        self.view_state = state
         self.error = "RuntimeError: WebView did not render 'Transfer details'; last value=None, url='app-document://logistics.invalid/transfer/', native=" + repr(state)
         (self.logs / 'ios-native-ui-error.txt').write_text(self.error)
         (self.logs / 'ios-native-ui-fault.log').write_text('')
@@ -91,6 +92,55 @@ class NativeStartupRecoveryTests(unittest.TestCase):
         proof = self.qualify()
         self.assertEqual(proof['blocked_workers'], [11, 12, 13])
         self.assertEqual(proof['cpus'], 3)
+
+    def documentation_stall(self, **state_changes):
+        state = dict(self.view_state, allowed_url='app-document://markdown.invalid/wiki/' + 'a' * 32 + '/docs.md',
+                     load_events=[])
+        state.update(state_changes)
+        return ("RuntimeError: WebView did not render 'Retain the current help page.'; "
+                "last value=None, url=None, native=" + repr(state))
+
+    def test_documentation_stall_without_live_url_still_requires_all_blocked_workers(self):
+        (self.logs / 'ios-native-ui-error.txt').write_text(self.documentation_stall())
+        self.assertEqual(self.qualify()['blocked_workers'], [11, 12, 13])
+        self.sample_path.write_text(self.sample_path.read_text().replace('Thread_13', 'Thread_12'))
+        self.assertIsNone(self.qualify())
+
+    def test_missing_live_url_requires_the_generated_documentation_target_before_load_events(self):
+        for state in (dict(allowed_url=None),
+                      dict(allowed_url='app-document://logistics.invalid/transfer/'),
+                      dict(allowed_url='app-document://markdown.invalid/wiki/a/docs.md'),
+                      dict(allowed_url='app-document://markdown.invalid/wiki/' + 'a' * 32 + '/other.md'),
+                      dict(load_events=None), dict(load_events=[{'phase': 'start'}]),
+                      dict(load_events=[{'phase': 'commit'}]), dict(url_error='Failed to read URL'),
+                      dict(web_process_pid=42), dict(provisional_process_pid=42),
+                      dict(parent=False), dict(window=False), dict(loading=False), dict(progress=.4)):
+            with self.subTest(state=state):
+                self.assertFalse(recovery.stalled_view(self.documentation_stall(**state)))
+        error = self.documentation_stall()
+        for before, after in (('Retain the current help page.', 'Transfer details'),
+                              ('last value=None', "last value='wrong article'"),
+                              ('url=None', "url='about:blank'")):
+            with self.subTest(change=after):
+                self.assertFalse(recovery.stalled_view(error.replace(before, after, 1)))
+
+    def test_documentation_stall_without_live_url_never_replays_a_live_original_process(self):
+        first = RuntimeError('Native app UI run failed (232): original failure')
+        def fail():
+            self.write_evidence()
+            (self.logs / 'ios-native-ui-error.txt').write_text(self.documentation_stall())
+            raise first
+        operation = Mock(side_effect=fail)
+        with patch.object(recovery.os, 'cpu_count', return_value=3), \
+                patch('build_manager.apple_simulators.AppleSimulators') as client, \
+                patch.object(recovery, 'process_absent', return_value=False) as absent:
+            client.return_value.matching.return_value = dict(udid=self.device, state='Booted')
+            with self.assertRaises(RuntimeError) as caught:
+                recovery.run(operation, self.device, tools=self.tools,
+                             logs=self.logs, source_path=self.source_path)
+        self.assertIs(caught.exception, first)
+        absent.assert_called_once_with(900)
+        operation.assert_called_once_with()
 
     def test_a_spare_worker_or_repeated_stack_never_proves_starvation(self):
         sample = self.sample_path.read_text()
