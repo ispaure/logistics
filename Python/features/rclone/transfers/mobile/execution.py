@@ -156,6 +156,7 @@ class TransferExecution:
             worker = asyncio.create_task(asyncio.to_thread(work, client, cancel.is_set, progress))
             result = await wait_for_transfer(worker, cancel, client)
             if not view.current(client, generation):
+                state.display_revoked = True
                 state.result = 'failed'
                 state.message = 'Sync stopped because the connection changed; completed destination changes remain.'
                 return False
@@ -178,7 +179,10 @@ class TransferExecution:
             raise
         except Exception as error:
             state.result = 'cancelled' if cancel.is_set() else 'failed'
-            state.message = 'Sync stopped; completed destination changes remain. ' + str(error)[:350]
+            state.display_revoked |= not view.current(client, generation)
+            state.message = 'Sync stopped; completed destination changes remain.'
+            if not state.display_revoked:
+                state.message += ' ' + str(error)[:350]
             return False
         finally:
             state.finished_at = monotonic()

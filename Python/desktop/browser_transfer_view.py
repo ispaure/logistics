@@ -69,7 +69,7 @@ def present_browser_transfer(operation, title, *, provider=None):
     private = getattr(provider, 'private', False)
     status = BrowserTransferStatus(operation, private=private)
     window = ProcessProgressWindow(f'Transfers · {title}', runner=status,
-                                   presentation=ProcessProgressPresentation)
+                                   presentation=ProcessProgressPresentation, context={'notify_transfer': True})
     if private:
         from services.documents.ui.private_views import protect_private_view
         protect_private_view(window, provider)

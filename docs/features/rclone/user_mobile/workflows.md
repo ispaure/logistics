@@ -19,6 +19,21 @@ If you open an online workspace during a transfer, the detail pane explains
 why browsing must wait and offers **View transfer progress**. Workspaces
 becomes available again when the transfer ends.
 
+When a managed sync or download runs for at least 30 seconds and you are away
+from its progress view, an in-app banner can take you back to **Transfers**.
+For a failed or incomplete transfer, review what changed before retrying.
+Short jobs and cancellations report their outcome in **Transfers**.
+
+Turn on **Settings → Workspaces → Background transfer notifications** to get
+generic system notifications while the app is in the background. Android and iOS
+apply their own permissions and notification settings. If a result is ready and
+system delivery is unavailable, Logistics shows the banner when you return.
+The sync shortcut also keeps the latest eligible result available. Notification
+text omits filenames, paths, connection names and error output. Unlock a
+protected connection in Logistics to review its details. Android and iOS can
+suspend or stop the app. A notification does not grant background execution
+time, and interrupted downloads may require recovery.
+
 ### Choose storage on the first pull
 
 For a new copy from a session-only crypt remote, the **Use an encrypted copy

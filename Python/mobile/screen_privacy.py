@@ -213,6 +213,8 @@ class ScreenPrivacy:
         if self.disposed:
             return
         self.interrupted = True
+        from .transfer_notifications import sync as sync_transfer_notices
+        sync_transfer_notices(self.app)
         self._pause_folder_work()
         self._set_directory_index_active(False)
         self.wifi_revision = getattr(self, 'wifi_revision', 0) + 1
@@ -229,6 +231,8 @@ class ScreenPrivacy:
         if self.disposed:
             return
         self.inactive = True  # Deny reentrant playback before native/UI effects.
+        from .transfer_notifications import sync as sync_transfer_notices
+        sync_transfer_notices(self.app)
         self._pause_folder_work()
         self._set_directory_index_active(False)
         self.browser_refresh_pending = True
@@ -464,6 +468,9 @@ class ScreenPrivacy:
             self.browser_refresh_pending = False
             from .browser_ui import schedule_visible_file_browser_refresh
             schedule_visible_file_browser_refresh(self.app)
+
+        from .transfer_notifications import sync as sync_transfer_notices
+        sync_transfer_notices(self.app)
 
     def sync_lock_view(self, gates):
         """Replace the entire navigation root; routes may update safely behind it."""

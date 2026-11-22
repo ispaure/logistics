@@ -35,6 +35,9 @@ class FolderActionsPage(DocumentsPage):
         fresh = window not in self.records
         if fresh:
             context = window.context
+            if context.get('notify_transfer'):
+                from .transfer_notifications import bind_transfer_notice
+                bind_transfer_notice(self, window)
             source, destination = context.get('source', ''), context.get('destination', '')
             if source and destination:
                 window.setWindowTitle(f"{context.get('operation', 'Sync')}: "
@@ -63,9 +66,11 @@ class FolderActionsPage(DocumentsPage):
             return
         label = 'Complete' if result.succeeded else 'Cancelled' if result.state == 'cancelled' else 'Failed'
         record['unseen'] = not self._viewed(window)
-        window.setWindowTitle(f"{record['name']} · {label}")
+        guard = getattr(window, '_private_view_guard', None)
+        if guard is None or not guard.locked:
+            window.setWindowTitle(f"{record['name']} · {label}")
         self.changed.emit()
-        if not self.closing and record['unseen']:
+        if not self.closing and record['unseen'] and 'notify_transfer' not in window.context:
             notice = self.notify(f"{record['name']} · {label}", result.error or 'Open Workspace actions for details.',
                         failed=result.state != 'cancelled' and not result.succeeded,
                         outcome='cancelled' if result.state == 'cancelled' else None)

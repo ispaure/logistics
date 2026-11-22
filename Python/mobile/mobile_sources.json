@@ -203,6 +203,8 @@
     "startup.py",
     "storage_controller.py",
     "storage_ui.py",
+    "transfer_notification_native.py",
+    "transfer_notifications.py",
     "transfer_status.py",
     "trusted_wifi.py",
     "ui_metrics.py",

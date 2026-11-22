@@ -25,8 +25,48 @@ def workspaces(app):
     box.add(switch_row(app, 'Show Legacy', app.show_legacy_choice,
         'Show older folders and credentials named Legacy. Resets when the app closes.'))
     if enabled(app.preferences, 'rclone'):
+        from mobile import transfer_notification_native
+        if transfer_notification_native.supported(app):
+            add_transfer_notification_setting(app, box)
         from .reader_history import migration_controls
         migration_controls(app, box)
         box.add(page_button('rclone connections…', on_press=app.show_cloud_connections, style=Pack(height=48)))
         box.add(page_button('SMB shares…', on_press=app.show_smb_connection, style=Pack(height=48)))
     return box
+
+
+def add_transfer_notification_setting(app, box):
+    from mobile.transfer_notification_native import request
+    from mobile.transfer_notifications import PREFERENCE
+
+    def change(widget, **kwargs):
+        widget.enabled = False
+
+        def finish(granted):
+            if not app.active_host:
+                return
+            try:
+                app.preferences.save(**{PREFERENCE: 'true' if granted else 'false'})
+            except (OSError, ValueError):
+                status.text = 'The setting could not be saved.'
+            else:
+                status.text = ('Background notifications enabled.' if granted else
+                               'Enable notifications in system settings to receive background transfer results.'
+                               if widget.value else '')
+            widget.value = app.preferences.values[PREFERENCE] == 'true'
+            widget.enabled = True
+
+        if not widget.value:
+            finish(False)
+        else:
+            try:
+                request(app, finish)
+            except Exception:
+                finish(False)
+
+    toggle = toga.Switch('Background transfer notifications',
+        value=app.preferences.values[PREFERENCE] == 'true', on_change=change, style=Pack(height=48))
+    status = toga.Label('')
+    box.add(switch_row(app, 'Background transfer notifications', toggle,
+        'Get a system notification for long transfers that finish while Logistics is in the background.'))
+    box.add(status)

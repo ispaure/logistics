@@ -23,8 +23,12 @@ class ApplicationNotifications(NotificationCenter):
         self.native_notice = None
         self.published.connect(self._native)
 
+    @staticmethod
+    def native_available():
+        return qt.QSystemTrayIcon.isSystemTrayAvailable() and qt.QSystemTrayIcon.supportsMessages()
+
     def _native(self, notice):
-        if not notice.native or not qt.QSystemTrayIcon.isSystemTrayAvailable() or not qt.QSystemTrayIcon.supportsMessages():
+        if not notice.native or not self.native_available():
             return
         if self.tray is None:
             from .sidebar import DestinationIcon

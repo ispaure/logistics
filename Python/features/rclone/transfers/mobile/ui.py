@@ -10,6 +10,7 @@ __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
 from services.documents.locations import collection_path
+from services.transfer_notifications import start_transfer_notice, transfer_notice
 from services.folders.labels import encrypted_copy_label
 import asyncio
 import toga
@@ -178,6 +179,8 @@ class MirrorUI(TransferReviewUI):
         self.transfer_bytes = getattr(self, 'transfer_bytes', SimpleNamespace(text=''))
         self.render_transfer_summary()
         if present:
+            if not self.transfer_busy:
+                self.dismiss_transfer_status()
             self.show_view(self.transfer_view, route='transfers', title='Transfer')
             self.transfer_view.queue_send()
         percentage = getattr(self, 'transfer_percentage', None)
@@ -441,6 +444,7 @@ class TransferExecutionPresentation:
 
     def started(self):
         owner = self.controller
+        self.completion = start_transfer_notice()
         self.awake = owner.app.acquire_awake_lease()
         owner.set_cloud_busy(True)
         owner.show_transfers(present=(owner.native_host.state.destination == 'files'
@@ -458,6 +462,16 @@ class TransferExecutionPresentation:
         owner.set_cloud_busy(False)
         if not owner.active_host:
             return
+        state = owner.state
+        surface = getattr(owner, '_progress_surface', None)
+        observed = (owner.rclone_ui.transfer_foreground()
+                    and surface is not None and not surface.closed and surface.visible())
+        outcome = {'complete': 'success', 'conflict': 'failure', 'failed': 'failure'}.get(state.result, state.result)
+        completion, self.completion = getattr(self, 'completion', None), None
+        notice = transfer_notice(completion, outcome, observed=observed, details='Transfers',
+                                 locked=state.display_revoked) if completion is not None else None
+        if state.display_revoked:
+            state.message = 'Connection locked or changed. Review again after unlocking.'
         owner.cloud_status.value = owner.transfer_message
         for bar in (owner.cloud_transfer_progress, owner.transfer_progress):
             bar.stop()
@@ -465,7 +479,7 @@ class TransferExecutionPresentation:
             bar.value = 100 if owner.transfer_complete else 0
         owner.transfer_notice.text = import_hint(owner.transfer_message.replace(' · ', '\n'))
         owner.refresh_transfer_status()
-        if owner.transfer_complete:
+        if owner.transfer_complete and notice is None:
             completed_epoch = owner.transfer_epoch
 
             def clear_completion():
@@ -474,3 +488,11 @@ class TransferExecutionPresentation:
 
             owner.loop.call_later(5, clear_completion)
         owner.render_transfer_summary()
+        if notice is not None:
+            epoch = state.epoch
+
+            def details():
+                if owner.active_host and owner.state.epoch == epoch:
+                    owner.show_transfers()
+
+            owner.rclone_ui.publish_transfer_notice(notice, details)

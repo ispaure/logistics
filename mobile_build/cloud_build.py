@@ -129,7 +129,8 @@ def configure_android_appearance(project):
         ET.SubElement(root, 'uses-permission', {'{' + namespace + '}name': permission})
     for permission in ('android.permission.FOREGROUND_SERVICE', 'android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK',
                        'android.permission.WAKE_LOCK', 'android.permission.ACCESS_WIFI_STATE',
-                       'android.permission.ACCESS_COARSE_LOCATION', 'android.permission.ACCESS_FINE_LOCATION'):
+                       'android.permission.ACCESS_COARSE_LOCATION', 'android.permission.ACCESS_FINE_LOCATION',
+                       'android.permission.POST_NOTIFICATIONS'):
         if not any(item.get('{' + namespace + '}name') == permission for item in root.findall('uses-permission')):
             ET.SubElement(root, 'uses-permission', {'{' + namespace + '}name': permission})
     application = root.find('application')

@@ -98,7 +98,8 @@ def open_download_progress(provider, path, destination, *, published=lambda dest
     release = provider.acquire()
     try:
         window = ProcessProgressWindow('Pull · Download locally', runner=DownloadRunner(release),
-            context={'operation': 'Pull', 'source': provider.storage_label, 'destination': str(destination)},
+            context={'operation': 'Pull', 'source': provider.storage_label, 'destination': str(destination),
+                     'notify_transfer': True},
             presentation=transfer_presentation(dry_run=False))
         def offer_restart(result):
             if window.runner.restart_offered:
@@ -134,7 +135,8 @@ def open_transfer_progress(arguments, *, source, destination, dry_run,
     window = open_process('rclone sync (dry run)' if dry_run else 'rclone sync',
         arguments[0], arguments[1:], parser=RcloneProgressParser(),
         context={'operation': 'Sync (dry run)' if dry_run else 'Sync',
-                 'source': source, 'destination': destination, 'dry_run': dry_run},
+                 'source': source, 'destination': destination, 'dry_run': dry_run,
+                 'notify_transfer': not dry_run, 'transfer_revoked': revoked},
         presentation=transfer_presentation(dry_run=dry_run, show_removals=True),
         **({'environment': environment} if environment is not None else {}))
     watch_transfer(window, credential_path, revoked, cancelled, session_bound=session_bound)

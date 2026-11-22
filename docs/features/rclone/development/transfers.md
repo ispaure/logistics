@@ -9,6 +9,34 @@ Desktop **Workspaces → Cloud → Pull** follows `ui_contributions.py:_get_acti
 3. `execute` consumes approval once, checks the binding and runs mandatory platform preflight. Programmatic `run` also preflights. Retrying an interactive execution requires fresh review.
 4. Keep review validity (mapping/record state) separate from execution access (credential lifetime). Cancellation keeps committed writes.
 
+## Completion notifications
+
+Logistics opts desktop browser copy, move and export, integrated rclone sync,
+and staged downloads into completion notices. Mobile managed sync and selected
+downloads enter through `TransferExecution.run`. Desktop previews and terminal
+launches outside the integrated progress window have their own progress and
+completion handling. Mobile admits one managed transfer writer at a time.
+
+For another user-started transfer, allocate one `start_transfer_notice()` from
+`services.transfer_notifications` at execution admission. Pass the verified
+terminal outcome to `transfer_notice` on the UI thread after the worker retires.
+Use a fixed, human-facing name for the details destination. Mark the result
+observed if its progress view is visible in the foreground. Keep cancellation
+feedback in the progress UI. The 30-second threshold allows time to navigate
+away and filters routine short copies and immediate failures. Keep names, paths,
+errors and credentials in the protected details view. Revalidate access and
+job ownership before opening details.
+
+Desktop publishes to the existing notification center and toast. Workspace
+actions retains each unread job if the system tray cannot show it. Native tray
+activation can open the Workspace actions destination. Qt does not report
+whether the OS displayed an accepted tray message. Mobile keeps a bounded
+in-memory queue for foreground delivery, including results deferred while the
+OS or the app's settings prevent background delivery. The adapters schedule
+only local notices. They do not start, extend or resurrect transfer execution.
+A terminated process can't publish a new terminal event. The download
+recovery journal continues to own resumable work.
+
 ## Download selected items
 
 Desktop **Download locally…** runs `transfers/remote_download.py` under the browser's

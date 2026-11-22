@@ -126,7 +126,8 @@ class MainWindow(pyside.Window):
             from desktop.bulk_rename import register_bulk_rename_host
             register_bulk_rename_host(self._show_bulk_rename)
             from .notifications import notification_service, Toast
-            self.toast = Toast(notification_service(), self.dlg)
+            self.toast = Toast(notification_service(), self.dlg, queue=True,
+                accepts=lambda notice: notice.source != 'transfer' or not notice.native)
             self.dlg.statusBar().addWidget(self.toast, 1)
             self._toast_status_guard = _ToastStatusGuard(self.toast, self.dlg.statusBar())
             self._refresh_sidebar()

@@ -94,6 +94,14 @@ retry after a recoverable error. **Cancel** stops further work and leaves change
 already written. Closing Logistics cancels integrated transfers and waits for
 them to stop.
 
+When a transfer runs for at least 30 seconds and you are away from its progress
+view, Logistics announces completion or a problem. In the app, **Details** opens
+the transfer. When Logistics is in the background, the system tray can show a
+generic message. If system notifications are unavailable or disabled, check
+the unread marker on **Workspace actions**. Short jobs, previews and cancelled jobs
+use the existing progress display. System notifications omit filenames, paths,
+connection names and error output.
+
 Readable copies default to `~/Server/Local/<folder>`. See
 [LocalCrypt on desktop](localcrypt.md) for encrypted copies and
 [mounted remote folders](../../fuse/user/user.md) for live FUSE access.

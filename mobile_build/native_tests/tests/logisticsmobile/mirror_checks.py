@@ -53,8 +53,16 @@ async def exercise_mirrors(app, comic_key):
             if not release.wait(120):
                 raise RuntimeError('Native background transfer fixture timed out.')
         return request(action, **values)
+    from commonUtils.runtime.notifications import Completion
+    from mobile.transfer_notification_native import banner
+    from mobile.transfer_notifications import for_app
+
     original = app.editor.value
-    with patch.object(client, 'request', side_effect=gated):
+    elapsed = 0
+    with patch('features.rclone.transfers.mobile.ui.start_transfer_notice',
+               side_effect=lambda: Completion(30, clock=lambda: elapsed)), \
+            patch('mobile.transfer_notification_native.banner', wraps=banner) as banners, \
+            patch.object(client, 'request', side_effect=gated):
         task = asyncio.create_task(app.run_mirror_work(lambda client, cancel, progress:
             app.mirror_store().create(client, 'Fixture', 'logistics-native-check', cancelled=cancel, progress=progress), 'create'))
         try:
@@ -136,14 +144,23 @@ async def exercise_mirrors(app, comic_key):
             await app.next_book_page()
             reader = app.reader_manager().active
             assert reader.book_reader is not None and reader.book_record['position'] == 1
+            elapsed = 30
             release.set()
             assert await task, app.transfer_message
             assert app.native_host.state.destination == 'documents'
             assert app.reader_manager().active is reader
             assert app.editor.value == 'Ordinary draft during a native pull\n'
+            banners.assert_called_once()
+            assert banners.call_args.args[1].title == 'Transfer complete'
+            assert for_app(app).close_banner is not None
+            print('LOGISTICS_TRANSFER_NOTICE=foreground native banner after verified pull', flush=True)
         finally:
             release.set()
-            await task
+            try:
+                await task
+            finally:
+                for_app(app).dispose()
+                app.dismiss_transfer_status()
     store = app.mirror_store()
     job = next(job for job in store.jobs.values() if job['remote'] == 'Fixture')
     note = store.target(job) / 'fixture.txt'

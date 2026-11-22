@@ -274,6 +274,7 @@ class HostLifecycle:
         self._stop_playback(stop_markdown_speech)
         self._stop_playback(stop_media)
         self._retire(getattr(host, '_transfer_controller', None), 'dispose')
+        self._retire(getattr(host, '_transfer_notifications', None), 'dispose')
         for panel in tuple(getattr(host, '_notebook_views', {}).values()):
             self._retire(panel, 'dispose')
         for name in ('vault_browser', 'notebook_panel', 'memory_pressure', 'screen_privacy', 'audio_output'):

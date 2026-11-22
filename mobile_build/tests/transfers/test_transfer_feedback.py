@@ -26,6 +26,88 @@ from mobile_build.tests.support.readers import RemoteClient
 TEST_STAGE = TestStage.REGRESSION
 
 
+class NativeTransferNotificationTests(TestCase):
+    def test_ios_native_settings_recheck_and_safe_payload(self):
+        from types import SimpleNamespace
+        from commonUtils.runtime.notifications import Notice
+        from mobile import transfer_notification_native as native
+
+        authority = SimpleNamespace(authorizationStatus=1, alertSetting=2,
+                                    notificationCenterSetting=2, lockScreenSetting=2)
+        application = SimpleNamespace(applicationState=2)
+        center = Mock()
+        center.getNotificationSettingsWithCompletionHandler.side_effect = lambda callback: callback(authority)
+        center.addNotificationRequest.side_effect = lambda request, withCompletionHandler: withCompletionHandler(None)
+        center.requestAuthorizationWithOptions.side_effect = lambda options, completionHandler: completionHandler(True, None)
+        content = SimpleNamespace()
+        request = Mock()
+        classes = {
+            'UNUserNotificationCenter': SimpleNamespace(currentNotificationCenter=lambda: center),
+            'UIApplication': SimpleNamespace(sharedApplication=application),
+            'UNMutableNotificationContent': SimpleNamespace(alloc=lambda: SimpleNamespace(init=lambda: content)),
+            'UNNotificationRequest': SimpleNamespace(requestWithIdentifier=request),
+        }
+        rubicon = SimpleNamespace(ObjCClass=classes.__getitem__, objc_id=object,
+                                  Block=lambda callback, *_: callback)
+        loop = SimpleNamespace(is_closed=lambda: False, call_soon_threadsafe=lambda callback, *args: callback(*args))
+        app = SimpleNamespace(loop=loop)
+        observed = []
+        notice = Notice('synthetic-id', 'transfer', 'Transfer complete', 'Open Transfers for details.')
+        with patch.dict('sys.modules', {'rubicon.objc': rubicon}), patch('ctypes.CDLL'), \
+                patch.object(native, 'backend', return_value='toga_iOS'):
+            native.post(app, notice, allow=lambda: True, done=observed.append)
+            self.assertEqual(observed, [False])
+            center.requestAuthorizationWithOptions.assert_not_called()
+            native.request(app, observed.append)
+            self.assertEqual(observed, [False, True])
+            authority.authorizationStatus = 2
+            application.applicationState = 0
+            native.post(app, notice, allow=lambda: True, done=observed.append)
+            request.assert_not_called()
+            application.applicationState = 2
+            native.post(app, notice, allow=lambda: True, done=observed.append)
+            self.assertEqual(observed, [False, True, False, True])
+            request.assert_called_once_with('synthetic-id', content=content, trigger=None)
+            self.assertEqual(vars(content), {'title': notice.title, 'body': notice.message})
+
+    def test_android_native_permission_and_channel_gate_delivery(self):
+        from types import SimpleNamespace
+        from commonUtils.runtime.notifications import Notice
+        from mobile import transfer_notification_native as native
+
+        manager = Mock()
+        manager.areNotificationsEnabled.return_value = True
+        manager.getNotificationChannel.return_value.getImportance.return_value = 0
+        context = Mock()
+        context.getSystemService.return_value = manager
+        context.checkSelfPermission.return_value = -1
+        context.getPackageManager.return_value.getLaunchIntentForPackage.return_value = None
+        activity = Mock()
+        activity.getApplicationContext.return_value = context
+        app = SimpleNamespace(_impl=SimpleNamespace(native=activity))
+        notification = SimpleNamespace(Builder=Mock(), BigTextStyle=Mock(), VISIBILITY_PUBLIC=1)
+        android = {
+            'android.app': SimpleNamespace(Notification=notification, NotificationChannel=Mock(),
+                NotificationManager=SimpleNamespace(IMPORTANCE_DEFAULT=3, IMPORTANCE_NONE=0), PendingIntent=Mock()),
+            'android.content': SimpleNamespace(Intent=Mock()),
+            'android.os': SimpleNamespace(Build=SimpleNamespace(VERSION=SimpleNamespace(SDK_INT=34))),
+        }
+        notice = Notice('synthetic-id', 'transfer', 'Transfer complete', 'Open Transfers for details.')
+        with patch.dict('sys.modules', android):
+            self.assertFalse(native._post_android(app, notice))
+            context.checkSelfPermission.assert_called_once_with(native.ANDROID_PERMISSION)
+            manager.createNotificationChannel.assert_not_called()
+            context.checkSelfPermission.return_value = 0
+            self.assertFalse(native._post_android(app, notice))
+            manager.notify.assert_not_called()
+            manager.getNotificationChannel.return_value.getImportance.return_value = 3
+            self.assertTrue(native._post_android(app, notice))
+            builder = notification.Builder.return_value
+            builder.setContentTitle.assert_called_once_with(notice.title)
+            builder.setContentTitle.return_value.setContentText.assert_called_once_with(notice.message)
+            manager.notify.assert_called_once_with(notice.id, 0, builder.build.return_value)
+
+
 class TransferFeedbackTests(TestCase):
     def test_native_background_fixture_uses_shared_files_during_transfer(self):
         from threading import Event
@@ -107,6 +189,69 @@ class TransferFeedbackTests(TestCase):
         for outcome in ('complete', 'failed', 'cancelled'):
             with self.subTest(outcome=outcome):
                 app.loop.run_until_complete(exercise(outcome))
+
+    def test_away_completion_checks_lifecycle_permissions_and_locked_credentials(self):
+        from commonUtils.runtime.notifications import Completion
+        from mobile import transfer_notifications
+
+        app = self.app
+        owner = app.transfer_controller()
+        now = 0
+        viewed = []
+        closed = []
+        def banner(host, notice, details):
+            viewed.append((notice, details))
+            return lambda: closed.append(notice.id)
+
+        def start(outcome):
+            def work(client, cancelled, progress):
+                nonlocal now
+                if outcome != 'short':
+                    now += 30
+                if outcome == 'locked':
+                    client.generation += 1
+                    raise OSError('Synthetic token secret and /private/fixture.txt')
+                return ('complete', 1)
+            return app.loop.run_until_complete(app.run_mirror_work(
+                work, 'pull', source='Private:fixture.txt', destination='/private/fixture.txt'))
+
+        def post(host, notice, *, allow, done):
+            self.assertTrue(allow())
+            done(False)  # Denied, disabled channel, or failed to schedule.
+
+        with patch('features.rclone.transfers.mobile.ui.start_transfer_notice',
+                   side_effect=lambda: Completion(30, clock=lambda: now)), \
+                patch('mobile.transfer_notification_native.banner', side_effect=banner), \
+                patch('mobile.transfer_notification_native.post', side_effect=post) as system:
+            app.show_home()
+            self.assertTrue(start('short'))
+            self.assertEqual(viewed, [])
+            self.assertTrue(start('success'))
+            self.assertEqual(len(viewed), 1)
+            owner.execution.view.finished()
+            self.assertEqual(len(viewed), 1)
+            viewed[-1][1]()
+            self.assertEqual(app.routes.screens[app.native_host.state.destination][-1][0], 'transfers')
+
+            app.show_home()
+            app.preferences.values[transfer_notifications.PREFERENCE] = 'true'
+            with patch.object(app.screen_privacy, 'inactive', True):
+                self.assertFalse(start('locked'))
+                self.assertFalse(start('locked'))
+                self.assertEqual(len(viewed), 1)
+                self.assertEqual(system.call_count, 2)
+                posted = [call.args[1] for call in system.call_args_list]
+                self.assertEqual(len({notice.id for notice in posted}), 2)
+                self.assertTrue(all(notice.message == 'Unlock in Logistics to review the transfer.'
+                                    for notice in posted))
+                self.assertNotIn('Synthetic token', app.transfer_message)
+            notices = transfer_notifications.for_app(app)
+            self.addCleanup(notices.dispose)
+            transfer_notifications.sync(app)
+            self.assertEqual(len(viewed), 2)
+            self.assertIn(viewed[0][0].id, closed)
+            notices.advance()
+            self.assertEqual(len(viewed), 3)
 
     def test_rclone_sleep_lease_survives_cancel_until_worker_retires(self):
         import asyncio

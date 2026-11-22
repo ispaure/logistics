@@ -202,3 +202,72 @@ class FolderActionTests(QtTestCase):
                 tray_type.MessageIcon.Warning, 5000)
             tray_type.return_value.messageClicked.connect.assert_called_once()
         self.page.tray = None
+
+
+    def test_integrated_transfer_notices_use_safe_copy_and_keep_concurrent_results(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        from commonUtils.runtime.notifications import Completion
+        from desktop.notifications import notification_service
+        from features.rclone.transfers.ui.progress import open_transfer_progress
+
+        center = notification_service()
+        now = 0
+        with TemporaryDirectory() as root, \
+                patch('desktop.transfer_notifications.start_transfer_notice',
+                      side_effect=lambda: Completion(30, clock=lambda: now)), \
+                patch.object(center, 'native_available', return_value=False), \
+                patch.object(self.app, 'applicationState', return_value=qt.Qt.ApplicationState.ApplicationActive):
+            release = Path(root) / 'release'
+            private = Path(root) / 'synthetic-private.txt'
+            private.write_text('fixture')
+            def start(exit_code, *, revoked=lambda: False, dry_run=False):
+                code = ('from pathlib import Path; import sys,time\n'
+                        'while not Path(sys.argv[1]).exists(): time.sleep(.005)\n'
+                        'print("Synthetic error at " + sys.argv[2], file=sys.stderr)\n'
+                        'raise SystemExit(int(sys.argv[3]))')
+                job = open_transfer_progress([sys.executable, '-u', '-c', code, str(release), str(private), str(exit_code)],
+                    source=str(private), destination=str(Path(root) / 'destination'),
+                    dry_run=dry_run, credential_path=private, revoked=revoked, cancelled=lambda: False,
+                    session_bound=False)
+                self.windows.append(job)
+                return job
+
+            short = start(0)
+            release.touch()
+            self.tabs.setCurrentIndex(0)
+            self.wait(lambda: not short.busy)
+            self.assertFalse(any(n.source == 'transfer' for n in center.records.values()))
+            release.unlink()
+            normal, failed = start(0), start(1)
+            dry = start(0, dry_run=True)
+            cancelled = start(0)
+            self.tabs.setCurrentIndex(0)
+            now = 31
+            cancelled.runner.cancel()
+            self.wait(lambda: not cancelled.busy)
+            release.touch()
+            self.wait(lambda: all(not job.busy for job in (normal, failed, dry)))
+            notices = [n for n in center.records.values() if n.source == 'transfer']
+            self.assertEqual({n.outcome for n in notices}, {'success', 'failure'})
+            self.assertEqual(len(notices), 2)
+            normal.runner.completed.emit(normal.result)
+            self.assertEqual(len([n for n in center.records.values() if n.source == 'transfer']), 2)
+            failure = next(n for n in notices if n.outcome == 'failure')
+            self.assertNotIn('synthetic-private', failure.title + failure.message)
+            self.assertIn('before retrying', failure.message)
+            failure.activate()
+            self.assertIs(self.page.workspace.active_view.document, failed)
+
+            # Revocation can win a terminal-signal race before the process guard polls.
+            release.unlink()
+            locked = False
+            protected = start(1, revoked=lambda: locked)
+            self.tabs.setCurrentIndex(0)
+            locked = True
+            now += 31
+            protected.runner.completed.emit(ProcessResult('failed', 1, 1, str(private)))
+            last = list(center.records.values())[-1]
+            self.assertEqual(last.message, 'Unlock in Logistics to review the transfer.')
+            self.assertIsNone(last.activate)

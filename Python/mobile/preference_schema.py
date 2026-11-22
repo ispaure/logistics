@@ -49,6 +49,7 @@ DEFAULTS = {
     'session_speech_when_locked': 'false',
     'playlist_speech_when_locked': 'false',
     'session_trusted_wifi': 'false',
+    'transfer_system_notifications': 'false',
     'trusted_wifi_networks': '[]',
     'approved_bluetooth_devices': '[]',
     'speech_voice': '',
@@ -84,6 +85,8 @@ def validate(values):
     network_names(values['trusted_wifi_networks'])
     if values[CLIPBOARD_KEY] not in {'true', 'false'}:
         raise ValueError('Invalid protected clipboard preference.')
+    if values['transfer_system_notifications'] not in {'true', 'false'}:
+        raise ValueError('Invalid transfer notification preference.')
     if values['session_trusted_wifi'] not in {'true', 'false'}:
         raise ValueError('Invalid trusted Wi-Fi session preference.')
     if any(values[key] not in {'true', 'false'}

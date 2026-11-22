@@ -70,6 +70,7 @@
     "protection.py",
     "seasonal.py",
     "session_auth.py",
+    "transfer_notifications.py",
     "workflow_host.py",
     "worker_retirement.py"
   ]

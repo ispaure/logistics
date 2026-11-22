@@ -72,6 +72,8 @@ class MobileHostUI:
     record_folder: RecordFolder = lambda *args, **kwargs: None
     opening_status: OpeningStatus = lambda *args, **kwargs: nullcontext()
     refresh_transfer_chrome: Callable[[], None] = lambda: None
+    transfer_foreground: Callable[[], bool] = lambda: True
+    publish_transfer_notice: Callable[[Any, Callable], None] = lambda notice, action: None
     offer_notes: Callable[[Any, Any, str, list], Awaitable[Any]] | None = None
 
 

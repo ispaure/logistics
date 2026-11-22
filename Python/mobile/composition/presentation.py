@@ -28,6 +28,7 @@ def rclone_host_ui(app):
     from mobile.folder_navigation import record
     from mobile.document_sources import opening_status
     from mobile.reader_chrome import refresh_transfer_chrome
+    from mobile import transfer_notifications
     async def offer_notes(browser, provider, root, rows):
         return False  # Notes Libraries are launched explicitly from Documents.
     from mobile.settings.forms import (
@@ -44,6 +45,9 @@ def rclone_host_ui(app):
     return MobileHostUI(
         offer_notes=offer_notes,
         refresh_transfer_chrome=lambda: refresh_transfer_chrome(app),
+        transfer_foreground=lambda: (transfer_notifications.foreground(app)
+                                     and not transfer_notifications.covered(app)),
+        publish_transfer_notice=lambda notice, action: transfer_notifications.for_app(app).publish(notice, action),
         icon_button=icon_button,
         NativeBrowser=NativeBrowser,
         FeatureCommands=lambda button, owner, *args, **kwargs: FeatureCommands(
