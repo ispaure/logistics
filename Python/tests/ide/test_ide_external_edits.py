@@ -36,23 +36,31 @@ class ExternalEditsTests(QtTestCase):
             replacement.write_text('external\n')
             view = ProjectWorkspace(Project('test', directory, autosave='off'))
             view.open_path(path)
-            self.wait(view)
+            # Opening also queues a watcher read. Save should race only the
+            # generated replacement, not an incidental initial reconciliation.
+            self.wait_until(lambda: not view.disk_pending and not view.worker and not view.queue,
+                            message='IDE did not finish opening and checking the test file')
             editor = view.current
             editor.insertPlainText('draft ')
-            real_replace = os.replace
+            replaced = False
 
-            def interleave(operation, source, target):
-                if path in (Path(source), Path(target)) and replacement.exists():
-                    real_replace(replacement, path)
-                return operation(source, target)
+            def interleave(source, target):
+                nonlocal replaced
+                if Path(source) == path and Path(target).name == 'previous':
+                    try:
+                        os.replace(replacement, path)
+                    except OSError as error:
+                        raise AssertionError('External replacement failed at Save displacement '
+                                             f'(errno={error.errno}, winerror={getattr(error, "winerror", None)}).') from error
+                    replaced = True
+                return rename_exclusive(source, target)
 
-            with (patch('commonUtils.persistence.atomic.os.replace',
-                        side_effect=lambda src, dst: interleave(real_replace, src, dst)),
-                  patch('commonUtils.persistence.publication.rename_exclusive',
-                        side_effect=lambda src, dst: interleave(rename_exclusive, src, dst)),
-                  patch.object(qt.QMessageBox, 'exec', return_value=0)):
+            with (patch('commonUtils.persistence.publication.rename_exclusive', side_effect=interleave),
+                  patch.object(qt.QMessageBox, 'exec', return_value=0) as conflict):
                 saved = view.save_current()
 
+            self.assertTrue(replaced, f'Save did not reach external replacement: {view.status.text()}')
+            conflict.assert_called_once()
             self.assertEqual(path.read_text(), 'external\n')
             self.assertFalse(saved)
             self.assertEqual(editor.toPlainText(), 'draft original\n')
