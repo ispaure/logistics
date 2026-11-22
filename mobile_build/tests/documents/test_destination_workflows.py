@@ -86,10 +86,12 @@ class DestinationWorkflowTests(unittest.TestCase):
         parent = self.app.file_select_bar.parent
         self.assertTrue(contains(self.app.files_view, self.app.file_select_bar))
         self.assertEqual(self.app.file_select_bar.style.display, 'none')
+        self.assertEqual(self.app.file_select_bar.style.visibility, 'hidden')
         self.assertEqual(self.app.file_select_bar.style.height, 0)
         self.app.begin_file_selection()
         self.assertIs(self.app.file_select_bar.parent, parent)
         self.assertEqual(self.app.file_select_bar.style.display, 'pack')
+        self.assertEqual(self.app.file_select_bar.style.visibility, 'visible')
         self.assertEqual(self.app.file_select_bar.style.height, 48)
         for entry in list(browser.tree.entries.values()):
             if not entry.container:
@@ -99,6 +101,7 @@ class DestinationWorkflowTests(unittest.TestCase):
         self.app.cut_files()
         self.assertIs(self.app.file_select_bar.parent, parent)
         self.assertEqual(self.app.file_select_bar.style.display, 'none')
+        self.assertEqual(self.app.file_select_bar.style.visibility, 'hidden')
         self.assertEqual(self.app.file_select_bar.style.height, 0)
         self.run_async(self.app.browser_file_location(('Local files', 'Destination')))
         self.assertIn('Paste move here', dict(self.app.file_item_commands()))

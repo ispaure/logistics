@@ -305,7 +305,7 @@ class FileBrowser(RecycledBrowser):
                 title = '✓ ' + name if identity in self.checked_entries else name
                 if button.text != title:
                     button.text = title
-                    self.presentation.middle_filename(button)
+                self.presentation.middle_filename(button)
 
     def clear_selection(self):
         """Retire contextual selection without rebuilding the retained listing."""

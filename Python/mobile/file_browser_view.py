@@ -10,17 +10,148 @@ __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
 from functools import partial
+from pathlib import PurePosixPath
 from threading import Event
+from weakref import ref
 
 import toga
 from toga.style import Pack
-from toga.style.pack import ROW
+from toga.style.pack import ROW, START
 
+from commonUtils.ui.native.presentation import allow_label_to_shrink
+
+from .appearance import accessible_name, batch_surfaces, surface
 from .browser_ui import FileBrowser, browser_command
 from .control_icons import apply_icon, icon_button
+from .ui_metrics import CONTROL_TEXT, TOUCH_TARGET
+
+
+_TILE_TITLE_INSET = 8
+
+
+def _style_tile_title(button):
+    button.style.update(height=72, font_size=CONTROL_TEXT)
+    allow_label_to_shrink(button)
+    impl = button._impl
+    backend = type(impl).__module__
+    if backend.startswith('toga_iOS.'):
+        impl.native.contentHorizontalAlignment = 1
+    elif backend.startswith('toga_android.'):
+        native = impl.native
+        padding = impl.scale_in(_TILE_TITLE_INSET)
+        native.setPaddingRelative(padding, 0, padding, 0)
+        native.setGravity(3 | 16)
+
+
+def _android_tile_title(title, paint, width, lines):
+    from android.text import StaticLayout, TextUtils
+
+    if lines == 1:
+        return str(TextUtils.ellipsize(title, paint, float(width), TextUtils.TruncateAt.MIDDLE))
+
+    # Android only supports end ellipsis on a multiline TextView. Let its
+    # layout choose the first break. Keep the longest suffix on the next line.
+    length = len(title.encode('utf-16-le')) // 2
+    layout = StaticLayout.Builder.obtain(title, 0, length, paint, width).build()
+    if layout.getLineCount() <= lines:
+        return title
+    split = layout.getLineEnd(0)
+    first = str(TextUtils.substring(title, 0, split)).rstrip()
+    if paint.measureText(first) < width / 2:
+        # A short word followed by a long unbroken token can leave the
+        # first line nearly empty. Fill it at a grapheme boundary instead.
+        from android.icu.text import BreakIterator
+        boundaries = BreakIterator.getCharacterInstance()
+        boundaries.setText(title)
+        limit = paint.breakText(title, True, float(width), None)
+        split = max(split, boundaries.preceding(min(limit + 1, length)))
+        first = str(TextUtils.substring(title, 0, split)).rstrip()
+    rest = TextUtils.substring(title, split, length)
+    last = TextUtils.ellipsize(rest, paint, float(width), TextUtils.TruncateAt.START)
+    return first + '\n' + str(last)
+
+
+def _install_android_tile_title(button):
+    impl = button._impl
+
+    # Keep Toga's logical text intact for checkmarks, actions and recycling.
+    # Set only the visible native caption, after Pack allocates its actual width.
+    implementation = type(impl)
+    target = ref(impl)
+    title = displayed = button.text
+    fitted_size = None
+    multiline = False
+
+    def set_text(text):
+        nonlocal title, displayed, fitted_size
+        title = displayed = text
+        fitted_size = None
+        implementation.set_text(target(), text)
+
+    def set_bounds(x, y, width, height):
+        nonlocal displayed, fitted_size, multiline
+        current = target()
+        implementation.set_bounds(current, x, y, width, height)
+        size = width, height
+        if fitted_size == size or not title or width <= 0 or height <= 0:
+            return
+        fitted_size = size
+        view = current.native
+        available = current.scale_in(width) - 2 * current.scale_in(_TILE_TITLE_INSET)
+        if available <= 0:
+            return
+        display = ' '.join(title.splitlines())
+        paint = view.getPaint()
+        if paint.measureText(display) > available:
+            if not multiline:
+                # Short captions use the default button layout. Configure
+                # wrapping only when the available width actually needs it.
+                view.setSingleLine(False)
+                view.setMaxLines(2)
+                view.setBreakStrategy(0)  # Match StaticLayout's simple line breaking.
+                view.setHyphenationFrequency(0)
+                multiline = True
+            lines = 2 if current.scale_in(height) >= 2 * view.getLineHeight() else 1
+            display = _android_tile_title(display, paint, available, lines)
+        if display != displayed:
+            implementation.set_text(current, display)
+            displayed = display
+
+    impl.get_text = lambda: title
+    impl.set_text = set_text
+    impl.set_bounds = set_bounds
+    impl._tile_title_layout = True
+
+
+def _tile_menu(name, on_press, backend):
+    label = 'Actions for ' + name
+    if backend.startswith('toga_android.'):
+        # The glyph needs no per-tile drawable or tint setup.
+        command = toga.Button('⋮', on_press=on_press,
+            style=Pack(width=TOUCH_TARGET, height=TOUCH_TARGET, font_size=22))
+        command._impl.native.setPadding(0, 0, 0, 0)
+        command._impl.native.setGravity(17)  # Gravity.CENTER
+        accessible_name(command, label)
+    else:
+        command = icon_button('overflow', label, on_press=on_press)
+    return surface(command, background='transparent', foreground='text', eink_outlined=False)
+
+
+def _tile_filename(button):
+    backend = type(button._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        title = button._impl.native.titleLabel
+        title.numberOfLines = 2
+        title.lineBreakMode = 5  # NSLineBreakByTruncatingMiddle
+    elif backend.startswith('toga_android.') and not getattr(button._impl, '_tile_title_layout', False):
+        _install_android_tile_title(button)
+    accessible_name(button, button.text)
 
 
 class LocalFileBrowser(FileBrowser):
+    # 96 for the preview, 72 for the title and 4-point card margins.
+    TILE_ROW_HEIGHT = 176
+
     def __init__(self, **kwargs):
         self.thumbnails = None
         self._previews_visible = False
@@ -32,6 +163,8 @@ class LocalFileBrowser(FileBrowser):
         self._restoring_tile_anchor = False
         self._defer_tile_mount = False
         super().__init__(**kwargs)
+        self.presentation.style_button = _style_tile_title
+        self.presentation.middle_filename = _tile_filename
         self.view_switch = browser_command(icon_button('file_tiles', 'Show tiles', on_press=self.switch_view))
 
     def _list_selected(self, widget, **kwargs):
@@ -97,9 +230,10 @@ class LocalFileBrowser(FileBrowser):
             row.thumbnail = False
             row.icon = self.presentation.file_icon(row.folder)
         self._list_thumbnail_rows.clear()
-        for preview, box, placeholder in self._tile_previews.values():
-            preview.image = None
-            if preview.parent is box:
+        for box, placeholder in self._tile_previews.values():
+            preview = box.children[0]
+            if preview is not placeholder:
+                preview.image = None
                 box.remove(preview)
                 box.add(placeholder)
 
@@ -234,19 +368,31 @@ class LocalFileBrowser(FileBrowser):
         card = super()._tile_card(entry)
         image_box, button = card.children
         if self.thumbnails is not None and self.thumbnails.supports(entry):
-            preview = toga.ImageView(style=Pack(width=96, height=96))
-            self._tile_previews[entry.identity] = preview, image_box, image_box.children[0]
+            self._tile_previews[entry.identity] = image_box, image_box.children[0]
+        controls = [button]
         if self.on_item_actions is not None:
-            card.remove(button)
-            button.style.flex = 1
-            command = icon_button('overflow', 'Actions for ' + button.text,
-                                  on_press=partial(self._tile_actions, entry))
-            card.add(toga.Box(children=[button, command], style=Pack(direction=ROW)))
-        dispatch = getattr(self, 'file_key_dispatch', None)
-        if dispatch is not None and button.factory.Button.__module__.startswith('toga_android.'):
-            from .native.file_shortcuts import bind
-            for control in card.children[-1].children if self.on_item_actions is not None else (button,):
-                control._file_key_binding = bind(control, dispatch, focusable=False)
+            name = entry.payload.get('display_name') or PurePosixPath(entry.label).name
+            backend = type(button._impl).__module__
+            command = _tile_menu(name, partial(self._tile_actions, entry), backend)
+            card.remove(image_box)
+            image_box.style.flex = 1
+            card.insert(0, toga.Box(children=[image_box, command],
+                                    style=Pack(direction=ROW, height=96, align_items=START)))
+            controls.append(command)
+            if backend.startswith('toga_iOS.'):
+                card._impl.native.accessibilityElements = [control._impl.native for control in controls]
+            elif backend.startswith('toga_android.'):
+                from android.view import View
+                title_id = View.generateViewId()
+                button._impl.native.setId(title_id)
+                command._impl.native.setAccessibilityTraversalAfter(title_id)
+        binding = getattr(self._tile_scroll, '_file_key_binding', None)
+        if binding is not None and button.factory.Button.__module__.startswith('toga_android.'):
+            # All tile controls dispatch to the same browser and transfer
+            # focus to the viewport. Reuse its native key listener.
+            for control in controls:
+                control._impl.native.setOnKeyListener(binding)
+                control._file_key_binding = binding
         return card
 
     async def _select_pressed(self, entry, widget, **kwargs):
@@ -270,13 +416,15 @@ class LocalFileBrowser(FileBrowser):
     def _retire_tile(self, identity):
         target = self._tile_previews.pop(identity, None)
         if target is not None:
-            preview = target[0]
-            token = id(preview)
+            box, placeholder = target
+            token = id(box)
             cancelled = self._preview_jobs.get(token)
             if cancelled is not None:
                 cancelled.set()
             self._preview_completed.discard(token)
-            preview.image = None
+            preview = box.children[0]
+            if preview is not placeholder:
+                preview.image = None
         super()._retire_tile(identity)
 
     def _tile_anchor_position(self):
@@ -288,7 +436,10 @@ class LocalFileBrowser(FileBrowser):
             # The shared renderer starts at zero. Build the destination window
             # immediately while switching from a scrolled list.
             position = self._tile_anchor_position()
-        super()._update_tile_window(position)
+        # Card selection repaints the same controls that construction styles.
+        # Only apply their final appearance to the native views.
+        with batch_surfaces():
+            super()._update_tile_window(position)
         self._schedule_previews()
 
     def _schedule_previews(self, delay=0):
@@ -309,8 +460,8 @@ class LocalFileBrowser(FileBrowser):
             return {id(row): (row.entry, row) for index in self._visible_rows()
                     if 0 <= index < len(self.native_list.data)
                     and self.thumbnails.supports((row := self.native_list.data[index]).entry)}
-        return {id(preview): (self._tile_cards[identity][0], (preview, box))
-                for identity, (preview, box, _) in self._tile_previews.items()}
+        return {id(box): (self._tile_cards[identity][0], (box, placeholder))
+                for identity, (box, placeholder) in self._tile_previews.items()}
 
     def _update_previews(self):
         self._preview_update = None
@@ -366,8 +517,12 @@ class LocalFileBrowser(FileBrowser):
         if self.mode == 'List':
             self._set_row_thumbnail(target, image)
         else:
-            view, box = target
-            view.image = image
-            if view.parent is not box:
+            box, placeholder = target
+            if box.children[0] is placeholder:
+                # The window needs a fallback glyph immediately. Allocate a
+                # second native image view only for a successful decode.
+                preview = toga.ImageView(image, style=Pack(flex=1, height=96))
                 box.clear()
-                box.add(view)
+                box.add(preview)
+            else:
+                box.children[0].image = image

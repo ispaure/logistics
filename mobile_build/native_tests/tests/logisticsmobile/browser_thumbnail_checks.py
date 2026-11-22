@@ -62,6 +62,11 @@ async def wait_for(predicate, message, *, timeout=12):
         await asyncio.sleep(.025)
 
 
+def preview_attached(browser, identity):
+    box, placeholder = browser._tile_previews[identity]
+    return box.children[0] is not placeholder and box.children[0].image is not None
+
+
 def cached(browser, name):
     return next((data for (path, _), data in browser.icons.items() if path.name == name), b'')
 
@@ -128,8 +133,10 @@ async def exercise_browser_thumbnails(app):
     gate = Event()
     calls = []
     original = type(source).load
+    build_card = browser._tile_card
     build_tiles, mount_listing = browser._render_tiles, browser._mount_listing
-    tile_build_seconds = tile_mount_seconds = 0.0
+    tile_build_seconds = tile_mount_seconds = card_seconds = 0.0
+    cards_created = 0
 
     def slow(source, row, size, cancelled):
         if row['path'].startswith(folder.name + '/'):
@@ -145,6 +152,14 @@ async def exercise_browser_thumbnails(app):
         build_tiles()
         tile_build_seconds += monotonic() - started
 
+    def timed_card(entry):
+        nonlocal card_seconds, cards_created
+        started = monotonic()
+        card = build_card(entry)
+        card_seconds += monotonic() - started
+        cards_created += 1
+        return card
+
     def timed_mount_listing(view):
         nonlocal tile_mount_seconds
         started = monotonic()
@@ -154,6 +169,7 @@ async def exercise_browser_thumbnails(app):
 
     with patch.object(type(source), 'load', slow), \
             patch.object(browser, '_render_tiles', new=timed_build_tiles), \
+            patch.object(browser, '_tile_card', new=timed_card), \
             patch.object(browser, '_mount_listing', new=timed_mount_listing):
         try:
             await wait_for(lambda: len(calls) == 2, ('workers', calls))
@@ -179,6 +195,7 @@ async def exercise_browser_thumbnails(app):
                           cancel_after_scroll_seconds=cancelled_at - scrolled_at,
                           tile_build_seconds=tile_build_seconds,
                           tile_mount_seconds=tile_mount_seconds,
+                          tile_card_seconds=card_seconds, tiles_constructed=cards_created,
                           decoder_starts=len(calls), elapsed_limit=2, decoder_limit=2)
             print('LOGISTICS_NATIVE_DETAIL=' + json.dumps(dict(thumbnail_view_switch=timing)), flush=True)
             assert timing['decoder_starts'] == 2, ('Decoder started while both slots were held', timing)
@@ -218,7 +235,7 @@ async def exercise_browser_thumbnails(app):
             image_entry = next(entry for entry in browser.entries if entry.label == '001-image.png')
             await browser.select(image_entry)
             browser.view_switch.on_press()
-            await wait_for(lambda: browser._tile_previews[image_entry.identity][0].image is not None,
+            await wait_for(lambda: preview_attached(browser, image_entry.identity),
                            'The tile did not reuse its row preview')
             assert browser.selected == image_entry.identity and browser.buttons[image_entry.identity].text == image_entry.label
             assert calls.count('001-image.png') <= 2, calls
@@ -275,7 +292,8 @@ async def exercise_locked_thumbnails(app, provider, label):
             browser.refresh_entries(await asyncio.to_thread(provider.list, folder))
             await wait_for(started.is_set, lambda: ('Private decode did not start', state()))
             source = browser.thumbnails
-            prior_tiles = [image for image, *_ in browser._tile_previews.values()]
+            prior_tiles = [box.children[0] for box, placeholder in browser._tile_previews.values()
+                           if box.children[0] is not placeholder]
             await app.lock_cloud()
             # Release simulated late plaintext only after the catalog has been cleared.
             gate.set()

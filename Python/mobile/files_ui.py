@@ -288,7 +288,7 @@ class FilesUI:
         self.file_select_done = toga.Button('Done selecting', on_press=self.end_file_selection,
                                            style=Pack(height=48, flex=1))
         self.file_select_bar = toga.Box(children=[self.file_cut_button, self.file_archive_button, self.file_select_done],
-                                        style=Pack(direction=ROW, height=0, display='none'))
+                                        style=Pack(direction=ROW, height=0, display='none', visibility='hidden'))
         self.file_source_tabs = toga.Box(style=Pack(direction=ROW, height=48))
         self.files_view = toga.Box(children=[
             self.file_browser.location_bar,
@@ -441,7 +441,7 @@ class FilesUI:
                                                   and self.feature_enabled('archives') else 'none')
         # The Workspaces frame reparents the original browser contents into
         # its detail pane. Keep the selection row with those contents.
-        self.file_select_bar.style.update(height=48, display='pack')
+        self.file_select_bar.style.update(height=48, display='pack', visibility='visible')
 
     def check_file_entry(self, entry):
         if self.cloud_busy:
@@ -468,8 +468,8 @@ class FilesUI:
                 await controller(self.app).create(sources)
 
     def end_file_selection(self, widget=None, **kwargs):
-        # Pack can retain the explicit height of a hidden widget.
-        self.file_select_bar.style.update(height=0, display='none')
+        # Keep the native children from drawing or taking taps over tiles.
+        self.file_select_bar.style.update(height=0, display='none', visibility='hidden')
         self.file_checked.clear()
         self.file_browser.on_check_entry = None
         self.file_browser.checked_entries.clear()

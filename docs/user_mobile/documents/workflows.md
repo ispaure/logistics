@@ -10,8 +10,9 @@ to see its full path.
 
 In the Local File Browser, tap **Show tiles** in the folder toolbar for larger
 previews. Tap **Show rows** to switch back. The browser keeps your folder,
-selection and place in the listing. Tap a filename to open it or use its
-**•••** button for file actions.
+selection and place in the listing. Filenames have two lines beneath the
+preview. Tap the name to open a file or folder, or use **•••** in the
+upper-right corner of the tile for item actions.
 
 Images, notebooks, PDFs and comics in Local or unlocked LocalCrypt show
 thumbnails as you browse, including in synced folders on your device.

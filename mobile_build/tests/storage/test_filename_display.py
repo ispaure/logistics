@@ -66,6 +66,108 @@ class FilenameDisplayTests(unittest.TestCase):
                 LogisticsMobile.storage_root = None
 
 
+    def test_local_tile_filename_uses_card_width_and_keeps_item_actions(self):
+        from mobile.file_browser_view import LocalFileBrowser
+        from mobile_build.tests.support.app import create_app
+
+        app = create_app(self)
+        opened, folders, actions = [], [], []
+        browser = LocalFileBrowser(open_file=opened.append, open_folder=folders.append,
+                                   item_actions=actions.append)
+        self.addCleanup(lambda: app.loop.run_until_complete(browser.close()))
+        provider = SimpleNamespace(root=Path('/virtual'), relative=lambda path: path)
+        folder = '000 - Collections and preliminary notes from the field'
+        names = ['001 - ' + 'wide field notes ' * 8 + 'rev-α.cbz',
+                 '002-' + '測定🧪' * 30 + '-final.tar.gz']
+        files = [folder, *names, *(f'{index:03}-dense-file.md' for index in range(3, 168))]
+        browser.set_entries(provider, '', [dict(path=name, name=name, directory=name == folder)
+                                           for name in files])
+        browser.show_tiles()
+        entries = browser._tile_entries[:3]
+        for width in (224, 320, 540, 768, 1024):
+            with self.subTest(width=width):
+                # Width is for the browser pane, after any rail, sidebar or hinge.
+                browser.items.style.layout(SimpleNamespace(width=width, height=600))
+                for entry in entries:
+                    _, card, title, _, _ = browser._tile_cards[entry.identity]
+                    band, _ = card.children
+                    media, menu = band.children
+                    self.assertEqual(title.layout.content_width, card.layout.content_width)
+                    self.assertGreaterEqual(title.layout.content_height, 64)
+                    self.assertLessEqual(menu.layout.absolute_content_top + menu.layout.content_height,
+                                         title.layout.absolute_content_top)
+                    self.assertEqual(menu.layout.content_width, 48)
+                    self.assertEqual(menu.layout.content_height, 48)
+                    self.assertLessEqual(media.layout.absolute_content_left + media.layout.content_width,
+                                         menu.layout.absolute_content_left)
+                    self.assertEqual(title.accessible_name, entry.label)
+                    self.assertEqual(menu.accessible_name, 'Actions for ' + entry.label)
+                row = browser._tile_row_views[0]
+                self.assertLessEqual(row.children[-1].layout.absolute_content_left
+                                     + row.children[-1].layout.content_width, width)
+
+        dir_entry, file_entry, _ = entries
+        file_card = browser._tile_cards[file_entry.identity][1]
+        menu = file_card.children[0].children[1]
+        title = file_card.children[-1]
+        app.loop.run_until_complete(menu.on_press())
+        self.assertEqual([row['path'] for row in actions], [names[0]])
+        self.assertFalse(opened)
+        app.loop.run_until_complete(title.on_press())
+        self.assertEqual([row['path'] for row in opened], [names[0]])
+        app.loop.run_until_complete(browser.buttons[dir_entry.identity].on_press())
+        self.assertEqual([row['path'] for row in folders], [folder])
+
+        browser.checked_entries = {file_entry.identity}
+        browser.highlight_selection()
+        self.assertEqual(title.accessible_name, '✓ ' + names[0])
+        browser.checked_entries.clear()
+        browser.highlight_selection()
+        self.assertEqual(title.accessible_name, names[0])
+
+        browser._update_tile_window(browser.TILE_ROW_HEIGHT * 80)
+        self.assertLessEqual(len(browser._tile_cards), 80)
+        self.assertIn(browser._tile_entries[-1].identity, browser._tile_cards)
+        self.assertEqual(title.text, '')
+
+    def test_android_tile_fits_second_line_with_longest_suffix(self):
+        from mobile.file_browser_view import _android_tile_title
+
+        name = 'Project 🧪 notes and measurements for review – revision 03.tar.gz'
+        units = name.encode('utf-16-le')
+        line_end = len('Project 🧪 '.encode('utf-16-le')) // 2
+        obtain = Mock()
+        obtain.return_value.build.return_value = SimpleNamespace(
+            getLineCount=lambda: 4, getLineEnd=lambda line: line_end)
+        paint = Mock()
+        paint.measureText.return_value = 260
+        middle, start = object(), object()
+        ellipsize = Mock(return_value='…revision 03.tar.gz')
+        android = SimpleNamespace(
+            StaticLayout=SimpleNamespace(Builder=SimpleNamespace(obtain=obtain)),
+            TextUtils=SimpleNamespace(TruncateAt=SimpleNamespace(MIDDLE=middle, START=start), ellipsize=ellipsize,
+                substring=lambda text, start, end: units[start * 2:end * 2].decode('utf-16-le')))
+        with patch.dict('sys.modules', {'android.text': android}):
+            self.assertEqual(_android_tile_title(name, paint, 110, 2), 'Project 🧪\n…revision 03.tar.gz')
+            obtain.assert_called_once_with(name, 0, len(units) // 2, paint, 110)
+            ellipsize.assert_called_once_with(name[len('Project 🧪 '):], paint, 110.0, start)
+            obtain.return_value.build.return_value.getLineCount = lambda: 2
+            self.assertEqual(_android_tile_title(name, paint, 210, 2), name)
+            self.assertEqual(_android_tile_title(name, paint, 110, 1), '…revision 03.tar.gz')
+            ellipsize.assert_called_with(name, paint, 110.0, middle)
+            obtain.return_value.build.return_value.getLineCount = lambda: 4
+            paint.measureText.return_value = 20
+            paint.breakText.return_value = line_end + 7
+            boundaries = Mock()
+            boundaries.preceding.return_value = line_end + 7
+            icu = SimpleNamespace(BreakIterator=SimpleNamespace(getCharacterInstance=lambda: boundaries))
+            with patch.dict('sys.modules', {'android.icu.text': icu}):
+                self.assertEqual(_android_tile_title(name, paint, 110, 2),
+                                 'Project 🧪 notes a\n…revision 03.tar.gz')
+            boundaries.setText.assert_called_once_with(name)
+            boundaries.preceding.assert_called_once_with(line_end + 8)
+
+
 class FilenameInputTests(unittest.TestCase):
     def test_native_editing_cannot_remove_or_replace_extension(self):
         from mobile.filename_input import FilenameInput
