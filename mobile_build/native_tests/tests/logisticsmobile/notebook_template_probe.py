@@ -12,13 +12,16 @@ __status__ = "Production"
 import asyncio
 import base64
 import json
+from hashlib import sha256
 from pathlib import Path
+from time import monotonic
 import traceback
 
 from commonUtils.testing.stages import TestStage
 from mobile.app import LogisticsMobile
 from . import start_native_check
 from .fixtures import capture_window, choose_creation_type
+from .rotation_checks import rotate
 
 TEST_STAGE = TestStage.REGRESSION
 BUNDLE = 'io.github.ispaure.logisticsnotebookqa'
@@ -44,7 +47,7 @@ class Probe(LogisticsMobile):
         await self.idle(panel)
 
     async def template(self, panel, name, paper_format, visible=True):
-        await panel.web.evaluate_javascript("$('pageTemplateButton').click();"
+        await panel.web.evaluate_javascript("window.notebookNativeAction('layers');$('changeTemplate').click();"
             "$('pageTemplate').value=" + json.dumps(name) + ";$('templateFormat').value="
             + json.dumps(paper_format) + ";$('templateVisible').checked=" + json.dumps(visible) + ";"
             "$('pageTemplate').dispatchEvent(new Event('change'));$('applyTemplate').click()")
@@ -53,7 +56,7 @@ class Probe(LogisticsMobile):
         expected = name + (' Move' if paper_format == 'move' else ' Pro') if name.startswith('Logistics ') else name
         assert page.template == expected, dict(expected=expected, actual=page.template)
 
-    async def create_notebook(self, title, template, paper_format):
+    async def create_notebook(self, title, template, paper_format, *, observe=None):
         from features.notebooks.templates import CATALOG, FORMATS
         await choose_creation_type(self, 'rmdoc')
         picker = self.editor_picker()
@@ -83,7 +86,10 @@ class Probe(LogisticsMobile):
             assert desc_frame.origin.y + desc_frame.size.height <= size_frame.origin.y + 1, 'Template description overlaps size label'
         else:
             assert native.isShown() and native.getWidth() > 0 and native.getHeight() > 0
-        await capture_window(self, self.evidence / (title + '-creation.png'))
+        if observe is None:
+            await capture_window(self, self.evidence / (title + '-creation.png'))
+        else:
+            await observe(picker, controls)
         await picker.choose_creation_location()
         await picker.browser_editor_location(('Local', ''))
         assert picker.picker_primary.enabled, picker.save_as_status.value
@@ -93,6 +99,162 @@ class Probe(LogisticsMobile):
         assert panel.editor.notebook.name == title, picker.save_as_status.value
         await self.idle(panel)
         return panel, path, backend
+
+    async def settled_page(self, panel, landscape):
+        web = panel.web
+        deadline = monotonic() + 12
+        while monotonic() < deadline:
+            raw = await web.evaluate_javascript("""JSON.stringify((()=>{
+                if (typeof paperBounds !== 'function' || !window.notebookIdle() || resizeFrame !== null ||
+                    viewportZoomMemory?.layout !== viewportLayoutKey()) return null;
+                const image = $('pdfBackground');
+                if (!image.hidden && !image.naturalWidth) return null;
+                return {page:paperBounds(), viewport:[innerWidth,innerHeight],
+                  artwork:backgroundContentBounds(), background:image.getAttribute('src'),
+                  rendered:[$('paperWrap').clientWidth,$('paperWrap').clientHeight]};
+            })())""")
+            result = json.loads(raw) if raw else None
+            if result and (result['viewport'][0] > result['viewport'][1]) == landscape:
+                return result
+            await asyncio.sleep(.05)
+        raise AssertionError('Notebook canvas did not settle in the requested orientation.')
+
+    async def matrix(self, cases):
+        from features.notebooks.notebook import Notebook
+        from features.notebooks.templates import view_bounds
+        from services.documents.mobile_notebooks import close_notebook
+
+        for orientation in ('portrait', 'landscape-left'):
+            await rotate(self, orientation)
+            landscape = orientation != 'portrait'
+            for label, template in [('restaurant', 'Logistics Restaurant review'),
+                                    ('lined', 'P Lines medium'), ('blank', 'Blank')]:
+                for paper in ('pro', 'move'):
+                    title = f'{orientation}-{label}-{paper}'
+                    bounds = view_bounds([], paper == 'move')
+                    ratio = bounds['width'] / bounds['height']
+                    record = dict(orientation=orientation, template=template, format=paper, paper=bounds)
+                    cases.append(record)
+                    self.show_home()
+
+                    async def observe(picker, controls):
+                        image = controls.preview.image
+                        size = [int(controls.preview.style.width), int(controls.preview.style.height)]
+                        assert abs(size[0] / size[1] - ratio) < .006, size
+                        assert (image is None) == (template == 'Blank')
+                        record['creation'] = dict(preview=size, image=list(image.size) if image else None,
+                                                  image_sha256=sha256(image.data).hexdigest() if image else None)
+                        if image is not None:
+                            assert abs(image.size[0] / image.size[1] - ratio) < .006, image.size
+                            (self.evidence / f'{title}-creation-preview.png').write_bytes(image.data)
+                        if label == 'restaurant' and paper == 'move':
+                            picker.name_form.vertical_position = picker.name_form.max_vertical_position
+                            await asyncio.sleep(.2)
+                            await capture_window(self, self.evidence / f'{title}-creation.png')
+
+                    panel, path, backend = await self.create_notebook(title, template, paper, observe=observe)
+                    record['backend'] = backend
+                    created = await self.settled_page(panel, landscape)
+                    assert created['page'] == bounds and all(created['rendered']), created
+                    record['created'] = {key: value for key, value in created.items() if key != 'background'}
+                    if created['background']:
+                        record['created']['artwork_sha256'] = sha256(created['background'].encode()).hexdigest()
+                    assert (created['background'] is None) == (template == 'Blank')
+
+                    await self.command(panel, dict(op='stroke', tool=17, color=0, width=2,
+                                                   points=[[660, 146, .5], [748, 146, .5]]))
+                    book = panel.editor.notebook
+                    ink = book.page(0).to_bytes()
+                    # Change from a different installed background before comparing the staged choice.
+                    other = 'P Lines large' if template == 'Blank' else 'Blank'
+                    await self.template(panel, other, paper)
+                    web = panel.web
+                    route = 'layers' if landscape else 'pages'
+                    await web.evaluate_javascript("window.notebookNativeAction(" + json.dumps(route) + ");true")
+                    await self.idle(panel)
+                    before = panel.editor.state()
+                    members = book.members.copy()
+                    sequence = panel.bridge.sequence
+                    open_picker = "$('changeTemplate').click();" if landscape else "$('pageTemplateButton').click();"
+                    select_choice = (open_picker + "$('pageTemplate').value=" + json.dumps(template)
+                        + ";$('templateFormat').value=" + json.dumps(paper)
+                        + ";$('templateVisible').checked=true;updateTemplatePreview();true")
+                    await web.evaluate_javascript(select_choice)
+                    deadline = monotonic() + 8
+                    while monotonic() < deadline:
+                        ready = await web.evaluate_javascript("""(() => {
+                          const i = $('templatePreview').querySelector('img');
+                          return $('templatePicker').open && (i.hidden || (i.complete && i.naturalWidth > 0));
+                        })()""")
+                        if ready:
+                            break
+                        await asyncio.sleep(.05)
+                    else:
+                        raise TimeoutError('Change Template preview did not settle.')
+                    observation = json.loads(await web.evaluate_javascript("""JSON.stringify((() => {
+                      const d = $('templatePicker'), p = $('templatePreview'), i = p.querySelector('img');
+                      const r = p.getBoundingClientRect(), a = i.getBoundingClientRect();
+                      return {width:r.width,height:r.height,scale:a.width/r.width,left:(a.left-r.left)/r.width,
+                        horizontalOverflow:d.scrollWidth-d.clientWidth, background:i.getAttribute('src'),
+                        applyEnabled:!$('applyTemplate').disabled};
+                    })())"""))
+                    assert observation['applyEnabled'] and observation['horizontalOverflow'] <= 1, observation
+                    assert abs(observation['width'] / observation['height'] - ratio) < .003, observation
+                    pattern = observation.pop('background')
+                    assert pattern == created['background']
+                    if pattern:
+                        assert abs(observation['scale'] - 1404 / bounds['width']) < .003, observation
+                        assert abs(observation['left'] + bounds['x'] / bounds['width']) < .003, observation
+                    record['change_preview'] = observation
+                    if label == 'restaurant' and paper == 'move':
+                        await capture_window(self, self.evidence / f'{title}-change.png')
+                    await web.evaluate_javascript("$('cancelTemplate').click();true")
+                    assert await web.evaluate_javascript("!$('templatePicker').open && window.notebookIdle()")
+                    assert panel.bridge.sequence == sequence and panel.editor.state() == before and book.members == members
+                    record['cancel_unchanged'] = True
+
+                    # Reopen from the still-open sheet after Cancel, and confirm the actual action.
+                    await web.evaluate_javascript(select_choice + ";$('applyTemplate').click();true")
+                    await self.idle(panel)
+                    assert panel.bridge.sequence == sequence + 1
+                    applied = await self.settled_page(panel, landscape)
+                    assert applied['page'] == bounds and applied.pop('background') == pattern
+                    assert book.page(0).to_bytes() == ink and Notebook.read(book.to_bytes()).page(0).to_bytes() == ink
+                    record['applied'] = applied
+                    record['ink_sha256'] = sha256(ink).hexdigest()
+                    if label == 'restaurant' and paper == 'move':
+                        await web.evaluate_javascript("$('mobileBackdrop').click();true")
+                        await capture_window(self, self.evidence / f'{title}-page.png')
+                    await self.command(panel, dict(op='save'))
+                    assert Notebook.read(path.read_bytes()).page(0).to_bytes() == ink
+                    assert close_notebook(self, panel.session.id, 'discard')
+
+    async def unavailable(self, cases):
+        from features.notebooks.notebook import Notebook
+        from services.documents.mobile_notebooks import close_notebook, open_notebook
+        self.show_home()
+        book = Notebook.new('Generated imported template')
+        reference = 'Synthetic unavailable restaurant card'
+        book.pages[0].template = reference
+        book.structure_dirty = True
+        path = Path(self.paths.cache) / 'generated-unknown.rmdoc'
+        path.write_bytes(book.to_bytes())
+        assert await open_notebook(self, path=path)
+        panel = self.notebook_panel
+        await self.idle(panel)
+        result = json.loads(await panel.web.evaluate_javascript("""(() => {
+          window.notebookNativeAction('layers');$('changeTemplate').click();
+          return JSON.stringify({label:$('pageTemplate').selectedOptions[0]?.textContent,
+              message:$('templatePreviewStatus').textContent, disabled:$('applyTemplate').disabled,
+              open:$('templatePicker').open});
+        })()"""))
+        assert result == dict(label=reference + ' (preserved)', message='Template artwork unavailable.',
+                              disabled=True, open=True), result
+        await capture_window(self, self.evidence / 'unknown-template.png')
+        await panel.web.evaluate_javascript("$('cancelTemplate').click();true")
+        assert panel.editor.notebook.pages[0].template == reference
+        cases.append(result)
+        assert close_notebook(self, panel.session.id, 'discard')
 
     async def save_reopen(self, panel, path):
         from features.notebooks.notebook import Notebook
@@ -171,6 +333,11 @@ class Probe(LogisticsMobile):
             picker.notebook_templates.template.value = CATALOG['P Lines large']
             picker.cancel_text_destination()
             assert not list(Path(self.private_root).rglob('*.rmdoc'))
+
+            await self.matrix(report['cases'])
+            await rotate(self, 'portrait')
+            await self.unavailable(report['cases'])
+            self.show_home()
 
             panel, path, backend = await self.create_notebook('Native lined', 'P Lines medium', 'pro')
             book = panel.editor.notebook

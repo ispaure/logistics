@@ -106,13 +106,14 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--revision', default='HEAD', help='Committed Logistics revision; excludes concurrent working edits')
     parser.add_argument('--ios-shell-receipt', type=Path, help='Verified simulator shell receipt; iOS never compiles implicitly')
+    parser.add_argument('--build-ios-shell', action='store_true', help='Compile a disposable iOS Simulator QA shell for this run')
     parser.add_argument('--android-shell-receipt', type=Path, help='Copy/repackage a verified QA APK instead of compiling')
     parser.add_argument('--probe', choices=('templates', 'calibration', 'palm', 'links'), default='templates')
     parser.add_argument('--ios-family', choices=('iPhone', 'iPad', 'iPhone Duo'), default='iPhone')
     parser.add_argument('--duoctl', type=Path, help='Reviewed simulator-only touch helper for iOS link acceptance')
     args = parser.parse_args()
-    if args.platform == 'ios' and args.ios_shell_receipt is None:
-        parser.error('iOS requires --ios-shell-receipt (copy-only simulator shell)')
+    if args.platform == 'ios' and (args.ios_shell_receipt is not None) == args.build_ios_shell:
+        parser.error('iOS requires exactly one of --ios-shell-receipt or --build-ios-shell')
     if args.probe == 'calibration' and (args.platform != 'android' or args.android_shell_receipt is None):
         parser.error('Calibration requires Android and an explicit source-verified QA shell receipt')
     if args.probe == 'palm' and args.platform == 'ios' and args.ios_family != 'iPad':
@@ -154,16 +155,18 @@ def main():
                            result_name='notebook-link-result.json')
         try:
             if args.platform == 'ios':
-                receipt = json.loads(args.ios_shell_receipt.read_text())
-                if args.probe == 'links':
-                    from mobile_build.validation.drawer_privacy_tools import verify_shell
-                    verified = verify_shell(receipt, captured['logistics_commit'])
-                    verified['scope'] = 'PDF/notebook link simulator acceptance; no physical device input'
-                    (output / 'verified-ios-shell.json').write_text(json.dumps(verified, indent=2))
-                source_app = Path(receipt['app'])
-                if not source_app.is_dir():
-                    raise ValueError('Verified simulator shell no longer exists')
-                (output / 'compiled-shell.json').write_text(json.dumps(receipt, indent=2))
+                source_app = None
+                if args.ios_shell_receipt is not None:
+                    receipt = json.loads(args.ios_shell_receipt.read_text())
+                    if args.probe == 'links':
+                        from mobile_build.validation.drawer_privacy_tools import verify_shell
+                        verified = verify_shell(receipt, captured['logistics_commit'])
+                        verified['scope'] = 'PDF/notebook link simulator acceptance; no physical device input'
+                        (output / 'verified-ios-shell.json').write_text(json.dumps(verified, indent=2))
+                    source_app = Path(receipt['app'])
+                    if not source_app.is_dir():
+                        raise ValueError('Verified simulator shell no longer exists')
+                    (output / 'compiled-shell.json').write_text(json.dumps(receipt, indent=2))
                 driver.run_ios(work, payload, output, env, family=args.ios_family, source_app=source_app, duoctl=args.duoctl, **profile)
             else:
                 if args.android_shell_receipt is not None:
@@ -173,7 +176,8 @@ def main():
                     driver.exercise_android_app(apk, work, output, env, options,
                         startup_timeout=240, install_timeout=90, probe_timeout=180, **profile)
                 else:
-                    driver.run_android(work, payload, output, env, options, **profile)
+                    driver.run_android(work, payload, output, env, options,
+                                       probe_timeout=420 if args.probe == 'templates' else None, **profile)
         finally:
             if args.platform == 'android' and args.probe in ('palm', 'links') and args.android_shell_receipt is None:
                 retain_palm_package(work, output, name=args.probe)
