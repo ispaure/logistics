@@ -37,7 +37,7 @@ function templateControls() {
   dialog.setAttribute('aria-labelledby', 'templatePickerTitle');
   dialog.innerHTML = `<form>
     <h2 id="templatePickerTitle">Change Template</h2>
-    <label>Page template <select id="pageTemplate" autofocus></select></label>
+    <label>Page template <span class="template-select"><select id="pageTemplate" autofocus></select></span></label>
     <label>Template size <select id="templateFormat"><option value="pro">Paper Pro</option><option value="move">Paper Pro Move</option></select></label>
     <label><input id="templateVisible" type="checkbox"> Show template</label>
     <figure id="templatePreview" role="img" aria-label="Template preview"><img alt="" decoding="async" hidden></figure>

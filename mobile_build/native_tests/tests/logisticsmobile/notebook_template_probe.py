@@ -46,6 +46,18 @@ class Probe(LogisticsMobile):
         await panel.web.evaluate_javascript('send(' + json.dumps(action) + ')')
         await self.idle(panel)
 
+    async def capture_canvas(self, panel, filename):
+        web = panel.web
+        await web.evaluate_javascript("""window.probePainted = false;
+          requestAnimationFrame(() => requestAnimationFrame(() => { window.probePainted = true; })); true""")
+        for _ in range(100):
+            if await web.evaluate_javascript('window.probePainted === true'):
+                # WebView's next presented frame can lag the JS animation frame.
+                await asyncio.sleep(.2)
+                return await capture_window(self, self.evidence / filename)
+            await asyncio.sleep(.05)
+        raise TimeoutError('Notebook canvas did not present a frame for evidence.')
+
     async def template(self, panel, name, paper_format, visible=True):
         await panel.web.evaluate_javascript("window.notebookNativeAction('layers');$('changeTemplate').click();"
             "$('pageTemplate').value=" + json.dumps(name) + ";$('templateFormat').value="
@@ -80,10 +92,10 @@ class Probe(LogisticsMobile):
         if backend.startswith('toga_iOS.'):
             assert native.window is not None and native.bounds.size.height > 0
             description = controls.description._impl.native
-            size_label = controls.format_label._impl.native
+            choice_layout = controls.preview_layout._impl.native
             desc_frame = description.convertRect_toView_(description.bounds, controls._impl.native)
-            size_frame = size_label.convertRect_toView_(size_label.bounds, controls._impl.native)
-            assert desc_frame.origin.y + desc_frame.size.height <= size_frame.origin.y + 1, 'Template description overlaps size label'
+            choice_frame = choice_layout.convertRect_toView_(choice_layout.bounds, controls._impl.native)
+            assert choice_frame.origin.y + choice_frame.size.height <= desc_frame.origin.y + 1, 'Template description overlaps choices'
         else:
             assert native.isShown() and native.getWidth() > 0 and native.getHeight() > 0
         if observe is None:
@@ -147,8 +159,9 @@ class Probe(LogisticsMobile):
                         if image is not None:
                             assert abs(image.size[0] / image.size[1] - ratio) < .006, image.size
                             (self.evidence / f'{title}-creation-preview.png').write_bytes(image.data)
+                        record['creation']['selector_and_preview_layout'] = str(controls.preview_layout.style.direction)
                         if label == 'restaurant' and paper == 'move':
-                            picker.name_form.vertical_position = picker.name_form.max_vertical_position
+                            picker.name_form.vertical_position = min(picker.name_form.max_vertical_position, 128)
                             await asyncio.sleep(.2)
                             await capture_window(self, self.evidence / f'{title}-creation.png')
 
@@ -193,21 +206,22 @@ class Probe(LogisticsMobile):
                         raise TimeoutError('Change Template preview did not settle.')
                     observation = json.loads(await web.evaluate_javascript("""JSON.stringify((() => {
                       const d = $('templatePicker'), p = $('templatePreview'), i = p.querySelector('img');
-                      const r = p.getBoundingClientRect(), a = i.getBoundingClientRect();
+                      const r = p.getBoundingClientRect(), a = i.getBoundingClientRect(), s = $('pageTemplate');
                       return {width:r.width,height:r.height,scale:a.width/r.width,left:(a.left-r.left)/r.width,
                         horizontalOverflow:d.scrollWidth-d.clientWidth, background:i.getAttribute('src'),
+                        selectWidth:s.clientWidth, dialogWidth:d.clientWidth,
                         applyEnabled:!$('applyTemplate').disabled};
                     })())"""))
+                    pattern = observation.pop('background')
                     assert observation['applyEnabled'] and observation['horizontalOverflow'] <= 1, observation
                     assert abs(observation['width'] / observation['height'] - ratio) < .003, observation
-                    pattern = observation.pop('background')
                     assert pattern == created['background']
                     if pattern:
                         assert abs(observation['scale'] - 1404 / bounds['width']) < .003, observation
                         assert abs(observation['left'] + bounds['x'] / bounds['width']) < .003, observation
                     record['change_preview'] = observation
                     if label == 'restaurant' and paper == 'move':
-                        await capture_window(self, self.evidence / f'{title}-change.png')
+                        await self.capture_canvas(panel, f'{title}-change.png')
                     await web.evaluate_javascript("$('cancelTemplate').click();true")
                     assert await web.evaluate_javascript("!$('templatePicker').open && window.notebookIdle()")
                     assert panel.bridge.sequence == sequence and panel.editor.state() == before and book.members == members
@@ -224,7 +238,7 @@ class Probe(LogisticsMobile):
                     record['ink_sha256'] = sha256(ink).hexdigest()
                     if label == 'restaurant' and paper == 'move':
                         await web.evaluate_javascript("$('mobileBackdrop').click();true")
-                        await capture_window(self, self.evidence / f'{title}-page.png')
+                        await self.capture_canvas(panel, f'{title}-page.png')
                     await self.command(panel, dict(op='save'))
                     assert Notebook.read(path.read_bytes()).page(0).to_bytes() == ink
                     assert close_notebook(self, panel.session.id, 'discard')
@@ -251,7 +265,7 @@ class Probe(LogisticsMobile):
         })()"""))
         assert result == dict(label=reference + ' (preserved)', message='Template artwork unavailable.',
                               disabled=True, open=True), result
-        await capture_window(self, self.evidence / 'unknown-template.png')
+        await self.capture_canvas(panel, 'unknown-template.png')
         await panel.web.evaluate_javascript("$('cancelTemplate').click();true")
         assert panel.editor.notebook.pages[0].template == reference
         cases.append(result)

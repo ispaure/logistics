@@ -88,7 +88,9 @@ header{max-height:50dvh;overflow:auto;background:#fafaf7;border-bottom:1px solid
 #templatePicker h2{margin:0;font-size:18px}
 #templatePicker label{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
 #templatePicker select{max-width:100%;min-width:0}
-#pageTemplate{width:100%}
+.template-select{display:block;position:relative;width:100%;min-width:0}
+.template-select::after{content:'';position:absolute;inset-inline-end:14px;top:50%;width:7px;height:7px;border:solid currentColor;border-width:0 2px 2px 0;transform:translateY(-70%) rotate(45deg);pointer-events:none}
+#pageTemplate{display:block;width:100%;appearance:none;padding-inline-end:34px;text-overflow:ellipsis;overflow:hidden;white-space:nowrap}
 #templatePicker p{margin:0}
 #templatePicker p:empty{display:none}
 #templatePreview{position:relative;overflow:hidden;margin:4px auto;width:min(140px,27dvh);background:white;outline:1px solid #aaa}

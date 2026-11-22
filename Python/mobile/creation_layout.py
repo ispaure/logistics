@@ -206,7 +206,8 @@ class CreationFormats:
         self.compact = compact
         view = self.picker.name_view
         if self.picker.notebook_templates is not None:
-            self.picker.notebook_templates.fit(width)
+            name_width = self.picker.name_panel.style.width if paired else width
+            self.picker.notebook_templates.fit(name_width)
         short = self.tabbed and keyboard and height < 140
         self.picker.save_as_name.style.height = 44 if short else 48
         # Reserve the short viewport for the field itself. Avoid partially

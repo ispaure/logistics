@@ -15,7 +15,7 @@ import logging
 
 import toga
 from toga.style import Pack
-from toga.style.pack import CENTER, COLUMN, ROW
+from toga.style.pack import CENTER, COLUMN, NONE, ROW
 from commonUtils.ui.native.forms import FittedLabel, fit_text
 from ..notebook import Notebook
 from ..templates import CATALOG, FORMATS, TEMPLATE_NOTICE, description, view_bounds
@@ -41,15 +41,17 @@ class NotebookTemplateChoices(toga.Box):
         self._preview_choice = None
         self.template = toga.Selection(items=list(CATALOG.values()), style=Pack(height=48))
         self.paper_format = toga.Selection(items=list(FORMATS.values()), style=Pack(height=48))
-        self.preview = toga.ImageView(style=Pack(background_color='white'))
-        preview_row = toga.Box(children=[self.preview],
+        self.preview = toga.ImageView(style=Pack(height=138, background_color='white'))
+        self.preview_frame = toga.Box(children=[self.preview],
             style=Pack(direction=COLUMN, align_items=CENTER, margin_top=8, background_color='#e5e5e5'))
         self.description = FittedLabel('', style=Pack(margin_top=8))
         self.notice = FittedLabel(TEMPLATE_NOTICE, style=Pack(font_size=12, margin_top=8))
         self.format_label = toga.Label('Template size', style=Pack(margin_top=8))
-        self.add(toga.Label('First page template'), self.template, self.description,
-                 self.format_label, self.paper_format, preview_row,
-                 self.notice)
+        self.choices = toga.Box(
+            children=[toga.Label('First page template'), self.template, self.format_label, self.paper_format],
+            style=Pack(direction=COLUMN))
+        self.preview_layout = toga.Box(children=[self.choices, self.preview_frame], style=Pack(direction=COLUMN))
+        self.add(self.preview_layout, self.description, self.notice)
         self.template.on_change = self.update_choice
         self.paper_format.on_change = self.update_choice
         self.update_choice()
@@ -92,8 +94,9 @@ class NotebookTemplateChoices(toga.Box):
 
     def update_preview(self, template, paper_format):
         bounds = view_bounds([], paper_format == 'move')
-        self.preview.style.height = 138
-        self.preview.style.width = round(138 * bounds['width'] / bounds['height'])
+        width = round(self.preview.style.height * bounds['width'] / bounds['height'])
+        if self.preview.style.width != width:
+            self.preview.style.width = width
         if not self._preview_active or (template, paper_format) == self._preview_choice:
             return
         self.cancel_preview()
@@ -131,6 +134,12 @@ class NotebookTemplateChoices(toga.Box):
 
     def fit(self, width):
         self._width = width
+        direction = ROW if width >= 480 else COLUMN
+        if self.preview_layout.style.direction != direction:
+            self.preview_layout.style.direction = direction
+            self.choices.style.flex = int(direction == ROW)
+            self.preview_frame.style.width = 152 if direction == ROW else NONE
+            self.preview_frame.style.margin_left = 12 if direction == ROW else 0
         for label in (self.description, self.notice):
             fit_text(label, max(120, width - 40))
             if type(label._impl).__module__.startswith('toga_iOS.'):
