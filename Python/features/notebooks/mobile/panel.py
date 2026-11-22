@@ -151,7 +151,7 @@ class NotebookPanel:
         generation = getattr(self.app, 'navigation_generation', None)
         self.busy = True
         try:
-            book = await choose_new_notebook(self.app)
+            book = await choose_new_notebook(self)
         finally:
             self.busy = False
         if generation != getattr(self.app, 'navigation_generation', None):
@@ -964,6 +964,9 @@ class NotebookPanel:
 
     def dispose(self):
         self.closed = True
+        decision = getattr(self, 'template_decision', None)
+        if decision is not None and not decision.done():
+            decision.set_result(None)
         native_actions = getattr(self, 'native_actions', None)
         if native_actions is not None:
             native_actions.dispose()

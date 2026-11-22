@@ -162,7 +162,7 @@ class Notebook:
         result.metadata_dirty = True
         if template is not None:
             from .templates import select
-            select(result, 0, template, paper_format, True)
+            select(result, 0, template, paper_format, True, lock_size=True)
         return result
 
     @classmethod

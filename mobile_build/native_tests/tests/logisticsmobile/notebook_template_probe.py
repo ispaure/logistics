@@ -47,7 +47,7 @@ class Probe(LogisticsMobile):
         await panel.web.evaluate_javascript("$('pageTemplateButton').click();"
             "$('pageTemplate').value=" + json.dumps(name) + ";$('templateFormat').value="
             + json.dumps(paper_format) + ";$('templateVisible').checked=" + json.dumps(visible) + ";"
-            "$('pageTemplate').dispatchEvent(new Event('change'))")
+            "$('pageTemplate').dispatchEvent(new Event('change'));$('applyTemplate').click()")
         await self.idle(panel)
         page = panel.editor.notebook.pages[panel.editor.index]
         expected = name + (' Move' if paper_format == 'move' else ' Pro') if name.startswith('Logistics ') else name
@@ -66,7 +66,13 @@ class Probe(LogisticsMobile):
         controls.paper_format.value = FORMATS[paper_format]
         await asyncio.sleep(.3)
         assert controls.selection() == (template, paper_format)
-        assert controls.paper_format.enabled == template.startswith('Logistics ')
+        assert controls.paper_format.enabled
+        if template != 'Blank':
+            for _ in range(100):
+                if controls.preview.image is not None:
+                    break
+                await asyncio.sleep(.05)
+            assert controls.preview.image is not None, 'Template preview did not load'
         native = controls.template._impl.native
         if backend.startswith('toga_iOS.'):
             assert native.window is not None and native.bounds.size.height > 0

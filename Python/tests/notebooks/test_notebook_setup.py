@@ -34,9 +34,12 @@ class NotebookSetupTests(QtTestCase):
         self.assertEqual(book.pages[0].template, 'Logistics Cornell notes Move')
         self.assertEqual(settings(book, book.pages[0]), dict(format='move', visible=True))
         dialog.template.setCurrentIndex(dialog.template.findData('P Lines small'))
-        self.assertFalse(dialog.paper_format.isEnabled())
+        self.assertTrue(dialog.paper_format.isEnabled())
         native = dialog.notebook()
         self.assertEqual(native.pages[0].template, 'P Lines small')
+        self.assertEqual(settings(native, native.pages[0])['format'], 'move')
+        preview = dialog.preview.pixmap()
+        self.assertAlmostEqual(preview.width() / preview.height(), 821 / 1460, delta=.01)
         self.assertFalse(any(name.endswith('.template') for name in native.members))
 
     def test_cancel_draft_creation_does_not_open_workspace(self):

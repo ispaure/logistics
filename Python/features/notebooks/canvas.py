@@ -9,12 +9,20 @@ __maintainer__ = "Marc-André Voyer"
 __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
+from functools import cache
 import json
 from commonUtils.ui.native.web_dropdown import DROPDOWN_CSS, DROPDOWN_SCRIPT
 from .assets import asset
 from .bridge import MAX_COMMAND
 from .icons import ICON_SCRIPT
 from .protocol import canvas_state_json
+from .templates import CATALOG, FORM_TEMPLATES, background
+
+
+@cache
+def _template_artwork_json():
+    return json.dumps({name: (background(name), background(name, 'move') if name in FORM_TEMPLATES else None)
+                       for name in CATALOG})
 
 
 def editor_html(state, bridge, *, console_bridge=False, desktop=False, mobile=False, stylesheet='', paper_preview=None):
@@ -42,6 +50,7 @@ let state=__STATE__,bridge=__BRIDGE__,seq=0,queue=[],busy=false,mode='ink',
     pendingInk=null,continuousInk=false,deferredUpdate=null;
 const $=id=>document.getElementById(id),canvas=$('paper'),ctx=canvas.getContext('2d',{desynchronized:!state.native_pen});
 const canvasPixelLimit=__CANVAS_PIXEL_LIMIT__;
+const templateArtwork=__TEMPLATE_ARTWORK__;
 """
     # Android's native pen already provides the direct display preview. Its
     # canonical WebView canvas must use normal compositor synchronization rather
@@ -50,6 +59,7 @@ const canvasPixelLimit=__CANVAS_PIXEL_LIMIT__;
     # not multiply all three without bound. Desktop gets a larger screen budget;
     # neither budget changes native ink geometry or exported document quality.
     setup = setup.replace('__CANVAS_PIXEL_LIMIT__', str((8 if mobile else 16) * 1024 * 1024))
+    setup = setup.replace('__TEMPLATE_ARTWORK__', _template_artwork_json())
     engine = setup + ICON_SCRIPT + '\n' + '\n'.join(asset(name) for name in (
         'drawing.js', 'queue.js', 'viewport.js', 'palm.js', 'input.js', 'zoom.js', 'images.js', 'selection.js', 'links.js', 'touch_navigation.js', 'boot.js'))
     engine = engine.replace('__MAX_COMMAND__', str(MAX_COMMAND)).replace(

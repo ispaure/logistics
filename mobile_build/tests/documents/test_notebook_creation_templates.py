@@ -9,6 +9,8 @@ __maintainer__ = "Marc-André Voyer"
 __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
+import asyncio
+from threading import Event
 import unittest
 from unittest.mock import AsyncMock, patch
 from commonUtils.testing.stages import TestStage
@@ -66,6 +68,45 @@ class NotebookCreationTemplateTests(unittest.TestCase):
         self.app.loop.run_until_complete(picker.save_text_destination())
         self.assertEqual(Notebook.read(target.read_bytes()).pages[0].template, 'P Lines large')
 
+    def test_slow_preview_does_not_block_choosing_or_replace_a_newer_preview(self):
+        from mobile_build.tests.support.pdf import PNG
+        _, picker = self.choose('Fast selection', 'Remarkable Document (.rmdoc)')
+        controls = picker.notebook_templates
+        release, started, finished = Event(), Event(), Event()
+
+        def render(template, paper_format):
+            started.set()
+            try:
+                if not release.wait(3):
+                    raise TimeoutError('Preview test did not release the worker.')
+                return PNG
+            finally:
+                finished.set()
+
+        async def change_while_loading():
+            controls.template.value = CATALOG['Logistics Restaurant review']
+            while not started.is_set():
+                await asyncio.sleep(.01)
+            self.assertIsNone(controls.preview.image)
+            controls.template.value = CATALOG['Blank']
+            controls.paper_format.value = FORMATS['move']
+            self.assertEqual(controls.selection(), ('Blank', 'move'))
+            self.assertEqual(picker.operation.notebook_format, 'move')
+            release.set()
+            while not finished.is_set():
+                await asyncio.sleep(.01)
+            self.assertIsNone(controls.preview.image)
+
+        with patch('features.notebooks.mobile.setup.preview_png', side_effect=render):
+            try:
+                self.app.loop.run_until_complete(asyncio.wait_for(change_while_loading(), 5))
+            finally:
+                release.set()
+        self.app.loop.run_until_complete(picker.save_text_destination())
+        book = Notebook.read((self.root / 'LocalFiles/Fast selection.rmdoc').read_bytes())
+        self.assertEqual(book.pages[0].template, 'Blank')
+        self.assertEqual(settings(book, book.pages[0]), dict(format='move', visible=True))
+
     def test_disabled_or_transient_native_events_do_not_reenable_controls(self):
         from unittest.mock import Mock
         from features.notebooks.mobile.setup import NotebookTemplateChoices
@@ -81,15 +122,6 @@ class NotebookCreationTemplateTests(unittest.TestCase):
         with patch.object(controls.template._impl, 'get_selected_index', return_value=None):
             controls.update_choice()
         self.assertTrue(controls.template.enabled)
-
-    def test_navigation_after_template_choice_does_not_open_another_dialog(self):
-        from features.notebooks.mobile.setup import choose_new_notebook
-        async def changed_navigation(dialog):
-            self.app.navigation_generation += 1
-            return 'Logistics Checklist'
-        with patch.object(self.app.main_window, 'dialog', AsyncMock(side_effect=changed_navigation)) as dialog:
-            self.assertIsNone(self.app.loop.run_until_complete(choose_new_notebook(self.app)))
-        dialog.assert_awaited_once()
 
     def test_cancel_leaves_no_notebook_and_fresh_creation_resets_choices(self):
         self.app.loop.run_until_complete(self.app.choose_document_type())
@@ -131,9 +163,26 @@ class NotebookCreationTemplateTests(unittest.TestCase):
         self.assertFalse(owner.busy)
 
     def test_native_notebook_library_creation_uses_same_catalog_and_can_cancel(self):
+        from types import SimpleNamespace
+        import toga
         from features.notebooks.mobile.setup import choose_new_notebook
-        with patch.object(self.app.main_window, 'dialog', AsyncMock(side_effect=['Logistics Checklist', 'move'])):
-            book = self.app.loop.run_until_complete(choose_new_notebook(self.app))
+
+        async def choose(*, cancel):
+            original = toga.Box()
+            panel = SimpleNamespace(app=self.app, view=toga.Box(children=[original]), closed=False)
+            pending = asyncio.create_task(choose_new_notebook(panel))
+            await asyncio.sleep(0)
+            form = panel.view.children[0]
+            scroll, actions = form.children
+            controls = scroll.content.children[1]
+            controls.template.value = CATALOG['Logistics Checklist']
+            controls.paper_format.value = FORMATS['move']
+            button = actions.children[0 if cancel else 1]
+            button.on_press()
+            result = await pending
+            self.assertEqual(list(panel.view.children), [original])
+            return result
+
+        book = self.app.loop.run_until_complete(choose(cancel=False))
         self.assertEqual(book.pages[0].template, 'Logistics Checklist Move')
-        with patch.object(self.app.main_window, 'dialog', AsyncMock(return_value='cancel')):
-            self.assertIsNone(self.app.loop.run_until_complete(choose_new_notebook(self.app)))
+        self.assertIsNone(self.app.loop.run_until_complete(choose(cancel=True)))

@@ -423,7 +423,8 @@ class Editor:
                 inherit(book, current, new_page)
         elif op == 'template':
             from .templates import select
-            select(book, self.index, action['name'], action['format'], action['visible'])
+            select(book, self.index, action['name'], action['format'], action['visible'],
+                   lock_size=action.get('fixed_size', False))
         elif op == 'duplicate-page':
             book.copy_page(book, self.index, self.index + 1)
             self.index += 1
@@ -580,7 +581,9 @@ class Editor:
         ink.order = [key for key in ink.order if key not in ids]
 
     def state(self):
-        from .templates import CATALOG, FORM_TEMPLATES, settings, background, view_bounds, template_name, available, TEMPLATE_NOTICE, description
+        from .templates import (
+            CATALOG, TEMPLATE_NOTICE, available, background, description, fixed_size, settings, template_name, view_bounds,
+        )
         ink = self.notebook.page(self.index)
         page = self.notebook.pages[self.index]
         paper = settings(self.notebook, page)
@@ -615,8 +618,9 @@ class Editor:
                     strokes=[self.canvas_stroke(s) for s in ink.strokes], layers=ink.layers,
                     warning=ink.warning, template=page.template,
                     template_name=template_name(page.template),
-                    templates=CATALOG, template_formats=sorted(FORM_TEMPLATES), template_notice=TEMPLATE_NOTICE, template_description=template_description,
+                    templates=CATALOG, template_notice=TEMPLATE_NOTICE, template_description=template_description,
                     template_settings=paper, template_editable=not pdf,
+                    template_fixed_size=not pdf and fixed_size(self.notebook, page),
                     template_available=template_available,
                     move_paper=move_paper, compact_paper=compact_paper,
                     background=self.background() if mapped_pdf else background(page.template, paper['format']) if paper['visible'] and template_available else None,

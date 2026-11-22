@@ -85,6 +85,11 @@ def settings(book, page):
     return dict(format=paper_format, visible=value.get('visible') is not False)
 
 
+def fixed_size(book, page):
+    return (template_name(page.template) in FORM_TEMPLATES
+            or _stored_settings(book, page).get('fixed_size') is True)
+
+
 def available(book, page):
     """Never substitute built-in artwork for a different imported asset."""
     name = template_name(page.template)
@@ -117,7 +122,7 @@ def inherit(book, source, target):
         book.members[f'{book.id}/{target.id}.logistics-template.json'] = raw
 
 
-def select(book, index, name, paper_format, visible):
+def select(book, index, name, paper_format, visible, *, lock_size=False):
     if name not in CATALOG or paper_format not in FORMATS or type(visible) is not bool:
         raise ValueError('Choose a supported page template and paper format.')
     if book.content.get('fileType') == 'pdf':
@@ -133,6 +138,8 @@ def select(book, index, name, paper_format, visible):
     page.template = reference
     saved = _stored_settings(book, page)
     saved.update(format=paper_format, visible=visible)
+    if lock_size:
+        saved['fixed_size'] = True
     book.members[f'{book.id}/{page.id}.logistics-template.json'] = json.dumps(saved).encode()
     book.structure_dirty = True
     if artwork is not None and path not in book.members:
@@ -229,6 +236,17 @@ def svg(name, paper_format='pro'):
 def background(name, paper_format='pro'):
     artwork = svg(name, paper_format)
     return 'data:image/svg+xml;base64,' + base64.b64encode(artwork.encode()).decode() if artwork else None
+
+
+@lru_cache(maxsize=32)
+def preview_svg(name, paper_format):
+    """Clip the original artwork to the selected paper, without scaling ink coordinates."""
+    bounds = view_bounds([], paper_format == 'move')
+    x, y, width, height = (bounds[key] for key in ('x', 'y', 'width', 'height'))
+    artwork = svg(name, paper_format).partition('>')[2].removesuffix('</svg>')
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" '
+            f'viewBox="{x:g} {y:g} {width} {height}">'
+            f'<rect x="{x:g}" width="{width}" height="{height}" fill="white"/>{artwork}</svg>')
 
 
 @lru_cache(maxsize=32)

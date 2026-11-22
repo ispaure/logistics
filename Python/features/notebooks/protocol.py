@@ -62,6 +62,8 @@ def validate_action(action):
         raise ValueError('Invalid ' + op + ' command fields.')
     if op == 'paste-strokes' and 'single_use' in action and type(action['single_use']) is not bool:
         raise ValueError('Invalid single-use paste choice.')
+    if op == 'template' and 'fixed_size' in action and type(action['fixed_size']) is not bool:
+        raise ValueError('Invalid fixed template size choice.')
     if op == 'unlock-pdf' and len(action['password']) > 1024:
         raise ValueError('Password is too long.')
     if op == 'eraser-kind' and action['kind'] not in ('partial', 'whole'):

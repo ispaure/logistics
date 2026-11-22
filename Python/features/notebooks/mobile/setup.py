@@ -9,12 +9,25 @@ __maintainer__ = "Marc-André Voyer"
 __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
+import asyncio
+from functools import lru_cache
+import logging
+
 import toga
 from toga.style import Pack
-from toga.style.pack import COLUMN
+from toga.style.pack import CENTER, COLUMN, ROW
 from commonUtils.ui.native.forms import FittedLabel, fit_text
 from ..notebook import Notebook
-from ..templates import CATALOG, FORMATS, TEMPLATE_NOTICE, description
+from ..templates import CATALOG, FORMATS, TEMPLATE_NOTICE, description, view_bounds
+
+
+@lru_cache(maxsize=24)
+def preview_png(template, paper_format):
+    from features.pdf.document import PDFDocument
+    from ..remarkable_export import backgrounds_pdf
+
+    book = Notebook.new(template=template, paper_format=paper_format)
+    return PDFDocument.render_page(backgrounds_pdf(book), 0, edge=384)
 
 
 class NotebookTemplateChoices(toga.Box):
@@ -23,13 +36,19 @@ class NotebookTemplateChoices(toga.Box):
         self.changed = changed
         self._width = None
         self._enabled = True
+        self._preview_active = False
+        self._preview_task = None
+        self._preview_choice = None
         self.template = toga.Selection(items=list(CATALOG.values()), style=Pack(height=48))
         self.paper_format = toga.Selection(items=list(FORMATS.values()), style=Pack(height=48))
+        self.preview = toga.ImageView(style=Pack(background_color='white'))
+        preview_row = toga.Box(children=[self.preview],
+            style=Pack(direction=COLUMN, align_items=CENTER, margin_top=8, background_color='#e5e5e5'))
         self.description = FittedLabel('', style=Pack(margin_top=8))
         self.notice = FittedLabel(TEMPLATE_NOTICE, style=Pack(font_size=12, margin_top=8))
         self.format_label = toga.Label('Template size', style=Pack(margin_top=8))
         self.add(toga.Label('First page template'), self.template, self.description,
-                 self.format_label, self.paper_format,
+                 self.format_label, self.paper_format, preview_row,
                  self.notice)
         self.template.on_change = self.update_choice
         self.paper_format.on_change = self.update_choice
@@ -52,18 +71,61 @@ class NotebookTemplateChoices(toga.Box):
         except ValueError:
             # Native reattachment can briefly report no selected row.
             return
-        self.paper_format.enabled = template.startswith('Logistics ')
         self.description.text = description(template)
         self.changed(template, paper_format)
+        self.update_preview(template, paper_format)
         if self._width is not None:
             self.fit(self._width)
+
+    def set_preview_active(self, active):
+        self._preview_active = active
+        if active:
+            self.update_choice()
+        else:
+            self.cancel_preview()
+
+    def cancel_preview(self):
+        if self._preview_task is not None:
+            self._preview_task.cancel()
+            self._preview_task = None
+        self._preview_choice = None
+
+    def update_preview(self, template, paper_format):
+        bounds = view_bounds([], paper_format == 'move')
+        self.preview.style.height = 138
+        self.preview.style.width = round(138 * bounds['width'] / bounds['height'])
+        if not self._preview_active or (template, paper_format) == self._preview_choice:
+            return
+        self.cancel_preview()
+        self.preview.image = None
+        if template == 'Blank':
+            self._preview_choice = (template, paper_format)
+            return
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            return
+        self._preview_choice = (template, paper_format)
+        self._preview_task = loop.create_task(self.load_preview(template, paper_format))
+
+    async def load_preview(self, template, paper_format):
+        try:
+            # Coalesce fast native picker callbacks before starting the renderer.
+            await asyncio.sleep(.05)
+            png = await asyncio.to_thread(preview_png, template, paper_format)
+            self.preview.image = toga.Image(src=png)
+        except Exception:
+            logging.getLogger(__name__).exception('Could not load notebook template preview')
+            self._preview_choice = None
+        finally:
+            if self._preview_task is asyncio.current_task():
+                self._preview_task = None
 
     def set_enabled(self, enabled):
         was_enabled = self._enabled
         self._enabled = bool(enabled)
         self.template.enabled = self._enabled
-        self.paper_format.enabled = self._enabled and self.template.value in [
-            label for key, label in CATALOG.items() if key.startswith('Logistics ')]
+        self.paper_format.enabled = self._enabled
         if self._enabled and not was_enabled:
             self.update_choice()
 
@@ -80,24 +142,45 @@ class NotebookTemplateChoices(toga.Box):
                                          * len(rendered.split('\n')) + 2)
 
 
-async def choose_new_notebook(app, *, name='Notebook'):
-    """Legacy notebook-library entry uses native scrolling template choices."""
-    from services.documents.authoring.document_dialogs import DocumentTypeDialog
-    generation = getattr(app, 'navigation_generation', None)
-    def current():
-        return (getattr(app, 'active_host', True)
-                and generation == getattr(app, 'navigation_generation', None))
-    dialog = DocumentTypeDialog(choices=[(label, key) for key, label in CATALOG.items()])
-    dialog.title = 'New notebook — first page template'
-    dialog.message = TEMPLATE_NOTICE
-    template = await app.main_window.dialog(dialog)
-    if not current() or template not in CATALOG:
-        return None
-    paper_format = 'pro'
-    if template.startswith('Logistics '):
-        dialog = DocumentTypeDialog(choices=[(label, key) for key, label in FORMATS.items()])
-        dialog.title, dialog.message = 'Template size', description(template)
-        paper_format = await app.main_window.dialog(dialog)
-        if not current() or paper_format not in FORMATS:
-            return None
-    return Notebook.new(name, template=template, paper_format=paper_format)
+async def choose_new_notebook(panel, *, name='Notebook'):
+    """Mount the shared form in the notebook library until Create or Cancel."""
+    decision = asyncio.get_running_loop().create_future()
+    controls = NotebookTemplateChoices(lambda *_: None)
+
+    def finish(widget, **kwargs):
+        if decision.done():
+            return
+        if widget is create:
+            try:
+                choice = controls.selection()
+            except ValueError:
+                return
+        else:
+            choice = None
+        decision.set_result(choice)
+
+    create = toga.Button('Create notebook', on_press=finish, style=Pack(height=48, flex=1))
+    actions = toga.Box(children=[toga.Button('Cancel', on_press=finish, style=Pack(height=48)), create],
+                       style=Pack(direction=ROW, margin=12))
+    fields = toga.Box(children=[toga.Label('New notebook'), controls],
+                      style=Pack(direction=COLUMN, margin=16))
+    form = toga.Box(children=[toga.ScrollContainer(content=fields, horizontal=False, style=Pack(flex=1)),
+                             actions], style=Pack(direction=COLUMN, flex=1))
+    previous = list(panel.view.children)
+    panel.view.clear()
+    panel.view.add(form)
+    panel.template_decision = decision
+    try:
+        controls.fit(panel.app.main_window.size.width)
+        controls.set_preview_active(True)
+        choice = await decision
+    finally:
+        controls.set_preview_active(False)
+        panel.template_decision = None
+        if form.parent is panel.view:
+            panel.view.remove(form)
+            if not panel.closed:
+                panel.view.add(*previous)
+    if choice is not None:
+        template, paper_format = choice
+        return Notebook.new(name, template=template, paper_format=paper_format)

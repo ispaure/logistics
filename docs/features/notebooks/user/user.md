@@ -1,6 +1,6 @@
 # reMarkable notebooks on desktop
 
-Choose **Notebook (.rmdoc)** in **New / Open Document**. Use **New** to name a draft and choose the first template and paper size. Use **Open** or activate an existing `.rmdoc` in File Browser. First Save asks for a location. Closing a modified draft offers Save, Discard or Cancel.
+Choose **Notebook (.rmdoc)** in **New / Open Document**. Use **New** to name a draft and choose the first template and paper size. The preview shows the selected pattern at Paper Pro or Paper Pro Move proportions. Use **Open** or activate an existing `.rmdoc` in File Browser. First Save asks for a location. Closing a modified draft offers Save, Discard or Cancel.
 
 ### Retrieve a notebook from a reMarkable tablet
 
@@ -40,9 +40,9 @@ iOS and Android can stream local, unencrypted PDF-backed RMDOC files over 256 Mi
 
 ## Page templates and paper sizes
 
-Use **Page → Page Template…** or the toolbar's **Page template** to change the current page. **Template format** selects Pro or Move on supported layouts. **Show template** hides the background only. These edits support Undo and are inherited by inserted pages. PDF backgrounds are fixed.
+Use **Page → Page Template…** or **Layers & template → Change Template…** to preview a background at either paper size. **Show template** controls background visibility. Click **Apply** to update the current page and preserve handwriting, or **Cancel** to keep the current settings. If imported artwork is unavailable, the picker shows its name until you apply a replacement. Template changes support Undo and inserted pages inherit the settings. PDF backgrounds are fixed.
 
-**Paper view** selects display framing for all pages in the open notebook. Move centers the smaller writing area and expands for existing outlying ink. Pro shows the margins. Reopen to restore automatic framing, which fits the saved Pro or Move format on supported layouts.
+**Paper view** selects display framing for all pages in the open notebook. Move centers the smaller writing area and expands for existing outlying ink. Pro shows the margins. Reopen to restore automatic framing, which fits the saved Pro or Move format for pages sized in the template picker.
 
 **Save / Save As** keeps editable template settings. **Export Copy…** embeds custom layouts as fixed vector PDF backgrounds with separate native ink. Keep the original to change templates later. Export can refuse unavailable artwork, unsupported object bounds or ink above the top edge. Choose supported artwork or hide it when appropriate. Existing PDF-backed copies retain their original PDF.
 

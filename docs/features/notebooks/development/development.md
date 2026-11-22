@@ -42,7 +42,7 @@ python3 dev.py test desktop --exact-file Python/tests/notebooks/test_brush_calib
 
 The vendored **rmscene 0.8.0** codec is MIT-licensed, Copyright (c) 2023 Rick Lupton. Logistics carries a type namespace fix and measured Highlighter IDs 14–16. Its `packaging` dependency supports Briefcase. [Upstream](https://github.com/ricklupton/rmscene) · [Vendored license](../../../../Python/features/notebooks/_vendor/rmscene/LICENSE.py)
 
-`templates.py` previews original Logistics artwork and stores native ruled references for stock paper. Inserted pages inherit paper without ink. Save retains editable templates. `remarkable_export.py` writes vector PDF backgrounds for custom artwork or hidden rules, keeping scene bytes. It refuses unavailable visible artwork. reMarkable Desktop 3.28.1 discarded named custom assets and retained vector backgrounds and editable ink in the sampled two-page copy. Check `test_remarkable_export.py`.
+`templates.py` supplies the original artwork and base paper geometry for creation and change previews. Mobile creation rasterizes the shared vector background through the platform PDF renderer. The canvas picker clips the same SVG used on the page. The picker saves paper size separately from the ink scene. Older stock pages without a fixed size retain adaptive framing. Stock presets keep native ruled references. Inserted pages inherit paper without ink. Save retains editable templates. `remarkable_export.py` writes vector PDF backgrounds for custom artwork or hidden rules, keeping scene bytes. It refuses unavailable visible artwork. reMarkable Desktop 3.28.1 discarded named custom assets and retained vector backgrounds and editable ink in the sampled two-page copy. Check `test_remarkable_export.py`.
 
 ## Editing and recovery
 

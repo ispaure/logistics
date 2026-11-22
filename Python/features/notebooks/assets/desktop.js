@@ -194,8 +194,7 @@ window.notebookViewState = () => ({
 window.notebookUI = (name, value) => {
   if (active !== null) return;
   if (name === 'template') {
-    $('layerOptions').open = true;
-    $('pageTemplate').focus();
+    openTemplatePicker();
     return
   }
   if (name === 'toolbar') {
@@ -234,10 +233,12 @@ window.notebookUpdate = (next, error) => {
   syncChrome()
 };
 document.addEventListener('pointerdown', e => {
+  if ($('templatePicker').open) return;
   for (let panel of document.querySelectorAll('details'))
     if (panel.open && !panel.contains(e.target)) panel.open = false
 });
 document.addEventListener('keydown', e => {
+  if ($('templatePicker').open) return;
   if (eraserDialog.open && e.key === 'Escape') {
     e.preventDefault();
     closeEraserSettings(true);

@@ -234,6 +234,7 @@ class DestinationForm:
 
     def discard_notebook_templates(self):
         if self.notebook_templates is not None:
+            self.notebook_templates.set_preview_active(False)
             self.notebook_templates.changed = lambda *args: None
             self.notebook_templates = None
 
@@ -390,7 +391,9 @@ class DestinationForm:
         enabled = self._creation_extension() == 'rmdoc'
         if enabled and controls.parent is None:
             self.name_view.add(controls)
+            controls.set_preview_active(True)
         elif not enabled and controls.parent is self.name_view:
+            controls.set_preview_active(False)
             self.name_view.remove(controls)
 
     def present_picker_location(self, label, folder, *, has_parent, private, suggest_creation):

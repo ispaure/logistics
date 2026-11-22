@@ -11,7 +11,7 @@ __status__ = "Production"
 
 from commonUtils.ui import pyside as qt
 from ..notebook import DESKTOP_MAX_ARCHIVE, Notebook
-from ..templates import CATALOG, FORMATS, TEMPLATE_NOTICE, description, svg
+from ..templates import CATALOG, FORMATS, TEMPLATE_NOTICE, description, preview_svg
 
 
 class NotebookSetup(qt.QDialog):
@@ -35,8 +35,8 @@ class NotebookSetup(qt.QDialog):
         form.addRow('Template size', self.paper_format)
         layout.addLayout(form)
         self.preview = qt.QLabel()
-        self.preview.setFixedSize(210, 280)
-        self.preview.setStyleSheet('background:white;border:1px solid #aaa')
+        self.preview.setFixedSize(180, 220)
+        self.preview.setAlignment(qt.Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self.preview, alignment=qt.Qt.AlignmentFlag.AlignHCenter)
         self.description = qt.QLabel()
         self.description.setWordWrap(True)
@@ -59,16 +59,17 @@ class NotebookSetup(qt.QDialog):
 
     def update_preview(self):
         name = self.template.currentData()
-        self.paper_format.setEnabled(name.startswith('Logistics '))
         self.description.setText(description(name))
-        artwork = svg(name, self.paper_format.currentData())
-        if artwork:
-            image = qt.QPixmap()
-            image.loadFromData(artwork.encode(), 'SVG')
-            self.preview.setPixmap(image.scaled(self.preview.size(), qt.Qt.AspectRatioMode.KeepAspectRatio,
-                                                qt.Qt.TransformationMode.SmoothTransformation))
-        else:
-            self.preview.clear()
+        artwork = preview_svg(name, self.paper_format.currentData())
+        from PySide6.QtSvg import QSvgRenderer
+        renderer = QSvgRenderer(artwork.encode())
+        size = renderer.defaultSize().scaled(self.preview.size(), qt.Qt.AspectRatioMode.KeepAspectRatio)
+        image = qt.QPixmap(size)
+        image.fill(qt.Qt.GlobalColor.white)
+        painter = qt.QPainter(image)
+        renderer.render(painter)
+        painter.end()
+        self.preview.setPixmap(image)
         self.layout().activate()
         self.adjustSize()
 

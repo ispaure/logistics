@@ -25,7 +25,7 @@ from features.notebooks.editor import Editor
 from features.notebooks.notebook import Notebook
 from features.notebooks.remarkable_export import export_rmdoc
 from features.notebooks.protocol import update_script, stroke_script
-from features.notebooks.templates import FORM_TEMPLATES, CATALOG
+from features.notebooks.templates import CATALOG, view_bounds
 from logistics_build.build_retention import scratch
 from tests.notebooks.webengine_driver import javascript, wait_until
 
@@ -115,6 +115,73 @@ def pdf_highlighter(view, desktop):
     return pixels
 
 
+def preview_matrix(view, editor, desktop, output):
+    """Compare staged previews with rendered pages while checking the ink bytes."""
+    book = editor.notebook
+    editor.apply(dict(op='stroke', points=[[660, 146, .5], [748, 146, .5]], tool=17, color=0, width=2))
+    ink = book.page(0).to_bytes()
+    def js(script):
+        return javascript(view, script)
+
+    def capture(path):
+        js('window.previewFramePainted=false;requestAnimationFrame(() => requestAnimationFrame(() => {window.previewFramePainted=true}))')
+        wait_until(lambda: js('window.previewFramePainted'))
+        QTest.qWait(30)
+        assert view.grab().save(str(path))
+
+    js(update_script(editor.state()))
+    js('documentPaperView=null;resetViewportZoom()')
+    cases = []
+    for orientation, (width, height) in [('portrait', (390, 844)), ('landscape', (844, 390))]:
+        view.resize(width, height)
+        wait_until(lambda: js('innerWidth === %d && innerHeight === %d' % (width, height)))
+        for preset, template in [('restaurant', 'Logistics Restaurant review'),
+                                 ('lined', 'P Lines medium'), ('blank', 'Blank')]:
+            for paper_format in ('pro', 'move'):
+                before = editor.state()
+                members = book.members.copy()
+                choice = ("openTemplatePicker();$('pageTemplate').value=" + json.dumps(template)
+                          + ";$('templateFormat').value=" + json.dumps(paper_format)
+                          + ";$('templateVisible').checked=true;updateTemplatePreview();")
+                assert js(choice + "$('templatePicker').open && !$('applyTemplate').disabled && !busy && !queue.length")
+                wait_until(lambda: js("(() => {const img=$('templatePreview').querySelector('img');"
+                                      "return img.hidden || (img.complete && img.naturalWidth > 0)})()"))
+                preview = json.loads(js(r'''JSON.stringify((() => {
+                  const dialog = $('templatePicker'), frame = $('templatePreview'), image = frame.querySelector('img');
+                  const rect = frame.getBoundingClientRect(), art = image.getBoundingClientRect();
+                  const apply = $('applyTemplate').getBoundingClientRect();
+                  return {width: rect.width, height: rect.height, scale: art.width / rect.width,
+                    left: (art.left - rect.left) / rect.width, visible: !image.hidden,
+                    ready: apply.bottom <= innerHeight && apply.right <= innerWidth &&
+                      dialog.scrollWidth <= dialog.clientWidth + 1};
+                })())'''))
+                bounds = view_bounds([], paper_format == 'move')
+                assert abs(preview['width'] / preview['height'] - bounds['width'] / bounds['height']) < .002, preview
+                assert preview['visible'] == (template != 'Blank') and preview['ready'], preview
+                if preview['visible']:
+                    assert abs(preview['scale'] - 1404 / bounds['width']) < .002, preview
+                    assert abs(preview['left'] + bounds['x'] / bounds['width']) < .002, preview
+                assert js("$('cancelTemplate').click();!$('templatePicker').open && !busy && !queue.length")
+                assert editor.state() == before and book.members == members and book.page(0).to_bytes() == ink
+                assert js(choice + "$('templatePicker').open")
+                wait_until(lambda: js("(() => {const img=$('templatePreview').querySelector('img');"
+                                      "return img.hidden || (img.complete && img.naturalWidth > 0)})()"))
+                prefix = f'{"desktop" if desktop else "mobile"}-{orientation}-{preset}-{paper_format}'
+                capture(output / (prefix + '-preview.png'))
+                js("window.probePreview = $('templatePreview').querySelector('img').getAttribute('src');$('applyTemplate').click()")
+                editor.apply(json.loads(js('JSON.stringify(queue[0])')))
+                js(update_script(editor.state()))
+                wait_until(lambda: js("$('pdfBackground').hidden || $('pdfBackground').naturalWidth > 0"))
+                assert js("window.probePreview === $('pdfBackground').getAttribute('src')")
+                assert json.loads(js('JSON.stringify(paperBounds())')) == bounds
+                assert book.page(0).to_bytes() == ink
+                assert Notebook.read(book.to_bytes()).page(0).to_bytes() == ink
+                capture(output / (prefix + '-page.png'))
+                cases.append(dict(orientation=orientation, template=template, format=paper_format,
+                                  bounds=bounds, preview=preview, ink_preserved=True, cancel_unchanged=True))
+    return cases
+
+
 def main(output):
     output = output.resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -146,25 +213,23 @@ def main(output):
                 wait(lambda: js(view, "typeof paperView!=='undefined'&&!!$('pageTemplate')&&!!$('zoomLevel')"))
                 name = 'desktop' if desktop else 'mobile'
                 if desktop:
-                    assert js(view, "window.notebookUI('template');$('layerOptions').open&&document.activeElement===$('pageTemplate')"), 'Desktop Page Template entry'
+                    assert js(view, "window.notebookUI('template');$('templatePicker').open&&document.activeElement===$('pageTemplate')"), 'Desktop Page Template entry'
                 else:
-                    assert js(view, "$('pageTemplateButton').click();$('mobileSheet').dataset.panel==='layers'&&!$('mobileSheet').hidden"), 'Mobile Page Template entry'
+                    assert js(view, "$('pageTemplateButton').click();$('templatePicker').open"), 'Mobile Page Template entry'
                 assert js(view, "$('templateCompatibility').textContent.includes('not affiliated with or endorsed by reMarkable')"), 'Compatibility notice'
                 # Exercise the actual HTML control and pass its queued action
                 # through the same model/acknowledgement contract as both hosts.
                 for template in CATALOG:
                     for paper_format in ('pro', 'move'):
-                        js(view, "$('pageTemplate').value=" + json.dumps(template) + ";$('templateFormat').value="
-                           + json.dumps(paper_format) + ";$('pageTemplate').dispatchEvent(new Event('change'))")
+                        js(view, "openTemplatePicker();$('pageTemplate').value=" + json.dumps(template) + ";$('templateFormat').value="
+                           + json.dumps(paper_format) + ";$('pageTemplate').dispatchEvent(new Event('change'));$('applyTemplate').click()")
                         action = json.loads(js(view, 'JSON.stringify(queue[0])'))
                         editor.apply(action)
                         js(view, update_script(editor.state()))
                         wait(lambda: js(view, "$('pdfBackground').hidden||($('pdfBackground').complete&&$('pdfBackground').naturalWidth>0)"))
                         QTest.qWait(30)
                         assert js(view, "$('pageTemplate').value") == template
-                        assert js(view, "getComputedStyle($('templateFormatControl')).display!=='none'") == (template in FORM_TEMPLATES)
-                        if template.startswith('Logistics '):
-                            assert js(view, "$('templateFormat').value") == paper_format
+                        assert js(view, "$('templateFormat').value") == paper_format
                         assert js(view, "$('pdfBackground').hidden") == (template == 'Blank')
                         if template == 'Logistics Restaurant review':
                             expected = (dict(x=291.5, y=0, width=821, height=1460) if paper_format == 'move'
@@ -271,20 +336,23 @@ def main(output):
                 book.members[page.template + '.template'] = b'{"foreign":"artwork"}'
                 js(view, update_script(editor.state()))
                 assert js(view, "$('pdfBackground').hidden&&$('templateNotice').textContent.includes('unavailable')"), 'Foreign artwork was silently replaced'
-                assert js(view, "$('templateFormatControl').hidden&&$('templateFormat').disabled&&$('templateVisible').disabled&&!$('pageTemplate').disabled")
+                assert js(view, "openTemplatePicker();$('templateFormat').disabled&&$('templateVisible').disabled&&!$('pageTemplate').disabled&&$('applyTemplate').disabled")
+                js(view, "$('cancelTemplate').click()")
                 assert js(view, "$('templateDescription').textContent.includes('Imported')"), 'Imported artwork incorrectly claimed as original'
                 # Imported names which happen to match Object.prototype keys
                 # still need a preserved option and an unavailable-artwork notice.
                 for reference in ('toString', '__proto__', 'P Lines small Move'):
                     page.template = reference
                     js(view, update_script(editor.state()))
-                    assert js(view, "$('pageTemplate').value===" + json.dumps(reference) + "&&$('templateNotice').textContent.includes('unavailable')&&$('templateFormatControl').hidden")
+                    assert js(view, "openTemplatePicker();$('pageTemplate').selectedOptions[0].textContent==="
+                              + json.dumps(reference + ' (preserved)') + "&&$('templateNotice').textContent.includes('unavailable')&&$('applyTemplate').disabled")
+                    js(view, "$('cancelTemplate').click()")
                 # Exercise one-page changes and Add Page through the real shared
                 # UI queue, including inheritance without duplicating handwriting.
                 def change_template(template):
-                    js(view, "$('pageTemplate').value=" + json.dumps(template)
+                    js(view, "openTemplatePicker();$('pageTemplate').value=" + json.dumps(template)
                        + ";$('templateFormat').value='move';$('templateVisible').checked=true;"
-                         "$('pageTemplate').dispatchEvent(new Event('change'))")
+                         "$('pageTemplate').dispatchEvent(new Event('change'));$('applyTemplate').click()")
                     editor.apply(json.loads(js(view, 'JSON.stringify(queue[0])')))
                     js(view, update_script(editor.state()))
                 change_template('Logistics Cornell notes')
@@ -293,13 +361,17 @@ def main(output):
                 js(view, "send({op:'add-page'})")
                 editor.apply(json.loads(js(view, 'JSON.stringify(queue[0])')))
                 js(view, update_script(editor.state()))
-                assert js(view, "$('pageTemplate').value==='Logistics Cornell notes'&&$('templateFormat').value==='move'&&$('templateVisible').checked")
+                assert js(view, "openTemplatePicker();$('pageTemplate').value==='Logistics Cornell notes'&&$('templateFormat').value==='move'&&$('templateVisible').checked")
+                js(view, "$('cancelTemplate').click()")
                 assert not book.page(editor.index).strokes, 'New page copied handwriting'
                 change_template('Logistics Checklist')
                 parent = next(i for i, p in enumerate(book.pages) if p.id == parent_id)
                 assert book.pages[parent].template == 'Logistics Cornell notes Move', 'Changed another page template'
                 assert book.page(parent).to_bytes() == parent_ink, 'Changed another page handwriting'
                 report['pdf_highlighter'] = highlight
+                matrix_book = Notebook.new('Preview comparison')
+                matrix_editor = Editor(matrix_book)
+                report['preview_matrix'] = preview_matrix(view, matrix_editor, desktop, output)
                 reports.append(report)
             finally:
                 view.close()

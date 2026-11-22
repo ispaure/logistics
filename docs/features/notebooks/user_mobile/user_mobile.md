@@ -1,6 +1,6 @@
 # reMarkable notebooks on Android and iOS
 
-Choose **New document → Notebook (.rmdoc)**, enter a name and select a template, size and Local or unlocked LocalCrypt folder. Open an existing notebook from Files. To annotate a PDF, choose **⋯ → Duplicate as .rmdoc to annotate** in a writable folder. The notebook opens beside the source with its same base name. Existing files are preserved.
+Choose **New document → Notebook (.rmdoc)**, enter a name and choose a first-page template. The preview shows the pattern and proportions for the Paper Pro or Paper Pro Move size you select. Then choose a Local or unlocked LocalCrypt folder. Open an existing notebook from Files. To annotate a PDF, choose **⋯ → Duplicate as .rmdoc to annotate** in a writable folder. The notebook opens beside the source with its same base name. Existing files are preserved.
 
 **Save** updates the file. **Save As** saves and switches to a new location. **Export .rmdoc** writes a separate copy. Close offers Save, Quit without saving or Cancel when dirty. **Quit without saving** also discards the recovery draft. If discard fails, the editor stays open. Ordinary notebooks recover completed edits when reopened after an unexpected close. If the original changed or vanished, save the recovered draft to a new location. LocalCrypt drafts stay in memory until saved. Save before locking. Saving or exporting to ordinary storage asks before writing a decrypted copy.
 
@@ -14,9 +14,9 @@ Choose **New document → Notebook (.rmdoc)**, enter a name and select a templat
 
 ## Page templates
 
-Use **Notebook actions → Layers** or **Pages Overview → Page template…** to select a template, Pro or Move format where supported, and background visibility. Added pages inherit the current settings. PDF-backed pages keep their PDF background and can be duplicated within that notebook.
+Open **Change Template…** from **Notebook actions → Layers** or **Pages Overview**. Choose a template, size and background visibility, then review the preview. **Apply** changes the current page and preserves handwriting. **Cancel** leaves the page as it was. If imported artwork is unavailable, the picker shows its name and preserves the original until you apply a replacement. Added pages inherit the current settings. PDF-backed pages keep their PDF background and can be duplicated within that notebook.
 
-Choose **Paper view** in Layers for framing across the open notebook. Automatic framing fits the saved Pro or Move format on supported layouts. Other pages adapt to screen size and posture, with Move framing on narrow portrait phones. Reset keeps a manual choice and reopening restores automatic framing. See [page templates and paper sizes](../user/user.md#page-templates-and-paper-sizes).
+Choose **Paper view** in Layers for framing across the open notebook. Automatic framing fits the saved Pro or Move format for pages sized in the template picker. Other pages adapt to screen size and posture, with Move framing on narrow portrait phones. Reset keeps a manual choice and reopening restores automatic framing. See [page templates and paper sizes](../user/user.md#page-templates-and-paper-sizes).
 
 **Save / Save As** retains editable template settings. **Export .rmdoc** uses fixed PDF backgrounds for custom and hidden templates, with separate native ink. Keep the original to change templates later. Export can refuse unavailable artwork, unsupported object bounds or ink above the top edge.
 

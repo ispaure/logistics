@@ -269,9 +269,9 @@ renderEraserChoices();
   };
   pp.append(go);
   const pageTemplateButton = document.createElement('button');
-  pageTemplateButton.textContent = 'Page template…';
+  pageTemplateButton.textContent = 'Change Template…';
   pageTemplateButton.id = 'pageTemplateButton';
-  pageTemplateButton.onclick = e => openSheet('layers', e.currentTarget);
+  pageTemplateButton.onclick = openTemplatePicker;
   pp.append(pageTemplateButton);
   let previews = document.createElement('div');
   previews.className = 'page-previews';
@@ -769,6 +769,7 @@ renderEraserChoices();
     target.clip();
   };
   document.addEventListener('pointerdown', e => {
+    if ($('templatePicker').open) return;
     if (inSideRail(e.clientX) && $('viewport').contains(e.target)) {
       cancelPageTouch();
       e.preventDefault();
@@ -797,7 +798,7 @@ renderEraserChoices();
   document.addEventListener('selectionchange', clearPaperSelection);
   const startPointer = canvas.onpointerdown;
   canvas.onpointerdown = e => {
-    if (inSideRail(e.clientX)) return;
+    if ($('templatePicker').open || inSideRail(e.clientX)) return;
     // The Android native pen bridge calls this handler directly.
     dismissToolPanels(canvas);
     // WebKit need not emit selectionchange for a programmatic/nonselectable
@@ -816,6 +817,7 @@ renderEraserChoices();
   }
   dock.addEventListener('scroll', repositionToolPanels);
   document.addEventListener('keydown', e => {
+    if ($('templatePicker').open) return;
     if (e.key === 'Escape' && presetMenu.open) {
       e.preventDefault();
       presetMenu.close();

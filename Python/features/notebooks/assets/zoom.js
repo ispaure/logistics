@@ -22,14 +22,14 @@ function viewportLayoutKey() {
 function compactPaper() {
   return state.compact_paper || state.move_paper || {width: 821, height: 1460}
 }
-function formattedTemplate() {
-  return state.template_editable && state.template_formats?.includes(state.template_name)
+function fixedTemplateSize() {
+  return state.template_editable && state.template_fixed_size
 }
 function compactTemplate() {
-  return formattedTemplate() && state.template_settings.format === 'move'
+  return fixedTemplateSize() && state.template_settings.format === 'move'
 }
 function defaultViewportChoice() {
-  if (formattedTemplate() || state.exported_template_paper)
+  if (fixedTemplateSize() || state.exported_template_paper)
     return {view: compactTemplate() ? 'move' : 'pro', zoom: 'page'};
   if (!mobileViewport()) return {view: 'pro', zoom: 'fit'};
   if (document.body.classList.contains('notebook-laptop')) return {view: 'pro', zoom: 'fit'};
@@ -150,7 +150,7 @@ function setZoom(value, anchor = null, paperPoint = null, touch = null) {
   // Promote the default phone strip to the full page when the user zooms.
   // Form templates keep their selected paper bounds while zooming.
   if (documentPaperView === null && defaultViewportZoom && mobileViewport() &&
-      !formattedTemplate() && !['page', 'fit'].includes(value)) {
+      !fixedTemplateSize() && !['page', 'fit'].includes(value)) {
     paperView = 'pro';
     if ($('paperView')) $('paperView').value = paperView
   }
