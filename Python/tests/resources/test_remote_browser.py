@@ -251,6 +251,7 @@ class RemoteBrowserTests(QtTestCase):
                 provider.list()
 
     def test_desktop_selected_file_and_folder_downloads(self):
+        from threading import get_ident
         from commonUtils.ui.tasks.process_host import register_process_host
         from commonUtils.ui.tasks.process_progress import ProcessProgressWindow
         from desktop.file_browser import BrowserView, FileBrowserWindow
@@ -266,8 +267,18 @@ class RemoteBrowserTests(QtTestCase):
             (source / 'note.txt').write_text('Explicit local copy')
             (source / 'unsupported.bin').write_bytes(b'unsupported')
             (source / 'large.bin').write_bytes(b'x' * (2 * 1024 * 1024))
-            (source / 'nested' / 'empty').mkdir(parents=True)
-            (source / 'nested' / 'child.txt').write_bytes(b'child')
+            nested_source = source / 'nested'
+            (nested_source / 'empty').mkdir(parents=True)
+            (nested_source / 'child.txt').write_bytes(b'child')
+
+            def nested_stat():
+                try:
+                    info = nested_source.stat()
+                    return dict(size=info.st_size, mtime_ns=info.st_mtime_ns, inode=info.st_ino)
+                except OSError as error:
+                    return type(error).__name__
+
+            initial_stat = nested_stat()
             context = root / 'account.session'
             session.remember(context, {'Files': {'type': 'alias', 'remote': str(source)}})
             self.addCleanup(session.forget, context)
@@ -361,12 +372,38 @@ class RemoteBrowserTests(QtTestCase):
                      patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Cancel):
                     view.browser_export.action.trigger()
                 self.assertEqual(list(prepared.iterdir()), [])
-                with patch.object(qt.QFileDialog, 'getExistingDirectory', return_value=str(prepared)), \
-                     patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Yes):
-                    view.browser_export.action.trigger()
-                export = actions.workspace.active_view.document
-                self.wait_until(lambda: export.result is not None, timeout=15)
-                self.assertTrue(export.result.succeeded, export.details.text())
+
+                revisions = dict(after_fixture_setup=initial_stat, listings=[])
+                download_item = remote_download.download_remote_item
+
+                def observe_download(provider, path, destination, **options):
+                    # Capture the actual comparison inputs instead of issuing a
+                    # separate listing that might see different metadata.
+                    revisions.update(path=path, selected=options['expected_revision'], at_start=nested_stat())
+                    list_remote = provider.list
+                    worker = get_ident()
+
+                    def observe_listing(folder='', **kwargs):
+                        rows = list_remote(folder, **kwargs)
+                        if get_ident() == worker:
+                            row = next((row for row in rows if row['path'] == path), None)
+                            revisions['listings'].append(dict(parent=folder,
+                                revision=row['revision'] if row is not None else None,
+                                directory=row['directory'] if row is not None else None,
+                                source_stat=nested_stat()))
+                        return rows
+
+                    with patch.object(provider, 'list', side_effect=observe_listing):
+                        return download_item(provider, path, destination, **options)
+
+                with patch.object(remote_download, 'download_remote_item', side_effect=observe_download):
+                    with patch.object(qt.QFileDialog, 'getExistingDirectory', return_value=str(prepared)), \
+                         patch.object(qt.QMessageBox, 'question', return_value=qt.QMessageBox.StandardButton.Yes):
+                        view.browser_export.action.trigger()
+                    export = actions.workspace.active_view.document
+                    self.wait_until(lambda: export.result is not None, timeout=15)
+                self.assertTrue(export.result.succeeded,
+                                f'{export.details.text()}\nGenerated folder revisions: {revisions!r}')
                 self.assertEqual((prepared / 'nested' / 'child.txt').read_bytes(), b'child')
                 self.assertTrue((prepared / 'nested' / 'empty').is_dir())
                 self.assertEqual({path.name for path in prepared.iterdir()}, {'nested'})
