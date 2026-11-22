@@ -14,9 +14,11 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.EXTENDED
 import asyncio
 from collections import deque
+from contextlib import contextmanager, nullcontext
 import json
 from pathlib import Path
 import sys
+import time
 from time import monotonic
 
 from commonUtils.testing.rotation import NativeRotation, ORIENTATIONS
@@ -380,7 +382,7 @@ def android_control_frames(app, frames):
     visit(app.body)
 
 
-def assert_visible_controls(app, *, frames=None):
+def assert_visible_controls(app, *, frames=None, phase=None):
     """Fixed controls must stay inside cutout/Home-indicator safe bounds."""
     if sys.platform != 'ios':
         if frames is not None:
@@ -420,11 +422,14 @@ def assert_visible_controls(app, *, frames=None):
         if not isinstance(widget, toga.ScrollContainer):
             for child in widget.children:
                 visit(child, footer_view)
-    visit(app.body)
+    with phase('body') if phase is not None else nullcontext():
+        visit(app.body)
     # UIKit bar items retain Toga callbacks, but mount UIKit-owned controls:
     # the original UIButton has no window and cannot provide their geometry.
-    adapter = getattr(getattr(app, 'native_host', None), 'adapter', None)
-    if adapter is not None:
+    def visit_navigation_bar():
+        adapter = getattr(getattr(app, 'native_host', None), 'adapter', None)
+        if adapter is None:
+            return
         from rubicon.objc import ObjCClass
         navigation = adapter.navigation[app.native_host.destinations.index(app.native_host.state.destination)]
         bar = native_value(navigation.navigationBar)
@@ -448,18 +453,62 @@ def assert_visible_controls(app, *, frames=None):
             for child in native_value(native.subviews):
                 visit_bar(child)
         visit_bar(bar)
+
+    with phase('navigation_bar') if phase is not None else nullcontext():
+        visit_navigation_bar()
     return count
 
 
 
-async def settled_visible_controls(app, *, minimum=0):
+def _control_audit_clock():
+    wall = time.monotonic_ns()
+    cpu = getattr(time, 'thread_time_ns', None)
+    try:
+        return wall, cpu() if cpu is not None else None
+    except (OSError, NotImplementedError):
+        return wall, None
+
+
+async def settled_visible_controls(app, *, minimum=0, diagnostics=None):
     """Wait briefly for UIKit's rotation morph, retaining strict final bounds."""
-    def check():
-        count = assert_visible_controls(app)
+    def check(**options):
+        count = assert_visible_controls(app, **options)
         assert count >= minimum, f'Expected {minimum} mounted controls, found {count}'
         return count
 
-    return await wait_for_assertion(check, timeout=CONTROL_SETTLE_TIMEOUT)
+    if diagnostics is None:
+        return await wait_for_assertion(check, timeout=CONTROL_SETTLE_TIMEOUT)
+
+    attempts = deque(maxlen=4)
+    total = 0
+    origin = time.monotonic_ns()
+
+    def observed_check():
+        nonlocal total
+        total += 1
+        record = dict(attempt=total, phases={})
+        attempts.append(record)
+
+        @contextmanager
+        def phase(name):
+            wall, cpu = _control_audit_clock()
+            try:
+                yield
+            finally:
+                end_wall, end_cpu = _control_audit_clock()
+                record['phases'][name] = dict(start_ns=wall - origin, wall_ns=end_wall - wall,
+                    thread_cpu_ns=end_cpu - cpu if cpu is not None and end_cpu is not None else None)
+
+        with phase('attempt'):
+            count = check(phase=phase)
+            record['controls'] = count
+            return count
+
+    try:
+        return await wait_for_assertion(observed_check, timeout=CONTROL_SETTLE_TIMEOUT)
+    except AssertionError:
+        diagnostics['control_audit'] = dict(timeout_s=CONTROL_SETTLE_TIMEOUT, attempts=total, recent=list(attempts))
+        raise
 
 
 def rotation_native_geometry(app):
@@ -711,7 +760,8 @@ async def rotate_panel(app, *, panel, cycle, orientation):
             # A hosted simulator can suspend the event loop after an otherwise
             # valid sample. Let UIKit settle before starting the control audit.
             await measure(app, 'rotation-post-ack-settle', asyncio.sleep(ROTATION_SETTLE), **context)
-            return await measure(app, 'rotation-control-settle', settled_visible_controls(app), **context)
+            return await measure(app, 'rotation-control-settle',
+                                 settled_visible_controls(app, diagnostics=readiness), **context)
         return await measure(app, 'rotation-post-ack-settle',
                              settled_rotation_layout(app, acknowledged, readiness), **context)
     except AssertionError:

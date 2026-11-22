@@ -80,6 +80,29 @@ class RotationSettlingTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(audit.call_count, 2)
             self.assertEqual(sleep.await_count, 1)
 
+    async def test_control_audit_keeps_only_recent_attempts_when_thread_clock_is_unavailable(self):
+        failure = AssertionError('control outside viewport')
+        diagnostics = {}
+
+        async def retry(check, *, timeout):
+            self.assertEqual(timeout, rotation_checks.CONTROL_SETTLE_TIMEOUT)
+            for _ in range(6):
+                with self.assertRaises(AssertionError):
+                    check()
+            raise failure
+
+        with patch.object(rotation_checks, 'wait_for_assertion', side_effect=retry), \
+                patch.object(rotation_checks, 'assert_visible_controls', side_effect=failure), \
+                patch.object(rotation_checks, 'time', NS(monotonic_ns=lambda: 100)):
+            with self.assertRaises(AssertionError) as caught:
+                await rotation_checks.settled_visible_controls(object(), diagnostics=diagnostics)
+
+        self.assertIs(caught.exception, failure)
+        audit = diagnostics['control_audit']
+        self.assertEqual(audit['attempts'], 6)
+        self.assertEqual([row['attempt'] for row in audit['recent']], [3, 4, 5, 6])
+        self.assertTrue(all(row['phases']['attempt']['thread_cpu_ns'] is None for row in audit['recent']))
+
 
 class RotationLayoutReadinessTests(unittest.IsolatedAsyncioTestCase):
     def setUp(self):
@@ -370,7 +393,8 @@ class RotationFailureEvidenceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(delay, rotation_checks.ROTATION_SETTLE)
             steps.append('settled')
 
-        async def audit(app):
+        async def audit(app, *, diagnostics):
+            self.assertEqual(diagnostics, {})
             steps.append('audited')
             return 4
 
@@ -383,6 +407,43 @@ class RotationFailureEvidenceTests(unittest.IsolatedAsyncioTestCase):
                 object(), panel='folder', cycle=0, orientation='portrait'), 4)
         self.assertEqual(steps, ['settled', 'audited'])
         sample.assert_not_awaited()
+
+    async def test_ios_late_audit_persists_body_and_navigation_timings_in_failure_snapshot(self):
+        import json
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
+        def audit(app, *, phase):
+            with phase('body'):
+                pass
+            with phase('navigation_bar'):
+                pass
+            return 4
+
+        clocks = NS(monotonic_ns=Mock(side_effect=(10, 20, 30, 40, 50, 60, 70)),
+                    thread_time_ns=Mock(side_effect=(2, 3, 4, 5, 7, 8)))
+        with TemporaryDirectory() as directory, \
+                patch.object(rotation_checks, 'time', clocks), \
+                patch.object(rotation_checks.sys, 'platform', 'ios'), \
+                patch.object(rotation_checks, 'acknowledge_rotation', new_callable=AsyncMock), \
+                patch.object(rotation_checks.asyncio, 'sleep', new_callable=AsyncMock), \
+                patch.object(rotation_checks, 'assert_visible_controls', side_effect=audit), \
+                patch.object(waiting, 'monotonic', side_effect=(0, 3.679, 3.679)), \
+                patch.object(rotation_checks, 'rotation_native_geometry', return_value=((), None)), \
+                patch.object(rotation_checks, 'rotation_failure_snapshot', side_effect=RuntimeError('no view')), \
+                patch('builtins.print'):
+            app = NS(paths=NS(cache=directory))
+            with self.assertRaisesRegex(AssertionError, 'Assertion completed after its deadline'):
+                await rotation_checks.rotate_panel(app, panel='documentation', cycle=0, orientation='landscape-left')
+            report = json.loads((Path(directory) / 'logistics-native-ui-rotation-failure.json').read_text())
+
+        self.assertEqual(report, app._native_rotation_failure)
+        self.assertEqual(report['readiness']['control_audit'], dict(timeout_s=2, attempts=1, recent=[
+            dict(attempt=1, controls=4, phases=dict(
+                attempt=dict(start_ns=10, wall_ns=50, thread_cpu_ns=6),
+                body=dict(start_ns=20, wall_ns=10, thread_cpu_ns=1),
+                navigation_bar=dict(start_ns=40, wall_ns=10, thread_cpu_ns=2)))
+        ]))
 
     async def test_android_timeout_attaches_bounded_diagnostics_to_the_native_result(self):
         import json
