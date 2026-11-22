@@ -13,6 +13,12 @@ Git validates the working path before routing. IDE chooses the deepest registere
 ## Tree, search and navigation
 
 `ui/browser.py` wraps the shared lazy model. Rename blocks pending opens, autosave, cross-project ownership and collisions. It retargets open descendants, snapshots and watchers. Delete allows closed files and empty folders. `ui/git_status.py` overlays dirty buffers and clears stale data on failure. Project splits stay inside their workspace and cap at three columns.
+The browser and Project Structure share recursive folder roles from
+`projects.py` and palette-adjusted brushes from `ui/project_structure.py`.
+Exclusions take precedence over source roots. The browser keeps excluded
+directory rows visible and applies the same exclusions as search to file rows.
+Folder roles supply the color when a folder also has Git status, and its
+tooltip includes both.
 On macOS the browser uses the shared vnode watcher to re-list affected expanded
 directories through the existing model. Model indexes, filters and selection
 stay in place.

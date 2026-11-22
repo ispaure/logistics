@@ -9,18 +9,19 @@ Choose **+ → Register / Open existing project**, select a folder and name it.
 Open **Project → Project Settings…** to edit an existing project.
 
 - In **Project Structure**, select a folder and choose **Mark as Source** (blue)
-  or **Mark as Excluded** (orange). Excluded folders stay visible in this tree so
-  you can inspect them. Use **Add Path…**, **Remove**, or double-click a list
-  entry to edit it. A source folder can be absolute or relative to the project
-  root. Use `.` for the root itself. An exclusion such as `build` matches
-  that name anywhere in the project. Use a path such as `mobile/build` for a
-  particular nested folder.
+  or **Mark as Excluded** (orange). Both Project Structure and the IDE project
+  tree show these colors on folders and their subfolders. An exclusion takes
+  precedence inside a source folder. Hover over a colored folder to see its
+  role. Use **Add Path…**, **Remove**, or double-click a list entry to edit it.
+  A source folder can be absolute or relative to the project root. Use `.`
+  for the root itself. An exclusion such as `build` matches that name anywhere
+  in the project. Use a path such as `mobile/build` for a particular nested folder.
 - Use **Exclude files** below the folder tree for patterns such as
   `*.xcarchive; *.dSYM`. Separate patterns with semicolons. Matching is
   case-sensitive and applies to file and folder names at any depth. `*`
-  matches any number of characters, and `?` matches one. Matching folders
-  appear orange in Project Structure. The IDE file tree, **Go to file**,
-  and **Find in Files** skip matching items and the contents of matching folders.
+  matches any number of characters, and `?` matches one. The IDE project tree
+  shows excluded folders and hides excluded files, including files inside those
+  folders. **Go to file** and **Find in Files** skip excluded folders and files.
 - In **Python Interpreter**, browse to a Python executable or an environment
   folder, or enter its path. Clear the field to use automatic interpreter
   selection. The tab loads installed packages from a configured Python 3.8+

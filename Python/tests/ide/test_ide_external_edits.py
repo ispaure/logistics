@@ -189,24 +189,32 @@ class ExternalEditsTests(QtTestCase):
             browser.locate(selected)
             browser.filter.setText('py')
             self.assertEqual(browser.path(), selected)
+            def role(path):
+                return index(path).data(qt.Qt.ItemDataRole.ToolTipRole).splitlines()[-1]
+
             created, renamed = nested / 'created.py', nested / 'renamed.py'
             created.write_text('create\n')
-            (nested / 'generated').mkdir()
+            generated = nested / 'generated'
+            generated.mkdir()
             (nested / 'hidden.py.cache').touch()
-            self.wait_until(lambda: names(nested) == ['created.py', 'selected.py'],
+            self.wait_until(lambda: names(nested) == ['generated', 'created.py', 'selected.py'],
                             message=lambda: f'After creation: {names(nested)}')
+            self.assertEqual(role(generated), 'Excluded')
             self.assertEqual(browser.path(), selected)
             self.assertTrue(browser.tree.isExpanded(index(nested)))
 
             view.hide()
             created.rename(renamed)
-            self.wait_until(lambda: names(nested) == ['renamed.py', 'selected.py'])
+            regular = nested / 'regular'
+            generated.rename(regular)
+            self.wait_until(lambda: names(nested) == ['regular', 'renamed.py', 'selected.py'])
+            self.assertEqual(role(regular), 'Source')
             replacement = nested / 'temporary.cache'
             replacement.write_text('replacement\n')
             replacement.replace(selected)
             renamed.unlink()
             view.show()
-            self.wait_until(lambda: names(nested) == ['selected.py'])
+            self.wait_until(lambda: names(nested) == ['regular', 'selected.py'])
             self.assertEqual(browser.path(), selected)
             self.assertTrue(browser.tree.isExpanded(index(nested)))
             self.assertEqual(browser.filter.text(), 'py')

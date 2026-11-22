@@ -13,7 +13,7 @@ from pathlib import Path
 
 from commonUtils.ui import pyside as qt
 from commonUtils.ui.appearance.colors import readable_accent
-from features.ide.projects import is_excluded
+from features.ide.projects import ProjectFolderRoles, is_excluded
 
 
 COLORS = {'Source': '#2878df', 'Excluded': '#cf681d', 'Missing': '#d82741'}
@@ -36,12 +36,17 @@ class StructureModel(qt.QFileSystemModel):
         self.setFilter(qt.QDir.Filter.Dirs | qt.QDir.Filter.NoDotAndDotDot |
                        qt.QDir.Filter.Hidden | qt.QDir.Filter.NoSymLinks)
 
+    def multiData(self, index, roles):
+        for position in range(roles.size()):
+            role = roles[position]
+            role.setData(self.data(index, role.role()))
+
     def data(self, index, role=qt.Qt.ItemDataRole.DisplayRole):
         if index.isValid() and role in (qt.Qt.ItemDataRole.ForegroundRole, qt.Qt.ItemDataRole.ToolTipRole):
             path = Path(self.filePath(index))
             status = self.panel.status_for(path)
             if status and role == qt.Qt.ItemDataRole.ForegroundRole:
-                return path_color(status, self.panel.palette())
+                return path_color(status, self.panel.tree.palette())
             if role == qt.Qt.ItemDataRole.ToolTipRole:
                 return f'{path}\n{status}' if status else str(path)
         return super().data(index, role)
@@ -140,7 +145,7 @@ class ProjectStructure(qt.QWidget):
     def __init__(self, project, parent=None):
         super().__init__(parent)
         self.root = None
-        self.source_folders = set()
+        self.folder_roles = ProjectFolderRoles(None, (), (), ())
         layout = qt.QVBoxLayout(self)
         root_row = qt.QHBoxLayout()
         root_label = qt.QLabel('Project root')
@@ -215,8 +220,7 @@ class ProjectStructure(qt.QWidget):
 
     def update_patterns(self, text):
         self.patterns = list(dict.fromkeys(part.strip() for part in text.split(';') if part.strip()))
-        self.tree.viewport().update()
-        self.update_buttons()
+        self.refresh_roles()
 
     def resolved_root(self):
         value = self.root_path.text().strip()
@@ -247,18 +251,8 @@ class ProjectStructure(qt.QWidget):
         self.root_status.setVisible(not available)
         self.refresh()
 
-    def source_folder(self, value):
-        try:
-            return (self.root / Path(value).expanduser()).resolve() if self.root else None
-        except (OSError, RuntimeError, ValueError):
-            return None
-
     def status_for(self, path):
-        if self.root is None or not path.is_relative_to(self.root):
-            return ''
-        if is_excluded(path.relative_to(self.root), self.exclusions.values, self.patterns):
-            return 'Excluded'
-        return 'Source' if path in self.source_folders else ''
+        return self.folder_roles.status(path)
 
     def relative_selection(self):
         index = self.tree.currentIndex()
@@ -278,7 +272,7 @@ class ProjectStructure(qt.QWidget):
         remaining = [rule for rule in self.exclusions.values if rule != direct]
         self.mark_source.setEnabled(not is_excluded(relative, remaining, self.patterns)
                                     and (direct in self.exclusions.values
-                                         or self.root / relative not in self.source_folders))
+                                         or self.root / relative not in self.folder_roles.sources))
         self.mark_excluded.setEnabled(not is_excluded(relative, self.exclusions.values, self.patterns))
 
     def mark(self, status):
@@ -289,16 +283,19 @@ class ProjectStructure(qt.QWidget):
         path = self.root / relative
         if status == 'Source' and self.mark_source.isEnabled():
             self.exclusions.values = [rule for rule in self.exclusions.values if rule != value]
-            if path not in self.source_folders:
+            if path not in self.folder_roles.sources:
                 self.sources.values.append(value)
         elif status == 'Excluded' and self.mark_excluded.isEnabled():
-            self.sources.values = [entry for entry in self.sources.values if self.source_folder(entry) != path]
+            self.sources.values = [entry for entry in self.sources.values if self.folder_roles.source_folder(entry) != path]
             self.exclusions.values.append(value)
         self.refresh()
 
     def refresh(self):
-        self.source_folders = {self.source_folder(value) for value in self.sources.values}
         self.sources.refresh()
         self.exclusions.refresh()
+        self.refresh_roles()
+
+    def refresh_roles(self):
+        self.folder_roles = ProjectFolderRoles(self.root, self.sources.values, self.exclusions.values, self.patterns)
         self.tree.viewport().update()
         self.update_buttons()

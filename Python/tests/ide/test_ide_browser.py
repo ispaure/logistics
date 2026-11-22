@@ -19,7 +19,10 @@ from unittest.mock import patch
 
 from commonUtils.tests.qt_test_case import QtTestCase
 from commonUtils.ui import pyside as qt
+from commonUtils.ui.appearance.colors import contrast_ratio
+from commonUtils.ui.appearance.theme import configured_colors, theme_palette
 from features.ide.ui.browser import ProjectBrowser
+from features.ide.ui.project_structure import ProjectStructure
 from features.ide.projects import Project
 
 
@@ -64,6 +67,101 @@ class ProjectBrowserTests(QtTestCase):
             self.assertEqual(browser.path(), root / 'a2.py')
             owner.close()
 
+    def test_folder_roles_match_settings_in_light_and_dark(self):
+        with self.temporary_directory() as directory:
+            root = Path(directory).resolve()
+            roles = {
+                'src': 'Source',
+                'src/lib': 'Source',
+                'src/lib/generated': 'Excluded',
+                'src/lib/generated/nested': 'Excluded',
+                'src/lib/generated/nested/leaf': 'Excluded',
+                'other/code': 'Source',
+                'other/code/nested': 'Source',
+                'other/code/cache': 'Excluded',
+                'other/code/build.pkg': 'Excluded',
+                '.venv': 'Excluded',
+                'other': '',
+            }
+            for name in roles:
+                (root / name).mkdir(parents=True, exist_ok=True)
+            (root / '.unrelated').mkdir()
+            (root / 'src/lib/generated/nested/skipped.py').touch()
+            (root / 'src/skipped.tmp').touch()
+            (root / 'src/shown.py').touch()
+            project = Project('test', str(root), source_paths=['src', str(root / 'other/code'),
+                                                               'src/lib/generated/nested'],
+                              excluded_paths=['src/lib/generated', 'cache', '.venv'],
+                              excluded_patterns=['*.pkg', '*.tmp'])
+            owner = qt.QWidget()
+            layout = qt.QHBoxLayout(owner)
+            settings = ProjectStructure(project, owner)
+            browser = ProjectBrowser(project, owner)
+            layout.addWidget(settings)
+            layout.addWidget(browser)
+            owner.show()
+
+            def browser_index(name):
+                return browser.proxy.mapFromSource(browser.model.index(str(root / name)))
+
+            names = ['.venv', 'other', 'src']
+            if not qt.QFileInfo(str(root / '.unrelated')).isHidden():
+                names.insert(0, '.unrelated')
+            self.wait_for_names(browser, root, names)
+            for name, children in (
+                ('src', ['lib', 'shown.py']),
+                ('src/lib', ['generated']),
+                ('src/lib/generated', ['nested']),
+                ('src/lib/generated/nested', ['leaf']),
+                ('other', ['code']),
+                ('other/code', ['build.pkg', 'cache', 'nested']),
+            ):
+                browser.tree.expand(browser_index(name))
+                settings.tree.expand(settings.model.index(str(root / name)))
+                self.wait_for_names(browser, root / name, children)
+
+            foreground = qt.Qt.ItemDataRole.ForegroundRole
+            tooltip = qt.Qt.ItemDataRole.ToolTipRole
+            self.assertIsNone(browser_index('src/shown.py').data(foreground))
+            excluded = browser_index('src/lib/generated')
+            browser.proxy.git_changes[root / 'src/lib/generated'] = ('ignored', 'Ignored')
+            self.assertIn('Git: Ignored', excluded.data(tooltip))
+            self.assertIn('Excluded', excluded.data(tooltip))
+            browser.locate(root / 'src/lib')
+            colors = []
+            for dark in (False, True):
+                owner.setPalette(theme_palette(configured_colors(dark)))
+                self.app.processEvents()
+                self.assertEqual(browser.path(), root / 'src/lib')
+                self.assertEqual(settings.tree.palette(), browser.tree.palette())
+                palette = browser.tree.palette()
+                palette_role = qt.QPalette.ColorRole
+                background = palette.color(palette_role.Base).rgba()
+                self.assertGreaterEqual(contrast_ratio(palette.color(palette_role.HighlightedText).rgba(),
+                                                       palette.color(palette_role.Highlight).rgba()), 4.5)
+                for name, status in roles.items():
+                    with self.subTest(name=name, dark=dark):
+                        index = browser_index(name)
+                        self.assertTrue(index.isValid())
+                        settings_index = settings.model.index(str(root / name))
+                        self.assertTrue(settings_index.isValid())
+                        self.assertEqual(settings.status_for(root / name), status)
+                        self.assertEqual(index.data(foreground), settings_index.data(foreground))
+                        if status:
+                            self.assertEqual(index.data(tooltip).splitlines()[1], status)
+                            color = index.data(foreground).color()
+                            self.assertGreaterEqual(contrast_ratio(color.rgba(), background), 4.5)
+                            for tree, item in ((browser.tree, index), (settings.tree, settings_index)):
+                                option = qt.QStyleOptionViewItem()
+                                option.initFrom(tree)
+                                tree.itemDelegate().initStyleOption(option, item)
+                                self.assertEqual(option.palette.color(qt.QPalette.ColorRole.Text), color)
+                self.assertNotEqual(browser_index('src').data(foreground), excluded.data(foreground))
+                colors.append((browser_index('src').data(foreground), excluded.data(foreground)))
+            self.assertNotEqual(*colors)
+            browser.git_status.stop()
+            owner.close()
+
     def test_git_colors_refresh_for_modified_new_staged_and_clean_files(self):
         with self.temporary_directory() as directory:
             root = Path(directory).resolve()
@@ -87,15 +185,11 @@ class ProjectBrowserTests(QtTestCase):
             (ignored / 'nested' / 'child.py').write_text('ignored child\n')
             (root / 'deleted_folder' / 'gone.py').unlink()
             owner = qt.QWidget()
-            browser = ProjectBrowser(Project('test', str(root), autosave='off'), owner)
+            browser = ProjectBrowser(Project('test', str(root), source_paths=[], autosave='off'), owner)
             self.wait_until(lambda: root / 'edited.py' in browser.proxy.git_changes)
-            names = ['deleted_folder', 'ignored_folder', 'new_folder', 'clean.py', 'edited.py', 'ignored.py']
-            if browser.model.index(str(root / '.gitignore')).isValid():
-                # Match the filesystem model's platform-specific hidden-file policy.
-                source = browser.model.index(str(root))
-                if any(browser.model.fileName(browser.model.index(row, 0, source)) == '.gitignore'
-                       for row in range(browser.model.rowCount(source))):
-                    names.insert(3, '.gitignore')
+            names = ['.git', 'deleted_folder', 'ignored_folder', 'new_folder', 'clean.py', 'edited.py', 'ignored.py']
+            if not qt.QFileInfo(str(root / '.gitignore')).isHidden():
+                names.insert(4, '.gitignore')
             self.wait_for_names(browser, root, names)
             def data(path, role):
                 index = browser.proxy.mapFromSource(browser.model.index(str(path)))

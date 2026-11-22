@@ -50,6 +50,16 @@ class ProjectSettingsTests(IDEQtTests):
             page = IDEPage(store_path=root / 'workspace.json')
             page.store.projects[project.id] = project
             view = page.open_project(project)
+            browser = view.browser
+            selected = source / 'main.py'
+            tooltip = qt.Qt.ItemDataRole.ToolTipRole
+
+            def index(browser, path):
+                return browser.proxy.mapFromSource(browser.model.index(str(path)))
+
+            self.wait_until(lambda: index(browser, selected).isValid())
+            browser.locate(selected)
+            self.assertEqual(index(browser, excluded).data(tooltip).splitlines()[-1], 'Source')
 
             def mark(dialog):
                 structure = dialog.structure
@@ -88,11 +98,23 @@ class ProjectSettingsTests(IDEQtTests):
             self.assertEqual(project.source_paths, ['.', 'src'])
             self.assertEqual(project.excluded_paths, ['build', 'missing/output', 'src/generated'])
             self.assertEqual(project.excluded_patterns, ['*.xcarchive', 'build?.py'])
+            self.assertEqual(index(browser, excluded).data(tooltip).splitlines()[-1], 'Excluded')
+            self.assertFalse(index(browser, excluded / 'copy.py').isValid())
+            self.assertEqual(browser.path(), selected)
+            self.assertTrue(browser.tree.isExpanded(index(browser, source)))
             self.assertEqual(project_files(project, '.py'), [str(Path('src') / 'main.py')])
             self.assertTrue(page.persist())
             restored = ProjectStore(page.store.path).projects[project.id]
             self.assertEqual(restored.excluded_paths, project.excluded_paths)
             self.assertEqual(restored.excluded_patterns, project.excluded_patterns)
+            self.assertTrue(page.prepare_close())
+            reopened = IDEPage(store_path=page.store.path)
+            self.assertEqual(len(reopened.views), 1)
+            browser = reopened.views[0].browser
+            self.wait_until(lambda: browser.path() == selected)
+            self.assertTrue(browser.tree.isExpanded(index(browser, source)))
+            self.assertEqual(index(browser, excluded).data(tooltip).splitlines()[-1], 'Excluded')
+            self.assertTrue(reopened.prepare_close())
 
     def test_interpreter_inspects_the_selected_virtual_environment(self):
         import os

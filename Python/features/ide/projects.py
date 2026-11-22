@@ -34,6 +34,35 @@ def is_excluded(relative, rules, patterns=()):
         or matches_exclusion_pattern(relative, patterns))
 
 
+class ProjectFolderRoles:
+    """Resolve source roots once and apply project rules to each folder path."""
+
+    def __init__(self, root, sources, exclusions, patterns):
+        self.root = root
+        self.sources = {path for value in sources
+                        if (path := self.source_folder(value)) is not None}
+        self.exclusions = frozenset(exclusions)
+        self.patterns = tuple(patterns)
+
+    def source_folder(self, value):
+        try:
+            return (self.root / Path(value).expanduser()).resolve() if self.root else None
+        except (OSError, RuntimeError, ValueError):
+            return None
+
+    def status(self, path):
+        if self.root is None or not path.is_relative_to(self.root):
+            return ''
+        if is_excluded(path.relative_to(self.root), self.exclusions, self.patterns):
+            return 'Excluded'
+        for folder in (path, *path.parents):
+            if folder in self.sources:
+                return 'Source'
+            if folder == self.root:
+                break
+        return ''
+
+
 @dataclass
 class Project:
     name: str

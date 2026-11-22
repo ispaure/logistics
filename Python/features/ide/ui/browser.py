@@ -17,7 +17,8 @@ from commonUtils.ui import desktop_actions
 from commonUtils.ui.file_browser.index_watcher import create_macos_watcher
 from commonUtils.ui.file_browser.model import BrowserFileSystemModel, ByteSortModel
 from commonUtils.filesystem.transfers import validate_name
-from features.ide.projects import is_excluded
+from features.ide.projects import ProjectFolderRoles, is_excluded
+from features.ide.ui.project_structure import path_color
 
 
 class ProjectFilter(ByteSortModel):
@@ -28,17 +29,27 @@ class ProjectFilter(ByteSortModel):
         self.query = ''
         self.git_changes = {}
         self.unsaved_paths = set()
+        self.update_folder_roles()
+
+    def update_folder_roles(self):
+        self.folder_roles = ProjectFolderRoles(self.project.root, self.project.source_paths,
+                                               self.project.excluded_paths, self.project.excluded_patterns)
 
     def data(self, index, role=qt.Qt.ItemDataRole.DisplayRole):
         if index.isValid() and index.column() == 0 and role in (
                 qt.Qt.ItemDataRole.ForegroundRole, qt.Qt.ItemDataRole.ToolTipRole):
-            path = Path(self.sourceModel().filePath(self.mapToSource(index)))
+            model = self.sourceModel()
+            source = self.mapToSource(index)
+            path = Path(model.filePath(source))
+            folder_status = self.folder_roles.status(path) if model.isDir(source) else ''
+            if folder_status and role == qt.Qt.ItemDataRole.ForegroundRole:
+                return path_color(folder_status, self.browser.tree.palette())
             status = self.git_changes.get(path)
             if status is None:
                 # Git reports ignored directories once, without enumerating
                 # their contents. Only that status inherits down the tree.
                 for parent in path.parents:
-                    if not parent.is_relative_to(self.project.root):
+                    if not parent.is_relative_to(self.folder_roles.root):
                         break
                     if self.git_changes.get(parent, (None,))[0] == 'ignored':
                         status = self.git_changes[parent]
@@ -49,7 +60,10 @@ class ProjectFilter(ByteSortModel):
                 if role == qt.Qt.ItemDataRole.ForegroundRole:
                     from features.ide.ui.git_status import COLORS
                     return qt.QBrush(qt.QColor(COLORS[status[0]]))
-                return str(path) + '\n' + ('Git: ' if status[0] == 'ignored' or path in self.git_changes else '') + status[1]
+                prefix = 'Git: ' if status[0] == 'ignored' or path in self.git_changes else ''
+                return '\n'.join(part for part in (str(path), folder_status, prefix + status[1]) if part)
+            if folder_status:
+                return f'{path}\n{folder_status}'
         return super().data(index, role)
 
     def flags(self, index):
@@ -85,17 +99,21 @@ class ProjectFilter(ByteSortModel):
         return renamed
 
     def filterAcceptsRow(self, row, parent):
-        index = self.sourceModel().index(row, 0, parent)
-        path = Path(self.sourceModel().filePath(index))
+        model = self.sourceModel()
+        index = model.index(row, 0, parent)
+        path = Path(model.filePath(index))
+        rules = self.folder_roles
         try:
-            relative = path.relative_to(self.project.root)
+            relative = path.relative_to(rules.root)
         except ValueError:
             return True
-        if path == self.project.root:
+        if not relative.parts:
             return True
-        if is_excluded(relative, self.project.excluded_paths, self.project.excluded_patterns):
-            return False
-        return self.sourceModel().isDir(index) or self.query.casefold() in path.name.casefold()
+        hidden = model.fileInfo(index).isHidden()
+        if model.isDir(index):
+            return not hidden or rules.status(path) == 'Excluded'
+        return (not hidden and self.query.casefold() in path.name.casefold()
+                and not is_excluded(relative, rules.exclusions, rules.patterns))
 
 
 class ProjectBrowser(qt.QWidget):
@@ -113,6 +131,8 @@ class ProjectBrowser(qt.QWidget):
         layout.addWidget(self.filter)
         self.model = BrowserFileSystemModel(self)
         self.model.setReadOnly(True)
+        # Excluded folders can have hidden names, such as .git or .venv.
+        self.model.setFilter(self.model.filter() | qt.QDir.Filter.Hidden)
         self.proxy = ProjectFilter(project, self.model, self)
         self.proxy.sort(0, qt.Qt.SortOrder.AscendingOrder)
         self.tree = qt.QTreeView()
@@ -159,10 +179,15 @@ class ProjectBrowser(qt.QWidget):
         self.git_status = ProjectGitStatus(self)
 
     def reset_root(self):
-        self.model.setRootPath(str(self.project.root))
+        self.proxy.update_folder_roles()
+        root = self.proxy.folder_roles.root
+        self.model.setRootPath(str(root))
         self.proxy.invalidateFilter()
-        self.tree.setRootIndex(self.proxy.mapFromSource(self.model.index(str(self.project.root))))
-        self.tree.setEnabled(self.project.root.is_dir())
+        index = self.proxy.mapFromSource(self.model.index(str(root)))
+        if self.tree.rootIndex() != index:
+            self.tree.setRootIndex(index)
+        self.tree.setEnabled(root.is_dir())
+        self.tree.viewport().update()
         self.sync_folder_watches()
         if hasattr(self, 'git_status'):
             self.git_status.refresh()
@@ -184,6 +209,8 @@ class ProjectBrowser(qt.QWidget):
         self.pending_expansion = {updated(path) for path in self.pending_expansion}
         if self.pending_selection:
             self.pending_selection = updated(self.pending_selection)
+        self.proxy.invalidateFilter()
+        self.tree.viewport().update()
         self.sync_folder_watches()
         self.git_status.refresh()
         self.changed.emit()
