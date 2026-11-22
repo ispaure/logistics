@@ -77,7 +77,7 @@ class DestinationForm:
         from .filename_input import FilenameInput
         directory = mode in ('open', 'folder') or getattr(destination_action, 'kind', '') in (
             'archive-create', 'archive-extract', 'archive-add')
-        if getattr(destination_action, 'kind', '') == 'move':
+        if getattr(destination_action, 'kind', '') in {'move', 'duplicate'}:
             directory = destination_action.provider.entry(destination_action.path)['directory']
         self.save_as_name = FilenameInput(value=name, directory=directory,
                                            placeholder=name_label, style=Pack(height=48))
@@ -129,14 +129,15 @@ class DestinationForm:
             self.save_as_view = toga.Box(children=location_fields,
                                         style=Pack(direction=COLUMN, margin_left=12, margin_right=12))
         else:
-            self.save_as_view = toga.Box(children=[*name_fields, self.effective_name, *location_fields],
+            fields = [] if action == 'move-selection' else [*name_fields, self.effective_name]
+            self.save_as_view = toga.Box(children=[*fields, *location_fields],
                                         style=Pack(direction=COLUMN, margin=12))
         self.picker_actions = toga.Box(children=[
                 toga.Button('Cancel', on_press=self.cancel_text_destination, style=Pack(height=48)),
                 self.picker_primary],
                 style=Pack(direction=ROW, margin_left=12, margin_right=12, margin_bottom=12))
         self.picker_form = toga.ScrollContainer(content=self.save_as_view, horizontal=False,
-                                                style=Pack(height=80 if creation is not None else 180))
+                                                style=Pack(height=80 if creation is not None or action == 'move-selection' else 180))
         # Keep the named action outside the compact location header: that
         # header reserves icon-sized slots and truncates "New folder" on phones.
         storage_row = self.save_as_storage
@@ -173,6 +174,8 @@ class DestinationForm:
         action = self.operation.destination_action
         if self.operation.mode == 'folder':
             return 'New Notes Library', 'Create library here'
+        if getattr(action, 'kind', '') == 'duplicate':
+            return 'Duplicate', 'Duplicate here'
         if action is not None:
             return getattr(action, 'title', 'Move'), getattr(action, 'primary', 'Move here')
         if self.operation.creation is not None:

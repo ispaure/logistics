@@ -140,7 +140,8 @@ class WorkspacesScreen:
             native.rightView = accessory
             native.rightViewMode = 3  # UITextFieldViewModeAlways
             native.accessibilityHint = 'Opens the list of credentials'
-        self.folder_transfers_button = toga.Button('Transfers', on_press=self.show_transfers, style=Pack(height=TOUCH_TARGET, font_size=CONTROL_TEXT, flex=1))
+        self.folder_transfers_button = toga.Button('Transfers', on_press=self.show_transfers,
+                                                   style=Pack(height=TOUCH_TARGET, font_size=CONTROL_TEXT))
         toolbar_button(self.folder_transfers_button, 'arrow.up.arrow.down')
         self.folder_add_share_button = toga.Button('Add share…', on_press=self.show_smb_connection,
                                                   style=Pack(height=TOUCH_TARGET, font_size=CONTROL_TEXT, flex=1))
@@ -174,6 +175,9 @@ class WorkspacesScreen:
         box = toga.Box(children=[self.app._files_status_row, self.folder_subtab_header, self.folder_picker_header, self.folder_source_actions,
             self.folder_loading_box, self.app.incoming_notice, scroll],
             style=Pack(direction=COLUMN, margin=(8, 16, 12, 16), flex=1))
+        if self.app.feature_enabled('rclone'):
+            box.insert(1, toga.Box(children=[self.folder_transfers_button],
+                                  style=Pack(direction=ROW, justify_content=END, margin_bottom=4)))
         box._workspaces_source_row = self.app._files_status_row
         from .scroll_edges import fill_bottom
         fill_bottom(box, scroll)

@@ -354,6 +354,10 @@ class EditorPicker(DestinationForm):
             source_label = 'Source location'
             self.editor_storage_roots[source_label] = item.provider
             source_folder = item.path.rpartition('/')[0]
+        elif action == 'duplicate':
+            source_label = 'Source location'
+            self.editor_storage_roots[source_label] = destination_action.provider
+            source_folder = destination_action.path.rpartition('/')[0]
         if mode == 'save' and creation is None and source_provider is not None and not getattr(source_provider, 'remote_storage', False):
             source_label = 'Source location'
             self.editor_storage_roots[source_label] = source_provider
@@ -551,6 +555,10 @@ class EditorPicker(DestinationForm):
             return await self.complete_archive_action()
         if action == 'download':
             return await self.complete_download()
+        if action == 'duplicate':
+            return await self.complete_duplicate()
+        if action == 'move-selection':
+            return await self.complete_selected_move()
         work = self._begin_work()
         work.mutation = True
         self.save_as_name.enabled = False
@@ -625,6 +633,112 @@ class EditorPicker(DestinationForm):
                     plan.release()
             finally:
                 self._finish_work(work)
+
+    async def complete_selected_move(self):
+        from .document_mutations import prepare_document_mutation
+        from .file_operations import FileDestination, FileOperationRequest, retiring_work
+
+        action = self.operation.destination_action
+        work = self._begin_work()
+        work.mutation = True
+        failures = []
+        moved = set()
+        try:
+            label, folder = work.location
+            provider = self.editor_provider(label)
+            plaintext = action.provider.private and not provider.private
+            if plaintext:
+                confirmed = await self.app.main_window.dialog(toga.ConfirmDialog(
+                    'Move to unencrypted storage?', 'The destination will contain decrypted files. Continue?'))
+                if not confirmed or not self._accepts(work):
+                    return
+            destination = FileDestination(self.app.private_root, work.client, provider, work.credential_generation)
+            work.awake = self.app.acquire_awake_lease()
+            for index, (source, revision) in enumerate(action.entries, 1):
+                if not self._accepts(work) or work.cancel.is_set():
+                    break
+                self.save_as_status.value = f'Moving item {index} of {len(action.entries)}…'
+                name = source.rpartition('/')[2]
+                request = FileOperationRequest('move', action.provider, source,
+                    '/'.join(filter(None, (folder, name))), destination,
+                    plaintext_approved=plaintext, expected_revision=revision)
+                plan = None
+                try:
+                    plan = await prepare_document_mutation(self.app, request)
+
+                    def completed(result):
+                        work.committed = True
+                        moved.add(source)
+                        plan.apply(result)
+
+                    await retiring_work(plan.execute, work.cancel, completed=completed)
+                except OperationCancelled:
+                    break
+                except (OSError, ValueError) as error:
+                    failures.append(f'{name}: {error}')
+                finally:
+                    if plan is not None:
+                        plan.release()
+            if work.operation is self.operation and self.active_host:
+                if work.cancel.is_set():
+                    self.save_as_status.value = 'Move stopped. Inspect both folders.'
+                elif self._accepts(work) and failures:
+                    self.save_as_status.value = '\n'.join(failures)
+                    if moved:
+                        remaining = tuple(entry for entry in action.entries if entry[0] not in moved)
+                        self.operation = replace(self.operation, destination_action=replace(action, entries=remaining))
+                elif self._accepts(work):
+                    self._finish_work(work)
+                    self.clear()
+                    await self.app.show_files()
+                    await self.app.browse_files()
+                    self.app.file_status.value = 'Move finished.'
+        except (OSError, ValueError) as error:
+            if self._accepts(work):
+                self.save_as_status.value = str(error)[:250]
+        finally:
+            self._finish_work(work)
+
+    async def complete_duplicate(self):
+        from services.documents.mutations import copy_document_tree
+        from .file_operations import retiring_work
+
+        action = self.operation.destination_action
+        work = self._begin_work()
+        work.mutation = True
+        self.save_as_name.enabled = False
+        try:
+            destination = self.editor_provider(self.save_as_storage.value)
+            name = resource_name(self.save_as_name.value)
+            target = '/'.join(filter(None, (self.picker_folder.value, name)))
+            if action.provider.private and not destination.private:
+                confirmed = await self.app.main_window.dialog(toga.ConfirmDialog(
+                    'Duplicate to unencrypted storage?',
+                    'The duplicate will contain decrypted files. Continue?'))
+                if not confirmed or not self._accepts(work):
+                    return
+            self.save_as_status.value = 'Duplicating and verifying…'
+            work.awake = self.app.acquire_awake_lease()
+
+            def copy(cancelled):
+                return copy_document_tree(action.provider, action.path, target, destination=destination,
+                                          expected_revision=action.expected_revision, cancelled=cancelled)
+
+            def completed(result):
+                work.committed = True
+
+            await retiring_work(copy, work.cancel, completed=completed)
+            if self._accepts(work):
+                self._finish_work(work)
+                self.clear()
+                await self.app.show_files()
+                await self.app.browse_files()
+                self.app.file_status.value = 'Duplicated as ' + name + '.'
+        except (OSError, ValueError, OperationCancelled) as error:
+            if work.operation is self.operation and self.active_host:
+                self.save_as_status.value = 'Duplicate cancelled.' if work.cancel.is_set() else str(error)[:250]
+        finally:
+            self._finish_work(work)
 
     async def complete_archive_action(self):
         from .file_operations import retiring_work

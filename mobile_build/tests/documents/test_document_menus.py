@@ -193,7 +193,7 @@ class DocumentMenuTests(TestCase):
     def labels(self, menu):
         return [title for title, _ in menu.actions]
 
-    def test_home_and_browser_menus_share_and_favourite_selected_file(self):
+    def test_open_document_can_be_favourited_and_listing_can_share(self):
         from commonUtils.runtime.platform import OS
         from mobile import favourites, outbound_share
         from services.documents.mobile_storage import document_copies
@@ -206,6 +206,7 @@ class DocumentMenuTests(TestCase):
         expected = 'Selected file ☃\r\n'.encode()
         second.write_bytes(expected)
         self.assertTrue(self.run_async(app.open_crypt(copies=document_copies(provider), key=second.name)))
+        self.run_async(favourites.favourite(app, session=app.private_sessions.active.session))
         app.close_session(app.private_sessions.active.session.id, choice='discard')
         self.assertTrue(self.run_async(app.open_crypt(copies=document_copies(provider), key=first.name)))
         owner = app.private_sessions.active.session
@@ -225,7 +226,11 @@ class DocumentMenuTests(TestCase):
                 patch.object(outbound_share, '_send_ios', side_effect=receive):
             button, = hub.document_row_menu(selected)
             commands = dict(button.document_actions.load_actions())
-            self.run_async(commands['Add to Favourites']())
+            self.assertNotIn('Add to Favourites', commands)
+            self.assertNotIn('All documents', commands)
+            home_button, = hub.document_row_menu(selected, show_documents_link=True)
+            self.assertIn('All documents', dict(home_button.document_actions.load_actions()))
+            home_button.document_actions.dispose()
             self.assertEqual([row['title'] for row in favourites.catalog(app).entries()], [second.name])
             self.assertTrue(self.run_async(commands[outbound_share.SEND]()))
             button.document_actions.dispose()
@@ -233,8 +238,17 @@ class DocumentMenuTests(TestCase):
             self.assertTrue(self.run_async(app.show_files(location=('Local files', ''))))
             actions = dict(app.file_item_commands(row=provider.entry(second.name)))
             self.assertTrue(self.run_async(actions[outbound_share.SEND]()))
-            self.run_async(actions['Remove from Favourites']())
+            self.assertNotIn('Remove from Favourites', actions)
+            self.assertNotIn('Add to Favourites', actions)
             self.assertEqual(app.file_item_actions(provider, provider.entry('')), [])
+            import toga
+            container = toga.Box()
+            favourites.populate(app, container, heading=False, allow_remove=True)
+            children = container.children[0].children
+            self.assertEqual(len(children), 2)
+            menu = children[1].document_actions
+            self.run_async(dict(menu.load_actions())['Remove from Favourites']())
+            menu.dispose()
         self.assertEqual(captured, [(second.name, expected)] * 2)
         self.assertEqual(favourites.catalog(app).entries(), [])
         self.assertEqual(list(staging.iterdir()), [])

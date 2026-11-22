@@ -192,7 +192,7 @@ class ArchiveWorkspace:
         def load_actions():
             row = dict(path=item.path, revision=item.revision, directory=False)
             return [*commands, *row_actions(self.app, item.provider, row,
-                                           anchor=self.menu_button, opener=dict(kind='archive'))]
+                                           anchor=self.menu_button, opener=dict(kind='archive'), favourite=True)]
         native_menu(self.app, self.menu_button, load_actions)
         self.menu = self.menu_button.document_actions
         self.cancel_button = toga.Button('Cancel operation', on_press=self.request_cancel, style=Pack(height=48))

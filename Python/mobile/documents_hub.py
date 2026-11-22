@@ -235,7 +235,7 @@ class DocumentsHub:
             from .favourites import populate
             retire_document_actions(self.document_favourites_list)
             self.document_favourites_list.clear()
-            populate(self.app, self.document_favourites_list, heading=False, row_font=FILENAME_FONT)
+            populate(self.app, self.document_favourites_list, heading=False, row_font=FILENAME_FONT, allow_remove=True)
         self.reflow_documents_hub()
 
     def populate_document_libraries(self):

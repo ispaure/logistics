@@ -374,6 +374,9 @@ class LocalFileBrowser(FileBrowser):
             name = entry.payload.get('display_name') or PurePosixPath(entry.label).name
             backend = type(button._impl).__module__
             command = _tile_menu(name, partial(self._tile_actions, entry), backend)
+            command._selection_display = None
+            card._tile_command = command
+            self._show_tile_selection(entry, command)
             card.remove(image_box)
             image_box.style.flex = 1
             card.insert(0, toga.Box(children=[image_box, command],
@@ -395,6 +398,27 @@ class LocalFileBrowser(FileBrowser):
                 control._file_key_binding = binding
         return card
 
+    def highlight_selection(self):
+        super().highlight_selection()
+        if self.mode == 'Tiles':
+            for entry, card, _, _, _ in self._tile_cards.values():
+                if hasattr(card, '_tile_command'):
+                    self._show_tile_selection(entry, card._tile_command)
+
+    def _show_tile_selection(self, entry, command):
+        state = entry.identity in self.checked_entries if self.on_check_entry is not None else None
+        if command._selection_display is state:
+            return
+        command._selection_display = state
+        name = entry.payload.get('display_name') or PurePosixPath(entry.label).name
+        symbol, label = (('overflow', 'Actions for ') if state is None else
+                         ('selected_item', 'Deselect ') if state else ('select_item', 'Select '))
+        if type(command._impl).__module__.startswith('toga_android.'):
+            command.text = {'overflow': '⋮', 'selected_item': '✓', 'select_item': '○'}[symbol]
+            accessible_name(command, label + name)
+        else:
+            apply_icon(command, symbol, label + name)
+
     async def _select_pressed(self, entry, widget, **kwargs):
         if self.mode == 'Tiles' and widget is self.buttons.get(entry.identity):
             from .native.file_shortcuts import focus
@@ -402,6 +426,8 @@ class LocalFileBrowser(FileBrowser):
         return await super()._select_pressed(entry, widget, **kwargs)
 
     async def _tile_actions(self, entry, widget=None, **kwargs):
+        if self.on_check_entry is not None:
+            return await self._select_pressed(entry, widget, **kwargs)
         if self.closed or self.navigation_busy or not self._entry_current(entry):
             return
         from .native.file_shortcuts import focus

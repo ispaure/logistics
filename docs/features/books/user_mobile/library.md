@@ -14,4 +14,4 @@ EPUB imports permit up to 5,000 entries, 256 MiB for archive and expanded total,
 
 Swipe or use arrows to turn pages. Use EPUB's chapter list and **Bookmark** or **Unbookmark** to navigate by passage. Comics offer **Comic pages…**, a slider and separate neighboring-comic buttons when available. Appearance controls follow the format.
 
-**Edit metadata…** writes to ordinary imported copies and leaves their sources intact. For Local or unlocked LocalCrypt comic folders, use **Files → Actions → Edit comics in this folder…**. See [EPUB reading](reading.md#native-mobile-reading) and [comic batch limits](../../comics/user_mobile/reading.md#mobile-collection-search-and-folder-batches).
+**Edit metadata…** writes to ordinary imported copies and leaves their sources intact. See [EPUB reading](reading.md#native-mobile-reading) and [editing comic metadata](../../comics/user_mobile/reading.md#edit-comic-metadata).

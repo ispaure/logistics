@@ -74,7 +74,7 @@ class DestinationWorkflowTests(unittest.TestCase):
         self.assertEqual((self.root / 'First/Nested/résumé.md').read_bytes(), b'# Unsaved')
         self.assertEqual(self.app.private_sessions.active.crypt_reader.name, 'résumé.md')
 
-    def test_cut_selection_paste_moves_only_successful_items_and_leaves_conflicts_cut(self):
+    def test_selection_move_publishes_successful_items_and_keeps_conflicts(self):
         destination = self.root / 'Destination'
         destination.mkdir()
         for name in ('first.txt', 'conflict.txt'):
@@ -93,28 +93,62 @@ class DestinationWorkflowTests(unittest.TestCase):
         self.assertIs(self.app.file_select_bar.parent, parent)
         self.assertEqual(self.app.file_select_bar.style.display, 'pack')
         self.assertEqual(self.app.file_select_bar.style.visibility, 'visible')
-        self.assertEqual(self.app.file_cut_button.style.visibility, 'visible')
+        self.assertEqual(self.app.file_move_button.style.visibility, 'visible')
         self.assertEqual(self.app.file_select_done.style.visibility, 'visible')
         self.assertEqual(self.app.file_select_bar.style.height, 48)
+        browser.show_tiles()
+        entry = next(entry for entry in browser.tree.entries.values() if not entry.container)
+        command = browser.entry_rows[entry.identity]._tile_command
+        self.assertIs(command._selection_display, False)
+        self.run_async(browser._tile_actions(entry, command))
+        self.assertIs(command._selection_display, True)
+        self.run_async(browser._tile_actions(entry, command))
+        browser.show_list()
         for entry in list(browser.tree.entries.values()):
             if not entry.container:
                 self.run_async(browser.activate_entry(entry))
         self.assertEqual(len(self.app.file_checked), 2)
         self.assertIsNone(self.app.provider_sessions().active)
-        self.app.cut_files()
+        self.assertEqual(self.app.file_selection_count.text, '2 selected')
+        self.run_async(self.app.move_checked_files())
         self.assertIs(self.app.file_select_bar.parent, parent)
         self.assertEqual(self.app.file_select_bar.style.display, 'none')
         self.assertEqual(self.app.file_select_bar.style.visibility, 'hidden')
         self.assertTrue(all(button.style.visibility == 'hidden' for button in self.app.file_select_bar.children))
         self.assertEqual(self.app.file_select_bar.style.height, 0)
-        self.run_async(self.app.browser_file_location(('Local files', 'Destination')))
-        self.assertIn('Paste move here', dict(self.app.file_item_commands()))
-        self.run_async(self.app.paste_files())
+        self.run_async(self.picker.browser_editor_location((self.picker.save_as_storage.value, 'Destination')))
+        self.run_async(self.picker.confirm_editor_file())
         self.assertEqual((destination / 'first.txt').read_text(), 'first.txt')
         self.assertFalse((self.root / 'first.txt').exists())
         self.assertEqual((self.root / 'conflict.txt').read_text(), 'conflict.txt')
         self.assertEqual((destination / 'conflict.txt').read_text(), 'Keep destination')
-        self.assertEqual(set(self.app.pending_file_cut()[1]), {'conflict.txt'})
+        self.assertIn('conflict.txt', self.picker.save_as_status.value)
+        (destination / 'conflict.txt').unlink()
+        self.run_async(self.picker.confirm_editor_file())
+        self.assertEqual((destination / 'conflict.txt').read_text(), 'conflict.txt')
+        self.assertFalse((self.root / 'conflict.txt').exists())
+        self.assertEqual(self.app.file_status.value, 'Move finished.')
+
+    def test_duplicate_uses_chosen_folder_and_name_without_overwriting(self):
+        destination = self.root / 'Destination'
+        destination.mkdir()
+        (self.root / 'original.txt').write_bytes(b'Original bytes')
+        (destination / 'existing.txt').write_bytes(b'Keep destination')
+        self.run_async(self.app.show_files(location=('Local files', '')))
+        self.app.browser_file_selected(self.app.file_provider.entry('original.txt'))
+        actions = dict(self.app.file_item_commands())
+        self.assertTrue({'Move…', 'Duplicate…'} <= actions.keys())
+        self.assertTrue({'Pin this folder', 'New folder…', 'Cut', 'Copy regular file'}.isdisjoint(actions))
+        self.run_async(actions['Duplicate…']())
+        self.assertNotEqual(self.picker.save_as_name.value, 'original.txt')
+        self.run_async(self.picker.browser_editor_location((self.picker.save_as_storage.value, 'Destination')))
+        self.picker.save_as_name.value = 'existing.txt'
+        self.run_async(self.picker.confirm_editor_file())
+        self.assertEqual((destination / 'existing.txt').read_bytes(), b'Keep destination')
+        self.picker.save_as_name.value = 'renamed.txt'
+        self.run_async(self.picker.confirm_editor_file())
+        self.assertEqual((destination / 'renamed.txt').read_bytes(), b'Original bytes')
+        self.assertEqual((self.root / 'original.txt').read_bytes(), b'Original bytes')
 
     def test_failed_folder_creation_keeps_folder_filename_and_draft(self):
         (self.root / 'Exists').mkdir()

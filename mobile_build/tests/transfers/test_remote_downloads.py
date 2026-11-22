@@ -330,13 +330,16 @@ class RemoteDownloadPickerTests(unittest.TestCase):
         self.assertFalse(app.cloud_busy)
         self.assertIsNone(picker.operation.destination_action)
 
-    def test_remote_menu_offers_download_for_both_files_and_folders(self):
-        for directory in (False,True):
-            row=dict(path='selected',directory=directory)
+    def test_remote_menu_offers_download_and_checks_preview_eligibility(self):
+        for path, directory, extra in (
+                ('selected', False, set()), ('selected', True, {'Open folder'}),
+                ('note.txt', False, {'Open preview'}), ('comic.cbz', False, {'Open preview', 'Archive password…'})):
+            row=dict(path=path,directory=directory,size=256)
             owner=NS(rclone_ui=NS(private_label=lambda text:text),cloud_open_remote='Cloud',
-                     cloud_client=NS(generation=1),remote_browser=Mock(),download_remote_item=Mock())
+                     cloud_client=NS(generation=1,supports_streaming=True),
+                     remote_browser=Mock(),download_remote_item=Mock())
             CloudUI.show_remote_item_actions(owner,row)
             actions=dict(owner.remote_browser.show_item_menu.call_args.args[0])
-            self.assertIn('Download locally…',actions)
+            self.assertEqual(set(actions), {'Download locally…', *extra})
             actions['Download locally…']()
             owner.download_remote_item.assert_called_once_with(row)

@@ -43,7 +43,7 @@ class HubDocumentTests(unittest.TestCase):
         import toga
         hub = self.app.hub_controller()
 
-        def row_menu(session):
+        def row_menu(session, *, show_documents_link=False):
             button = toga.Button('Document actions')
             button.document_actions = Mock()
             return [button]
@@ -545,7 +545,7 @@ class HubDocumentTests(unittest.TestCase):
         self.assertEqual(list(app.folder_subtab_header.children), [app.folder_cloud_tabs])
         self.assertIn(app.folder_picker_header, frame.main.children)
         self.assertEqual(list(app.folder_picker_header.children), [credential_row, app.folder_view_toggle])
-        self.assertIsNone(app.folder_transfers_button.parent)
+        self.assertIsNotNone(app.folder_transfers_button.parent)
         app.transfer_busy = False
         app.transfer_notification = True
         app.transfer_complete = True

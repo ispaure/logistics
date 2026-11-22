@@ -40,7 +40,7 @@ async def exercise_ios_browser_menus(app):
         assert 'Open' in labels and 'Details' in labels, (name, labels)
         if name == filename:
             share = next(action for action in actions if str(action.title) == SEND)
-            assert share.image is not None and 'Add to Favourites' in labels
+            assert share.image is not None and 'Add to Favourites' not in labels
         else:
             assert SEND not in labels and 'Add to Favourites' not in labels
         assert browser.selected == button.row.entry.identity

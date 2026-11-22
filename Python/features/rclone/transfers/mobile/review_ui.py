@@ -349,4 +349,7 @@ class TransferReviewUI:
         def work(client, cancel, progress):
             return transfers.execute(prepared, TransferContext(cancel, progress))
         operation = 'push' if push else 'pull'
-        return await self.run_mirror_work(work, operation, source=request.source, destination=request.destination)
+        from .planning import resolved_job
+        remote = resolved_job(client, job)['remote']
+        return await self.run_mirror_work(work, operation, authority=(remote, job['identity']),
+                                          source=request.source, destination=request.destination)

@@ -46,9 +46,12 @@ destination before retrying. See [moving a file you are
 using](../documents/workflows.md#move-or-rename-a-file-you-are-using) if
 the file is open in an editor.
 
-Use **Pin current folder** to keep a shortcut in Workspaces. Remote
-shortcuts require the same connection. Encrypted paths cannot be pinned
-for restoration. Removing a pin removes the shortcut.
+Use the open folder’s **…** button beside its view controls to create a
+**New folder…** or enter **Select items**. An individual item's menu
+offers **Move…** and, where the storage supports it, **Duplicate…**.
+
+Tap **Transfers** below the Workspaces source tabs to see transfer
+progress or find interrupted downloads.
 
 ## Notes Library
 

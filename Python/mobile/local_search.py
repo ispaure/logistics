@@ -9,6 +9,8 @@ __maintainer__ = "Marc-André Voyer"
 __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
+from dataclasses import replace
+
 from commonUtils.search.indexed import IndexedLocalSearch
 from commonUtils.search.providers import search_resources
 
@@ -27,6 +29,16 @@ class LocalSearch(IndexedLocalSearch):
             return super().prepare(provider, directory, cancelled=cancelled)
 
     def search(self, provider, directory, query, **kwargs):
+        from services.documents.locations import visible_transfer_rows
+
+        def visible(result):
+            return replace(result, rows=list(visible_transfer_rows(provider, result.rows)))
+
+        if (progress := kwargs.get('progress')) is not None:
+            kwargs['progress'] = lambda result: progress(visible(result))
+        return visible(self._search_provider(provider, directory, query, **kwargs))
+
+    def _search_provider(self, provider, directory, query, **kwargs):
         indexed = getattr(provider, 'search_listing', None) or getattr(provider, 'indexed_list', None)
         if indexed is not None:
             return search_resources(provider, directory, query, list_children=indexed, **kwargs)
@@ -44,6 +56,7 @@ class LocalSearch(IndexedLocalSearch):
     def _search_without_snapshot(self, provider, directory, query, *, cancelled, progress):
         from commonUtils.filesystem.index.exclusions import scan_exclusions
         from commonUtils.filesystem.local_access import check_local_path
+        from services.documents.locations import visible_transfer_rows
 
         root = provider._locate(directory)
         check_local_path(root, recursive=True)
@@ -53,8 +66,8 @@ class LocalSearch(IndexedLocalSearch):
         def names(folder, *, cancelled):
             if folder in excluded:
                 return ()
-            return (row for row in provider.list_names(folder, cancelled=cancelled)
-                    if row['path'] not in excluded)
+            rows = provider.list_names(folder, cancelled=cancelled)
+            return (row for row in visible_transfer_rows(provider, rows) if row['path'] not in excluded)
 
         try:
             result = search_resources(provider, directory, query, cancelled=cancelled, progress=progress,

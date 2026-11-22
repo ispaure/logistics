@@ -16,6 +16,7 @@ import json
 from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
+import re
 import shutil
 import stat
 import time
@@ -173,6 +174,20 @@ def ordinary_index_provider(provider):
     return (type(provider) in (LocalFiles, MobileLocalFiles, CollectionFiles)
             and not provider.private and not getattr(provider, 'session_only', False)
             and not getattr(provider, 'remote_storage', False))
+
+
+_TRANSFER_STAGING = re.compile(r'\.logistics-[0-9a-f]{32}\.00000000\.partial')
+
+
+def _transfer_staging_path(path):
+    return '.logistics-' in path and any(_TRANSFER_STAGING.fullmatch(part) for part in path.split('/'))
+
+
+def visible_transfer_rows(provider, rows):
+    """Keep unpublished local transfer files and their descendants out of browse results."""
+    if not getattr(provider, 'private', False) and not getattr(provider, 'remote_storage', False):
+        return (row for row in rows if not _transfer_staging_path(row['path']))
+    return rows
 
 
 def local_folder_snapshot(provider, path='', *, cancelled=lambda: False, names_only=False, root_name_visible=None):

@@ -1,6 +1,8 @@
 // Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
 // SPDX-License-Identifier: MIT
 
+#import <os/log.h>
+
 // Keep the Logistics deck in front of AVKit so the phone and Siri Remote
 // control the same playback clock during native AirPlay.
 @implementation LGVideoController (AirPlay)
@@ -156,6 +158,7 @@
     self.airPlaySeekDeadline = self.airPlayRouteLossDeadline = 0;
     self.airPlayStartDeadline = 0;
     self.airPlaySeekPending = self.airPlayChapterSeek = NO;
+    self.airPlayItemFailed = self.airPlayLockPlaybackIntent = NO;
     self.airPlayAdvanced = self.airPlayWasExternal = self.airPlaySystemPaused = self.airPlaySawTransport = NO;
     self.airPlayLastProgress = self.airPlayLastPoll = NSProcessInfo.processInfo.systemUptime;
     self.airPlayStallGraceUntil = 0;
@@ -209,6 +212,7 @@
     if (self.controlsLocked || ![self allowsAirPlay] || ![self canPlay:NO] ||
         !self.requestPlay || !self.requestPlay() || ![self canPlay:NO]) return;
     self.playRequested = YES;
+    if (![self protectedDataAvailable]) self.airPlayLockPlaybackIntent = YES;
     self.airPlaySystemPaused = NO;
     self.airPlayLastProgress = NSProcessInfo.processInfo.systemUptime;
     if (!self.airPlayAdvanced) self.airPlayStartDeadline = self.airPlayLastProgress + 45;
@@ -356,14 +360,15 @@
     if (!event && [self.airPlayTraceState isEqualToString:state] && now - self.airPlayLastTrace < 30) return;
     self.airPlayTraceState = state;
     self.airPlayLastTrace = now;
-    NSLog(@"[VideoAirPlay] %@ uptime=%.1f clock=%lld confirmed=%lld lastAdvanceAge=%.1f %@",
+    // These diagnostics contain playback state without media or receiver identifiers.
+    os_log(OS_LOG_DEFAULT, "[VideoAirPlay] %{public}@ uptime=%.1f clock=%lld confirmed=%lld lastAdvanceAge=%.1f %{public}@",
         event ?: @"sample", now, [self airPlayTime:player.currentTime], self.airPlayConfirmedPosition,
         now - self.airPlayLastProgress, state);
     if (self.airPlaySourceTrace) self.airPlaySourceTrace();
 }
 
 - (void)logAirPlaySource:(NSString *)diagnostics {
-    NSLog(@"[VideoAirPlay] HLS %@", diagnostics);
+    os_log(OS_LOG_DEFAULT, "[VideoAirPlay] HLS %{public}@", diagnostics);
 }
 
 - (void)airPlayRateChanged:(NSNotification *)note {
@@ -377,8 +382,10 @@
             self.airPlaySystemPaused = self.playRequested;
         } else if ([reason isEqualToString:AVPlayerRateDidChangeReasonSetRateCalled]) {
             self.airPlaySystemPaused = NO;
-            if (player.externalPlaybackActive && player.timeControlStatus == AVPlayerTimeControlStatusPaused)
+            if (player.externalPlaybackActive && player.timeControlStatus == AVPlayerTimeControlStatusPaused) {
                 self.airPlaySawTransport = YES; // An explicit rate change can pause before the first frame.
+                self.airPlayLockPlaybackIntent = NO;
+            }
         }
         [self traceAirPlay:[@"rate-change " stringByAppendingString:reason ?: @"unspecified"]];
     });
@@ -386,7 +393,8 @@
 
 - (void)airPlayEnded:(NSNotification *)note {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (note.object != self.airPlayPlayer.currentItem) return;
+        AVPlayerItem *item = self.airPlayPlayer.currentItem;
+        if (note.object != item || self.airPlayItemFailed || item.status == AVPlayerItemStatusFailed) return;
         self.ended = YES;
         self.playRequested = NO;
         self.airPlayStartDeadline = 0;
@@ -402,6 +410,12 @@
         NSError *underlying = error.userInfo[NSUnderlyingErrorKey];
         NSLog(@"[VideoAirPlay] playback failed domain=%@ code=%ld underlying=%@/%ld",
             error.domain, (long)error.code, underlying.domain, (long)underlying.code);
+        // AVKit can follow this failure with an end event while the item remains
+        // ready. Keep the confirmed position and play intent until wake.
+        self.airPlayItemFailed = YES;
+        self.airPlaySeekGeneration++;
+        if (![self protectedDataAvailable] && self.airPlayLockPlaybackIntent && !self.ended)
+            self.playRequested = YES;
         [self recoverAirPlay:@"item-failed"];
     });
 }
@@ -414,6 +428,10 @@
     }
     if (![self canPlay:NO]) {
         if (self.playRequested) [self pause];
+        return;
+    }
+    if (self.airPlayItemFailed) {
+        [self recoverAirPlay:@"item-failed"];
         return;
     }
 
@@ -496,6 +514,7 @@
             self.airPlayStartDeadline = 0;
             self.airPlayLastProgress = now;
             self.airPlayConfirmedPosition = current;
+            if (![self protectedDataAvailable]) self.airPlayLockPlaybackIntent = YES;
         }
         if (current >= 0) self.airPlayClock = current;
     }
@@ -527,7 +546,7 @@
     }
     // The OS can suspend the app. Keep the established item through a lock and
     // evaluate a new handoff when the app can present controls again.
-    if ([self hasEstablishedAirPlay] && (self.airPlayPlayer.externalPlaybackActive || [self hasAirPlayAudioRoute]) &&
+    if ([self hasEstablishedAirPlay] && (self.airPlayItemFailed || self.airPlayPlayer.externalPlaybackActive || [self hasAirPlayAudioRoute]) &&
         (![self protectedDataAvailable] || UIApplication.sharedApplication.applicationState != UIApplicationStateActive)) return;
 
     [self traceAirPlay:reason];
@@ -580,6 +599,7 @@
     self.lastPosition = self.startMilliseconds;
     [self removeAirPlayItemObservers];
     self.airPlaySeekPending = NO;
+    self.airPlayItemFailed = self.airPlayLockPlaybackIntent = NO;
     self.airPlaySeekTarget = -1;
     self.airPlaySeekDeadline = self.airPlayStartDeadline = self.airPlayRouteLossDeadline = 0;
     [NSNotificationCenter.defaultCenter removeObserver:self name:AVPlayerRateDidChangeNotification object:player];

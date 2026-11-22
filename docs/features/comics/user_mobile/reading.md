@@ -18,13 +18,11 @@ Use **Appearance → Comic page layout** for Single, Automatic or Two pages. Aut
 
 To inspect retained imports, open **Settings → Reset → Clear cached documents**. **Clear redundant copies…** removes verified duplicate copies and their reading records after confirmation. Changed copies, drafts and originals are kept.
 
-### Mobile collection search and folder batches
+### Edit comic metadata
 
 Use **Edit metadata…** in an ordinary imported reader. Successful saves preserve page images and the external import source. Standalone encrypted imports support reading and have no metadata writer.
 
 In an unlocked LocalCrypt comic, use **Edit metadata… → Save encrypted metadata**. See [encrypted archive saves](../../rclone/user_mobile/localcrypt.md#edit-encrypted-archive-metadata).
-
-For Local or unlocked LocalCrypt folders, choose **Files → Actions → Edit comics in this folder…**. Check only intended fields, then **Apply selected fields**. An empty checked field clears it. The scan includes descendants up to 200 comics, 10,000 entries and 16 folder levels. Changed or unsupported archives fail preflight. **Cancel after current comic** keeps completed saves and leaves remaining files untouched. Inspect results and reopen the batch if revisions cannot refresh.
 
 Unlocked LocalCrypt needs the configured inner password for protected archives. Saves update ciphertext locally. Push separately to update the remote. Closing, backgrounding or locking clears draft fields and suggestions. Already published edits remain saved.
 

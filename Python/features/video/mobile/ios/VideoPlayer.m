@@ -134,6 +134,7 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic) int64_t airPlaySeekTarget, airPlayStartPosition;
 @property(nonatomic) int64_t airPlayClock, airPlayConfirmedPosition;
 @property(nonatomic) BOOL airPlayAdvanced, airPlayRecovered, airPlaySystemPaused, airPlaySawTransport;
+@property(nonatomic) BOOL airPlayItemFailed, airPlayLockPlaybackIntent;
 @property(nonatomic) NSTimeInterval airPlayStartDeadline, airPlaySeekDeadline, airPlayRouteLossDeadline;
 @property(nonatomic) NSTimeInterval airPlayLastProgress, airPlayLastTrace;
 @property(nonatomic) NSTimeInterval airPlayLastPoll, airPlayStallGraceUntil;
@@ -796,6 +797,7 @@ typedef struct {
     if ([self hasAirPlay]) {
         [self.airPlayPlayer pause];
         self.playRequested = NO;
+        self.airPlayLockPlaybackIntent = NO;
         self.airPlayStartDeadline = 0;
         self.airPlaySystemPaused = NO;
         [self updatePlayButton];
@@ -1181,6 +1183,7 @@ typedef struct {
         // Device lock does not revoke an ordinary movie already playing on TV.
         // Keep checking the source grant; do not start a new handoff while locked.
         if ([self hasEstablishedAirPlay] && [self allowsAirPlay] && [self canPlay:NO]) {
+            self.airPlayLockPlaybackIntent = self.playRequested;
             [self setScreenAwake:NO];
             return;
         }

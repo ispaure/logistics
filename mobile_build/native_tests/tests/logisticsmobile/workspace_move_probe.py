@@ -155,24 +155,24 @@ class WorkspaceMoveProbe(DocumentWorkspaceProbe):
         assert len(app.file_checked) == 2
         if android:
             assert native.getCheckedItemCount() == 2
+        from .video_probe import until
+        assert app.file_selection_count.text == '2 selected'
+        picker = app.editor_picker()
         if android:
-            app.cut_files()
-            assert await app.browser_file_location(('Local files', 'Destination'))
-            await dict(app.file_item_commands())['Paste move here']()
+            await app.move_checked_files()
         else:
-            from .video_probe import until
-            app.file_cut_button._impl.native.sendActionsForControlEvents(1 << 6)
-            await until(lambda: app.pending_file_cut() is not None)
-            folder = next(row for row in browser.native_list.data if row.title == 'Destination')
-            self.ios_select_row(browser, folder)
-            await until(lambda: app.file_path == 'Destination')
-            keep = next(row for row in browser.native_list.data if row.title == 'Keep.txt')
-            await self.ios_item_action(browser, keep, 'Paste move here')
-            await until(lambda: app.pending_file_cut() is None and not app.cloud_busy)
+            app.file_move_button._impl.native.sendActionsForControlEvents(1 << 6)
+            await until(lambda: picker.active_host and getattr(getattr(picker, 'picker_primary', None), 'enabled', False))
+        assert await picker.browser_editor_location((picker.save_as_storage.value, 'Destination'))
+        if android:
+            await picker.confirm_editor_file()
+        else:
+            picker.picker_primary._impl.native.sendActionsForControlEvents(1 << 6)
+            await until(lambda: (root / 'Destination' / 'Move beta.txt').is_file() and not app.cloud_busy)
         for name in ('Move alpha.txt', 'Move beta.txt'):
             assert (root / 'Destination' / name).read_text() == name
             assert not (root / name).exists()
-        report['cases'].append('native_multi_selection_cut_paste_verified')
+        report['cases'].append('native_multi_selection_move_verified')
 
     @staticmethod
     def ios_select_row(browser, row):
@@ -191,10 +191,11 @@ class WorkspaceMoveProbe(DocumentWorkspaceProbe):
         path = NSIndexPath.indexPathForRow(row.index, inSection=0)
         native.scrollToRowAtIndexPath(path, atScrollPosition=2, animated=False)
         await until(lambda: native.cellForRowAtIndexPath(path) is not None)
-        native.cellForRowAtIndexPath(path).accessoryView.sendActionsForControlEvents(1 << 6)
-        await until(lambda: getattr(browser, '_item_menu', None) is not None)
+        accessory = native.cellForRowAtIndexPath(path).accessoryView
+        assert accessory.row.title == row.title
+        actions = await browser.native_list.menu_provider(accessory.row)
+        assert title in [str(action.title) for action in actions]
         menu = browser._item_menu
-        assert title in [str(action.title) for action in menu.native.actions]
         menu.invoke(dict(menu.actions)[title])
         browser.dismiss_item_menu()
         await asyncio.wait_for(asyncio.gather(*tuple(browser.work.tasks)), 45)

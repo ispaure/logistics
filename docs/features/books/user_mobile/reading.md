@@ -40,7 +40,7 @@ Choose an installed offline voice under **Settings → Read aloud → Read-aloud
 
 **Timer** offers Off and durations from 15 minutes to one hour. Its budget runs only during playback. **Reset timer** restores the selected duration. At zero, speech pauses. Play starts a fresh timer.
 
-Use **Appearance…** or **Settings → EPUB** for local fonts, sizes 12–32, spacing, width, margins, justification and System/Light/Dark/Sepia/Slate themes. These settings are device-wide and save immediately. Back returns to the same passage. For comic layouts and editing, see [Comics](../../comics/user_mobile/reading.md#mobile-collection-search-and-folder-batches).
+Use **Appearance…** or **Settings → EPUB** for local fonts, sizes 12–32, spacing, width, margins, justification and System/Light/Dark/Sepia/Slate themes. These settings are device-wide and save immediately. Back returns to the same passage. For comic layouts and editing, see [Comics](../../comics/user_mobile/reading.md).
 
 ### Lock-screen read-aloud
 

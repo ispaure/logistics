@@ -158,9 +158,22 @@ class MirrorUI(TransferReviewUI):
                         'Files already copied, replaced or deleted will stay changed.'))
                     if confirmed and self.transfer_busy and epoch == self.transfer_epoch:
                         self.cancel_mirror_transfer()
-                elif action in ('downloads', 'resume-download', 'discard-download') and not self.transfer_busy:
+                elif action == 'downloads':
+                    await self.refresh_transfer_history()
+                elif action in ('resume-download', 'discard-download') and not self.transfer_busy:
                     from features.rclone.mobile.download_recovery import queue_command
                     await queue_command(self, action, args, visible)
+                    await self.refresh_transfer_history()
+                elif action == 'clear-history' and not self.transfer_busy:
+                    from time import time_ns
+                    cutoff = time_ns()
+                    client = self.cloud_client
+                    generation = getattr(client, 'generation', None)
+                    confirmed = await self.main_window.dialog(toga.ConfirmDialog('Clear transfer history?',
+                        'Clear completed records for saved and unlocked connections? Files and interrupted downloads stay in place.'))
+                    if (confirmed and visible() and not self.transfer_busy and client is self.cloud_client
+                            and getattr(client, 'generation', None) == generation):
+                        await self.refresh_transfer_history(clear_through=cutoff)
                 elif action == 'settings' and not self.transfer_busy:
                     self.show_transfer_options()
             def visible():
@@ -181,8 +194,10 @@ class MirrorUI(TransferReviewUI):
         if present:
             if not self.transfer_busy:
                 self.dismiss_transfer_status()
-            self.show_view(self.transfer_view, route='transfers', title='Transfer')
+            self.show_view(self.transfer_view, route='transfers', title='Transfers')
             self.transfer_view.queue_send()
+            if not self.transfer_busy:
+                self.loop.create_task(self.refresh_transfer_history())
         percentage = getattr(self, 'transfer_percentage', None)
         self.transfer_progress.stop()
         self.transfer_progress.max = 100 if percentage is not None or not self.transfer_busy else None
@@ -192,17 +207,58 @@ class MirrorUI(TransferReviewUI):
     def render_transfer_summary(self):
         from features.rclone.transfers.presentation import progress_model
         model = progress_model(self.state)
-        if (not self.transfer_busy and getattr(self.cloud_client, 'package_records', ())
-                and (self.private_root / 'DownloadQueue').is_dir()):
-            model['can_list_downloads'] = True
+        if self.state.display_revoked and not self.transfer_busy:
+            model.update(phase='idle', message='No transfer is running.')
+        surface = getattr(self, '_progress_surface', None)
+        if surface is not None and not surface.closed and not self.transfer_busy:
+            model.update({key: surface.model[key] for key in
+                          ('downloads', 'history', 'downloads_notice', 'history_notice', 'history_error') if key in surface.model})
         if self.mirror_store().error:
             model.update(phase='failed', message=self.mirror_store().error)
         self.transfer_notice.text = import_hint(self.transfer_message)
         self.transfer_files.text = 'Files\n' + f"{model['files']:,}" + (f" / {model['total_files']:,}" if model['total_files'] else '')
         self.transfer_bytes.text = f"Data (MB)\n{model['done'] / 1_000_000:,.2f} /\n{model['total'] / 1_000_000:,.2f}"
-        surface = getattr(self, '_progress_surface', None)
         if surface is not None and not surface.closed:
             surface.update(model)
+
+    async def refresh_transfer_history(self, *, clear_through=None, write_failed=False):
+        from features.rclone.mobile.download_recovery import available_jobs
+        from .history import visible_history
+
+        surface = getattr(self, '_progress_surface', None)
+        if surface is None or surface.closed or not surface.visible() or self.transfer_busy:
+            return
+        client = self.cloud_client
+        generation = getattr(client, 'generation', None)
+        refresh = self._history_refresh = object()
+        unlocked = bool(getattr(client, 'package_records', ()))
+
+        def load():
+            downloads_notice = ('No interrupted downloads for the unlocked connections.' if unlocked else
+                                'Unlock the original connection to see interrupted downloads.')
+            history_notice = 'No completed transfers.'
+            downloads, history = [], []
+            try:
+                jobs = available_jobs(self.app, client=client) if client is not None else ()
+                for _, job in jobs:
+                    downloads.append(dict(id=job['id'], name=job['selection']['name'], path=job['selection']['path'],
+                                          offset=job['offset'], size=job['source']['size'], folder=job.get('kind') == 'folder'))
+            except (OSError, ValueError):
+                downloads_notice = 'Interrupted downloads could not be loaded.'
+            try:
+                history = visible_history(self.private_root, client, generation, clear_through=clear_through)
+            except (OSError, ValueError):
+                history_notice = ('Transfer history could not be cleared.' if clear_through is not None else
+                                  'Transfer history could not be loaded.')
+            history_error = ('The completed transfer could not be saved in history.' if write_failed else '')
+            return dict(downloads=downloads, downloads_notice=downloads_notice, history=history,
+                        history_notice=history_notice, history_error=history_error)
+
+        model = await asyncio.to_thread(load)
+        if (not surface.closed and surface.visible() and self.active_host and not self.transfer_busy
+                and self._history_refresh is refresh and self.cloud_client is client
+                and getattr(client, 'generation', None) == generation):
+            surface.update(dict(surface.model, **model))
 
     def choose_transfer_copy(self, jobs, *, push=False):
         """Resolve an ambiguous transfer without turning details into a folder list."""
@@ -319,8 +375,20 @@ class MirrorUI(TransferReviewUI):
             return
         self.begin_transfer_review(remote=remote, folder=folder, storage=storage)
 
-    async def run_mirror_work(self, work, operation, *, source=None, destination=None):
-        return await self.execution.run(work, operation, source=source, destination=destination)
+    async def run_mirror_work(self, work, operation, *, source=None, destination=None, authority=None):
+        result = await self.execution.run(work, operation, source=source, destination=destination)
+        write_failed = False
+        if result and authority is not None and source is not None and destination is not None:
+            from .history import record_completed
+            client = self.cloud_client
+            try:
+                await asyncio.to_thread(record_completed, self.private_root, client, client.generation,
+                                        *authority, operation, source, destination,
+                                        self.state.metrics.get('done', 0))
+            except (OSError, ValueError):
+                write_failed = True
+        await self.refresh_transfer_history(write_failed=write_failed)
+        return result
 
     def publish_mirror_progress(self, epoch, values):
         if not self.active_host or epoch != getattr(self, 'transfer_epoch', None) or not self.transfer_busy:

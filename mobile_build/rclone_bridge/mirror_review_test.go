@@ -151,6 +151,14 @@ func TestTransferOptionsFollowOrdinaryFileLinksAndKeepExcludedDestination(t *tes
 	os.WriteFile(filepath.Join(local, "new.skip"), []byte("excluded source"), 0600)
 	checkpoint := ".logistics-" + strings.Repeat("a", 32) + ".00000000.partial"
 	os.WriteFile(filepath.Join(local, checkpoint), []byte("verified prefix"), 0600)
+	folderCheckpoint := ".logistics-" + strings.Repeat("b", 32) + ".00000000.partial"
+	stageFolder := filepath.Join(local, folderCheckpoint, "nested")
+	if err := os.MkdirAll(stageFolder, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(stageFolder, "finished.txt"), []byte("completed member"), 0600); err != nil {
+		t.Fatal(err)
+	}
 	for name, text := range map[string]string{"retained.skip": "excluded destination", "delete.txt": "delete"} {
 		if _, err := f.Put(ctx, strings.NewReader(text), object.NewStaticObjectInfo("policy/"+name, time.Now(), int64(len(text)), true, nil, f)); err != nil {
 			t.Fatal(err)
@@ -164,7 +172,7 @@ func TestTransferOptionsFollowOrdinaryFileLinksAndKeepExcludedDestination(t *tes
 	}
 	rows := review.(map[string]any)["changes"].([][]string)
 	for _, row := range rows {
-		if strings.HasSuffix(row[1], ".skip") {
+		if strings.HasSuffix(row[1], ".skip") || strings.Contains(row[1], folderCheckpoint) {
 			t.Fatal("excluded review entry", row)
 		}
 	}
@@ -183,6 +191,9 @@ func TestTransferOptionsFollowOrdinaryFileLinksAndKeepExcludedDestination(t *tes
 	if _, err := f.NewObject(ctx, "policy/"+checkpoint); err == nil {
 		t.Fatal("interrupted download uploaded")
 	}
+	if _, err := f.NewObject(ctx, "policy/"+folderCheckpoint+"/nested/finished.txt"); err == nil {
+		t.Fatal("interrupted folder members uploaded")
+	}
 	if _, err := f.NewObject(ctx, "policy/delete.txt"); err == nil {
 		t.Fatal("destination-only file retained")
 	}
@@ -190,11 +201,17 @@ func TestTransferOptionsFollowOrdinaryFileLinksAndKeepExcludedDestination(t *tes
 	destination := filepath.Join(local, "pulled")
 	os.Mkdir(destination, 0700)
 	os.WriteFile(filepath.Join(destination, checkpoint), []byte("verified prefix"), 0600)
+	if err := os.Rename(filepath.Join(local, folderCheckpoint), filepath.Join(destination, folderCheckpoint)); err != nil {
+		t.Fatal(err)
+	}
 	if _, err := mirrorSync(ctx, "Cloud", "policy", identity, destination, run, false); err != nil {
 		t.Fatal(err)
 	}
 	if data, err := os.ReadFile(filepath.Join(destination, checkpoint)); err != nil || string(data) != "verified prefix" {
 		t.Fatal("interrupted download damaged by Pull", err)
+	}
+	if data, err := os.ReadFile(filepath.Join(destination, folderCheckpoint, "nested", "finished.txt")); err != nil || string(data) != "completed member" {
+		t.Fatal("interrupted folder damaged by Pull", err)
 	}
 	if _, err := os.Stat(filepath.Join(destination, "retained.skip")); err != nil {
 		t.Fatal("push filter leaked into pull", err)

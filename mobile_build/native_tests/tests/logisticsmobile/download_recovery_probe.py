@@ -20,6 +20,7 @@ from uuid import uuid4
 from commonUtils.runtime.resources.documents import LocalDocuments
 from commonUtils.testing.stages import TestStage
 from features.rclone.mobile.download_recovery import available_jobs
+from features.rclone.transfers.mobile.native_fallback import transfer_size
 from mobile.app import LogisticsMobile
 from . import start_native_check
 
@@ -187,9 +188,13 @@ class AndroidRecoveryProbe(LogisticsMobile):
             report.update(success=False, phase=phase, error=traceback.format_exc())
             self.write_result(report)
 
-    def control(self, prefix):
-        buttons = self.transfer_view.native_fallback.buttons.children
-        return next((button for button in buttons if button.text.startswith(prefix)), None)
+    def interrupted_rows(self):
+        for widget in self.transfer_view.native_fallback.history.children:
+            if getattr(widget, 'text', None) == 'Completed transfers':
+                break
+            if getattr(widget, 'children', ()):
+                title, details, actions = widget.children[0].children
+                yield title.text, details.text, actions.children[0]
 
     async def unlock_case(self, mode, case):
         case['resumed_pid'] = os.getpid()
@@ -198,10 +203,9 @@ class AndroidRecoveryProbe(LogisticsMobile):
             await asyncio.to_thread(self.cloud_client.lock)
         assert not await asyncio.to_thread(available_jobs, self)
         self.show_transfers()
-        assert not any(
-            b.text.startswith(('Resume ', 'Interrupted downloads'))
-            for b in self.transfer_view.native_fallback.buttons.children
-        )
+        await until(lambda: 'downloads' in self.transfer_view.model, 'Transfers never loaded while locked')
+        assert not list(self.interrupted_rows())
+        assert not any(row['destination'].endswith('session.bin') for row in self.transfer_view.model['history'])
         case['locked_rows'] = 0
         if mode == 'session':
             try:
@@ -222,21 +226,18 @@ class AndroidRecoveryProbe(LogisticsMobile):
             case['keystore'] = self.keystore()
 
     async def resume_case(self, mode, case):
-        self.show_transfers()
-
-        await self.tap(
-            await until(lambda: self.control('Interrupted downloads'), 'Missing interrupted-download control')
-        )
-        resume = await until(lambda: self.control('Resume '), 'No restored row')
-        case['row'] = resume.text
+        self.show_locations()
+        await self.tap(self.folder_transfers_button)
+        row = await until(lambda: next(iter(self.interrupted_rows()), None), 'No restored row in Workspaces → Transfers')
+        title, details, resume = row
+        assert title.endswith(mode + '.bin') and resume.text == 'Resume'
+        case['row'] = title + '\n' + details
         case['status'] = self.transfer_view.native_fallback.status.text
-        assert 'after unlocking' not in case['status']
         from android.view import WindowManager
         flags = self._impl.native.getWindow().getAttributes().flags
         case['secure_window'] = bool(flags & WindowManager.LayoutParams.FLAG_SECURE)
-        assert f'{self.config["stop"]:,}' in resume.text and f'{self.config["size"]:,}' in resume.text, (
-            resume.text
-        )
+        amount = transfer_size(self.config['stop']) + ' of ' + transfer_size(self.config['size'])
+        assert amount in ' '.join(details.split()), details
         epoch = self.transfer_epoch
         await self.tap(resume)
         await until(
@@ -254,6 +255,10 @@ class AndroidRecoveryProbe(LogisticsMobile):
             case['sha256'] = physical_digest
         assert case['sha256'] == self.config['sha256']
         assert not await asyncio.to_thread(available_jobs, self)
+        await until(lambda: any(row['destination'].endswith(mode + '.bin')
+                               for row in self.transfer_view.model.get('history', ())),
+                    'Verified download never appeared in Completed transfers')
+        case['completed_history'] = True
         Path(case.pop('target')).unlink()
 
     async def begin_case(self, mode, report):

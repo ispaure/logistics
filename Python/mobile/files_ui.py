@@ -18,8 +18,9 @@ import toga
 from .control_icons import icon_button
 from services.workflow_host import OwnedAttribute
 from toga.style import Pack
-from toga.style.pack import COLUMN, ROW
+from toga.style.pack import CENTER, COLUMN, ROW
 from commonUtils.runtime.resources.local import LocalFiles
+from commonUtils.runtime.resources.provider import capabilities
 
 
 def local_read_available(app, *, private=True):
@@ -36,9 +37,10 @@ def ordinary_local_copies(copies):
 
 class FilesUI:
     @staticmethod
-    def file_browser_rows(rows):
+    def file_browser_rows(rows, provider=None):
+        from services.documents.locations import visible_transfer_rows
         return {f'{i + 1}. {"Folder" if row["directory"] else "File"}: {row["name"]}': row
-                for i, row in enumerate(rows)}
+                for i, row in enumerate(visible_transfer_rows(provider, rows))}
 
     def folder_listing(self):
         if not hasattr(self, '_folder_listing'):
@@ -111,7 +113,7 @@ class FilesUI:
                 if getattr(self, 'file_loaded_location', None) != (label, path):
                     self.end_file_selection()
                 self.file_provider, self.file_path = provider, path
-                self.file_rows = FilesUI.file_browser_rows(rows)
+                self.file_rows = FilesUI.file_browser_rows(rows, provider)
                 # set_entries publishes selection reset once with the new snapshot.
                 self.file_loaded_location = label, path
                 self.populate_file_browser(rows, self.file_password.value, location=self.file_loaded_location)
@@ -222,6 +224,7 @@ class FilesUI:
         from .file_browser_view import LocalFileBrowser
         self.file_browser = LocalFileBrowser(folder_visible=self.folder_path_visible, selected=self.browser_file_selected, open_folder=self.browser_file_folder, navigate=self.browser_file_location, open_file=self.browser_file_open)
         self.file_browser.install_item_commands(lambda row: self.file_item_commands(row=row))
+        self.file_browser.finish_selection = self.end_file_selection
         from weakref import ref
         from .native.file_shortcuts import install
         owner = ref(self)
@@ -268,27 +271,23 @@ class FilesUI:
         from .action_menu import FeatureCommands
         self.file_actions_button = icon_button('overflow', 'File and folder actions')
         self.file_actions = FeatureCommands(self.file_actions_button, self,
-            [('New folder…', lambda: self.show_file_actions(operation='new')),
-             ('Rename…', lambda: self.show_file_actions(operation='rename')),
-             ('Move…', lambda: self.show_file_actions(operation='move')),
-             ('Copy', self.copy_file),
-             ('Pin current folder', self.locations_controller().pin_local_folder),
-             ('Delete selected…', self.delete_file), ('Change location…', lambda: self.show_file_actions(operation='location')),
-             ('Select items', self.begin_file_selection),
-             ('Archive password…', lambda: self.show_file_actions(operation='password'))], self.show_file_actions)
+            self.current_folder_commands(), self.show_file_actions)
         self.file_browser.attach_location_header(self.file_status,
             icon_button('back', 'Back to Workspaces', on_press=self.parent_file_folder))
         from .browser_ui import browser_command
         browser_command(self.file_actions_button)
         self.file_browser.location_bar.add(self.file_browser.view_switch, self.file_actions_button)
         self.file_checked = {}
-        self.file_cut_button = toga.Button('Cut', on_press=self.cut_files, style=Pack(height=48, flex=1))
-        self.file_archive_button = toga.Button('Create archive…', on_press=self.create_file_archive,
-                                             enabled=False, style=Pack(height=48, flex=1))
-        self.file_select_done = toga.Button('Done selecting', on_press=self.end_file_selection,
-                                           style=Pack(height=48, flex=1))
-        self.file_select_bar = toga.Box(children=[self.file_cut_button, self.file_archive_button, self.file_select_done],
-                                        style=Pack(direction=ROW))
+        from .appearance import action_button, surface
+        self.file_selection_count = toga.Label('0 selected', style=Pack(flex=1, font_size=14, margin_left=8))
+        self.file_move_button = action_button(toga.Button('Move…', on_press=self.move_checked_files,
+                                                          style=Pack(height=48)))
+        self.file_archive_button = toga.Button('Archive…', on_press=self.create_file_archive,
+                                               enabled=False, style=Pack(height=48))
+        self.file_select_done = toga.Button('Done', on_press=self.end_file_selection, style=Pack(height=48))
+        self.file_select_bar = surface(toga.Box(children=[self.file_selection_count, self.file_move_button,
+            self.file_archive_button, self.file_select_done], style=Pack(direction=ROW, align_items=CENTER,
+                gap=4)), radius=10, background='alternate')
         self._show_file_selection_bar(False)
         self.file_source_tabs = toga.Box(style=Pack(direction=ROW, height=48))
         self.files_view = toga.Box(children=[
@@ -345,7 +344,7 @@ class FilesUI:
     def show_file_actions(self, widget=None, *, operation=None, **kwargs):
         if self.cloud_busy:
             return
-        if operation == 'move':
+        if operation in ('move', 'duplicate'):
             try:
                 provider, path = self.selected_file()
             except ValueError as error:
@@ -355,14 +354,19 @@ class FilesUI:
                 return
             from .file_operations import FileOperationRequest
             row = self.file_rows.get(self.file_selection.value)
-            request = FileOperationRequest('move', provider, path, expected_revision=row.get('revision'))
+            request = FileOperationRequest(operation, provider, path, expected_revision=row.get('revision'))
+            name = path.rpartition('/')[2]
+            if operation == 'duplicate':
+                from services.documents.mutations import copy_path
+                name = copy_path(name, directory=row['directory'])
             return self.loop.create_task(self.editor_picker().show_destination(
-                path.rpartition('/')[2], request))
+                name, request))
         box = self.file_operation_view.content
         for child in list(box.children):
             box.remove(child)
         selected = self.file_rows.get(self.file_selection.value)
-        title = selected['name'] if selected else 'Workspace actions'
+        item_action = operation in ('rename', 'password')
+        title = selected['name'] if item_action and selected else Path(self.file_path).name or 'Folder actions'
         box.add(toga.Label(title, style=Pack(font_size=20, margin_bottom=12)))
         if operation in ('new', 'rename'):
             if operation == 'rename' and selected:
@@ -378,14 +382,13 @@ class FilesUI:
             box.add(self.file_target)
             box.add(self.file_commands[6])
         elif operation == 'password':
-            box.add(toga.Label('Password for the archive you want to open'))
-            box.add(self.file_password)
+            box.add(self.file_password,
+                    toga.Button('Open with password', on_press=self.read_managed_file, style=Pack(height=48)))
         elif operation == 'location':
             box.add(self.file_location)
             box.add(self.file_commands[0])
         else:
-            commands = self.file_item_commands()
-            for label, callback in commands:
+            for label, callback in self.current_folder_commands():
                 async def run(widget=None, target=callback, **kw):
                     import inspect
                     result = target()
@@ -396,53 +399,79 @@ class FilesUI:
         box.add(toga.Button('Return to files', on_press=self.show_files, style=Pack(height=48, margin_top=12)))
         self.show_view(self.file_operation_view, destination='files', route='file-actions', title='File actions')
 
-    def file_item_commands(self, *, context=None, row=None):
-        from commonUtils.runtime.resources.provider import capabilities
+    def current_folder_commands(self):
+        provider = self.file_provider
+        access = capabilities(provider)
+        commands = [('Change location…', lambda: self.show_file_actions(operation='location'))]
+        if access.create and not getattr(provider, 'read_only', False):
+            commands.insert(0, ('New folder…', lambda: self.show_file_actions(operation='new')))
+        if self.can_select_file_entries(provider):
+            commands.append(('Select items', self.begin_file_selection))
+        return commands
 
+    def can_select_file_entries(self, provider):
+        from .archive_operations import ordinary
+        can_move = capabilities(provider).delete and not getattr(provider, 'read_only', False)
+        return can_move or (ordinary(provider) and self.feature_enabled('archives'))
+
+    def file_item_commands(self, *, context=None, row=None):
         if context is None:
-            provider, storage = self.file_provider, self.file_storage.value
+            provider = self.file_provider
             selected = row if row is not None else self.file_rows.get(self.file_selection.value)
         else:
-            provider, storage, selected = context
-        commands = [('New folder…', lambda: self.show_file_actions(operation='new'))]
+            provider, _, selected = context
+
+        if provider is None or not selected or not selected.get('path'):
+            return []
+        from .local_sources import SharedFiles
+        if isinstance(provider, SharedFiles) and provider.is_managed_collection(selected['path']):
+            return [('Open', self.enter_file_folder)]
+
         access = capabilities(provider)
-        from services.documents.mobile_locations import enabled
-        if storage == 'Local files' or (storage == 'Shared files' and enabled(self.private_root)):
-            commands.append(('Pin this folder', self.locations_controller().pin_local_folder))
-        if selected:
-            commands += [('Open', self.enter_file_folder if selected['directory'] else self.read_managed_file),
-                         ('Rename…', lambda: self.show_file_actions(operation='rename')),
-                         *([('Move…', lambda: self.show_file_actions(operation='move'))] if access.delete else []),
-                         *([('Copy', self.copy_file)] if self.can_copy_file(provider) else []),
-                         ('Details', self.show_file_details), ('Delete…', self.delete_file)]
+        writable = not getattr(provider, 'read_only', False)
+        commands = [('Open', self.enter_file_folder if selected['directory'] else self.read_managed_file),
+                    ('Details', self.show_file_details)]
+        if writable and access.rename:
+            commands.append(('Rename…', lambda: self.show_file_actions(operation='rename')))
+        if writable and access.delete:
+            commands.append(('Move…', lambda: self.show_file_actions(operation='move')))
+        if self.can_copy_file(provider):
+            commands.append(('Duplicate…', lambda: self.show_file_actions(operation='duplicate')))
         if context is None:
             commands.extend(self.app.file_item_actions(provider, selected))
+        if not selected['directory'] and Path(selected['path']).suffix.lower() in {'.cbz', '.zip', '.epub'}:
+            commands.append(('Archive password…', lambda: self.show_file_actions(operation='password')))
         from .archive_ui import archive_commands
         commands.extend(archive_commands(self.app, provider, selected))
-        if context is None:
-            from .archive_operations import ordinary
-            if access.delete or (ordinary(provider) and self.feature_enabled('archives')):
-                commands.append(('Select items', self.begin_file_selection))
-                if selected and access.delete:
-                    commands.append(('Cut', self.cut_files))
-            if access.create and access.rename and access.delete and self.pending_file_cut():
-                commands.append(('Paste move here', self.paste_files))
-        if isinstance(provider, LocalFiles) and (not provider.private or getattr(provider, 'supports_metadata_collections', False)):
-            commands += [('Edit comics in this folder…', self.edit_local_comic_folder)]
-        return commands + [('Archive password…', lambda: self.show_file_actions(operation='password'))]
+        if context is None and self.can_select_file_entries(provider):
+            selected_path = selected['path']
+            commands.append(('Select items', lambda: self.begin_file_selection(initial_path=selected_path)
+                             if self.file_provider is provider else None))
+        if writable and access.delete:
+            commands.append(('Delete…', self.delete_file))
+        return commands
 
-    def begin_file_selection(self):
-        if self.cloud_busy or self.file_browser.on_check_entry is not None:
+    def begin_file_selection(self, *, initial_path=None):
+        if (self.cloud_busy or self.file_browser.on_check_entry is not None
+                or not self.can_select_file_entries(self.file_provider)):
             return
         self.file_browser.on_check_entry = self.check_file_entry
         self.file_browser.highlight_selection()
-        self.file_cut_button.enabled = self.file_archive_button.enabled = False
+        self.file_move_button.enabled = self.file_archive_button.enabled = False
+        self.file_selection_count.text = '0 selected'
+        can_move = capabilities(self.file_provider).delete and not getattr(self.file_provider, 'read_only', False)
+        self.file_move_button.style.display = 'pack' if can_move else 'none'
         from .archive_operations import ordinary
         self.file_archive_button.style.display = ('pack' if ordinary(self.file_provider)
                                                   and self.feature_enabled('archives') else 'none')
         # The Workspaces frame reparents the original browser contents into
         # its detail pane. Keep the selection row with those contents.
         self._show_file_selection_bar(True)
+        if initial_path is not None:
+            for entry in self.file_browser.entries:
+                if isinstance(entry.payload, dict) and entry.payload.get('path') == initial_path:
+                    self.check_file_entry(entry)
+                    break
 
     def _show_file_selection_bar(self, visible):
         visibility = 'visible' if visible else 'hidden'
@@ -455,16 +484,31 @@ class FilesUI:
     def check_file_entry(self, entry):
         if self.cloud_busy:
             return
+        from .local_sources import SharedFiles
+        if isinstance(self.file_provider, SharedFiles) and self.file_provider.is_managed_collection(entry.payload['path']):
+            return
         if entry.identity in self.file_checked:
             del self.file_checked[entry.identity]
         else:
             self.file_checked[entry.identity] = entry.payload
         self.file_browser.checked_entries = set(self.file_checked)
         self.file_browser.highlight_selection()
-        from commonUtils.runtime.resources.provider import capabilities
-        self.file_cut_button.enabled = bool(self.file_checked) and capabilities(self.file_provider).delete
+        self.file_move_button.enabled = bool(self.file_checked) and self.file_move_button.style.display != 'none'
         self.file_archive_button.enabled = bool(self.file_checked)
-        self.file_cut_button.text = f'Cut ({len(self.file_checked)})'
+        self.file_selection_count.text = f'{len(self.file_checked)} selected'
+
+    async def move_checked_files(self, widget=None, **kwargs):
+        from .file_operations import FileSelectionMove
+
+        provider = self.file_provider
+        if (self.cloud_busy or not self.file_checked or not capabilities(provider).delete
+                or getattr(provider, 'read_only', False)):
+            return
+        entries = {row['path']: row['revision'] for row in self.file_checked.values()}
+        selection = tuple((path, revision) for path, revision in entries.items()
+                          if not any(parent.as_posix() in entries for parent in Path(path).parents))
+        self.end_file_selection()
+        await self.editor_picker().show_destination('', FileSelectionMove(provider, selection))
 
     async def create_file_archive(self, widget=None, **kwargs):
         from .archive_ui import controller
@@ -587,16 +631,6 @@ class FilesUI:
         from services.documents.storage import document_writable
         provider = self.file_provider if provider is None else provider
         return provider is not None and document_writable(provider)
-
-    async def copy_file(self, widget=None, **kwargs):
-        from .file_operations import FileOperationRequest
-        if not self.can_copy_file():
-            return
-        def capture():
-            provider, path = self.selected_file()
-            return FileOperationRequest('copy', provider, path)
-        if await self.file_operations().run(capture):
-            await self.browse_files()
 
     def show_file_details(self, widget=None, **kwargs):
         info = self.file_browser.info
@@ -743,6 +777,8 @@ class FilesUI:
         source = LocalThumbnails(provider, client, password)
         self.file_browser.configure_previews(source)
         self.file_browser.details = source.details
+        self.file_actions.raw_actions = self.current_folder_commands()
+        self.file_actions.refresh()
         if location is None:
             self.file_browser.history.clear()
         self.file_browser.set_entries(self.file_provider, self.file_path, rows, location=location)

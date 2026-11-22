@@ -423,7 +423,12 @@ class TransferSurfaceAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         fallback = widget(native, parent=surface, surface=surface,
             title=label('Current transfer'), paths=label('Source: Local/current\nDestination: Remote:'),
             status=label('Copying files…'),
-            metrics=label('50%\nFiles: 2 / 4\nData: 0.50 / 1.00 MB\nChecked: 1 · Listed: 4'),
+            amount=label('50%'), metrics=label(''),
+            fields=state(children=[state(children=[state(children=[label(name), label(value)])
+                for name, value in row]) for row in [
+                    [('Files copied', '2 / 4'), ('Data copied', '500,000 bytes / 1.0 MB')],
+                    [('Files found', '4'), ('Files compared', '1')],
+                    [('Source', 'Local/current')], [('Destination', 'Remote:')]]]),
             buttons=state(children=[state(text='Stop transfer', enabled=True),
                 state(text='Continue browsing', enabled=True)]))
         surface.native_fallback = fallback
@@ -433,11 +438,12 @@ class TransferSurfaceAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         surface = self.surface()
         proof = verify_native_transfer_fallback(surface)
         self.assertEqual(proof, dict(renderer='native', mode='progress', revision=3, recoveries=2))
-        surface.native_fallback.paths._impl.native.text = 'Source: stale\nDestination: old'
-        with self.assertRaisesRegex(AssertionError, 'endpoints are stale'):
+        source = surface.native_fallback.fields.children[-2].children[0].children[1]
+        source._impl.native.text = 'Local/stale'
+        with self.assertRaisesRegex(AssertionError, 'field Source is stale'):
             verify_native_transfer_fallback(surface)
         # A matching cached Python property cannot conceal a stale native label.
-        self.assertEqual(surface.native_fallback.paths.text, 'Source: Local/current\nDestination: Remote:')
+        self.assertEqual(source.text, 'Local/current')
 
     def test_detached_hidden_unlaid_out_or_unacknowledged_fallback_cannot_pass(self):
         mutations = [lambda s: setattr(s.native_fallback._impl.native, 'window', None),
@@ -467,7 +473,8 @@ class TransferSurfaceAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 def text_result(value):
                     return (value if representation == 'python-string'
                             else SimpleNamespace(toString=lambda: value))
-                for widget in (fallback.title, fallback.paths, fallback.status, fallback.metrics):
+                fields = [w for row in fallback.fields.children for cell in row.children for w in cell.children]
+                for widget in (fallback.title, fallback.status, fallback.amount, *fields):
                     value = widget.text
                     widget._impl.native = SimpleNamespace(getText=lambda value=value: text_result(value))
                 # Read actual native text, including characters that must never
@@ -475,10 +482,11 @@ class TransferSurfaceAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 surface.model['workspace'] = 'Current Δ\u200btransfer '
                 fallback.title._impl.native.getText = lambda: text_result(surface.model['workspace'])
                 self.assertEqual(verify_native_transfer_fallback(surface)['renderer'], 'native')
-                fallback.paths._impl.native.getText = lambda: text_result('Source: stale\nDestination: old')
-                with self.assertRaisesRegex(AssertionError, 'endpoints are stale'):
+                source = fallback.fields.children[-2].children[0].children[1]
+                source._impl.native.getText = lambda: text_result('Local/stale')
+                with self.assertRaisesRegex(AssertionError, 'field Source is stale'):
                     verify_native_transfer_fallback(surface)
-                self.assertEqual(fallback.paths.text, 'Source: Local/current\nDestination: Remote:')
+                self.assertEqual(source.text, 'Local/current')
                 impl.native.isAttachedToWindow = lambda: False
                 with self.assertRaisesRegex(AssertionError, 'detached'):
                     verify_native_transfer_fallback(surface)
@@ -562,6 +570,6 @@ class TransferSurfaceAcceptanceTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_wrong_native_model_does_not_pass_after_recovery(self):
         surface = self.surface()
-        surface.native_fallback.metrics._impl.native.text = 'Files: 99'
+        surface.native_fallback.fields.children[0].children[0].children[1]._impl.native.text = '99'
         with self.assertRaisesRegex(RuntimeError, 'bounded recovery'):
             await wait_for_transfer_surface(surface, timeout=.01)

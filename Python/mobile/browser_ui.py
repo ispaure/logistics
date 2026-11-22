@@ -199,7 +199,7 @@ async def refresh_download_directory(app, destination, target):
 
             def publish(rows):
                 from .files_ui import FilesUI
-                app.file_rows = FilesUI.file_browser_rows(rows)
+                app.file_rows = FilesUI.file_browser_rows(rows, provider)
                 app.set_file_items(list(app.file_rows))
                 files.refresh_entries(rows)
 
@@ -233,7 +233,8 @@ class FileBrowser(RecycledBrowser):
         from commonUtils.runtime.browsing import BrowseEntry, BrowseTree, provider_entries
 
         root = self.folder_tree.root
-        entries = list(provider_entries(self.search_provider, rows))
+        from services.documents.locations import visible_transfer_rows
+        entries = list(provider_entries(self.search_provider, visible_transfer_rows(self.search_provider, rows)))
         folder = BrowseTree(BrowseEntry(root, root.name, True), max_entries=len(entries) + 1)
         folder.set_children(root, entries)
         if self.tree is not self.folder_tree:
@@ -320,6 +321,8 @@ class FileBrowser(RecycledBrowser):
 
     def back_action(self):
         """Choose one browser-local Back step; the route owns invoking it."""
+        if self.on_check_entry is not None and hasattr(self, 'finish_selection'):
+            return self.finish_selection
         if self.search.value:
             return lambda: setattr(self.search, 'value', '')
         if self.search_open:
@@ -335,8 +338,9 @@ class FileBrowser(RecycledBrowser):
         self._index_cancel = Event()
         self._index_error = None
         self._index_started = False
+        from services.documents.locations import visible_transfer_rows
         try:
-            super().set_entries(provider, directory, rows, location=location)
+            super().set_entries(provider, directory, visible_transfer_rows(provider, rows), location=location)
         except BaseException:
             if release is not None:
                 release()
@@ -543,7 +547,8 @@ class FileBrowser(RecycledBrowser):
         self.on_item_actions = lambda row: self.show_item_menu(commands(row))
         if self.native_list.factory.DetailedList.__module__.startswith('toga_iOS.'):
             async def provide(row):
-                if self.closed or self.navigation_busy or row.epoch != self.epoch or not self._entry_current(row.entry):
+                if (self.closed or self.navigation_busy or self.on_check_entry is not None
+                        or row.epoch != self.epoch or not self._entry_current(row.entry)):
                     return []
                 entry = await self.validate_cached_entry(row.entry)
                 if entry is None or not self._entry_current(entry):

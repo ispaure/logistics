@@ -15,7 +15,7 @@ import os
 from time import time
 
 from commonUtils.testing.stages import TestStage
-from mobile.favourites import catalog
+from mobile.favourites import catalog, favourite, populate
 from mobile.outbound_share import SEND, SHARE_LIFETIME, _root, prune
 from services.documents.mobile_storage import document_copies
 
@@ -39,6 +39,7 @@ class OutboundIOSProbe(DocumentWorkspaceProbe):
         selected_file.write_bytes(PAYLOAD)
         assert await app.open_crypt(copies=document_copies(provider), key=OPEN)
         owner = app.private_sessions.active.session
+        await favourite(app, session=owner)
         assert await app.show_files(location=('Local files', ''))
 
         root = _root(app)
@@ -58,9 +59,16 @@ class OutboundIOSProbe(DocumentWorkspaceProbe):
         browser.dismiss_item_menu()
         report['cases'].append('native-share-glyph')
 
-        await self.wait_until(lambda: [item['title'] for item in catalog(app).entries()] == [NAME])
-        await self.wait_until(lambda: not catalog(app).entries())
-        report['cases'].append('favourite-and-remove-selected-file')
+        import toga
+        assert all('Favourites' not in str(action.title) for action in actions)
+        assert [item['title'] for item in catalog(app).entries()] == [OPEN]
+        container = toga.Box()
+        populate(app, container, heading=False, allow_remove=True)
+        menu = container.children[0].children[1].document_actions
+        await dict(menu.load_actions())['Remove from Favourites']()
+        menu.dispose()
+        assert not catalog(app).entries()
+        report['cases'].append('favourite-and-remove-open-document')
 
         for i in range(2):
             await self.wait_until(lambda: app._outbound_share_sheet if hasattr(app, '_outbound_share_sheet') else None)

@@ -172,6 +172,9 @@ Established playback allows 15 seconds without progress and gives a transient
 route break three seconds. When the app is active and a usable route remains,
 it can replace the item once at the last confirmed position. After a
 suspension it gives AVKit time to report progress before declaring a stall.
+An item failure reported during lock is held until the app can retry. A later
+end notification from that failed item cannot clear the resume point or turn
+the failure into normal completion.
 A failed recovery retires the player and leaves the confirmed position for an
 explicit retry or local playback. Returning from AirPlay flushes queued VLC
 audio at the held position and preserves the user's mute setting.
@@ -182,6 +185,8 @@ completions, phone/receiver Pause, a ready item with a stationary playhead,
 route loss, and explicit retry. It injects device-lock
 availability and background notifications to check continued AirPlay, pause/resume,
 denied new handoffs, source revocation, route loss and session protection.
+It also injects the locked-device failure followed by an end notification and
+checks the single retry at the confirmed position on wake.
 Receiver Pause is checked during pending seeks, before polling and after repeated
 background transitions. It also measures the system
 route picker's alignment beside Forward and verifies HDR metadata with the
@@ -279,7 +284,9 @@ and close, failed handoff/retry, and authorization checks on file fallback.
 Selecting the phone in the same picker returns to
 VLC within the same presentation. At open HEVC GOP boundaries, a fragment can
 hold its final frame briefly across the gap left by dropping leading pictures
-that depend on both sides of the boundary.
+that depend on both sides of the boundary. For gaps longer than four frames,
+the remuxer checks that the next CRA is followed by the expected number of
+leading pictures. The native HLS fixture exercises a stream with eight.
 
 An iPhone simulator probe linked the pinned VLCKit binary, requested
 fragments out of order and decoded each fragment independently. Compressed

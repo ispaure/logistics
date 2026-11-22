@@ -56,16 +56,18 @@ Choose **••• → Move…**, pick a writable folder, and tap **Move here**.
 Moving a file out of an encrypted copy into ordinary storage requires
 confirmation because the destination will be readable as an ordinary file.
 
-In File Browser, use an item's actions to move a single file or folder.
-To move several items together, choose **Select items**, tap each item,
-then tap **Cut**. Browse to the destination and choose **Paste move here**.
-With the listing focused, use **Command-X** and **Command-V** on iPhone or
-iPad, or **Ctrl-X** and **Ctrl-V** on Android, for the same move. Tap the
-destination listing before pasting if it needs focus. A focused search field
-uses the text editing shortcuts.
-Items that conflict stay at the source and remain cut. **Cancel move**
-stops remaining work. Inspect both folders if a move stops after publishing
-a verified destination.
+In File Browser, choose an item's **Move…** to move one file or folder.
+Choose **Duplicate…** to keep the original and pick a folder and a name
+for the copy. An existing destination file is preserved.
+
+To move several items, choose **Select items**, tap the desired rows or
+tiles, and check the selection count. Tap **Move…** and choose a
+destination. Tap **Done** to leave selection mode. Items that conflict
+stay at the source. Inspect both folders if an in-progress move stops.
+
+With the listing focused, **Command-X** and **Command-V** on iPhone or
+iPad, or **Ctrl-X** and **Ctrl-V** on Android, also move files. A focused
+search field uses the text editing shortcuts.
 
 Moving or renaming an open text file keeps its draft, and the next **Save**
 writes to the new path. Moving a folder updates the open text files inside

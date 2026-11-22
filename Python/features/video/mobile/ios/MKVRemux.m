@@ -84,22 +84,52 @@ static void LGMKVFreeIO(AVIOContext **context) {
     avio_context_free(context);
 }
 
-static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
-    // Matroska AVC/HEVC packets contain length-prefixed NAL units.
-    // HEVC CRA/BLA may have leading pictures. Drop samples before the cue PTS.
-    int configurationByte = codec->codec_id == AV_CODEC_ID_H264 ? 4 : 21;
-    if (codec->extradata_size <= configurationByte || codec->extradata[0] != 1) return -1;
+static int LGMKVVideoPictureType(AVPacket *packet, AVCodecParameters *codec) {
+    BOOL avc = codec->codec_id == AV_CODEC_ID_H264;
+    int configurationByte = avc ? 4 : 21;
+    if (packet->size <= 0 || codec->extradata_size <= configurationByte || codec->extradata[0] != 1) return -1;
     unsigned width = (codec->extradata[configurationByte] & 3) + 1;
     const uint8_t *cursor = packet->data, *end = cursor + packet->size;
     while (end - cursor > width) {
         uint32_t length = 0;
         for (unsigned i = 0; i < width; i++) length = (length << 8) | *cursor++;
         if (!length || length > end - cursor) return -1;
-        unsigned type = codec->codec_id == AV_CODEC_ID_H264 ? cursor[0] & 31 : (cursor[0] >> 1) & 63;
-        if (codec->codec_id == AV_CODEC_ID_H264 ? type == 5 : (type >= 16 && type <= 21)) return (int)type;
+        int type = avc ? cursor[0] & 31 : (cursor[0] >> 1) & 63;
+        if (avc ? (type >= 1 && type <= 5) : type <= 31) return type;
         cursor += length;
     }
     return -1;
+}
+
+static int LGMKVVideoSync(AVPacket *packet, AVCodecParameters *codec) {
+    int type = LGMKVVideoPictureType(packet, codec);
+    BOOL sync = codec->codec_id == AV_CODEC_ID_H264 ? type == 5 : type >= 16 && type <= 21;
+    return sync ? type : -1;
+}
+
+static BOOL LGMKVVerifyLeadingPictures(AVFormatContext *source, AVPacket *packet, int videoTrack,
+                                      int64_t boundary, int64_t expected) {
+    av_packet_unref(packet);
+    if (av_seek_frame(source, videoTrack, boundary, AVSEEK_FLAG_BACKWARD) < 0) return NO;
+    AVCodecParameters *codec = source->streams[videoTrack]->codecpar;
+    BOOL foundCRA = NO;
+    int status;
+    while ((status = av_read_frame(source, packet)) >= 0) {
+        if (packet->stream_index == videoTrack) {
+            if (!foundCRA) {
+                if (packet->pts == AV_NOPTS_VALUE || packet->pts > boundary) return NO;
+                foundCRA = packet->pts == boundary && LGMKVVideoPictureType(packet, codec) == 21;
+            } else {
+                if (packet->pts >= boundary) return expected == 0;
+                int type = LGMKVVideoPictureType(packet, codec);
+                // RADL and RASL pictures follow their CRA in decode order and
+                // precede it in presentation order.
+                if (packet->pts == AV_NOPTS_VALUE || type < 6 || type > 9 || --expected < 0) return NO;
+            }
+        }
+        av_packet_unref(packet);
+    }
+    return status == AVERROR_EOF && foundCRA && expected == 0;
 }
 
 static NSString *LGMKVSubtitleText(AVPacket *packet, enum AVCodecID codec) {
@@ -554,8 +584,9 @@ static BOOL LGMKVHoldLastPresentation(NSMutableData *data, int64_t end, int64_t 
                 packet->dts = start + timelineOffset + av_rescale_q(frameCount, frame, video->time_base);
                 packet->pts += timelineOffset + compositionDelay;
                 packet->duration = start + timelineOffset + av_rescale_q(++frameCount, frame, video->time_base) - packet->dts;
+                // Matroska PTS and the synthesized DTS round independently to track ticks.
                 if (packet->duration <= 0 || packet->pts < packet->dts ||
-                    packet->pts - packet->dts > compositionDelay * 3) goto done;
+                    packet->pts - packet->dts > compositionDelay * 3 + 2) goto done;
             }
         } else {
             hasAudio = YES;
@@ -583,7 +614,12 @@ static BOOL LGMKVHoldLastPresentation(NSMutableData *data, int64_t end, int64_t 
         // boundary. Hold the last sample through that short gap so each
         // fragment can start at its cue and keep continuous decode time.
         BOOL openGOP = video->codecpar->codec_id == AV_CODEC_ID_HEVC && nextSync == 21;
-        if (gap < -2 || (gap > 2 && (!openGOP || gap > compositionDelay))) goto done;
+        if (gap < -2 || (gap > 2 && !openGOP)) goto done;
+        if (gap > compositionDelay) {
+            int64_t missing = av_rescale_q(gap, video->time_base, frame);
+            if (llabs(gap - av_rescale_q(missing, frame, video->time_base)) > 2 ||
+                !LGMKVVerifyLeadingPictures(_source, packet, _video, end, missing)) goto done;
+        }
         AVRational outputClock = output->streams[0]->time_base;
         tail->duration = av_rescale_q(end + timelineOffset, video->time_base, outputClock) - tail->dts;
         if (tail->duration <= 0) goto done;

@@ -90,6 +90,15 @@ class FileOperationRequest:
 
 
 @dataclass(frozen=True)
+class FileSelectionMove:
+    provider: object
+    entries: tuple
+    kind: str = 'move-selection'
+    title: str = 'Move selected items'
+    primary: str = 'Move here'
+
+
+@dataclass(frozen=True)
 class FileOperationsHost:
     allowed: Callable
     begin: Callable

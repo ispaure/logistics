@@ -288,7 +288,7 @@ async def reopen(app, row, *, error_title='Open favourite'):
     return False
 
 
-def populate(app, container, *, heading=True, row_font=None):
+def populate(app, container, *, heading=True, row_font=None, allow_remove=False):
     if heading:
         container.add(toga.Label('Favourites', style=Pack(font_size=20, font_weight='bold', margin_top=12)))
     try:
@@ -318,17 +318,19 @@ def populate(app, container, *, heading=True, row_font=None):
             from .browser_ui import middle_filename
             opener.style.font_size = row_font
             middle_filename(list_button(opener))
-        remove_button = toga.Button('Remove', on_press=remove, style=Pack(height=48))
-        from .appearance import accessible_name
-        accessible_name(remove_button, 'Remove ' + row['title'] + ' from Favourites')
-        controls = [opener, remove_button]
+        controls = [opener]
         from . import outbound_share
-        if outbound_share.supported() and row['source']['type'] in {'local', 'remote', 'crypt', 'download'}:
+        if allow_remove or (outbound_share.supported() and
+                            row['source']['type'] in {'local', 'remote', 'crypt', 'download'}):
             from .control_icons import icon_button
             from .file_items import native_menu, reference_actions
-            share_button = icon_button('overflow', 'File actions for ' + row['title'])
-            controls.append(native_menu(app, share_button, lambda row=row, button=share_button: reference_actions(
-                app, row['source'], row['title'], row['opener'], anchor=button, favourite=False)))
+            more = icon_button('overflow', 'File actions for ' + row['title'])
+
+            def actions(row=row, button=more, remove_action=remove):
+                commands = [('Remove from Favourites', remove_action)] if allow_remove else []
+                return commands + reference_actions(app, row['source'], row['title'], row['opener'], anchor=button)
+
+            controls.append(native_menu(app, more, actions))
         buttons.append(toga.Box(children=controls,
             style=Pack(direction=ROW)))
     if row_font is not None:

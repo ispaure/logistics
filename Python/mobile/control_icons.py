@@ -73,11 +73,12 @@ ICONS = {
 from services.documents.library_action_icons import ACTION_ICONS
 ICONS.update(ACTION_ICONS)
 
-# Settings categories use recognizable symbols rather than unrelated commands.
 _settings_circle = ((12, 2), (17, 3.3), (20.7, 7), (22, 12), (20.7, 17),
                     (17, 20.7), (12, 22), (7, 20.7), (3.3, 17), (2, 12),
                     (3.3, 7), (7, 3.3), (12, 2))
 ICONS.update(
+    select_item=('circle', '○', (_settings_circle,)),
+    selected_item=('checkmark.circle', '✓', (_settings_circle, ((7, 12), (10, 15), (17, 8)))),
     preferences=('slider.horizontal.3', '☷', (((3, 6), (21, 6)), ((3, 12), (21, 12)),
                   ((3, 18), (21, 18)), ((8, 3), (8, 9)), ((16, 9), (16, 15)), ((8, 15), (8, 21)))),
     chat=('bubble.left.and.bubble.right', '☏', (((3, 3), (18, 3), (18, 14), (9, 14), (4, 19), (4, 14), (3, 14), (3, 3)),

@@ -130,6 +130,21 @@ class RcloneTransferProbe(LogisticsMobile):
             state.message = 'Connection lost. Completed changes remain.'
             owner.render_transfer_summary()
             await self.sample(self.transfer_view, 'progress-failed', report, evidence)
+            state.result = 'idle'
+            state.message = 'No transfer is running.'
+            owner.render_transfer_summary()
+            surface = self.transfer_view
+            surface.update(dict(surface.model, downloads=[dict(id='sample', name='World tour.mp4',
+                path='Videos/World tour.mp4', offset=45_000_000_000, size=100_000_000_000)],
+                history=[dict(time=1_796_000_000_000_000_000, operation='download',
+                              source='Personal:Photos/Autumn', destination='On this Phone / Autumn',
+                              bytes=3_500_000_000)]))
+            await self.sample(surface, 'transfer-history', report, evidence)
+            history = surface.native_fallback.history
+            contents = history.children[1].children[0]
+            assert '45.00 GB of 100.00 GB' in contents.children[1]._settings_source_text
+            assert [control.text for control in contents.children[-1].children] == ['Resume', 'Discard…']
+            assert any(getattr(control, 'text', None) == 'Clear history…' for control in history.children)
             self.routes.return_to('files')
             self.transfer_busy = self.transfer_notification = False
 
@@ -283,7 +298,9 @@ class RcloneTransferProbe(LogisticsMobile):
         assert await self.show_files(location=(browser_storage, parent.name))
         browser = self.file_browser
 
-        original = remote_downloads.sync_copy
+        from features.rclone.mobile import folder_recovery
+        copy_file = remote_downloads.sync_copy
+        copy_folder = folder_recovery.run_folder_download
         for dark in (False, True):
             theme = 'dark' if dark else 'light'
             await appearance(dark)
@@ -304,17 +321,25 @@ class RcloneTransferProbe(LogisticsMobile):
                 picker.save_as_name.value = target
                 started, release = Event(), Event()
 
-                def gated(job, active, **kwargs):
-                    kwargs['progress'](phase='Transferring', done=1, total=2, files=0, total_files=1)
+                def hold(progress, cancelled):
+                    progress(phase='Transferring', done=1, total=2, files=0, total_files=1)
                     started.set()
                     if not release.wait(75):
                         raise TimeoutError('Download sample did not release the fixture')
-                    check_cancelled(kwargs['cancelled'])
+                    check_cancelled(cancelled)
                     if outcome == 'failed':
                         raise OSError('Synthetic read failure')
-                    return original(job, active, **kwargs)
 
-                with patch.object(remote_downloads, 'sync_copy', side_effect=gated), \
+                def gated_file(job, active, **kwargs):
+                    hold(kwargs['progress'], kwargs['cancelled'])
+                    return copy_file(job, active, **kwargs)
+
+                def gated_folder(root, remote, path, destination, name, cancelled, progress, *arguments):
+                    hold(progress, cancelled)
+                    return copy_folder(root, remote, path, destination, name, cancelled, progress, *arguments)
+
+                with patch.object(remote_downloads, 'sync_copy', side_effect=gated_file), \
+                        patch.object(folder_recovery, 'run_folder_download', side_effect=gated_folder), \
                         patch.object(self.main_window, 'dialog', new=AsyncMock(return_value=True)):
                     task = asyncio.create_task(picker.complete_destination())
                     try:

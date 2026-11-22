@@ -88,7 +88,7 @@ def progress_model(state):
     removing = phase == 'Removing destination entries'
     result = state.result
     if state.busy:
-        phase = ('verify' if phase in ('Sync complete; verifying local copy', 'Checking / finishing sync')
+        phase = ('verify' if phase in ('Sync complete; verifying local copy', 'Checking / finishing sync', 'Verifying the local copy…')
                  else 'transfer' if removing or phase == 'Transferring' or values.get('done', 0) > 0 else 'scan')
         if state.cancel is not None and state.cancel.is_set():
             phase = 'stopping'

@@ -130,7 +130,7 @@ class CompositionContractTests(unittest.TestCase):
         from pathlib import Path
         root = Path(__file__).resolve().parents[3]
         retired = {'pin_local_folder', 'pin_remote_folder', 'pinned_locations',
-                   'pinned_opener', 'pinned_remover'}
+                   'pinned_opener', 'pinned_remover', 'locations_controller'}
         stale = []
         for folder in ('Python/mobile', 'mobile_build/native_tests'):
             for path in (root / folder).rglob('*.py'):
@@ -138,4 +138,4 @@ class CompositionContractTests(unittest.TestCase):
                     if (isinstance(node, ast.Attribute) and node.attr in retired
                             and isinstance(node.value, ast.Name) and node.value.id == 'app'):
                         stale.append(f'{path.relative_to(root)}:{node.lineno}: app.{node.attr}')
-        self.assertEqual(stale, [], 'Use the retained locations_controller() owner')
+        self.assertEqual(stale, [], 'Mobile pin commands should stay retired')

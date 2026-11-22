@@ -110,7 +110,8 @@ def notes_host(app):
         from ..file_items import row_actions
         provider = owner.provider
         root = owner.root if provider.private else str((provider.root / owner.root).resolve())
-        return row_actions(app, provider, row, anchor=owner.reader_actions_button, opener=dict(kind='notes', root=root))
+        return row_actions(app, provider, row, anchor=owner.reader_actions_button,
+                           opener=dict(kind='notes', root=root), favourite=True)
 
     return NotesHost(
         playlists=partial(_playlists, app),

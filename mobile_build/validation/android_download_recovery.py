@@ -273,7 +273,7 @@ class RecoveryObserver:
     def handle(self, request):
         action = request['action']
         if action == 'tap':
-            if self.mode != 'session' and request['text'].startswith('Resume '):
+            if self.mode != 'session' and request['text'] == 'Resume':
                 self.capture(self.mode + '-restored')
             self.adb('shell', 'input', 'tap', str(request['x']), str(request['y']))
             self.evidence['controls'].append(request['text'])

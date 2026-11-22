@@ -81,32 +81,42 @@ def verify_native_transfer_fallback(surface):
         raise AssertionError('Transfer fallback requires actual iOS or Android widgets')
     model = surface.model
     assert text(fallback.title), 'Native transfer title is missing'
-    paths = 'Source: ' + model.get('source', '—') + '\nDestination: ' + model.get('destination', '—')
-    drawn_paths = text(fallback.paths)
-    assert getattr(fallback.paths, '_settings_source_text', drawn_paths) == paths, 'Native transfer endpoints are stale'
-    assert drawn_paths == fallback.paths.text, 'Native transfer endpoints are stale'
-    metrics = text(fallback.metrics)
-    buttons = {button.text: button for button in fallback.buttons.children}
+    buttons = {getattr(button, '_settings_source_text', button.text): button
+               for button in fallback.buttons.children}
     if model.get('mode') == 'progress':
-        notice = model.get('message') or model.get('status', '')
+        from features.rclone.transfers.mobile.native_fallback import progress_fields, progress_status
+        phase = model.get('phase', 'idle')
+        notice = progress_status(model)
         assert getattr(fallback.status, '_settings_source_text', text(fallback.status)) == notice
         assert text(fallback.status) == fallback.status.text, 'Native transfer status was not drawn'
-        assert f"Files: {model.get('files', 0):,} / {model.get('total_files', 0):,}" in metrics, 'Native transfer file counts are stale'
-        assert (f"Data: {model.get('done', 0) / 1_000_000:,.2f} / "
-            + f"{model.get('total', 0) / 1_000_000:,.2f} MB") in metrics, 'Native transfer byte counts are stale'
-        assert f"Checked: {model.get('checks', 0):,} · Listed: {model.get('listed', 0):,}" in metrics
-        if model.get('percentage') is not None:
-            assert f"{model['percentage']:.0f}%" in metrics
-        assert 'Continue browsing' in buttons and buttons['Continue browsing'].enabled
+        expected = progress_fields(model) if phase != 'idle' else ()
+        actual = [[cell.children for cell in row.children] for row in fallback.fields.children]
+        assert [len(row) for row in actual] == [len(row) for row in expected], 'Native transfer fields are missing'
+        for controls, fields in zip(actual, expected):
+            for (label, value), (name, detail) in zip(controls, fields):
+                assert getattr(label, '_settings_source_text', text(label)) == name and text(label) == label.text
+                assert getattr(value, '_settings_source_text', text(value)) == detail and text(value) == value.text, (
+                    f'Native transfer field {name} is stale')
+        if phase != 'idle' and model.get('percentage') is not None:
+            assert text(fallback.amount) == f"{model['percentage']:.0f}%", 'Native progress percentage is stale'
+        if phase == 'idle':
+            assert 'Continue browsing' not in buttons
+        else:
+            assert 'Continue browsing' in buttons and buttons['Continue browsing'].enabled
         if model.get('busy'):
             assert 'Stop transfer' in buttons
             assert buttons['Stop transfer'].enabled == (model.get('phase') != 'stopping')
     elif model.get('mode') == 'review':
-        assert text(fallback.status) == model.get('notice', ''), 'Native review notice is stale'
+        paths = 'Source: ' + model.get('source', '—') + '\nDestination: ' + model.get('destination', '—')
+        drawn_paths = text(fallback.paths)
+        assert getattr(fallback.paths, '_settings_source_text', drawn_paths) == paths, 'Native transfer endpoints are stale'
+        assert drawn_paths == fallback.paths.text, 'Native transfer endpoints are stale'
+        metrics = ' '.join(text(fallback.metrics).split())
+        assert getattr(fallback.status, '_settings_source_text', text(fallback.status)) == model.get('notice', ''), 'Native review notice is stale'
         for kind in ('add', 'replace', 'delete', 'cleanup'):
             assert f"{kind.capitalize()}: {model.get('counts', {}).get(kind, 0):,}" in metrics
         assert 'no undo' in metrics
-        assert [text(child) for child in fallback.rows.children] == [
+        assert [getattr(child, '_settings_source_text', text(child)) for child in fallback.rows.children] == [
             f'{kind.capitalize()}: {path}' for kind, path in model.get('rows', ())], 'Native review rows are stale'
         approve = buttons.get('Approve ' + model.get('operation', 'transfer'))
         assert approve is not None and approve.enabled == bool(model.get('can_confirm'))

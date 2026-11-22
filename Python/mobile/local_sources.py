@@ -99,13 +99,17 @@ class SharedFiles(LocalFiles):
 
     def _guard(self, path):
         relative = path.relative_to(self.root)
-        if relative.parts in (('Local',), ('Received Files',)):
+        if self.is_managed_collection(relative.as_posix()):
             raise ValueError('This folder is managed by Logistics. Open it to manage its contents.')
         return super()._guard(path)
 
+    @staticmethod
+    def is_managed_collection(path):
+        return path in ('Local', 'Received Files')
+
     def list(self, path='', *, cancelled=lambda: False):
         path = self.relative(path)
-        if path in ('Local', 'Received Files'):
+        if self.is_managed_collection(path):
             # Recursive search reads the collection too. Mutations still go
             # through entry/_guard, which protects the collection root.
             return LocalFiles(self.root).list(path, cancelled=cancelled)
@@ -115,7 +119,7 @@ class SharedFiles(LocalFiles):
         from commonUtils.runtime.operations import check_cancelled
         for child in self.root.iterdir():
             check_cancelled(cancelled)
-            if child.name in ('Local', 'Received Files'):
+            if self.is_managed_collection(child.name):
                 if not self.include_collections:
                     continue
                 # Expose the collection as a folder, but keep root mutations

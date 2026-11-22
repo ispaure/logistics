@@ -8,8 +8,9 @@ Both use rclone Sync.
 Destination files and empty folders can be replaced or deleted without a backup.
 One transfer runs at a time. Existing local copies stay available for browsing.
 
-Tap the sync progress ring on a main tab to reopen details. The progress page
-shows the source, destination, current activity and counts. Percentages use
+Tap **Transfers** below the **Workspaces** source tabs, or use the sync
+progress ring on a main tab to reopen details. The progress page shows the
+source, destination, current activity and counts. Percentages use
 known bytes or file counts. Removal counts describe attempts.
 Completion appears after verification. **Continue browsing** keeps the job
 active. **Stop transfer** asks before cancellation. Completed changes remain
@@ -65,11 +66,29 @@ encrypted names and bytes. Use transfer details to follow or cancel the
 download. The destination listing updates after the item is saved. You can
 keep browsing the folder without reopening it.
 
-For a selected file of 8 MiB or more, open **Transfers → Interrupted downloads**
-after a stop or relaunch. Unlock the original connection to see its jobs. Choose
-**Resume** to check the saved bytes and fetch the remainder, or **Discard** to
-remove the partial file. A changed source or partial needs inspection. The
-destination listing refreshes when the verified file is published.
+## Transfer history and interrupted downloads
+
+Open **Workspaces → Transfers**. The panel shows the current transfer,
+interrupted downloads with a verified checkpoint, and up to 60 recent
+completed transfers recorded by the app. A stopped download can appear here after you relaunch.
+Choose **Resume** to check the saved bytes and fetch the remainder, or
+**Discard** to remove that job and its partial data. The destination listing
+refreshes when the verified item is published.
+
+Unlock the original connection to see its interrupted downloads. Completed
+transfers from a password-protected session-only connection also stay hidden
+while it is locked. **Clear history…** clears the visible completed history
+without deleting completed files or interrupted downloads.
+
+Single-file recovery applies to files of at least 8 MiB when the source can
+provide verifiable byte ranges. Files of 100 GB or larger use the same range
+mechanism and require room for the remaining bytes. A changed source or partial
+needs inspection before recovery.
+
+A selected folder can also resume to ordinary on-device storage when all its
+files support verified ranges. The app retains completed files in staging and
+publishes the complete folder together. A leftover `.download-…` staging folder
+from a one-shot download has no resume checkpoint.
 
 A crypt source can resume into ordinary storage or into its own LocalCrypt
 destination. A destination that needs a fresh encryption stream, or a server

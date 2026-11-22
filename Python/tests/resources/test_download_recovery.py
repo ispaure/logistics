@@ -100,6 +100,50 @@ class RecoveryTests(unittest.TestCase):
         self.assertEqual(self.target.read_bytes(), self.source.data)
         self.assertEqual(self.queue.jobs(), [])
 
+    @unittest.skipUnless(os.name == 'posix', 'requires sparse ftruncate')
+    def test_large_checkpoint_resumes_only_the_missing_range(self):
+        offset = 100 * 1024**3
+        payload = b'final short range'
+        size = offset + len(payload)
+        prefix_digest = sha256(b'verified sparse fixture prefix')
+
+        for encrypted in (False, True):
+            with self.subTest(encrypted=encrypted):
+                job, stage = self.interrupt()
+                source = dict(size=size, version='large fixture', encoded=encrypted, algorithm='')
+                tail = b'@' * 16 + payload if encrypted else payload
+                stored_offset = recovery._stored(offset, encrypted)
+                with stage.open('r+b') as stream:
+                    stream.truncate(stored_offset)
+                job.update(offset=offset, source=source, digest=prefix_digest.hexdigest())
+                self.queue.save(job)
+                self.queue = recovery.DownloadQueue(self.root, 'fixture authority', self.check)
+
+                def hash_sparse_fixture(stream, length, algorithm, check):
+                    # Stand in for the already hashed sparse prefix. This test verifies the
+                    # logical and stored offsets without reading 100 GiB of synthetic zeros.
+                    self.assertIn(length, (stored_offset, stored_offset + len(tail)))
+                    stream.seek(stored_offset)
+                    digest = prefix_digest.copy()
+                    if length > stored_offset:
+                        saved_tail = stream.read(len(tail))
+                        self.assertEqual(saved_tail, tail)
+                        digest.update(saved_tail)
+                    return digest, None
+
+                progress = []
+                with patch.object(recovery, '_prefix', side_effect=hash_sparse_fixture), \
+                        patch.object(self.source, 'stat', return_value=source), \
+                        patch.object(self.source, 'read', return_value=tail) as read:
+                    recovery.recover(self.queue, job['selection'], self.target, self.source, check=self.check,
+                                     progress=lambda done, total: progress.append((done, total)), key=job['id'])
+                read.assert_called_once_with(source, offset, len(payload))
+                self.assertEqual(progress, [(offset, size), (size, size)])
+                self.assertEqual(self.target.stat().st_size, stored_offset + len(tail))
+                self.assertEqual(self.queue.jobs(), [])
+                self.assertFalse(stage.exists())
+                self.target.unlink()
+
     def test_changed_source_partial_and_collision_preserve_user_files(self):
         job, stage = self.interrupt()
         self.source.reads.clear()

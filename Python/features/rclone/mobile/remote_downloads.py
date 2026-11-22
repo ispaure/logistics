@@ -1,4 +1,4 @@
-"""Single remote-item pulls into a chosen ordinary or unlocked encrypted folder."""
+"""Selected remote downloads into ordinary or unlocked encrypted storage."""
 
 # AUTHORSHIP INFORMATION
 
@@ -45,13 +45,15 @@ class RemoteDownload:
                 reason = error
                 raise
         async def run():
-            return await app.run_mirror_work(work, 'download',
-                source=f'{self.provider.remote}:{self.path}',
-                destination=f'{getattr(destination, "remote", "Local")} / {target}')
+            identity = getattr(self.provider, 'identity', None)
+            authority = {'authority': (self.provider.remote, identity)} if identity is not None else {}
+            return await app.run_mirror_work(work, 'download', source=f'{self.provider.remote}:{self.path}',
+                destination=f'{getattr(destination, "remote", "Local")} / {target}', **authority)
         result = await run()
         if not result and reason and self.provider.client is app.cloud_client and self.provider.generation == app.cloud_client.generation:
             import toga
-            if await app.main_window.dialog(toga.ConfirmDialog('Download from byte zero?', str(reason))):
+            title = 'Download without resume?' if self.directory else 'Download from byte zero?'
+            if await app.main_window.dialog(toga.ConfirmDialog(title, str(reason))):
                 from_zero, approved, resume_key = True, reason.checkpoint, None
                 return await run()
         return result
@@ -70,10 +72,17 @@ class RemoteDownload:
         try:
             source.check()
             root = root or getattr(destination, 'private_root', None) or getattr(destination, 'collection_storage_root', None)
-            if not self.directory and root is not None:
-                from .download_recovery import run_download
-                if run_download(root, source, self.path, destination, target, cancelled, progress,
-                                options, work, resume_key, from_zero, approved):
+            if root is not None:
+                if self.directory and not from_zero:
+                    from .folder_recovery import run_folder_download
+                    recovered = run_folder_download(root, source, self.path, destination, target, cancelled,
+                                                    progress, options, resume_key)
+                else:
+                    from .download_recovery import run_download
+                    recovered = not self.directory and run_download(
+                        root, source, self.path, destination, target, cancelled, progress,
+                        options, work, resume_key, from_zero, approved)
+                if recovered:
                     return TransferOutcome('download', status='complete')
             try:
                 destination.entry(target)

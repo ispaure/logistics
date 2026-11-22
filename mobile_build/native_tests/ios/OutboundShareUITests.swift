@@ -12,9 +12,6 @@ final class OutboundShareUITests: XCTestCase {
     func testSelectedFileShare() {
         continueAfterFailure = false
         sender.launch()
-        choose("Add to Favourites")
-        choose("Remove from Favourites")
-
         choose("Send to App…")
         let extensionCell = shareCell()
         tapReady(extensionCell, "native share destination")

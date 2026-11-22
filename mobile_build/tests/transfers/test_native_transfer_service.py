@@ -32,6 +32,57 @@ from features.rclone.transfers.transfer_options import TransferOptions
 from mobile_build.tests.support.mirror import MirrorClient
 
 
+class TransferHistoryTests(unittest.TestCase):
+    def test_saved_and_session_history_keep_distinct_visibility_and_clear_scope(self):
+        import base64
+        from types import SimpleNamespace
+        from features.rclone.transfers.mobile import history
+
+        def transform(data, decode=False):
+            return base64.b64decode(data) if decode else base64.b64encode(data)
+
+        def request(action, **values):
+            data = base64.b64decode(values['data'])
+            return base64.b64encode(transform(data, action in {'document_lists_open', 'unprotect_package'})).decode()
+
+        open_records = (
+            dict(saved=True, package_name='Saved ZIP', identities={'Saved': 'a' * 64}),
+            dict(saved=False, package_name='Private ZIP', identities={'Private': 'b' * 64},
+                 document_cache_id='c' * 64),
+        )
+        client = SimpleNamespace(generation=4, package_records=open_records,
+            vault=SimpleNamespace(unlock=lambda create=False: {'key': 'test'}), request=request)
+
+        def open_remote(origin):
+            return SimpleNamespace(client=client, remote=origin.remote, identity=origin.identity,
+                                   check=lambda: history.credential_check(client, origin.generation), close=lambda: None)
+
+        service = SimpleNamespace(remotes=SimpleNamespace(open=open_remote))
+        with TemporaryDirectory() as folder, patch.object(history, 'native_service', return_value=service), \
+                patch.object(history, 'time_ns', side_effect=(1, 2, 3)):
+            def write(remote, identity, source):
+                history.record_completed(folder, client, client.generation, remote, identity,
+                                         'download', source, 'On this Phone', 100_000_000_000)
+
+            write('Saved', 'a' * 64, 'saved video')
+            write('Private', 'b' * 64, 'private video')
+            self.assertEqual([row['source'] for row in history.visible_history(folder, client, 4)],
+                             ['private video', 'saved video'])
+            for path in Path(folder).rglob('*.bin'):
+                self.assertNotIn(b'private video', path.read_bytes())
+            client.generation += 1
+            client.package_records = ()
+            self.assertEqual([row['source'] for row in history.visible_history(folder, client, 5)], ['saved video'])
+            self.assertEqual(history.visible_history(folder, client, 5, clear_through=2), [])
+            self.assertTrue(all(not (Path(folder) / item).exists() for item in ('DownloadQueue', 'LocalFiles')))
+            client.generation += 1
+            client.package_records = open_records
+            write('Saved', 'a' * 64, 'newer saved video')
+            rows = history.visible_history(folder, client, 6, clear_through=2)
+            self.assertEqual([row['source'] for row in rows], ['newer saved video'])
+            self.assertEqual(rows[0]['bytes'], 100_000_000_000)
+
+
 class NativeTransferTests(unittest.TestCase):
     def approve(self, prepared):
         self.assertTrue(prepared.review.scan.retired.wait(2))
@@ -348,8 +399,8 @@ class TransferSurfaceTests(unittest.IsolatedAsyncioTestCase):
         surface.recover_rendering()
         fallback = surface.native_fallback
         self.assertIsNone(surface.web)
-        self.assertIn('Files: 2', fallback.metrics.text)
-        self.assertIn('Removal attempts: 0 files, 0 folders', fallback.metrics.text)
+        self.assertEqual(fallback.fact_cells[0].text, '2')
+        self.assertIn('0 files, 0 folders', [value.text for value in fallback.fact_cells])
         self.assertEqual(surface.delivered_revision, surface.revision)
         self.assertIsNone(surface.pending)
         await fallback.buttons.children[0].on_press()
@@ -358,9 +409,33 @@ class TransferSurfaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(surface.recovery_count, 2)
         surface.update(dict(mode='progress', phase='complete', files=3,
             file_delete_attempts=1234, folder_removal_attempts=2))
-        self.assertIn('Files: 3', fallback.metrics.text)
-        self.assertIn('Removal attempts: 1,234 files, 2 folders', fallback.metrics.text)
+        self.assertEqual(fallback.fact_cells[0].text, '3')
+        self.assertIn('1,234 files, 2 folders', [value.text for value in fallback.fact_cells])
         self.assertEqual([button.text for button in fallback.buttons.children], ['Continue browsing'])
+
+    async def test_native_history_exposes_resume_discard_clear_and_revokes_labels(self):
+        surface, handler = self.surface()
+        surface.recover_rendering()
+        surface.recover_rendering()
+        surface.update(dict(mode='progress', phase='idle',
+            downloads=[dict(id='job', name='private clip.mp4', path='secret/clip.mp4',
+                            offset=45_000_000_000, size=100_000_000_000)],
+            history=[dict(time=1, operation='pull', source='secret:', destination='Local', bytes=0)]))
+        fallback = surface.native_fallback
+        job = fallback.history.children[1].children[0]
+        self.assertIn('45.00 GB of 100.00 GB', job.children[1].text)
+        resume, discard = job.children[-1].children
+        await resume.on_press()
+        handler.assert_awaited_with('resume-download', dict(revision=str(surface.revision), id='job'))
+        await discard.on_press()
+        handler.assert_awaited_with('discard-download', dict(revision=str(surface.revision), id='job'))
+        clear = next(control for control in fallback.history.children if getattr(control, 'text', None) == 'Clear history…')
+        await clear.on_press()
+        handler.assert_awaited_with('clear-history', dict(revision=str(surface.revision)))
+        surface.revoke()
+        self.assertFalse(fallback.history.children)
+        self.assertEqual(surface.model, {})
+        self.assertNotIn('secret', surface.children[0].text)
 
     async def test_native_review_keeps_confirmation_and_stale_revision_guards(self):
         surface, handler = self.surface()
@@ -440,15 +515,15 @@ class TransferSurfaceTests(unittest.IsolatedAsyncioTestCase):
     async def test_hidden_surface_does_not_recover_and_pending_native_model_resumes(self):
         visible = True
         surface, _ = self.surface(visible=lambda: visible)
-        surface.update(dict(mode='progress', files=1))
+        surface.update(dict(mode='progress', phase='transfer', busy=True, files=1))
         surface.recover_rendering()
         surface.recover_rendering()
         visible = False
-        surface.update(dict(mode='progress', files=2))
-        self.assertIn('Files: 1', surface.native_fallback.metrics.text)
+        surface.update(dict(mode='progress', phase='transfer', busy=True, files=2))
+        self.assertEqual(surface.native_fallback.fact_cells[0].text, '1')
         visible = True
-        surface.update(dict(mode='progress', files=2))
-        self.assertIn('Files: 2', surface.native_fallback.metrics.text)
+        surface.update(dict(mode='progress', phase='transfer', busy=True, files=2))
+        self.assertEqual(surface.native_fallback.fact_cells[0].text, '2')
 
     async def test_hidden_unloaded_surface_has_no_recovery_deadline(self):
         surface, _ = self.surface(visible=lambda: False)

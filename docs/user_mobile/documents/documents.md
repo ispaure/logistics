@@ -65,11 +65,12 @@ which locations you can save to and where a copy goes.
 
 ## Favourite files
 
-Open a file’s item menu in Workspaces, Home or Documents and choose
-**Add to Favourites** or **Remove from Favourites**. The shortcut appears in
-Home and in **Documents → Favourites**. An open document also offers
-**Favourite file**. A note favourited from Notes Library reopens there.
-Session-only favourites appear after you unlock the matching credential.
+Open the document and use its menu to add it to Favourites. The shortcut
+appears in Home and in **Documents → Favourites** and restores the context
+the document was opened in. A note favourited from Notes Library reopens
+there. To remove a shortcut from the list, use the row’s **… → Remove from
+Favourites** in **Documents → Favourites**. Session-only favourites appear
+after you unlock the matching credential.
 
 ## Send a file to another app
 

@@ -35,8 +35,8 @@ locations can serve as sources. Creation and extraction require an ordinary
 writable on-device destination. LocalCrypt and remote storage continue to use
 their existing copy and reader actions. The manager can show encrypted ZIP
 member names. Opening protected contents still requires the appropriate
-password and runtime support. **Files → Archive password…** continues to supply
-the password for the book and comic readers.
+password and runtime support. For a protected EPUB, CBZ or ZIP, choose
+**Archive password…** in the file's **…** menu to open it in the reader.
 
 ## Return to an archive
 

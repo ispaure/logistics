@@ -124,26 +124,33 @@ def run_download(root, source, path, destination, target, cancelled, progress, o
     return True
 
 
-def available_jobs(app):
+def download_origins(client, *, saved=None):
     from features.rclone.remote_access import NativeRemoteLocation
+    generation = client.generation
+    for record in getattr(client, 'package_records', ()):
+        if saved is None or record['saved'] == saved:
+            for remote, identity in record.get('identities', {}).items():
+                yield NativeRemoteLocation(remote, identity, generation)
+
+
+def available_jobs(app, *, client=None):
+    from .folder_recovery import FolderQueue
     from .service import native_service
-    client = app.cloud_client
+    client = app.cloud_client if client is None else client
     rows = []
     if client is None or not (Path(app.private_root) / 'DownloadQueue').is_dir():
         return rows
-    for record in client.package_records:
-        for remote, identity in record.get('identities', {}).items():
-            origin = NativeRemoteLocation(remote, identity)
-            source = native_service(client).remotes.open(origin)
+    for origin in download_origins(client):
+        source = native_service(client).remotes.open(origin)
+        try:
             try:
-                try:
-                    queue = mobile_queue(app.private_root, source)
-                except RestartRequired:
-                    continue
-                for job in queue.jobs():
-                    rows.append((origin, job))
-            finally:
-                source.close()
+                queue = mobile_queue(app.private_root, source)
+            except RestartRequired:
+                continue
+            for job in (*queue.jobs(), *FolderQueue(queue).jobs()):
+                rows.append((origin, job))
+        finally:
+            source.close()
     return rows
 
 
@@ -163,7 +170,7 @@ def restored_destination(app, source, job):
         destination = next((p for p in providers if str(p.root) == selection['root']), None)
         if destination is None:
             raise ValueError('The original download folder is unavailable.')
-    if str(destination.transfer_location(selection['name'])) != job['target']:
+    if str(destination.transfer_location(selection['name'], directory=job.get('kind') == 'folder')) != job['target']:
         if destination.private:
             destination.close()
         raise ValueError('The destination changed. Reopen the original storage.')
@@ -173,48 +180,42 @@ def restored_destination(app, source, job):
 async def queue_command(controller, action, args, visible):
     import asyncio
     import toga
+    from .folder_recovery import FolderQueue
     from .remote_downloads import RemoteDownload
     from .service import native_service
     app, surface = controller.app, controller._progress_surface
     client = app.cloud_client
-    if client is None:
+    if client is None or not getattr(client, 'package_records', ()):
         return
     generation = client.generation
     def current():
         return (visible() and not surface.closed and not controller.transfer_busy and
                 app.cloud_client is client and client.generation == generation)
     try:
-        rows = await asyncio.to_thread(available_jobs, app)
+        rows = await asyncio.to_thread(available_jobs, app, client=client)
         if not current():
-            return
-        if action == 'downloads':
-            model = dict(surface.model, downloads=[dict(id=j['id'], path=j['selection']['path'],
-                         name=j['selection']['name'], offset=j['offset'], size=j['source']['size']) for _, j in rows])
-            if rows and controller.state.display_revoked:
-                # This list has a fresh grant. Keep the previous transfer redacted.
-                model.update(phase='idle', message='Choose a download to resume or discard.')
-            elif not rows:
-                model['message'] = 'No interrupted downloads for the unlocked connections.'
-            surface.update(model)
             return
         match = next(((origin, j) for origin, j in rows if j['id'] == args.get('id')), None)
         if match is None:
             return
         origin, job = match
+        folder = job.get('kind') == 'folder'
         source = native_service(client).remotes.open(origin)
         destination = None
         try:
             destination = restored_destination(app, source, job)
             if action == 'discard-download':
                 confirmed = await app.main_window.dialog(toga.ConfirmDialog('Discard interrupted download?',
-                    'Remove this job and its partial file?'))
+                    'Remove this job and its partial data?'))
                 if confirmed and current():
                     queue = mobile_queue(app.private_root, source)
-                    await asyncio.to_thread(queue.discard, job['id'], destination.transfer_location(job['selection']['name']),
+                    recovery = FolderQueue(queue) if folder else queue
+                    target = destination.transfer_location(job['selection']['name'], directory=folder)
+                    await asyncio.to_thread(recovery.discard, job['id'], target,
                                             expected=(job['id'], job['offset'], job['digest']))
                     controller.render_transfer_summary()
             elif current():
-                request = RemoteDownload(source, job['selection']['path'], False)
+                request = RemoteDownload(source, job['selection']['path'], folder)
                 if await request.complete(app, destination, job['selection']['name'], resume_key=job['id']):
                     await controller.rclone_ui.refresh_download_directory(destination, job['selection']['name'])
         finally:

@@ -35,7 +35,6 @@ from features.rclone.mobile.controller import CloudController
 from features.rclone.transfers.mobile.controller import TransferController
 from mobile.folder_controller import FolderController
 from mobile.hub_controller import HubController
-from mobile.locations_controller import LocationsController
 from mobile.storage_controller import StorageController
 
 
@@ -105,13 +104,6 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         if "_hub_controller" not in self.__dict__:
             self._hub_controller = HubController(self)
         return self._hub_controller
-
-    def locations_controller(self) -> LocationsController:
-        """Return the retained owner of this workflow."""
-        if "_locations_controller" not in self.__dict__:
-            from .composition.locations import locations_host
-            self._locations_controller = LocationsController(locations_host(self))
-        return self._locations_controller
 
     def storage_controller(self) -> StorageController:
         """Return the retained owner of this workflow."""

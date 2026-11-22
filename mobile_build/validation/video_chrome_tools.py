@@ -147,11 +147,13 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
                                 '2\n00:00:11,900 --> 00:00:13,500\n<i>CROSSING AIRPLAY CAPTION</i>\n')
             ass = workspace / 'airplay.ass'
             subprocess.run(['ffmpeg', '-v', 'error', '-i', str(captions), str(ass)], check=True)
-            subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:size=160x90:rate=24000/1001',
+            # Fixed groups of eight B-frames put eight leading pictures after each CRA.
+            subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=24000/1001',
                 '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-i', str(captions), '-i', str(ass),
                 '-map', '0:v', '-map', '1:a', '-map', '2:s', '-map', '3:s', '-t', '19', '-c:v', 'libx265',
-                '-preset', 'ultrafast', '-pix_fmt', 'yuv420p10le', '-g', '48', '-bf', '2',
-                '-x265-params', 'pools=1:frame-threads=1:log-level=error:hdr10=1:colorprim=9:transfer=16:colormatrix=9',
+                '-preset', 'ultrafast', '-pix_fmt', 'yuv420p10le',
+                '-x265-params', ('pools=1:frame-threads=1:log-level=error:hdr10=1:colorprim=9:transfer=16:colormatrix=9:'
+                                 'keyint=144:min-keyint=144:scenecut=0:open-gop=1:bframes=8:b-adapt=0:b-pyramid=1:rc-lookahead=16'),
                 '-c:a', 'libopus', '-ac', '6', '-c:s', 'copy', '-metadata:s:s:0', 'language=eng',
                 '-metadata:s:s:1', 'language=fra', str(app / 'airplay.mkv')], check=True)
             subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=160x90:rate=24000/1001',

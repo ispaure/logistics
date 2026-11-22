@@ -14,7 +14,7 @@ from hashlib import sha256
 from pathlib import Path
 
 from commonUtils.testing.stages import TestStage
-from mobile.favourites import catalog
+from mobile.favourites import catalog, favourite, populate
 from mobile.outbound_share import SEND, _root, prune
 from services.documents.mobile_storage import document_copies
 
@@ -39,6 +39,7 @@ class OutboundShareProbe(DocumentWorkspaceProbe):
         (provider.root / NAME).write_bytes(PAYLOAD)
         assert await app.open_crypt(copies=document_copies(provider), key=OPEN)
         session = app.private_sessions.active.session
+        await favourite(app, session=session)
         assert await app.show_files(location=('Local files', ''))
         browser = app.file_browser
 
@@ -52,13 +53,18 @@ class OutboundShareProbe(DocumentWorkspaceProbe):
             assert native.performItemClick(native.getChildAt(index), index, native.getItemIdAtPosition(index))
             await asyncio.sleep(.15)
 
-        await native_action('Add to Favourites')
-        await self.wait_until(lambda: bool(catalog(app).entries()))
-        assert [row['title'] for row in catalog(app).entries()] == [NAME]
+        import toga
+        assert [row['title'] for row in catalog(app).entries()] == [OPEN]
+        entry = provider.entry(NAME)
+        assert all('Favourites' not in title for title, _ in app.file_item_commands(row=entry))
+        container = toga.Box()
+        populate(app, container, heading=False, allow_remove=True)
+        menu = container.children[0].children[1].document_actions
+        await dict(menu.load_actions())['Remove from Favourites']()
+        menu.dispose()
+        assert not catalog(app).entries()
         assert session.id in app.workspace.sessions
-        await native_action('Remove from Favourites')
-        await self.wait_until(lambda: not catalog(app).entries())
-        report['cases'].append('selected-file-favourite-and-remove-with-open-owner-retained')
+        report['cases'].append('open-document-favourite-and-remove-with-session-retained')
 
         for step in ('cancel', 'deliver'):
             await native_action(SEND)

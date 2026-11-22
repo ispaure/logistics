@@ -168,18 +168,29 @@ class CloudUI(LocalCryptUI):
             self.show_view(self.cloud_advanced_view, destination='files', route='remote-actions', title='Remote actions')
 
     def remote_item_commands(self, row):
+        from features.rclone.remote_policy import LocalCopyRequired, direct_kind
+
         async def open_item():
             if row['directory']:
                 return await self.browser_cloud_folder(row)
             self.crypt_password.value = ''
             return await self.open_remote_document(row)
-        actions = [('Open folder' if row['directory'] else 'Open preview', open_item),
-                   ('Download locally…', lambda: self.download_remote_item(row))]
+
+        preview = None
+        if not row['directory'] and getattr(self.cloud_client, 'supports_streaming', False):
+            try:
+                preview = direct_kind(row['path'], row.get('size', -1))
+            except LocalCopyRequired:
+                pass
+        actions = []
+        if row['directory'] or preview:
+            actions.append(('Open folder' if row['directory'] else 'Open preview', open_item))
+        actions.append(('Download locally…', lambda: self.download_remote_item(row)))
+        if preview == 'archive':
+            actions.append(('Archive password…', lambda: self.show_remote_item_password(row)))
         provider = getattr(getattr(self, 'browser_state', None), 'resource', None)
         if provider is not None:
             actions.extend(self.app.file_item_actions(provider, row))
-        if not row['directory'] and Path(row['path']).suffix.lower() in {'.cbz', '.zip', '.epub'}:
-            actions.append(('Archive password…', lambda: self.show_remote_item_password(row)))
         return actions
 
     def show_remote_item_actions(self, row):
@@ -189,7 +200,7 @@ class CloudUI(LocalCryptUI):
         private_label = self.rclone_ui.private_label
         remote, generation = self.cloud_open_remote, self.cloud_client.generation
         password = PasswordInput(placeholder='Inner ZIP password', style=Pack(height=48))
-        status = toga.Label('Enter the comic ZIP password.', style=Pack(font_size=12))
+        status = toga.Label('Enter the archive password.', style=Pack(font_size=12))
         async def open_item(widget=None, **kw):
             if self.cloud_client.generation != generation or self.cloud_open_remote != remote:
                 password.value = ''

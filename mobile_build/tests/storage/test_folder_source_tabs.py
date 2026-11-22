@@ -194,11 +194,11 @@ class FolderSourceTabTests(unittest.TestCase):
         app.change_folder_source('Local')
         self.assertEqual(list(app.folder_source_actions.children), [])
         self.assertEqual(app.folder_source_actions.style.margin_bottom, 0)
-        self.assertIsNone(app.folder_transfers_button.parent)
+        self.assertIsNotNone(app.folder_transfers_button.parent)
         self.assertIsNone(app.folder_add_share_button.parent)
         app.change_folder_source('Network shares')
         self.assertEqual(list(app.folder_source_actions.children), [app.folder_add_share_button])
-        self.assertIsNone(app.folder_transfers_button.parent)
+        self.assertIsNotNone(app.folder_transfers_button.parent)
         self.assertEqual(list(app.folder_picker_header.children), [app.folder_view_toggle])
         self.assertFalse(any(getattr(child, 'text', '') == 'Add share…'
                              for child in app.folder_list.children))
@@ -208,6 +208,27 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertEqual(list(app.folder_source_actions.children), [app.folder_add_remote_button])
         self.assertIsNone(app.folder_add_share_button.parent)
         self.assertIn(app.folder_credential_row, app.folder_picker_header.children)
+
+    def test_workspaces_transfers_opens_native_progress_and_explains_locked_downloads(self):
+        app = self.app
+        app.show_locations()
+        for source in ('Local', 'rclone', 'Network shares'):
+            with self.subTest(source=source):
+                app.change_folder_source(source)
+                self.assertEqual(app.folder_source, source)
+                node = app.folder_transfers_button
+                while node is not None and node is not app.folder_picker_view:
+                    node = node.parent
+                self.assertIs(node, app.folder_picker_view)
+        app.folder_transfers_button.on_press()
+        surface = app.transfer_controller()._progress_surface
+        self.assertIsNone(surface.web)
+        fallback = surface.native_fallback
+        app.loop.run_until_complete(app.transfer_controller().refresh_transfer_history())
+        labels = [getattr(item, '_settings_source_text', item.text) for item in fallback.history.children]
+        self.assertIn('Interrupted downloads', labels)
+        self.assertIn('Unlock the original connection to see interrupted downloads.', labels)
+        self.assertIn('Completed transfers', labels)
 
     def test_folder_view_preserves_full_names_and_is_shared_and_saved(self):
         from unittest.mock import patch
@@ -516,13 +537,8 @@ class FolderSourceTabTests(unittest.TestCase):
         app.loop.run_until_complete(app.browser_file_location(('Shared files', 'Local/Managed')))
         self.assertEqual(app.file_provider.root, documents / 'Local')
         self.assertEqual(app.file_path, 'Managed')
-        app.locations_controller().pin_local_folder()
-        pin = app.locations_controller().pinned_locations().items[0]
-        self.assertEqual(pin['path'], 'Managed')
-        app.loop.run_until_complete(app.browser_file_location(('Shared files', '')))
-        app.loop.run_until_complete(app.locations_controller().pinned_opener(pin)())
-        self.assertEqual(app.file_provider.root, documents / 'Local')
-        self.assertEqual(app.file_path, 'Managed')
+        self.assertFalse(any('pin' in title.lower() for title, _ in app.file_item_commands(
+            row=app.file_provider.entry('Managed/note.txt'))))
 
     def test_encrypted_workspace_keeps_one_location_header_without_source_strip(self):
         app = self.app

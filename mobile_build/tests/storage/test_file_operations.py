@@ -56,11 +56,10 @@ class FileOperationTests(unittest.TestCase):
     def select(self, name):
         self.app.file_selection.value = next(key for key, row in self.app.file_rows.items() if row['name'] == name)
 
-    def test_copy_menu_copies_files_and_dotted_folders_beside_source(self):
-        self.assertIn('Copy', dict(self.app.file_item_commands()))
-        self.run_async(self.app.copy_file())
-        self.select('first.txt')
-        self.run_async(self.app.copy_file())
+    def test_sibling_copy_verifies_files_and_dotted_folders_beside_source(self):
+        self.assertIn('Duplicate…', dict(self.app.file_item_commands()))
+        for _ in range(2):
+            FileOperationRequest('copy', self.source, 'first.txt').execute(lambda: False)
         for name in ('first.txt', 'first - Copy.txt', 'first - Copy (2).txt'):
             self.assertEqual((self.source.root / name).read_text(), 'First')
         folder = self.source.root / 'Folder.v1'
@@ -68,16 +67,58 @@ class FileOperationTests(unittest.TestCase):
         (folder / 'child.txt').write_text('Child')
         self.run_async(self.app.browse_files())
         self.select('Folder.v1')
-        self.assertIn('Copy', dict(self.app.file_item_commands()))
-        self.run_async(self.app.copy_file())
+        self.assertIn('Duplicate…', dict(self.app.file_item_commands()))
+        FileOperationRequest('copy', self.source, folder.name).execute(lambda: False)
         self.assertEqual((self.source.root / 'Folder.v1 - Copy/child.txt').read_text(), 'Child')
         self.assertEqual((folder / 'child.txt').read_text(), 'Child')
         self.assertFalse(list(self.source.root.glob('.notes-copy-*')))
         with patch.object(self.app.file_provider, 'remote_storage', True, create=True):
             self.select('first.txt')
-            self.assertNotIn('Copy', dict(self.app.file_item_commands()))
+            self.assertNotIn('Duplicate…', dict(self.app.file_item_commands()))
             with self.assertRaises(PermissionError):
                 FileOperationRequest('copy', self.app.file_provider, 'first.txt').execute(lambda: False)
+
+    def test_overflow_separates_folder_commands_and_eligible_item_actions(self):
+        from mobile.local_sources import SharedFiles
+
+        (self.source.root / 'chapter.CBZ').write_bytes(b'Archive menu fixture')
+        (self.source.root / 'comic folder').mkdir()
+        self.run_async(self.app.browse_files())
+        folder_commands = dict(self.app.file_actions.actions)
+        self.assertEqual(set(folder_commands), {'New folder…', 'Change location…', 'Select items'})
+
+        for name in ('first.txt', 'chapter.CBZ', 'comic folder'):
+            with self.subTest(name=name):
+                row = self.source.entry(name)
+                titles = dict(self.app.file_item_commands(row=row))
+                self.assertTrue({'Open', 'Details', 'Rename…', 'Move…', 'Duplicate…', 'Delete…'} <= titles.keys())
+                self.assertEqual('Archive password…' in titles, name == 'chapter.CBZ')
+                self.assertFalse({'New folder…', 'Edit comics in this folder…', 'Add to Favourites',
+                                  'Pin this folder', 'Cut', 'Copy'} & titles.keys())
+                self.assertEqual(list(titles)[-1], 'Delete…')
+        provider = self.app.file_provider
+        with patch.object(provider, 'read_only', True, create=True):
+            read_only_commands = dict(self.app.file_item_commands(row=provider.entry('first.txt')))
+            self.assertTrue({'Open', 'Details'} <= read_only_commands.keys())
+            self.assertFalse({'Rename…', 'Move…', 'Duplicate…', 'Delete…'} & read_only_commands.keys())
+            self.assertNotIn('New folder…', dict(self.app.current_folder_commands()))
+
+        shared = SharedFiles(self.destination.root)
+        (shared.root / 'Received Files').mkdir()
+        collection, = shared.list()
+        commands = self.app.file_item_commands(context=(shared, 'Shared files', collection))
+        self.assertEqual([title for title, _ in commands], ['Open'])
+
+    def test_item_menu_starts_selection_with_that_row_checked(self):
+        app = self.app
+        row = self.source.entry('second.txt')
+        dict(app.file_item_commands(row=row))['Select items']()
+        self.assertEqual([item['path'] for item in app.file_checked.values()], ['second.txt'])
+        self.assertEqual(app.file_selection_count.text, '1 selected')
+        self.assertTrue(app.file_move_button.enabled)
+        app.end_file_selection()
+        dict(app.current_folder_commands())['Select items']()
+        self.assertFalse(app.file_checked)
 
     def test_collection_name_listing_avoids_metadata_formatting(self):
         from services.documents.locations import CollectionFiles

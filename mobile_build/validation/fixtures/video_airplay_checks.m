@@ -289,6 +289,63 @@
     [self.samples addObject:@{@"event": @"wake-sampling-and-eof", @"staleSampleKept": @YES, @"endKept": @YES}];
     return YES;
 }
+- (void)checkLockedItemFailure {
+    LGVideoRouteProbe *v = self.video;
+    LGReceiverPlayer *player = [self attachReceiver];
+    player.fixtureItem.fixtureStatus = AVPlayerItemStatusReadyToPlay;
+    player.fixtureExternal = YES;
+    [v startAirPlayPlayback];
+    [v updateAirPlay];
+    player.fixtureControl = AVPlayerTimeControlStatusPlaying;
+    player.fixtureTime = CMTimeMake(20355, 1000);
+    [v updateAirPlay];
+    AVPlayerItem *failedItem = player.currentItem;
+    v.fixtureDataUnavailable = YES;
+    [v protectedData:nil];
+    [player pause]; // AVKit can stop the rate before it reports the item failure.
+    [v updateAirPlay];
+    if (v.playRequested || v.airPlayConfirmedPosition != 20355) {
+        [self finish:@"Locked failure fixture did not reach the stationary ready item"]; return;
+    }
+    NSError *error = [NSError errorWithDomain:AVFoundationErrorDomain
+        code:AVErrorExternalPlaybackNotSupportedForAsset userInfo:nil];
+    [v airPlayFailed:[NSNotification notificationWithName:AVPlayerItemFailedToPlayToEndTimeNotification
+        object:failedItem userInfo:@{AVPlayerItemFailedToPlayToEndTimeErrorKey: error}]];
+    [v airPlayEnded:[NSNotification notificationWithName:AVPlayerItemDidPlayToEndTimeNotification object:failedItem]];
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [v updateAirPlay];
+        if (v.ended || !v.playRequested || v.airPlayRecovered || player.currentItem != failedItem) {
+            [self finish:@"A failed locked item was treated as ended or retried before wake"]; return;
+        }
+        v.fixtureDataUnavailable = NO;
+        [v foregroundNotification:nil];
+        if (!v.airPlayRecovered || player.currentItem == failedItem || v.airPlaySeekTarget != 20355 ||
+            v.airPlayConfirmedPosition != 20355 || !v.playRequested || !player.muted) {
+            [self finish:@"Wake did not replace the failed item at its last confirmed point"]; return;
+        }
+        [v airPlayFailed:[NSNotification notificationWithName:AVPlayerItemFailedToPlayToEndTimeNotification
+            object:player.currentItem userInfo:@{AVPlayerItemFailedToPlayToEndTimeErrorKey: error}]];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if ([v hasAirPlay] || [v positionMilliseconds] != 20355) {
+                [self finish:@"A second failure spun up another retry or lost the resume point"]; return;
+            }
+            [self.samples addObject:@{@"event": @"locked-item-failure", @"wakeRetryMilliseconds": @20355,
+                @"spuriousEndIgnored": @YES, @"secondFailureKeptPosition": @YES}];
+            LGReceiverPlayer *endPlayer = [self attachReceiver];
+            v.playRequested = YES;
+            [v airPlayEnded:[NSNotification notificationWithName:AVPlayerItemDidPlayToEndTimeNotification
+                object:endPlayer.currentItem]];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (!v.ended || v.playRequested || v.airPlayRecovered) {
+                    [self finish:@"A genuine end notification did not stop playback"]; return;
+                }
+                v.ended = NO;
+                [v detachAirPlay];
+                [self checkReceiverLoading];
+            });
+        });
+    });
+}
 - (BOOL)checkRemuxMetadata {
     LGMKVRemux *remux = [[LGMKVRemux alloc] initWithPath:[NSBundle.mainBundle pathForResource:@"airplay" ofType:@"mkv"]];
     NSData *data = [[remux renditionsJSON] dataUsingEncoding:NSUTF8StringEncoding];
@@ -534,6 +591,10 @@
     [v pause];
     if (![self checkLockPolicy]) return;
     if (![self checkWatchdogs]) return;
+    [self checkLockedItemFailure];
+}
+- (void)checkReceiverLoading {
+    LGVideoRouteProbe *v = self.video;
     LGReceiverPlayer *player = [self attachReceiver];
     v.airPlaySeekTarget = v.airPlayStartPosition = v.airPlayConfirmedPosition = 12000;
     [v startAirPlayPlayback];

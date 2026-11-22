@@ -109,7 +109,8 @@ class HomeScreen:
             accessible_name(button, f'See all {collection.lower()} documents')
             header.add(button)
         box.add(header)
-        rows = [self.recent_row(session, summary, show_kind=True) for session, summary in items]
+        rows = [self.recent_row(session, summary, show_kind=True, show_documents_link=True)
+                for session, summary in items]
         box.add(document_group(rows) if rows else empty_document_row(empty))
         return [row.document_button for row in rows]
 

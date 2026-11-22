@@ -40,18 +40,19 @@ def reference_available(app, source):
                for record in client.package_records)
 
 
-def row_actions(app, provider, row, *, anchor=None, opener=None):
+def row_actions(app, provider, row, *, anchor=None, opener=None, favourite=False):
     if provider is None or not row or row.get('directory') or not row.get('path'):
         return []
     item = FileItem(provider, row['path'], row.get('revision'))
     actions = []
-    try:
-        source, cipher = favourites.resource_reference(app, provider, item.path)
-        title = document_display_name(provider, item.path)
-        actions.append(favourites.favourite_action(
-            app, source, title, opener or dict(kind='file'), cipher, validate=item.validate))
-    except (OSError, ValueError):
-        pass
+    if favourite:
+        try:
+            source, cipher = favourites.resource_reference(app, provider, item.path)
+            title = document_display_name(provider, item.path)
+            actions.append(favourites.favourite_action(
+                app, source, title, opener or dict(kind='file'), cipher, validate=item.validate))
+        except (OSError, ValueError):
+            pass
     if outbound_share.supported():
         actions.append((outbound_share.SEND, partial(outbound_share.send, app, item, anchor=anchor)))
     return actions
@@ -92,7 +93,7 @@ def _resolve_reference(app, source):
     return FileItem(provider, path), provider.close
 
 
-def reference_actions(app, source, title, opener, *, anchor=None, favourite=True):
+def reference_actions(app, source, title, opener, *, anchor=None, favourite=False):
     if not source or source['type'] not in {'local', 'remote', 'crypt', 'download'}:
         return []
     resolve = partial(_resolve_reference, app, source)
