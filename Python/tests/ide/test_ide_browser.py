@@ -97,6 +97,7 @@ class ProjectBrowserTests(QtTestCase):
             layout = qt.QHBoxLayout(owner)
             settings = ProjectStructure(project, owner)
             browser = ProjectBrowser(project, owner)
+            browser.git_status.stop()
             layout.addWidget(settings)
             layout.addWidget(browser)
             owner.show()
@@ -123,13 +124,15 @@ class ProjectBrowserTests(QtTestCase):
             foreground = qt.Qt.ItemDataRole.ForegroundRole
             tooltip = qt.Qt.ItemDataRole.ToolTipRole
             self.assertIsNone(browser_index('src/shown.py').data(foreground))
-            excluded = browser_index('src/lib/generated')
-            browser.proxy.git_changes[root / 'src/lib/generated'] = ('ignored', 'Ignored')
-            self.assertIn('Git: Ignored', excluded.data(tooltip))
-            self.assertIn('Excluded', excluded.data(tooltip))
+            excluded = 'src/lib/generated'
+            browser.proxy.git_changes[root / excluded] = ('ignored', 'Ignored')
             browser.locate(root / 'src/lib')
             colors = []
             for dark in (False, True):
+                if dark:
+                    # A filesystem update can move a row between palette comparisons.
+                    (root / 'src/lib/added').mkdir()
+                    self.wait_for_names(browser, root / 'src/lib', ['added', 'generated'])
                 owner.setPalette(theme_palette(configured_colors(dark)))
                 self.app.processEvents()
                 self.assertEqual(browser.path(), root / 'src/lib')
@@ -156,10 +159,16 @@ class ProjectBrowserTests(QtTestCase):
                                 option.initFrom(tree)
                                 tree.itemDelegate().initStyleOption(option, item)
                                 self.assertEqual(option.palette.color(qt.QPalette.ColorRole.Text), color)
-                self.assertNotEqual(browser_index('src').data(foreground), excluded.data(foreground))
-                colors.append((browser_index('src').data(foreground), excluded.data(foreground)))
+                # Resolve the path after event processing and any proxy layout changes.
+                excluded_index = browser_index(excluded)
+                description = excluded_index.data(tooltip)
+                self.assertIn('Git: Ignored', description)
+                self.assertIn('Excluded', description)
+                source_color = browser_index('src').data(foreground)
+                excluded_color = excluded_index.data(foreground)
+                self.assertNotEqual(source_color, excluded_color)
+                colors.append((source_color, excluded_color))
             self.assertNotEqual(*colors)
-            browser.git_status.stop()
             owner.close()
 
     def test_git_colors_refresh_for_modified_new_staged_and_clean_files(self):
