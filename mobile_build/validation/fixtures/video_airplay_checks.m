@@ -16,12 +16,14 @@
 @property(nonatomic) NSUInteger playCalls;
 @property(nonatomic, strong) NSMutableArray *seeks;
 @property(nonatomic) CMTime lastSeekTime, lastSeekToleranceBefore;
+@property(nonatomic) CMTime fixtureTime;
 @end
 @implementation LGReceiverPlayer
 - (AVPlayerItem *)currentItem { return self.fixtureItem; }
 - (AVPlayerStatus)status { return AVPlayerStatusReadyToPlay; }
 - (BOOL)isExternalPlaybackActive { return self.fixtureExternal; }
 - (AVPlayerTimeControlStatus)timeControlStatus { return self.fixtureControl; }
+- (CMTime)currentTime { return self.fixtureTime; }
 - (void)play { self.playCalls++; self.fixtureControl = AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate; }
 - (void)pause { self.fixtureControl = AVPlayerTimeControlStatusPaused; }
 - (void)replaceCurrentItemWithPlayerItem:(AVPlayerItem *)item { self.fixtureItem = (id)item; }
@@ -115,10 +117,13 @@
     player.seeks = [NSMutableArray array];
     player.fixtureItem = [[LGReceiverItem alloc] initWithURL:[NSBundle.mainBundle URLForResource:@"fixture" withExtension:@"mp4"]];
     LGVideoRouteProbe *v = self.video;
-    v.airPlayPlayer = v.airPlayRoutePlayer = player;
+    v.airPlayPlayer = player;
     v.fixtureRoute = YES;
     v.airPlayWasExternal = NO;
     v.airPlaySeekTarget = -1;
+    v.airPlayClock = v.airPlayStartPosition = v.airPlayConfirmedPosition = 0;
+    v.airPlayAdvanced = v.airPlaySawTransport = v.airPlayRecovered = NO;
+    player.fixtureTime = kCMTimeZero;
     player.allowsExternalPlayback = YES;
     return player;
 }
@@ -161,6 +166,8 @@
     v.playRequested = YES;
     v.fixtureRoute = NO; player.fixtureExternal = NO;
     [v updateAirPlay];
+    v.airPlayRouteLossDeadline = NSProcessInfo.processInfo.systemUptime - 1;
+    [v updateAirPlay];
     if ([v hasAirPlay] || v.playRequested || [v canPlay:NO]) {
         [self finish:@"Route loss resumed local video while locked"]; return NO;
     }
@@ -178,6 +185,108 @@
     [v revealSurface];
     [self.samples addObject:@{@"event": @"airplay-lock", @"continued": @YES, @"pauseResume": @YES,
         @"newHandoffDenied": @YES, @"revocation": @YES, @"routeLoss": @YES, @"protectedStopped": @YES}];
+    return YES;
+}
+- (BOOL)checkWatchdogs {
+    LGVideoRouteProbe *v = self.video;
+    LGReceiverPlayer *player = [self attachReceiver];
+    player.fixtureItem.fixtureStatus = AVPlayerItemStatusReadyToPlay;
+    player.fixtureExternal = YES;
+    [v startAirPlayPlayback];
+    [v updateAirPlay];
+    if (v.airPlayStartDeadline <= 0 || v.airPlayAdvanced) {
+        [self finish:@"A ready route cleared the startup deadline before the playhead advanced"]; return NO;
+    }
+    v.airPlayStartDeadline = NSProcessInfo.processInfo.systemUptime - 1;
+    AVPlayerItem *first = player.currentItem;
+    [v updateAirPlay];
+    if (!v.airPlayRecovered || player.currentItem == first || !v.playRequested) {
+        [self finish:@"A ready but stationary startup did not replace the item"]; return NO;
+    }
+    v.airPlayStartDeadline = NSProcessInfo.processInfo.systemUptime - 1;
+    [v updateAirPlay];
+    if ([v hasAirPlay] || player.currentItem || player.allowsExternalPlayback) {
+        [self finish:@"Second startup failure left an item or route player"]; return NO;
+    }
+    [self.samples addObject:@{@"event": @"ready-start-timeout", @"oneReplacement": @YES, @"retired": @YES}];
+
+    player = [self attachReceiver];
+    player.fixtureItem.fixtureStatus = AVPlayerItemStatusReadyToPlay;
+    player.fixtureExternal = YES;
+    [v startAirPlayPlayback];
+    [v updateAirPlay];
+    player.fixtureTime = CMTimeMake(800, 1000);
+    player.fixtureControl = AVPlayerTimeControlStatusPlaying;
+    [v updateAirPlay];
+    if (!v.airPlayAdvanced || v.airPlayStartDeadline || v.airPlayConfirmedPosition != 800) {
+        [self finish:@"Verified forward media time did not establish playback"]; return NO;
+    }
+    first = player.currentItem;
+    player.fixtureControl = AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate;
+    v.airPlayLastProgress = NSProcessInfo.processInfo.systemUptime - 3;
+    [v updateAirPlay];
+    if (player.currentItem != first) { [self finish:@"Brief buffering replaced the item"]; return NO; }
+    [player pause];
+    v.airPlayLastProgress = NSProcessInfo.processInfo.systemUptime - 20;
+    [v updateAirPlay];
+    if (v.playRequested || player.currentItem != first) { [self finish:@"Manual Pause triggered recovery"]; return NO; }
+    [v startAirPlayPlayback];
+    v.airPlayLastProgress = NSProcessInfo.processInfo.systemUptime - 20;
+    v.fixtureDataUnavailable = YES;
+    [v protectedData:nil]; [v background]; [v updateAirPlay];
+    if (v.airPlayRecovered || player.currentItem != first) { [self finish:@"Lock started a new handoff"]; return NO; }
+    v.fixtureDataUnavailable = NO;
+    [v foregroundNotification:nil];
+    if (!v.airPlayRecovered || player.currentItem == first || v.airPlayStartPosition != 800 ||
+        v.airPlaySeekTarget != 800 || !player.muted) {
+        [self finish:@"Wake did not retry once at the last confirmed position"]; return NO;
+    }
+    [v detachAirPlay];
+    [self.samples addObject:@{@"event": @"established-stall", @"shortBufferKept": @YES,
+        @"pausedKept": @YES, @"lockedKept": @YES, @"wakeRetryMilliseconds": @800}];
+
+    player = [self attachReceiver];
+    player.fixtureItem.fixtureStatus = AVPlayerItemStatusReadyToPlay;
+    player.fixtureExternal = YES;
+    [v startAirPlayPlayback];
+    [v updateAirPlay];
+    first = player.currentItem;
+    player.fixtureExternal = NO;
+    [v updateAirPlay];
+    v.airPlayRouteLossDeadline = NSProcessInfo.processInfo.systemUptime - 1;
+    [v updateAirPlay];
+    if (!v.airPlayRecovered || player.currentItem == first || !player.muted) {
+        [self finish:@"External video route loss with a ready item did not retry the selected TV"]; return NO;
+    }
+    [v detachAirPlay];
+    [self.samples addObject:@{@"event": @"route-break", @"readyItemReplaced": @YES}];
+
+    player = [self attachReceiver];
+    player.fixtureItem.fixtureStatus = AVPlayerItemStatusReadyToPlay;
+    player.fixtureExternal = YES;
+    [v startAirPlayPlayback];
+    [v updateAirPlay];
+    player.fixtureControl = AVPlayerTimeControlStatusPlaying;
+    player.fixtureTime = CMTimeMake(28000, 1000);
+    [v updateAirPlay];
+    first = player.currentItem;
+    v.airPlayLastPoll = NSProcessInfo.processInfo.systemUptime - 180;
+    v.airPlayLastProgress = v.airPlayLastPoll;
+    player.fixtureControl = AVPlayerTimeControlStatusWaitingToPlayAtSpecifiedRate;
+    [v foregroundNotification:nil];
+    if (player.currentItem != first || v.airPlayRecovered) {
+        [self finish:@"A suspended timer caused immediate replacement on wake"]; return NO;
+    }
+    v.ended = YES;
+    v.playRequested = NO;
+    v.airPlayStallGraceUntil = 0;
+    [v updateAirPlay];
+    if (!v.ended || v.playRequested || player.currentItem != first) {
+        [self finish:@"End of video entered the stall recovery path"]; return NO;
+    }
+    v.ended = NO;
+    [v detachAirPlay];
+    [self.samples addObject:@{@"event": @"wake-sampling-and-eof", @"staleSampleKept": @YES, @"endKept": @YES}];
     return YES;
 }
 - (BOOL)checkRemuxMetadata {
@@ -424,12 +533,9 @@
     }
     [v pause];
     if (![self checkLockPolicy]) return;
-    LGReceiverPlayer *player = [LGReceiverPlayer new];
-    player.seeks = [NSMutableArray array];
-    player.fixtureItem = [[LGReceiverItem alloc] initWithURL:[NSBundle.mainBundle URLForResource:@"fixture" withExtension:@"mp4"]];
-    v.airPlayPlayer = v.airPlayRoutePlayer = player; v.fixtureRoute = YES;
-    player.allowsExternalPlayback = YES;
-    v.airPlaySeekTarget = v.airPlayStartPosition = 12000;
+    if (![self checkWatchdogs]) return;
+    LGReceiverPlayer *player = [self attachReceiver];
+    v.airPlaySeekTarget = v.airPlayStartPosition = v.airPlayConfirmedPosition = 12000;
     [v startAirPlayPlayback];
     [v updateTimeline];
     if (player.playCalls != 1 || !v.seek.enabled || !v.playRequested) { [self finish:@"Loading resume blocked playback or timeline"]; return; }
@@ -463,6 +569,7 @@
                 CMTimeCompare(player.lastSeekToleranceBefore, kCMTimeZero) != 0) {
                 [self finish:@"Chapter skip did not seek the active AVPlayer to the labeled start"]; return;
             }
+            player.fixtureTime = CMTimeMake(15000, 1000);
             ((void (^)(BOOL))player.seeks.lastObject)(YES);
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (player.playCalls != 2 || v.playRequested) { [self finish:@"Seek completion undid explicit Pause"]; return; }
@@ -507,18 +614,27 @@
     }
     [self.samples addObject:@{@"event": @"receiver-background", @"cycles": @6}];
     [v startAirPlayPlayback]; [v seekAirPlay:17000];
+    v.airPlayRecovered = YES; // The last attempt already used its one replacement.
     v.airPlaySeekDeadline = NSProcessInfo.processInfo.systemUptime - 1;
     [v updateAirPlay];
-    if ([v hasAirPlay] || !v.localAudioNeedsRefresh || [v positionMilliseconds] != 17000) {
-        [self finish:@"Seek timeout failed to detach at requested position"]; return;
+    int64_t position = [v positionMilliseconds];
+    if ([v hasAirPlay] || !v.localAudioNeedsRefresh || position != v.airPlayConfirmedPosition || position == 17000) {
+        [self finish:@"Seek timeout did not detach at the last confirmed position"]; return;
     }
     [self.samples addObject:@{@"event": @"receiver", @"loadingSeek": @YES, @"staleCompletion": @YES,
         @"interruptedSeek": @YES, @"pausedSeek": @YES, @"timeout": @YES,
         @"forwardSkip": @YES, @"directionChange": @YES, @"endClamp": @YES}];
-    if (!player.allowsExternalPlayback || player.currentItem) { [self finish:@"Timeout did not preserve an empty reusable route"]; return; }
+    if (player.allowsExternalPlayback || player.currentItem) { [self finish:@"Timeout did not retire the failed route player"]; return; }
+    LGReceiverPlayer *retry = [LGReceiverPlayer new];
+    NSURL *url = [NSBundle.mainBundle URLForResource:@"fixture" withExtension:@"mp4"];
+    if (![v beginAirPlay:retry URL:url title:@"Generated media"] || v.airPlayPlayer != retry ||
+        v.airPlayRecovered || v.airPlayStartPosition != position || retry.playCalls != 1) {
+        [self finish:@"An explicit retry did not start a fresh player at the confirmed point"]; return;
+    }
+    [self.samples addObject:@{@"event": @"explicit-retry", @"newPlayer": @YES, @"position_ms": @(position)}];
     [v retireWithCompletion:^{
-        if (player.allowsExternalPlayback || player.currentItem || v.airPlayRoutePlayer) {
-            [self finish:@"Closing after detach left AirPlay enabled"]; return;
+        if (retry.allowsExternalPlayback || retry.currentItem || v.airPlayPlayer) {
+            [self finish:@"Closing after a fresh cast left AirPlay enabled"]; return;
         }
         [self.samples addObject:@{@"event": @"airplay-close", @"externalPlaybackDisabled": @YES, @"itemReleased": @YES}];
         if ([self checkRemuxMetadata]) [self exportSubtitleFixtures];

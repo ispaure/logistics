@@ -31,6 +31,10 @@ Once native AirPlay is playing on the TV, switching apps or locking the iPhone
 keeps that session available, including pause/resume. Start a new AirPlay session
 while the phone is unlocked. Playback still stops if source access is revoked or
 the file becomes unreadable; session-only protection continues to block AirPlay.
+If AirPlay stalls, Logistics can retry once from the last confirmed position
+when the phone is active. If playback stops, select the TV again in **AirPlay**.
+To continue on the phone, choose **iPhone** in the picker if the TV is still
+selected, then press **Play**.
 
 On Apple TV, reveal the playback controls with the remote and open **Subtitles** to choose a track or **Off**, alongside the audio selector. Only compatible subtitle tracks appear. The phone's **Audio tracks** and **Subtitles** menus control the same selection and reflect TV changes when reopened. MP4/MOV files outside the stream-copy profile use native playback, where available embedded Apple-compatible tracks remain selectable but sidecars are unavailable.
 

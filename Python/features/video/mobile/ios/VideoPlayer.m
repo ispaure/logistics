@@ -132,14 +132,18 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic) BOOL airPlayPickerOpen, airPlayPreparing, airPlayResumeLocal;
 @property(nonatomic) NSTimeInterval airPlayRouteDeadline;
 @property(nonatomic) int64_t airPlaySeekTarget, airPlayStartPosition;
-@property(nonatomic) NSTimeInterval airPlayConnectionDeadline;
-@property(nonatomic) NSTimeInterval airPlaySeekDeadline;
+@property(nonatomic) int64_t airPlayClock, airPlayConfirmedPosition;
+@property(nonatomic) BOOL airPlayAdvanced, airPlayRecovered, airPlaySystemPaused, airPlaySawTransport;
+@property(nonatomic) NSTimeInterval airPlayStartDeadline, airPlaySeekDeadline, airPlayRouteLossDeadline;
+@property(nonatomic) NSTimeInterval airPlayLastProgress, airPlayLastTrace;
+@property(nonatomic) NSTimeInterval airPlayLastPoll, airPlayStallGraceUntil;
+@property(nonatomic, copy) NSString *airPlayTraceState;
 @property(nonatomic) NSUInteger airPlaySeekGeneration;
 @property(nonatomic, copy) BOOL (^airPlayAllowed)(void);
+@property(nonatomic, copy) void (^airPlaySourceTrace)(void);
 @property(nonatomic, strong) AVPlayerViewController *airPlayController;
 @property(nonatomic, strong) AVRoutePickerView *airPlayPicker;
 @property(nonatomic, strong) AVPlayer *airPlayPlayer;
-@property(nonatomic, strong) AVPlayer *airPlayRoutePlayer;
 @property(nonatomic) BOOL airPlayChapterSeek;
 @property(nonatomic, copy) NSDictionary<NSNumber *, NSString *> *airPlayChapters;
 @property(nonatomic, copy) NSDictionary<NSNumber *, NSString *> *localChapters;
@@ -281,7 +285,9 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 - (BOOL)holdLocalPlayForAirPlay;
 - (void)airPlayPreparationFailed:(NSString *)message;
 - (void)showAirPlayTracks:(id)sender subtitles:(BOOL)text;
-- (void)detachAirPlayKeepingRoute:(BOOL)keepRoute;
+- (void)detachAirPlay;
+- (void)traceAirPlay:(NSString *)event;
+- (void)suspendForLock;
 @end
 
 @interface LGVideoController (PlaybackControls)
@@ -402,6 +408,7 @@ typedef struct {
     [center addObserver:self selector:@selector(backgroundNotification:) name:UIApplicationDidEnterBackgroundNotification object:nil];
     [center addObserver:self selector:@selector(foregroundNotification:) name:UIApplicationDidBecomeActiveNotification object:nil];
     [center addObserver:self selector:@selector(protectedData:) name:UIApplicationProtectedDataWillBecomeUnavailable object:nil];
+    [center addObserver:self selector:@selector(protectedDataRestored:) name:UIApplicationProtectedDataDidBecomeAvailable object:nil];
     [center addObserver:self selector:@selector(foregroundNotification:) name:UIApplicationProtectedDataDidBecomeAvailable object:nil];
     [center addObserver:self selector:@selector(captureChanged:) name:UIScreenCapturedDidChangeNotification object:nil];
     [center addObserver:self selector:@selector(audioInterrupted:) name:AVAudioSessionInterruptionNotification object:nil];
@@ -789,7 +796,8 @@ typedef struct {
     if ([self hasAirPlay]) {
         [self.airPlayPlayer pause];
         self.playRequested = NO;
-        self.airPlayConnectionDeadline = 0;
+        self.airPlayStartDeadline = 0;
+        self.airPlaySystemPaused = NO;
         [self updatePlayButton];
         [self setControlsShown:YES];
         return;
@@ -1088,6 +1096,7 @@ typedef struct {
 - (void)audioInterrupted:(NSNotification *)notification {
     NSUInteger type = [notification.userInfo[AVAudioSessionInterruptionTypeKey] unsignedIntegerValue];
     self.interrupted = type == AVAudioSessionInterruptionTypeBegan;
+    [self traceAirPlay:self.interrupted ? @"interruption-began" : @"interruption-ended"];
     [self pause]; // Ignore ShouldResume, including after an OS-initiated pause.
 }
 - (void)audioRouteChanged:(NSNotification *)notification {
@@ -1099,7 +1108,10 @@ typedef struct {
         if (self.airPlayAvailable && ([self hasAirPlay] || self.airPlayPreparing ||
             [self hasAirPlayAudioRoute] || self.airPlayResumeLocal || self.airPlayRouteDeadline > 0)) {
             if (reason != AVAudioSessionRouteChangeReasonNoSuitableRouteForCategory) {
-                if ([self hasAirPlay]) [self updateAirPlay]; else [self updateAirPlayRoute];
+                if ([self hasAirPlay]) {
+                    [self traceAirPlay:@"audio-route-change"];
+                    [self updateAirPlay];
+                } else [self updateAirPlayRoute];
                 return;
             }
         }
@@ -1117,7 +1129,7 @@ typedef struct {
 - (void)suspendForLock {
     if (self.lockHidden) return;
     self.lockHidden = YES;
-    [self detachAirPlayKeepingRoute:NO];
+    [self detachAirPlay];
     [self revokeExternalVideo];
     [self.captionPiP stopPictureInPicture];
     [self clearPausePresentation];
@@ -1143,13 +1155,18 @@ typedef struct {
     return YES;
 }
 - (void)background {
+    [self traceAirPlay:@"background"];
     [self setScreenAwake:NO];
     if (self.restricted) [self suspendForLock];
-    else if (!self.pipActive && !self.casting && !self.airPlayPlayer.externalPlaybackActive &&
+    else if (!self.pipActive && !self.casting && ![self hasEstablishedAirPlay] &&
              ![self continueLocalAudioInBackground]) [self pause];
 }
 - (void)backgroundNotification:(NSNotification *)notification { [self background]; }
 - (void)foregroundNotification:(NSNotification *)notification {
+    if ([self hasAirPlay]) {
+        [self traceAirPlay:@"foreground"];
+        [self updateAirPlay];
+    }
     if (!self.localAudioInBackground || UIApplication.sharedApplication.applicationState != UIApplicationStateActive ||
         ![self protectedDataAvailable]) return;
     self.localAudioInBackground = NO;
@@ -1158,6 +1175,7 @@ typedef struct {
     [self updateScreenAwake];
 }
 - (void)protectedData:(NSNotification *)notification {
+    [self traceAirPlay:@"protected-data-unavailable"];
     if (self.restricted) [self suspendForLock];
     else if ([self hasAirPlay]) {
         // Device lock does not revoke an ordinary movie already playing on TV.
@@ -1166,12 +1184,15 @@ typedef struct {
             [self setScreenAwake:NO];
             return;
         }
-        [self detachAirPlayKeepingRoute:NO];
+        [self detachAirPlay];
         [self revealSurface];
     } else {
         [self setScreenAwake:NO];
         if (![self continueLocalAudioInBackground]) [self pause];
     }
+}
+- (void)protectedDataRestored:(NSNotification *)notification {
+    [self traceAirPlay:@"protected-data-available"];
 }
 - (void)captureChanged:(NSNotification *)notification {
     if (self.restricted && self.view.window.screen.isCaptured) {
@@ -1181,9 +1202,8 @@ typedef struct {
 }
 - (int64_t)progressPosition {
     if (self.ended) return 0;
-    if ([self hasAirPlay]) return !self.airPlayWasExternal || self.airPlaySeekTarget >= 0 ||
-        self.airPlayPlayer.currentItem.status != AVPlayerItemStatusReadyToPlay ? -1 :
-        [self airPlayTime:self.airPlayPlayer.currentTime];
+    if ([self hasAirPlay]) return self.airPlayAdvanced && self.airPlaySeekTarget < 0 ?
+        self.airPlayConfirmedPosition : -1;
     if (self.audioSwitchTrack.length || self.progressSeek >= 0 || self.networkResumePending ||
         self.resumeSeekSubmitted || self.startMilliseconds >= 0)
         return -1;
@@ -1848,8 +1868,9 @@ typedef struct {
     [self cancelAudioSwitch];
     // A closed video must not leave the window's reusable AVPlayer opted into
     // external playback while browsing or opening a protected document.
-    [self detachAirPlayKeepingRoute:NO];
+    [self detachAirPlay];
     self.airPlayAllowed = nil;
+    self.airPlaySourceTrace = nil;
     self.backgroundAudioAllowed = nil;
     self.rateChangePending = NO;
     [self clearPausePresentation];

@@ -325,6 +325,46 @@ class VideoMobileLifetimeTests(unittest.IsolatedAsyncioTestCase):
             with self.assertRaisesRegex(OSError, 'Stream close failed'):
                 await closing
 
+    async def test_airplay_detach_closes_revoked_stream_before_retry(self):
+        from threading import Event
+        owner = self.player(restricted=False)
+        owner.native.airplay_active.return_value = False
+        owner.content.check = Mock()
+        owner.content.check_access.side_effect = PermissionError('Revoked')
+        entered, release = Event(), Event()
+        previous, replacement = Mock(), Mock()
+
+        def close_stream():
+            entered.set()
+            if not release.wait(3):
+                raise TimeoutError('Controlled stream close timed out')
+
+        previous.close.side_effect = close_stream
+        owner.mkv_stream = previous
+        detached = asyncio.create_task(owner.controls.command('airplayDetached', ''))
+        retry = None
+        try:
+            self.assertTrue(await asyncio.to_thread(entered.wait, 1))
+            owner.content.check_access.side_effect = None
+            path = Path('/unused/movie.mkv')
+            with patch('features.video.mobile.ios.airplay_file', return_value=path), patch(
+                'features.video.mobile.mkv.MKVStream', return_value=replacement
+            ) as prepare:
+                retry = asyncio.create_task(owner.prepare_airplay())
+                await asyncio.sleep(0)
+                self.assertTrue(owner.switching_player)
+                prepare.assert_not_called()
+                release.set()
+                await asyncio.gather(detached, retry)
+                prepare.assert_called_once()
+            owner.native.start_airplay.assert_called_once_with(path, replacement)
+            self.assertIs(owner.mkv_stream, replacement)
+        finally:
+            release.set()
+            await detached
+            if retry is not None:
+                await retry
+
     async def test_provisional_stream_close_failure_propagates_after_cancelled_preparation(self):
         from threading import Event
         owner = self.player(restricted=False)
@@ -1443,6 +1483,10 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
                 urlopen(fragment, timeout=2)
             self.assertEqual(revoked.exception.code, 404)
             self.assertEqual(engine.fragment.call_args_list, [unittest.mock.call(1, track=2), unittest.mock.call(2, track=-1)])
+            diagnostics = stream.request_diagnostics()
+            self.assertEqual(diagnostics['requests'], 7)
+            self.assertEqual(diagnostics['source_reads'], 2)
+            self.assertIsNotNone(diagnostics['response_age'])
 
     def test_mkv_bidirectional_seek_waits_for_old_requests_and_rechecks_access(self):
         from itertools import product
@@ -1520,7 +1564,7 @@ class IOSPresentationPrivacyTests(unittest.TestCase):
             for _ in range(4):
                 self.assertTrue(stream.slots.acquire(False))
             try:
-                with patch('features.video.mobile.mkv.monotonic', side_effect=[0, 11]):
+                with patch('features.video.mobile.mkv.monotonic', side_effect=[0, 0, 11]):
                     with self.assertRaises(HTTPError) as busy:
                         urlopen(stream.url.replace('video.m3u8', 'video/segment-0.m4s'), timeout=2)
                 self.assertEqual(busy.exception.code, 503)

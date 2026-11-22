@@ -185,6 +185,9 @@ class MKVStream:
         self.cancelled = cancelled
         self.stopped = Event()
         self.lock = Lock()
+        self.request_lock = Lock()
+        self.requests = self.responses = self.source_reads = 0
+        self.last_request = self.last_response = self.last_source_read = 0
         self.slots = BoundedSemaphore(4)
         self.route = '/' + token_urlsafe(32) + '/'
         self.cached = {}
@@ -247,6 +250,8 @@ class MKVStream:
                 if not self.path.startswith(stream.route) or not stream.allowed():
                     self.send_error(404)
                     return
+                if body:
+                    stream.record_request()
                 # A receiver seek can request an uncached fragment in either
                 # direction while abandoned responses still occupy all four slots.
                 # Let those responses unwind instead of failing the HLS item.
@@ -287,6 +292,8 @@ class MKVStream:
                             if not stream.allowed():
                                 break
                             self.wfile.write(view[offset:min(last + 1, offset + 256 * 1024)])
+                        else:
+                            stream.record_response()
                 except (OSError, ValueError):
                     self.close_connection = True
                 finally:
@@ -301,6 +308,24 @@ class MKVStream:
             self.server.server_close()
             raise
         self.url = f'http://{address}:{self.server.server_port}{self.route}video.m3u8'
+
+    def record_request(self):
+        with self.request_lock:
+            self.requests += 1
+            self.last_request = monotonic()
+
+    def record_response(self):
+        with self.request_lock:
+            self.responses += 1
+            self.last_response = monotonic()
+
+    def request_diagnostics(self):
+        with self.request_lock:
+            now = monotonic()
+            return dict(requests=self.requests, responses=self.responses, source_reads=self.source_reads,
+                        request_age=round(now - self.last_request, 1) if self.last_request else None,
+                        response_age=round(now - self.last_response, 1) if self.last_response else None,
+                        source_age=round(now - self.last_source_read, 1) if self.last_source_read else None)
 
     def allowed(self):
         if self.stopped.is_set() or self.cancelled.is_set() or not self.owner.allowed(external=True):
@@ -374,6 +399,9 @@ class MKVStream:
             key = ('video' if track < 0 else 'audio', route, index)
             previous = self.cached.get(key[0])
             if previous is None or previous[0] != key:
+                with self.request_lock:
+                    self.source_reads += 1
+                    self.last_source_read = monotonic()
                 media = self.remux.fragment(index, track=track)
                 if not self.allowed():
                     return None, None

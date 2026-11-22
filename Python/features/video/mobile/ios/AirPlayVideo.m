@@ -38,12 +38,12 @@
 
 - (void)routePickerViewDidEndPresentingRoutes:(AVRoutePickerView *)picker {
     self.airPlayPickerOpen = NO;
+    // Route notifications can arrive after the sheet closes.
+    self.airPlayRouteDeadline = NSProcessInfo.processInfo.systemUptime + 3;
     if ([self hasAirPlay]) {
         [self updateAirPlay];
         return;
     }
-    // The audio route notification can arrive after the route sheet closes.
-    self.airPlayRouteDeadline = NSProcessInfo.processInfo.systemUptime + 3;
     [self updateAirPlayRoute];
 }
 
@@ -66,7 +66,8 @@
         self.airPlayRouteDeadline = 0;
         return;
     }
-    if (external && !self.airPlayPreparing && [self allowsAirPlay] && [self canPlay:NO]) {
+    if (external && !self.airPlayPreparing && [self allowsAirPlay] && [self canPlay:NO] &&
+        UIApplication.sharedApplication.applicationState == UIApplicationStateActive) {
         self.airPlayRouteDeadline = 0;
         self.airPlayPreparing = YES;
         [self emitCommand:@"airplay" value:@""];
@@ -100,36 +101,75 @@
 
 - (BOOL)beginAirPlay:(AVPlayer *)player URL:(NSURL *)url title:(NSString *)title {
     self.airPlayPreparing = NO;
-    if ([self hasAirPlay] || ![self allowsAirPlay] || ![self canPlay:NO] ||
+    if ([self hasAirPlay] || ![self protectedDataAvailable] ||
+        UIApplication.sharedApplication.applicationState != UIApplicationStateActive ||
+        ![self allowsAirPlay] || ![self canPlay:NO] ||
         self.pipActive || self.casting || ![self hasAirPlayAudioRoute]) return NO;
     int64_t position = [self positionMilliseconds];
     self.airPlayChapters = [self chapterRows];
-    self.airPlayChapterSeek = NO;
+    self.airPlayRecovered = NO;
     self.airPlayResumeLocal |= self.playRequested;
     [self pause];  // Silence VLC before handing the same timeline to AVKit.
     [self moveVideoToExternalHost:nil];
     [self clearPausePresentation];
     self.movie.hidden = YES;
     self.ended = NO;
-    self.airPlayStartPosition = position;
-    self.airPlaySeekTarget = position > 0 ? position : -1;
-    self.airPlayConnectionDeadline = 0;
-    self.airPlayWasExternal = NO;
-
     AVMutableMetadataItem *name = [AVMutableMetadataItem new];
     name.identifier = AVMetadataCommonIdentifierTitle;
     name.value = title;
+    self.airPlayPlayer = player;
+    self.airPlayPlayer.allowsExternalPlayback = YES;
+    if (@available(iOS 15.0, *)) self.airPlayPlayer.audiovisualBackgroundPlaybackPolicy =
+        AVPlayerAudiovisualBackgroundPlaybackPolicyContinuesIfPossible;
+    [self installAirPlayItemAtURL:url metadata:@[name] position:position];
+    self.airPlayController = [AVPlayerViewController new];
+    // The AVKit surface is concealed locally below; keep its system playback
+    // controls enabled for native transport and media-selection integration.
+    self.airPlayController.showsPlaybackControls = YES;
+    self.airPlayController.allowsPictureInPicturePlayback = NO;
+    self.airPlayController.player = player;
+    [self addChildViewController:self.airPlayController];
+    UIView *surface = self.airPlayController.view;
+    surface.userInteractionEnabled = NO;
+    surface.alpha = 0;
+    surface.accessibilityElementsHidden = YES;
+    surface.frame = self.inlineMovie.bounds;
+    surface.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [self.inlineMovie addSubview:surface];
+    [self.airPlayController didMoveToParentViewController:self];
+
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(airPlayRateChanged:)
+        name:AVPlayerRateDidChangeNotification object:player];
+    [self applyPictureSize];
+    [self showStatus:@"Connecting to TV…"];
+    [self startAirPlayPlayback];
+    if (self.playRequested) return YES;
+    [self detachAirPlay];
+    [self revealSurface];
+    return NO;
+}
+
+- (void)installAirPlayItemAtURL:(NSURL *)url metadata:(NSArray<AVMetadataItem *> *)metadata
+                      position:(int64_t)position {
+    self.airPlayStartPosition = self.airPlayConfirmedPosition = self.airPlayClock = position;
+    self.airPlaySeekTarget = position > 0 ? position : -1;
+    self.airPlaySeekDeadline = self.airPlayRouteLossDeadline = 0;
+    self.airPlayStartDeadline = 0;
+    self.airPlaySeekPending = self.airPlayChapterSeek = NO;
+    self.airPlayAdvanced = self.airPlayWasExternal = self.airPlaySystemPaused = self.airPlaySawTransport = NO;
+    self.airPlayLastProgress = self.airPlayLastPoll = NSProcessInfo.processInfo.systemUptime;
+    self.airPlayStallGraceUntil = 0;
+    self.airPlayTraceState = nil;
     AVURLAsset *asset = [AVURLAsset URLAssetWithURL:url
         options:@{AVURLAssetReferenceRestrictionsKey: @(AVAssetReferenceRestrictionForbidAll)}];
     AVPlayerItem *item = [AVPlayerItem playerItemWithAsset:asset];
-    item.externalMetadata = @[name];
-    self.airPlayPlayer = player;
-    self.airPlayRoutePlayer = player;
-    self.airPlayPlayer.allowsExternalPlayback = YES;
+    item.externalMetadata = metadata;
     self.airPlayPlayer.muted = YES;
-    if (@available(iOS 15.0, *)) self.airPlayPlayer.audiovisualBackgroundPlaybackPolicy =
-        AVPlayerAudiovisualBackgroundPlaybackPolicyContinuesIfPossible;
     [self.airPlayPlayer replaceCurrentItemWithPlayerItem:item];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(airPlayEnded:)
+        name:AVPlayerItemDidPlayToEndTimeNotification object:item];
+    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(airPlayFailed:)
+        name:AVPlayerItemFailedToPlayToEndTimeNotification object:item];
     if (!self.airPlayChapters.count && !self.chaptersInvalidated) {
         __weak LGVideoController *owner = self;
         __weak AVPlayerItem *routeItem = item;
@@ -154,40 +194,24 @@
             });
         }];
     }
-    self.airPlayController = [AVPlayerViewController new];
-    // The AVKit surface is concealed locally below; keep its system playback
-    // controls enabled for native transport and media-selection integration.
-    self.airPlayController.showsPlaybackControls = YES;
-    self.airPlayController.allowsPictureInPicturePlayback = NO;
-    self.airPlayController.player = player;
-    [self addChildViewController:self.airPlayController];
-    UIView *surface = self.airPlayController.view;
-    surface.userInteractionEnabled = NO;
-    surface.alpha = 0;
-    surface.accessibilityElementsHidden = YES;
-    surface.frame = self.inlineMovie.bounds;
-    surface.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    [self.inlineMovie addSubview:surface];
-    [self.airPlayController didMoveToParentViewController:self];
+}
 
-    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(airPlayEnded:)
-        name:AVPlayerItemDidPlayToEndTimeNotification object:item];
-    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(airPlayFailed:)
-        name:AVPlayerItemFailedToPlayToEndTimeNotification object:item];
-    [NSNotificationCenter.defaultCenter addObserver:self selector:@selector(airPlayRateChanged:)
-        name:AVPlayerRateDidChangeNotification object:player];
-    [self applyPictureSize];
-    [self showStatus:@"Connecting to TV…"];
-    [self startAirPlayPlayback];
-    return YES;
+- (void)removeAirPlayItemObservers {
+    AVPlayerItem *item = self.airPlayPlayer.currentItem;
+    if (!item) return;
+    self.airPlaySeekGeneration++;
+    [NSNotificationCenter.defaultCenter removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification object:item];
+    [NSNotificationCenter.defaultCenter removeObserver:self name:AVPlayerItemFailedToPlayToEndTimeNotification object:item];
+    [item cancelPendingSeeks];
 }
 
 - (void)startAirPlayPlayback {
     if (self.controlsLocked || ![self allowsAirPlay] || ![self canPlay:NO] ||
         !self.requestPlay || !self.requestPlay() || ![self canPlay:NO]) return;
     self.playRequested = YES;
-    if (!self.airPlayPlayer.externalPlaybackActive || self.airPlayPlayer.currentItem.status != AVPlayerItemStatusReadyToPlay)
-        self.airPlayConnectionDeadline = NSProcessInfo.processInfo.systemUptime + 45;
+    self.airPlaySystemPaused = NO;
+    self.airPlayLastProgress = NSProcessInfo.processInfo.systemUptime;
+    if (!self.airPlayAdvanced) self.airPlayStartDeadline = self.airPlayLastProgress + 45;
     if (self.ended) [self seekAirPlay:0];
     // Starting playback initiates the receiver handoff. Waiting for the resume
     // seek first can deadlock that handoff on large HLS inputs. Pending seeks
@@ -207,13 +231,20 @@
     self.airPlayChapterSeek = chapter;
     if (!self.airPlayWasExternal) self.airPlayStartPosition = self.airPlaySeekTarget;
     self.ended = NO;
-    if (self.airPlayPlayer.currentItem.status == AVPlayerItemStatusReadyToPlay) [self submitAirPlaySeek];
+    self.airPlaySeekDeadline = NSProcessInfo.processInfo.systemUptime + 20;
+    if (self.airPlayPlayer.currentItem.status == AVPlayerItemStatusReadyToPlay) {
+        [self submitAirPlaySeek];
+    } else if (self.airPlaySeekPending) {
+        self.airPlaySeekGeneration++;
+        self.airPlaySeekPending = NO;
+        [self.airPlayPlayer.currentItem cancelPendingSeeks];
+    }
 }
 
 - (void)submitAirPlaySeek {
     int64_t target = self.airPlaySeekTarget;
     self.airPlaySeekPending = YES;
-    self.airPlaySeekDeadline = NSProcessInfo.processInfo.systemUptime + 20;
+    if (self.airPlaySeekDeadline <= 0) self.airPlaySeekDeadline = NSProcessInfo.processInfo.systemUptime + 20;
     NSUInteger generation = ++self.airPlaySeekGeneration;
     __weak LGVideoController *owner = self;
     CMTime toleranceBefore = self.airPlayChapterSeek ? kCMTimeZero : CMTimeMake(250, 1000);
@@ -227,10 +258,24 @@
             // AVKit/receiver controls pause AVPlayer directly. A seek can finish
             // before the next timeline tick observes that pause; never replay it
             // from stale phone-side intent (including an interrupted seek).
-            if (owner.airPlayPlayer.timeControlStatus == AVPlayerTimeControlStatusPaused)
+            if (owner.airPlayPlayer.timeControlStatus == AVPlayerTimeControlStatusPaused &&
+                !owner.airPlaySystemPaused)
                 owner.playRequested = NO;
+            if (!finished && owner.playRequested && owner.airPlayPlayer.externalPlaybackActive &&
+                !owner.airPlayAdvanced && target == owner.airPlayStartPosition) {
+                owner.airPlaySeekTarget = target;
+                owner.airPlaySeekDeadline = NSProcessInfo.processInfo.systemUptime;
+                [owner recoverAirPlay:@"initial-seek-failed"];
+                return;
+            }
+            int64_t current = [owner airPlayTime:owner.airPlayPlayer.currentTime];
+            if (finished && current >= 0) owner.airPlayConfirmedPosition = current;
+            owner.airPlayClock = current;
+            owner.airPlayLastProgress = NSProcessInfo.processInfo.systemUptime;
+            if (finished && owner.airPlayStartDeadline > 0)
+                owner.airPlayStartDeadline = MAX(owner.airPlayStartDeadline, owner.airPlayLastProgress + 15);
             if (!finished) [owner showStatus:@"The TV couldn’t seek to that position. Try the timeline again."];
-            if (owner.playRequested && [owner allowsAirPlay] && [owner canPlay:NO])
+            if (owner.playRequested && !owner.airPlaySystemPaused && [owner allowsAirPlay] && [owner canPlay:NO])
                 [owner playAirPlayAtRequestedRate];
             [owner updatePlayButton];
         });
@@ -295,17 +340,47 @@
         }];
 }
 
+- (void)traceAirPlay:(NSString *)event {
+    AVPlayer *player = self.airPlayPlayer;
+    if (!player) return;
+    AVPlayerItem *item = player.currentItem;
+    UIWindowScene *scene = self.viewIfLoaded.window.windowScene;
+    NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
+    NSString *state = [NSString stringWithFormat:
+        @"control=%ld waiting=%@ item=%ld external=%d audioRoute=%d empty=%d likely=%d seeking=%d requested=%d app=%ld scene=%ld protectedData=%d",
+        (long)player.timeControlStatus, player.reasonForWaitingToPlay ?: @"none", (long)item.status,
+        player.externalPlaybackActive, [self hasAirPlayAudioRoute], item.playbackBufferEmpty,
+        item.playbackLikelyToKeepUp, self.airPlaySeekTarget >= 0, self.playRequested,
+        (long)UIApplication.sharedApplication.applicationState, scene ? (long)scene.activationState : -1L,
+        [self protectedDataAvailable]];
+    if (!event && [self.airPlayTraceState isEqualToString:state] && now - self.airPlayLastTrace < 30) return;
+    self.airPlayTraceState = state;
+    self.airPlayLastTrace = now;
+    NSLog(@"[VideoAirPlay] %@ uptime=%.1f clock=%lld confirmed=%lld lastAdvanceAge=%.1f %@",
+        event ?: @"sample", now, [self airPlayTime:player.currentTime], self.airPlayConfirmedPosition,
+        now - self.airPlayLastProgress, state);
+    if (self.airPlaySourceTrace) self.airPlaySourceTrace();
+}
+
+- (void)logAirPlaySource:(NSString *)diagnostics {
+    NSLog(@"[VideoAirPlay] HLS %@", diagnostics);
+}
+
 - (void)airPlayRateChanged:(NSNotification *)note {
     AVPlayer *player = note.object;
     AVPlayerItem *item = player.currentItem;
-    NSString *reason = note.userInfo[AVPlayerRateDidChangeReasonKey] ?: @"unspecified";
+    NSString *reason = note.userInfo[AVPlayerRateDidChangeReasonKey];
     dispatch_async(dispatch_get_main_queue(), ^{
         if (player != self.airPlayPlayer || item != player.currentItem) return;
-        // State only: no source path, title, capability URL or participant ID.
-        NSLog(@"[VideoAirPlay] rate-change reason=%@ rate=%g control=%ld external=%d seek=%d requested=%d app=%ld protectedData=%d",
-            reason, player.rate, (long)player.timeControlStatus, player.externalPlaybackActive,
-            self.airPlaySeekTarget >= 0, self.playRequested,
-            (long)UIApplication.sharedApplication.applicationState, [self protectedDataAvailable]);
+        if ([reason isEqualToString:AVPlayerRateDidChangeReasonAppBackgrounded] ||
+            [reason isEqualToString:AVPlayerRateDidChangeReasonSetRateFailed]) {
+            self.airPlaySystemPaused = self.playRequested;
+        } else if ([reason isEqualToString:AVPlayerRateDidChangeReasonSetRateCalled]) {
+            self.airPlaySystemPaused = NO;
+            if (player.externalPlaybackActive && player.timeControlStatus == AVPlayerTimeControlStatusPaused)
+                self.airPlaySawTransport = YES; // An explicit rate change can pause before the first frame.
+        }
+        [self traceAirPlay:[@"rate-change " stringByAppendingString:reason ?: @"unspecified"]];
     });
 }
 
@@ -314,134 +389,213 @@
         if (note.object != self.airPlayPlayer.currentItem) return;
         self.ended = YES;
         self.playRequested = NO;
+        self.airPlayStartDeadline = 0;
+        [self traceAirPlay:@"ended"];
         [self emitCommand:@"ended" value:@""];
     });
 }
 
 - (void)airPlayFailed:(NSNotification *)note {
     dispatch_async(dispatch_get_main_queue(), ^{
-        if (note.object == self.airPlayPlayer.currentItem) {
-            NSError *error = note.userInfo[AVPlayerItemFailedToPlayToEndTimeErrorKey];
-            NSError *underlying = error.userInfo[NSUnderlyingErrorKey];
-            NSLog(@"[VideoAirPlay] playback failed domain=%@ code=%ld underlying=%@/%ld",
-                error.domain, (long)error.code, underlying.domain, (long)underlying.code);
-            [self finishAirPlayWithMessage:@"AirPlay couldn’t play this video."];
-        }
+        if (note.object != self.airPlayPlayer.currentItem) return;
+        NSError *error = note.userInfo[AVPlayerItemFailedToPlayToEndTimeErrorKey];
+        NSError *underlying = error.userInfo[NSUnderlyingErrorKey];
+        NSLog(@"[VideoAirPlay] playback failed domain=%@ code=%ld underlying=%@/%ld",
+            error.domain, (long)error.code, underlying.domain, (long)underlying.code);
+        [self recoverAirPlay:@"item-failed"];
     });
 }
 
 - (void)updateAirPlay {
     AVPlayer *player = self.airPlayPlayer;
     if (![self allowsAirPlay]) {
-        [self detachAirPlayKeepingRoute:NO];
-        [self revealSurface];
-        [self showStatus:@"AirPlay access changed. Press Play to continue on this device."];
+        [self stopAirPlayForAccessChange];
         return;
     }
-    if (![self canPlay:NO]) { [self pause]; return; }
-    if (![self hasAirPlayAudioRoute] && !player.externalPlaybackActive) {
-        [self finishAirPlayWithMessage:nil];
+    if (![self canPlay:NO]) {
+        if (self.playRequested) [self pause];
         return;
     }
+
+    NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
+    if (self.airPlayAdvanced && self.airPlayLastPoll > 0 && now - self.airPlayLastPoll > 3) {
+        // AVKit may need a fresh sample after this process was suspended.
+        self.airPlayStallGraceUntil = now + 5;
+        self.airPlayRouteLossDeadline = 0;
+    }
+    self.airPlayLastPoll = now;
+    BOOL external = player.externalPlaybackActive;
+    BOOL audioRoute = [self hasAirPlayAudioRoute];
+    [self traceAirPlay:nil];
+    if (!external) {
+        player.muted = YES;
+        if (self.airPlayWasExternal && !audioRoute &&
+            (self.airPlayPickerOpen || self.airPlayRouteDeadline > now)) {
+            [self finishAirPlayWithMessage:nil]; // User switched to this device in the picker.
+            return;
+        }
+        if (self.airPlayWasExternal || !audioRoute) {
+            if (self.airPlayRouteLossDeadline <= 0) self.airPlayRouteLossDeadline = now + 3;
+            if (now >= self.airPlayRouteLossDeadline) [self recoverAirPlay:@"route-lost"];
+            return;
+        }
+    }
+    self.airPlayRouteLossDeadline = 0;
     if (player.status == AVPlayerStatusFailed || player.currentItem.status == AVPlayerItemStatusFailed) {
         NSError *error = player.currentItem.error ?: player.error;
         NSLog(@"[VideoAirPlay] failed domain=%@ code=%ld", error.domain, (long)error.code);
-        [self finishAirPlayWithMessage:@"AirPlay couldn’t play this video."];
+        [self recoverAirPlay:@"player-or-item-failed"];
         return;
     }
-    NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
-    BOOL ready = player.externalPlaybackActive && player.currentItem.status == AVPlayerItemStatusReadyToPlay;
-    if (ready) self.airPlayConnectionDeadline = 0;
-    if ((self.airPlayConnectionDeadline > 0 && now >= self.airPlayConnectionDeadline) ||
-        (self.airPlaySeekPending && self.airPlaySeekDeadline > 0 && now >= self.airPlaySeekDeadline)) {
-        NSLog(@"[VideoAirPlay] timeout item=%ld external=%d seek=%d", (long)player.currentItem.status,
-            player.externalPlaybackActive, self.airPlaySeekPending);
-        [self finishAirPlayWithMessage:@"AirPlay couldn’t finish loading this video."];
+
+    BOOL itemReady = player.currentItem.status == AVPlayerItemStatusReadyToPlay;
+    BOOL ready = external && itemReady;
+    if (ready && !self.airPlayWasExternal) {
+        self.airPlayWasExternal = YES;
+        [self applyAirPlayPlaybackOptions];
+        if (self.airPlaySeekTarget < 0 &&
+            llabs([self airPlayTime:player.currentTime] - self.airPlayStartPosition) > 250)
+            [self seekAirPlay:self.airPlayStartPosition];
+    }
+    if (ready && !self.ended) {
+        if (player.timeControlStatus == AVPlayerTimeControlStatusPaused) {
+            if (!self.airPlaySystemPaused && self.airPlaySawTransport) {
+                self.playRequested = NO;
+                self.airPlayStartDeadline = 0;
+            }
+        } else {
+            self.airPlaySawTransport = YES;
+            self.airPlaySystemPaused = NO;
+            if (!self.playRequested) {
+                self.airPlayLastProgress = now;
+                if (!self.airPlayAdvanced) self.airPlayStartDeadline = now + 45;
+            }
+            self.playRequested = YES;
+        }
+    } else if (ready && self.ended && player.timeControlStatus == AVPlayerTimeControlStatusPlaying &&
+               [self airPlayTime:player.currentTime] < self.airPlayConfirmedPosition) {
+        self.ended = NO; // Replay from the receiver's transport.
+        self.playRequested = YES;
+        self.airPlayLastProgress = now;
+    }
+    if (self.airPlaySeekDeadline > 0 && now >= self.airPlaySeekDeadline) {
+        [self recoverAirPlay:@"seek-timeout"];
         return;
     }
-    if (self.airPlaySeekTarget >= 0 && !self.airPlaySeekPending &&
-        player.currentItem.status == AVPlayerItemStatusReadyToPlay) [self submitAirPlaySeek];
-    if (ready) {
-        if (!self.airPlayWasExternal) {
-            self.airPlayWasExternal = YES;
-            [self applyAirPlayPlaybackOptions];
-            if (self.airPlaySeekTarget < 0 &&
-                llabs([self airPlayTime:player.currentTime] - self.airPlayStartPosition) > 250)
-                [self seekAirPlay:self.airPlayStartPosition];
-            self.airPlayPicker.accessibilityValue = @"Playing on TV";
-            [self showStatus:@""];
+    if (self.airPlaySeekTarget >= 0 && !self.airPlaySeekPending && itemReady) [self submitAirPlaySeek];
+
+    if (ready && self.airPlaySeekTarget < 0 && self.playRequested &&
+        player.timeControlStatus == AVPlayerTimeControlStatusPlaying) {
+        int64_t current = [self airPlayTime:player.currentTime];
+        if (current >= 0 && current > self.airPlayClock && self.airPlayClock >= 0) {
+            if (!self.airPlayAdvanced) {
+                self.airPlayPicker.accessibilityValue = @"Playing on TV";
+                [self showStatus:@""];
+            }
+            self.airPlayAdvanced = YES;
+            self.airPlayStartDeadline = 0;
+            self.airPlayLastProgress = now;
+            self.airPlayConfirmedPosition = current;
         }
-        player.muted = self.airPlaySeekTarget >= 0 || self.resumeMuted;
-    } else {
-        player.muted = YES;
-        if (self.airPlayWasExternal) {
-            self.airPlayPicker.accessibilityValue = @"Connecting";
-            if (self.airPlayConnectionDeadline <= 0)
-                self.airPlayConnectionDeadline = NSProcessInfo.processInfo.systemUptime + 3;
-        }
+        if (current >= 0) self.airPlayClock = current;
     }
-    if (self.airPlaySeekTarget < 0 ||
-        (player.currentItem.status == AVPlayerItemStatusReadyToPlay && player.timeControlStatus == AVPlayerTimeControlStatusPaused)) {
-        self.playRequested = player.timeControlStatus != AVPlayerTimeControlStatusPaused;
-        if (self.playRequested && self.ended) self.ended = NO;
+    if (self.playRequested && !self.ended && self.airPlaySeekTarget < 0 &&
+        ((self.airPlayStartDeadline > 0 && now >= self.airPlayStartDeadline) ||
+         (self.airPlayAdvanced && now - self.airPlayLastProgress >= 15 && now >= self.airPlayStallGraceUntil))) {
+        [self recoverAirPlay:self.airPlayAdvanced ? @"playhead-stalled" : @"start-timeout"];
+        return;
     }
+    player.muted = !ready || self.airPlaySeekTarget >= 0 || self.resumeMuted;
     [self updatePlayButton];
 }
 
-- (void)finishAirPlayWithMessage:(NSString *)message {
-    BOOL resume = self.airPlayWasExternal ? self.playRequested : self.airPlayResumeLocal;
-    [self detachAirPlayKeepingRoute:[self allowsAirPlay]];
-    self.airPlayResumeLocal = resume;
-    [self revealSurface];
-    if ([self hasAirPlayAudioRoute]) {
-        NSString *choose = @"Choose this device in AirPlay to continue here.";
-        [self showStatus:message.length ? [NSString stringWithFormat:@"%@ %@", message, choose] : choose];
+- (void)stopAirPlayForAccessChange {
+    [self traceAirPlay:@"access-revoked"];
+    if (self.restricted) {
+        [self suspendForLock];
     } else {
-        [self updateAirPlayRoute];
-        if (message.length) [self showStatus:message];
+        [self detachAirPlay];
+        [self revealSurface];
+        [self showStatus:@"AirPlay access changed. Press Play to continue on this device."];
     }
 }
 
-- (void)detachAirPlayKeepingRoute:(BOOL)keepRoute {
-    if (!keepRoute) {
-        // A prior timeout/route loss may already have detached the item while
-        // retaining the reusable player's route. Closing must retire that too.
-        [self.airPlayRoutePlayer pause];
-        self.airPlayRoutePlayer.muted = YES;
-        self.airPlayRoutePlayer.allowsExternalPlayback = NO;
-        self.airPlayRoutePlayer = nil;
-        self.airPlayPreparing = NO;
-        self.airPlayRouteDeadline = 0;
-        self.airPlayResumeLocal = NO;
+- (void)recoverAirPlay:(NSString *)reason {
+    if (![self allowsAirPlay]) {
+        [self stopAirPlayForAccessChange];
+        return;
     }
+    // The OS can suspend the app. Keep the established item through a lock and
+    // evaluate a new handoff when the app can present controls again.
+    if ([self hasEstablishedAirPlay] && (self.airPlayPlayer.externalPlaybackActive || [self hasAirPlayAudioRoute]) &&
+        (![self protectedDataAvailable] || UIApplication.sharedApplication.applicationState != UIApplicationStateActive)) return;
+
+    [self traceAirPlay:reason];
+    AVPlayer *player = self.airPlayPlayer;
+    AVPlayerItem *item = player.currentItem;
+    AVURLAsset *asset = [item.asset isKindOfClass:AVURLAsset.class] ? (AVURLAsset *)item.asset : nil;
+    if (!self.airPlayRecovered && self.playRequested && !self.ended && !self.airPlayPickerOpen &&
+        [self protectedDataAvailable] && UIApplication.sharedApplication.applicationState == UIApplicationStateActive &&
+        [self canPlay:NO] && (player.externalPlaybackActive || [self hasAirPlayAudioRoute]) &&
+        player.status != AVPlayerStatusFailed && asset.URL) {
+        self.airPlayRecovered = YES;
+        int64_t position = self.airPlayConfirmedPosition;
+        [self removeAirPlayItemObservers];
+        self.playRequested = NO;
+        player.muted = YES;
+        [player pause];
+        // Keep the selected route and the authorized source alive for one
+        // fresh item. An explicit retry after teardown also rebuilds the source.
+        [self installAirPlayItemAtURL:asset.URL metadata:item.externalMetadata position:position];
+        self.airPlayPicker.accessibilityValue = @"Connecting";
+        [self showStatus:@"Reconnecting to TV…"];
+        [self startAirPlayPlayback];
+        if (self.playRequested) return;
+    }
+    [self finishAirPlayWithMessage:@"AirPlay stopped. Select the TV in AirPlay to retry."];
+}
+
+- (void)finishAirPlayWithMessage:(NSString *)message {
+    BOOL resume = !message && (self.airPlayWasExternal ? self.playRequested : self.airPlayResumeLocal);
+    [self detachAirPlay];
+    self.airPlayResumeLocal = resume;
+    [self revealSurface];
+    if ([self hasAirPlayAudioRoute]) {
+        NSString *choose = @"Choose this device in AirPlay to play here.";
+        [self showStatus:message.length ? [NSString stringWithFormat:@"%@ %@", message, choose] : choose];
+    } else {
+        [self updateAirPlayRoute];
+        if (message.length)
+            [self showStatus:[message stringByAppendingString:@" Press Play to continue on this device."]];
+    }
+}
+
+- (void)detachAirPlay {
+    self.airPlayPreparing = NO;
+    self.airPlayRouteDeadline = 0;
+    self.airPlayResumeLocal = NO;
     AVPlayer *player = self.airPlayPlayer;
     if (!player) return;
-    self.startMilliseconds = [self positionMilliseconds];
+    self.startMilliseconds = self.ended ? 0 : self.airPlayConfirmedPosition;
     self.lastPosition = self.startMilliseconds;
-    self.airPlaySeekGeneration++;
+    [self removeAirPlayItemObservers];
     self.airPlaySeekPending = NO;
-    self.airPlaySeekDeadline = 0;
-    self.airPlayConnectionDeadline = 0;
+    self.airPlaySeekTarget = -1;
+    self.airPlaySeekDeadline = self.airPlayStartDeadline = self.airPlayRouteLossDeadline = 0;
     [NSNotificationCenter.defaultCenter removeObserver:self name:AVPlayerRateDidChangeNotification object:player];
-    [player pause];
     player.muted = YES;
-    [NSNotificationCenter.defaultCenter removeObserver:self name:AVPlayerItemDidPlayToEndTimeNotification
-        object:player.currentItem];
-    [NSNotificationCenter.defaultCenter removeObserver:self name:AVPlayerItemFailedToPlayToEndTimeNotification
-        object:player.currentItem];
-    [player.currentItem cancelPendingSeeks];
+    [player pause];
     self.airPlayController.player = nil;
     [self.airPlayController willMoveToParentViewController:nil];
     [self.airPlayController.view removeFromSuperview];
     [self.airPlayController removeFromParentViewController];
     self.airPlayController = nil;
-    if (!keepRoute) player.allowsExternalPlayback = NO;
+    player.allowsExternalPlayback = NO;
     [player replaceCurrentItemWithPlayerItem:nil];
     self.airPlayPlayer = nil;
     self.airPlayChapters = nil;
     self.airPlayPicker.accessibilityValue = nil;
     self.localAudioNeedsRefresh = YES;
-    self.airPlayPreparing = NO;
     self.playRequested = NO;
     if (!self.retired) {
         [self showStatus:@""];

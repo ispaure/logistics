@@ -52,6 +52,7 @@ class MobileVideo:
         self.last_sample = None
         self.discovery = None
         self.mkv_stream = None
+        self.airplay_stream_close = None
         self.cancel_remux = None
         self.switching_player = False
         self._release_retirement = None
@@ -303,6 +304,8 @@ class MobileVideo:
             if self.native.airplay_active():
                 return
             await self.release_airplay_stream()
+            if self.airplay_stream_close is not None:
+                await asyncio.shield(self.airplay_stream_close)
             if self.closed:
                 return
             path = airplay_file(self)
@@ -370,9 +373,12 @@ class MobileVideo:
         # Detach the retained stream once; this coroutine owns its close barrier.
         stream, self.mkv_stream = self.mkv_stream, None
         if stream is not None:
-            worker = self.app.loop.create_task(asyncio.to_thread(stream.close))
-            await drain_worker(worker)
-            worker.result()
+            worker = self.airplay_stream_close = self.app.loop.create_task(asyncio.to_thread(stream.close))
+            try:
+                await drain_worker(worker)
+                worker.result()
+            finally:
+                self.airplay_stream_close = None
 
     def allowed(self, external=False):
         try:

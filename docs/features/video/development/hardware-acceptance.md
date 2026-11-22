@@ -58,7 +58,8 @@ Mirroring disconnected and select Apple TV in the player's AirPlay picker.
 | Select a different audio track or subtitle on the TV, then reopen the Duo's track menu | The TV plays the selected track and the Duo marks the current Apple player selection. |
 | Change a track or turn subtitles off on the Duo | The receiver changes its output without reopening the video or resetting the timeline. |
 | Pause with the Siri Remote, then change speed or mute on the Duo | Playback remains paused. Play resumes at the chosen supported speed and mute state. |
-| Lock the Duo after TV playback starts; pause/resume from the Siri Remote and Watch, then unlock | The same ordinary session continues and controls remain usable. Repeat long enough to require new HLS segments. Source revocation and session protection must still stop output. |
+| Cast the same generated H.264/AAC MP4 and compatible MKV for at least five minutes each with Duo awake, then repeat while locked on the same Apple TV and route. Use media at least ten minutes long and continue to EOF where possible. | Compare real TV picture, audio, and media position around three and five minutes, then wake and check position, audio and transport controls. Source revocation and session protection still stop output. |
+| Briefly interrupt buffering, then break the video route with the audio route still selected. Wake Duo if locked and cast again after a timeout or teardown. | Brief buffering keeps the existing playback item. A stalled session gets one recovery attempt on an available route while Duo is active. Retry or play locally at the confirmed position. Listen for overlapping audio. |
 | Switch apps repeatedly, return to Logistics, and press Siri Remote Play/Pause during and after a phone seek | Each Pause holds, including when an outstanding seek completes. Repeat after several minutes. Record whether the clickpad and Back still work if transport controls fail. |
 | Seek from either device and change fit/fill | The shared timeline follows the seek and the TV picture uses the chosen sizing. |
 | Start a large MKV midway through, then press Back 10 seconds repeatedly on the Siri Remote past the starting position; repeat after a phone timeline seek | Earlier fragments load and playback continues without ending AirPlay. Repeat rapidly while video is loading, and record the movie timestamp and player/server errors if it disconnects. |
@@ -66,7 +67,7 @@ Mirroring disconnected and select Apple TV in the player's AirPlay picker.
 | Choose iPhone in the same AirPlay picker while playing, paused and muted | VLC receives the current position and intent after the audio route returns; muted playback stays muted. |
 | Close the player while streaming, paused, loading, and after a connection/seek timeout | TV video stops, the item and HLS server are released, and reopening requires an explicit playback action. The system audio route may still show Apple TV; choosing iPhone in Control Center returns it without changing Settings. |
 | Open a movie and pause/resume before its audio output is ready; return from TV to iPhone and press Play | Sound resumes without a manual seek, route toggle or app restart unless deliberately muted. |
-| Resume a 4K HDR MKV at a saved position, then scrub while the TV loads | The handoff starts, the requested target remains visible, and playback reaches that target. A stalled load or seek reports failure and preserves the position for local playback. |
+| Resume a 4K HDR MKV at a saved position, then scrub while the TV loads | The handoff starts, the requested target remains visible, and playback reaches that target. A stalled load or seek reports failure and preserves the last confirmed position for local playback. |
 | Open a generated MP4 with named chapters, then a remuxed MKV with the same chapter starts. Use the phone's **Chapters** panel during native AirPlay, with playback running and after pausing from the Siri Remote. | The receiver seeks to the named starts and preserves the receiver's play or pause state. Check the first and final chapter boundaries and return to local playback. Record separately whether the particular receiver shows an embedded chapter list for a direct file. |
 
 Check forced subtitle and accessibility preferences on the receiver separately
@@ -78,6 +79,10 @@ around the button press, together with app/OS versions and the movie timestamp.
 The log contains playback state and the system rate-change reason, without source
 names or stream URLs. Compare Siri Remote input with phone and Watch input;
 successful navigation alone does not establish that a Pause reached AVPlayer.
+For a lock failure, record which transition occurs first among HLS requests or
+fragment reads, playhead movement, and loss of the video route. Native MP4
+does not use the HLS server, so compare the AVPlayer and route observations for
+that file separately. Save only state and timing fields.
 
 ## Evidence and cleanup
 

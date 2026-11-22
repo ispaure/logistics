@@ -141,17 +141,12 @@ The iOS-only `native_video_airplay` preference defaults off. Ordinary local
 MP4, MOV, M4V and MKV files with a guarded path and an external-playback grant
 have one native **AirPlay** picker in the VLC controller. The selected AirPlay
 audio route starts preparation. The controller confirms external video with
-AVPlayer and keeps the same deck and timeline. On route loss or playback
-failure, the picker stays available. VLC waits for the audio route to return
-before resuming. Revocation disables external playback and detaches the item.
-A window reuses its empty AVPlayer for successive requests, disabling external
-playback when the video controller retires. Startup does not opt into long-form
-automatic route suggestions; iOS's Automatically AirPlay preference owns those
-system notifications, including ones shown while browsing protected media.
-The controller retains the reusable route player separately from its active item:
-retirement disables external playback even after a timeout has already detached
-the item. It does not attempt to force the system audio route back to the phone.
-That selection belongs to iOS's route picker/Control Center.
+AVPlayer and keeps the same deck and timeline. Each explicit cast creates its
+own AVPlayer and source. Closing or abandoning the handoff retires the player
+and releases any HLS server. A retry waits for closing requests to drain before
+opening a fresh server. iOS owns the audio selection through its route picker
+and Control Center, and owns automatic route suggestions through its
+Automatically AirPlay preference.
 
 Device lock preserves an established, authorized ordinary AirPlay session.
 `hasEstablishedAirPlay` requires a retained player that has reached external
@@ -160,24 +155,31 @@ restriction. New handoffs and local playback remain denied while protected data
 is unavailable. File protection is unchanged: an inaccessible source still fails
 its access/read checks. Closing, revocation and session protection detach as before.
 
-AVKit receiver controls can pause AVPlayer without calling the Logistics pause
-method. Timeline polling accepts that state during seeks, and seek completion
-rechecks the player before restarting; this prevents a stale `playRequested`
-flag from undoing receiver Pause. Rate-change notifications log state and system
-reason without filenames, titles or stream URLs. These logs help distinguish a
-pause reaching AVPlayer from one that never reaches the sender; they do not prove
-why a physical receiver stopped sending commands.
+AVKit receiver controls can pause AVPlayer directly. Timeline polling accepts
+that state during seeks, and seek completion rechecks the player before
+restarting. The watchdog also honors interruptions, deliberate Pause, and EOF.
+The `[VideoAirPlay]` trace records system rate and waiting reasons, item and
+route state, clock progress, scene and protected-data notifications, and
+interruption and error codes. HLS snapshots add counts and ages for requests,
+completed responses, and fragment reads. These snapshots contain no filenames,
+titles, stream URLs, or receiver identifiers.
 
-Playback starts the receiver handoff while a saved-position seek is pending;
-output stays muted until the seek completes. Loading keeps the known-duration
-timeline usable. Connection and seek deadlines prevent an unresponsive receiver
-from retaining the player indefinitely. Local mute is user intent, separate
-from VLC's transient output state; returning from AirPlay flushes queued audio
-at the held position.
+Playback starts the receiver handoff while a saved-position seek is pending.
+Output stays muted until the seek completes. Loading keeps the known-duration
+timeline usable. Start has a 45-second deadline that requires forward media
+time on the active route, and seeks have a separate 20-second deadline.
+Established playback allows 15 seconds without progress and gives a transient
+route break three seconds. When the app is active and a usable route remains,
+it can replace the item once at the last confirmed position. After a
+suspension it gives AVKit time to report progress before declaring a stall.
+A failed recovery retires the player and leaves the confirmed position for an
+explicit retry or local playback. Returning from AirPlay flushes queued VLC
+audio at the held position and preserves the user's mute setting.
 
 `video_chrome_tools --airplay-controls` checks the production controller with
 real VLC audio state and simulated AVPlayer loading, interrupted and stale seek
-completions, phone/receiver Pause and timeout recovery. It injects device-lock
+completions, phone/receiver Pause, a ready item with a stationary playhead,
+route loss, and explicit retry. It injects device-lock
 availability and background notifications to check continued AirPlay, pause/resume,
 denied new handoffs, source revocation, route loss and session protection.
 Receiver Pause is checked during pending seeks, before polling and after repeated

@@ -40,6 +40,8 @@ class IOSVideo:
         self.native.airPlayAvailable = airplay_file(owner) is not None
         self.airplay_allowed = Block(self.airplay_source_allowed, c_bool)
         self.native.airPlayAllowed = self.airplay_allowed
+        self.airplay_source_trace = Block(self.trace_airplay_source, None)
+        self.native.airPlaySourceTrace = self.airplay_source_trace
         self.native.subtitleJSON = json.dumps(subtitles)
         self.allowed = Block(lambda external: owner.playback_allowed(bool(external)), c_bool, c_bool)
         self.request_play = Block(lambda: owner.request_play(), c_bool)
@@ -102,12 +104,15 @@ class IOSVideo:
     def airplay_active(self):
         return bool(self.native.hasAirPlay())
 
+    def trace_airplay_source(self):
+        import json
+        stream = self.owner.mkv_stream
+        if stream is not None:
+            self.native.logAirPlaySource(json.dumps(stream.request_diagnostics()))
+
     def start_airplay(self, path, stream):
         from rubicon.objc import ObjCClass
-        app = self.owner.app
-        player = getattr(app, 'video_airplay_player', None)
-        if player is None or int(native_value(player, 'status')) == 2:  # AVPlayerStatusFailed
-            player = app.video_airplay_player = ObjCClass('AVPlayer').alloc().init()
+        player = ObjCClass('AVPlayer').alloc().init()
         url = ObjCClass('NSURL')
         source = url.URLWithString(stream.url) if stream else url.fileURLWithPath(str(path))
         return bool(self.native.beginAirPlay(player, URL=source, title=path.name))

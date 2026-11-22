@@ -82,6 +82,10 @@ class PlaybackControls:
 
     async def command(self, name, value):
         owner = self.owner
+        if name == "airplayDetached":
+            if not owner.closed and not owner.native.airplay_active():
+                await owner.release_airplay_stream()
+            return
         if owner.closed or owner.hidden or not owner.allowed():
             return
         try:
@@ -116,9 +120,6 @@ class PlaybackControls:
                     await owner.flush_progress(observation)
             elif name == "airplay":
                 await owner.prepare_airplay()
-            elif name == "airplayDetached":
-                if not owner.native.airplay_active():
-                    await owner.release_airplay_stream()
             elif name == "seek":
                 owner.native.seek(parse_time(value))
             elif name in ("previous", "next", "queue", "ended"):
