@@ -49,6 +49,17 @@ file-manager reads. Drag preparation uses non-resumable rclone downloads and
 the existing credential checks. A forced credential revocation can block
 provider cleanup and leave an encrypted temporary item in the provider.
 
+LocalCrypt leaves interrupted drag staging in place across a fresh unlock.
+A stage name cannot establish ownership. Even with a sealed record and an
+advisory lease, the current provider validates a revision and then removes a
+pathname. A writer that does not share the lease can replace the entry between
+these steps. A generated probe reproduced removal of the replacement.
+Recovery needs a provider-owned staging area isolated from other writers or a
+removal operation that enforces object identity at the point of mutation.
+The recovery design must preserve older stages, unknown objects and
+replacements. It can validate sealed records with the fresh credential
+generation.
+
 The desktop browser tests exercise real Qt widget dispatch with generated URI
 lists. They cover action and volume selection, nested bytes, collisions,
 cancellation, path handoff, encrypted imports, and remote export preparation.
