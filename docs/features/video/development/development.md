@@ -89,6 +89,14 @@ acknowledgement and seeks to the held position before resuming. Mobile
 preference writes serialize. See [iOS HDR pause and resume](hdr-play-pause.md)
 and [PiP and captions](video-player.md#mobile-pip-controls-and-captions).
 
+On iOS, a bounded read of a local AVI header checks for a video stream with
+XVID in both its stream handler and compression fields. Those inputs prefer
+VLC's FFmpeg AVI demuxer with the native AVI demuxer as fallback. This avoids
+startup picture breakup reproduced when VLC's native AVI packetization
+selected VideoToolbox for an older packed Xvid stream. The alternative
+demuxer selected avcodec and retained the sample-buffer display and MP3
+audio decoder in the simulator. Cloud opens skip the additional header read.
+
 ### Inline subtitle clearance
 
 The inline controllers compare the painted bounds of a supported text cue with

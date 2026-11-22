@@ -961,6 +961,53 @@ class CloudVideoDispatchTests(unittest.IsolatedAsyncioTestCase):
         controller.open_crypt.assert_not_called()
         resource.readers.assert_not_called()
 
+    async def test_xvid_avi_uses_bounded_local_ios_header(self):
+        from io import BytesIO
+        from features.video.formats import AVI_HEADER_BYTES, avi_uses_xvid
+        from features.video.mobile.player import MobileVideo
+
+        def chunk(tag, body):
+            return tag + len(body).to_bytes(4, 'little') + body + b'\0' * (len(body) % 2)
+
+        def avi(handler=b'xvid', codec=b'XVID'):
+            video = chunk(b'strh', b'vids' + handler + bytes(48))
+            video += chunk(b'strf', (40).to_bytes(4, 'little') + bytes(12) + codec + bytes(20))
+            audio = chunk(b'LIST', b'strl' + chunk(b'strh', b'audsXVID' + bytes(48)))
+            header = chunk(b'LIST', b'hdrl' + chunk(b'JUNK', b'pad') + audio + chunk(b'LIST', b'strl' + video))
+            return chunk(b'RIFF', b'AVI ' + header + chunk(b'LIST', b'movi' + bytes(AVI_HEADER_BYTES)))
+
+        fixture = avi()
+        self.assertTrue(avi_uses_xvid(fixture[:AVI_HEADER_BYTES]))
+        for prefix in (fixture[:100], avi(codec=b'MJPG'), avi(handler=b'FMP4'),
+                       chunk(b'RIFF', b'WAVE' + fixture[12:]),
+                       chunk(b'RIFF', b'AVI ' + chunk(b'JUNK', fixture))):
+            self.assertFalse(avi_uses_xvid(prefix))
+
+        for platform, remote, path, selected in (
+                ('toga_iOS.app', False, 'sample.AVI', True),
+                ('toga_iOS.app', True, 'sample.avi', False),
+                ('toga_android.app', False, 'sample.avi', False),
+                ('toga_iOS.app', False, 'sample.mp4', False)):
+            with self.subTest(platform=platform, remote=remote, path=path):
+                backend = type('App', (), {'__module__': platform})()
+                owner = object.__new__(MobileVideo)
+                owner.app = SimpleNamespace(_impl=backend)
+                owner.uses_xvid_avi = False
+                owner.prepare_media_bounds = Mock()
+                owner.prepare_sidecars = Mock(return_value=[])
+                owner.progress = Mock(load=lambda: 0)
+                owner.controls = SimpleNamespace(store=Mock())
+                stream = BytesIO(fixture)
+                with patch.object(stream, 'read', wraps=stream.read) as read:
+                    owner.content = SimpleNamespace(path=path, remote=remote,
+                        media_bounds=None, open=Mock(return_value=stream))
+                    self.assertEqual(owner.prepare(), (0, []))
+                    self.assertEqual(owner.uses_xvid_avi, selected)
+                    if selected:
+                        read.assert_called_once_with(AVI_HEADER_BYTES)
+                    else:
+                        owner.content.open.assert_not_called()
+
     async def test_optional_cloud_sidecar_failure_does_not_block_video(self):
         from features.video.mobile.player import MobileVideo
         owner = object.__new__(MobileVideo)

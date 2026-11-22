@@ -30,6 +30,7 @@ class IOSVideo:
         self.display_registration = None
         self.native = ObjCClass('LGVideoController').alloc().init()
         self.native.videoURL = owner.transport.url
+        self.native.usesXvidAVI = owner.uses_xvid_avi
         self.native.startMilliseconds = position
         self.native.knownDuration = owner.progress.duration
         self.native.restricted = owner.restricted

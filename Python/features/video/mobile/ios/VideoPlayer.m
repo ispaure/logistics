@@ -153,6 +153,7 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic, copy) BOOL (^requestPlay)(void);
 @property(nonatomic, copy) void (^closed)(void);
 @property(nonatomic, strong) VLCMediaPlayer *player;
+@property(nonatomic) BOOL usesXvidAVI;
 @property(nonatomic, strong) UIView *movie;
 @property(nonatomic, strong) UIView *inlineMovie, *externalVideoHost;
 @property(nonatomic, copy) BOOL (^externalDisplayAllowed)(void);
@@ -878,6 +879,13 @@ typedef struct {
     // preceding cluster over the retained provider's HTTP range transport.
     if ([[NSURL URLWithString:self.videoURL].pathExtension.lowercaseString isEqualToString:@"mkv"])
         [media addOption:@":demux=mkv_trusted,mkv"];
+    // Native AVI packetization can send old packed Xvid to VideoToolbox,
+    // which starts with badly damaged pictures. FFmpeg's AVI demuxer keeps
+    // these inputs on avcodec without changing the audio or display route.
+    if (self.usesXvidAVI) {
+        [media addOption:@":demux=avformat,avi"];
+        [media addOption:@":avformat-format=avi"];
+    }
     // VLC 4 start-time clips the timeline and duration. Seek the opening
     // input instead so timestamps and later seeks retain the original origin.
     [media addOption:@":network-caching=6000"];

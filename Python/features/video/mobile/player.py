@@ -44,6 +44,7 @@ class MobileVideo:
         self.subtitles = []
         self.closed = False
         self.hidden = False
+        self.uses_xvid_avi = False
         self.native_restricted = None
         self.task = None
         self.retirement = None
@@ -205,6 +206,14 @@ class MobileVideo:
     def prepare(self):
         if not self.content.remote:
             self.prepare_media_bounds()
+            if (Path(self.content.path).suffix.lower() == '.avi'
+                    and type(self.app._impl).__module__.startswith('toga_iOS.')):
+                from features.video.formats import AVI_HEADER_BYTES, avi_uses_xvid
+                try:
+                    with self.content.open() as stream:
+                        self.uses_xvid_avi = avi_uses_xvid(stream.read(AVI_HEADER_BYTES))
+                except OSError:
+                    self.content.check_access()
         position = self.progress.load()
         end = (self.content.media_bounds or {}).get('end_ms')
         if end is not None:
