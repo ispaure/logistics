@@ -49,16 +49,28 @@ file-manager reads. Drag preparation uses non-resumable rclone downloads and
 the existing credential checks. A forced credential revocation can block
 provider cleanup and leave an encrypted temporary item in the provider.
 
-LocalCrypt leaves interrupted drag staging in place across a fresh unlock.
-A stage name cannot establish ownership. Even with a sealed record and an
-advisory lease, the current provider validates a revision and then removes a
-pathname. A writer that does not share the lease can replace the entry between
-these steps. A generated probe reproduced removal of the replacement.
-Recovery needs a provider-owned staging area isolated from other writers or a
-removal operation that enforces object identity at the point of mutation.
-The recovery design must preserve older stages, unknown objects and
-replacements. It can validate sealed records with the fresh credential
-generation.
+On import, a copy builds a `.drag-…` tree and a cross-provider move builds a
+`.transfer-…` tree. LocalCrypt also prepares each new file under a
+`.create-…` name. Process exit before the final rename can leave a verified
+stage. Exit after a move publishes but before source removal can leave both
+complete copies. A retry must respect the destination collision.
+
+LocalCrypt leaves abandoned stages alone on fresh unlock. A sealed ownership
+record can identify an earlier revision. Removal still acts on a pathname,
+which another writer can replace after the revision check. Preparing a
+complete tree outside the mirror keeps it out of transfers of that mirror.
+On macOS, a second process running as the same user could write in that
+owner-only staging directory while Logistics held its advisory lease.
+Exclusive rename protects an occupied destination and accepts the current
+source pathname.
+
+To prevent leftovers safely, the provider needs to own the encrypted tree
+from allocation through verification and publication. It must exclude other
+writers or atomically publish the verified immutable tree into the authorized
+destination without overwriting. Recovery after revocation requires a fresh
+grant and retirement tied to the owned object. A free lease alone cannot
+distinguish a crash before publication from one after it. Historical stages,
+replacements and move sources must survive an ambiguous outcome.
 
 The desktop browser tests exercise real Qt widget dispatch with generated URI
 lists. They cover action and volume selection, nested bytes, collisions,
