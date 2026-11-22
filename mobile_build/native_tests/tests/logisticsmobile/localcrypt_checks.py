@@ -18,7 +18,76 @@ import base64
 import json
 import os
 from pathlib import Path
+from time import monotonic
 from .settings import READER_READY_TIMEOUT
+
+
+async def _check_wrong_archive_password(app, name):
+    """Reject the fixture password and acknowledge the actual native alert."""
+    import toga
+    from unittest.mock import patch
+    from commonUtils.archives.zip_access import ArchivePasswordError
+    from commonUtils.runtime.platform import get_os, OS
+    from .timings import section
+
+    app.crypt_password.value = 'wrong'
+    original_dialog = app.main_window.dialog
+    original_open = app.crypt_copies.open
+    acknowledged = []
+    phases = {}
+    started = monotonic()
+
+    def mark(phase):
+        phases[phase] = round(monotonic() - started, 6)
+
+    def observe_acquisition(*args, **kwargs):
+        mark('acquisition_started')
+        try:
+            return original_open(*args, **kwargs)
+        except ArchivePasswordError:
+            mark('archive_password_rejected')
+            raise
+
+    async def acknowledge_password_error(dialog):
+        mark('dialog_entered')
+        assert isinstance(dialog, toga.InfoDialog), 'Unexpected native password-error dialog'
+        task = asyncio.create_task(original_dialog(dialog))
+        try:
+            if get_os() is OS.IOS:
+                from .dialog_driver import presented_ios_dialog, respond_ios_dialog
+                native = await presented_ios_dialog(dialog)
+                mark('dialog_presented')
+                assert str(native.title) == 'Could not open document'
+                message = str(native.message)
+                assert native.presentingViewController is not None
+                await respond_ios_dialog(dialog, None)
+            else:
+                await asyncio.sleep(.2)
+                from java import jclass
+                native = dialog._impl.native
+                assert native.isShowing()
+                mark('dialog_presented')
+                message = str(native.findViewById(jclass('android.R$id').message).getText())
+                native.getButton(-1).performClick()
+            mark('dialog_answered')
+            assert 'password' in message.lower(), message
+            acknowledged.append(message)
+            result = await asyncio.wait_for(task, 5)
+            mark('dialog_task_returned')
+            return result
+        finally:
+            if not task.done():
+                task.cancel()
+
+    with section(app, 'localcrypt-wrong-password', format=Path(name).suffix[1:], phases_s=phases):
+        with patch.object(app.main_window, 'dialog', side_effect=acknowledge_password_error), \
+                patch.object(app.crypt_copies, 'open', side_effect=observe_acquisition):
+            mark('open_requested')
+            await asyncio.wait_for(app.open_crypt(), 30)
+            mark('open_returned')
+        assert len(acknowledged) == 1, 'Wrong password did not show its native error'
+        assert (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None) is None, 'Metadata save removed inner ZIP password'
+        assert 'password' in app.cloud_status.value.lower()
 
 
 async def exercise_localcrypt(app, passed, *, notebook_images=None):
@@ -364,42 +433,8 @@ async def exercise_localcrypt(app, passed, *, notebook_images=None):
         assert updated.page(0) == before_page
         await close_copy()
         if password:
-            import toga
-            from commonUtils.runtime.platform import get_os, OS
-            app.crypt_password.value = 'wrong'
-            original_dialog = app.main_window.dialog
-            acknowledged = []
-            async def acknowledge_password_error(dialog):
-                assert isinstance(dialog, toga.InfoDialog), 'Unexpected native password-error dialog'
-                task = asyncio.create_task(original_dialog(dialog))
-                try:
-                    await asyncio.sleep(.2)
-                    native = dialog._impl.native
-                    if get_os() is OS.IOS:
-                        from .dialog_driver import presented_ios_dialog
-                        native = await presented_ios_dialog(dialog)
-                        assert str(native.title) == 'Could not open document'
-                        message = str(native.message)
-                        assert native.presentingViewController is not None
-                        from .dialog_driver import respond_ios_dialog
-                        await respond_ios_dialog(dialog, None)
-                    else:
-                        from java import jclass
-                        assert native.isShowing()
-                        message = str(native.findViewById(jclass('android.R$id').message).getText())
-                        native.getButton(-1).performClick()
-                    assert 'password' in message.lower(), message
-                    acknowledged.append(message)
-                    return await asyncio.wait_for(task, 5)
-                finally:
-                    if not task.done():
-                        task.cancel()
             print('LOGISTICS_NATIVE_METADATA=' + name + ':wrong-password', flush=True)
-            with patch.object(app.main_window, 'dialog', side_effect=acknowledge_password_error):
-                await asyncio.wait_for(app.open_crypt(), 30)
-            assert len(acknowledged) == 1, 'Wrong password did not show its native error'
-            assert (app.provider_sessions().active.crypt_reader if app.provider_sessions().active else None) is None, 'Metadata save removed inner ZIP password'
-            assert 'password' in app.cloud_status.value.lower()
+            await _check_wrong_archive_password(app, name)
         print('LOGISTICS_NATIVE_METADATA=' + name + ':complete', flush=True)
     passed.append('native_localcrypt_metadata')
 
