@@ -57,14 +57,15 @@ class TimingReport:
             'tests': [], 'modules': [],
         }
 
-    def save(self, *, complete=False, exit_code=None):
+    def save(self, *, complete=False, exit_code=None, compact=False):
         self.data.update(duration_seconds=perf_counter() - self.started,
                          complete=complete, exit_code=exit_code)
         if complete:
             self.data['finished_at'] = timestamp()
         self.path.parent.mkdir(parents=True, exist_ok=True)
         temporary = self.path.with_suffix('.tmp')
-        temporary.write_text(json.dumps(self.data, indent=2) + '\n', encoding='utf-8')
+        indent = None if compact else 2
+        temporary.write_text(json.dumps(self.data, indent=indent) + '\n', encoding='utf-8')
         temporary.replace(self.path)
         if self.junit is not None:
             from build_manager.reporting import write_junit

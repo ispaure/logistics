@@ -323,7 +323,7 @@ def schedule(plan, execute, report, directory, *, workers, mode, fail_fast, canc
             unstarted[index] = dict(file=row.path.relative_to(directory).as_posix(), stage=stage.value,
                 cases=[case for case in row.inventory() if case['stage'] == stage.value], reason=why)
 
-    def save():
+    def save(*, compact=False):
         if report is None:
             return
         for key in ('tests', 'modules', 'not_run'):
@@ -332,7 +332,7 @@ def schedule(plan, execute, report, directory, *, workers, mode, fail_fast, canc
         complete = not unstarted and all(data.get('coverage_complete', False) for _, data in results.values())
         report.data.update(coverage_complete=complete, stopped_early=not complete,
                            cancelled=cancelled.is_set(), workers=workers)
-        report.save()
+        report.save(compact=compact)
 
     # Exact stage barriers also prevent two stages of one file overlapping.
     stages = list(dict.fromkeys(stage for stage, _ in plan))
@@ -388,7 +388,9 @@ def schedule(plan, execute, report, directory, *, workers, mode, fail_fast, canc
                         if fail_fast or mode == 'fast' and preflight:
                             reason = 'Fail-fast failure' if fail_fast else 'Test discovery/preflight failed'
                 if done:
-                    save()
+                    # Large live reports already contain the full test plan.
+                    # Keep writing every checkpoint, with formatting on exit.
+                    save(compact=True)
             if mode == 'fast' and stage.value == 'smoke' and stage_failed:
                 reason = 'Smoke gate failed'
         save()
