@@ -270,6 +270,11 @@ class RemoteBrowserTests(QtTestCase):
             nested_source = source / 'nested'
             (nested_source / 'empty').mkdir(parents=True)
             (nested_source / 'child.txt').write_bytes(b'child')
+            # Publish a fixed directory timestamp after creating every child.
+            # The Windows local backend can otherwise see different implicit
+            # last-write times for the same newly populated test directory.
+            fixture_time = 1_700_000_000
+            os.utime(nested_source, (fixture_time, fixture_time))
 
             def nested_stat():
                 try:
