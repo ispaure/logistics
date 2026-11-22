@@ -22,6 +22,8 @@ from features.ide.ui.workspace import ProjectWorkspace
 
 
 TEST_STAGE = TestStage.REGRESSION
+# A Windows reader can briefly hold the target during an external replacement.
+FIXTURE_REPLACE_TIMEOUT = 1
 
 
 class ExternalEditsTests(QtTestCase):
@@ -47,9 +49,8 @@ class ExternalEditsTests(QtTestCase):
                 nonlocal replaced
                 if Path(source) == path and Path(target).name == 'previous':
                     try:
-                        # Keep the atomic replacement at the displacement
-                        # boundary even if a Windows reader briefly holds it.
-                        atomic_write_bytes(path, b'external\n', replace_timeout=1)
+                        atomic_write_bytes(path, b'external\n',
+                                           replace_timeout=FIXTURE_REPLACE_TIMEOUT)
                     except OSError as error:
                         raise AssertionError('External replacement failed at Save displacement '
                                              f'(errno={error.errno}, winerror={getattr(error, "winerror", None)}).') from error
@@ -97,9 +98,7 @@ class ExternalEditsTests(QtTestCase):
             self.assertEqual((right.textCursor().anchor(), right.textCursor().position()), (6, 8))
 
             view.hide()
-            replacement = root / 'replacement'
-            replacement.write_text('atomic replacement\n')
-            replacement.replace(path)
+            atomic_write_bytes(path, b'atomic replacement\n', replace_timeout=FIXTURE_REPLACE_TIMEOUT)
             self.wait_until(lambda: right.toPlainText() == 'atomic replacement\n')
             view.show()
             path.write_text('second in-place edit\n')
@@ -224,9 +223,7 @@ class ExternalEditsTests(QtTestCase):
             generated.rename(regular)
             self.wait_until(lambda: names(nested) == ['regular', 'renamed.py', 'selected.py'])
             self.assertEqual(tooltip_lines(regular)[1], 'Source')
-            replacement = nested / 'temporary.cache'
-            replacement.write_text('replacement\n')
-            replacement.replace(selected)
+            atomic_write_bytes(selected, b'replacement\n', replace_timeout=FIXTURE_REPLACE_TIMEOUT)
             renamed.unlink()
             view.show()
             self.wait_until(lambda: names(nested) == ['regular', 'selected.py'])
