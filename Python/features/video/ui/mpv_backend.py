@@ -84,6 +84,7 @@ class ColourPlayer(qt.QObject):
         self.generation, self.retired, self.presented, self._ended = 0, False, False, False
         self._tracks, self._chapters, self._settings, self._subtitles = [], [], None, set()
         self.source_colour, self.output_colour = {}, {}
+        self._subtitle_brightness, self._subtitle_colour = 'default', '#ffffff'
         self.video.ready.connect(self.ready)
         self.video.failed.connect(self.failed)
         self.video.submitted.connect(self.frame_submitted)
@@ -116,6 +117,8 @@ class ColourPlayer(qt.QObject):
         self._pending_seek, self._loaded, self._ended = None, False, False
         self._seek_deadline, self._seek_error, self._audio_pts = None, False, None
         self._tracks, self._chapters, self._subtitles = [], [], set()
+        self.source_colour = {}
+        self.set_subtitle_brightness(self._subtitle_brightness)
         self._error = self.Error.NoError
         self._advanced_start = self._video_track_failed = self._decoded_video = False
         self.audio.suppress(True)
@@ -233,6 +236,7 @@ class ColourPlayer(qt.QObject):
         output = state.get('video-out-params') or {}
         self._decoded_video |= bool(output)
         self.source_colour = state.get('video-params') or {}
+        self.set_subtitle_brightness(self._subtitle_brightness)
         self.output_colour = {key: state.get(key) for key in ('target-peak', 'target-trc')}
         was_ready = self.video.source_ready
         self.video.source_ready = self._loaded and bool(output)
@@ -417,6 +421,16 @@ class ColourPlayer(qt.QObject):
             self.core.submit('set', key, value)
         self.update_output()
 
+    def set_subtitle_brightness(self, level):
+        self._subtitle_brightness = level
+        hdr = self.source_colour.get('gamma') in {'pq', 'hlg'}
+        # The embedded OpenGL renderer uses SDR text colors even for HDR video.
+        # Reserve some room above Default when playing an HDR source.
+        colour = '#b0b0b0' if level == 'dim' else '#d6d6d6' if hdr and level == 'default' else '#ffffff'
+        if colour != self._subtitle_colour:
+            self._subtitle_colour = colour
+            self.core.submit('set', 'sub-color', colour)
+
     def update_output(self):
         if self._settings is not None and not self.retired:
             self.video.configure_output(self._settings.colour_output, self._settings.tone_mapping)
@@ -433,7 +447,7 @@ class ColourPlayer(qt.QObject):
 
 class MPVPlayback:
     capabilities = PlaybackCapabilities(external_formats=('.srt', '.vtt', '.ass', '.ssa'),
-        embedded_subtitle_adjustment=True, audio_delay=True, receivers=True)
+        embedded_subtitle_adjustment=True, audio_delay=True, receivers=True, subtitle_brightness='text')
     colour_managed = True
 
     def __init__(self, owner, *, interactive=True, library_path=None):

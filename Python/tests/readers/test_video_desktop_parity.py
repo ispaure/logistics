@@ -214,6 +214,34 @@ class DesktopVideoParityTests(QtTestCase):
         self.assertEqual(subtitles.at(1500), 'Visible')
         self.assertEqual(subtitles.at(2500), '')
 
+    def test_qt_sidecar_brightness_updates_the_visible_cue(self):
+        from features.video.ui.backend import QtPlayback
+        from features.video.ui.player import VideoWindow
+        from logistics_build.build_retention import scratch
+        from tests.readers.video_fixtures import bundled_movie
+
+        with scratch() as root:
+            path = bundled_movie('black.mkv', root)
+            (root / 'cue.srt').write_text('1\n00:00:00,000 --> 00:00:12,000\nVISIBLE SUBTITLE\n')
+            provider = LocalFiles(root)
+            with patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'state'):
+                window = VideoWindow(ResourceChoice(provider, path.name), backend_factory=QtPlayback)
+            try:
+                window.show()
+                choice = ResourceChoice(provider, 'cue.srt')
+                with patch('services.documents.ui.editors.choose_editor_resource', return_value=choice):
+                    window.load_subtitles()
+                self.wait_until(lambda: window.caption.isVisible() and bool(window.caption.text()))
+                normal = window.caption.grab().toImage().convertToFormat(qt.QImage.Format.Format_Grayscale8)
+                window.change_setting('subtitle_brightness', 'dim')
+                dim = window.caption.grab().toImage().convertToFormat(qt.QImage.Format.Format_Grayscale8)
+                self.assertEqual(window.caption.text(), 'VISIBLE SUBTITLE')
+                self.assertEqual(normal.size(), dim.size())
+                self.assertEqual(max(bytes(normal.constBits())), 255)
+                self.assertEqual(max(bytes(dim.constBits())), 191)
+            finally:
+                window.close()
+
     def test_overlay_geometry_lock_and_readiness_do_not_resume_manual_pause(self):
         from features.video.ui.player import VideoWindow
         from logistics_build.build_retention import scratch

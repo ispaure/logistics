@@ -76,7 +76,7 @@ class VideoSessionTests(unittest.TestCase):
         with TemporaryDirectory() as root:
             store = SettingsStore(root)
             values = asdict(
-                PlaybackSettings(rate=1.5, autoplay_next=True, audio_language="fr")
+                PlaybackSettings(rate=1.5, autoplay_next=True, audio_language="fr", subtitle_brightness="dim")
             )
             store.save(values)
             self.assertEqual(asdict(SettingsStore(root).load()), values)
@@ -84,6 +84,8 @@ class VideoSessionTests(unittest.TestCase):
                 ("rate", float("nan")),
                 ("aspect", "stretch"),
                 ("subtitle_delay_ms", 1.5),
+                ("subtitle_brightness", ["bright"]),
+                ("subtitle_brightness", "maximum"),
                 ("autoplay_next", 1),
                 ("audio_language", "fr:injected"),
                 ("audio_track", True),
@@ -93,6 +95,7 @@ class VideoSessionTests(unittest.TestCase):
                     store.save(dict(values, **{key: value}))
             Path(store.path).write_text("invalid")
             self.assertEqual(store.load(), PlaybackSettings())
+            self.assertEqual(PlaybackSettings.from_dict({}).subtitle_brightness, "default")
 
     def test_encrypted_progress_authentication_revision_and_revocation(self):
         with (

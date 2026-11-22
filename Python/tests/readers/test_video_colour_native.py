@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import shutil
+import subprocess
 from types import SimpleNamespace
 from unittest.mock import patch
 import unittest
@@ -138,6 +139,110 @@ class NativeColourTests(QtTestCase):
             self.assertFalse(window.requested_play)
             window.close()
             self.assertFalse(window.backend.core.thread.is_alive())
+
+    def test_subtitle_brightness_changes_only_current_cue(self):
+        from features.video.ui.mpv_surface import CocoaGL
+        from logistics_build.build_retention import scratch
+
+        evidence = Path(__file__).resolve().parents[3] / 'tmp/test-results' / os.environ.get(
+            'LOGISTICS_SUBTITLE_EVIDENCE', 'desktop-subtitle-brightness')
+        evidence.mkdir(parents=True, exist_ok=True)
+        receipt = {}
+        with scratch() as root, patch.object(CocoaGL, 'headroom', return_value=4.):
+            for hdr in (True, False):
+                kind = 'pq' if hdr else 'sdr'
+                path = root / f'{kind}.mkv'
+                srt = root / 'caption.srt'
+                srt.write_text('1\n00:00:00,000 --> 00:00:16,000\nSUBTITLE BRIGHTNESS\n')
+                alternate = root / 'alternate.srt'
+                alternate.write_text('1\n00:00:00,000 --> 00:00:16,000\nSECOND TRACK\n')
+                luma = 'if(lt(N,96),327,609)' if hdr else 'if(lt(N,96),32,170)'
+                neutral = 512 if hdr else 128
+                codec = ['-c:v', 'libx264', '-colorspace', 'bt709', '-color_trc', 'bt709',
+                         '-color_primaries', 'bt709']
+                if hdr:
+                    codec = ['-c:v', 'libx265', '-x265-params',
+                             'pools=1:frame-threads=1:log-level=error:keyint=12:colorprim=9:transfer=16:colormatrix=9',
+                             '-colorspace', 'bt2020nc', '-color_trc', 'smpte2084',
+                             '-color_primaries', 'bt2020']
+                subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i',
+                                f"nullsrc=s=320x180:r=12:d=16,format={'yuv420p10le' if hdr else 'yuv420p'},"
+                                f"geq=lum='{luma}':cb={neutral}:cr={neutral}",
+                                '-i', str(srt), '-i', str(alternate), '-map', '0:v', '-map', '1:s',
+                                '-map', '2:s', '-threads', '1', *codec, '-c:s', 'srt', str(path)],
+                               check=True, capture_output=True, timeout=45)
+                window = self.make_player(root, path)
+                try:
+                    capture = window.video.sample_pixels
+                    image = None
+                    frames = 0
+                    def capture_on_paint(width, height):
+                        nonlocal image, frames
+                        frames += 1
+                        image = window.video.capture().convertToFormat(qt.QImage.Format.Format_RGBA8888)
+                        return capture(width, height)
+                    window.video.sample_pixels = capture_on_paint
+                    window.show_settings('subtitles')
+                    box = next(box for box in window.settings_pane.findChildren(qt.QComboBox)
+                               if box.accessibleName() == 'Subtitle brightness')
+                    window.change_setting('subtitle_track', 0)
+                    for scene, target in [('dark', 1500), ('light', 9500)]:
+                        window.player.setPosition(target)
+                        self.wait_until(lambda: window.player._pending_seek is None and
+                                        abs(window.player.position() - target) < 200, timeout=10)
+                        self.wait_until(lambda: (window.video.samples[4][0] > .4) == (scene == 'light'),
+                                        timeout=10)
+                        snapshots, arrays, colours = {}, {}, {}
+                        for level in ('dim', 'default', 'bright'):
+                            expected = {'dim': 126, 'default': 138 if hdr else 148, 'bright': 148}[level]
+                            box.setCurrentIndex(box.findData(level))
+                            box.activated.emit(box.currentIndex())
+                            # Wait for the rendered cue rather than assuming the
+                            # asynchronous command has reached a display frame.
+                            def cue_present():
+                                if image is None:
+                                    return False
+                                red = bytes(image.constBits())[0::4]
+                                return sum(red.count(code) for code in range(expected - 1, expected + 2)) > 200
+                            self.wait_until(cue_present, timeout=1.5,
+                                            message=lambda: str((kind, scene, level, frames)))
+                            image.save(str(evidence / f'{kind}-{scene}-{level}.png'))
+                            arrays[level] = bytes(image.constBits())[0::4]
+                            snapshots[level] = window.video.samples
+                            colours[level] = (window.player._subtitle_colour, frames)
+                        self.assertEqual(window.player.activeSubtitleTrack(), 0)
+                        self.assertGreaterEqual(window.player.position(), target - 200)
+                        self.assertLess(window.player.position(), target + 5000)
+                        self.assertEqual(window.player.playbackState(), window.player.PlaybackState.PlayingState)
+                        dim, default, bright = (arrays[level] for level in ('dim', 'default', 'bright'))
+                        largest = max(b - d for d, b in zip(dim, bright))
+                        self.assertGreater(largest, 8, (kind, scene, window.player.source_colour,
+                            colours, [max(array) for array in arrays.values()]))
+                        glyph = [i for i, (d, b) in enumerate(zip(dim, bright)) if b - d >= largest - 2]
+                        averages = [round(sum(sample[i] for i in glyph) / len(glyph), 2)
+                                    for sample in (dim, default, bright)]
+                        self.assertLess(averages[0], averages[1])
+                        if hdr:
+                            self.assertLess(averages[1], averages[2], (window.player.source_colour, colours, averages))
+                        else:
+                            self.assertEqual(default, bright)
+                        self.assertEqual(snapshots['dim'], snapshots['default'])
+                        self.assertEqual(snapshots['default'], snapshots['bright'])
+                        self.assertEqual(dim[:image.width() * image.height() // 2],
+                                         bright[:image.width() * image.height() // 2])
+                        receipt[f'{kind}-{scene}'] = dict(
+                            caption_red=averages, sampled_video=snapshots['default'],
+                            source=window.player.source_colour, output_headroom=window.video.output_headroom)
+                    window.change_setting('subtitle_track', 1)
+                    self.wait_until(lambda: window.player.activeSubtitleTrack() == 1)
+                    self.assertEqual(window.settings.subtitle_brightness, 'bright')
+                    window.change_setting('subtitle_track', -1)
+                    self.wait_until(lambda: window.player.activeSubtitleTrack() == -1)
+                    window.change_setting('subtitle_track', 0)
+                    self.wait_until(lambda: window.player.activeSubtitleTrack() == 0)
+                finally:
+                    window.close()
+        (evidence / 'measurements.json').write_text(json.dumps(receipt, indent=2) + '\n')
 
     def test_codec_matrix_and_renderer_handoff_preserve_pause_and_position(self):
         from logistics_build.build_retention import scratch

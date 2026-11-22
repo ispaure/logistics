@@ -236,7 +236,7 @@
     NSMutableDictionary *options = [[self playbackOptions] mutableCopy]; options[key] = value;
     NSData *data = [NSJSONSerialization dataWithJSONObject:options options:0 error:nil];
     self.optionsJSON = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    [self applyPlaybackOptions];
+    if (![key isEqualToString:@"subtitle_brightness"]) [self applyPlaybackOptions];
     NSData *update = [NSJSONSerialization dataWithJSONObject:@{key: value} options:0 error:nil];
     [self emitCommand:@"settings" value:[[NSString alloc] initWithData:update encoding:NSUTF8StringEncoding]];
 }
@@ -350,8 +350,33 @@
     }
     UIAlertController *menu = [self menu:@"Subtitles and audio" sender:sender];
     [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Choose subtitle file…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self emitCommand:@"subtitleBrowse" value:@""]; }]];
+    if (self.casting || self.externalVideoHost) {
+        menu.message = @"Subtitle brightness is unavailable over Cast or on a connected display.";
+    } else if (self.subtitlePiPEnabled && [AVPictureInPictureController isPictureInPictureSupported] && [self canPlay:YES]) {
+        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Subtitle brightness in PiP…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+            [self subtitleBrightnessOptions:sender];
+        }]];
+    } else if (!self.restricted) {
+        menu.message = @"Subtitle brightness applies in Subtitle PiP on supported devices.";
+    }
     for (NSArray *entry in @[@[@"Subtitle delay (ms; positive = later)", @"subtitle_delay_ms"], @[@"Audio delay (ms; positive = later)", @"audio_delay_ms"], @[@"Preferred audio language (e.g. fr)", @"audio_language"], @[@"Preferred subtitle language (e.g. en)", @"subtitle_language"]])
         [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:entry[0] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self promptValue:entry[0] key:entry[1] numeric:[entry[1] hasSuffix:@"_ms"]]; }]];
+    [self presentPlaybackDialog:menu];
+}
+- (void)subtitleBrightnessOptions:(id)sender {
+    if (self.controlsLocked || ![self canPlay:YES] || [self hasAirPlay] ||
+        self.externalVideoHost || self.casting || !self.subtitlePiPEnabled) return;
+    UIAlertController *menu = [self menu:@"Subtitle brightness in PiP" sender:sender];
+    menu.message = @"Choose a level to preview the current cue in Subtitle PiP. Bright adds brightness for HDR video.";
+    NSString *current = [self playbackOptions][@"subtitle_brightness"] ?: @"default";
+    for (NSArray<NSString *> *choice in @[@[@"Dim", @"dim"], @[@"Default", @"default"], @[@"Bright", @"bright"]]) {
+        NSString *title = [choice[1] isEqualToString:current] ? [@"✓ " stringByAppendingString:choice[0]] : choice[0];
+        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:title style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+            if (self.controlsLocked || [self hasAirPlay] || self.externalVideoHost || self.casting || ![self canPlay:YES]) return;
+            [self setting:@"subtitle_brightness" value:choice[1]];
+            [self pip:sender];
+        }]];
+    }
     [self presentPlaybackDialog:menu];
 }
 - (void)subtitleSizeOptions:(id)sender {

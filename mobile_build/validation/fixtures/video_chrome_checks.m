@@ -368,7 +368,11 @@
     if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAUnknownDuration"] boolValue]) self.video.knownDuration = 0;
     self.video.subtitleJSON = @"[]";
     self.video.queueJSON = @"[]";
-    self.video.optionsJSON = @"{\"video_title\":\"A long video filename for title alignment.mp4\",\"source_label\":\"Cloud file\",\"source_remote\":true}";
+    BOOL pipSubtitles = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPipSubtitles"] boolValue];
+    NSDictionary *playback = @{@"video_title": @"A long video filename for title alignment.mp4",
+        @"source_label": @"Cloud file", @"source_remote": @YES, @"pip_subtitles": @(pipSubtitles)};
+    self.video.optionsJSON = [[NSString alloc] initWithData:
+        [NSJSONSerialization dataWithJSONObject:playback options:0 error:nil] encoding:NSUTF8StringEncoding];
     self.video.allowed = ^BOOL(BOOL external) { return YES; };
     self.video.requestPlay = ^BOOL { return YES; };
     self.window.rootViewController = [[LGVideoNavigationController alloc] initWithRootViewController:self.video];

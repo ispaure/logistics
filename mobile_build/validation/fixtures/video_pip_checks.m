@@ -6,6 +6,29 @@ static NSArray *LGPiPViewTree(UIView *view) {
     for (UIView *child in view.subviews) [children addObject:LGPiPViewTree(child)];
     return @[view.description, view.layer.description, children];
 }
+
+static NSArray *LGCaptionBrightnessSamples(BOOL hdr) {
+    // Two caption pixels with the same coverage over dark and light video.
+    // Two adjacent video-only pixels must survive all three composites exactly.
+    CGRect bounds = CGRectMake(0, 0, 4, 1);
+    CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceExtendedLinearSRGB);
+    CIContext *context = [CIContext contextWithOptions:@{kCIContextWorkingColorSpace: (__bridge id)space}];
+    const float captionPixels[] = {0, 0, 0, 0, .8, .8, .8, 1, .8, .8, .8, 1, 0, 0, 0, 0};
+    const float videoPixels[] = {.05, .05, .05, 1, .05, .05, .05, 1, .6, .6, .6, 1, .6, .6, .6, 1};
+    CIImage *caption = [CIImage imageWithBitmapData:[NSData dataWithBytes:captionPixels length:sizeof(captionPixels)]
+        bytesPerRow:sizeof(captionPixels) size:bounds.size format:kCIFormatRGBAf colorSpace:space];
+    CIImage *video = [CIImage imageWithBitmapData:[NSData dataWithBytes:videoPixels length:sizeof(videoPixels)]
+        bytesPerRow:sizeof(videoPixels) size:bounds.size format:kCIFormatRGBAf colorSpace:space];
+    NSMutableArray *samples = [NSMutableArray array];
+    for (NSString *level in @[@"dim", @"default", @"bright"]) {
+        CIImage *result = [LGAdjustCaptionBrightness(caption, level, hdr) imageByCompositingOverImage:video];
+        float rgba[16] = {0};
+        [context render:result toBitmap:rgba rowBytes:sizeof(rgba) bounds:bounds format:kCIFormatRGBAf colorSpace:space];
+        [samples addObject:@[@(rgba[0]), @(rgba[4]), @(rgba[8]), @(rgba[12])]];
+    }
+    CGColorSpaceRelease(space);
+    return samples;
+}
 // Read the actual PiP sample output, not a substitute subtitle label.
 static NSDictionary *LGPiPPixels(AVSampleBufferDisplayLayer *layer, NSString *path) API_AVAILABLE(ios(17.4)) {
     CVPixelBufferRef pixels = [layer.sampleBufferRenderer copyDisplayedPixelBuffer];
@@ -46,6 +69,28 @@ static NSDictionary *LGPiPPixels(AVSampleBufferDisplayLayer *layer, NSString *pa
         LGVideoController *v = self.video;
         LGCaptionPictureInPicture *pip = (id)v.captionPiP;
         if (self.pipStage == 0 && v.player.isPlaying && now - self.started > 2) {
+            for (NSNumber *hdr in @[@NO, @YES]) {
+                NSArray *levels = LGCaptionBrightnessSamples(hdr.boolValue);
+                NSArray *dim = levels[0], *normal = levels[1], *bright = levels[2];
+                for (NSNumber *index in @[@0, @3]) {
+                    NSUInteger i = index.unsignedIntegerValue;
+                    if (![dim[i] isEqual:normal[i]] || ![normal[i] isEqual:bright[i]]) {
+                        [self finish:@"Caption brightness changed video-only pixels"]; return;
+                    }
+                }
+                for (NSNumber *index in @[@1, @2]) {
+                    NSUInteger i = index.unsignedIntegerValue;
+                    if ([normal[i] floatValue] - [dim[i] floatValue] < .2 ||
+                        (hdr.boolValue ? [bright[i] floatValue] - [normal[i] floatValue] < .15 : ![normal[i] isEqual:bright[i]])) {
+                        [self finish:@"Caption brightness did not produce the expected luminance ordering"]; return;
+                    }
+                }
+                [self.samples addObject:@{@"event": @"caption-only-gain", @"hdr": hdr, @"levels": levels}];
+            }
+            if (![AVPictureInPictureController isPictureInPictureSupported]) {
+                [self finish:@"AVKit reports system Picture in Picture is unavailable on this simulator"];
+                return;
+            }
             if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPipEmbedded"] boolValue]) {
                 if (!v.player.textTracks.count) return;
                 v.player.textTracks.firstObject.selectedExclusively = YES;
@@ -60,7 +105,7 @@ static NSDictionary *LGPiPPixels(AVSampleBufferDisplayLayer *layer, NSString *pa
             @"error": pip.layer.error.description ?: @"", @"views": v.movie.subviews.description ?: @""}
             writeToFile:[self outputPath:@"pip-progress.plist"] atomically:YES];
         if (!pip.controller.pictureInPictureActive) return;
-        if (self.pipStage == 1 && self.samples.count == 0 && now - self.pipStageTime > 1) {
+        if (self.pipStage == 1 && self.samples.count == 2 && now - self.pipStageTime > 1) {
             [self.samples addObject:@{@"event": @"native-caption-hierarchy", @"views": LGPiPViewTree(v.movie),
                 @"tracks": v.player.textTracks.description ?: @""}];
             UIImage *plane = [pip subtitlePlane:pip.layer.bounds.size];

@@ -6,6 +6,20 @@
 #import <AVKit/AVKit.h>
 #import <CoreImage/CoreImage.h>
 
+static CIImage *LGAdjustCaptionBrightness(CIImage *caption, NSString *level, BOOL hdr) {
+    CGFloat gain = 1;
+    if ([level isEqualToString:@"dim"]) gain = .6;
+    else if (hdr && [level isEqualToString:@"bright"]) gain = 1.25;
+    if (gain == 1) return caption;
+    // Scale only caption RGB in the CI context's extended linear working space.
+    // The alpha vector stays at its identity, including at antialiased edges.
+    return [caption imageByApplyingFilter:@"CIColorMatrix" withInputParameters:@{
+        @"inputRVector": [CIVector vectorWithX:gain Y:0 Z:0 W:0],
+        @"inputGVector": [CIVector vectorWithX:0 Y:gain Z:0 W:0],
+        @"inputBVector": [CIVector vectorWithX:0 Y:0 Z:gain W:0],
+    }];
+}
+
 API_AVAILABLE(ios(17.4))
 @interface LGCaptionPictureInPicture : NSObject <VLCPictureInPictureWindowControlling,
     AVPictureInPictureControllerDelegate, AVPictureInPictureSampleBufferPlaybackDelegate>
@@ -137,7 +151,8 @@ API_AVAILABLE(ios(17.4))
         CGRect target = AVMakeRectWithAspectRatioInsideRect(display, canvas);
         CGFloat sx = target.size.width / video.extent.size.width;
         CGFloat sy = target.size.height / video.extent.size.height;
-        if ([[owner playbackOptions][@"aspect"] isEqualToString:@"fill"]) {
+        NSDictionary *options = [owner playbackOptions];
+        if ([options[@"aspect"] isEqualToString:@"fill"]) {
             CGFloat fill = MAX(size.width / display.width, size.height / display.height);
             target.size = CGSizeMake(display.width * fill, display.height * fill);
             sx = target.size.width / video.extent.size.width;
@@ -149,7 +164,12 @@ API_AVAILABLE(ios(17.4))
         video = [video imageByApplyingTransform:CGAffineTransformMakeTranslation(target.origin.x, target.origin.y)];
         video = [video imageByCompositingOverImage:[[CIImage imageWithColor:CIColor.blackColor] imageByCroppingToRect:canvas]];
         UIImage *plane = [self subtitlePlane:size];
-        CIImage *image = plane ? [[CIImage imageWithCGImage:plane.CGImage] imageByCompositingOverImage:video] : video;
+        CIImage *image = video;
+        if (plane) {
+            CIImage *caption = LGAdjustCaptionBrightness([CIImage imageWithCGImage:plane.CGImage],
+                options[@"subtitle_brightness"], hdr);
+            image = [caption imageByCompositingOverImage:video];
+        }
         CFTypeRef transfer = CVBufferCopyAttachment(source, kCVImageBufferTransferFunctionKey, NULL);
         CFStringRef spaceName = kCGColorSpaceSRGB;
         if (transfer && CFEqual(transfer, kCVImageBufferTransferFunction_SMPTE_ST_2084_PQ)) spaceName = kCGColorSpaceITUR_2100_PQ;

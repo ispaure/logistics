@@ -132,7 +132,10 @@ class PlaybackTools:
             if key == 'renderer':
                 self.reopen_renderer(value)
                 return
-            self.apply_settings()
+            if key == 'subtitle_brightness':
+                self.update_subtitle_appearance()
+            else:
+                self.apply_settings()
             if self.progress.state.write_status == 'locked':
                 self.status.setText(self.progress.resume_notice)
         except (OSError, ValueError) as error:
@@ -145,14 +148,20 @@ class PlaybackTools:
         self.player.setPlaybackRate(self.settings.rate)
         if hasattr(self.player, "setPitchCompensation"):
             self.player.setPitchCompensation(True)
-        self.caption.setStyleSheet(
-            f"font-size: {round(22 * self.settings.subtitle_scale)}px; color: white; background: black;"
-        )
+        self.update_subtitle_appearance()
         self.apply_aspect()
         self.prefer_languages()
         self.speed_button.setText(f'{self.settings.rate:g}×')
         self.speed_button.setToolTip(f'Speed · {self.settings.rate:g}× · pitch preserved')
         self.picture_button.setToolTip('Picture size · ' + self.settings.aspect.title())
+
+    def update_subtitle_appearance(self):
+        if self.backend.capabilities.subtitle_brightness == 'text':
+            self.player.set_subtitle_brightness(self.settings.subtitle_brightness)
+        colour = '#bfbfbf' if self.settings.subtitle_brightness == 'dim' else 'white'
+        self.caption.setStyleSheet(
+            f"font-size: {round(22 * self.settings.subtitle_scale)}px; color: {colour}; background: black;"
+        )
 
     def apply_aspect(self):
         # A scroll viewport clips original-size frames without forcing them to fit.

@@ -6,6 +6,14 @@
 - **Current folder** lists videos in natural filename order. **P/N** selects previous/next. **Play next automatically** advances within the folder at natural completion and requires source access.
 - **Audio** and **Subtitles** choose embedded tracks or UTF-8 SRT, VTT, ASS or SSA files from the provider picker. Set language codes, subtitle size, delay or audio offset. Positive delay means later. Private subtitles must share the video's storage. Qt compatibility is limited to external SRT/VTT captions.
 
+On macOS with the automatic renderer, **Subtitles → Subtitle brightness**
+previews changes on the current plain-text cue during playback.
+Choose **Dim**, **Default** or **Bright**. Bright adds brightness for HDR
+video. For SDR video, Bright and Default use the usual white. Styled and image
+subtitles keep their authored appearance. The VLC compatibility renderer
+and Cast do not offer this adjustment. The Qt fallback can dim SRT and VTT
+subtitle files that Logistics draws itself.
+
 Notes Library videos opened as files use the full player. Inline Markdown clips start paused at zero.
 
 The header separates the filename from its source icon and label. Local files

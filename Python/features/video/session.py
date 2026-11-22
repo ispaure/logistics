@@ -19,6 +19,7 @@ from .formats import VIDEO_EXTENSIONS
 
 RATES = (0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0)
 ASPECTS = ("fit", "fill", "original")
+SUBTITLE_BRIGHTNESS = ("dim", "default", "bright")
 
 
 def parse_time(value):
@@ -42,6 +43,7 @@ class PlaybackSettings:
     rate: float = 1.0
     aspect: str = "fit"
     subtitle_scale: float = 1.0
+    subtitle_brightness: str = "default"
     subtitle_delay_ms: int = 0
     audio_delay_ms: int = 0
     audio_language: str = ""
@@ -73,6 +75,7 @@ class PlaybackSettings:
             or result.aspect not in ASPECTS
             or type(result.subtitle_scale) not in (float, int)
             or not 0.5 <= result.subtitle_scale <= 3
+            or result.subtitle_brightness not in SUBTITLE_BRIGHTNESS
             or type(result.autoplay_next) is not bool
             or type(result.pip_subtitles) is not bool
         ):

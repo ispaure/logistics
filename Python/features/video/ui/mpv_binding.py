@@ -191,6 +191,8 @@ class Core(qt.QObject):
                             if result < 0:
                                 raise RuntimeError('The colour output configuration was rejected.')
                             self.redraw.emit()
+                        elif args[0] == 'sub-color' and result >= 0:
+                            self.redraw.emit()
                     elif kind == 'command':
                         if args[0] == 'stop':
                             switch_serial, switch_state = None, None

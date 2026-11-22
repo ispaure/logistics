@@ -203,6 +203,20 @@ class PlaybackPanels:
             self.subtitle_tracks.show()
             layout.addWidget(self.attach)
             self.attach.show()
+            brightness = self.backend.capabilities.subtitle_brightness
+            if brightness == 'text':
+                choice('Subtitle brightness', 'subtitle_brightness',
+                       [('Dim', 'dim'), ('Default', 'default'), ('Bright', 'bright')])
+                note('Previews on the current plain-text cue. Bright adds brightness for HDR video. '
+                     'Styled and image subtitles keep their own colors.')
+            elif brightness == 'sidecar':
+                box = choice('Subtitle brightness · SRT and VTT files', 'subtitle_brightness',
+                             [('Dim', 'dim'), ('Default', 'default')])
+                if box.currentIndex() < 0:
+                    box.setCurrentIndex(box.findData('default'))
+                note('Previews on the current cue from a subtitle file.')
+            else:
+                note('Subtitle brightness is unavailable with this decoder.')
             scope = '' if self.backend.capabilities.embedded_subtitle_adjustment else 'External '
             choice(scope + 'subtitle size', 'subtitle_scale', [(f'{value:g}×', value) for value in (.75, 1., 1.25, 1.5, 2.)])
             delay(scope + 'subtitle delay', 'subtitle_delay_ms')
@@ -256,7 +270,8 @@ class PlaybackPanels:
             for identity, label in receivers.rows():
                 action(label, lambda checked=False, key=identity: receivers.choose(self, key))
             action('Refresh receivers', lambda: self.refresh_settings('cast'))
-            note('Receiver discovery can take a few seconds. Refresh to update the list.')
+            note('Subtitle brightness applies in supported local playback only. '
+                 'Receiver discovery can take a few seconds. Refresh to update the list.')
         layout.addStretch(1)
         self.settings_scroll.setWidget(page)
         for button, panel in zip(getattr(self, 'utility_buttons', ()),

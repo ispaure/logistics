@@ -8,6 +8,13 @@ Keyboard shortcuts include Space, Left/Right, M, F, G, P/N and Escape. **Subtitl
 
 On iOS 17.4 or later, turn on **Playback → Subtitle PiP (reopen video)** and reopen to enable subtitle composition. Turn it off and reopen for classic PiP. See the [iOS pause presentation and physical checks](../development/hdr-play-pause.md).
 
+With Subtitle PiP enabled, choose **Subtitles and audio → Subtitle brightness
+in PiP**. Choosing a level opens Picture in Picture to preview the current cue. **Dim** lowers
+the caption brightness and **Default** keeps the normal level. **Bright**
+raises caption brightness for HDR video when the output has headroom.
+Inline iOS playback, classic PiP, Android, Cast, AirPlay and connected displays
+keep their native subtitle appearance.
+
 ## Watching on a TV with iPhone or iPad
 
 1. Enable **Settings → Video → Native AirPlay video** and open a local MP4, MOV, M4V or compatible MKV.

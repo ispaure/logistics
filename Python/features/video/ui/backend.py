@@ -36,10 +36,11 @@ class PlaybackCapabilities:
     embedded_subtitle_adjustment: bool = False
     audio_delay: bool = False
     receivers: bool = False
+    subtitle_brightness: str = 'unavailable'
 
 
 class QtPlayback:
-    capabilities = PlaybackCapabilities()
+    capabilities = PlaybackCapabilities(subtitle_brightness='sidecar')
 
     def __init__(self, owner):
         self.player = QMediaPlayer(owner)
