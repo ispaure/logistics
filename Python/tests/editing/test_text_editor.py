@@ -83,18 +83,32 @@ class TextEditorTests(QtTestCase):
                 patch('features.application.registry.get_browser_extensions', return_value=[]):
             for folder in (False, True):
                 with self.subTest(folder=folder):
-                    parent = self.root / ('folder-case' if folder else 'file-case')
-                    parent.mkdir()
-                    path, document = self.open(parent.name + '/note.txt', b'Original bytes')
+                    root = self.root / ('folder-case' if folder else 'file-case')
+                    parent = root / 'Drafts'
+                    parent.mkdir(parents=True)
+                    path, document = self.open(parent.relative_to(self.root) / 'note.txt', b'Original bytes')
                     document.editor.setPlainText('Unsaved draft')
                     document.editor.document().setModified(True)
-                    view = BrowserView(root_path=self.root)
+                    original = parent if folder else path
+                    collision = original.with_name('Taken')
+                    destination = collision / 'note.txt' if folder else collision
+                    if folder:
+                        collision.mkdir()
+                    destination.write_bytes(b'Existing destination')
+
+                    view = BrowserView(root_path=root)
                     view.show()
                     browser = view.file_browser
-                    self.wait_until(lambda: not browser.busy)
-                    original = parent if folder else path
+                    self.wait_until(lambda: not browser.busy and browser.model.index(str(original)).isValid())
                     index = browser.model.index(str(original))
-                    self.wait_until(index.isValid)
+                    with patch.object(qt.QMessageBox, 'warning') as warning:
+                        self.assertFalse(browser.model.setData(index, collision.name))
+                    warning.assert_called_once()
+                    self.assertEqual(path.read_bytes(), b'Original bytes')
+                    self.assertEqual(destination.read_bytes(), b'Existing destination')
+                    self.assertEqual(document.editor.toPlainText(), 'Unsaved draft')
+                    self.assertTrue(document.modified)
+
                     with patch.object(qt.QMessageBox, 'warning') as warning:
                         self.assertTrue(browser.model.setData(index, 'Renamed'), warning.call_args)
                     self.assertFalse(warning.called, warning.call_args)
@@ -109,8 +123,9 @@ class TextEditorTests(QtTestCase):
                     self.assertEqual(renamed.read_bytes(), b'Original bytes')
                     self.assertEqual(document.editor.toPlainText(), 'Unsaved draft')
                     self.assertTrue(document.modified)
-                    self.wait_until(lambda: not browser.busy)
-                    view.close()
+                    self.wait_until(view.close, message='File Browser did not retire its workers')
+                    view.deleteLater()
+                    self.app.sendPostedEvents(view, qt.QEvent.Type.DeferredDelete)
 
     def test_open_save_round_trip_and_duplicate_documents(self):
         for name, data in [
