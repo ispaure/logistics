@@ -59,7 +59,7 @@ class ProjectSettingsTests(IDEQtTests):
 
             self.wait_until(lambda: index(browser, selected).isValid())
             browser.locate(selected)
-            self.assertEqual(index(browser, excluded).data(tooltip).splitlines()[-1], 'Source')
+            self.assertEqual(index(browser, excluded).data(tooltip).splitlines()[1], 'Source')
 
             def mark(dialog):
                 structure = dialog.structure
@@ -98,7 +98,7 @@ class ProjectSettingsTests(IDEQtTests):
             self.assertEqual(project.source_paths, ['.', 'src'])
             self.assertEqual(project.excluded_paths, ['build', 'missing/output', 'src/generated'])
             self.assertEqual(project.excluded_patterns, ['*.xcarchive', 'build?.py'])
-            self.assertEqual(index(browser, excluded).data(tooltip).splitlines()[-1], 'Excluded')
+            self.assertEqual(index(browser, excluded).data(tooltip).splitlines()[1], 'Excluded')
             self.assertFalse(index(browser, excluded / 'copy.py').isValid())
             self.assertEqual(browser.path(), selected)
             self.assertTrue(browser.tree.isExpanded(index(browser, source)))
@@ -113,7 +113,7 @@ class ProjectSettingsTests(IDEQtTests):
             browser = reopened.views[0].browser
             self.wait_until(lambda: browser.path() == selected)
             self.assertTrue(browser.tree.isExpanded(index(browser, source)))
-            self.assertEqual(index(browser, excluded).data(tooltip).splitlines()[-1], 'Excluded')
+            self.assertEqual(index(browser, excluded).data(tooltip).splitlines()[1], 'Excluded')
             self.assertTrue(reopened.prepare_close())
 
     def test_interpreter_inspects_the_selected_virtual_environment(self):

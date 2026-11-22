@@ -189,8 +189,9 @@ class ExternalEditsTests(QtTestCase):
             browser.locate(selected)
             browser.filter.setText('py')
             self.assertEqual(browser.path(), selected)
-            def role(path):
-                return index(path).data(qt.Qt.ItemDataRole.ToolTipRole).splitlines()[-1]
+
+            def tooltip_lines(path):
+                return index(path).data(qt.Qt.ItemDataRole.ToolTipRole).splitlines()
 
             created, renamed = nested / 'created.py', nested / 'renamed.py'
             created.write_text('create\n')
@@ -199,7 +200,12 @@ class ExternalEditsTests(QtTestCase):
             (nested / 'hidden.py.cache').touch()
             self.wait_until(lambda: names(nested) == ['generated', 'created.py', 'selected.py'],
                             message=lambda: f'After creation: {names(nested)}')
-            self.assertEqual(role(generated), 'Excluded')
+            self.assertEqual(tooltip_lines(generated)[1], 'Excluded')
+            # Control the snapshot only while reading the tooltip.
+            with patch.object(browser.proxy, 'git_changes', {}):
+                self.assertEqual(tooltip_lines(generated), [str(generated), 'Excluded'])
+            with patch.object(browser.proxy, 'git_changes', {generated: ('ignored', 'Ignored')}):
+                self.assertEqual(tooltip_lines(generated), [str(generated), 'Excluded', 'Git: Ignored'])
             self.assertEqual(browser.path(), selected)
             self.assertTrue(browser.tree.isExpanded(index(nested)))
 
@@ -208,7 +214,7 @@ class ExternalEditsTests(QtTestCase):
             regular = nested / 'regular'
             generated.rename(regular)
             self.wait_until(lambda: names(nested) == ['regular', 'renamed.py', 'selected.py'])
-            self.assertEqual(role(regular), 'Source')
+            self.assertEqual(tooltip_lines(regular)[1], 'Source')
             replacement = nested / 'temporary.cache'
             replacement.write_text('replacement\n')
             replacement.replace(selected)
