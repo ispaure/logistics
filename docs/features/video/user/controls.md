@@ -3,6 +3,7 @@
 - **Playback → Go to time** accepts seconds, `MM:SS` or `HH:MM:SS`, including fractions. Press **G** to open it. A seek of at least ten seconds offers **Undo seek** for eight seconds (**Ctrl+Z**). Seek and Undo preserve Play/Pause. **Start over** clears the held position.
 - **Playback → Lock controls** guards against accidental input. Use **Unlock** or Escape to restore it.
 - **Speed** runs from 0.5× to 2×. **Picture** offers Fit, Fill (cropped), and Original size. The green cache strip maps remote bytes to time approximately.
+- Timeline ticks mark embedded chapter starts. Open **Chapters** for named positions, **Previous chapter** and **Next chapter**. Within the first second of a chapter, **Previous chapter** jumps to the preceding chapter if there is one. After that it restarts the current chapter. **Next chapter** is unavailable in the final chapter. Chapter jumps keep the current Play/Pause state. Videos without chapters have no chapter ticks or skip actions.
 - **Current folder** lists videos in natural filename order. **P/N** selects previous/next. **Play next automatically** advances within the folder at natural completion and requires source access.
 - **Audio** and **Subtitles** choose embedded tracks or UTF-8 SRT, VTT, ASS or SSA files from the provider picker. Set language codes, subtitle size, delay or audio offset. Positive delay means later. Private subtitles must share the video's storage. Qt compatibility is limited to external SRT/VTT captions.
 

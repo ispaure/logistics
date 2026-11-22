@@ -34,6 +34,7 @@ from .presentation import PlaybackPresentation
 from .chrome import DockedChrome
 from .panels import PlaybackPanels
 from .icons import video_icon
+from features.video.chapters import chapter_targets, read_chapters
 
 
 class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPanels, qt.QMainWindow):
@@ -60,6 +61,7 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
         self._last_progress_position = None
         self.chapter_cancelled, self.chapter_worker = Event(), None
         self.chapter_data, self.chapter_menu = None, None
+        self.chapter_skip_buttons = ()
         self.transport_failure = None
         self.open_deadline = None
         self.open_failed = False
@@ -95,10 +97,13 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
                 self.status.setText(self.progress.resume_notice)
             self.closing = False
             self.initialized = True
+            self.load_chapters()
             if getattr(self, '_renderer_warning', None):
                 self.status.setText(self._renderer_warning)
         except BaseException:
             self.chapter_cancelled.set()
+            if self.chapter_worker is not None and self.chapter_worker.is_alive():
+                self.chapter_worker.join()
             if self.sidecar_worker is not None:
                 self.sidecar_worker.join()
             if hasattr(self, 'lifecycle'):
@@ -245,6 +250,8 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
         self.progress.duration = duration
         self.seek.setEnabled(True)
         self.seek.setRange(0, min(duration, 2147483647))
+        if self.update_chapter_timeline():
+            self.refresh_settings('chapters')
         if self.resume_at is not None and duration > 0:
             self.status.setText("Resumed playback. Use Playback → Start over to restart.")
             self.have_frame = False
@@ -262,6 +269,7 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
             self.clear_playback_wait()
         if not self.seek.isSliderDown():
             self.seek.setValue(position)
+        self.update_chapter_actions()
         duration = self.player.duration() or self.progress.duration
         self.update_time(position, duration)
         self.caption.setText(self.subtitles.at(position - self.settings.subtitle_delay_ms) if self.external and self.subtitles else '')
@@ -445,7 +453,11 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
             self.sidecars_loaded(rows)
 
     def transport_problem(self, category):
-        self.resource_changed = self.resource_changed or category == 'changed'
+        if category == 'changed' and not self.resource_changed:
+            self.resource_changed = True
+            self.chapter_data = []
+            self.update_chapter_timeline()
+            self.refresh_settings('chapters')
         messages = {
             'access': 'Video access expired. Unlock the source, then press Play to retry.',
             'changed': 'The video changed while it was open. Close and reopen it.',
@@ -478,30 +490,72 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
     def show_chapters(self):
         if not self.controls_allowed():
             return
-        if hasattr(self.player, 'chapters'):
-            self.chapter_data = self.player.chapters()
+        self.refresh_native_chapters()
         self.show_settings('chapters')
-        if self.chapter_data is not None or (self.chapter_worker is not None and self.chapter_worker.is_alive()):
+
+    def load_chapters(self):
+        if self.chapter_worker is not None:
             return
+
         def load():
-            from features.video.chapters import read_chapters
             try:
-                rows, error = read_chapters(self.content, cancelled=self.chapter_cancelled.is_set), False
+                rows = read_chapters(self.content, cancelled=lambda:
+                                     self.chapter_cancelled.is_set() or self.resource_changed)
             except (OSError, ValueError, PermissionError):
-                rows, error = [], True
+                rows = []
             if not self.chapter_cancelled.is_set():
-                self.chapter_result.emit((rows, error))
+                self.chapter_result.emit(rows)
+
         self.chapter_worker = Thread(target=load, name='video-chapters')
         self.chapter_worker.start()
 
-    def chapters_loaded(self, result):
-        if self.closing or self.chapter_cancelled.is_set():
+    def refresh_native_chapters(self):
+        if self.chapter_data or self.resource_changed or not hasattr(self.player, 'chapters'):
             return
-        rows, error = result
-        if error:
-            self.status.setText('Could not read chapters. Check access and try again.')
-        self.chapter_data = rows
+        rows = self.player.chapters()
+        if rows:
+            self.chapters_loaded(rows)
+
+    def chapters_loaded(self, rows):
+        if self.closing or self.chapter_cancelled.is_set() or self.resource_changed:
+            return
+        if rows or not self.chapter_data:
+            self.chapter_data = sorted({row.start_ms: row for row in rows if row.start_ms >= 0}.values(),
+                                       key=lambda row: row.start_ms)
+        self.update_chapter_timeline()
         self.refresh_settings('chapters')
+
+    def update_chapter_timeline(self):
+        starts = tuple(row.start_ms for row in self.chapter_data or ()
+                       if row.start_ms < self.seek.maximum() and self.progress.duration > 0)
+        if starts == self.seek.chapter_starts:
+            return False
+        self.seek.chapter_starts = starts
+        self.seek.setAccessibleDescription(
+            'Chapter starts are marked. Open Chapters for named positions and chapter skips.'
+            if self.seek.chapter_starts else '')
+        self.seek.update()
+        self.update_chapter_actions()
+        return True
+
+    def update_chapter_actions(self):
+        if self.chapter_skip_buttons:
+            targets = chapter_targets(self.seek.chapter_starts, self.chapter_position())
+            for button, target in zip(self.chapter_skip_buttons, targets):
+                button.setEnabled(target is not None)
+
+    def skip_chapter(self, direction):
+        target = chapter_targets(self.seek.chapter_starts, self.chapter_position())[direction]
+        if target is not None:
+            self.seek_chapter(target)
+
+    def chapter_position(self):
+        return self.seek.maximum() if self.ended else self.player.position()
+
+    def seek_chapter(self, target):
+        if not self.resource_changed and target in self.seek.chapter_starts and self.controls_allowed():
+            self.ended = False
+            self.seek_to(target)
 
     def seek_to(self, position):
         if self.closing or (self.resume_guard is not None and self.resume_guard.blocked):
@@ -601,6 +655,7 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
                 self.status.setText('Playback finished.')
             self.show_controls()
             self.ended = True
+            self.update_chapter_actions()
             self.checkpoint(completed=True)
             if self.settings.autoplay_next and was_requested:
                 qt.QTimer.singleShot(0, lambda: self.queue_move(1))
@@ -655,6 +710,7 @@ class VideoWindow(PlaybackPresentation, PlaybackTools, DockedChrome, PlaybackPan
         if self.chapter_worker is not None:
             self.chapter_worker.join()
         self.chapter_data = None
+        self.update_chapter_timeline()
         if getattr(self, "queue_worker", None) is not None:
             self.queue_worker.join()
         self.queue = None

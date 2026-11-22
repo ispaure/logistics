@@ -2,6 +2,8 @@
 
 Tap to reveal controls. Double-tap the left or right side to skip ten seconds, or the center to play/pause. **Lock controls** guards against accidental input. Use **Unlock controls** or Escape to unlock. Undo seek is desktop-only.
 
+Timeline ticks mark embedded chapter starts. Open **Chapters** to choose a named position or use **Previous chapter** and **Next chapter**. Within the first second of a chapter, **Previous chapter** jumps to the preceding chapter if there is one. After that it restarts the current chapter. **Next chapter** is unavailable in the final chapter. Jumps keep the current Play/Pause state. Videos without chapters have no chapter ticks or skip actions.
+
 Open **Playback** on iOS or **More playback options → Playback…** on Android for **Go to time**, **Start over**, speed, folder order and autoplay. **Show in folder** closes playback and selects the source. Reopening resumes at the saved position. See the [shared control guide](../user/controls.md).
 
 Keyboard shortcuts include Space, Left/Right, M, F, G, P/N and Escape. **Subtitles and audio** browses the current provider for SRT, VTT, ASS and SSA up to 8 MiB. Set preferred languages, subtitle size and delay, or audio sync offset. Positive delay means later. Android font/language changes can briefly rebuffer. **Cache ≈** maps remote cached bytes to time approximately.
@@ -20,6 +22,8 @@ keep their native subtitle appearance.
 1. Enable **Settings → Video → Native AirPlay video** and open a local MP4, MOV, M4V or compatible MKV.
 2. Tap **AirPlay** beside **Forward 10 seconds** and select the TV. Use the phone or tablet's normal timeline, play/pause and skip controls.
 3. Select **iPhone** in the route picker to continue on device, including after a connection or seek failure.
+
+With native AirPlay, use **Chapters** on the iPhone or iPad to jump to a named position or skip between chapters. Availability of chapters on the TV itself depends on the media and receiver.
 
 Compatible MP4/MKV streams use H.264/HEVC and compatible AAC, AC-3, E-AC-3 or Opus audio. Opus converts to AAC. Embedded MP4 timed text and MKV SRT, WebVTT and ASS/SSA text are offered as TV subtitle tracks, together with discovered SRT/WebVTT sidecars. ASS styling and drawings are omitted; the TV controls subtitle appearance. Image subtitles such as PGS remain local-only. Session-only protection blocks AirPlay.
 

@@ -25,6 +25,42 @@
 
 #import "ScreenAwake.m"
 
+static NSString *const LGVideoChapterHint = @"Open Chapters for named positions and chapter skips.";
+static const int64_t LGVideoChapterRestartMilliseconds = 1000;
+
+@interface LGVideoTimeline : UISlider
+@property(nonatomic, copy) NSArray<NSNumber *> *chapterFractions;
+@property(nonatomic, strong) CAShapeLayer *chapterMarkers;
+@end
+
+@implementation LGVideoTimeline
+- (void)setChapterFractions:(NSArray<NSNumber *> *)fractions {
+    if ([_chapterFractions isEqualToArray:fractions]) return;
+    _chapterFractions = [fractions copy];
+    self.accessibilityHint = fractions.count ? LGVideoChapterHint : nil;
+    [self setNeedsLayout];
+}
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (!self.chapterMarkers && !self.chapterFractions.count) return;
+    if (!self.chapterMarkers) {
+        self.chapterMarkers = [CAShapeLayer layer];
+        self.chapterMarkers.fillColor = UIColor.whiteColor.CGColor;
+        [self.layer addSublayer:self.chapterMarkers];
+    }
+    CGRect track = [self trackRectForBounds:self.bounds];
+    CGFloat start = CGRectGetMidX([self thumbRectForBounds:self.bounds trackRect:track value:0]);
+    CGFloat end = CGRectGetMidX([self thumbRectForBounds:self.bounds trackRect:track value:1]);
+    UIBezierPath *path = [UIBezierPath bezierPath];
+    for (NSNumber *fraction in self.chapterFractions) {
+        CGFloat x = start + fraction.doubleValue * (end - start);
+        [path appendPath:[UIBezierPath bezierPathWithRect:CGRectMake(x - 1, CGRectGetMaxY(track) + 4, 2, 5)]];
+    }
+    self.chapterMarkers.frame = self.bounds;
+    self.chapterMarkers.path = path.CGPath;
+}
+@end
+
 static NSString *LGVideoCompactCodec(NSString *value) {
     NSString *key = [[(value ?: @"") lowercaseString] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
     NSDictionary *names = @{@"a52": @"AC-3", @"ac3": @"AC-3", @"ac-3": @"AC-3",
@@ -104,6 +140,13 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic, strong) AVRoutePickerView *airPlayPicker;
 @property(nonatomic, strong) AVPlayer *airPlayPlayer;
 @property(nonatomic, strong) AVPlayer *airPlayRoutePlayer;
+@property(nonatomic) BOOL airPlayChapterSeek;
+@property(nonatomic, copy) NSDictionary<NSNumber *, NSString *> *airPlayChapters;
+@property(nonatomic, copy) NSDictionary<NSNumber *, NSString *> *localChapters;
+@property(nonatomic) NSInteger chapterTitleIndex;
+@property(nonatomic) NSTimeInterval nextChapterLookup;
+@property(nonatomic) BOOL chaptersInvalidated;
+@property(nonatomic, weak) UIAlertController *chapterDialog;
 @property(nonatomic, copy) BOOL (^allowed)(BOOL external);
 @property(nonatomic, copy) BOOL (^backgroundAudioAllowed)(void);
 @property(nonatomic) BOOL localAudioInBackground;
@@ -159,7 +202,7 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic, strong) UILabel *timeLabel;
 @property(nonatomic, strong) NSLayoutConstraint *controlsLeading, *controlsTrailing, *controlsTop, *controlsBottom;
 @property(nonatomic, strong) UILabel *message;
-@property(nonatomic, strong) UISlider *seek;
+@property(nonatomic, strong) LGVideoTimeline *seek;
 @property(nonatomic, strong) UIBarButtonItem *pictureButton;
 @property(nonatomic, strong) UIButton *tabletopPictureButton;
 @property(nonatomic) BOOL fullscreen;
@@ -228,6 +271,7 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 - (BOOL)allowsAirPlay;
 - (void)startAirPlayPlayback;
 - (void)seekAirPlay:(int64_t)target;
+- (void)seekAirPlay:(int64_t)target chapter:(BOOL)chapter;
 - (int64_t)airPlayTime:(CMTime)time;
 - (void)updateAirPlay;
 - (void)finishAirPlayWithMessage:(NSString *)message;
@@ -1352,6 +1396,7 @@ typedef struct {
     self.timeLabel.text = [NSString stringWithFormat:@"%@ / %@%@", time(position), duration > 0 ? time(duration) : @"Duration unknown", self.cacheApproximate ? @" · Cache ≈" : @""];
     self.timeLabel.accessibilityValue = self.timeLabel.text;
     self.seek.accessibilityValue = self.timeLabel.text;
+    [self updateChapterMarkers:duration];
     self.lastPosition = position;
     [self updatePlayButton];
 }
@@ -1458,21 +1503,106 @@ typedef struct {
     }
     return menu;
 }
+- (NSDictionary<NSNumber *, NSString *> *)chapterRows {
+    if (self.chaptersInvalidated || self.retired || ![self canPlay:NO]) return @{};
+    if ([self hasAirPlay]) return self.airPlayChapters.count ? self.airPlayChapters : self.localChapters;
+    NSInteger title = self.player.currentTitleIndex;
+    if (title != self.chapterTitleIndex) {
+        self.chapterTitleIndex = title;
+        self.localChapters = nil;
+        self.nextChapterLookup = 0;
+    }
+    NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
+    if (self.localChapters.count || now < self.nextChapterLookup) return self.localChapters;
+    self.nextChapterLookup = now + 1;
+    NSArray<VLCMediaPlayerChapterDescription *> *rows = [self.player chapterDescriptionsOfTitle:(int)title];
+    NSMutableDictionary<NSNumber *, NSString *> *chapters = [NSMutableDictionary dictionary];
+    for (NSUInteger index = 0; index < rows.count; index++) {
+        VLCMediaPlayerChapterDescription *chapter = rows[index];
+        int64_t offset = chapter.timeOffset.value.longLongValue;
+        if (offset < 0) continue;
+        NSString *name = chapter.name.length ? chapter.name : [NSString stringWithFormat:@"Chapter %lu", (unsigned long)index + 1];
+        chapters[@(offset)] = name;
+    }
+    self.localChapters = chapters;
+    return self.localChapters;
+}
+- (NSArray<NSNumber *> *)chapterStarts:(NSDictionary<NSNumber *, NSString *> *)rows duration:(int64_t)duration {
+    NSMutableArray<NSNumber *> *starts = [NSMutableArray array];
+    for (NSNumber *start in rows) if (start.longLongValue < duration) [starts addObject:start];
+    return [starts sortedArrayUsingSelector:@selector(compare:)];
+}
+- (void)updateChapterMarkers:(int64_t)duration {
+    NSMutableArray<NSNumber *> *fractions = [NSMutableArray array];
+    for (NSNumber *start in [self chapterStarts:[self chapterRows] duration:duration]) {
+        [fractions addObject:@(start.doubleValue / duration)];
+    }
+    self.seek.chapterFractions = fractions;
+}
+- (NSNumber *)chapterTarget:(NSArray<NSNumber *> *)starts next:(BOOL)next {
+    int64_t position = self.ended ? [self durationMilliseconds] : [self positionMilliseconds];
+    NSNumber *previous = nil, *current = nil;
+    for (NSNumber *start in starts) {
+        if (start.longLongValue > position) {
+            if (next) return start;
+            break;
+        }
+        previous = current;
+        current = start;
+    }
+    if (next || !current) return nil;
+    return position - current.longLongValue < LGVideoChapterRestartMilliseconds ? previous : current;
+}
+- (void)seekChapter:(NSNumber *)start {
+    if (!start || self.controlsLocked || ![self chapterRows][start] ||
+        start.longLongValue >= [self durationMilliseconds]) return;
+    if ([self hasAirPlay]) [self seekAirPlay:start.longLongValue chapter:YES];
+    else [self seekToMilliseconds:start.longLongValue];
+}
+- (void)skipChapter:(BOOL)next {
+    NSArray *starts = [self chapterStarts:[self chapterRows] duration:[self durationMilliseconds]];
+    [self seekChapter:[self chapterTarget:starts next:next]];
+}
+- (void)invalidateChapters {
+    self.chaptersInvalidated = YES;
+    self.localChapters = self.airPlayChapters = nil;
+    self.seek.chapterFractions = @[];
+    UIViewController *presented = self.presentedViewController;
+    if (presented == self.chapterDialog || ([presented isKindOfClass:LGVideoDeckSettings.class] &&
+        ((LGVideoDeckSettings *)presented).dialog == self.chapterDialog)) {
+        [presented dismissViewControllerAnimated:YES completion:^{ [self scheduleControls]; }];
+    }
+}
 - (void)chapters:(id)sender {
-    if (![self canPlay:NO]) return;
+    if (self.controlsLocked || ![self canPlay:NO]) return;
     [self setControlsShown:YES];
     UIAlertController *menu = [self menu:@"Chapters" sender:sender];
-    NSArray<VLCMediaPlayerChapterDescription *> *chapters = [self.player chapterDescriptionsOfTitle:self.player.currentTitleIndex];
-    for (NSUInteger index = 0; index < chapters.count; index++) {
-        VLCMediaPlayerChapterDescription *chapter = chapters[index];
-        int64_t offset = chapter.timeOffset.value.longLongValue;
-        NSString *name = chapter.name.length ? chapter.name : [NSString stringWithFormat:@"Chapter %lu", (unsigned long)index + 1];
-        NSString *label = [NSString stringWithFormat:@"%@%lld:%02lld · %@", chapter.isCurrent ? @"✓ " : @"", offset / 60000, offset / 1000 % 60, name];
-        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:label style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-            [self seekToMilliseconds:offset];
-        }]];
+    NSDictionary *rows = [self chapterRows];
+    NSArray<NSNumber *> *starts = [self chapterStarts:rows duration:[self durationMilliseconds]];
+    if (starts.count) {
+        for (NSNumber *direction in @[@NO, @YES]) {
+            BOOL next = direction.boolValue;
+            UIAlertAction *skip = [UIAlertAction lg_videoActionWithTitle:next ? @"Next chapter" : @"Previous chapter"
+                style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self skipChapter:next]; }];
+            skip.enabled = [self chapterTarget:starts next:next] != nil;
+            [menu lg_videoAddAction:skip];
+        }
+        int64_t position = self.ended ? [self durationMilliseconds] : [self positionMilliseconds];
+        NSNumber *current = nil;
+        for (NSNumber *start in starts) if (start.longLongValue <= position) current = start;
+        for (NSNumber *start in starts) {
+            int64_t offset = start.longLongValue;
+            NSString *label = [NSString stringWithFormat:@"%@%lld:%02lld:%02lld · %@", [start isEqual:current] ? @"✓ " : @"",
+                offset / 3600000, offset / 60000 % 60, offset / 1000 % 60, rows[start]];
+            [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:label style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+                [self seekChapter:start];
+            }]];
+        }
+    } else {
+        menu.message = self.chaptersInvalidated ? @"The video changed. Reopen it to see its chapters." :
+            rows.count ? @"Chapter positions are unavailable for the current timeline." : @"This video has no embedded chapters.";
     }
-    if (!chapters.count) menu.message = @"This video has no embedded chapters.";
+    self.chapterDialog = menu;
     [self presentPlaybackDialog:menu];
 }
 - (void)audioTracks:(id)sender { [self tracks:sender subtitles:NO]; }
@@ -1849,7 +1979,7 @@ typedef struct {
     self.timeLabel.text = @"0:00 / 0:00";
     self.timeLabel.accessibilityLabel = @"Playback time";
     [self.controls addArrangedSubview:self.timeLabel];
-    self.seek = [[UISlider alloc] init];
+    self.seek = [[LGVideoTimeline alloc] init];
     self.seek.minimumTrackTintColor = UIColor.whiteColor;
     self.seek.maximumTrackTintColor = [UIColor colorWithWhite:.65 alpha:1];
     self.seek.thumbTintColor = UIColor.whiteColor;

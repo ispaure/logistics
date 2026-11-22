@@ -175,6 +175,30 @@ def chapter_movie(root, container='mkv', ffmpeg='ffmpeg', *, regenerate=False):
     return output
 
 
+def chapter_playback_fixtures(root, *, android_emulator=False):
+    """Generate matching labeled and chapterless MP4 playback inputs."""
+    root = Path(root)
+    root.mkdir(parents=True, exist_ok=True)
+    metadata = root / 'chapter-playback.ffmeta'
+    metadata.write_text(';FFMETADATA1\n' + ''.join(
+        f'[CHAPTER]\nTIMEBASE=1/1000\nSTART={start}\nEND={end}\ntitle={title}\n'
+        for start, end, title in ((0, 5000, 'Opening'), (5000, 10000, 'Middle'), (10000, 18000, 'Finale'))))
+    plain, marked = root / 'chapterless.mp4', root / 'chapter-playback.mp4'
+    # Goldfish's H.264 decoder can stall on cold opens. Use MPEG-4 video for
+    # chapter qualification on the emulator so the codec is independent.
+    codec = ['-c:v', 'mpeg4', '-q:v', '4'] if android_emulator else ['-c:v', 'libx264', '-preset', 'ultrafast']
+    subprocess.run(['ffmpeg', '-v', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=25',
+        '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-t', '18',
+        *codec, '-threads', '1', '-g', '25',
+        '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-movflags', '+faststart', str(plain)],
+        check=True, capture_output=True, timeout=30)
+    subprocess.run(['ffmpeg', '-v', 'error', '-i', str(plain), '-f', 'ffmetadata', '-i', str(metadata),
+        '-map', '0:v', '-map', '0:a', '-map_chapters', '1', '-c', 'copy',
+        '-movflags', '+faststart', str(marked)], check=True, capture_output=True, timeout=30)
+    metadata.unlink()
+    return marked, plain
+
+
 def refresh_bundled(ffmpeg='ffmpeg'):
     """Regenerate the committed clips used by deterministic decoder tests."""
     if not shutil.which(ffmpeg):

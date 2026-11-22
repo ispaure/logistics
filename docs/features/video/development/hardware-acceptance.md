@@ -67,6 +67,7 @@ Mirroring disconnected and select Apple TV in the player's AirPlay picker.
 | Close the player while streaming, paused, loading, and after a connection/seek timeout | TV video stops, the item and HLS server are released, and reopening requires an explicit playback action. The system audio route may still show Apple TV; choosing iPhone in Control Center returns it without changing Settings. |
 | Open a movie and pause/resume before its audio output is ready; return from TV to iPhone and press Play | Sound resumes without a manual seek, route toggle or app restart unless deliberately muted. |
 | Resume a 4K HDR MKV at a saved position, then scrub while the TV loads | The handoff starts, the requested target remains visible, and playback reaches that target. A stalled load or seek reports failure and preserves the position for local playback. |
+| Open a generated MP4 with named chapters, then a remuxed MKV with the same chapter starts. Use the phone's **Chapters** panel during native AirPlay, with playback running and after pausing from the Siri Remote. | The receiver seeks to the named starts and preserves the receiver's play or pause state. Check the first and final chapter boundaries and return to local playback. Record separately whether the particular receiver shows an embedded chapter list for a direct file. |
 
 Check forced subtitle and accessibility preferences on the receiver separately
 from manual selection. SDK and host playlist tests do not establish these

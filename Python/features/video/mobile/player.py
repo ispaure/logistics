@@ -90,8 +90,11 @@ class MobileVideo:
             'busy': 'The video connection is busy. Press Play to retry.',
         }
         self.failure_message = messages.get(category, messages['read'])
-        if not self.closed and not self.hidden and self.native is not None:
-            self.native.transport_failed(self.failure_message)
+        if not self.closed and self.native is not None:
+            if category == 'changed':
+                self.native.invalidate_chapters()
+            if not self.hidden:
+                self.native.transport_failed(self.failure_message)
 
     def pause_audio(self):
         if self.native is not None:

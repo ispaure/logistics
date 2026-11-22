@@ -101,6 +101,7 @@ class PlaybackPanels:
 
     def fill_settings(self):
         name = self.panel_name
+        self.chapter_skip_buttons = ()
         titles = dict(playback='Playback', speed='Playback speed', picture='Picture', audio='Audio',
                       subtitles='Subtitles', chapters='Chapters', queue='Current folder', cast='Cast')
         self.panel_title.setText(titles[name])
@@ -255,15 +256,27 @@ class PlaybackPanels:
                     button.setCheckable(True)
                     button.setChecked(row['current'])
         elif name == 'chapters':
-            if self.chapter_data is None:
+            if self.resource_changed:
+                note('The video changed. Reopen it to see its chapters.')
+            elif self.chapter_data is None:
                 note('Loading chapters…')
             elif not self.chapter_data:
                 note('This video has no supported embedded chapters.')
+            elif not self.seek.chapter_starts:
+                note('Chapter positions are unavailable for the current timeline.')
             else:
                 from .player import clock
+                self.chapter_skip_buttons = (
+                    action('Previous chapter', lambda: self.skip_chapter(0)),
+                    action('Next chapter', lambda: self.skip_chapter(1)),
+                )
+                self.update_chapter_actions()
                 for chapter in self.chapter_data:
-                    action(f'{clock(chapter.start_ms)} · {chapter.title}',
-                           lambda checked=False, position=chapter.start_ms: self.seek_to(position))
+                    if chapter.start_ms in self.seek.chapter_starts:
+                        label = f'{clock(chapter.start_ms)} · {chapter.title}'
+                        button = action(label.replace('&', '&&'),
+                                        lambda checked=False, position=chapter.start_ms: self.seek_chapter(position))
+                        button.setAccessibleName(label)
         elif name == 'cast':
             receivers = self.backend.receivers
             action('Return playback to this window', lambda: receivers.choose(self, None))

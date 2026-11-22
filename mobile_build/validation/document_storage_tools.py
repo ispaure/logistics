@@ -55,6 +55,8 @@ SYNC_SCREENSHOTS = tuple(f'sync-{orientation}-{destination}.png'
 
 
 def diagnostics(entry_point):
+    if entry_point.endswith('.video_chapters_probe'):
+        return ('chapter-timeline.png',)
     if entry_point == READER_APPEARANCE_ENTRY:
         return ('reader-appearance-progress.json', *(f'appearance-{provider}-{kind}.png'
                  for provider in ('local', 'localcrypt') for kind in ('comic', 'epub', 'pdf')))
@@ -265,6 +267,9 @@ def copy_payload(payload, target, *, entry_point='tests.logisticsmobile.document
         multitrack_movie(fixtures, long_source)
         for temporary in (source, long_source, fixtures / 'tracks.srt'):
             temporary.unlink()
+    if entry_point.endswith('.video_chapters_probe'):
+        from tests.readers.video_fixtures import chapter_playback_fixtures
+        chapter_playback_fixtures(target / 'tests/logisticsmobile/chapter-fixtures', android_emulator=android)
     if entry_point.endswith(('.viewer_layout_probe', '.control_center_probe')):
         from tests.readers.video_fixtures import codec_matrix
         codec_matrix(target / 'tests/logisticsmobile/video-fixtures', duration=60)
@@ -1176,7 +1181,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('comic-guidance', 'workspace-edges', 'mobile-feedback', 'documents-search', 'filename-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'download-recovery', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'notebook-geometry', 'editor-keyboard', 'hardware-input', 'storage', 'reader-space', 'reader-appearance', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'playlist-speech', 'native-suite', 'rotation-crash', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-rapid-ink', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('comic-guidance', 'workspace-edges', 'mobile-feedback', 'documents-search', 'filename-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'download-recovery', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'notebook-geometry', 'editor-keyboard', 'hardware-input', 'storage', 'reader-space', 'reader-appearance', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'video-chapters', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'playlist-speech', 'native-suite', 'rotation-crash', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-rapid-ink', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--retain-build', action='store_true', help='Pin this managed QA build for reruns; caller must remove the pin and workspace afterward.')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--android-gpu', choices=('host', 'swiftshader'), default='swiftshader',
@@ -1202,8 +1207,8 @@ def main():
         parser.error(str(error))
     if args.external_subtitle_only and (args.platform != 'ios' or args.probe != 'unified-progress'):
         parser.error('--external-subtitle-only requires the iOS unified-progress probe.')
-    if args.probe in ('unified-progress', 'unified-progress-video') and args.device:
-        parser.error('Unified progress acceptance requires a disposable device.')
+    if args.probe in ('unified-progress', 'unified-progress-video', 'video-chapters') and args.device:
+        parser.error('This probe requires a disposable device.')
     if args.ios_runtime and args.platform != 'ios':
         parser.error('--ios-runtime requires iOS.')
     if args.probe == 'download-recovery' and (args.platform != 'android' or args.device):
@@ -1334,6 +1339,9 @@ def main():
         if args.probe == 'features':
             creation_profile = dict(bundle='io.github.ispaure.logisticsfeaturesqa',
                 entry_point='tests.logisticsmobile.features_probe', result_name='features-result.json')
+        if args.probe == 'video-chapters':
+            creation_profile = dict(bundle=BUNDLE, entry_point='tests.logisticsmobile.video_chapters_probe',
+                                    result_name='video-chapters-result.json')
         if args.probe == 'recent-deletion':
             creation_profile = dict(entry_point='tests.logisticsmobile.recent_deletion_probe',
                                     result_name='recent-deletion-result.json')

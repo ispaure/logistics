@@ -15,6 +15,7 @@
 @property(nonatomic) AVPlayerTimeControlStatus fixtureControl;
 @property(nonatomic) NSUInteger playCalls;
 @property(nonatomic, strong) NSMutableArray *seeks;
+@property(nonatomic) CMTime lastSeekTime, lastSeekToleranceBefore;
 @end
 @implementation LGReceiverPlayer
 - (AVPlayerItem *)currentItem { return self.fixtureItem; }
@@ -25,6 +26,8 @@
 - (void)pause { self.fixtureControl = AVPlayerTimeControlStatusPaused; }
 - (void)replaceCurrentItemWithPlayerItem:(AVPlayerItem *)item { self.fixtureItem = (id)item; }
 - (void)seekToTime:(CMTime)time toleranceBefore:(CMTime)before toleranceAfter:(CMTime)after completionHandler:(void (^)(BOOL))completion {
+    self.lastSeekTime = time;
+    self.lastSeekToleranceBefore = before;
     [self.seeks addObject:[completion copy]];
 }
 @end
@@ -453,10 +456,17 @@
         ((void (^)(BOOL))player.seeks.lastObject)(NO);
         dispatch_async(dispatch_get_main_queue(), ^{
             if (v.airPlaySeekPending || v.airPlaySeekTarget >= 0 || player.playCalls != 2) { [self finish:@"Interrupted seek left receiver stuck"]; return; }
-            [v seekAirPlay:15000]; [v pause];
+            [v pause];
+            v.airPlayChapters = @{@0: @"Opening", @15000: @"Second scene", @25000: @"Finale"};
+            [v skipChapter:YES];
+            if (v.airPlaySeekTarget != 15000 || CMTimeCompare(player.lastSeekTime, CMTimeMake(15000, 1000)) != 0 ||
+                CMTimeCompare(player.lastSeekToleranceBefore, kCMTimeZero) != 0) {
+                [self finish:@"Chapter skip did not seek the active AVPlayer to the labeled start"]; return;
+            }
             ((void (^)(BOOL))player.seeks.lastObject)(YES);
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (player.playCalls != 2 || v.playRequested) { [self finish:@"Seek completion undid explicit Pause"]; return; }
+                [self.samples addObject:@{@"event": @"sender chapter seek", @"target_ms": @15000, @"stayedPaused": @YES}];
                 [self checkReceiverPause:player iteration:0];
             });
         });

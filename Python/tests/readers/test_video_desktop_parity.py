@@ -27,6 +27,63 @@ TEST_STAGE = TestStage.EXTENDED
 
 
 class DesktopVideoParityTests(QtTestCase):
+    def test_chapter_markers_and_skips_through_desktop_open(self):
+        from features.video.ui.player import open_video_choice
+        from logistics_build.build_retention import scratch
+        from tests.readers.video_fixtures import chapter_playback_fixtures
+
+        if not shutil.which('ffmpeg'):
+            self.skipTest('FFmpeg fixture generator required')
+        with scratch() as root, patch('commonUtils.filesystem.storage.cache_directory', return_value=root / 'state'):
+            marked, plain = chapter_playback_fixtures(root)
+            for path in (marked, plain):
+                window = open_video_choice(ResourceChoice(LocalFiles(root), path.name))
+                try:
+                    window.show()
+                    self.wait_until(lambda: window.player.position() > 400 and window.chapter_data is not None,
+                                    timeout=20)
+                    window.pause_requested()
+                    self.wait_until(lambda: not window.requested_play)
+                    window.chapters.click()
+                    if path == plain:
+                        self.assertEqual(window.seek.chapter_starts, ())
+                        self.assertFalse(window.chapter_skip_buttons)
+                        self.assertEqual(window.seek.accessibleDescription(), '')
+                        continue
+                    self.assertEqual(window.seek.chapter_starts, (0, 5000, 10000))
+                    self.assertIn('Open Chapters', window.seek.accessibleDescription())
+                    buttons = window.settings_pane.findChildren(qt.QPushButton)
+                    self.assertEqual([button.text().split(' · ')[-1] for button in buttons if ' · ' in button.text()],
+                                     ['Opening', 'Middle', 'Finale'])
+                    previous, following = window.chapter_skip_buttons
+                    self.assertFalse(previous.isEnabled())
+                    following.click()
+                    self.wait_until(lambda: window.player.position() == 5000)
+                    self.assertFalse(window.requested_play)
+                    self.assertTrue(previous.isEnabled())
+                    previous.click()
+                    self.wait_until(lambda: window.player.position() == 0)
+                    window.toggle_play()
+                    self.wait_until(lambda: window.player.position() >= 400)
+                    following.click()
+                    self.wait_until(lambda: window.player.position() >= 5100)
+                    following.click()
+                    self.wait_until(lambda: window.player.position() >= 10100)
+                    self.assertTrue(window.requested_play)
+                    self.assertFalse(following.isEnabled())
+                    window.pause_requested()
+                    window.seek_to(11500)
+                    self.wait_until(lambda: window.player.position() == 11500)
+                    previous.click()
+                    self.wait_until(lambda: window.player.position() == 10000)
+                    window.transport_problem('changed')
+                    self.assertFalse(window.seek.chapter_starts)
+                    self.assertFalse(window.chapter_skip_buttons)
+                    window.seek_chapter(0)
+                    self.assertEqual(window.player.position(), 10000)
+                finally:
+                    window.close()
+
     def test_vlc_audio_tail_resume_pause_and_seek_recovery(self):
         from time import monotonic
         from features.video.playback import VideoContent

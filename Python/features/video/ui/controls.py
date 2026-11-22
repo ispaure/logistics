@@ -23,6 +23,7 @@ from features.video.session import (
 
 class CachedSlider(qt.QSlider):
     ranges = ()
+    chapter_starts = ()
 
     def paintEvent(self, event):
         super().paintEvent(event)
@@ -36,6 +37,20 @@ class CachedSlider(qt.QSlider):
                         8 + start * width, self.height() - 4, (stop - start) * width, 3
                     )
                 )
+            if self.chapter_starts:
+                option = qt.QStyleOptionSlider()
+                self.initStyleOption(option)
+                style = self.style()
+                groove = style.subControlRect(style.ComplexControl.CC_Slider, option,
+                                              style.SubControl.SC_SliderGroove, self)
+                handle = style.subControlRect(style.ComplexControl.CC_Slider, option,
+                                              style.SubControl.SC_SliderHandle, self)
+                span = max(0, groove.width() - handle.width())
+                painter.setBrush(self.palette().text())
+                for start in self.chapter_starts:
+                    offset = style.sliderPositionFromValue(0, self.maximum(), start, span, option.upsideDown)
+                    x = groove.x() + handle.width() / 2 + offset
+                    painter.drawRect(qt.QRectF(x - 1, groove.bottom() + 1, 2, 4))
 
 
 class PlaybackTools:
@@ -74,6 +89,8 @@ class PlaybackTools:
         if self.closing:
             self.cache_timer.stop()
             return
+        if self.chapter_data == [] and not self.resource_changed:
+            self.refresh_native_chapters()
         try:
             value = self.content.buffered_ranges()
             self.seek.ranges = value["ranges"] if not value["local"] else ()

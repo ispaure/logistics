@@ -103,6 +103,8 @@
     if ([self hasAirPlay] || ![self allowsAirPlay] || ![self canPlay:NO] ||
         self.pipActive || self.casting || ![self hasAirPlayAudioRoute]) return NO;
     int64_t position = [self positionMilliseconds];
+    self.airPlayChapters = [self chapterRows];
+    self.airPlayChapterSeek = NO;
     self.airPlayResumeLocal |= self.playRequested;
     [self pause];  // Silence VLC before handing the same timeline to AVKit.
     [self moveVideoToExternalHost:nil];
@@ -128,6 +130,30 @@
     if (@available(iOS 15.0, *)) self.airPlayPlayer.audiovisualBackgroundPlaybackPolicy =
         AVPlayerAudiovisualBackgroundPlaybackPolicyContinuesIfPossible;
     [self.airPlayPlayer replaceCurrentItemWithPlayerItem:item];
+    if (!self.airPlayChapters.count && !self.chaptersInvalidated) {
+        __weak LGVideoController *owner = self;
+        __weak AVPlayerItem *routeItem = item;
+        [asset loadChapterMetadataGroupsBestMatchingPreferredLanguages:NSLocale.preferredLanguages
+            completionHandler:^(NSArray<AVTimedMetadataGroup *> *groups, NSError *error) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                AVPlayerItem *current = routeItem;
+                LGVideoController *controller = owner;
+                if (!current || controller.retired || controller.chaptersInvalidated ||
+                    controller.airPlayPlayer.currentItem != current) return;
+                NSMutableDictionary *chapters = [NSMutableDictionary dictionary];
+                for (AVTimedMetadataGroup *group in groups) {
+                    int64_t start = [controller airPlayTime:group.timeRange.start];
+                    if (start < 0) continue;
+                    NSString *title = [AVMetadataItem metadataItemsFromArray:group.items
+                        filteredByIdentifier:AVMetadataCommonIdentifierTitle].firstObject.stringValue;
+                    chapters[@(start)] = title.length ? title :
+                        [NSString stringWithFormat:@"Chapter %lu", (unsigned long)chapters.count + 1];
+                }
+                controller.airPlayChapters = chapters;
+                [controller updateChapterMarkers:[controller durationMilliseconds]];
+            });
+        }];
+    }
     self.airPlayController = [AVPlayerViewController new];
     // The AVKit surface is concealed locally below; keep its system playback
     // controls enabled for native transport and media-selection integration.
@@ -171,9 +197,14 @@
 }
 
 - (void)seekAirPlay:(int64_t)target {
+    [self seekAirPlay:target chapter:NO];
+}
+
+- (void)seekAirPlay:(int64_t)target chapter:(BOOL)chapter {
     if (self.controlsLocked || ![self allowsAirPlay] || ![self canPlay:NO]) return;
     int64_t duration = [self durationMilliseconds];
     self.airPlaySeekTarget = duration > 0 ? MIN(MAX(0, target), duration - 1) : MAX(0, target);
+    self.airPlayChapterSeek = chapter;
     if (!self.airPlayWasExternal) self.airPlayStartPosition = self.airPlaySeekTarget;
     self.ended = NO;
     if (self.airPlayPlayer.currentItem.status == AVPlayerItemStatusReadyToPlay) [self submitAirPlaySeek];
@@ -185,7 +216,8 @@
     self.airPlaySeekDeadline = NSProcessInfo.processInfo.systemUptime + 20;
     NSUInteger generation = ++self.airPlaySeekGeneration;
     __weak LGVideoController *owner = self;
-    [self.airPlayPlayer seekToTime:CMTimeMake(target, 1000) toleranceBefore:CMTimeMake(250, 1000)
+    CMTime toleranceBefore = self.airPlayChapterSeek ? kCMTimeZero : CMTimeMake(250, 1000);
+    [self.airPlayPlayer seekToTime:CMTimeMake(target, 1000) toleranceBefore:toleranceBefore
         toleranceAfter:CMTimeMake(250, 1000) completionHandler:^(BOOL finished) {
         dispatch_async(dispatch_get_main_queue(), ^{
             if (!owner.airPlayPlayer || owner.airPlaySeekGeneration != generation) return;
@@ -406,6 +438,7 @@
     if (!keepRoute) player.allowsExternalPlayback = NO;
     [player replaceCurrentItemWithPlayerItem:nil];
     self.airPlayPlayer = nil;
+    self.airPlayChapters = nil;
     self.airPlayPicker.accessibilityValue = nil;
     self.localAudioNeedsRefresh = YES;
     self.airPlayPreparing = NO;

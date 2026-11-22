@@ -13,8 +13,10 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
+import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Insets;
+import android.graphics.Paint;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.content.res.ColorStateList;
@@ -52,10 +54,13 @@ import org.videolan.libvlc.RendererItem;
 import org.videolan.libvlc.interfaces.IMedia;
 import org.videolan.libvlc.util.VLCVideoLayout;
 import java.util.ArrayList;
+import java.util.TreeMap;
 
 /** In-process VLC surface. No file intents, storage permissions or plaintext files. */
 public final class VideoPlayer {
     private static final long SEEK_TIMEOUT_MS = 20000;
+    private static final long CHAPTER_RESTART_MS = 1000;
+    private static final String CHAPTER_HINT = ". Open Chapters for named positions and chapter skips.";
     private static final long EARLY_END_MARGIN_MS = 1500;
     private static final String AUDIO_PENDING_OUTPUT = "Audio has not started at this position. Video continues.";
     private enum Tail { NONE, AUDIO, VIDEO }
@@ -70,6 +75,11 @@ public final class VideoPlayer {
     final Activity activity;
     private final String sourceURL;
     private String transportFailure;
+    private final TreeMap<Long, String> chapterStarts = new TreeMap<>();
+    private int chapterTitle = -1;
+    private boolean chaptersInvalidated;
+    private AlertDialog chapterDialog;
+    private long nextChapterLookup;
     private long openDeadline;
     private boolean aviFromBeginning;
     private boolean playbackFailed, optionsReloadPending;
@@ -384,7 +394,26 @@ public final class VideoPlayer {
         timeLabel.setText("0:00 / 0:00");
         timeLabel.setContentDescription("Playback time");
         controls.addView(timeLabel);
-        SeekBar seek = new SeekBar(activity);
+        SeekBar seek = new SeekBar(activity) {
+            private final Paint markers = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+            @Override protected synchronized void onDraw(Canvas canvas) {
+                super.onDraw(canvas);
+                long duration = declaredDuration > 0 ? declaredDuration : knownDuration;
+                if (duration <= 0 || chapterStarts.isEmpty()) return;
+                markers.setColor(Color.WHITE);
+                float left = getPaddingLeft();
+                float width = getWidth() - left - getPaddingRight();
+                float height = Math.min(dp(5), getHeight() / 4f);
+                float y = Math.min(getHeight() / 2f + dp(7), getHeight() - height);
+                for (long start : chapterStarts.headMap(duration).keySet()) {
+                    float fraction = (float) start / duration;
+                    if (getLayoutDirection() == View.LAYOUT_DIRECTION_RTL) fraction = 1 - fraction;
+                    float x = left + fraction * width;
+                    canvas.drawRect(x - dp(1), y, x + dp(1), y + height, markers);
+                }
+            }
+        };
         seek.setMax(10000);
         seek.setContentDescription("Video position");
         seek.setMinimumHeight(dp(48));
@@ -1235,28 +1264,93 @@ public final class VideoPlayer {
         player.setTime(target);
     }
 
-    private void chapters() {
-        if (!allowed(false)) return;
-        handler.removeCallbacks(hideControls);
-        MediaPlayer.Chapter[] chapters = player.getChapters(player.getTitle());
-        if (chapters == null || chapters.length == 0) {
-            openDialog = new AlertDialog.Builder(activity).setTitle("Chapters")
-                .setMessage("This video has no embedded chapters.").setPositiveButton("Done", null).create();
-        } else {
-            String[] labels = new String[chapters.length];
-            for (int i = 0; i < chapters.length; i++) {
-                String name = chapters[i].name;
-                labels[i] = clock(chapters[i].timeOffset) + " · " +
-                    (name == null || name.isEmpty() ? "Chapter " + (i + 1) : name);
-            }
-            openDialog = new AlertDialog.Builder(activity).setTitle("Chapters")
-                .setSingleChoiceItems(labels, player.getChapter(), (dialog, index) -> {
-                    seekTo(chapters[index].timeOffset);
-                    dialog.dismiss();
-                }).setNegativeButton("Cancel", null).create();
+    private void refreshChapters() {
+        if (chaptersInvalidated || done || !allowed(false)) return;
+        int title = player.getTitle();
+        if (title != chapterTitle) {
+            chapterStarts.clear();
+            chapterTitle = title;
+            nextChapterLookup = 0;
+            seek.invalidate();
         }
-        openDialog.setOnDismissListener(dialog -> { openDialog = null; scheduleControls(); });
+        long now = android.os.SystemClock.uptimeMillis();
+        if (!chapterStarts.isEmpty() || now < nextChapterLookup) return;
+        nextChapterLookup = now + 1000;
+        MediaPlayer.Chapter[] rows = player.getChapters(title);
+        if (rows == null || rows.length == 0) return;
+        for (int i = 0; i < rows.length; i++) {
+            if (rows[i].timeOffset < 0) continue;
+            String name = rows[i].name;
+            chapterStarts.put((long) rows[i].timeOffset,
+                    name == null || name.trim().isEmpty() ? "Chapter " + (i + 1) : name);
+        }
+        seek.invalidate();
+    }
+
+    public void invalidateChapters() {
+        chaptersInvalidated = true;
+        chapterStarts.clear();
+        if (chapterDialog != null) chapterDialog.dismiss();
+        seek.invalidate();
+    }
+
+    private Long chapterTarget(boolean next) {
+        long duration = durationMilliseconds();
+        long time = ended ? duration : position();
+        if (next) {
+            Long target = chapterStarts.higherKey(time);
+            return target != null && target < duration ? target : null;
+        }
+        Long current = chapterStarts.headMap(duration, false).floorKey(time);
+        return current != null && time - current < CHAPTER_RESTART_MS ? chapterStarts.lowerKey(current) : current;
+    }
+
+    private void seekChapter(long target) {
+        refreshChapters();
+        if (!chaptersInvalidated && chapterStarts.containsKey(target) && target < durationMilliseconds())
+            seekTo(target);
+    }
+
+    private void skipChapter(boolean next) {
+        refreshChapters();
+        Long target = chapterTarget(next);
+        if (target != null) seekChapter(target);
+    }
+
+    private void chapters() {
+        if (!allowed(false) || (tools != null && tools.locked)) return;
+        handler.removeCallbacks(hideControls);
+        refreshChapters();
+        long duration = durationMilliseconds();
+        ArrayList<Long> starts = new ArrayList<>(chapterStarts.headMap(duration).keySet());
+        AlertDialog.Builder dialog = new AlertDialog.Builder(activity).setTitle("Chapters");
+        if (starts.isEmpty()) {
+            String message = chaptersInvalidated ? "The video changed. Reopen it to see its chapters." :
+                chapterStarts.isEmpty() ? "This video has no embedded chapters." :
+                "Chapter positions are unavailable for the current timeline.";
+            openDialog = dialog.setMessage(message).setPositiveButton("Done", null).create();
+        } else {
+            ArrayList<String> labels = new ArrayList<>();
+            for (long start : starts) {
+                labels.add(clock(start) + " · " + chapterStarts.get(start));
+            }
+            long current = ended ? duration : position();
+            openDialog = dialog.setSingleChoiceItems(labels.toArray(new String[0]),
+                    starts.indexOf(chapterStarts.headMap(duration, false).floorKey(current)), (list, index) -> {
+                    seekChapter(starts.get(index));
+                    list.dismiss();
+                }).setNegativeButton("Cancel", null).create();
+            // Disabled actions remain visible so the boundary is apparent.
+            openDialog.setButton(AlertDialog.BUTTON_NEUTRAL, "Previous chapter", (window, which) -> skipChapter(false));
+            openDialog.setButton(AlertDialog.BUTTON_POSITIVE, "Next chapter", (window, which) -> skipChapter(true));
+        }
+        chapterDialog = openDialog;
+        openDialog.setOnDismissListener(window -> { chapterDialog = openDialog = null; scheduleControls(); });
         openDialog.show();
+        if (!starts.isEmpty()) {
+            openDialog.getButton(AlertDialog.BUTTON_NEUTRAL).setEnabled(chapterTarget(false) != null);
+            openDialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(chapterTarget(true) != null);
+        }
     }
 
     public void startByUser() {
@@ -1455,13 +1549,15 @@ public final class VideoPlayer {
                 resumeSeekSubmitted = false;
             }
             long time = position(), length = durationMilliseconds();
+            refreshChapters();
             if (time >= 0 && !ended) lastPosition = time;
             if (!seek.isPressed() && length > 0) seek.setProgress((int)(time * 10000 / length));
             seek.setVisibility(View.VISIBLE);
             seek.setEnabled(length > 0 && (tools == null || !tools.locked) && allowed(false));
             updatePlayIcon();
             timeLabel.setText(clock(time) + " / " + (length > 0 ? clock(length) : "Duration unknown") + (tools != null && tools.cacheApproximate ? " · Cache ≈" : ""));
-            seek.setContentDescription("Video position: " + timeLabel.getText());
+            seek.setContentDescription("Video position: " + timeLabel.getText() +
+                (chapterStarts.headMap(length).isEmpty() ? "" : CHAPTER_HINT));
             boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
             if (pip != wasPip) { wasPip = pip; setControlsVisible(true); }
             if (pip) updatePipActions();

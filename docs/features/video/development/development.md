@@ -38,7 +38,7 @@ changing a renderer.
 | Android video view hierarchy and native events | In Android `VideoPlayer.java`, the view setup builds the overlay and controls, `applyControlInsets()` fits the controls to the safe area, `show()` attaches VLC to the mounted view, and `onPlayerEvent()` handles VLC events. |
 | iOS video view hierarchy and layout | The `VideoChrome` category in `mobile/ios/VideoPlayer.m` builds the inline surface and controls, resolves the fold and safe-area geometry, and sizes the inline picture and control deck. |
 | Provider admission, read-ahead or errors | `playback.py`, `transport.py`, `buffering.py` |
-| Chapters and folder queue | `chapters.py` reads Matroska ChapterAtoms and MP4 chpl data. `session.py` orders the queue. |
+| Chapters and folder queue | `chapters.py` reads Matroska ChapterAtoms and MP4 chpl data. The desktop and native timelines use the existing seek paths for chapter jumps. `session.py` orders the queue. |
 | Resume or privacy | [Playback tool ownership](#playback-tool-ownership) and [storage policy](video-player.md) |
 
 ## Desktop playback
@@ -331,6 +331,16 @@ captions. Custom encoder tests use FFmpeg. The mobile host covers credentials,
 mount/retirement, settings and native-source staging. Compile native adapters
 with `mobile_build.validation.video_native` for `android` or `ios` in the
 project environment.
+
+Run the generated chaptered and chapterless clips through the normal mobile open path on owned disposable devices:
+
+```sh
+python -m mobile_build.validation.document_storage_tools ios --probe video-chapters --output tmp/test-results/ios-chapters
+python -m mobile_build.validation.document_storage_tools android --probe video-chapters --output tmp/test-results/android-chapters
+```
+
+Both probes check marker positions, accessible chapter labels, skips while paused and playing, and clearing markers when the stream changes.
+Native AirPlay exposes source VLC chapters in the iOS player and tries the current AVAsset's timed metadata when VLC has no rows. Chapter skips use the active AVPlayer's seek and its completion handling. MKV and compatible MP4 served through the HLS remux use the source timeline on the phone. The sender's public AirPlay APIs have no contract for installing custom chapter markers or skip buttons on a receiver. Apple's navigation marker groups and custom transport menus belong to a tvOS app's player. Direct file metadata may be presented by a receiver. [AVAsset chapters](https://developer.apple.com/documentation/avfoundation/avasset/loadchaptermetadatagroups%28bestmatchingpreferredlanguages%3Acompletionhandler%3A%29?language=objc) · [AVPlayer seek](https://developer.apple.com/documentation/avfoundation/avplayer/seek%28to%3Atolerancebefore%3Atoleranceafter%3Acompletionhandler%3A%29?language=objc) · [tvOS navigation markers](https://developer.apple.com/documentation/avkit/presenting-navigation-markers)
 
 Use `video_probe_tools` with a current video-enabled package for native
 fullscreen, rotation and remote/crypt matrices. Its synthetic HTTPS/WebDAV

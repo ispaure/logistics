@@ -20,7 +20,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock
 
-from features.video.chapters import Chapter, MediaBounds, TrackBound, read_chapters, read_media_bounds
+from features.video.chapters import Chapter, MediaBounds, TrackBound, chapter_targets, read_chapters, read_media_bounds
 
 
 def element(tag, data):
@@ -53,6 +53,22 @@ class MetadataTestCase(unittest.TestCase):
 
 
 class ChapterTests(MetadataTestCase):
+    def test_skip_targets_at_boundaries_and_before_the_first_start(self):
+        starts = (2000, 2500, 6000)
+        expected = {
+            0: (None, 2000),
+            2000: (None, 2500),
+            2500: (2000, 6000),
+            3499: (2000, 6000),
+            3500: (2500, 6000),
+            6000: (2500, None),
+            7000: (6000, None),
+        }
+        for position, targets in expected.items():
+            with self.subTest(position=position):
+                self.assertEqual(chapter_targets(starts, position), targets)
+        self.assertEqual(chapter_targets((), 3000), (None, None))
+
     def test_mp4_skips_media_and_retains_named_offsets(self):
         entries = b'\x01\0\0\0\0\0\0\0\x02'
         for offset, title in ((0, b'Opening'), (90500, b'The next scene')):

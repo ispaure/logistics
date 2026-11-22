@@ -19,6 +19,7 @@ from itertools import islice
 from pathlib import PurePosixPath
 import re
 import struct
+from bisect import bisect_right
 
 
 _MATROSKA_SUFFIXES = ('.mkv', '.webm', '.mka')
@@ -32,6 +33,16 @@ _MAX_END_MS = (1 << 53) - 1  # Safe in native and JSON timeline representations.
 class Chapter:
     start_ms: int
     title: str
+
+
+def chapter_targets(starts, position):
+    """Return previous/next starts. Previous restarts after the first second."""
+    next_index = bisect_right(starts, position)
+    current = next_index - 1
+    if current >= 0 and position - starts[current] < 1000:
+        current -= 1
+    return (starts[current] if current >= 0 else None,
+            starts[next_index] if next_index < len(starts) else None)
 
 
 @dataclass(frozen=True)

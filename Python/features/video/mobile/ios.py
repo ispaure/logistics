@@ -144,6 +144,9 @@ class IOSVideo:
     def transport_failed(self, message):
         self.native.setTransportFailure(message)
 
+    def invalidate_chapters(self):
+        self.native.invalidateChapters()
+
     def play(self):
         self.native.startByUser()
 
