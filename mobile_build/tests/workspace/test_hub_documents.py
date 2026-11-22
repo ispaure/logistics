@@ -115,13 +115,14 @@ class HubDocumentTests(unittest.TestCase):
                     hub = app.build_documents_hub()
                     app.document_search.value = query
                     app.loop.run_until_complete(asyncio.sleep(.35))
-                    for section in (app.document_open_list, app.document_recent_list, app.document_saved_list):
+                    for section in (app.document_open_list, app.document_recent_list):
                         self.assertFalse(any(getattr(widget, '_document_group', False) for widget in widgets(section)))
                         message = section.children[-1]
                         self.assertIsInstance(message, toga.Label)
                         self.assertEqual(message._impl._surface_roles[:2], ('transparent', 'muted'))
                         self.assertFalse(message._impl._surface_eink_outlined)
                         self.assertIn('No matching' if query else 'No ', message.text)
+                    self.assertEqual(list(app.document_saved_list.children), [])
                     self.assertFalse(any(getattr(widget, 'text', '') == 'Open Books & Comics library'
                                          for widget in widgets(hub)))
             show_library.assert_not_called()
@@ -190,6 +191,21 @@ class HubDocumentTests(unittest.TestCase):
         self.assertIn('No closed recent documents.', labels(app.document_recent_list))
         from mobile.recent_documents import RecentDocuments
         self.assertEqual(RecentDocuments(app.recent_documents.path.parent).sessions(), [])
+
+        from features.notebooks.mobile.documents import repository
+        from features.notebooks.notebook import Notebook
+        repository(app).create(Notebook.new('Saved notebook'))
+        app.show_documents_hub(collection='Saved')
+        self.assertEqual(app.documents_view, 'Libraries')
+        self.assertNotIn('Saved', app.document_view_buttons)
+        self.assertIs(app.document_saved_list.parent, app.document_libraries_list)
+        self.assertIn('On this device', labels(app.document_saved_list))
+        buttons = {widget.text: widget for widget in widgets(app.document_saved_list)
+                   if isinstance(widget, toga.Button)}
+        self.assertIn('Saved notebook', buttons)
+        app.loop.run_until_complete(buttons[saved.name].on_press())
+        self.assertEqual(app.current.id, saved.id)
+        self.assertEqual(app.editor.value, 'Saved content')
 
     def test_locked_cloud_recent_renders_source_and_requests_credentials(self):
         from mobile.workspace import Session

@@ -40,7 +40,7 @@ class LocalDocumentSearchTests(TestCase):
         catalog(app).remember(dict(type='local', path=str(path)), path.name,
                               dict(kind='markdown'), favourite=True)
         app.show_documents_hub()
-        self.assertEqual(list(app.document_view_buttons), ['Libraries', 'Favourites', 'Open', 'Recent', 'Saved'])
+        self.assertEqual(list(app.document_view_buttons), ['Libraries', 'Favourites', 'Open', 'Recent'])
         self.assertEqual(list(app.document_results.children), [app.document_libraries_list])
         favourites = app.document_view_buttons['Favourites']
         self.assertEqual(favourites.accessible_name, 'Favourites')
@@ -189,7 +189,7 @@ class LocalDocumentSearchTests(TestCase):
               patch('mobile.fold_layout.division', return_value=None) as fold):
             app.reflow_documents_hub()
             self.assertEqual(body.style.direction, COLUMN)
-            self.assertEqual([len(row.children) for row in app.document_views.children], [3, 2])
+            self.assertEqual([len(row.children) for row in app.document_views.children], [2, 2])
             width.return_value = 350
             app.reflow_documents_hub()
             self.assertEqual(len(app.document_views.children), 1)

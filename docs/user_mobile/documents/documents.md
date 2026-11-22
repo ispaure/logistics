@@ -14,9 +14,10 @@ to continue with any unsaved edits still in that editor. In a reader, use
 **Open now** is a shortcut to a current session. **Recent** on Home previews
 the latest closed file, and **See all** opens its collection in Documents.
 
-In Documents, use **Recent** to reopen a closed session or **Saved** to find
-other saved documents. **Libraries** shows available Notes and Comics
-libraries. If a Recent entry fails, find the file in its current folder,
+In Documents, use **Recent** to reopen a closed session. **Libraries** shows
+available Notes and Comics libraries. Its **On this device** section lists
+app-managed text files and notebooks outside **Open** and **Recent**.
+If a Recent entry fails, find the file in its current folder,
 reconnect its remote, or unlock its credential.
 
 ## Find the file in its folder

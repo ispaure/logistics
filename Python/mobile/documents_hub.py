@@ -15,11 +15,13 @@ from toga.style.pack import COLUMN, ROW, CENTER
 
 from .appearance import accessible_name, batch_surfaces, list_button, surface
 from .control_icons import icon_button, button_icons
-from .hub_controls import PanelGrid, document_list, empty_document_row, retire_document_actions, text_document_kind
+from .hub_controls import (
+    PanelGrid, document_group, document_list, empty_document_row, retire_document_actions, text_document_kind,
+)
 from .ui_metrics import TOUCH_TARGET
 
 
-COLLECTIONS = ('Libraries', 'Favourites', 'Open', 'Recent', 'Saved')
+COLLECTIONS = ('Libraries', 'Favourites', 'Open', 'Recent')
 SIDEBAR_WIDTH = 160
 SIDEBAR_BREAKPOINT = 480
 TABS_BREAKPOINT = 300
@@ -87,7 +89,7 @@ class DocumentsHub:
             if cell.parent is not None:
                 cell.parent.remove(cell)
         self.document_views.clear()
-        names = (COLLECTIONS[:3], COLLECTIONS[3:]) if wrapped else (COLLECTIONS,)
+        names = (COLLECTIONS[:2], COLLECTIONS[2:]) if wrapped else (COLLECTIONS,)
         for group in names:
             row = toga.Box(style=Pack(direction=COLUMN if sidebar else ROW))
             for name in group:
@@ -149,8 +151,9 @@ class DocumentsHub:
         self.document_notes_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_comics_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_favourites_list = toga.Box(style=Pack(direction=COLUMN))
-        self.document_libraries_list = toga.Box(children=[self.document_notes_list, self.document_comics_list],
-                                                style=Pack(direction=COLUMN))
+        self.document_libraries_list = toga.Box(
+            children=[self.document_notes_list, self.document_comics_list, self.document_saved_list],
+            style=Pack(direction=COLUMN))
         self._document_libraries_ready = False
         for menu in getattr(self, '_document_search_menus', ()):
             menu.dispose()
@@ -162,7 +165,8 @@ class DocumentsHub:
         self._document_tab_cells = {}
         self._document_tabs_mode = None
         self._document_collection_geometry = None
-        self.documents_view = getattr(self, 'documents_view', 'Libraries')
+        if getattr(self, 'documents_view', None) not in COLLECTIONS:
+            self.documents_view = 'Libraries'
         for name in COLLECTIONS:
             def choose(widget=None, name=name, **kwargs):
                 self.documents_view = name
@@ -219,7 +223,7 @@ class DocumentsHub:
         self._style_document_tabs()
         selected = self.document_search_results if searching else {
             'Open': self.document_open_list, 'Recent': self.document_recent_list,
-            'Saved': self.document_saved_list, 'Libraries': self.document_libraries_list,
+            'Libraries': self.document_libraries_list,
             'Favourites': self.document_favourites_list}[self.documents_view]
         if list(self.document_results.children) != [selected]:
             self.document_results.clear()
@@ -441,7 +445,9 @@ class DocumentsHub:
                 rows.append(self.recent_row(Session('', 'notebook', key, 'notebook', title=name), summary))
         for row in rows:
             row.document_button.style.font_size = FILENAME_FONT
-        self.document_saved_list.add(document_list(rows, 'No other saved documents.'))
+        if rows:
+            self.document_saved_list.add(
+                toga.Label('On this device', style=library_heading_style()), document_group(rows))
         self.show_document_collection()
 
     async def open_document_category(self, category):
