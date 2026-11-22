@@ -54,9 +54,12 @@ class LocalDocumentSearchTests(TestCase):
         self.assertEqual(app.native_host.state.destination, 'documents')
         self.assertIn('Pinned favourite', app.private_sessions.active.crypt_reader.text)
         app.show_documents_hub()
-        remove = next(w for w in widgets(app.document_favourites_list)
-                      if isinstance(w, toga.Button) and w.text == 'Remove')
-        app.loop.run_until_complete(remove.on_press())
+        favourite_widgets = list(widgets(app.document_favourites_list))
+        self.assertFalse(any(isinstance(w, toga.Button) and w.text == 'Remove'
+                             for w in favourite_widgets))
+        menu, = (w.document_actions for w in favourite_widgets if hasattr(w, 'document_actions'))
+        remove = dict(menu.load_actions())['Remove from Favourites']
+        app.loop.run_until_complete(remove())
         self.assertEqual(catalog(app).entries(), [])
 
     def test_search_button_and_android_back_restore_documents_collection(self):

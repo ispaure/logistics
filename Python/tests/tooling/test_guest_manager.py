@@ -23,6 +23,7 @@ import unittest
 from unittest.mock import patch
 import zipfile
 from logistics_build.guest_manager import archive, verify
+from logistics_build.guest_source_readiness import ROUTING
 
 
 class GuestManagerTests(unittest.TestCase):
@@ -41,6 +42,10 @@ class GuestManagerTests(unittest.TestCase):
         capture = patch.dict(os.environ, {'LOGISTICS_MANAGER_LOCAL_TEST_SOURCE': ''})
         capture.start()
         self.addCleanup(capture.stop)
+        # The generated repositories need no host Git routing or credentials.
+        for key in tuple(os.environ):
+            if key in ROUTING or key.startswith('GIT_CONFIG_'):
+                del os.environ[key]
         self.folder = TemporaryDirectory()
         self.addCleanup(self.folder.cleanup)
         self.root = Path(self.folder.name).resolve()

@@ -10,6 +10,7 @@ __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
 import json
+import os
 from pathlib import Path
 from shutil import copytree
 import subprocess
@@ -34,6 +35,11 @@ class GuestSourceReadinessTests(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # Use the generated repositories without inheriting host Git routing.
+        cls.enterClassContext(patch.dict(os.environ))
+        for key in tuple(os.environ):
+            if key in owner.ROUTING or key.startswith('GIT_CONFIG_'):
+                del os.environ[key]
         temporary = TemporaryDirectory()
         cls.addClassCleanup(temporary.cleanup)
         root = Path(temporary.name).resolve()
