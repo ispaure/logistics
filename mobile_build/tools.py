@@ -11,6 +11,7 @@ __status__ = "Production"
 
 import argparse
 import ast
+from collections import deque
 import importlib.util
 import json
 from hashlib import sha256
@@ -178,6 +179,27 @@ SHARED_REQUIRED_MODULES = (
 )
 
 
+def _runtime_imports(body):
+    """Visit import-bearing statements in breadth-first order without walking expressions."""
+    def statements(nodes):
+        for node in nodes:
+            if isinstance(node, ast.If) and (
+                    isinstance(node.test, ast.Name) and node.test.id == 'TYPE_CHECKING'
+                    or isinstance(node.test, ast.Attribute) and node.test.attr == 'TYPE_CHECKING'
+                    and isinstance(node.test.value, ast.Name) and node.test.value.id == 'typing'):
+                yield from statements(node.orelse)
+            elif isinstance(node, (ast.stmt, ast.ExceptHandler, ast.match_case)):
+                yield node
+
+    pending = deque(statements(body))
+    while pending:
+        node = pending.popleft()
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            yield node
+        else:
+            pending.extend(statements(ast.iter_child_nodes(node)))
+
+
 def validate_app_modules(root, modules=APP_MODULES, feature_modules=None, *, document_modules=DOCUMENT_MODULES):
     """Check staged application/feature/service imports before a native build."""
     root = Path(root)
@@ -196,17 +218,7 @@ def validate_app_modules(root, modules=APP_MODULES, feature_modules=None, *, doc
         package = relative.rsplit('/', 1)[0].replace('/', '.')
         if relative.endswith('/__init__.py'):
             package = relative[:-len('/__init__.py')].replace('/', '.')
-        class RuntimeImports(ast.NodeTransformer):
-            def visit_If(self, node):
-                if (isinstance(node.test, ast.Name) and node.test.id == 'TYPE_CHECKING'
-                        or isinstance(node.test, ast.Attribute) and node.test.attr == 'TYPE_CHECKING'
-                        and isinstance(node.test.value, ast.Name) and node.test.value.id == 'typing'):
-                    alternative = ast.Module(body=node.orelse, type_ignores=[])
-                    return self.generic_visit(alternative).body
-                return self.generic_visit(node)
-        tree = RuntimeImports().visit(tree)
-        for node in ast.walk(tree):
-            dependencies = []
+        for node in _runtime_imports(tree.body):
             if isinstance(node, ast.ImportFrom):
                 module = importlib.util.resolve_name('.' * node.level + (node.module or ''), package) if node.level else node.module or ''
                 dependencies = [module] if node.module else [module + '.' + alias.name for alias in node.names]
@@ -217,7 +229,7 @@ def validate_app_modules(root, modules=APP_MODULES, feature_modules=None, *, doc
                     if ((root.parent / (child + '.py')).is_file()
                             or (root.parent / child / '__init__.py').is_file()):
                         dependencies.append(module + '.' + alias.name)
-            elif isinstance(node, ast.Import):
+            else:
                 dependencies = [alias.name for alias in node.names]
             for dependency in dependencies:
                 if not dependency.startswith(('mobile.', 'features.', 'services.')):

@@ -90,10 +90,20 @@ assert not any(name.startswith(('PySide', 'toga', 'mobile', 'config')) for name 
             (package / '__init__.py').write_text('value = 42\n')
             (child / '__init__.py').write_text('')
             consumer = app / 'consumer.py'
-            consumer.write_text('from mobile.package import value\n')
+            consumer.write_text('''
+from mobile.package import value
+if TYPE_CHECKING:
+    from mobile.package import child
+if typing.TYPE_CHECKING:
+    from mobile.package import child
+''')
             modules = ('consumer.py', 'package/__init__.py')
             mobile_tools.validate_app_modules(app, modules, document_modules=())
-            for statement in ('from mobile.package import child', 'from .package import child'):
+            for statement in ('from mobile.package import child', 'from .package import child',
+                              'if TYPE_CHECKING:\n    pass\nelse:\n    from .package import child',
+                              'try:\n    pass\nexcept Exception:\n    from .package import child',
+                              'match value:\n    case _:\n        from .package import child',
+                              'async def nested():\n    from .package import child'):
                 with self.subTest(statement=statement):
                     consumer.write_text(statement + '\n')
                     with self.assertRaisesRegex(ValueError, r'imports unstaged mobile\.package\.child'):
