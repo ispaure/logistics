@@ -11,6 +11,7 @@ __status__ = "Production"
 
 ANDROID_PERMISSION = 'android.permission.POST_NOTIFICATIONS'
 ANDROID_CHANNEL = 'transfer-results'
+IOS_SETTINGS_TIMEOUT = 3
 
 
 def backend(app):
@@ -67,16 +68,22 @@ def post(app, notice, *, allow, done):
 
 
 def _post_ios(app, notice, allow, done):
-    from rubicon.objc import Block, ObjCClass, objc_id
+    from rubicon.objc import Block, ObjCClass, ObjCInstance, objc_id
 
     center = _ios_center()
     loop = app.loop
+    waiting = True
 
     def on_loop(callback, *args):
         if not loop.is_closed():
             loop.call_soon_threadsafe(callback, *args)
 
     def submit(authorized):
+        nonlocal waiting
+        if not waiting:
+            return
+        waiting = False
+        timeout.cancel()
         if not authorized or not allow():
             done(False)
             return
@@ -93,17 +100,23 @@ def _post_ios(app, notice, allow, done):
         except Exception:
             done(False)
 
-    def settings(value):
+    def settings(pointer):
         # Authorization can change at any time. Alert or Notification Center
         # must be enabled before attempting delivery.
         try:
+            value = ObjCInstance(pointer)
             authorized = value.authorizationStatus in (2, 3, 4) and 2 in (
                 value.alertSetting, value.notificationCenterSetting, value.lockScreenSetting)
         except Exception:
             authorized = False
         on_loop(submit, authorized)
 
-    center.getNotificationSettingsWithCompletionHandler(Block(settings, None, objc_id))
+    timeout = loop.call_later(IOS_SETTINGS_TIMEOUT, submit, False)
+    try:
+        center.getNotificationSettingsWithCompletionHandler(Block(settings, None, objc_id))
+    except Exception:
+        timeout.cancel()
+        raise
 
 
 def _post_android(app, notice):

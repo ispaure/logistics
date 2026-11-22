@@ -36,7 +36,7 @@ class NativeTransferNotificationTests(TestCase):
                                     notificationCenterSetting=2, lockScreenSetting=2)
         application = SimpleNamespace(applicationState=2)
         center = Mock()
-        center.getNotificationSettingsWithCompletionHandler.side_effect = lambda callback: callback(authority)
+        center.getNotificationSettingsWithCompletionHandler.side_effect = lambda callback: callback(1)
         center.addNotificationRequest.side_effect = lambda request, withCompletionHandler: withCompletionHandler(None)
         center.requestAuthorizationWithOptions.side_effect = lambda options, completionHandler: completionHandler(True, None)
         content = SimpleNamespace()
@@ -47,9 +47,10 @@ class NativeTransferNotificationTests(TestCase):
             'UNMutableNotificationContent': SimpleNamespace(alloc=lambda: SimpleNamespace(init=lambda: content)),
             'UNNotificationRequest': SimpleNamespace(requestWithIdentifier=request),
         }
-        rubicon = SimpleNamespace(ObjCClass=classes.__getitem__, objc_id=object,
+        rubicon = SimpleNamespace(ObjCClass=classes.__getitem__, ObjCInstance={1: authority}.__getitem__, objc_id=object,
                                   Block=lambda callback, *_: callback)
-        loop = SimpleNamespace(is_closed=lambda: False, call_soon_threadsafe=lambda callback, *args: callback(*args))
+        loop = SimpleNamespace(is_closed=lambda: False, call_later=Mock(),
+                               call_soon_threadsafe=lambda callback, *args: callback(*args))
         app = SimpleNamespace(loop=loop)
         observed = []
         notice = Notice('synthetic-id', 'transfer', 'Transfer complete', 'Open Transfers for details.')
@@ -69,6 +70,16 @@ class NativeTransferNotificationTests(TestCase):
             self.assertEqual(observed, [False, True, False, True])
             request.assert_called_once_with('synthetic-id', content=content, trigger=None)
             self.assertEqual(vars(content), {'title': notice.title, 'body': notice.message})
+
+            pending = []
+            center.getNotificationSettingsWithCompletionHandler.side_effect = pending.append
+            native.post(app, notice, allow=lambda: True, done=observed.append)
+            delay, timeout, allowed = loop.call_later.call_args.args
+            self.assertEqual(delay, native.IOS_SETTINGS_TIMEOUT)
+            timeout(allowed)
+            pending[0](1)
+            self.assertEqual(observed, [False, True, False, True, False])
+            request.assert_called_once()
 
     def test_android_native_permission_and_channel_gate_delivery(self):
         from types import SimpleNamespace
