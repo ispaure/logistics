@@ -27,6 +27,56 @@ RUNNER = Path(__file__).parents[1] / 'run_regressions.py'
 
 
 class RegressionRunnerTests(unittest.TestCase):
+    def test_notes_timeout_capture_is_scoped_to_hosted_offscreen_macos_regression(self):
+        from regression_timeout import output_root
+
+        notes = RUNNER.parent / 'editing/test_notes_library_tabs.py'
+        results = RUNNER.parent / 'unused-results'
+        with patch.dict(os.environ, GITHUB_ACTIONS='true', QT_QPA_PLATFORM='offscreen',
+                        LOGISTICS_PLATFORM_RESULTS=str(results)):
+            with patch.object(sys, 'platform', 'darwin'):
+                self.assertEqual(output_root(notes, 'regression'), results / 'native/test-timeouts')
+                self.assertIsNone(output_root(notes, 'smoke'))
+                self.assertIsNone(output_root(notes.with_name('test_notes_library_desktop.py'), 'regression'))
+                with patch.dict(os.environ, GITHUB_ACTIONS=''):
+                    self.assertIsNone(output_root(notes, 'regression'))
+                with patch.dict(os.environ, QT_QPA_PLATFORM='cocoa'):
+                    self.assertIsNone(output_root(notes, 'regression'))
+            with patch.object(sys, 'platform', 'linux'):
+                self.assertIsNone(output_root(notes, 'regression'))
+
+    def test_diagnostic_failure_preserves_timeout_and_uploads_available_stack(self):
+        from regression_timeout import monitored_child
+
+        with TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            directory = root / 'capture'
+            output = root / 'upload'
+
+            def failed_sample(process, target, remaining):
+                self.assertEqual(target, directory)
+                self.assertGreater(remaining, 0)
+                (target / 'checkpoint.json').write_text(json.dumps([
+                    dict(phase='case-started', test='example.test_case', at='start'),
+                    dict(phase='teardown-started', test='example.test_case', at='teardown'),
+                ]), encoding='utf-8')
+                (target / 'python.log').write_text('Python thread stack', encoding='utf-8')
+                return ['Native sample failed (TimeoutExpired).']
+
+            with patch('parallel_regressions._posix_child') as launch, \
+                    patch('regression_timeout._wait_until', return_value=None) as waits, \
+                    patch('regression_timeout._sample', side_effect=failed_sample):
+                status, receipt = monitored_child(['fake'], {}, 300, directory, output,
+                                                  'editing/test_notes_library_tabs.py', 'regression', None)
+            self.assertEqual(status, 124)
+            self.assertEqual(receipt['status'], 'incomplete')
+            self.assertEqual(receipt['checkpoints'][-1]['phase'], 'teardown-started')
+            self.assertEqual(set(receipt['artifacts']), {'python'})
+            self.assertEqual(Path(receipt['receipt']).parent, output)
+            self.assertIn('Native sample failed (TimeoutExpired).', receipt['errors'])
+            self.assertEqual(waits.call_args_list[1].args[1] - waits.call_args_list[0].args[1], 5)
+            launch.return_value.__exit__.assert_called_once()
+
     def test_current_test_events_stream_from_the_isolated_child(self):
         with TemporaryDirectory() as temporary:
             root = Path(temporary)

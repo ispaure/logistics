@@ -33,6 +33,7 @@ from unittest.mock import patch
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from regression_timing import TimedResult, TimingReport, default_report, timestamp, emit_progress
+from regression_timeout import CAPTURE_DIRECTORY, child_checkpoints, monitored_child, output_root
 from runner_settings import ISOLATED_FILE_TIMEOUT, PROGRESS_INTERVAL
 from commonUtils.testing.stages import TestStage, STAGE_ORDER, PROFILES, validate
 
@@ -187,7 +188,7 @@ def read_child_evidence(path, stage, exit_code, expected):
 
 def run_isolated(directory, pattern, interval, include_patterns=(), report=None, *,
                  stages=STAGE_ORDER, mode='diagnostic', fail_fast=False, timings=None,
-                 order='default', seed=None, exact_files=(), workers=1, cancelled=None):
+                 order='default', seed=None, exact_files=(), workers=1, cancelled=None, scheduler_cancelled=None):
     """Validate first, then run isolated files by stage and known duration."""
     if workers not in (1, 2, 4, 8):
         raise ValueError('Choose one, two, four or eight isolated test workers.')
@@ -234,7 +235,7 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
                 code = run_isolated(directory, pattern, interval, report=local, stages=(level,),
                     mode=mode, fail_fast=fail_fast, order=order, seed=seed,
                     exact_files=[row.path.relative_to(directory).as_posix()],
-                    cancelled=cancel_event if eligible(row.path) else None)
+                    cancelled=cancel_event if eligible(row.path) else None, scheduler_cancelled=cancel_event)
                 local.save(complete=True, exit_code=code)
                 return code, local.data
             with cancellation() as cancel_event:
@@ -278,8 +279,17 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
             expected = child_context(path, level.value, order, seed)
             try:
                 environment = dict(os.environ, BUILD_MANAGER_TEST_FILE=relative_file)
-                stopped_outcome = None
-                if cancelled is None:
+                stopped_outcome = timeout_diagnostics = None
+                capture = output_root(path, level.value) if cancelled is None else None
+                if capture is not None:
+                    code, timeout_diagnostics = monitored_child(
+                        command, environment, ISOLATED_FILE_TIMEOUT, child_report.parent / CAPTURE_DIRECTORY,
+                        capture, relative_file, level.value, scheduler_cancelled)
+                    if timeout_diagnostics is not None:
+                        stopped_outcome = 'timeout'
+                    elif code == 130 and scheduler_cancelled is not None and scheduler_cancelled.is_set():
+                        stopped_outcome = 'cancelled'
+                elif cancelled is None:
                     code = subprocess.run(command, timeout=ISOLATED_FILE_TIMEOUT, env=environment).returncode
                 else:
                     from parallel_regressions import child
@@ -315,6 +325,7 @@ def run_isolated(directory, pattern, interval, include_patterns=(), report=None,
                     path=relative_file, stage=level.value, started_at=started_at, finished_at=timestamp(),
                     duration_seconds=monotonic() - started, exit_code=code, outcome=outcome,
                     test_report_available=available, test_report_complete=evidence_error is None,
+                    **({'timeout_diagnostics': timeout_diagnostics} if timeout_diagnostics is not None else {}),
                     **({'evidence_error': evidence_error} if evidence_error else {})))
                 report.save()
         elapsed = report.data['modules'][-1]['duration_seconds'] if report is not None else monotonic() - started
@@ -429,7 +440,13 @@ def main():
         report.data.update(report.child_context)
     report.save()
     try:
-        code = run_with_report(args, report)
+        capture = report.path.parent / CAPTURE_DIRECTORY
+        if args.timing_child and capture.is_dir():
+            with child_checkpoints(capture) as checkpoint:
+                report.timeout_checkpoint = checkpoint
+                code = run_with_report(args, report)
+        else:
+            code = run_with_report(args, report)
     except ValueError as error:
         requested = exact_files or [p.relative_to(args.directory).as_posix()
                                        for p in matching_sources(args.directory, args.pattern, args.include_pattern)]

@@ -119,6 +119,8 @@ class TimingReport:
 class TimedResult(unittest.TextTestResult):
     """Include setup/teardown/cleanups, with fixture errors and subtest failures."""
     def startTest(self, test):
+        if checkpoint := getattr(self.report, 'timeout_checkpoint', None):
+            checkpoint('case-started', test.id())
         self._timing = {'id': test.id(), 'started_at': timestamp(), 'outcome': 'incomplete'}
         if hasattr(self, 'test_stages'):
             self._timing['stage'] = self.test_stages[test.id()]
@@ -140,6 +142,8 @@ class TimedResult(unittest.TextTestResult):
             finished_at=timestamp()))
         if getattr(self.report, 'checkpoint_cases', False):
             self.report.save()
+        if checkpoint := getattr(self.report, 'timeout_checkpoint', None):
+            checkpoint('case-finished', test.id())
         self._timing = None
         self.status['completed'] += 1
         self.status.update(test='between tests / class or module fixtures', started=monotonic())
