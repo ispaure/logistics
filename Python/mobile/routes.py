@@ -18,6 +18,30 @@ import toga
 from commonUtils.ui.native.routes import Routes
 
 
+_settings_route_delegate = None
+
+
+def settings_route_delegate():
+    """Project the Settings root bar while UIKit is still animating Back."""
+    global _settings_route_delegate
+    if _settings_route_delegate is None:
+        from ctypes import c_bool
+        from commonUtils.ui.native.routes import apple_delegate
+        from rubicon.objc import objc_id, objc_method, send_super
+
+        class LogisticsRouteDelegate(apple_delegate()):
+            @objc_method
+            def navigationController_willShowViewController_animated_(self, navigation, controller, animated: bool) -> None:
+                send_super(__class__, self, 'navigationController:willShowViewController:animated:',
+                           navigation, controller, animated, restype=None, argtypes=[objc_id, objc_id, c_bool])
+                owner = self.owner
+                if owner is not None:
+                    owner.prepare_settings_return(navigation, controller, animated)
+
+        _settings_route_delegate = LogisticsRouteDelegate
+    return _settings_route_delegate
+
+
 def contains(root, widget):
     if widget is None:
         return False
@@ -36,6 +60,7 @@ class MobileRoutes(Routes):
         self._installation = object()
         self.origins = {}
         self._selection_returns = {}
+        self.settings_return_navigation = None
         from .folder_navigation import FolderNavigation
         self.folders = FolderNavigation(self)
         super().__init__(*args, **kwargs)
@@ -43,6 +68,7 @@ class MobileRoutes(Routes):
     def uninstall(self):
         if not self._retired:
             self._retired = True
+            self.settings_return_navigation = None
             self.retire_credential_import()
             task, self.back_task = self.back_task, None
             if (task is not None and not task.done()
@@ -277,29 +303,54 @@ class MobileRoutes(Routes):
     def install(self):
         self._installation = object()
         self._retired = False
-        if self.apple or self.host.adapter is None:
+        if self.host.adapter is None:
             return super().install()
-        from java import dynamic_proxy
-        from io.github.ispaure.commonutils import NavigationBack
+        if self.apple:
+            adapter = self.host.adapter
+            self.delegate = settings_route_delegate().alloc().init()
+            self.delegate.owner = self
+            for navigation in adapter.navigation:
+                navigation.delegate = self.delegate
+            adapter.controller.moreNavigationController.delegate = self.delegate
+        else:
+            from java import dynamic_proxy
+            from io.github.ispaure.commonutils import NavigationBack
 
-        class Listener(dynamic_proxy(NavigationBack.Listener)):
-            def __init__(self, owner):
-                super().__init__()
-                self.owner = weakref.ref(owner)
+            class Listener(dynamic_proxy(NavigationBack.Listener)):
+                def __init__(self, owner):
+                    super().__init__()
+                    self.owner = weakref.ref(owner)
 
-            def onBackRequested(self):
-                owner = self.owner()
-                return owner.system_back() if owner is not None else False
+                def onBackRequested(self):
+                    owner = self.owner()
+                    return owner.system_back() if owner is not None else False
 
-        self.listener = Listener(self)
-        self.back_callback = NavigationBack.install(self.host.adapter.impl._native_activity, self.listener)
-        from .android_volume_pages import VolumePages
-        self.volume_pages = VolumePages(self.app)
+            self.listener = Listener(self)
+            self.back_callback = NavigationBack.install(self.host.adapter.impl._native_activity, self.listener)
+            from .android_volume_pages import VolumePages
+            self.volume_pages = VolumePages(self.app)
         self.selection_changed()
         if self.on_render is not None:
             self.on_render()
 
+    def prepare_settings_return(self, navigation, controller, animated):
+        if (not animated or self._retired or self.changing or self.host.changing
+                or self.host.state.destination != 'settings' or not self.screens['settings']
+                or getattr(self.app, '_reader_chrome_hidden', False)):
+            return
+        adapter = self.host.adapter
+        root = adapter.containers[self.host.destinations.index('settings')][1]
+        if navigation == adapter.navigation_for('settings') and controller == root and not navigation.isNavigationBarHidden():
+            self.settings_return_navigation = navigation
+            navigation.setNavigationBarHidden(True, animated=True)
+
     def native_popped(self, navigation):
+        if self.settings_return_navigation == navigation:
+            self.settings_return_navigation = None
+            root = self.host.adapter.containers[self.host.destinations.index('settings')][1]
+            # An interactive Back gesture may finish on its outgoing category.
+            if navigation.topViewController != root and navigation.isNavigationBarHidden():
+                navigation.setNavigationBarHidden(False, animated=False)
         if self._retired or self.changing or self.host.changing:
             return
         destination = self.host.adapter.destination_for_navigation(navigation)

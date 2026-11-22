@@ -270,6 +270,9 @@ class WorkspaceNavigation(AdaptiveWorkspace):
                 or getattr(self.app, '_reader_chrome_hidden', False)):
             return
         navigation = adapter.navigation_for(destination)
+        if (destination == 'settings'
+                and getattr(self.app.routes, 'settings_return_navigation', None) == navigation):
+            return
         controller = adapter.content_controller(destination)
         item = controller.navigationItem
         body = self.app.routes.body(destination)

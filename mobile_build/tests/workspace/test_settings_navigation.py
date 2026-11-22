@@ -15,8 +15,9 @@ from commonUtils.testing.stages import TestStage
 TEST_STAGE = TestStage.REGRESSION
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 import toga
 from mobile.app import LogisticsMobile
 from mobile.preferences import Preferences
@@ -106,6 +107,34 @@ class SettingsNavigationTests(unittest.TestCase):
         self.assertEqual(list(app.body.children), [nav.options['Workspaces']])
         self.assertIs(app.show_legacy_choice.parent.parent.parent, nav.sections['Workspaces'])
         self.assertEqual(app.text_font_size_choice.value, '24')
+
+    def test_apple_settings_return_reserves_no_bar_during_pop_and_restores_on_cancel(self):
+        app, routes = self.app, self.app.routes
+        self.nav.choose('App')
+        root, category = object(), object()
+        navigation = Mock(topViewController=category)
+        navigation.isNavigationBarHidden.return_value = False
+        adapter = SimpleNamespace(navigation=[navigation],
+            containers=[(None, root) for _ in app.native_host.destinations],
+            navigation_for=lambda destination: navigation, content_controller=Mock(),
+            destination_for_navigation=lambda current: 'settings', route_depth=lambda current: 1)
+
+        with patch.object(app.native_host, 'adapter', adapter):
+            routes.prepare_settings_return(navigation, category, True)
+            routes.prepare_settings_return(navigation, root, False)
+            navigation.setNavigationBarHidden.assert_not_called()
+
+            routes.prepare_settings_return(navigation, root, True)
+            navigation.setNavigationBarHidden.assert_called_once_with(True, animated=True)
+            app.adaptive.sync_destination_bar('settings')
+            adapter.content_controller.assert_not_called()
+
+            navigation.setNavigationBarHidden.reset_mock()
+            navigation.isNavigationBarHidden.return_value = True
+            routes.native_popped(navigation)
+            navigation.setNavigationBarHidden.assert_called_once_with(False, animated=False)
+            self.assertIsNone(routes.settings_return_navigation)
+            self.assertEqual(routes.screens['settings'][-1][0], 'settings-category')
 
     def test_matching_route_title_removes_the_heading_row_until_it_is_needed(self):
         from mobile.settings.titles import sync_route_title
