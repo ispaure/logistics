@@ -182,11 +182,14 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             if hasattr(child, 'image'):
                 child.image = None
             self.book_content.remove(child)
-        if hasattr(self, 'epub_view'):
+        if hasattr(self, 'epub_view') and not getattr(self, '_epub_retirement_requested', False):
             native = getattr(self.epub_view._impl, 'native', None)
             if native is not None:
                 native.stopLoading()
+            # Suspension and reopening can both retire the same chapter.
+            # Do not queue another WKWebView load for an already cleared reader.
             self.epub_view.set_content('https://logistics.invalid/closed-' + uuid4().hex + '/', '<p>Reader closed.</p>')
+            self._epub_retirement_requested = True
         self.chapter_selector.items = []
         self.bookmark_selector.items = []
         from .external_display import sync as sync_external
@@ -427,6 +430,7 @@ class ReaderUI(LibraryCatalog, ReaderChrome):
             self.epub_event(reader, epoch, index, action, value, initial=initial and value == restored_offset)
             initial = False
 
+        self._epub_retirement_requested = False
         self.epub_view = chapter_view(content, getattr(self, 'epub_view', None), offset=self.epub_offset,
             on_event=event, on_link=lambda href: self.epub_link(reader, epoch, index, href),
             motion_enabled=self.preferences.values.get('android_eink') != 'true')

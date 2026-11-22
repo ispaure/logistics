@@ -162,6 +162,44 @@ class ReaderParityUITests(unittest.TestCase):
 
             app.loop.run_until_complete(exercise())
 
+    def test_epub_retirement_loads_a_blank_once_per_open(self):
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            app = self.host(root)
+            app.show_library()
+            fixtures = root / 'fixtures'
+            fixtures.mkdir()
+            epub, _ = make_books(fixtures)
+            record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), epub)
+
+            async def exercise():
+                self.assertTrue(await app.open_book(record['id']))
+                owner = app.readers.active
+                view = owner.epub_view
+                first_bridge = view._chapter_bridge
+                with patch.object(view, 'set_content', wraps=view.set_content) as load:
+                    owner.release_book_reader()
+                    owner.release_book_reader()
+                    load.assert_called_once()
+                    self.assertEqual(load.call_args.args[1], '<p>Reader closed.</p>')
+                    self.assertTrue(first_bridge.closed)
+                    self.assertIsNone(owner.book_reader)
+
+                    self.assertTrue(await owner.open_book(record['id']))
+                    self.assertIs(owner.epub_view, view)
+                    next_bridge = view._chapter_bridge
+                    self.assertIsNot(next_bridge, first_bridge)
+                    self.assertFalse(next_bridge.closed)
+                    self.assertEqual(load.call_count, 2)
+                    self.assertIn('logistics-reader-root', load.call_args.args[1])
+
+                    owner.release_book_reader()
+                    self.assertEqual(load.call_count, 3)
+                    self.assertEqual(load.call_args.args[1], '<p>Reader closed.</p>')
+                    self.assertTrue(next_bridge.closed)
+
+            app.loop.run_until_complete(exercise())
+
     def test_provider_epub_passage_search_bookmarks_and_close_cleanup(self):
         from mobile_build.tests.support.readers import MemoryWebView
         directory = self.enterContext(TemporaryDirectory())
