@@ -9,10 +9,10 @@ __maintainer__ = "Marc-André Voyer"
 __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
-import os
 from pathlib import Path
 from unittest.mock import patch
 
+from commonUtils.persistence import atomic_write_bytes
 from commonUtils.persistence.publication import rename_exclusive
 from commonUtils.testing.stages import TestStage
 from commonUtils.tests.qt_test_case import QtTestCase
@@ -31,9 +31,8 @@ class ExternalEditsTests(QtTestCase):
     def test_external_replace_at_save_publication_preserves_both_versions(self):
         with self.temporary_directory() as directory:
             root = Path(directory).resolve()
-            path, replacement = root / 'a.py', root / 'replacement'
+            path = root / 'a.py'
             path.write_text('original\n')
-            replacement.write_text('external\n')
             view = ProjectWorkspace(Project('test', directory, autosave='off'))
             view.open_path(path)
             # Opening also queues a watcher read. Save should race only the
@@ -48,7 +47,9 @@ class ExternalEditsTests(QtTestCase):
                 nonlocal replaced
                 if Path(source) == path and Path(target).name == 'previous':
                     try:
-                        os.replace(replacement, path)
+                        # Keep the atomic replacement at the displacement
+                        # boundary even if a Windows reader briefly holds it.
+                        atomic_write_bytes(path, b'external\n', replace_timeout=1)
                     except OSError as error:
                         raise AssertionError('External replacement failed at Save displacement '
                                              f'(errno={error.errno}, winerror={getattr(error, "winerror", None)}).') from error
