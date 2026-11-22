@@ -228,8 +228,9 @@ class Probe(LogisticsMobile):
                     await self.command(panel, dict(op='save'))
                     assert Notebook.read(path.read_bytes()).page(0).to_bytes() == ink
                     assert close_notebook(self, panel.session.id, 'discard')
+        return path.parent
 
-    async def unavailable(self, cases):
+    async def unavailable(self, cases, directory):
         from features.notebooks.notebook import Notebook
         from services.documents.mobile_notebooks import close_notebook, open_notebook
         self.show_home()
@@ -237,7 +238,7 @@ class Probe(LogisticsMobile):
         reference = 'Synthetic unavailable restaurant card'
         book.pages[0].template = reference
         book.structure_dirty = True
-        path = Path(self.paths.cache) / 'generated-unknown.rmdoc'
+        path = directory / 'generated-unknown.rmdoc'
         path.write_bytes(book.to_bytes())
         assert await open_notebook(self, path=path)
         panel = self.notebook_panel
@@ -334,9 +335,9 @@ class Probe(LogisticsMobile):
             picker.cancel_text_destination()
             assert not list(Path(self.private_root).rglob('*.rmdoc'))
 
-            await self.matrix(report['cases'])
+            directory = await self.matrix(report['cases'])
             await rotate(self, 'portrait')
-            await self.unavailable(report['cases'])
+            await self.unavailable(report['cases'], directory)
             self.show_home()
 
             panel, path, backend = await self.create_notebook('Native lined', 'P Lines medium', 'pro')
