@@ -48,7 +48,8 @@ def document_group(rows):
     group._document_group = True
     def borderless(widget):
         if isinstance(widget, toga.Button):
-            surface(widget, radius=0, background='transparent', foreground='text',
+            foreground = 'accent' if hasattr(widget, 'document_actions') else 'text'
+            surface(widget, radius=0, background='transparent', foreground=foreground,
                     outlined=False, eink_outlined=False)
         elif isinstance(widget, toga.Box):
             surface(widget, radius=0, background='transparent', outlined=False, eink_outlined=False)

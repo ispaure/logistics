@@ -422,9 +422,7 @@ class DocumentsHub:
             if (owner is not None and owner.item is not None and session.kind == 'archive'
                     and owner.matches_reference(session.source)):
                 continue
-            row = self.recent_row(session, summary)
-            row.document_button.style.font_size = FILENAME_FONT
-            rows.append(row)
+            rows.append(self.recent_row(session, summary, wrap_name=True))
         self.document_recent_list.add(document_list(rows, 'No closed recent documents.'))
         represented = {session.identity for session in sessions}
         represented.update(session.identity for session, _ in recent)

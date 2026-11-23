@@ -43,7 +43,7 @@ class HubDocumentTests(unittest.TestCase):
         import toga
         hub = self.app.hub_controller()
 
-        def row_menu(session, *, show_documents_link=False):
+        def row_menu(session):
             button = toga.Button('Document actions')
             button.document_actions = Mock()
             return [button]
@@ -96,7 +96,7 @@ class HubDocumentTests(unittest.TestCase):
             # with the rest of the overview to the trailing pane on tablets.
             groups = [widget for widget in widgets(home.trailing) if getattr(widget, '_document_group', False)]
             self.assertEqual(len(groups), 1)
-            self.assertTrue(any(text.startswith('Open · ') for text in labels(groups[0])))
+            self.assertTrue(any(text.partition(' · ')[0] == 'Open' for text in labels(groups[0])))
 
     def test_empty_document_messages_stay_outside_action_groups(self):
         import toga
@@ -152,11 +152,11 @@ class HubDocumentTests(unittest.TestCase):
         owner = app.editor_view
         app.save_workspace()
         app.show_home()
-        self.assertTrue(any(text.startswith('Open · ') for text in labels(app.routes.roots['home'])))
+        self.assertIn('Open', labels(app.routes.roots['home']))
         app.show_documents_hub()
         app.session_closer(owner.session.id)()
         self.assertNotIn(owner.session.id, app.workspace.sessions)
-        self.assertFalse(any(text.startswith('Open · ') for text in labels(app.routes.roots['home'])))
+        self.assertFalse(any(text.partition(' · ')[0] == 'Open' for text in labels(app.routes.roots['home'])))
         self.assertFalse(any(getattr(widget, 'session_id', None) == owner.session.id
                              for widget in widgets(app.document_open_list)))
         self.assertEqual(app.store.open(owner.document.id).text, owner.document.text)
@@ -170,7 +170,7 @@ class HubDocumentTests(unittest.TestCase):
         app.request_reader_close(owner.session.id)
         self.assertEqual(app.native_host.state.destination, 'home')
         self.assertFalse(app.routes.screens['home'])
-        self.assertFalse(any(text.startswith('Open · ') for text in labels(app.body)))
+        self.assertFalse(any(text.partition(' · ')[0] == 'Open' for text in labels(app.body)))
         self.assertNotIn(owner.session.id, app.workspace.sessions)
 
     def test_clear_recent_button_preserves_open_and_saved_documents(self):
@@ -453,13 +453,13 @@ class HubDocumentTests(unittest.TestCase):
         self.assertNotIn('Read. Write. Organize.', labels)
         self.assertEqual(app.native_host.labels[0], 'Home')
 
-    def test_home_previews_active_and_latest_closed_and_opens_matching_collections(self):
+    def test_home_previews_three_closed_items_and_opens_matching_collections(self):
         from mobile.workspace import Session
 
         app = self.app
         active = app.store.create('Active draft.txt')
         app.workspace.open('managed-text', active.id, 'text', active.name)
-        closed = [app.store.create(f'Closed {index}.txt') for index in range(2)]
+        closed = [app.store.create(f'Long filename for a recently closed item {index}.txt') for index in range(4)]
         for doc in closed:
             app.recent_documents.remember(Session(doc.id, 'managed-text', doc.id, 'text', doc.name))
         app.recent_documents.remember(app.workspace.sessions[app.workspace.active])
@@ -471,8 +471,11 @@ class HubDocumentTests(unittest.TestCase):
             overview = app.home_sections.trailing
             self.assertEqual([button.text for button in app.hub_controller()._home_open_buttons],
                              [active.name])
-            self.assertEqual([button.text for button in app.hub_controller()._home_recent_buttons],
-                             [closed[-1].name])
+            recent_buttons = app.hub_controller()._home_recent_buttons
+            self.assertEqual([button.text for button in recent_buttons],
+                             [doc.name for doc in reversed(closed[-3:])])
+            self.assertTrue(all(button.style.height == 64 for button in recent_buttons))
+            self.assertNotIn('Text', labels(overview))
             self.assertIn('Favourites', labels(app.home_content))
             self.assertLess(app.home_content.children.index(overview),
                             app.home_content.children.index(app.home_sections.before))
@@ -484,6 +487,12 @@ class HubDocumentTests(unittest.TestCase):
             self.assertFalse(app.documents_search_open)
             self.assertEqual(app.document_search.value, '')
             self.assertEqual(list(app.document_results.children), [getattr(app, expected)])
+        recent_group = next(child for child in app.document_recent_list.children
+                            if getattr(child, '_document_group', False))
+        recent_rows = [row for row in recent_group.children if hasattr(row, 'document_button')]
+        self.assertEqual([row.document_button.text for row in recent_rows],
+                         [doc.name for doc in reversed(closed)])
+        self.assertTrue(all(row.document_button.style.height == 64 for row in recent_rows))
 
     def test_documents_search_retains_input_and_finds_local_files_beyond_recent(self):
         import toga

@@ -119,7 +119,7 @@ class NativeDocumentMenuTests(TestCase):
     def test_apple_sections_keep_command_handlers_and_use_inline_group_separators(self):
         calls = []
         actions = [(title, lambda title=title: calls.append(title))
-                   for title in ('Read aloud…', 'Appearance…', 'All documents', 'Delete document…')]
+                   for title in ('Read aloud…', 'Appearance…', 'Show in folder', 'Delete document…')]
         native = SimpleNamespace()
         impl = type('AppleButton', (), {'__module__': 'toga_iOS.widgets.button'})()
         impl.native = native
@@ -138,7 +138,7 @@ class NativeDocumentMenuTests(TestCase):
         self.assertEqual([action.title for section in sections for action in section.children],
                          [title for title, _ in actions])
         self.assertEqual([action.image for section in sections for action in section.children],
-                         ['speaker.wave.2', 'textformat.size', 'doc.text', 'trash'])
+                         ['speaker.wave.2', 'textformat.size', 'folder', 'trash'])
         sections[-1].children[0].handler(None)
         self.assertEqual(calls, ['Delete document…'])
         self.assertEqual(sections[-1].children[0].attributes, 2)
@@ -152,7 +152,7 @@ class NativeDocumentMenuTests(TestCase):
         popup.getMenu.return_value = native
         selected = []
         actions = [(title, lambda title=title: selected.append(title))
-                   for title in ('Show in folder', 'All documents', 'Close document')]
+                   for title in ('Show in folder', 'Show cached copy in folder', 'Close document')]
         modules = {
             'android.widget': SimpleNamespace(PopupMenu=Mock(return_value=popup)),
             'android.os': SimpleNamespace(Build=SimpleNamespace(VERSION=SimpleNamespace(SDK_INT=35))),
@@ -169,7 +169,7 @@ class NativeDocumentMenuTests(TestCase):
         native.setGroupDividerEnabled.assert_called_once_with(True)
         popup.setForceShowIcon.assert_called_once_with(True)
         self.assertEqual([call.args[0] for call in native.add.return_value.setIcon.call_args_list],
-                         ['folder_hub', 'view', 'close'])
+                         ['folder_hub', 'folder_hub', 'close'])
         menu.listener.onMenuItemClick(SimpleNamespace(getItemId=lambda: 2))
         self.assertEqual(selected, ['Close document'])
         listener = menu.listener
@@ -236,9 +236,13 @@ class DocumentMenuTests(TestCase):
             commands = dict(button.document_actions.load_actions())
             self.assertNotIn('Add to Favourites', commands)
             self.assertNotIn('All documents', commands)
-            home_button, = hub.document_row_menu(selected, show_documents_link=True)
-            self.assertIn('All documents', dict(home_button.document_actions.load_actions()))
-            home_button.document_actions.dispose()
+            hub.build_home()
+            row_button = next(candidate for candidate in hub._home_recent_buttons
+                              if candidate.text == second.name)
+            home_button = row_button.parent.children[1]
+            self.assertEqual(home_button.text, '⋯')
+            self.assertEqual(home_button._impl._surface_roles, ('transparent', 'accent', False))
+            self.assertNotIn('All documents', dict(home_button.document_actions.load_actions()))
             self.assertEqual([row['title'] for row in favourites.catalog(app).entries()], [second.name])
             self.assertTrue(self.run_async(commands[outbound_share.SEND]()))
             button.document_actions.dispose()

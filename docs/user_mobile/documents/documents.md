@@ -11,7 +11,8 @@ lives, whether its source is locked and whether it is read-only.
 **Open** in Documents lists your current readers and editors. Tap an entry
 to continue with any unsaved edits still in that editor. On Home,
 **Open now** is a shortcut to a current session. **Recent** on Home previews
-the latest closed file, and **See all** opens its collection in Documents.
+up to three recently closed files, and **See all** opens the full collection
+in Documents. Filenames on both screens can wrap to two lines.
 
 In Documents, use **Recent** to reopen a closed session. **Libraries** shows
 available Notes and Comics libraries. Its **On this device** section lists

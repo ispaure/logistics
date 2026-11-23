@@ -15,7 +15,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
 
-from .appearance import list_button
+from .appearance import accessible_name, list_button
 from .control_icons import icon_button, button_icons
 from .documents_hub import DocumentsHub
 from .home import HomeScreen, _home_state
@@ -33,6 +33,7 @@ from .hub_controls import (
     text_document_kind as text_document_kind,
 )
 from .recent_documents import MAX_RECENT
+from .ui_metrics import BODY_TEXT, TOUCH_TARGET
 
 
 def session_identities(session, history):
@@ -154,7 +155,7 @@ class HubUI(HomeScreen, DocumentsHub):
                 self.show_documents(resume=True)
         return reopen
 
-    def document_row_menu(self, session, *, show_documents_link=False):
+    def document_row_menu(self, session):
         from .document_sources import folder_location, ordinary_browser_location, show_folder_location
         from .file_items import native_menu, reference_actions, reference_available, row_actions
 
@@ -194,8 +195,6 @@ class HubUI(HomeScreen, DocumentsHub):
                         browser.on_item_actions(entry.payload)
                 return await show_folder_location(app, location, on_selected=selected)
             actions.append(('File actions…', remote_actions))
-        if location and show_documents_link:
-            actions.append(('All documents', app.show_documents_hub))
         source = (getattr(session, 'source', None) or getattr(session, 'history_source', None)
                   or getattr(session, 'cache_source', None))
         opener = getattr(session, 'history_opener', None) or dict(kind=session.kind)
@@ -210,25 +209,30 @@ class HubUI(HomeScreen, DocumentsHub):
             item_provider, item_row = None, None
         if not actions and not item_row and not reference_available(app, source):
             return []
-        button = icon_button('overflow', 'File actions for ' + (session.title or 'document'))
+        button = toga.Button('⋯', style=Pack(width=44, height=TOUCH_TARGET, font_size=24))
+        accessible_name(button, 'File actions for ' + (session.title or 'document'))
         def load_actions():
             direct = (row_actions(app, item_provider, item_row, anchor=button, opener=opener)
                       if item_row else reference_actions(app, source, session.title, opener, anchor=button))
             return [*actions, *direct]
         return [native_menu(app, button, load_actions)]
 
-    def recent_row(self, session, summary, *, show_kind=False, show_documents_link=False):
-        title, kind, details = summary
-        if show_kind:
-            details = [DOCUMENT_TYPES.get(kind, 'Document'), *details]
+    def recent_row(self, session, summary, *, wrap_name=False):
+        from .browser_ui import middle_filename, wrapped_filename
+
+        title, _, details = summary
         row = toga.Box(style=Pack(direction=COLUMN, margin_bottom=8))
         opener = self.recent_opener(session)
-        from .browser_ui import middle_filename
-        name = list_button(toga.Button(title, on_press=opener, style=Pack(height=48, flex=1)))
-        middle_filename(name)
+        name = list_button(toga.Button(title, on_press=opener,
+                                       style=Pack(height=64 if wrap_name else TOUCH_TARGET, flex=1)))
+        if wrap_name:
+            name.style.font_size = BODY_TEXT
+            wrapped_filename(name)
+        else:
+            middle_filename(name)
         self.document_button_icons(name, session)
         row.document_button = name
-        row.add(toga.Box(children=[name, *self.document_row_menu(session, show_documents_link=show_documents_link)],
+        row.add(toga.Box(children=[name, *self.document_row_menu(session)],
             style=Pack(direction=ROW, align_items=CENTER)))
         currently_open = session.id in self.workspace.sessions
         if currently_open or details:

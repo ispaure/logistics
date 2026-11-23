@@ -44,6 +44,25 @@ def middle_filename(button):
         button._impl.native.setContentDescription(button.text)
 
 
+def wrapped_filename(button):
+    """Match the File Browser's two-line title and retain the full accessible name."""
+    from .appearance import accessible_name
+
+    accessible_name(button, button.text)
+    impl = button._impl
+    backend = type(impl).__module__
+    if backend.startswith('toga_iOS.'):
+        label = impl.native.titleLabel
+        label.numberOfLines = 2
+        label.lineBreakMode = 4  # NSLineBreakByTruncatingTail
+    elif backend.startswith('toga_android.'):
+        from android.text import TextUtils
+
+        impl.native.setSingleLine(False)
+        impl.native.setMaxLines(2)
+        impl.native.setEllipsize(TextUtils.TruncateAt.END)
+
+
 def entry_icon(directory, *, landing_page=False):
     """A consistent folder/file glyph for ordinary and Notes Library rows."""
     kind = 'folder_document' if directory and landing_page else 'files' if directory else 'documents'

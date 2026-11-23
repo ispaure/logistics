@@ -26,7 +26,7 @@ _COMMAND_ICONS = {
     'Archive': 'archive', 'Manage archive': 'archive', 'Delete': 'trash_file', 'Delete document': 'trash_file',
     'Add to Favourites': 'favourite', 'Remove from Favourites': 'favourite', 'Favourite file': 'favourite',
     'Show in folder': 'folder_hub', 'Show cached copy in folder': 'folder_hub',
-    'All documents': 'view', 'File actions': 'more', 'New document': 'compose',
+    'File actions': 'more', 'New document': 'compose',
     'View document': 'view', 'View Markdown': 'view', 'View source text': 'view', 'Edit Markdown': 'edit',
     'Read aloud': 'speaker', 'Find and replace': 'find', 'Find in this page': 'find',
     'Find in chapter': 'find', 'Chapters and bookmarks': 'contents', 'Comic pages': 'file_tiles',
@@ -320,7 +320,7 @@ DOCUMENT_GROUPS = (
     ('Appearance…', 'Fullscreen', 'Reading mode', 'Fit comic page', 'Fit image'),
     ('File actions…', 'Reader tools…', 'Open / Metadata…', 'Rename document…',
      'Edit metadata…', 'Info…', 'Save', 'Save a copy', 'Save As…', 'Export…'),
-    ('Open beside another document', 'Show in folder', 'Show cached copy in folder', 'All documents',
+    ('Open beside another document', 'Show in folder', 'Show cached copy in folder',
      'New document', 'Open from Files…', 'Import…'),
     ('Close document', 'Delete document…'),
 )

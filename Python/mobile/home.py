@@ -39,7 +39,7 @@ class HomeScreen:
         sessions = self.open_document_sessions()
         opened = [(session, self.session_summary(session)) for session in sessions[:1]]
         recent = self.recent_items(excluding=[session.identity for session in sessions])
-        return len(sessions), opened, recent[:1]
+        return len(sessions), opened, recent[:3]
 
     def build_home(self):
         if hasattr(self, 'home_sections'):
@@ -109,7 +109,7 @@ class HomeScreen:
             accessible_name(button, f'See all {collection.lower()} documents')
             header.add(button)
         box.add(header)
-        rows = [self.recent_row(session, summary, show_kind=True, show_documents_link=True)
+        rows = [self.recent_row(session, summary, wrap_name=collection == 'Recent')
                 for session, summary in items]
         box.add(document_group(rows) if rows else empty_document_row(empty))
         return [row.document_button for row in rows]
