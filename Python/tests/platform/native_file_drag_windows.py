@@ -75,8 +75,10 @@ class Desktop:
         self.user.OpenInputDesktop.restype = wintypes.HANDLE
         self.user.OpenInputDesktop.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
         self.user.CloseDesktop.argtypes = [wintypes.HANDLE]
-        self.user.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
-        self.user.FindWindowW.restype = wintypes.HWND
+        self.user.FindWindowExW.argtypes = [wintypes.HWND, wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR]
+        self.user.FindWindowExW.restype = wintypes.HWND
+        self.user.IsWindowVisible.argtypes = [wintypes.HWND]
+        self.user.IsWindowVisible.restype = wintypes.BOOL
         self.user.GetUserObjectInformationW.argtypes = [
             wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD),
         ]
@@ -115,6 +117,12 @@ class Desktop:
 
     def window_at(self, point):
         return self.user.GetAncestor(self.user.WindowFromPhysicalPoint(wintypes.POINT(*point)), 2)
+
+    def visible_window(self, title):
+        window = self.user.FindWindowExW(None, None, None, title)
+        while window and not self.user.IsWindowVisible(window):
+            window = self.user.FindWindowExW(None, window, None, title)
+        return window
 
     def window_info(self, window):
         bounds = wintypes.RECT()
@@ -299,6 +307,9 @@ def exercise(root, cleanup):
     assert to_qt(shell / 'Collision.txt', 17) == 'failed'
     assert (local / 'Collision.txt').read_bytes() == b'existing' and (shell / 'Collision.txt').read_bytes() == b'incoming'
     print('Explorer → Logistics: collision preserved both files and reported failure.', flush=True)
+    to_qt(cancelled, 17, escape=True)
+    assert not (local / cancelled.name).exists() and cancelled.exists()
+    print('Explorer → Logistics: Escape left source unchanged.', flush=True)
     to_explorer(outbound, 17)
     received = receive / outbound.name / 'nested/file.txt'
     until(received.is_file, 'Explorer did not copy the nested folder.')
@@ -317,14 +328,14 @@ def exercise(root, cleanup):
     existing = receive / collision.name
     existing.write_bytes(b'existing at native destination')
     conflict_title = 'Replace or Skip Files'
-    assert not desktop.user.FindWindowW(None, conflict_title)
+    assert not desktop.visible_window(conflict_title)
 
     def close_explorer_conflict():
         # Explorer can block the Qt drag call while its conflict dialog is open.
         # Observe and dismiss the dialog on the gesture thread.
         deadline = monotonic() + 8
         while monotonic() < deadline:
-            dialog = desktop.user.FindWindowW(None, conflict_title)
+            dialog = desktop.visible_window(conflict_title)
             if dialog:
                 if not desktop.user.PostMessageW(dialog, 0x10, 0, 0):
                     raise AssertionError('Explorer conflict dialog could not be closed.')
@@ -333,12 +344,9 @@ def exercise(root, cleanup):
         raise AssertionError('Explorer did not show its conflict dialog.')
 
     to_explorer(collision, 17, after_release=close_explorer_conflict)
-    until(lambda: not desktop.user.FindWindowW(None, conflict_title), 'Explorer conflict remains open.')
+    until(lambda: not desktop.visible_window(conflict_title), 'Explorer conflict remains open.')
     assert existing.read_bytes() == b'existing at native destination' and collision.read_bytes() == b'existing'
     print('Logistics → Explorer: native conflict dialog cancelled and preserved both files.', flush=True)
-    to_qt(cancelled, 17, escape=True)
-    assert not (local / cancelled.name).exists() and cancelled.exists()
-    print('Explorer → Logistics: Escape left source unchanged.', flush=True)
     assert not list(local.glob('.drag-*'))
 
 
