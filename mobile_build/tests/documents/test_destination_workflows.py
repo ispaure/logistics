@@ -94,7 +94,7 @@ class DestinationWorkflowTests(unittest.TestCase):
         self.assertEqual(self.app.file_select_bar.style.display, 'pack')
         self.assertEqual(self.app.file_select_bar.style.visibility, 'visible')
         self.assertEqual(self.app.file_move_button.style.visibility, 'visible')
-        self.assertEqual(self.app.file_select_done.style.visibility, 'visible')
+        self.assertEqual(self.app.file_delete_button.style.visibility, 'visible')
         self.assertEqual(self.app.file_select_bar.style.height, 48)
         browser.show_tiles()
         entry = next(entry for entry in browser.tree.entries.values() if not entry.container)

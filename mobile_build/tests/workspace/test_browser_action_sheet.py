@@ -58,7 +58,8 @@ class BrowserActionSheetTests(unittest.TestCase):
                    'android.widget': NS(TextView=Mock(return_value=title)),
                    'android.view': NS(View=NS(OnLongClickListener=object)),
                    'java': NS(dynamic_proxy=lambda interface: object)}
-        with patch.dict('sys.modules', modules), patch('mobile.action_menu.android_menu_context', return_value=context):
+        with patch.dict('sys.modules', modules), patch('mobile.action_menu.android_menu_context', return_value=context), \
+                patch('mobile.action_menu.android_command_label', side_effect=lambda title, **kwargs: title) as format_label:
             self.menu.show()
         title.setText.assert_called_once_with(self.filename)
         listener = title.setOnLongClickListener.call_args.args[0]
@@ -68,6 +69,7 @@ class BrowserActionSheetTests(unittest.TestCase):
         title.setTextIsSelectable.assert_called_once_with(True)
         builder.setCustomTitle.assert_called_once_with(title)
         self.assertEqual(builder.setItems.call_args.args[0], ['Open', 'Delete…'])
+        self.assertEqual([call.args[0] for call in format_label.call_args_list], ['Open', 'Delete…'])
         self.callback.assert_not_called()
         self.menu.listener.onClick(None, 0)
         self.callback.assert_called_once_with()

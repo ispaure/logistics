@@ -118,7 +118,8 @@ class FolderLocationHeader(toga.Box):
             # touch target when there is no explicit numeric action width.
             return width if isinstance(width, (int, float)) and width > 0 else 48
         trailing = sum(action_width(child) for child in self.children
-                       if child not in (self.parent_button, self.caption, *self._title_gutters))
+                       if child not in (self.parent_button, self.caption, *self._title_gutters)
+                       and child.style.display != 'none')
         leading = action_width(self.parent_button)
         self.caption.style.margin_left = self.caption.style.margin_right = 0
         self._title_gutters[0].style.width = max(0, trailing - leading)
@@ -193,6 +194,11 @@ class FolderLocationHeader(toga.Box):
         if self.folder_location:
             show_location(self, 'Folder location', f'{name or self.folder_name.value}\n\n{self.folder_location}')
 
+    def update_back_icon(self):
+        symbol, label = ('close', 'Exit selection') if getattr(self, 'file_selection_mode', False) else ('back', 'Back')
+        apply_icon(self.parent_button, symbol, label)
+        browser_command(self.parent_button)
+
     def update(self, path, *, remote=False, encrypted=False, unlocked=False, name=None, session_only=False, provider=None):
         from services.documents.storage import display_path
         previous_location = getattr(self, 'folder_location', None)
@@ -202,8 +208,7 @@ class FolderLocationHeader(toga.Box):
             self.folder_name.value = title
         elif self.folder_location and self.folder_location != previous_location:
             self.folder_name.restart_pan()
-        apply_icon(self.parent_button, 'back', 'Back')
-        browser_command(self.parent_button)
+        self.update_back_icon()
         kinds = [('storage_remote', 'Online folder')] if remote else [('storage_local', 'On-device folder')]
         if encrypted:
             state = 'unlocked' if unlocked else 'locked'

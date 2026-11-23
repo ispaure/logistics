@@ -92,7 +92,8 @@ class FilenameDisplayTests(unittest.TestCase):
                     _, card, title, _, _ = browser._tile_cards[entry.identity]
                     band, _ = card.children
                     media, menu = band.children
-                    self.assertEqual(title.layout.content_width, card.layout.content_width)
+                    self.assertEqual(title.layout.content_width, card.children[1].layout.content_width)
+                    self.assertIsNone(card._tile_selection.parent)
                     self.assertGreaterEqual(title.layout.content_height, 64)
                     self.assertLessEqual(menu.layout.absolute_content_top + menu.layout.content_height,
                                          title.layout.absolute_content_top)
@@ -109,7 +110,7 @@ class FilenameDisplayTests(unittest.TestCase):
         dir_entry, file_entry, _ = entries
         file_card = browser._tile_cards[file_entry.identity][1]
         menu = file_card.children[0].children[1]
-        title = file_card.children[-1]
+        title = file_card.children[-1].children[-1]
         app.loop.run_until_complete(menu.on_press())
         self.assertEqual([row['path'] for row in actions], [names[0]])
         self.assertFalse(opened)
@@ -118,11 +119,15 @@ class FilenameDisplayTests(unittest.TestCase):
         app.loop.run_until_complete(browser.buttons[dir_entry.identity].on_press())
         self.assertEqual([row['path'] for row in folders], [folder])
 
+        browser.on_check_entry = lambda entry: None
         browser.checked_entries = {file_entry.identity}
         browser.highlight_selection()
-        self.assertEqual(title.accessible_name, '✓ ' + names[0])
+        _, file_card, title, _, _ = browser._tile_cards[file_entry.identity]
+        self.assertEqual(file_card._tile_selection.accessible_name, 'Deselect ' + names[0])
         browser.checked_entries.clear()
+        browser.on_check_entry = None
         browser.highlight_selection()
+        title = browser.buttons[file_entry.identity]
         self.assertEqual(title.accessible_name, names[0])
 
         browser._update_tile_window(browser.TILE_ROW_HEIGHT * 80)

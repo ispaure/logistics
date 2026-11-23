@@ -618,9 +618,6 @@ class VaultBrowser(LibraryFileForms, LibraryPanels):
         if hasattr(self, "reader_actions"):
             self.reader_actions.dispose()
         actions = []
-        if self.library.supports('create'):
-            actions.append(("New document…", self.new_note))
-            actions.append(("New folder…", lambda: self.manage_entry(folder=True)))
         if self.selected_path is not None and self.library.supports('rename'):
             actions.extend([("Rename selected…", lambda: self.manage_entry(move=True)),
                             ("Move selected…", self.move_selected)])

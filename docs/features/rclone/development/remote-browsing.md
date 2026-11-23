@@ -1,6 +1,6 @@
 # Read-only remote browsing
 
-Enter through **Workspaces → Cloud**, **Workspaces → Home Server** or desktop
+Enter through **Workspaces → Cloud**, **Workspaces → Server** or desktop
 **File Browser → File → Open Remote…**. See [Transfers](transfers.md) for Push/Pull
 and [LocalCrypt](localcrypt.md) for encrypted offline copies.
 

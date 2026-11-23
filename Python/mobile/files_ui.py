@@ -289,9 +289,11 @@ class FilesUI:
         self.file_archive_button = action_button(toga.Button('Archive', on_press=self.create_file_archive,
             enabled=False, style=Pack(height=48)))
         accessible_name(self.file_archive_button, 'Archive selected items')
-        self.file_select_done = icon_button('done', 'Done selecting items', on_press=self.end_file_selection)
+        self.file_delete_button = action_button(toga.Button('Delete…', on_press=self.delete_checked_files,
+            enabled=False, style=Pack(height=48)), destructive=True)
+        accessible_name(self.file_delete_button, 'Delete selected items')
         self.file_select_bar = surface(toga.Box(children=[self.file_selection_count, self.file_move_button,
-            self.file_archive_button, self.file_select_done], style=Pack(direction=ROW, align_items=CENTER,
+            self.file_archive_button, self.file_delete_button], style=Pack(direction=ROW, align_items=CENTER,
                 gap=4)), radius=10, background='alternate')
         self._show_file_selection_bar(False)
         self.file_source_tabs = toga.Box(style=Pack(direction=ROW, height=48))
@@ -448,35 +450,27 @@ class FilesUI:
             commands.append(('Archive password…', lambda: self.show_file_actions(operation='password')))
         from .archive_ui import archive_commands
         commands.extend(archive_commands(self.app, provider, selected))
-        if context is None and self.can_select_file_entries(provider):
-            selected_path = selected['path']
-            commands.append(('Select items', lambda: self.begin_file_selection(initial_path=selected_path)
-                             if self.file_provider is provider else None))
         if writable and access.delete:
             commands.append(('Delete…', self.delete_file))
         return commands
 
-    def begin_file_selection(self, *, initial_path=None):
-        if (self.cloud_busy or self.file_browser.on_check_entry is not None
+    def begin_file_selection(self):
+        browser = self.file_browser
+        if (self.cloud_busy or browser.on_check_entry is not None
                 or not self.can_select_file_entries(self.file_provider)):
             return
-        self.file_browser.on_check_entry = self.check_file_entry
-        self.file_browser.highlight_selection()
-        self.file_move_button.enabled = self.file_archive_button.enabled = False
+        if browser.search_open:
+            browser.close_search()
+        browser.on_check_entry = self.check_file_entry
+        browser.highlight_selection()
+        self.file_move_button.enabled = self.file_archive_button.enabled = self.file_delete_button.enabled = False
         self.file_selection_count.text = '0 selected'
-        can_move = capabilities(self.file_provider).delete and not getattr(self.file_provider, 'read_only', False)
-        self.file_move_button.style.display = 'pack' if can_move else 'none'
+        can_delete = capabilities(self.file_provider).delete and not getattr(self.file_provider, 'read_only', False)
+        self.file_move_button.style.display = self.file_delete_button.style.display = 'pack' if can_delete else 'none'
         from .archive_operations import ordinary
         self.file_archive_button.style.display = ('pack' if ordinary(self.file_provider)
                                                   and self.feature_enabled('archives') else 'none')
-        # The Workspaces frame reparents the original browser contents into
-        # its detail pane. Keep the selection row with those contents.
         self._show_file_selection_bar(True)
-        if initial_path is not None:
-            for entry in self.file_browser.entries:
-                if isinstance(entry.payload, dict) and entry.payload.get('path') == initial_path:
-                    self.check_file_entry(entry)
-                    break
 
     def _show_file_selection_bar(self, visible):
         visibility = 'visible' if visible else 'hidden'
@@ -485,6 +479,25 @@ class FilesUI:
             control.style.visibility = visibility if control.style.display != 'none' else 'hidden'
         self.file_select_bar.style.update(height=48 if visible else 0,
             display='pack' if visible else 'none', visibility=visibility)
+        browser = self.file_browser
+        header = browser.location_bar
+        if getattr(header, 'file_selection_mode', False) == visible:
+            return
+        header.file_selection_mode = browser.widget._file_selection_mode = visible
+        if visible:
+            header._file_selection_actions = [(control, control.style.display, control.style.visibility)
+                for control in (browser.search_button, browser.view_switch, self.file_actions_button)]
+            for control, _, _ in header._file_selection_actions:
+                control.style.update(display='none', visibility='hidden')
+        else:
+            for control, display, visibility in header._file_selection_actions:
+                control.style.update(display=display, visibility=visibility)
+            del header._file_selection_actions
+        header.update_back_icon()
+        if getattr(header, '_android_title', False):
+            header.balance_android_title()
+        if self.app.routes.apple and getattr(header, '_native_title_mounted', False):
+            self.app.adaptive.render()
 
     def check_file_entry(self, entry):
         if self.cloud_busy:
@@ -500,6 +513,7 @@ class FilesUI:
         self.file_browser.highlight_selection()
         self.file_move_button.enabled = bool(self.file_checked) and self.file_move_button.style.display != 'none'
         self.file_archive_button.enabled = bool(self.file_checked)
+        self.file_delete_button.enabled = bool(self.file_checked) and self.file_delete_button.style.display != 'none'
         self.file_selection_count.text = f'{len(self.file_checked)} selected'
 
     async def move_checked_files(self, widget=None, **kwargs):
@@ -509,11 +523,47 @@ class FilesUI:
         if (self.cloud_busy or not self.file_checked or not capabilities(provider).delete
                 or getattr(provider, 'read_only', False)):
             return
-        entries = {row['path']: row['revision'] for row in self.file_checked.values()}
-        selection = tuple((path, revision) for path, revision in entries.items()
-                          if not any(parent.as_posix() in entries for parent in Path(path).parents))
+        selection = self.selected_file_roots()
         self.end_file_selection()
         await self.editor_picker().show_destination('', FileSelectionMove(provider, selection))
+
+    def selected_file_roots(self):
+        entries = {row['path']: row['revision'] for row in self.file_checked.values()}
+        return tuple((path, revision) for path, revision in entries.items()
+                     if not any(parent.as_posix() in entries for parent in Path(path).parents))
+
+    async def delete_checked_files(self, widget=None, **kwargs):
+        from .file_operations import FileOperationRequest
+
+        provider = self.file_provider
+        if (self.cloud_busy or self.file_browser.on_check_entry is None or not self.file_checked
+                or not capabilities(provider).delete or getattr(provider, 'read_only', False)):
+            return
+        browser = self.file_browser
+        client = self.cloud_client
+        generation = getattr(client, 'generation', None)
+        navigation = self.navigation_generation
+        selection = self.selected_file_roots()
+        requests = tuple(FileOperationRequest('delete', provider, path, expected_revision=revision)
+                         for path, revision in selection)
+        count = len(requests)
+        items = 'item' if count == 1 else 'items'
+        if not await self.main_window.dialog(toga.ConfirmDialog(f'Delete {count} selected {items}?',
+                'This permanently deletes the selected files, folders and their contents.')):
+            return
+        if (not self.active_host or self.file_browser is not browser or browser.on_check_entry is None
+                or self.file_provider is not provider or self.cloud_busy or self.cloud_client is not client
+                or getattr(client, 'generation', None) != generation or self.navigation_generation != navigation
+                or self.selected_file_roots() != selection):
+            return
+        completed = []
+        self.end_file_selection()
+        result = await self.file_operations().run_selection(requests, completed.append, verb='Deleting')
+        if result is not None:
+            failures, _, cancelled = result
+            await self.browse_files()
+            summary = 'Deletion stopped.' if cancelled else f'Deleted {len(completed)} of {count} {items}.'
+            self.file_status.value = '\n'.join((summary, *failures))
 
     async def create_file_archive(self, widget=None, **kwargs):
         from .archive_ui import controller
@@ -526,11 +576,11 @@ class FilesUI:
                 await controller(self.app).create(sources)
 
     def end_file_selection(self, widget=None, **kwargs):
-        self._show_file_selection_bar(False)
         self.file_checked.clear()
         self.file_browser.on_check_entry = None
         self.file_browser.checked_entries.clear()
         self.file_browser.highlight_selection()
+        self._show_file_selection_bar(False)
 
     def pending_file_cut(self):
         cut = getattr(self, '_file_cut', None)
@@ -621,7 +671,7 @@ class FilesUI:
         cancel = toga.Button('Cancel move', on_press=self.cancel_cloud, style=Pack(height=48))
         self.file_browser.location_bar.add(cancel)
         try:
-            result = await self.file_operations().move_selection(requests, completed)
+            result = await self.file_operations().run_selection(requests, completed, verb='Moving')
         finally:
             self.file_browser.location_bar.remove(cancel)
             if reopened is not None:
@@ -638,17 +688,12 @@ class FilesUI:
         return provider is not None and document_writable(provider)
 
     def show_file_details(self, widget=None, **kwargs):
-        info = self.file_browser.info
-        if info.parent is not None:
-            info.parent.remove(info)
-        box = toga.Box(children=[info,
-            toga.Button('Return to files', on_press=self.show_files, style=Pack(height=48))],
-            style=Pack(direction=COLUMN, margin=12))
-        self.show_view(toga.ScrollContainer(horizontal=False, content=box, style=Pack(flex=1)), destination='files',
-                       route='file-details', title='File details')
-        self.file_browser.preview_selected_image()
+        self.file_browser.show_details_panel(self.files_view)
 
     async def parent_file_folder(self, widget=None, **kwargs):
+        if self.file_browser.on_check_entry is not None:
+            self.end_file_selection()
+            return True
         if (self.file_storage.value, self.file_path) == getattr(self.files_view, '_folder_entry_location', None):
             self.show_locations()
             return

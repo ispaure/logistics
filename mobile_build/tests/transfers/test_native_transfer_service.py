@@ -400,7 +400,7 @@ class TransferSurfaceTests(unittest.IsolatedAsyncioTestCase):
         fallback = surface.native_fallback
         self.assertIsNone(surface.web)
         self.assertEqual(fallback.fact_cells[0].text, '2')
-        self.assertIn('0 files, 0 folders', [value.text for value in fallback.fact_cells])
+        self.assertEqual([value.text for value in fallback.fact_cells][4:6], ['0', '0'])
         self.assertEqual(surface.delivered_revision, surface.revision)
         self.assertIsNone(surface.pending)
         await fallback.buttons.children[0].on_press()
@@ -410,7 +410,7 @@ class TransferSurfaceTests(unittest.IsolatedAsyncioTestCase):
         surface.update(dict(mode='progress', phase='complete', files=3,
             file_delete_attempts=1234, folder_removal_attempts=2))
         self.assertEqual(fallback.fact_cells[0].text, '3')
-        self.assertIn('1,234 files, 2 folders', [value.text for value in fallback.fact_cells])
+        self.assertEqual([value.text for value in fallback.fact_cells][2:4], ['1,234', '2'])
         self.assertEqual([button.text for button in fallback.buttons.children], ['Continue browsing'])
 
     async def test_native_history_exposes_resume_discard_clear_and_revokes_labels(self):
@@ -422,7 +422,7 @@ class TransferSurfaceTests(unittest.IsolatedAsyncioTestCase):
                             offset=45_000_000_000, size=100_000_000_000)],
             history=[dict(time=1, operation='pull', source='secret:', destination='Local', bytes=0)]))
         fallback = surface.native_fallback
-        job = fallback.history.children[1].children[0]
+        job = fallback.history.children[-1].children[0]
         self.assertIn('45.00 GB of 100.00 GB', job.children[1].text)
         resume, discard = job.children[-1].children
         await resume.on_press()
@@ -437,6 +437,26 @@ class TransferSurfaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(surface.model, {})
         self.assertNotIn('secret', surface.children[0].text)
 
+    async def test_live_transfer_keeps_completed_history_and_updates_per_file_bars(self):
+        surface, _ = self.surface()
+        surface.recover_rendering()
+        surface.recover_rendering()
+        surface.update(dict(mode='progress', busy=True, phase='transfer', operation='Pull',
+            bytes_per_second=2_500_000, file_delete_attempts=2, active=1,
+            active_files=[dict(name='Album/Photo.jpg', bytes=1_000_000, size=4_000_000)],
+            history=[dict(time=1, operation='push', source='Local', destination='Remote:', bytes=0)]))
+        fallback = surface.native_fallback
+        self.assertEqual(fallback.title.text, 'Pulling')
+        self.assertIn('2.50 MB/s', [value.text for value in fallback.fact_cells])
+        self.assertEqual(fallback.history.children[0].text, 'Completed transfers')
+        detail, bar = fallback.file_cells[0]
+        self.assertEqual(bar.value, 25)
+        self.assertEqual(detail.text, '1.0 MB of 4.0 MB')
+        surface.update(dict(surface.model,
+            active_files=[dict(name='Album/Photo.jpg', bytes=3_000_000, size=4_000_000)]))
+        self.assertIs(fallback.file_cells[0][1], bar)
+        self.assertEqual(bar.value, 75)
+
     async def test_native_review_keeps_confirmation_and_stale_revision_guards(self):
         surface, handler = self.surface()
         surface.update(dict(mode='review', can_confirm=True, complete=True,
@@ -444,13 +464,13 @@ class TransferSurfaceTests(unittest.IsolatedAsyncioTestCase):
         surface.recover_rendering()
         surface.recover_rendering()
         fallback = surface.native_fallback
-        approve = next(button for button in fallback.buttons.children if button.text.startswith('Approve'))
-        self.assertIn('private/file.txt', fallback.rows.children[0].text)
+        approve = next(button for button in fallback.buttons.children if button.text.startswith('Start '))
+        self.assertIn('private/file.txt', fallback.rows.children[0].children[0].children[0].text)
         self.assertIn('no undo', fallback.metrics.text)
         surface.update(dict(surface.model, notice='Files changed', can_confirm=False))
         await approve.on_press()
         handler.assert_not_awaited()
-        self.assertFalse(next(button for button in fallback.buttons.children if button.text.startswith('Approve')).enabled)
+        self.assertFalse(next(button for button in fallback.buttons.children if button.text.startswith('Start ')).enabled)
 
     async def test_native_recovery_still_revokes_and_clears_private_labels(self):
         surface, handler = self.surface()
@@ -458,7 +478,7 @@ class TransferSurfaceTests(unittest.IsolatedAsyncioTestCase):
         surface.recover_rendering()
         surface.recover_rendering()
         fallback = surface.native_fallback
-        row = fallback.rows.children[0]
+        row = fallback.rows.children[0].children[0].children[0]
         stop = fallback.buttons.children[0]
         surface.revoke()
         self.assertEqual(row.text, '')

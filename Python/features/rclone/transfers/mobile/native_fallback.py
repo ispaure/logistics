@@ -16,7 +16,6 @@ from toga.style import Pack
 from toga.style.pack import CENTER, COLUMN, ROW
 from commonUtils.ui.native.appearance import accessible_name
 from commonUtils.ui.native.forms import FittedLabel, fit_section, fit_text
-from features.rclone.transfers.presentation import removal_counts
 
 
 class NativeTransferFallback(toga.Box):
@@ -39,10 +38,11 @@ class NativeTransferFallback(toga.Box):
         self.fields = toga.Box(style=Pack(direction=COLUMN, gap=12, margin_top=6))
         self.fact_names = ()
         self.fact_cells = []
-        self.file_heading = self.label('Active files', size=17, bold=True)
+        self.file_heading = self.label('Copying now', size=17, bold=True)
         self.rows = toga.Box(style=Pack(direction=COLUMN, gap=9))
         self.buttons = toga.Box(style=Pack(direction=COLUMN, gap=8, margin=12))
         self.row_signature = self.button_signature = None
+        self.file_cells = []
         self.scope = self.remote = None
         self._fitted_width = None
         self._layout_subscription = None
@@ -53,6 +53,9 @@ class NativeTransferFallback(toga.Box):
         if self.presentation:
             self.presentation.surface(self.card, radius=16, background='surface')
             self.presentation.surface(self.amount, radius=0, background='transparent', foreground='accent')
+        self.review_page = self.label('', size=13, muted=True)
+        self.review_navigation = toga.Box(style=Pack(direction=ROW, gap=8))
+        self.review_filters = None
         self.history_signature = None
         self.history = toga.Box(style=Pack(direction=COLUMN, gap=8))
         self.body = toga.Box(children=[self.card, self.rows],
@@ -117,19 +120,25 @@ class NativeTransferFallback(toga.Box):
             cell_width = inner if len(row.children) == 1 else max(24, (inner - 12) // 2)
             for cell in row.children:
                 fit_section(cell, cell_width)
+        fit_text(self.file_heading, content_width)
         fit_section(self.rows, content_width)
         fit_section(self.history, content_width, fit=fit_transfer_control)
+        if self.review_filters is not None:
+            fit_text(self.review_page, content_width)
 
     def render(self, model):
         mode = model.get('mode')
-        self.title.text = model.get('workspace') or 'Transfers'
-        self.paths.text = 'Source: ' + model.get('source', '—') + '\nDestination: ' + model.get('destination', '—')
+        if mode != 'progress':
+            self.title.text = model.get('workspace') or 'Transfers'
+            self.paths.text = 'Source: ' + model.get('source', '—') + '\nDestination: ' + model.get('destination', '—')
         buttons = []
         if mode == 'progress':
             phase = model.get('phase', 'idle')
             self.title.text = {'idle': 'Transfers', 'complete': 'Transfer complete',
                 'failed': 'Transfer stopped', 'cancelled': 'Transfer cancelled',
-                'conflict': 'Files changed during sync'}.get(phase, model.get('operation', 'Transfer'))
+                'conflict': 'Files changed during sync'}.get(phase, {
+                    'Download': 'Downloading', 'Pull': 'Pulling', 'Push': 'Pushing',
+                }.get(model.get('operation'), 'Transferring'))
             self.status.text = progress_status(model)
             show_card = phase != 'idle' or self.status.text != 'No transfer is running.'
             if show_card and self.card.parent is None:
@@ -137,7 +146,8 @@ class NativeTransferFallback(toga.Box):
             elif not show_card and self.card.parent is self.body:
                 self.body.remove(self.card)
             self.render_progress_summary(model, phase)
-            rows = tuple(str(row.get('name', '')) for row in model.get('active_files', ()))
+            active_files = model.get('active_files', ())
+            rows = tuple((str(row.get('name', '')), row.get('size', 0) > 0) for row in active_files)
             if model.get('busy'):
                 buttons.append(('Stop transfer', 'stop', phase != 'stopping', {}))
             if phase != 'idle':
@@ -150,21 +160,20 @@ class NativeTransferFallback(toga.Box):
                 self.buttons.parent.remove(self.buttons)
             self.render_history(model)
         elif mode == 'review':
-            self.status.text = model.get('notice', '')
-            counts = model.get('counts', {})
-            self.metrics.text = (' · '.join(f'{name.capitalize()}: {counts.get(name, 0):,}'
-                for name in ('add', 'replace', 'delete', 'cleanup'))
-                + '\nDestination replacements and deletions have no undo.'
-                + f"\nPage {model.get('page', 0) + 1} · {model.get('total', 0):,} matching changes")
-            rows = tuple(f'{kind.capitalize()}: {path}' for kind, path in model.get('rows', ()))
-            page, size, total = model.get('page', 0), model.get('page_size', 30), model.get('total', 0)
-            buttons.extend([('Previous changes', 'previous', page > 0, {}),
-                ('Next changes', 'next', (page + 1) * size < total, {})])
-            if model.get('query') or model.get('filter', 'all') != 'all':
-                buttons.append(('Show all changes', 'filter', True, dict(kind='all', query='')))
-            buttons.append(('Approve ' + model.get('operation', 'transfer'), 'approve', bool(model.get('can_confirm')), {}))
+            operation = model.get('operation', 'Transfer')
+            self.title.text = f'Review {operation.lower()} changes'
+            self.status.text = review_status(model)
+            self.metrics.text = 'Destination replacements and deletions have no undo.'
             if model.get('can_early') and not model.get('complete'):
-                self.metrics.text += '\nSkipping may replace or delete more files.'
+                self.metrics.text += ' Skipping the review can replace or delete additional files.'
+            if self.fields.parent is None:
+                self.summary.insert(2, self.fields)
+            self.render_fields(review_fields(model))
+            self.render_review_navigation(model)
+            rows = tuple(model.get('rows', ()))
+            if model.get('complete') or model.get('can_confirm'):
+                buttons.append(('Start ' + operation.lower(), 'approve', bool(model.get('can_confirm')), {}))
+            if model.get('can_early') and not model.get('complete'):
                 buttons.append(('Skip preview and start', 'early', True, {}))
             buttons.append(('Cancel review', 'background', True, {}))
         else:
@@ -195,8 +204,35 @@ class NativeTransferFallback(toga.Box):
                     self.body.insert(self.body.children.index(self.rows), self.file_heading)
                 elif not rows and self.file_heading.parent is self.body:
                     self.body.remove(self.file_heading)
-            for text in rows:
-                self.rows.add(self.label(text, size=14))
+            if mode == 'progress':
+                self.file_cells = []
+                for name, known in rows:
+                    detail = self.label('', size=13, muted=True)
+                    bar = toga.ProgressBar(max=100, value=0, style=Pack(height=6)) if known else None
+                    controls = [self.label(name, size=14, bold=True), detail]
+                    if bar is not None:
+                        accessible_name(bar, 'Progress for ' + name)
+                        controls.append(bar)
+                    self.rows.add(self.history_card(*controls))
+                    self.file_cells.append((detail, bar))
+            else:
+                for kind, name in rows:
+                    self.rows.add(self.history_card(self.label(name, size=14, bold=True),
+                                                    self.label(kind.capitalize(), size=12, muted=True)))
+        if mode == 'progress':
+            count = model.get('active', len(rows))
+            heading = f'Copying now · {len(rows)} of {count} files' if count > len(rows) else 'Copying now'
+            if self.file_heading.text != heading:
+                self.file_heading.text = heading
+            for row, (detail, bar) in zip(active_files, self.file_cells):
+                done, total = row.get('bytes', 0), row.get('size', 0)
+                caption = transfer_size(done) + (' of ' + transfer_size(total) if total > 0 else ' copied')
+                if getattr(detail, '_settings_source_text', detail.text) != caption:
+                    detail.text = caption
+                if bar is not None:
+                    progress = max(0, min(100, 100 * done / total))
+                    if bar.value != progress:
+                        bar.value = progress
         # Progress redraws do not recreate controls. Review approval controls
         # are bound to the precise newly displayed revision.
         signature = (buttons, self.surface.revision if mode != 'progress' else None)
@@ -207,6 +243,35 @@ class NativeTransferFallback(toga.Box):
                 self.buttons.add(self.button(title, action, enabled, **args))
         if self._fitted_width is not None:
             self.reflow(self._fitted_width)
+
+    def render_review_navigation(self, model):
+        if self.review_filters is None:
+            labels = dict(All='all', Add='add', Replace='replace', Delete='delete', Cleanup='cleanup')
+            kind = toga.Selection(items=list(labels), style=Pack(flex=1, height=48))
+            search = toga.TextInput(placeholder='Find a change', style=Pack(flex=2, height=48))
+            accessible_name(kind, 'Change type')
+            accessible_name(search, 'Find a change')
+
+            async def filter_rows(widget=None, **kwargs):
+                if self.surface is not None:
+                    await self.surface.dispatch('filter', dict(kind=labels[kind.value], query=search.value))
+
+            kind.on_change = search.on_change = filter_rows
+            self.review_filters = toga.Box(children=[kind, search], style=Pack(direction=ROW, gap=8))
+            self.body.insert(1, self.review_filters)
+            self.body.insert(2, self.review_page)
+            self.body.add(self.review_navigation)
+            self.review_previous = self.button('Previous', 'previous')
+            self.review_next = self.button('Next', 'next')
+            self.review_previous.style.flex = self.review_next.style.flex = 1
+            self.review_navigation.add(self.review_previous, self.review_next)
+        page, size, total = model.get('page', 0), model.get('page_size', 30), model.get('total', 0)
+        caption = review_page_caption(model)
+        if getattr(self.review_page, '_settings_source_text', self.review_page.text) != caption:
+            self.review_page.text = caption
+        self.review_previous.enabled = page > 0
+        self.review_next.enabled = (page + 1) * size < total
+        self.review_navigation.style.display = 'pack' if total > size else 'none'
 
     def render_progress_summary(self, model, phase):
         percentage = model.get('percentage')
@@ -269,21 +334,19 @@ class NativeTransferFallback(toga.Box):
                 value.text = detail
 
     def render_history(self, model):
-        if model.get('busy'):
-            if self.history.parent is self.body:
-                self.body.remove(self.history)
-            self.history.clear()
-            self.history_signature = None
-            return
         downloads, completed = model.get('downloads'), model.get('history')
         history_error = model.get('history_error')
-        signature = (downloads, completed, model.get('downloads_notice'), model.get('history_notice'), history_error)
+        signature = (bool(model.get('busy')), downloads, completed, model.get('downloads_notice'),
+                     model.get('history_notice'), history_error)
         if self.history_signature == signature:
             return
         self.history_signature = signature
         if self.history.parent is None:
             self.body.add(self.history)
         self.history.clear()
+        self.render_completed(completed, history_error, model)
+        if model.get('busy'):
+            return
         self.history.add(self.label('Interrupted downloads', size=17, bold=True))
         if not downloads:
             self.history.add(self.label(model.get('downloads_notice', 'Loading interrupted downloads…'), muted=True))
@@ -301,8 +364,8 @@ class NativeTransferFallback(toga.Box):
             self.history.add(self.history_card(title, status,
                 toga.Box(children=[resume, discard], style=Pack(direction=ROW, gap=8))))
 
+    def render_completed(self, completed, history_error, model):
         heading = self.label('Completed transfers', size=17, bold=True)
-        heading.style.margin_top = 12
         self.history.add(heading)
         if history_error:
             self.history.add(self.label(history_error, muted=True))
@@ -316,7 +379,7 @@ class NativeTransferFallback(toga.Box):
                 status += ' · ' + transfer_size(entry['bytes'])
             self.history.add(self.history_card(self.label(title, size=16, bold=True),
                                               self.label(status, size=13, muted=True)))
-        if completed:
+        if completed and not model.get('busy'):
             self.history.add(self.button('Clear history…', 'clear-history'))
 
     def history_card(self, *controls):
@@ -336,18 +399,26 @@ class NativeTransferFallback(toga.Box):
         for value in self.fact_cells:
             value.text = ''
         self.render_fields(())
-        for child in self.rows.children:
-            if isinstance(child, toga.Label):
-                child.text = ''
-            elif isinstance(child, toga.Selection):
-                child.items = []
-        self.rows.clear()
-        self.history.clear()
+        def clear_text(control):
+            if isinstance(control, (toga.Label, toga.Button)):
+                control.text = ''
+                accessible_name(control, '')
+            elif isinstance(control, toga.Selection):
+                control.items = []
+            elif isinstance(control, toga.ProgressBar):
+                accessible_name(control, '')
+            elif isinstance(control, toga.Box):
+                for child in control.children:
+                    clear_text(child)
+
+        for section in (self.rows, self.history, self.buttons):
+            clear_text(section)
+            section.clear()
+        if self.review_filters is not None:
+            self.review_filters.children[1].value = ''
         self.history_signature = None
-        for button in self.buttons.children:
-            button.text = ''
-        self.buttons.clear()
         self.row_signature = self.button_signature = None
+        self.file_cells = []
         self.scope = self.remote = None
 
 
@@ -363,6 +434,23 @@ def transfer_size(size):
     if size >= 1_000_000:
         return f'{size / 1_000_000:,.1f} MB'
     return f'{size:,} bytes'
+
+
+def review_status(model):
+    return model.get('notice') or 'Review the changes before starting.'
+
+
+def review_fields(model):
+    counts = model.get('counts', {})
+    return [
+        (('Add', f"{counts.get('add', 0):,}"), ('Replace', f"{counts.get('replace', 0):,}")),
+        (('Delete', f"{counts.get('delete', 0):,}"), ('Remove empty folders', f"{counts.get('cleanup', 0):,}")),
+    ]
+
+
+def review_page_caption(model):
+    page, size, total = model.get('page', 0), model.get('page_size', 30), model.get('total', 0)
+    return f"{total:,} matching changes · Page {page + 1} of {max(1, (total + size - 1) // size)}"
 
 
 def progress_status(model):
@@ -385,16 +473,20 @@ def progress_fields(model):
     amount = f'{done} / {transfer_size(total)}' if total else done
     count = f'{files:,} / {total_files:,}' if total_files else f'{files:,}'
     rows = [(('Files copied', count), ('Data copied', amount))]
-    if model.get('elapsed'):
-        minutes, seconds = divmod(model['elapsed'], 60)
-        elapsed = [('Elapsed', f'{minutes}:{seconds:02d}')]
-        if model.get('max_attempts'):
-            elapsed.append(('Attempt', f"{model.get('attempt', 1)} / {model['max_attempts']}"))
-        rows.append(tuple(elapsed))
+    if model.get('busy'):
+        rate = model.get('bytes_per_second')
+        minutes, seconds = divmod(model.get('elapsed', 0), 60)
+        rows.append((('Speed', f'{rate / 1_000_000:,.2f} MB/s' if rate is not None else '—'),
+                     ('Elapsed', f'{minutes}:{seconds:02d}')))
+        if model.get('retrying') and model.get('max_attempts'):
+            rows.append((('Attempt', f"{model.get('attempt', 1)} / {model['max_attempts']}"),))
     if model.get('checks') or model.get('listed'):
         rows.append((('Files found', f"{model.get('listed', 0):,}"),
                      ('Files compared', f"{model.get('checks', 0):,}")))
-    if model.get('file_delete_attempts') is not None or model.get('folder_removal_attempts') is not None:
-        rows.append((('Removal attempts', removal_counts(model)),))
+    removals = tuple((label, f'{model[key]:,}') for key, label in (
+        ('file_delete_attempts', 'File deletion attempts'), ('folder_removal_attempts', 'Folder removal attempts'))
+        if model.get(key) is not None)
+    if removals:
+        rows.append(removals)
     rows.extend(((('Source', model.get('source', '—')),), (('Destination', model.get('destination', '—')),)))
     return rows

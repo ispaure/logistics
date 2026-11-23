@@ -427,6 +427,7 @@ class TransferSurfaceAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             fields=state(children=[state(children=[state(children=[label(name), label(value)])
                 for name, value in row]) for row in [
                     [('Files copied', '2 / 4'), ('Data copied', '500,000 bytes / 1.0 MB')],
+                    [('Speed', '—'), ('Elapsed', '0:00')],
                     [('Files found', '4'), ('Files compared', '1')],
                     [('Source', 'Local/current')], [('Destination', 'Remote:')]]]),
             buttons=state(children=[state(text='Stop transfer', enabled=True),
@@ -491,52 +492,55 @@ class TransferSurfaceAcceptanceTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaisesRegex(AssertionError, 'detached'):
                     verify_native_transfer_fallback(surface)
 
-    def test_native_review_requires_current_rows_and_paging_controls(self):
+    def review_fixture(self, *, notice='Ready', rows=(('delete', 'current/file'),), total=31):
+        from features.rclone.transfers.mobile.native_fallback import review_fields, review_page_caption, review_status
+
         surface = self.surface()
         fallback = surface.native_fallback
-        surface.model.update(mode='review', operation='Push', notice='Ready', can_confirm=True,
-            counts=dict(add=1, delete=1), rows=(('delete', 'current/file'),), page=0, page_size=30, total=31)
-        fallback.status._impl.native.text = 'Ready'
-        fallback.metrics._impl.native.text = 'Add: 1 · Replace: 0 · Delete: 1 · Cleanup: 0\nno undo\nPage 1 · 31 matching changes'
-        row_impl = type(fallback.title._impl)()
-        row_impl.native = SimpleNamespace(text='Delete: current/file')
-        fallback.rows = SimpleNamespace(children=[SimpleNamespace(_impl=row_impl)])
-        fallback.buttons.children = [SimpleNamespace(text='Previous changes', enabled=False),
-            SimpleNamespace(text='Next changes', enabled=True), SimpleNamespace(text='Approve Push', enabled=True),
-            SimpleNamespace(text='Cancel review', enabled=True)]
+        surface.model.update(mode='review', operation='Push', notice=notice, can_confirm=True,
+            counts=dict(add=1, delete=1), rows=rows, page=0, page_size=30, total=total)
+
+        def label(text):
+            impl = type(fallback.title._impl)()
+            impl.native = SimpleNamespace(text=text)
+            return SimpleNamespace(_impl=impl, text=text)
+
+        def box(*children):
+            return SimpleNamespace(children=children)
+
+        fallback.status = label(review_status(surface.model))
+        fallback.metrics = label('Destination replacements and deletions have no undo.')
+        fallback.fields = box(*(box(*(box(label(name), label(value)) for name, value in row))
+                                for row in review_fields(surface.model)))
+        fallback.rows = box(*(box(box(label(path), label(kind.capitalize()))) for kind, path in rows))
+        fallback.review_page = label(review_page_caption(surface.model))
+        fallback.review_previous = SimpleNamespace(enabled=False)
+        fallback.review_next = SimpleNamespace(enabled=total > 30)
+        fallback.buttons.children = [SimpleNamespace(text='Start push', enabled=True),
+                                     SimpleNamespace(text='Cancel review', enabled=True)]
+        return surface
+
+    def test_native_review_requires_current_rows_and_paging_controls(self):
+        surface = self.review_fixture()
+        fallback = surface.native_fallback
         self.assertEqual(verify_native_transfer_fallback(surface)['mode'], 'review')
-        row_impl.native.text = 'Delete: stale/file'
+        fallback.review_next.enabled = False
+        with self.assertRaises(AssertionError):
+            verify_native_transfer_fallback(surface)
+        fallback.review_next.enabled = True
+        row = fallback.rows.children[0].children[0].children[0]
+        row._impl.native.text = row.text = 'stale/file'
         with self.assertRaisesRegex(AssertionError, 'rows are stale'):
             verify_native_transfer_fallback(surface)
 
-    def test_ios_empty_notice_sentinel_is_decoded_without_accepting_stale_visible_notice(self):
-        surface = self.surface()
-        fallback = surface.native_fallback
-        surface.model.update(mode='review', operation='Push', notice='', can_confirm=True,
-            counts={}, rows=(), page=0, page_size=30, total=0)
-        fallback.metrics._impl.native.text = 'Add: 0 · Replace: 0 · Delete: 0 · Cleanup: 0\nno undo\nPage 1 · 0 matching changes'
-        fallback.rows = SimpleNamespace(children=[])
-        fallback.buttons.children = [SimpleNamespace(text='Previous changes', enabled=False),
-            SimpleNamespace(text='Next changes', enabled=False), SimpleNamespace(text='Approve Push', enabled=True),
-            SimpleNamespace(text='Cancel review', enabled=True)]
-        fallback.status._impl.native.text = '\u200b'
+    def test_ios_review_notice_cannot_accept_stale_visible_text(self):
+        surface = self.review_fixture(notice='', rows=(), total=0)
+        notice = surface.native_fallback.status
         self.assertEqual(verify_native_transfer_fallback(surface)['mode'], 'review')
-        fallback.status._impl.native.text = 'Old visible notice'
-        with self.assertRaisesRegex(AssertionError, 'notice is stale'):
-            verify_native_transfer_fallback(surface)
-        surface.model['notice'] = 'Files changed'
-        fallback.status._impl.native.text = '\u200b'
-        with self.assertRaisesRegex(AssertionError, 'notice is stale'):
-            verify_native_transfer_fallback(surface)
-        # Ordinary whitespace and zero-width characters inside nonempty text
-        # are not normalized, so stale content cannot hide behind stripping.
-        for expected, actual in ((' ', ' '), ('A\u200bB', 'A\u200bB')):
-            surface.model['notice'] = expected
-            fallback.status._impl.native.text = actual
-            self.assertEqual(verify_native_transfer_fallback(surface)['mode'], 'review')
-        fallback.status._impl.native.text = 'AB'
-        with self.assertRaisesRegex(AssertionError, 'notice is stale'):
-            verify_native_transfer_fallback(surface)
+        for stale in ('Old visible notice', '\u200b'):
+            notice._impl.native.text = notice.text = stale
+            with self.assertRaisesRegex(AssertionError, 'notice is stale'):
+                verify_native_transfer_fallback(surface)
 
     async def test_transfer_check_follows_current_webview_and_ignores_retired_result(self):
         surface = self.surface()

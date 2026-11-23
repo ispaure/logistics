@@ -5,7 +5,7 @@ Use **Workspaces → Cloud → Rclone Remotes** to browse online folders. Use
 Local files or encrypted LocalCrypt files. **Locked** and **Unlocked** describe
 whether the matching credentials are available.
 
-To connect directly to a Mac, PC or NAS, use **Workspaces → Home Server →
+To connect directly to a Mac, PC or NAS, use **Workspaces → Server →
 Add server…**. See [Browse an SMB server](../../../user/files-and-documents.md#browse-an-smb-server)
 for sign-in, reconnecting and local copies.
 
@@ -16,7 +16,7 @@ for sign-in, reconnecting and local copies.
    Import keeps the original. If a different package already uses the same
    name, rename the incoming ZIP.
 2. Enter its password and choose **Unlock…**. Choose an access mode.
-3. Return to **Workspaces → Cloud** or **Home Server**, and choose the credential
+3. Return to **Workspaces → Cloud** or **Server**, and choose the credential
    and remote. Unlocking only loads credentials. Opening the remote is the
    first network check.
 

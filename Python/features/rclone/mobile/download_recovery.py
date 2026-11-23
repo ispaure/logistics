@@ -95,7 +95,8 @@ def run_download(root, source, path, destination, target, cancelled, progress, o
 
     def report(done, total):
         progress(phase='Verifying the local copy…' if done == total else 'Transferring',
-                 files=0, total_files=1, done=done, total=total)
+                 files=0, total_files=1, done=done, total=total, active=int(done < total),
+                 active_files=[dict(name=path, bytes=done, size=total)] if done < total else [])
 
     from features.rclone.transfers.download_recovery import MINIMUM
     try:

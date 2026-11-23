@@ -109,19 +109,57 @@ class FileOperationTests(unittest.TestCase):
         commands = self.app.file_item_commands(context=(shared, 'Shared files', collection))
         self.assertEqual([title for title, _ in commands], ['Open'])
 
-    def test_item_menu_starts_selection_with_that_row_checked(self):
+    def test_selection_starts_in_folder_menu_and_back_clears_it(self):
         app = self.app
         row = self.source.entry('second.txt')
-        dict(app.file_item_commands(row=row))['Select items']()
-        self.assertEqual([item['path'] for item in app.file_checked.values()], ['second.txt'])
-        self.assertEqual(app.file_selection_count.text, '1 selected')
-        self.assertEqual(app.file_move_button.leading_icons, (('move_file', ''),))
-        self.assertEqual(app.file_archive_button.accessible_name, 'Archive selected items')
-        self.assertEqual(app.file_select_done.accessible_name, 'Done selecting items')
-        self.assertTrue(app.file_move_button.enabled)
-        app.end_file_selection()
+        self.assertNotIn('Select items', dict(app.file_item_commands(row=row)))
         dict(app.current_folder_commands())['Select items']()
         self.assertFalse(app.file_checked)
+        browser = app.file_browser
+        self.assertEqual(browser.location_bar.parent_button.accessible_name, 'Exit selection')
+        self.assertEqual([control.style.display for control in
+                          (browser.search_button, browser.view_switch, app.file_actions_button)], ['none'] * 3)
+        entry = next(entry for entry in browser.entries if entry.payload['path'] == 'second.txt')
+        app.check_file_entry(entry)
+        self.assertEqual(list(app.file_checked), [entry.identity])
+        self.assertEqual(app.file_selection_count.text, '1 selected')
+        self.assertEqual(app.file_archive_button.accessible_name, 'Archive selected items')
+        self.assertTrue(app.file_delete_button.enabled)
+        path = app.file_path
+        self.assertTrue(self.run_async(app.parent_file_folder()))
+        self.assertEqual(app.file_path, path)
+        self.assertFalse(app.file_checked)
+        self.assertIsNone(browser.on_check_entry)
+        self.assertEqual(app.file_actions_button.style.display, 'pack')
+
+    def test_delete_selection_confirms_then_removes_only_selected_items(self):
+        app = self.app
+        app.begin_file_selection()
+        app.check_file_entry(next(entry for entry in app.file_browser.entries if entry.label == 'second.txt'))
+        with patch.object(app.main_window, 'dialog', new=AsyncMock(side_effect=[False, True])):
+            self.run_async(app.delete_checked_files())
+            self.assertTrue((self.source.root / 'second.txt').is_file())
+            self.assertEqual(len(app.file_checked), 1)
+            self.run_async(app.delete_checked_files())
+        self.assertFalse((self.source.root / 'second.txt').exists())
+        self.assertEqual((self.source.root / 'first.txt').read_text(), 'First')
+        self.assertFalse(app.file_checked)
+
+    def test_file_details_dismisses_without_changing_the_folder_route(self):
+        app = self.app
+        browser = app.file_browser
+        entry = next(entry for entry in browser.entries if entry.label == 'second.txt')
+        self.run_async(browser.select(entry))
+        screens = list(app.routes.screens['files'])
+        app.show_file_details()
+        panel = browser.details_panel
+        self.assertIsNotNone(panel.overlay)
+        self.assertIsNone(panel.parent)
+        self.assertEqual(app.routes.screens['files'], screens)
+        self.assertTrue(app.routes.system_back())
+        self.assertIsNone(browser.details_panel)
+        self.assertEqual(browser.selected, entry.identity)
+        self.assertEqual(app.routes.screens['files'], screens)
 
     def test_selection_indicators_leave_filenames_and_group_actions_intact(self):
         app, browser = self.app, self.app.file_browser

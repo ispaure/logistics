@@ -715,7 +715,7 @@ class FolderSourceTabTests(unittest.TestCase):
             self.assertEqual(button.parent.children[0]._impl._surface_roles[1], expected)
             self.assertIn(expected.removeprefix('folder_'), button.accessible_name)
         self.assertFalse(hasattr(app.folder_tree_buttons[('Server', 'LLib')], 'on_press'))
-        self.assertEqual([b.text for b in app.folder_source_buttons.values()], ['Local', 'Cloud', 'Home Server'])
+        self.assertEqual([b.text for b in app.folder_source_buttons.values()], ['Local', 'Cloud', 'Server'])
 
     def test_tab_taps_open_matching_copy_and_menus_keep_same_mapping_actions(self):
         from unittest.mock import AsyncMock, patch

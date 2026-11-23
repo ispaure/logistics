@@ -186,8 +186,15 @@ class _VersionedRanges(NativeRanges):
     def __init__(self, source, path, destination, bandwidth, check, version):
         super().__init__(source, path, destination, bandwidth, check)
         self.version = version
+        self.initial_stat = True
 
     def stat(self):
+        # The initial manifest already fetched this version. Every range still
+        # compares its request with the live remote version, and the final stat
+        # rechecks it even for empty files.
+        if self.initial_stat:
+            self.initial_stat = False
+            return self.version
         if super().stat() != self.version:
             raise ValueError('A file in the selected folder changed. Discard the interrupted job.')
         return self.version
@@ -375,7 +382,8 @@ def run_folder_download(root, source, path, destination, target, cancelled, prog
 
             def report(offset, size):
                 progress(phase='Transferring', files=job['done'], total_files=len(files),
-                         done=job['bytes'] + offset, total=total)
+                         done=job['bytes'] + offset, total=total, active=int(offset < size),
+                         active_files=[dict(name=name, bytes=offset, size=size)] if offset < size else [])
 
             ranges = _VersionedRanges(source, member, destination, bandwidth, check_stage, version)
             try:

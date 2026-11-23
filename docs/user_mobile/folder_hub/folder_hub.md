@@ -13,7 +13,7 @@ with Back or resume the file later from **Documents → Open**.
 | **Local → On My Phone / On My Tablet** | Ordinary files and files shared with Logistics. |
 | **Local → Rclone Copies** | Managed offline copies, including readable copies and encrypted LocalCrypt copies. |
 | **Cloud → Rclone Remotes** | Online folders from loaded credential packages. |
-| **Home Server** | [SMB or Mac shares](../../features/rclone/user_mobile/connections.md#smb-and-mac-shared-folders) added through **Add share…** and their offline copies. SMB remotes from credential ZIPs appear in Cloud. |
+| **Server** | [SMB or Mac shares](../../features/rclone/user_mobile/connections.md#smb-and-mac-shared-folders) added through **Add share…** and their offline copies. SMB remotes from credential ZIPs appear in Cloud. |
 
 Read [remote and offline files](../documents/remote.md) to see where you can
 edit and when an encrypted folder needs a password. Use **Credential** to
@@ -29,7 +29,7 @@ folder. The folder-view button switches between a hierarchy and a flat list.
 ## Search and act on a file
 
 Tap the magnifying glass and type a filename or part of it. Local and
-LocalCrypt search covers subfolders. Cloud and Home Server search filters
+LocalCrypt search covers subfolders. Cloud and Server search filters
 the folder you are viewing. Separate words may appear in any order. Put
 a phrase in quotes to match it in order. Tap **×** to clear the filter.
 
@@ -40,7 +40,8 @@ that is missing or inaccessible leaves the list and shows a message.
 Private names stay out of the saved local index.
 
 Tap **…** beside an item for eligible actions such as **Details**,
-**Rename** or **Move**. Keep the app open during a long move. Switching
+**Rename** or **Move**. **Details** opens a panel over the current folder.
+Keep the app open during a long move. Switching
 apps or locking the device interrupts the operation, so inspect the
 destination before retrying. See [moving a file you are
 using](../documents/workflows.md#move-or-rename-a-file-you-are-using) if
@@ -58,8 +59,8 @@ Keep holding over a folder to make it flash twice and open. Continue
 dragging to another folder, or release to move the item into the open
 folder.
 
-Tap **Transfers** below the Workspaces source tabs to see transfer
-progress or find interrupted downloads.
+Tap the **Transfers** icon next to **Server** in Workspaces to see live
+progress, completed transfers and interrupted downloads.
 
 ## Notes Library
 
@@ -98,7 +99,8 @@ for permissions, deleting an inactive copy and returning to an old location.
 
 ## Select several files
 
-Choose **Select items** from the folder or item menu. Tap the circles before
-the filenames or tap the rows. The selection bar shows the number selected and
-the available group actions, including **Move…** and **Archive**. Use **Done**
-to leave selection mode.
+Choose **Select items** from the current folder’s **…** menu. Tap the circles
+or the rows to select files and folders. The selection bar shows the count and
+the available group actions, including **Move…**, **Archive** and **Delete…**.
+Deleting asks for confirmation. Tap **×** in the leading corner to clear
+selection and stay in the same folder.

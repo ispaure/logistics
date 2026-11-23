@@ -12,7 +12,7 @@ __status__ = "Production"
 from .appearance import surface as app_surface
 from .ui_metrics import TOUCH_TARGET, BODY_TEXT
 
-SOURCE_LABELS = {'Local': 'Local', 'rclone': 'Cloud', 'Network shares': 'Home Server'}
+SOURCE_LABELS = {'Local': 'Local', 'rclone': 'Cloud', 'Network shares': 'Server'}
 ROW_HEIGHT = TOUCH_TARGET
 ROW_GAP = 4
 ENTRY_ICON_SIZE = 24

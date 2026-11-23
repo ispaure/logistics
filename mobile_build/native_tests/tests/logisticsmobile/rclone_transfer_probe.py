@@ -44,30 +44,16 @@ class RcloneTransferProbe(LogisticsMobile):
             if surface.ready and surface.delivered_revision == surface.revision and surface.revision:
                 return
             await asyncio.sleep(.1)
-        raise AssertionError('Transfer web surface did not render: ' + str((surface.ready, surface.revision, surface.delivered_revision)))
-
-    async def js(self, surface, script):
-        return await surface.web.evaluate_javascript(script)
+        raise AssertionError('Transfer surface did not render: ' + str((surface.ready, surface.revision, surface.delivered_revision)))
 
     async def sample(self, surface, name, report, evidence):
+        from .web_checks import verify_native_transfer_fallback
+
         await self.wait_surface(surface)
         await asyncio.sleep(.2)
-        if surface.model['mode'] == 'progress':
-            from .web_checks import verify_native_transfer_fallback
-            report['samples'].append(dict(name=name, **verify_native_transfer_fallback(surface)))
-            await capture_window(self, evidence / (name + '.png'))
-            return
-        data = json.loads(await self.js(surface, "JSON.stringify((()=>{const r=el=>{const b=el.getBoundingClientRect();return {x:b.x,y:b.y,width:b.width,height:b.height,right:b.right,bottom:b.bottom}};const button=document.getElementById('approve')||document.getElementById('background');return {viewport:{width:innerWidth,height:innerHeight},body:document.body.scrollWidth,action:r(button),list:document.querySelector('.file-list')?r(document.querySelector('.file-list')):null,inspect:window.Transfer.inspect(),smallTargets:[...document.querySelectorAll('button')].filter(el=>{const b=el.getBoundingClientRect();return b.width>0&&b.height>0&&!el.hidden&&(b.width<43||b.height<43)}).map(el=>el.textContent)}})())"))
-        data['name'] = name
-        report['samples'].append(data)
+        assert surface.web is None
+        report['samples'].append(dict(name=name, **verify_native_transfer_fallback(surface)))
         await capture_window(self, evidence / (name + '.png'))
-        assert not data['smallTargets'], data
-        assert data['body'] <= data['viewport']['width'] + 1, data
-        assert data['action']['bottom'] <= data['viewport']['height'] + 1, data
-        assert data['action']['right'] <= data['viewport']['width'] + 1, data
-        if data['list']:
-            assert data['list']['height'] >= 90, data
-            assert data['inspect']['rows'] <= 30, data
 
     async def probe(self):
         report = dict(success=False, synthetic=True, samples=[])
@@ -141,7 +127,11 @@ class RcloneTransferProbe(LogisticsMobile):
                               bytes=3_500_000_000)]))
             await self.sample(surface, 'transfer-history', report, evidence)
             history = surface.native_fallback.history
-            contents = history.children[1].children[0]
+            contents = next(control.children[0] for control in history.children
+                            if hasattr(control, 'children') and control.children
+                            and hasattr(control.children[0], 'children')
+                            and any(getattr(child, 'text', '') == 'World tour.mp4'
+                                    for child in control.children[0].children))
             assert '45.00 GB of 100.00 GB' in contents.children[1]._settings_source_text
             assert [control.text for control in contents.children[-1].children] == ['Resume', 'Discard…']
             assert any(getattr(control, 'text', None) == 'Clear history…' for control in history.children)
@@ -182,30 +172,27 @@ class RcloneTransferProbe(LogisticsMobile):
                     surface.update(surface.model)
                     await self.wait_surface(surface)
 
-                assert not await self.js(surface, "!!document.querySelector('#file-list img')")
+                fallback = surface.native_fallback
                 if many:
-                    await self.js(surface, "document.querySelector('[data-action=next]').click()")
-                    await asyncio.sleep(.3)
+                    await fallback.review_next.on_press()
                     await self.sample(surface, 'review-next-page', report, evidence)
                     assert surface.model['page'] == 1
-                await self.js(surface, "document.querySelector('[data-filter=delete]').click()")
-                await asyncio.sleep(.3)
+                kind = fallback.review_filters.children[0]
+                kind.value = 'Delete'
+                await kind.on_change()
                 await self.sample(surface, 'delete-' + suffix, report, evidence)
                 assert surface.model['rows'] == (('delete', 'Archives/old-backup.zip'),)
-                await self.js(surface, "document.querySelector('[data-file]').click()")
-                await asyncio.sleep(.2)
-                await capture_window(self, evidence / ('selected-' + suffix + '.png'))
                 if operation == 'Pull' and sys.platform == 'ios':
                     await rotate(self, 'landscape-left', settle=.3)
                     await self.sample(surface, 'review-landscape', report, evidence)
                     await rotate(self, 'portrait', settle=.3)
-                await self.js(surface, "document.querySelector('[data-local=close]')?.click()")
                 if operation == 'Push' and not many:
-                    # Exercise the actual WebView command -> native confirmation ->
-                    # ReviewSession path. No executor is attached to this fixture.
+                    # Exercise the native action through ReviewSession confirmation.
                     declined = AsyncMock(return_value=False)
                     with patch.object(self.main_window, 'dialog', new=declined):
-                        await self.js(surface, "document.getElementById('approve').click()")
+                        start = next(button for button in fallback.buttons.children
+                                     if getattr(button, '_settings_source_text', button.text) == 'Start push')
+                        await start.on_press()
                         for _ in range(40):
                             if declined.await_count:
                                 break
@@ -215,10 +202,12 @@ class RcloneTransferProbe(LogisticsMobile):
                     await self.wait_surface(surface)
                     accepted = AsyncMock(return_value=True)
                     with patch.object(self.main_window, 'dialog', new=accepted):
-                        await self.js(surface, "document.getElementById('approve').click()")
+                        start = next(button for button in fallback.buttons.children
+                                     if getattr(button, '_settings_source_text', button.text) == 'Start push')
+                        await start.on_press()
                         assert await asyncio.wait_for(task, 5)
                         assert accepted.await_count == 1 and session.approved
-                    report['web_approval_and_decline'] = True
+                    report['native_approval_and_decline'] = True
                 else:
                     active[0] = False
                     await task

@@ -13,6 +13,7 @@ from services.documents.locations import collection_path
 from services.transfer_notifications import start_transfer_notice, transfer_notice
 from services.folders.labels import encrypted_copy_label
 import asyncio
+from time import monotonic
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW
@@ -196,8 +197,7 @@ class MirrorUI(TransferReviewUI):
                 self.dismiss_transfer_status()
             self.show_view(self.transfer_view, route='transfers', title='Transfers')
             self.transfer_view.queue_send()
-            if not self.transfer_busy:
-                self.loop.create_task(self.refresh_transfer_history())
+            self.loop.create_task(self.refresh_transfer_history())
         percentage = getattr(self, 'transfer_percentage', None)
         self.transfer_progress.stop()
         self.transfer_progress.max = 100 if percentage is not None or not self.transfer_busy else None
@@ -210,7 +210,7 @@ class MirrorUI(TransferReviewUI):
         if self.state.display_revoked and not self.transfer_busy:
             model.update(phase='idle', message='No transfer is running.')
         surface = getattr(self, '_progress_surface', None)
-        if surface is not None and not surface.closed and not self.transfer_busy:
+        if surface is not None and not surface.closed:
             model.update({key: surface.model[key] for key in
                           ('downloads', 'history', 'downloads_notice', 'history_notice', 'history_error') if key in surface.model})
         if self.mirror_store().error:
@@ -226,11 +226,12 @@ class MirrorUI(TransferReviewUI):
         from .history import visible_history
 
         surface = getattr(self, '_progress_surface', None)
-        if surface is None or surface.closed or not surface.visible() or self.transfer_busy:
+        if surface is None or surface.closed or not surface.visible() or (self.transfer_busy and clear_through is not None):
             return
         client = self.cloud_client
         generation = getattr(client, 'generation', None)
         refresh = self._history_refresh = object()
+        busy = self.transfer_busy
         unlocked = bool(getattr(client, 'package_records', ()))
 
         def load():
@@ -239,7 +240,7 @@ class MirrorUI(TransferReviewUI):
             history_notice = 'No completed transfers.'
             downloads, history = [], []
             try:
-                jobs = available_jobs(self.app, client=client) if client is not None else ()
+                jobs = available_jobs(self.app, client=client) if client is not None and not busy else ()
                 for _, job in jobs:
                     downloads.append(dict(id=job['id'], name=job['selection']['name'], path=job['selection']['path'],
                                           offset=job['offset'], size=job['source']['size'], folder=job.get('kind') == 'folder'))
@@ -255,7 +256,7 @@ class MirrorUI(TransferReviewUI):
                         history_notice=history_notice, history_error=history_error)
 
         model = await asyncio.to_thread(load)
-        if (not surface.closed and surface.visible() and self.active_host and not self.transfer_busy
+        if (not surface.closed and surface.visible() and self.active_host and busy == self.transfer_busy
                 and self._history_refresh is refresh and self.cloud_client is client
                 and getattr(client, 'generation', None) == generation):
             surface.update(dict(surface.model, **model))
@@ -397,7 +398,15 @@ class MirrorUI(TransferReviewUI):
         snapshot = transfer_progress(values)
         self._transfer_progress_snapshot = (epoch, snapshot)
         if hasattr(self, 'state'):
+            now = monotonic()
+            previous_sample = getattr(self, '_transfer_rate_sample', None)
+            self._transfer_rate_sample = (epoch, now, snapshot.done)
             self.state.metrics = dict(values)
+            if previous_sample is not None:
+                sample_epoch, stamp, offset = previous_sample
+                elapsed = now - stamp
+                if sample_epoch == epoch and elapsed >= .2 and snapshot.done >= offset:
+                    self.state.metrics['bytes_per_second'] = (snapshot.done - offset) / elapsed
         self.transfer_percentage, self.transfer_message = snapshot.percentage, snapshot.message
         done, total = snapshot.done, snapshot.total
         widgets = (id(self.transfer_notice), id(self.cloud_status), id(self.transfer_progress),

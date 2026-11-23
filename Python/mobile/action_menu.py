@@ -73,7 +73,7 @@ class NativeMenu(SharedNativeMenu):
             original_context = context
             context = lambda: android_menu_context(original_context())
         super().__init__(button, actions, context=context, **kwargs)
-        if type(button._impl).__module__.startswith('toga_iOS.'):
+        if self.actions and type(button._impl).__module__.startswith('toga_iOS.'):
             for (title, _), action in zip(self.actions, button._impl.native.menu.children):
                 if command_icon(title):
                     action.image = apple_command_image(title)

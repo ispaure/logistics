@@ -9,7 +9,7 @@ To reach the online file, add a [credential
 ZIP](../../features/rclone/user_mobile/connections.md#remote-files-and-credential-zips)
 for **Cloud → Rclone Remotes**, or add an [SMB
 share](../../features/rclone/user_mobile/connections.md#smb-and-mac-shared-folders)
-through **Home Server**.
+through **Server**.
 
 ## Direct reading
 

@@ -48,13 +48,35 @@ final class FileDragUITests: XCTestCase {
         selection.lifetime = .keepAlways
         add(selection)
 
+        XCTAssertFalse(app.buttons["Show tiles"].firstMatch.exists, app.debugDescription)
+        XCTAssertFalse(menu.exists, app.debugDescription)
+        XCTAssertTrue(app.buttons["Delete selected items"].firstMatch.exists, app.debugDescription)
+        let exitSelection = app.buttons["Exit selection"].firstMatch
+        XCTAssertTrue(exitSelection.waitForExistence(timeout: 8), app.debugDescription)
+        exitSelection.tap()
+        XCTAssertTrue(menu.waitForExistence(timeout: 8), app.debugDescription)
         app.buttons["Show tiles"].firstMatch.tap()
-        let firstTile = app.buttons["Deselect List source"].firstMatch
+        let itemActions = app.buttons["Actions for Tile source.txt"].firstMatch
+        XCTAssertTrue(itemActions.waitForExistence(timeout: 8), app.debugDescription)
+        itemActions.tap()
+        let details = app.buttons["Details"].firstMatch
+        XCTAssertTrue(details.waitForExistence(timeout: 8), app.debugDescription)
+        details.tap()
+        let closeDetails = app.buttons["Close details"].firstMatch
+        XCTAssertTrue(closeDetails.waitForExistence(timeout: 8), app.debugDescription)
+        let detailsScreenshot = XCTAttachment(screenshot: app.screenshot())
+        detailsScreenshot.name = "file-details-panel"
+        detailsScreenshot.lifetime = .keepAlways
+        add(detailsScreenshot)
+        closeDetails.tap()
+        XCTAssertTrue(itemActions.waitForExistence(timeout: 8), app.debugDescription)
+        menu.tap()
+        XCTAssertTrue(select.waitForExistence(timeout: 8), app.debugDescription)
+        select.tap()
+        let firstTile = app.buttons["Select List source"].firstMatch
         XCTAssertTrue(firstTile.waitForExistence(timeout: 8), app.debugDescription)
         firstTile.tap()
-        let unchecked = app.buttons["Select List source"].firstMatch
-        XCTAssertTrue(unchecked.waitForExistence(timeout: 8), app.debugDescription)
-        unchecked.tap()
+        app.buttons["Select Tile source.txt"].firstMatch.tap()
         XCTAssertTrue(app.staticTexts["2 selected"].firstMatch.waitForExistence(timeout: 8), app.debugDescription)
         let selectedTiles = XCTAttachment(screenshot: app.screenshot())
         selectedTiles.name = "selected-files-in-tiles"

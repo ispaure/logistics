@@ -111,20 +111,34 @@ def verify_native_transfer_fallback(surface):
         drawn_paths = text(fallback.paths)
         assert getattr(fallback.paths, '_settings_source_text', drawn_paths) == paths, 'Native transfer endpoints are stale'
         assert drawn_paths == fallback.paths.text, 'Native transfer endpoints are stale'
-        metrics = ' '.join(text(fallback.metrics).split())
-        assert getattr(fallback.status, '_settings_source_text', text(fallback.status)) == model.get('notice', ''), 'Native review notice is stale'
-        for kind in ('add', 'replace', 'delete', 'cleanup'):
-            assert f"{kind.capitalize()}: {model.get('counts', {}).get(kind, 0):,}" in metrics
-        assert 'no undo' in metrics
-        assert [getattr(child, '_settings_source_text', text(child)) for child in fallback.rows.children] == [
-            f'{kind.capitalize()}: {path}' for kind, path in model.get('rows', ())], 'Native review rows are stale'
-        approve = buttons.get('Approve ' + model.get('operation', 'transfer'))
-        assert approve is not None and approve.enabled == bool(model.get('can_confirm'))
+        from features.rclone.transfers.mobile.native_fallback import review_fields, review_page_caption, review_status
+
+        def source(widget):
+            assert text(widget) == widget.text
+            return getattr(widget, '_settings_source_text', widget.text)
+
+        assert (text(fallback.status) == fallback.status.text and
+                getattr(fallback.status, '_settings_source_text', fallback.status.text) == review_status(model)
+                ), 'Native review notice is stale'
+        assert 'no undo' in ' '.join(text(fallback.metrics).split())
+        fields = [tuple(tuple(source(control) for control in cell.children) for cell in row.children)
+                  for row in fallback.fields.children]
+        assert fields == review_fields(model)
+        rows = []
+        for card in fallback.rows.children:
+            name, kind = card.children[0].children
+            rows.append((source(kind).lower(), source(name)))
+        assert rows == list(model.get('rows', ())), 'Native review rows are stale'
+        approve = buttons.get('Start ' + model.get('operation', 'transfer').lower())
+        if model.get('complete') or model.get('can_confirm'):
+            assert approve is not None and approve.enabled == bool(model.get('can_confirm'))
+        early = buttons.get('Skip preview and start')
+        assert (early is not None) == bool(model.get('can_early') and not model.get('complete'))
         assert 'Cancel review' in buttons and buttons['Cancel review'].enabled
         page, size, total = model.get('page', 0), model.get('page_size', 30), model.get('total', 0)
-        assert f'Page {page + 1} · {total:,} matching changes' in metrics
-        assert buttons['Previous changes'].enabled == (page > 0)
-        assert buttons['Next changes'].enabled == ((page + 1) * size < total)
+        assert source(fallback.review_page) == review_page_caption(model)
+        assert fallback.review_previous.enabled == (page > 0)
+        assert fallback.review_next.enabled == ((page + 1) * size < total)
     else:
         raise AssertionError('Unexpected transfer mode for native acceptance')
     return dict(renderer='native', mode=model['mode'], revision=surface.revision,

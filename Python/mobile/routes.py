@@ -246,6 +246,10 @@ class MobileRoutes(Routes):
     def back(self):
         if self._retired:
             return False
+        browser = getattr(self.app, 'file_browser', None)
+        if (browser is not None and browser.on_check_entry is not None
+                and contains(self.body(), browser.widget)):
+            return self.invoke_back(browser.back_action())
         if (self.host.state.destination == 'documents'
                 and not self.screens['documents']
                 and not getattr(self.app.adaptive, 'in_detail', False)
@@ -496,6 +500,8 @@ class MobileRoutes(Routes):
             browser = getattr(app, browser_name, None)
             if browser is None or not contains(body, browser.widget):
                 continue
+            if browser_name == 'file_browser' and browser.on_check_entry is not None:
+                return self.invoke_back(browser.back_action())
             if (browser_name == 'file_browser' and not browser.search.value and not browser.search_open
                     and (app.file_storage.value, app.file_path)
                     == getattr(app.files_view, '_folder_entry_location', None)

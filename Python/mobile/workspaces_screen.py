@@ -18,6 +18,7 @@ from services.folders.labels import local_source_label, RCLONE_REMOTES
 
 from .appearance import accessible_name, batch_surfaces
 from .control_icons import apply_icon
+from .transfer_status import SyncButton
 from .folder_hub import credential_choices, source_choices
 from .folder_hub_style import (
     SOURCE_LABELS, compact_icon, folder_scroll, source_actions, source_tab, surface, toolbar_button,
@@ -140,9 +141,8 @@ class WorkspacesScreen:
             native.rightView = accessory
             native.rightViewMode = 3  # UITextFieldViewModeAlways
             native.accessibilityHint = 'Opens the list of credentials'
-        self.folder_transfers_button = toga.Button('Transfers', on_press=self.show_transfers,
-                                                   style=Pack(height=TOUCH_TARGET, font_size=CONTROL_TEXT))
-        toolbar_button(self.folder_transfers_button, 'arrow.up.arrow.down')
+        self.folder_transfers_button = SyncButton(self.app)
+        self.folder_transfers_button.update(False, None, False, 0)
         self.folder_add_share_button = toga.Button('Add share…', on_press=self.show_smb_connection,
                                                   style=Pack(height=TOUCH_TARGET, font_size=CONTROL_TEXT, flex=1))
         toolbar_button(self.folder_add_share_button, 'plus')
@@ -171,21 +171,17 @@ class WorkspacesScreen:
             style=Pack(display='pack' if incoming else 'none', font_size=12, margin_top=4))
         self.app._files_status_row = toga.Box(children=[self.folder_source_tabs],
             style=Pack(direction=ROW, align_items=CENTER, margin_bottom=4))
+        if self.app.feature_enabled('rclone'):
+            self.app._files_status_row.add(self.folder_transfers_button)
         scroll = folder_scroll(self.folder_list)
         box = toga.Box(children=[self.app._files_status_row, self.folder_subtab_header, self.folder_picker_header, self.folder_source_actions,
             self.folder_loading_box, self.app.incoming_notice, scroll],
             style=Pack(direction=COLUMN, margin=(8, 16, 12, 16), flex=1))
-        if self.app.feature_enabled('rclone'):
-            box.insert(1, toga.Box(children=[self.folder_transfers_button],
-                                  style=Pack(direction=ROW, justify_content=END, margin_bottom=4)))
         box._workspaces_source_row = self.app._files_status_row
         from .scroll_edges import fill_bottom
         fill_bottom(box, scroll)
         self.update_folder_list(choices)
-        host = self.app
-        self.register_transfer_status(box, visible_when=lambda: host.folder_source == 'rclone'
-            and (getattr(host, 'transfer_busy', False)
-                 or (getattr(host, 'transfer_notification', False) and not getattr(host, 'transfer_complete', False))))
+        self.register_transfer_status(box)
         self.folder_picker_view = box
         from .folder_hub_ui import reflow_folder_notice
 
@@ -301,9 +297,7 @@ class WorkspacesScreen:
                 button._impl.native.titleLabel.lineBreakMode = 0
                 button._impl.native.titleLabel.textAlignment = 1
             elif backend.startswith('toga_android.'):
-                # Share the row by label length and use the full touch height
-                # for text. Material's default padding clips a second line at 48 dp.
-                button.style.flex = 1.7 if source == 'Network shares' else 1
+                # Use the full touch height for the label.
                 pad = button._impl.scale_in(4)
                 button._impl.native.setPaddingRelative(pad, 0, pad, 0)
                 button._impl.native.setSingleLine(False)

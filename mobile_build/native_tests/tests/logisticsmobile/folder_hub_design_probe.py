@@ -95,7 +95,7 @@ class FolderHubDesignProbe(LogisticsMobile):
             self.remember_credential_association('Fixture.zip', names, session_only=True)
             self.show_locations()
             self.change_folder_source('rclone')
-            assert [button.text for button in self.folder_source_buttons.values()] == ['Local', 'Cloud', 'Home Server']
+            assert [button.text for button in self.folder_source_buttons.values()] == ['Local', 'Cloud', 'Server']
             for name in names:
                 button = self.folder_buttons[name]
                 icon = button.parent.children[0]
@@ -187,7 +187,7 @@ class FolderHubDesignProbe(LogisticsMobile):
             assert self.remote_browser.search_panel not in self.remote_browser.widget.children
             report.update(success=True, backend=backend, folders=len(names),
                           independent_locks=True, permanent_nesting=True,
-                          source_labels=['Local', 'Cloud', 'Home Server'])
+                          source_labels=['Local', 'Cloud', 'Server'])
         except Exception:
             report['error'] = traceback.format_exc()
         (output / 'result.json').write_text(json.dumps(report, indent=2))

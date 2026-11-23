@@ -141,14 +141,9 @@ class WorkspaceMoveProbe(DocumentWorkspaceProbe):
             assert browser._item_menu is None and app.file_path == ''
             assert (root / rows[0].title).is_file()
             report['cases'].append('android_native_list_drag_keeps_files_in_place')
-        if android:
-            app.begin_file_selection()
-            unselected_rows = rows
-        else:
-            await self.ios_item_action(browser, rows[0], 'Select items')
-            assert list(app.file_checked) == [rows[0].entry.identity]
-            unselected_rows = rows[1:]
-        for row in unselected_rows:
+        app.begin_file_selection()
+        assert not app.file_checked
+        for row in rows:
             if android:
                 child = native.getChildAt(row.index - native.getFirstVisiblePosition())
                 assert native.performItemClick(child, row.index, native.getItemIdAtPosition(row.index))
@@ -202,7 +197,7 @@ class WorkspaceMoveProbe(DocumentWorkspaceProbe):
         assert accessory.row.title == row.title
         actions = await browser.native_list.menu_provider(accessory.row)
         action = next(action for action in actions if str(action.title) == title)
-        if title in {'Move…', 'Select items'}:
+        if title == 'Move…':
             assert action.image is not None
         menu = browser._item_menu
         menu.invoke(dict(menu.actions)[title])

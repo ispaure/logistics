@@ -1,4 +1,4 @@
-"""One compact, accessible sync shortcut on main destinations only."""
+"""One compact, accessible sync shortcut on Workspaces."""
 
 # AUTHORSHIP INFORMATION
 
@@ -11,27 +11,28 @@ __status__ = "Production"
 
 import toga
 from toga.style import Pack
-from toga.style.pack import ROW, CENTER
 from commonUtils.ui.native.icons import IconRenderer, IconSpec
-from .control_icons import tint_android
+from .control_icons import ICONS, tint_android
 
 
 class SyncButton(toga.Button):
     def __init__(self, app):
-        super().__init__(on_press=app.show_transfers, style=Pack(width=48, height=48, margin_left=8))
-        self.renderer = IconRenderer({}, tint_android=tint_android)
+        super().__init__(on_press=app.show_transfers, style=Pack(width=48, height=48, margin_left=8, font_size=16))
+        self.renderer = IconRenderer({'transfers': IconSpec(*ICONS['transfers'])}, tint_android=tint_android)
         self.snapshot = None
-        self._sync_shortcut = True
         from .appearance import surface
         surface(self, background='hover', foreground='text', outlined=False)
 
-    def update(self, busy, percentage, complete, phase):
+    def update(self, busy, percentage, complete, phase, *, notified=False):
         progress = None if percentage is None else max(0, min(100, round(percentage)))
-        state = busy, progress, complete, phase if busy and progress is None else 0
+        state = busy, progress, complete, phase if busy and progress is None else 0, notified
         if state == self.snapshot:
             return
         initial = self.snapshot is None
         self.snapshot = state
+        if not (busy or notified):
+            self.renderer.apply(self, 'transfers', 'Transfers', preserve_layout=not initial)
+            return
         start = -90 if progress is not None or not busy else phase * 30 - 90
         sweep = max(3, 360 * progress / 100) if busy and progress is not None else 100 if busy else 360
         lines = (((8, 8), (15, 8), (13, 6)), ((15, 8), (13, 10)),
@@ -43,30 +44,6 @@ class SyncButton(toga.Button):
         self.renderer.apply(self, 'sync-progress', label, preserve_layout=not initial)
 
 
-def status_host(app, destination):
-    """Use retained root content, never document/toolbars or split detail panes."""
-    if destination == 'home':
-        return getattr(app, '_home_status_row', None), True
-    if destination == 'documents':
-        return getattr(app, '_documents_status_row', None), True
-    if destination == 'files':
-        return getattr(app, '_files_status_row', None), True
-    if destination == 'chat':
-        return getattr(app, 'chat_header', None), True
-    return getattr(getattr(app, 'settings_navigation', None), '_status_row', None), True
-
-
-def sync_home_row(app):
-    row = getattr(app, '_home_status_row', None)
-    content = getattr(app, 'home_content', None)
-    if row is None or content is None:
-        return
-    if row.children and row.parent is None:
-        content.insert(0, row)
-    elif not row.children and row.parent is not None:
-        row.parent.remove(row)
-
-
 def refresh(app, destination=None):
     pending = getattr(app, '_sync_status_tick', None)
     if pending is not None:
@@ -74,53 +51,16 @@ def refresh(app, destination=None):
         app._sync_status_tick = None
     if not getattr(app, 'active_host', False) or not hasattr(app, 'routes'):
         return
-    busy = bool(getattr(app, 'transfer_busy', False))
-    visible = busy or getattr(app, 'transfer_notification', False)
     destination = destination or app.native_host.state.destination
-    controls = app.__dict__.setdefault('_sync_status_controls', {})
-    # Remove every hidden control as well, so no timers or stale status survive
-    # navigation into a document or replacement of a lazy root.
-    for key, (host, row, button, inline) in list(controls.items()):
-        current, _ = status_host(app, key)
-        if not visible or key != destination or app.routes.screens[key] or current is not host:
-            mounted = button if inline else row
-            if mounted.parent is not None:
-                mounted.parent.remove(mounted)
-                if key == 'home':
-                    sync_home_row(app)
-                    app.reflow_home()
-                if key == 'chat':
-                    app.update_chat_header()
-                if key == 'settings':
-                    app.settings_navigation._menu_fit_width = None
-                    app.settings_navigation.reflow()
-            if current is not host:
-                del controls[key]
-    if not visible or app.routes.screens[destination]:
+    if destination != 'files' or app.routes.screens['files']:
         return
-    host, inline = status_host(app, destination)
-    if host is None:
+    button = getattr(app, 'folder_transfers_button', None)
+    if button is None or button.parent is None:
         return
-    if destination not in controls:
-        button = SyncButton(app)
-        row = toga.Box(children=[toga.Box(style=Pack(flex=1)), button],
-                       style=Pack(direction=ROW, align_items=CENTER)) if not inline else None
-        controls[destination] = host, row, button, inline
-    _, row, button, _ = controls[destination]
-    mounted = button if inline else row
-    if mounted.parent is None:
-        host.add(button) if inline else host.insert(0, row)
-        if destination == 'home':
-            sync_home_row(app)
-            app.reflow_home()
-        if destination == 'chat':
-            app.update_chat_header()
-        if destination == 'settings':
-            app.settings_navigation._menu_fit_width = None
-            app.settings_navigation.reflow()
+    busy = bool(getattr(app, 'transfer_busy', False))
     percentage = getattr(app, 'transfer_percentage', None)
     phase = int(app.loop.time() * 5) % 12
-    button.update(busy, percentage, getattr(app, 'transfer_complete', False), phase)
+    button.update(busy, percentage, getattr(app, 'transfer_complete', False), phase,
+                  notified=bool(getattr(app, 'transfer_notification', False)))
     if busy and percentage is None and app.preferences.values.get('android_eink') != 'true':
-        # Only the visible main tab animates; known progress redraws on updates.
         app._sync_status_tick = app.loop.call_later(.2, refresh, app)

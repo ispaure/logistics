@@ -1,4 +1,4 @@
-"""Native main-tab sync shortcut/navigation acceptance with synthetic progress."""
+"""Native Workspaces transfer shortcut/navigation acceptance with synthetic progress."""
 
 # AUTHORSHIP INFORMATION
 
@@ -48,79 +48,47 @@ class SyncStatusProbe(LogisticsMobile):
         report = dict(success=False, samples=[], synthetic_progress=True)
         try:
             self.show_cloud(present=False)
-            # Exercise the crowded Home row without importing any credentials.
-            self.home_unlock_candidates = lambda: [('synthetic', 'Synthetic credentials')]
-            self.show_home()
+            self.show_locations()
             self.transfer_busy = self.transfer_notification = True
             self.transfer_percentage = 42
             for orientation in ('portrait', 'landscape-left'):
                 await rotate(self, orientation, settle=.5)
-                for destination in ('home', 'files', 'documents', 'chat', 'settings'):
-                    self.routes.return_to(destination)
-                    self.refresh_transfer_status()
-                    await asyncio.sleep(.3)
-                    _, _, button, _ = self._sync_status_controls[destination]
-                    assert button.parent is not None
-                    assert '42%' in button.accessible_name
-                    assert sum((control if inline else row).parent is not None
-                        for _, row, control, inline in self._sync_status_controls.values()) == 1
-                    await capture_window(self, Path(self.paths.cache) /
-                        f'sync-{orientation}-{destination}.png')
-                    frame = control_frame(self, button)
-                    row_frame = control_frame(self, button.parent)
-                    if type(self._impl).__module__.startswith('toga_iOS.'):
-                        viewport_width = float(self.main_window._impl.native.bounds.size.width)
-                    else:
-                        decor = self._impl.native.getWindow().getDecorView()
-                        viewport_width = decor.getWidth() / decor.getResources().getDisplayMetrics().density
-                    assert frame['x'] >= 0 and frame['x'] + frame['width'] <= viewport_width + 1, frame
-                    assert 47 <= frame['width'] <= 49 and 47 <= frame['height'] <= 49, frame
-                    assert frame['x'] >= row_frame['x'] - 1, (frame, row_frame)
-                    assert frame['x'] + frame['width'] <= row_frame['x'] + row_frame['width'] + 1, (frame, row_frame)
-                    assert button._impl._surface_roles == ('hover', 'text', False)
-                    if destination == 'files':
-                        for source in ('rclone', 'Network shares', 'Local'):
-                            self.change_folder_source(source)
-                            await asyncio.sleep(.2)
-                            await capture_window(self, Path(self.paths.cache) /
-                                f'sync-{orientation}-files-{source.replace(" ", "-")}.png')
-                            if type(self._impl).__module__.startswith('toga_android.'):
-                                for tab in self.folder_source_buttons.values():
-                                    view = tab._impl.native
-                                    layout = view.getLayout()
-                                    last = layout.getLineCount() - 1
-                                    assert layout.getEllipsisCount(last) == 0, tab.text
-                                    assert layout.getLineBottom(last) <= (view.getHeight()
-                                        - view.getCompoundPaddingTop() - view.getCompoundPaddingBottom() + 1), tab.text
-                    if destination == 'settings' and self.settings_navigation.wide:
-                        self.settings_navigation.choose('Appearance')
-                        await asyncio.sleep(.2)
-                        await capture_window(self, Path(self.paths.cache) / f'sync-{orientation}-settings-panel.png')
-                    native = button._impl.native
-                    if type(self._impl).__module__.startswith('toga_iOS.'):
-                        native.sendActionsForControlEvents(1 << 6)
-                    else:
-                        native.performClick()
-                    await asyncio.sleep(.2)
-                    assert self.routes.screens[destination][-1][0] == 'transfers'
-                    other = 'files' if destination == 'home' else 'home'
-                    self.routes.return_to(other)
-                    self.routes.return_to(destination)
-                    assert not self.routes.screens[destination]
-                    assert self.transfer_busy
-                    report['samples'].append(dict(orientation=orientation, destination=destination,
-                        pose=pose_snapshot(self), button=frame, row=row_frame))
-                self.routes.return_to('home')
+                self.routes.return_to('files')
+                self.refresh_transfer_status()
                 await asyncio.sleep(.3)
-                await capture_window(self, Path(self.paths.cache) / ('sync-' + orientation + '.png'))
+                button = self.folder_transfers_button
+                assert list(self._files_status_row.children) == [self.folder_source_tabs, button]
+                assert '42%' in button.accessible_name
+                frame = control_frame(self, button)
+                row_frame = control_frame(self, button.parent)
+                server = control_frame(self, self.folder_source_buttons['Network shares'])
+                assert 47 <= frame['width'] <= 49 and 47 <= frame['height'] <= 49, frame
+                assert 0 <= frame['x'] - (server['x'] + server['width']) <= 12, (frame, server)
+                assert frame['x'] + frame['width'] <= row_frame['x'] + row_frame['width'] + 1, (frame, row_frame)
+                for source in ('rclone', 'Network shares', 'Local'):
+                    self.change_folder_source(source)
+                    await asyncio.sleep(.2)
+                    assert list(self._files_status_row.children) == [self.folder_source_tabs, button]
+                    await capture_window(self, Path(self.paths.cache) /
+                        f'sync-{orientation}-files-{source.replace(" ", "-")}.png')
+                native = button._impl.native
+                if type(self._impl).__module__.startswith('toga_iOS.'):
+                    native.sendActionsForControlEvents(1 << 6)
+                else:
+                    native.performClick()
+                await asyncio.sleep(.2)
+                assert self.routes.screens['files'][-1][0] == 'transfers'
+                self.routes.back()
+                assert not self.routes.screens['files']
+                assert self.transfer_busy
+                report['samples'].append(dict(orientation=orientation, destination='files',
+                    pose=pose_snapshot(self), button=frame, row=row_frame))
             self.transfer_percentage = None
             self.refresh_transfer_status()
             await asyncio.sleep(.5)
             assert self._sync_status_tick is not None
             self.show_documents(destination='documents')
             assert self._sync_status_tick is None
-            assert all((button if inline else row).parent is None
-                for _, row, button, inline in self._sync_status_controls.values())
             report['success'] = True
         except Exception:
             report['error'] = traceback.format_exc()

@@ -300,7 +300,7 @@ class FoldersPage(pyside.QWidget):
         while self.source_tabs.count():
             self.source_tabs.removeTab(0)
         for name in SOURCE_NAMES:
-            index = self.source_tabs.addTab(name)
+            index = self.source_tabs.addTab('Server' if name == 'Home Server' else name)
             sources = [source for source in self._remote_sources
                        if source_category(source) == name]
             self.source_tabs.setTabData(index, ('local', None) if name == 'Local' else ('remote', None, sources))
@@ -310,7 +310,7 @@ class FoldersPage(pyside.QWidget):
         data = self.source_tabs.tabData(index)
         if data is None:
             return ('local', None, LOCAL_SOURCE_NAME)
-        return (data[0], data[1], self.source_tabs.tabText(index))
+        return (data[0], data[1], SOURCE_NAMES[index])
 
     def _find_source_index(self, source_key) -> int:
         for index in range(self.source_tabs.count()):
@@ -349,7 +349,7 @@ class FoldersPage(pyside.QWidget):
         """Filter local rclone copies and Cloud by their credential group."""
         selected_source = self._get_selected_source()
         is_remote = selected_source is not None and selected_source[0] == 'remote'
-        category = self.source_tabs.tabText(self.source_tabs.currentIndex())
+        category = self._source_key(self.source_tabs.currentIndex())[2]
         local_rclone = not is_remote and self.local_source_tabs.tabData(self.local_source_tabs.currentIndex()) == 'Rclone'
         cloud = is_remote and category == 'Cloud'
         server = is_remote and category == 'Home Server'
@@ -698,7 +698,7 @@ class FoldersPage(pyside.QWidget):
         source_type = selected_source[0] if selected_source is not None else 'local'
 
         if message is None:
-            if self.source_tabs.tabText(self.source_tabs.currentIndex()) == 'Home Server':
+            if self._source_key(self.source_tabs.currentIndex())[2] == 'Home Server':
                 message = ('Choose Add server to connect to a Mac, PC, or NAS over SMB.'
                            if self.add_server_button.isEnabled() else 'Enable rclone in Settings to add an SMB server.')
             else:

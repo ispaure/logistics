@@ -12,7 +12,17 @@ __status__ = "Production"
 
 def mount_actions(header, controller):
     """Native symbol items adapt independently, including on iPhone Duo."""
-    from .ios_toolbar import mount_actions as mount, vertical_edge
+    from .ios_toolbar import mount_actions as mount, mount_leading, vertical_edge
+    if getattr(header, 'file_selection_mode', False):
+        close = header.parent_button
+        close.app, close.window = header.app, header.window
+        mount_leading(controller, [close], replaces_back=True)
+        controller._folder_selection_close = True
+        mount(controller, header, [])
+        return
+    if getattr(controller, '_folder_selection_close', False):
+        mount_leading(controller, [])
+        controller._folder_selection_close = False
     for button in header.title_actions:
         if button.parent is not None:
             button.parent.remove(button)

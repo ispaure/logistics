@@ -8,12 +8,13 @@ Both use rclone Sync.
 Destination files and empty folders can be replaced or deleted without a backup.
 One transfer runs at a time. Existing local copies stay available for browsing.
 
-Tap **Transfers** below the **Workspaces** source tabs, or use the sync
-progress ring on a main tab to reopen details. The progress page shows the
-source, destination, current activity and counts. Percentages use
-known bytes or file counts. Removal counts describe attempts.
-Completion appears after verification. **Continue browsing** keeps the job
-active. **Stop transfer** asks before cancellation. Completed changes remain
+Tap the **Transfers** icon next to **Server** in Workspaces. It shows live
+progress while a job runs. The Transfers page opens with the current job,
+its source and destination, MB/s, and progress for individual files as the
+source reports them. Percentages use the bytes or file counts found so far.
+Removal counters show attempts. Completion appears after verification.
+**Continue browsing** keeps the job active. **Stop transfer** asks before
+cancellation. Completed changes remain
 after a failure or stop.
 
 If you open an online workspace during a transfer, the detail pane explains
@@ -47,9 +48,9 @@ transfer. See [unlock and use a LocalCrypt copy](localcrypt.md).
 
 ### Review file changes
 
-Check **New files**, **Updated files**, **Delete from destination** and any
-**Local cleanup**. Use search and pages to inspect paths. Choose **Push N
-changes** or **Pull N changes** and confirm. A changed comparison needs another
+Check the totals for additions, replacements, deletions and empty folders.
+Filter by change type, search or page through the paths. Choose **Start push**
+or **Start pull** and confirm. A changed comparison needs another
 confirmation. **Skip preview and start** begins sync without waiting for the
 comparison to finish. Storage access and filesystem link checks still apply.
 The transfer can replace or delete more files than the preview lists. Back
@@ -69,8 +70,8 @@ keep browsing the folder without reopening it.
 ## Transfer history and interrupted downloads
 
 Open **Workspaces → Transfers**. The panel shows the current transfer,
-interrupted downloads with a verified checkpoint, and up to 60 recent
-completed transfers recorded by the app. A stopped download can appear here after you relaunch.
+up to 60 recent completed transfers recorded by the app, and interrupted
+downloads with a verified checkpoint. A stopped download can appear here after you relaunch.
 Choose **Resume** to check the saved bytes and fetch the remainder, or
 **Discard** to remove that job and its partial data. The destination listing
 refreshes when the verified item is published.

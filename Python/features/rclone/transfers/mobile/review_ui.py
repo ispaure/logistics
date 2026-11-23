@@ -131,7 +131,7 @@ class TransferReviewDialog:
                 cancel()
 
         surface = self.surface = TransferSurface(self.view.app, command,
-            visible=getattr(self.view, 'visible', lambda: True))
+            visible=getattr(self.view, 'visible', lambda: True), native=True)
         surface.approve_review, surface.cancel_review = choose, cancel
         surface.review_ready = False
         try:
@@ -235,10 +235,11 @@ class TransferReviewUI:
         def visible():
             screens = self.routes.screens[self.native_host.state.destination]
             return self.active_host and bool(screens and screens[-1][0] == 'local-push')
-        surface = self._transfer_setup_surface = TransferSurface(self.app, command, visible=visible)
+        surface = self._transfer_setup_surface = TransferSurface(self.app, command, visible=visible, native=True)
         surface.update(dict(mode='setup', operation='Push', workspace=folder, source='Local/' + folder,
                             destination=folder + ':', remotes=remotes))
-        self.show_view(surface, destination='files', route='local-push', title='Transfer')
+        self.show_view(surface, destination='files', route='local-push', title='Push to server')
+        surface.queue_send()
 
 
     def transfer_options(self):

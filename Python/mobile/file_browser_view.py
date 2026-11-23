@@ -16,7 +16,7 @@ from weakref import ref
 
 import toga
 from toga.style import Pack
-from toga.style.pack import CENTER, ROW, START
+from toga.style.pack import CENTER, COLUMN, ROW, START
 
 from commonUtils.ui.native.presentation import allow_label_to_shrink
 
@@ -148,6 +148,57 @@ def _tile_filename(button):
     accessible_name(button, button.text)
 
 
+class FileDetailsPanel(toga.Box):
+    """Keep file information detached from browser navigation."""
+
+    def __init__(self, browser, owner):
+        from commonUtils.ui.native.forms import FittedLabel, fit_section
+        from .speech_overlay import SpeechOverlay
+
+        super().__init__(style=Pack(direction=COLUMN, margin=16, flex=1, gap=8))
+        self.browser = ref(browser)
+        app = browser._app
+        self.overlay = None
+        entry = browser.tree.entries.get(browser.selected) if browser.tree is not None else None
+        title = toga.Label('Folder details' if entry and entry.container else 'File details',
+                           style=Pack(flex=1, font_size=17, font_weight='bold'))
+        close = icon_button('close', 'Close details', on_press=self.hide)
+        fields = toga.Box(style=Pack(direction=COLUMN, gap=12))
+        name = entry.label if entry is not None else ''
+        fields.add(FittedLabel(name, style=Pack(font_size=21, font_weight='bold')))
+        for child in browser.info.children:
+            if isinstance(child, toga.Label):
+                text = child.text
+            elif isinstance(child, toga.MultilineTextInput):
+                text = child.value
+            else:
+                continue
+            label, _, value = text.partition(': ')
+            if label == 'Name':
+                continue
+            caption = surface(FittedLabel(label, style=Pack(font_size=12)),
+                              background='transparent', foreground='muted', outlined=False)
+            fields.add(toga.Box(children=[caption, FittedLabel(value, style=Pack(font_size=15))],
+                                style=Pack(direction=COLUMN, gap=3)))
+        self.preview = toga.Box(style=Pack(direction=COLUMN, align_items=CENTER))
+        fields.add(self.preview)
+        width = min(440, max(100, app.main_window.size.width - 64))
+        fit_section(fields, width - 32)
+        self.overlay_height = min(480, 124 + 56 * (len(fields.children) - 1))
+        self.add(toga.Box(children=[title, close], style=Pack(direction=ROW, align_items=CENTER)),
+                 toga.ScrollContainer(content=fields, horizontal=False, style=Pack(flex=1)))
+        self.overlay = SpeechOverlay(self, owner, app, label=title.text, centered=True,
+                                     dim=True, width_limit=440, android_radius=16)
+
+    def hide(self, widget=None, **kwargs):
+        browser = self.browser()
+        if browser is not None and browser.details_panel is self:
+            browser.details_panel = None
+        if self.overlay is not None:
+            self.overlay.close()
+            self.overlay = None
+
+
 class LocalFileBrowser(FileBrowser):
     # 96 for the preview, 72 for the title and 4-point card margins.
     TILE_ROW_HEIGHT = 176
@@ -158,6 +209,8 @@ class LocalFileBrowser(FileBrowser):
         self._preview_update = None
         self._preview_jobs = {}
         self._preview_completed = set()
+        self._tile_selecting = False
+        self.details_panel = None
         self._tile_previews = {}
         self._mode_anchor = None
         self._restoring_tile_anchor = False
@@ -174,6 +227,8 @@ class LocalFileBrowser(FileBrowser):
         super()._list_selected(widget, **kwargs)
 
     def configure_previews(self, source):
+        if self.details_panel is not None:
+            self.details_panel.hide()
         previous = self.thumbnails
         if previous is not None and (previous.provider is not source.provider
                                      or previous.password != source.password):
@@ -182,7 +237,13 @@ class LocalFileBrowser(FileBrowser):
         self._reset_previews()
         self.thumbnails = source
 
-    def preview_selected_image(self):
+    def show_details_panel(self, owner):
+        if self.details_panel is not None:
+            self.details_panel.hide()
+        self.details_panel = FileDetailsPanel(self, owner)
+        self.preview_selected_image(self.details_panel)
+
+    def preview_selected_image(self, panel=None):
         """Show the explicit Details preview without starting row decoders."""
         from .browser_preview import DIRECT_IMAGE_SUFFIXES
         from .routes import contains
@@ -196,11 +257,17 @@ class LocalFileBrowser(FileBrowser):
 
         def publish(data):
             body = self._app.body
+            visible = (self.details_panel is panel if panel is not None else
+                       body is not None and contains(body, self.info))
             if (self.closed or source is not self.thumbnails or self.selected != entry.identity
-                    or self.epoch != epoch or body is None or not contains(body, self.info)):
+                    or self.epoch != epoch or not visible):
                 return
-            if not any(isinstance(child, toga.ImageView) for child in self.info.children):
-                self.info.add(toga.ImageView(toga.Image(src=data), style=Pack(width=160, height=160)))
+            target = panel.preview if panel is not None else self.info
+            if not any(isinstance(child, toga.ImageView) for child in target.children):
+                target.add(toga.ImageView(toga.Image(src=data), style=Pack(width=160, height=160)))
+                if panel is not None and panel.overlay is not None:
+                    panel.overlay_height = min(560, panel.overlay_height + 164)
+                    panel.overlay.reposition()
 
         cached = self.icons.get((entry.identity, entry.revision))
         if cached:
@@ -210,6 +277,8 @@ class LocalFileBrowser(FileBrowser):
                 epoch=epoch, cancelled=self.cancelled))
 
     def set_previews_visible(self, visible):
+        if not visible and self.details_panel is not None:
+            self.details_panel.hide()
         if self._previews_visible != visible:
             self._previews_visible = visible
             if visible:
@@ -384,8 +453,10 @@ class LocalFileBrowser(FileBrowser):
             surface(circle, background='transparent', foreground='accent', outlined=False)
             button.style.flex = 1
             card.remove(button)
-            card.add(toga.Box(children=[circle, button],
-                style=Pack(direction=ROW, height=72, align_items=CENTER)))
+            caption_controls = [circle, button] if self.on_check_entry is not None else [button]
+            card._tile_caption = toga.Box(children=caption_controls,
+                style=Pack(direction=ROW, height=72, align_items=CENTER))
+            card.add(card._tile_caption)
             self._show_tile_selection(entry, card)
             card.remove(image_box)
             image_box.style.flex = 1
@@ -395,7 +466,6 @@ class LocalFileBrowser(FileBrowser):
             if backend.startswith('toga_iOS.'):
                 if hasattr(self, '_item_commands'):
                     self._attach_tile_menu(command, entry)
-                card._impl.native.accessibilityElements = [control._impl.native for control in controls]
             elif backend.startswith('toga_android.'):
                 from android.view import View
                 title_id = View.generateViewId()
@@ -413,6 +483,21 @@ class LocalFileBrowser(FileBrowser):
     def highlight_selection(self):
         super().highlight_selection()
         if self.mode == 'Tiles':
+            selecting = self.on_check_entry is not None
+            if self._tile_selecting != selecting:
+                self._tile_selecting = selecting
+                if not getattr(self, '_tile_updating', False) and self._tile_row_views:
+                    # A circle changes each caption's geometry. Rebuild only
+                    # the recycled viewport and keep its original scroll offset.
+                    position = self.vertical_position
+                    for row in tuple(self._tile_row_views.values()):
+                        self._tile_rows.remove(row)
+                    self._tile_row_views.clear()
+                    for identity in tuple(self._tile_cards):
+                        self._retire_tile(identity)
+                    self._tile_range = None
+                    self._update_tile_window(position)
+                    return
             for entry, card, _, _, _ in self._tile_cards.values():
                 if hasattr(card, '_tile_command'):
                     self._show_tile_selection(entry, card)
@@ -432,6 +517,10 @@ class LocalFileBrowser(FileBrowser):
             name = entry.payload.get('display_name') or PurePosixPath(entry.label).name
             apply_icon(circle, 'selected_item' if state else 'select_item',
                        ('Deselect ' if state else 'Select ') + name)
+        if type(card._impl).__module__.startswith('toga_iOS.'):
+            title = card._tile_caption.children[-1]
+            controls = (title, circle) if selected_mode else (title, command)
+            card._impl.native.accessibilityElements = [control._impl.native for control in controls]
 
     def _attach_tile_menu(self, command, entry):
         from rubicon.objc import Block, ObjCBlock, ObjCClass, ObjCInstance, ns_from_py, objc_id

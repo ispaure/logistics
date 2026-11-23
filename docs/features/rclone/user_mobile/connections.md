@@ -70,7 +70,7 @@ packages keep encrypted open/recent paths under the ZIP password.
 On a Mac, enable **File Sharing** using SMB and grant the account access to the
 folders. Connect from the same network or a reachable VPN.
 
-1. Open **Settings → Workspaces → SMB shares…** or **Home Server → Add share…**.
+1. Open **Settings → Workspaces → SMB shares…** or **Server → Add share…**.
 2. Enter a unique name and the server hostname or IP address, without
    `smb://` or a share path. Enter the account credentials or select
    **Connect as guest**. The default port is 445. Set a different port or
@@ -80,7 +80,7 @@ folders. Connect from the same network or a reachable VPN.
 
 **Save credentials on this device** defaults on and uses the device vault.
 Turn it off for a temporary connection. Previously saved credentials remain.
-Direct shares appear in **Home Server**. SMB remotes imported in a ZIP appear
+Direct shares appear in **Server**. SMB remotes imported in a ZIP appear
 under their package in **Cloud**. To keep a share offline, open it and
 [pull a managed copy](workflows.md#pull-and-push-managed-folders).
 

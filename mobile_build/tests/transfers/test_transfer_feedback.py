@@ -389,92 +389,39 @@ class TransferFeedbackTests(TestCase):
         self.assertIsNone(view.transfer_banner)
         self.assertIsNone(transfer_control(app, view))
         self.assertEqual(reader_buttons(app, view), list(view._native_reader_buttons()))
-        self.assertFalse(any(button.parent is not None for _, _, button, _ in
-                             getattr(app, '_sync_status_controls', {}).values()))
+        self.assertIsNone(getattr(app, '_sync_status_tick', None))
 
-    def test_main_tabs_have_one_sync_icon_and_navigation_never_reopens_details(self):
+    def test_workspaces_reuses_one_transfers_icon_without_mounting_on_other_tabs(self):
         app = self.app
+        app.show_locations()
+        button = app.folder_transfers_button
+        self.assertEqual(button.accessible_name, 'Transfers')
         app.transfer_busy = True
         app.transfer_percentage = 42
         app._transfer_cancel = Mock()
-        for destination in ('home', 'files', 'documents', 'chat', 'settings'):
-            with self.subTest(destination=destination):
-                app.routes.return_to(destination)
-                app.refresh_transfer_status()
-                _, _, button, _ = app._sync_status_controls[destination]
-                self.assertIsNotNone(button.parent)
-                self.assertEqual(button._impl._surface_roles, ('hover', 'text', False))
-                self.assertTrue(app._sync_status_controls[destination][3])
-                if destination == 'home':
-                    self.assertIs(app._home_status_row.parent, app.home_content)
-                elif destination == 'documents':
-                    self.assertIs(button.parent, app._documents_status_row)
-                    self.assertIsNone(app.document_search.parent)
-                else:
-                    self.assertGreater(len(button.parent.children), 1)
-                self.assertIn('42%', button.accessible_name)
-                self.assertEqual(sum((control if inline else row).parent is not None
-                                     for _, row, control, inline in app._sync_status_controls.values()), 1)
-                button.on_press()
-                self.assertEqual(app.routes.screens[destination][-1][0], 'transfers')
-                other = 'files' if destination == 'home' else 'home'
-                app.routes.return_to(other)
-                app.routes.return_to(destination)
-                self.assertFalse(app.routes.screens[destination])
-                self.assertTrue(app.transfer_busy)
-                app._transfer_cancel.set.assert_not_called()
-        app.routes.return_to('home')
-        button = app._sync_status_controls['home'][2]
-        self.assertIs(button.parent, app._home_status_row)
-        self.assertIsNone(app.home_sections.content.transfer_banner)
-        app.transfer_busy = app.transfer_notification = False
-        app.refresh_transfer_status()
-        self.assertIsNone(app._home_status_row.parent)
-
-    def test_chat_sync_action_uses_its_own_row_above_the_title(self):
-        app = self.app
-        app.routes.return_to('chat')
-        app.update_chat_header()
-        width = app.chat_title.style.width
-        app.transfer_busy = True
-        app.transfer_percentage = 42
-        app.refresh_transfer_status()
-        button = app._sync_status_controls['chat'][2]
-        self.assertIs(button.parent, app.chat_header)
-        self.assertEqual(app.chat_title.style.width, width)
-        app.transfer_busy = app.transfer_notification = False
-        app.refresh_transfer_status()
-        self.assertIsNone(button.parent)
-        self.assertEqual(app.chat_title.style.width, width)
-
-    def test_settings_refits_category_without_restyling_sync_on_resize(self):
-        app = self.app
-        app.routes.return_to('settings')
-        navigation = app.settings_navigation
-        category = next(iter(navigation.buttons.values()))
-        original_width = category._settings_available_width
-        app.transfer_busy = True
-        app.transfer_percentage = 42
-        app.refresh_transfer_status()
-        button = app._sync_status_controls['settings'][2]
-        self.assertEqual(category._settings_available_width, original_width - 56)
-        from types import SimpleNamespace
-        app.main_window.size = SimpleNamespace(width=900, height=600)
-        navigation.reflow()
-        self.assertEqual(button.style.height, 48)
-        self.assertEqual(button._impl._surface_roles, ('hover', 'text', False))
-        narrow_width = category._settings_available_width
-        app.transfer_busy = app.transfer_notification = False
-        app.refresh_transfer_status()
-        self.assertEqual(category._settings_available_width, narrow_width + 56)
+        for source in ('Local', 'rclone', 'Network shares'):
+            app.change_folder_source(source)
+            app.refresh_transfer_status()
+            self.assertEqual(list(app._files_status_row.children), [app.folder_source_tabs, button])
+            self.assertIn('42%', button.accessible_name)
+        button.on_press()
+        self.assertEqual(app.routes.screens['files'][-1][0], 'transfers')
+        app.routes.back()
+        app.transfer_percentage = None
+        for destination in ('home', 'documents', 'chat', 'settings'):
+            app.routes.return_to(destination)
+            app.refresh_transfer_status()
+            self.assertIsNone(getattr(app, '_sync_status_tick', None))
+            self.assertFalse(app.routes.screens[destination])
+        app._transfer_cancel.set.assert_not_called()
 
     def test_same_progress_does_not_repaint_and_indeterminate_timer_stops_in_viewer(self):
         app = self.app
-        app.show_home()
+        app.show_locations()
         app.transfer_busy = True
         app.transfer_percentage = 42
         app.refresh_transfer_status()
-        button = app._sync_status_controls['home'][2]
+        button = app.folder_transfers_button
         with patch.object(button.renderer, 'apply') as paint:
             for _ in range(5):
                 app.refresh_transfer_status()
@@ -488,7 +435,7 @@ class TransferFeedbackTests(TestCase):
         self.assertIsNotNone(pending)
         app.show_documents(destination='documents')
         self.assertTrue(pending.cancelled())
-        self.assertIsNone(app._sync_status_tick)
+        self.assertIsNone(getattr(app, '_sync_status_tick', None))
         app.transfer_busy = False
         app.transfer_notification = False
 

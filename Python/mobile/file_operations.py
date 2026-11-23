@@ -191,7 +191,7 @@ class FileOperations:
             if plan:
                 plan.release()
 
-    async def move_selection(self, requests, completed):
+    async def run_selection(self, requests, completed, *, verb):
         from commonUtils.runtime.operations import OperationCancelled
 
         if self.cancel_event is not None or not self.host.allowed(False):
@@ -207,10 +207,10 @@ class FileOperations:
                 if cancel.is_set() or not self.host.current(view):
                     break
                 self.request = request
-                self.host.report(view, f'Moving item {index} of {len(requests)}…')
+                self.host.report(view, f'{verb} item {index} of {len(requests)}…')
                 try:
                     result = await self._execute(request, True, view, cancel, completed=lambda: completed(request))
-                    notice = result.notice or notice
+                    notice = getattr(result, 'notice', '') or notice
                 except OperationCancelled:
                     break
                 except (OSError, ValueError) as error:

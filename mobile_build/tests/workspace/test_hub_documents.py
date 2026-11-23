@@ -539,7 +539,7 @@ class HubDocumentTests(unittest.TestCase):
         frame = view._workspace_frame
         self.assertIsNone(view.transfer_banner)
         self.assertIs(frame.main.children[0], app._files_status_row)
-        self.assertIs(app._sync_status_controls['files'][2].parent, app._files_status_row)
+        self.assertEqual(list(app._files_status_row.children), [app.folder_source_tabs, app.folder_transfers_button])
         credential_row = app.folder_credential.parent
         self.assertIs(app._files_status_row.children[0], app.folder_source_tabs)
         self.assertEqual(list(app.folder_subtab_header.children), [app.folder_cloud_tabs])

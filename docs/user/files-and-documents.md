@@ -123,7 +123,7 @@ Use **Workspaces** to browse folders you use with an integration. **Local**
 offers **Dropbox**, **Rclone Copies** and **On This Computer**. A managed
 rclone copy is a separate folder on your computer. Its contents can differ
 from the online folder until you sync them. **Cloud → Rclone Remotes** lists
-online folders from loaded credentials. **Home Server** lets you add an SMB
+online folders from loaded credentials. **Server** lets you add an SMB
 server and open its shared folders in **Files**. It also lists remotes from
 packages named **Network shares** or **Session network shares**.
 
@@ -141,7 +141,7 @@ Right-click a local folder to reveal it in your system file manager.
 
 ### Browse an SMB server
 
-1. Open **Workspaces → Home Server → Add server…**. Enter a connection name and
+1. Open **Workspaces → Server → Add server…**. Enter a connection name and
    the server hostname or IP address. Use your SMB account or choose **Connect
    as guest** if the server allows it. Change the domain or port if your server
    uses different settings.

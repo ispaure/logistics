@@ -37,9 +37,11 @@ class AndroidPopupTests(TestCase):
         callback = Mock()
         with patch.dict('sys.modules', {
                 'android.widget': NS(PopupMenu=factory),
+                'android.os': NS(Build=NS(VERSION=NS(SDK_INT=35))),
                 'android.view': NS(ContextThemeWrapper=wrapper),
                 'java': NS(dynamic_proxy=lambda interface: object)}), \
-                patch('mobile.palette.eink_enabled', side_effect=[False, True]):
+                patch('mobile.palette.eink_enabled', side_effect=[False, True]), \
+                patch('mobile.action_menu.menu_drawable') as icon:
             menu = NativeMenu(NS(_impl=impl), [('Open', callback)],
                 invoke=lambda action: action(), context=lambda: context, fallback=Mock())
             menu.show()
@@ -50,6 +52,7 @@ class AndroidPopupTests(TestCase):
             self.assertEqual([call.args[1] for call in wrapper.call_args_list], [10, 20])
             factory.assert_called_with(wrapped, impl.native)
             callback.assert_called_once_with()
+            self.assertEqual([call.args[0] for call in icon.call_args_list], ['forward', 'forward'])
             menu.dispose()
             self.assertIsNone(menu.context)
 
