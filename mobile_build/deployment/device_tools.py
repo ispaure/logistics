@@ -48,14 +48,28 @@ def run(args, *, env=None, log=None):
         subprocess.run(args, cwd=output_root(ROOT), env=env, check=True)
 
 
-def device_json(args, env):
+def device_json(args, env, *, timeout=60):
+    if args[0] == 'list' or args[:2] == ['device', 'info']:
+        try:
+            from build_manager.apple_devices import device_json as invoke
+        except ModuleNotFoundError as error:
+            # Compatibility with the published Manager pin and standalone device tools.
+            if error.name not in {'build_manager', 'build_manager.apple_devices'}:
+                raise
+        else:
+            return invoke(args, env=env, cwd=output_root(ROOT), timeout=timeout)
+
     with tempfile.TemporaryDirectory(prefix='logistics-device-') as temporary:
         output = Path(temporary) / 'result.json'
-        run(['xcrun', 'devicectl', *args, '--timeout', '60', '--json-output', str(output)], env=env)
+        command = ['xcrun', 'devicectl', *args, '--timeout', str(timeout), '--json-output', str(output)]
+        if timeout == 60:
+            run(command, env=env)
+        else:
+            subprocess.run(command, cwd=output_root(ROOT), env=env, check=True, timeout=timeout + 10)
         data = json.loads(output.read_text())
-    if data['info']['outcome'] != 'success':
-        raise RuntimeError('Xcode device operation did not succeed.')
-    return data['result']
+        if data['info']['outcome'] != 'success':
+            raise RuntimeError('Xcode device operation did not succeed.')
+        return data['result']
 
 
 def properties(device):

@@ -17,7 +17,6 @@ import os
 from pathlib import Path
 import subprocess
 import sys
-import tempfile
 
 from . import android_deploy as android, device_tools as ios
 from .deployment_paths import WORKSPACE_ENV
@@ -58,12 +57,8 @@ def ios_devices():
     config = ios.saved_config()
     targets = list(dict.fromkeys(config.get('device_ids', [config['device_id']])))
     developer, _ = ios.choose(ios.installed())
-    with tempfile.TemporaryDirectory(prefix='logistics-device-list-') as directory:
-        path = Path(directory) / 'devices.json'
-        subprocess.run(['xcrun', 'devicectl', 'list', 'devices', '--timeout', '30',
-                        '--json-output', str(path)], env=dict(os.environ, DEVELOPER_DIR=developer),
-                       capture_output=True, text=True, check=True, timeout=40)
-        discovered = json.loads(path.read_text())['result']['devices']
+    discovered = ios.device_json(['list', 'devices'], dict(os.environ, DEVELOPER_DIR=developer),
+                                 timeout=30)['devices']
     result = []
     for target in targets:
         try:

@@ -34,6 +34,13 @@ from build_manager.run_fields import selection_ids
 from build_manager.workflows import transitive_dependency_ids, verify_artifacts
 from commonUtils.runtime.streams import file_sha256
 
+try:
+    from build_manager.retained_evidence import passed_phase_rows, select_artifact
+except ModuleNotFoundError as error:
+    if error.name != 'build_manager.retained_evidence':
+        raise
+    passed_phase_rows = select_artifact = None  # Published Manager pin.
+
 DESTINATIONS = {'ios-devices': 'ios', 'android-devices': 'android'}
 CHOICES = {'devices.ios', 'devices.android', 'devices.android_connections',
            'devices.ios_provisioning', 'devices.availability'}
@@ -99,18 +106,30 @@ def _shared_input(plan, report, platform):
     _require(gate in needed, 'Retained delivery requires the selected platform validation gate. ' + REBUILD)
     needed.update(phase.id for phase in plan.phases if phase.required and phase.always
                   and phase.id.startswith(platform + '.validation.'))
-    rows = {row['id']: row for row in report['phases']}
-    _require(all(rows.get(key, {}).get('status') == 'passed' for key in needed),
-             'Selected platform validation, cleanup or preparation did not pass. ' + REBUILD)
+    if passed_phase_rows is None:
+        rows = {row['id']: row for row in report['phases']}
+        _require(all(rows.get(key, {}).get('status') == 'passed' for key in needed),
+                 'Selected platform validation, cleanup or preparation did not pass. ' + REBUILD)
+    else:
+        try:
+            rows = passed_phase_rows(report, needed)
+        except ValueError as error:
+            raise ValueError(str(error) + ' ' + REBUILD) from error
     for key in sorted(needed):
         try:
             verify_artifacts(rows[key])
         except (OSError, ValueError) as error:
             raise ValueError(str(error) + ' ' + REBUILD) from error
-    matches = [artifact for artifact in rows[shared.id].get('artifacts', [])
-               if Path(artifact.get('original_path', artifact['path'])).resolve() == Path(shared.artifacts[0]).resolve()]
-    _require(len(matches) == 1, 'Retained artifact lacks exact copied/original evidence. ' + REBUILD)
-    artifact = matches[0]
+    if select_artifact is None:
+        matches = [artifact for artifact in rows[shared.id].get('artifacts', [])
+                   if Path(artifact.get('original_path', artifact['path'])).resolve() == Path(shared.artifacts[0]).resolve()]
+        _require(len(matches) == 1, 'Retained artifact lacks exact copied/original evidence. ' + REBUILD)
+        artifact = matches[0]
+    else:
+        try:
+            artifact = select_artifact(rows[shared.id], Path(shared.artifacts[0]).resolve())
+        except ValueError as error:
+            raise ValueError(str(error) + ' ' + REBUILD) from error
     path = Path(artifact['path'])
     source = plan.source
     if platform == 'ios':
