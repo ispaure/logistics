@@ -17,12 +17,24 @@ from commonUtils.search.providers import search_resources
 
 def filename_scan_label(cache_phase):
     return {
-        'checking': 'Checking LocalCrypt filename cache…',
-        'cached': 'Searching cached LocalCrypt names…',
-        'refreshing': 'Refreshing LocalCrypt filenames…',
+        'checking': 'Checking LocalCrypt cache…',
+        'cached': 'Using cached LocalCrypt names…',
+        'refreshing': 'Refreshing LocalCrypt names…',
         'device_cached': 'Searching cached filenames…',
         'device_refreshing': 'Refreshing filename cache…',
+        'cached_hints': 'Verifying cached matches…',
+        'crypt_cached_hints': 'Verifying cached LocalCrypt matches…',
+        'checking_storage': 'Checking for new files…',
     }.get(cache_phase, 'Scanning filenames…')
+
+
+def search_location_label(name, provider):
+    """Shorten generated encrypted location labels for the status display."""
+    if not getattr(provider, 'private', False):
+        return name
+    name = name.removesuffix(' - Encrypted Copy')
+    remote = getattr(provider, 'remote', '')
+    return remote if remote and name == f'{remote} · {remote}' else name
 
 
 class LocalSearch(IndexedLocalSearch):

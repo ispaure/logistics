@@ -65,6 +65,12 @@ class LocalCryptStorageTests(LocalCryptCase):
             with patch.object(f.provider, 'list', side_effect=AssertionError('Expected a sealed cache hit')):
                 self.assertIn('note.md', {row['name'] for row in f.provider.indexed_list()})
             f.provider.create_file('Added.txt', BytesIO(b'example'))
+            index.close()
+            index = f.provider._directory_index = DirectoryIndex(f.provider, cache, cipher)
+            with patch.object(index, '_fingerprint', side_effect=AssertionError('Expected cache hints')):
+                hints = index.cached_listing('', cancelled=lambda: False, locate=lambda path: f.provider.root)
+                self.assertIn('note.md', {row['name'] for row in hints})
+                self.assertNotIn('Added.txt', {row['name'] for row in hints})
             self.assertIn('Added.txt', {row['name'] for row in f.provider.indexed_list()})
             session.forget(f.context)
             self.assertFalse(index.rows)

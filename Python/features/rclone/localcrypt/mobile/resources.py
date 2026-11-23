@@ -276,6 +276,10 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
             self.relative(path), cancelled=cancelled, from_inventory=self._list_inventory,
             locate=self._locate_listing_folder, cache_status=cache_status)
 
+    def cached_search_listing(self, path, *, cancelled):
+        return self._directory_index.cached_listing(
+            self.relative(path), cancelled=cancelled, locate=self._locate_listing_folder)
+
     def list(self, path='', *, cancelled=lambda: False):
         path = self.relative(path)
         # Bound native requests while sharing the credential lookup and JSON

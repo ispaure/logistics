@@ -5,7 +5,17 @@ import sqlite3
 from contextlib import contextmanager
 
 from commonUtils.runtime.operations import check_cancelled
-from services.documents.locations import visible_transfer_rows
+from services.documents.locations import (
+    CollectionFiles, MobileLocalFiles, local_folder_snapshot, visible_transfer_rows,
+)
+
+
+def supports_device_name_cache(provider):
+    from .local_sources import PhoneFiles
+
+    return (type(provider) in (PhoneFiles, CollectionFiles, MobileLocalFiles)
+            and not provider.private and not getattr(provider, 'session_only', False)
+            and not getattr(provider, 'remote_storage', False))
 
 
 def _stamp(folder):
@@ -43,7 +53,17 @@ def device_name_listing(provider, cache_directory, *, status=lambda phase: None)
         finally:
             pending.clear()
 
-    def listing(path, *, cancelled):
+    def listing(path, *, cancelled, cached_only=False, cache_status=status):
+        if cached_only:
+            check_cancelled(cancelled)
+            if database is None:
+                return ()
+            try:
+                folder = provider.root / provider.relative(path)
+                saved = database.execute('SELECT rows FROM folders WHERE path = ?', (str(folder),)).fetchone()
+                return json.loads(saved[0]) if saved is not None else ()
+            except (sqlite3.Error, json.JSONDecodeError):
+                return ()
         folder = provider._locate(path)
         stamp = _stamp(folder)
         if database is not None:
@@ -53,13 +73,16 @@ def device_name_listing(provider, cache_directory, *, status=lambda phase: None)
                 if saved is not None and _stamp(folder) == stamp:
                     provider._guard(folder)
                     check_cancelled(cancelled)
-                    status('device_cached')
+                    cache_status('device_cached')
                     return json.loads(saved[0])
             except (sqlite3.Error, json.JSONDecodeError):
                 pass
 
-        status('device_refreshing' if database is not None else '')
-        rows = list(visible_transfer_rows(provider, provider.list_names(path, cancelled=cancelled)))
+        cache_status('device_refreshing' if database is not None else '')
+        list_names = getattr(provider, 'list_names', None)
+        children = (list_names(path, cancelled=cancelled) if list_names is not None
+                    else local_folder_snapshot(provider, path, cancelled=cancelled, names_only=True))
+        rows = list(visible_transfer_rows(provider, children))
         if database is not None and _stamp(folder) == stamp:
             pending.append((str(folder), stamp, json.dumps(rows)))
             if len(pending) >= 32:

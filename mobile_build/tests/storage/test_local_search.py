@@ -147,6 +147,19 @@ class LocalSearchTests(unittest.TestCase):
         self.assertEqual(len(self.search.search(provider, '', 'end eternity').rows), 3)
         self.assertFalse(self.database.exists())
 
+    def test_encrypted_progress_collapse_repeated_remote_without_changing_distinct_names(self):
+        from mobile.local_search import search_location_label
+
+        crypt = SimpleNamespace(private=True, remote='Legacy-EncryptedShare')
+        self.assertEqual(search_location_label(
+            'Legacy-EncryptedShare · Legacy-EncryptedShare - Encrypted Copy', crypt),
+            'Legacy-EncryptedShare')
+        self.assertEqual(search_location_label(
+            'Legacy-EncryptedShare · Personal - Encrypted Copy', crypt),
+            'Legacy-EncryptedShare · Personal')
+        self.assertEqual(search_location_label('Personal - Encrypted Copy', self.provider),
+                         'Personal - Encrypted Copy')
+
     def test_cancellation_and_scope(self):
         self.prepare()
         with self.assertRaises(OperationCancelled):
@@ -299,6 +312,9 @@ class SavedSearchPublicationTests(unittest.TestCase):
                     await wait_until(lambda: blocked.is_set() and bool(self.visible_paths()),
                                      message='Saved results did not publish before later validation')
                     self.assertEqual(self.visible_paths(), self.matches)
+                    self.assertEqual(browser._search_location_caption.text, 'Local')
+                    self.assertEqual(list(browser._search_status.children),
+                                     [browser._search_location_caption, browser.page_label])
                     self.assertIn('Checking', browser.page_label.text)
                     browser.selected = provider.root / self.matches[20]
                 finally:

@@ -90,6 +90,49 @@ class DirectoryIndex:
             raise ValueError('Linked encrypted directory index is not supported.')
         return file, scope
 
+    def _load_record(self, file, scope, path, revision=None):
+        if file is None:
+            return None
+        with file.open('rb') as stream:
+            encrypted = stream.read(LIMIT + 2049)
+        if len(encrypted) > LIMIT + 2048:
+            return None
+        record = json.loads(self.cipher.transform(encrypted, decode=True))
+        binding = record.get('binding') if isinstance(record, dict) else None
+        if (not isinstance(binding, list) or len(binding) != 4 or binding[:3] != [1, scope, path]
+                or (revision is not None and binding[3] != revision)):
+            return None
+        rows = record['rows']
+        if isinstance(rows, list) and all(
+                isinstance(row, dict) and type(row.get('directory')) is bool
+                and self.provider.relative(row['path']) == row['path']
+                and row['path'] == '/'.join(filter(None, (path, row['name'])))
+                and row['path'].rpartition('/')[0] == path for row in rows):
+            return binding[3], rows
+        return None
+
+    def cached_listing(self, path, *, cancelled, locate):
+        """Read search hints without enumerating or fingerprinting the folder."""
+        with self.provider.operation(cancelled):
+            self._check(cancelled)
+            with self.lock:
+                saved = self.rows.get(path)
+            if saved is not None:
+                return json.loads(saved[1])
+            if self.folder is None:
+                return ()
+            try:
+                info = locate(path).stat(follow_symlinks=False)
+                record = self._load_record(*self._record_path((info.st_dev, info.st_ino)), path)
+            except (OSError, ValueError, TypeError, KeyError, RuntimeError):
+                record = None
+            self._check(cancelled)
+            if record is None:
+                return ()
+            revision, rows = record
+            self._remember(path, revision, rows, cancelled)
+            return rows
+
     def listing(self, path, *, cancelled, from_inventory=None, locate=None, cache_status=lambda phase: None):
         provider = self.provider
         with provider.operation(cancelled):
@@ -116,21 +159,12 @@ class DirectoryIndex:
             file = scope = None
             try:
                 file, scope = self._record_path(inode)
-                if file is not None:
-                    with file.open('rb') as stream:
-                        encrypted = stream.read(LIMIT + 2049)
-                    if len(encrypted) <= LIMIT + 2048:
-                        record = json.loads(self.cipher.transform(encrypted, decode=True))
-                        if isinstance(record, dict) and record.get('binding') == [1, scope, path, revision]:
-                            rows = record['rows']
-                            if isinstance(rows, list) and all(
-                                    isinstance(row, dict) and type(row.get('directory')) is bool
-                                    and provider.relative(row['path']) == row['path']
-                                    and row['path'] == '/'.join(filter(None, (path, row['name'])))
-                                    and row['path'].rpartition('/')[0] == path for row in rows):
-                                self._remember(path, revision, rows, cancelled)
-                                cache_status('cached')
-                                return rows
+                record = self._load_record(file, scope, path, revision)
+                if record is not None:
+                    _, rows = record
+                    self._remember(path, revision, rows, cancelled)
+                    cache_status('cached')
+                    return rows
             except (OSError, ValueError, TypeError, KeyError, RuntimeError):
                 pass  # A disposable cache can always be rebuilt from the provider.
             cache_status('refreshing')

@@ -15,6 +15,7 @@ from threading import Event
 import toga
 from .control_icons import apply_icon
 from toga.style import Pack
+from toga.style.pack import COLUMN
 from commonUtils.ui.native_browser.recycled import RecycledBrowser, BrowserPresentation
 from .appearance import list_button
 from .appearance import surface, template_icon, selection_row
@@ -291,6 +292,12 @@ class FileBrowser(RecycledBrowser):
             kwargs['resource_search'] = local_search.search
         super().__init__(presentation=LogisticsBrowserPresentation(),
                          list_factory=partial(RecycledFileList, title_lines=2), inline_details=False, **kwargs)
+        from commonUtils.ui.native.presentation import allow_label_to_shrink
+        self._search_location_caption = toga.Label('', style=Pack(font_size=12, margin_bottom=2, display='none'))
+        allow_label_to_shrink(self._search_location_caption)
+        allow_label_to_shrink(self.page_label)
+        self._search_status = toga.Box(children=[self._search_location_caption, self.page_label],
+                                       style=Pack(direction=COLUMN))
         self.widget._clear_return_selection = self.clear_selection
         self.widget._file_browser_owner = self
 
@@ -363,18 +370,25 @@ class FileBrowser(RecycledBrowser):
         if self.closed or epoch != self.search_epoch or cancelled.is_set():
             return
         self._submitted_search_epoch = epoch
+        self._show_search_location()
         await super()._search_subfolders(epoch, cancelled)
 
-    def search_progress_text(self, result, visible_count):
-        from .local_search import filename_scan_label
+    def _show_search_location(self):
+        from .local_search import search_location_label
         from .local_sources import PhoneFiles, device_files_label
 
         name = (device_files_label(toga.App.app) if type(self.search_provider) is PhoneFiles
                 else self.location[0] if isinstance(self.location, tuple) and self.location else '')
-        location = f'{name} · ' if name else ''
+        caption = self._search_location_caption
+        caption.text = search_location_label(name, self.search_provider)
+        caption.style.display = 'pack' if name else 'none'
+
+    def search_progress_text(self, result, visible_count):
+        from .local_search import filename_scan_label
+
         if result.cached:
-            return f'{location}{visible_count:,} cached matches · Checking against storage…'
-        return (f'{location}{filename_scan_label(result.cache_phase)} '
+            return f'{visible_count:,} cached matches · Checking against storage…'
+        return (f'{filename_scan_label(result.cache_phase)} '
                 f'{visible_count:,} found · {result.scanned:,} checked')
 
     def _start_local_index(self):
@@ -386,6 +400,8 @@ class FileBrowser(RecycledBrowser):
             self._spawn(self._prepare_local_search(provider, self.search_directory, self._index_cancel))
 
     def query_changed(self, widget=None, **kwargs):
+        if hasattr(self, '_search_location_caption') and not self.search.value:
+            self._search_location_caption.style.display = 'none'
         if widget is self.sort:
             self._sorted_search_epoch = self.search_epoch
         if not self._search_suspended or widget is self.sort:
@@ -535,8 +551,8 @@ class FileBrowser(RecycledBrowser):
                     if child not in (header.parent_button, header.caption, self.search_button) and not (
                             type(child) is toga.Box and not child.children):
                         toolbar.add(child)
-        if self.page_label not in self.widget.children:
-            self.widget.insert(0 if hasattr(self, '_search_toolbar') else 1, self.page_label)
+        if self._search_status not in self.widget.children:
+            self.widget.insert(0 if hasattr(self, '_search_toolbar') else 1, self._search_status)
         self.search.focus()
         self._start_local_index()
 
@@ -558,8 +574,8 @@ class FileBrowser(RecycledBrowser):
                 toolbar.parent.remove(toolbar)
             self.search_panel.style.flex = 0
             del self._search_toolbar, self._search_toolbar_children
-        if self.page_label in self.widget.children:
-            self.widget.remove(self.page_label)
+        if self._search_status in self.widget.children:
+            self.widget.remove(self._search_status)
 
     def show_item_menu(self, actions):
         from .action_menu import show_browser_actions

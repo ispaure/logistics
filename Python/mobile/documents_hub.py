@@ -213,7 +213,15 @@ class DocumentsHub:
             style=Pack(direction=COLUMN, flex=1))
         box.add(self._document_collection_body)
         from .document_search import DocumentSearch
+        from commonUtils.ui.native.presentation import allow_label_to_shrink
+        self._documents_search_location = empty_document_row('')
+        self._documents_search_location.style.margin_bottom = 2
+        allow_label_to_shrink(self._documents_search_location)
         self._documents_search_status = empty_document_row('Searching local filenames…')
+        allow_label_to_shrink(self._documents_search_status)
+        self._documents_search_header = toga.Box(
+            children=[self._documents_search_location, self._documents_search_status],
+            style=Pack(direction=COLUMN))
         self._documents_file_search = DocumentSearch(
             self.app, self.publish_document_search, self.show_document_search_progress)
         self.documents_sections = box
@@ -356,12 +364,16 @@ class DocumentsHub:
         from .local_search import filename_scan_label
 
         status = self._documents_search_status
-        message = (f'{location} · {filename_scan_label(cache_phase)} · {checked:,} checked'
+        caption = self._documents_search_location
+        caption.style.update(display='pack' if location else 'none', visibility='visible')
+        if caption.text != location:
+            caption.text = location
+        message = (f'{filename_scan_label(cache_phase)} · {checked:,} checked'
                    if location else 'Searching local filenames…')
         if status.text != message:
             status.text = message
-        if status.parent is None:
-            self.document_search_results.insert(0, status)
+        if self._documents_search_header.parent is None:
+            self.document_search_results.insert(0, self._documents_search_header)
         if len(hits) > getattr(self, '_document_search_published', 0):
             self.publish_document_search(hits, (), finished=False)
 
@@ -422,7 +434,10 @@ class DocumentsHub:
             self._document_search_published = len(hits)
         if finished:
             count = max(published, len(hits))
-            if self._documents_search_status.parent is target:
+            if self._documents_search_header.parent is target:
+                # Reserve the location line through completion to keep live
+                # results under the same touch targets.
+                self._documents_search_location.style.visibility = 'hidden'
                 self._documents_search_status.text = f'{count:,} matches'
             if not count:
                 target.add(empty_document_row('No matching local documents.'))

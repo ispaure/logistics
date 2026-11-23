@@ -22,6 +22,7 @@ from commonUtils.runtime.operations import OperationCancelled, check_cancelled
 from commonUtils.search.providers import search_resources
 from .folder_listing import FolderListing
 from .files_ui import local_read_available
+from .local_search import search_location_label
 from .local_sources import PhoneFiles, device_files_label
 
 
@@ -43,22 +44,18 @@ def scan_local_documents(app, query, *, cancelled=lambda: False, progress=None):
 def _scan_locations(app, roots, query, *, cancelled, progress):
     failures, hits, seen = [], [], set()
     checked = 0
-    # Local and Received are enumerated separately from Shared to avoid aliases.
-    for label in roots:
-        check_cancelled(cancelled)
-        provider = None
-        location_checked = 0
-        cache_phase = ''
-        consumed = 0
-        location = label
+    def run(location, listing, load_match, phase, *, cache_pass=False):
+        nonlocal checked
+        label, provider = location.label, location.provider
+        consumed = scanned = 0
 
-        def report_cache(phase):
-            nonlocal cache_phase
-            cache_phase = phase
+        def report_cache(value):
+            nonlocal phase
+            phase = value
 
         def report(result):
-            nonlocal consumed, location_checked
-            location_checked = result.scanned
+            nonlocal consumed, scanned
+            scanned = result.scanned
             for row in result.rows[consumed:]:
                 check_cancelled(cancelled)
                 key = provider.relative(row['path'])
@@ -70,53 +67,54 @@ def _scan_locations(app, roots, query, *, cancelled, progress):
                 else:
                     path = str(Path(provider.root) / key)
                     source, identity = dict(type='local', path=path), ('local', path)
-                if identity in seen:
-                    continue
-                seen.add(identity)
-                hits.append(dict(name=PurePosixPath(key).name, path=key, location=label,
-                                 source=source, private=private, directory=row['directory']))
+                if identity not in seen:
+                    seen.add(identity)
+                    hits.append(dict(name=PurePosixPath(key).name, path=key, location=label,
+                                     source=source, private=private, directory=row['directory']))
             consumed = len(result.rows)
             if progress is not None:
-                progress(checked + location_checked, cache_phase, tuple(hits[:50]), location)
+                progress(checked + scanned, phase, tuple(hits[:50]), location.name)
+
+        def children(folder, *, cancelled):
+            rows = listing(folder, cancelled=cancelled, status=report_cache)
+            return (row for row in rows
+                    if app.folder_path_visible(row['path'], directory=row['directory']))
 
         try:
-            provider = app.storage_provider(label, roots)
-            if getattr(provider, 'remote_storage', False):
-                continue
-            device = type(provider) is PhoneFiles and not provider.private and not getattr(provider, 'session_only', False)
-            if device:
-                location = device_files_label(app)
-                from .device_name_cache import device_name_listing
-                context = device_name_listing(provider, app.private_root / 'Cache', status=report_cache)
-            else:
-                context = nullcontext()
             if progress is not None:
-                progress(checked, cache_phase, tuple(hits[:50]), location)
-            # SharedFiles excludes collection roots here. Its recursive hook
-            # otherwise includes them, so use the guarded ordinary list path.
-            search_listing = getattr(provider, 'search_listing', None)
-            listing = (search_listing or getattr(provider, 'indexed_list', None)
-                       or getattr(provider, 'list_names', provider.list))
-            with context as device_listing:
-                def children(folder, *, cancelled):
-                    if search_listing is not None:
-                        rows = search_listing(folder, cancelled=cancelled, cache_status=report_cache)
-                    else:
-                        rows = (device_listing or listing)(folder, cancelled=cancelled)
-                    return (row for row in rows
-                            if app.folder_path_visible(row['path'], directory=row['directory']))
-
-                result = search_resources(provider, '', query, cancelled=cancelled, list_children=children,
-                                          load_match=provider.entry if device else None,
-                                          progress=report if progress is not None else None)
+                progress(checked, phase, tuple(hits[:50]), location.name)
+            result = search_resources(provider, '', query, cancelled=cancelled,
+                                      list_children=children, load_match=load_match,
+                                      progress=report if progress is not None else None)
             report(result)
-            failures.extend(result.errors)
+            if not cache_pass:
+                failures.extend(result.errors)
         except (OSError, ValueError):
-            failures.append((label, 'Location could not be searched.'))
+            if not cache_pass:
+                failures.append((label, 'Location could not be searched.'))
         finally:
-            checked += location_checked
-            if provider is not None and hasattr(provider, 'close'):
-                provider.close()
+            checked += scanned
+
+    # Local and Received are enumerated separately from legacy Shared to avoid aliases.
+    with ExitStack() as cleanup:
+        locations = []
+        for label in roots:
+            check_cancelled(cancelled)
+            try:
+                provider = app.storage_provider(label, roots)
+            except (OSError, ValueError):
+                failures.append((label, 'Location could not be searched.'))
+                continue
+            if hasattr(provider, 'close'):
+                cleanup.callback(provider.close)
+            if not getattr(provider, 'remote_storage', False):
+                locations.append(_search_location(app, label, provider, cleanup))
+        for location in locations:
+            if location.cached is not None:
+                phase = 'crypt_cached_hints' if location.provider.private else 'cached_hints'
+                run(location, location.cached, location.validate, phase, cache_pass=True)
+        for location in locations:
+            run(location, location.live, location.reuse, 'checking_storage')
     check_cancelled(cancelled)
     # Legacy saved drafts have no public collection path, but are local files.
     from commonUtils.search.names import matches_name, search_terms
@@ -134,6 +132,56 @@ def _scan_locations(app, roots, query, *, cancelled, progress):
                 hits.append(dict(name=name, path=name, location='Saved documents',
                                  source=dict(type='notebook', resource=key), private=False))
     return hits, failures
+
+
+def _search_location(app, label, provider, cleanup):
+    from types import SimpleNamespace
+    from .device_name_cache import device_name_listing, supports_device_name_cache
+
+    name = device_files_label(app) if type(provider) is PhoneFiles else search_location_label(label, provider)
+    search_listing = getattr(provider, 'search_listing', None)
+    cached_listing = getattr(provider, 'cached_search_listing', None)
+    verified = {}
+
+    def validate(path):
+        try:
+            row = provider.entry(path)
+        except (OSError, ValueError) as error:
+            # Stale cache hints are disposable. The storage pass owns errors.
+            raise FileNotFoundError(path) from error
+        verified[path] = row
+        return row
+
+    if supports_device_name_cache(provider):
+        listing = cleanup.enter_context(device_name_listing(provider, app.private_root / 'Cache'))
+        def live(folder, *, cancelled, status):
+            return listing(folder, cancelled=cancelled, cache_status=status)
+
+        def cached(folder, *, cancelled, status):
+            return listing(folder, cancelled=cancelled, cached_only=True)
+
+        def reuse(path):
+            return verified[path] if path in verified else provider.entry(path)
+
+        return SimpleNamespace(label=label, name=name, provider=provider, live=live,
+                               cached=cached, validate=validate, reuse=reuse)
+
+    # SharedFiles excludes managed roots. Preserve its guarded listing rather
+    # than falling back to an unrestricted physical traversal.
+    listing = (getattr(provider, 'indexed_list', None)
+               or getattr(provider, 'list_names', provider.list))
+
+    def live(folder, *, cancelled, status):
+        if search_listing is not None:
+            return search_listing(folder, cancelled=cancelled, cache_status=status)
+        return listing(folder, cancelled=cancelled)
+
+    def cached(folder, *, cancelled, status):
+        return cached_listing(folder, cancelled=cancelled)
+
+    return SimpleNamespace(label=label, name=name, provider=provider, live=live,
+                           cached=cached if cached_listing is not None else None,
+                           validate=validate, reuse=None)
 
 
 async def reveal_search_hit(app, hit):
@@ -174,6 +222,7 @@ class DocumentSearch:
         work = self.listing.begin()
         last_report = float('-inf')
         last_location = ''
+        last_cache_pass = None
         first_match_shown = False
         finished = False
 
@@ -182,12 +231,15 @@ class DocumentSearch:
                 self.publish_progress(checked, cache_phase, hits, location)
 
         def report(checked, cache_phase, hits, location):
-            nonlocal last_report, first_match_shown, last_location
+            nonlocal last_report, first_match_shown, last_location, last_cache_pass
             now = monotonic()
             first_hit = bool(hits) and not first_match_shown
-            if not work.cancel.is_set() and (location != last_location or first_hit or now - last_report >= .25):
+            cache_pass = cache_phase in ('cached_hints', 'crypt_cached_hints')
+            if not work.cancel.is_set() and (location != last_location or cache_pass != last_cache_pass
+                                             or first_hit or now - last_report >= .25):
                 last_report = now
                 last_location = location
+                last_cache_pass = cache_pass
                 first_match_shown = first_match_shown or first_hit
                 self.app.loop.call_soon_threadsafe(display_progress, checked, cache_phase, hits, location)
 

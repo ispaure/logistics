@@ -137,7 +137,9 @@ class LocalDocumentSearchTests(TestCase):
         self.assertEqual(checked, sorted(checked))
         self.assertEqual(checked[-1], 20)
         self.assertIn('refreshing', [phase for _, phase, _, _ in progress])
-        self.assertEqual(list(dict.fromkeys(location for _, _, _, location in progress)), list(providers))
+        self.assertEqual(list(dict.fromkeys(location for _, phase, _, location in progress
+                                            if phase != 'crypt_cached_hints')),
+                         ['Local files', 'Shared files', 'Received Files', 'Fixture'])
         self.assertTrue(any(0 < len(preview) < len(hits) for _, _, preview, _ in progress))
         self.assertTrue(all(hits[:len(preview)] == list(preview) for _, _, preview, _ in progress))
         self.assertEqual({hit['location'] for hit in hits}, set(providers))
@@ -147,6 +149,41 @@ class LocalDocumentSearchTests(TestCase):
             key='One/Two/Three/Needle.md'))
         self.assertFalse(list(base.rglob('*.sqlite*')))
         self.assertTrue(crypt.closed)
+
+    def test_verified_cache_hits_publish_before_live_scan_and_deleted_names_are_refreshed(self):
+        from mobile.local_sources import PhoneFiles
+        from services.documents.locations import MobileLocalFiles
+        from mobile.document_search import _scan_locations
+
+        app = self.app
+        phone = PhoneFiles(app.private_root)
+        copy_root = app.private_root / 'test-copy'
+        copy_root.mkdir()
+        copies = MobileLocalFiles(copy_root)
+        roots = {'On this device': phone, 'Rclone Copies': copies}
+        (phone.root / 'old-needle.txt').touch()
+        (copies.root / 'cached-needle.txt').touch()
+        with (patch.object(app, 'storage_provider', side_effect=lambda label, roots: roots[label]),
+              patch.object(app, 'feature_enabled', return_value=False)):
+            def scan(progress=None):
+                hits, failures = _scan_locations(app, roots, 'needle',
+                                                cancelled=lambda: False, progress=progress)
+                self.assertEqual(failures, [])
+                return [hit['path'] for hit in hits]
+
+            self.assertEqual(scan(), ['old-needle.txt', 'cached-needle.txt'])
+            (phone.root / 'old-needle.txt').unlink()
+            (phone.root / 'new-needle.txt').touch()
+            progress = []
+            with patch.object(copies, 'entry', wraps=copies.entry) as validate:
+                self.assertEqual(scan(lambda *row: progress.append(row)),
+                                 ['cached-needle.txt', 'new-needle.txt'])
+                validate.assert_called_once_with('cached-needle.txt')
+            first = next((phase, [hit['path'] for hit in hits]) for _, phase, hits, _ in progress if hits)
+            self.assertEqual(first, ('cached_hints', ['cached-needle.txt']))
+            with patch.object(phone, 'entry', wraps=phone.entry) as validate:
+                self.assertEqual(set(scan()), {'cached-needle.txt', 'new-needle.txt'})
+                validate.assert_called_once_with('new-needle.txt')
 
     def test_search_replaces_views_opens_disk_file_and_clear_restores_collection(self):
         app = self.app
@@ -239,7 +276,7 @@ class LocalDocumentSearchTests(TestCase):
         app.show_documents_hub()
         started, release = Event(), Event()
         def slow(*args, **kwargs):
-            kwargs['progress'](4501, 'cached', (), 'Fixture - Encrypted Copy')
+            kwargs['progress'](4501, 'cached', (), 'Fixture')
             started.set()
             release.wait(4)
             return [dict(name='Private stale.md')], []
@@ -254,7 +291,10 @@ class LocalDocumentSearchTests(TestCase):
                 await wait_until(lambda: '4,501 checked' in app.hub_controller()._documents_search_status.text,
                                  timeout=2, interval=.01, message='No progress in the Documents status row')
                 self.assertIn('cached LocalCrypt names', app.hub_controller()._documents_search_status.text)
-                self.assertIn('Fixture - Encrypted Copy', app.hub_controller()._documents_search_status.text)
+                hub = app.hub_controller()
+                self.assertEqual(hub._documents_search_location.text, 'Fixture')
+                self.assertEqual(list(hub._documents_search_header.children),
+                                 [hub._documents_search_location, hub._documents_search_status])
                 with patch.object(app, 'cloud_client', SimpleNamespace(generation=2)):
                     release.set()
                     await owner.task
