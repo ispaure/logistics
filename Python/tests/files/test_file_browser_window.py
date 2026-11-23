@@ -403,8 +403,10 @@ class BrowserWindowTests(QtTestCase):
             accepted.append(True)
             return qt.Qt.DropAction.MoveAction
 
-        with patch.object(qt.QDrag, 'exec', receive):
+        with (patch.object(qt.QDrag, 'exec', receive),
+              patch.object(qt.QDrag, 'deleteLater') as retire):
             gesture()
+        retire.assert_not_called()
         self.assertEqual(accepted, [True])
         self.assertEqual((nested / 'sample.txt').read_bytes(), b'selection')
         status = window.workspace.active_view.move_actions.operation.message

@@ -77,11 +77,10 @@ def start_file_drag(widget, paths, *, internal=False):
     drag.setMimeData(mime)
     actions = qt.Qt.DropAction
     offered = actions.CopyAction | actions.MoveAction if internal else actions.CopyAction
-    try:
-        action = drag.exec(offered, actions.CopyAction)
-        return None if mime.handled else action
-    finally:
-        drag.deleteLater()
+    # Qt owns the drag after exec(). On X11 it still serves MIME data after
+    # exec() returns, until the receiving application acknowledges the drop.
+    action = drag.exec(offered, actions.CopyAction)
+    return None if mime.handled else action
 
 
 def handoff_message(action):
