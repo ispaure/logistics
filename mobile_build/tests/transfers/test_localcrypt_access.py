@@ -579,7 +579,7 @@ class LocalCryptAccessTests(unittest.TestCase):
                     self.fail('Fixture did not find a legacy collision')
 
     def test_session_cache_keeps_tree_root_when_large_share_evicts_subfolders(self):
-        from features.rclone.localcrypt.directory_index import DirectoryNameMemory
+        from features.rclone.mobile.credential_state import DirectoryNameMemory
 
         memory = DirectoryNameMemory()
         snapshot = ('revision', b'[]', ())
