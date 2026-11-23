@@ -17,6 +17,11 @@ keyboard work before the query event. Run `Python/tests/platform/benchmark_folde
 with a Manager scratch path and a separate evidence output path for desktop
 folder opening, navigation and rename.
 
+Run `mobile_build.validation.file_drag_ios` with `--output` under
+`tmp/test-results/` to exercise real hold-and-drag gestures on an owned iPhone
+simulator. The probe verifies folder entry and checks that the file and folder
+contents survived the move in List and Tiles.
+
 Use `performance_probe.py` for Android first draw and navigation,
 `performance_workloads.py` for loop delay and Python allocations, and
 `BenchmarkCryptArchivePage` in `mobile_build/rclone_bridge/archive_blocks_test.go`

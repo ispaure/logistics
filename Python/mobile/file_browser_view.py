@@ -246,6 +246,9 @@ class LocalFileBrowser(FileBrowser):
         self._preview_completed.clear()
 
     def stop(self):
+        if getattr(self, '_file_drag_delegate', None) is not None:
+            from .native.file_drag_ios import uninstall
+            uninstall(self)
         self.set_previews_visible(False)
         self._reset_previews()
         self.thumbnails = self.details = None
@@ -383,6 +386,8 @@ class LocalFileBrowser(FileBrowser):
                                     style=Pack(direction=ROW, height=96, align_items=START)))
             controls.append(command)
             if backend.startswith('toga_iOS.'):
+                if hasattr(self, '_item_commands'):
+                    self._attach_tile_menu(command, entry)
                 card._impl.native.accessibilityElements = [control._impl.native for control in controls]
             elif backend.startswith('toga_android.'):
                 from android.view import View
@@ -418,6 +423,41 @@ class LocalFileBrowser(FileBrowser):
             accessible_name(command, label + name)
         else:
             apply_icon(command, symbol, label + name)
+            if hasattr(command, '_tile_native_menu'):
+                native = command._impl.native
+                native.menu = command._tile_native_menu if state is None else None
+                native.showsMenuAsPrimaryAction = state is None
+
+    def _attach_tile_menu(self, command, entry):
+        from rubicon.objc import Block, ObjCBlock, ObjCClass, ObjCInstance, ns_from_py, objc_id
+        from weakref import ref
+
+        browser_ref, command_ref = ref(self), ref(command)
+        epoch = self.epoch
+
+        def provide(completion):
+            completion = ObjCInstance(completion).copy()
+
+            async def load():
+                actions = []
+                try:
+                    browser, control = browser_ref(), command_ref()
+                    if (browser is not None and control is not None
+                            and getattr(control, '_tile_native_menu', None) is not None):
+                        actions = await browser.native_item_menu(entry, epoch)
+                        if control._tile_native_menu is None:
+                            actions = []
+                finally:
+                    ObjCBlock(completion, None, objc_id)(ns_from_py(actions))
+
+            toga.App.app.loop.create_task(load())
+
+        command._tile_menu_provider = Block(provide, None, objc_id)
+        deferred = ObjCClass('UIDeferredMenuElement').elementWithUncachedProvider(command._tile_menu_provider)
+        command._tile_native_menu = ObjCClass('UIMenu').menuWithTitle('', children=[deferred])
+        if self.on_check_entry is None:
+            command._impl.native.menu = command._tile_native_menu
+            command._impl.native.showsMenuAsPrimaryAction = True
 
     async def _select_pressed(self, entry, widget, **kwargs):
         if self.mode == 'Tiles' and widget is self.buttons.get(entry.identity):
@@ -440,6 +480,12 @@ class LocalFileBrowser(FileBrowser):
             self.on_item_actions(entry.payload)
 
     def _retire_tile(self, identity):
+        _, card, *_ = self._tile_cards[identity]
+        command = getattr(card, '_tile_command', None)
+        if getattr(command, '_tile_native_menu', None) is not None:
+            command._impl.native.menu = None
+            command._impl.native.showsMenuAsPrimaryAction = False
+            command._tile_native_menu = command._tile_menu_provider = None
         target = self._tile_previews.pop(identity, None)
         if target is not None:
             box, placeholder = target

@@ -37,6 +37,18 @@ ICONS = {
     'storage_local': ('internaldrive', '▣', (((5, 5), (19, 5), (22, 15), (22, 20), (2, 20), (2, 15), (5, 5)), ((2, 15), (22, 15)), ((16, 18), (19, 18)))),
     'storage_crypt': ('lock', '⚿', (((5, 10), (19, 10), (19, 21), (5, 21), (5, 10)), ((8, 10), (8, 6), (9, 3), (15, 3), (16, 6), (16, 10)), ((12, 14), (12, 17)))),
     'storage_unlocked': ('lock.open', '🔓', (((5, 10), (19, 10), (19, 21), (5, 21), (5, 10)), ((8, 10), (8, 6), (9, 3), (15, 3), (16, 6)), ((12, 14), (12, 17)))),
+    'move_file': ('arrow.right.to.line', '→', (
+        ((3, 6), (9, 6), (11, 9), (21, 9), (21, 20), (3, 20), (3, 6)),
+        ((8, 14), (16, 14)), ((13, 11), (16, 14), (13, 17)))),
+    'duplicate_file': ('doc.on.doc', '▣', (
+        ((8, 8), (19, 8), (19, 22), (8, 22), (8, 8)),
+        ((15, 5), (15, 2), (3, 2), (3, 17), (5, 17)))),
+    'send_file': ('square.and.arrow.up', '↑', (
+        ((4, 10), (4, 21), (20, 21), (20, 10)), ((12, 15), (12, 2)), ((7, 7), (12, 2), (17, 7)))),
+    'trash_file': ('trash', '⌫', (
+        ((3, 6), (21, 6)), ((9, 6), (9, 3), (15, 3), (15, 6)),
+        ((5, 6), (7, 21), (17, 21), (19, 6)), ((10, 10), (10, 17)), ((14, 10), (14, 17)))),
+    'done': ('checkmark', '✓', (((5, 12), (10, 17), (20, 7)),)),
     'back': ('chevron.left', '‹', (((15, 5), (8, 12), (15, 19)),)),
     'forward': ('chevron.right', '›', (((9, 5), (16, 12), (9, 19)),)),
     'previous_comic': ('backward.end', '|≪', (((4, 5), (4, 19)), ((13, 5), (7, 12), (13, 19)), ((21, 5), (15, 12), (21, 19)))),
@@ -79,6 +91,7 @@ _settings_circle = ((12, 2), (17, 3.3), (20.7, 7), (22, 12), (20.7, 17),
 ICONS.update(
     select_item=('circle', '○', (_settings_circle,)),
     selected_item=('checkmark.circle', '✓', (_settings_circle, ((7, 12), (10, 15), (17, 8)))),
+    attention=('exclamationmark.circle', '!', (_settings_circle, ((12, 6), (12, 13)), ((12, 16), (12, 17)))),
     preferences=('slider.horizontal.3', '☷', (((3, 6), (21, 6)), ((3, 12), (21, 12)),
                   ((3, 18), (21, 18)), ((8, 3), (8, 9)), ((16, 9), (16, 15)), ((8, 15), (8, 21)))),
     chat=('bubble.left.and.bubble.right', '☏', (((3, 3), (18, 3), (18, 14), (9, 14), (4, 19), (4, 14), (3, 14), (3, 3)),
@@ -130,6 +143,21 @@ _renderer = IconRenderer({name: _spec(name, value) for name, value in ICONS.item
 refresh_icons = _renderer.refresh
 button_icons = _renderer.leading
 apply_icon = _renderer.apply
+
+
+def menu_drawable(name, context):
+    from commonUtils.ui.native.icons import android_drawable
+    from .palette import argb, android_palette
+
+    resources = context.getResources()
+    extent = round(20 * resources.getDisplayMetrics().density)
+    dark = resources.getConfiguration().uiMode & 0x30 == 0x20
+    drawable = android_drawable(_renderer.icons[name], bounds=(extent, extent), resources=resources)
+    if hasattr(drawable, 'setIntrinsicWidth'):
+        drawable.setIntrinsicWidth(extent)
+        drawable.setIntrinsicHeight(extent)
+    drawable.setTint(argb(android_palette(dark)['text']))
+    return drawable
 
 
 def icon_button(name, label, *, on_press=None, enabled=True):

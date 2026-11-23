@@ -25,7 +25,7 @@
 
 #import "ScreenAwake.m"
 
-static NSString *const LGVideoChapterHint = @"Open Chapters for named positions and chapter skips.";
+static NSString *const LGVideoChapterHint = @"Open Chapters for named positions, or use the chapter buttons beside Play.";
 static const int64_t LGVideoChapterRestartMilliseconds = 1000;
 
 @interface LGVideoTimeline : UISlider
@@ -195,6 +195,7 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic, strong) UIStackView *videoIdentity;
 @property(nonatomic, strong) UIStackView *transport, *tabletopUtilities;
 @property(nonatomic, strong) UIButton *playButton;
+@property(nonatomic, strong) UIButton *chapterBackButton, *chapterForwardButton;
 @property(nonatomic, strong) NSLayoutConstraint *movieWidth, *movieHeight, *movieCenterY, *deckCenterY, *controlsHeightLimit;
 
 @property(nonatomic) BOOL networkWaiting, networkResumePending, playRequested;
@@ -684,7 +685,10 @@ typedef struct {
     button.configuration = config;
     button.accessibilityLabel = label;
     button.accessibilityIdentifier = [@"video.deck." stringByAppendingString:label];
-    [button.widthAnchor constraintEqualToConstant:primary ? 56 : 48].active = YES;
+    NSLayoutConstraint *width = [button.widthAnchor constraintEqualToConstant:primary ? 56 : 48];
+    // A hidden arranged button must be able to collapse to zero width.
+    width.priority = UILayoutPriorityRequired - 1;
+    width.active = YES;
     [button.heightAnchor constraintEqualToConstant:primary ? 56 : 48].active = YES;
     [button addTarget:self action:selector forControlEvents:UIControlEventTouchUpInside];
     return button;
@@ -1564,11 +1568,23 @@ typedef struct {
     return [starts sortedArrayUsingSelector:@selector(compare:)];
 }
 - (void)updateChapterMarkers:(int64_t)duration {
+    NSArray<NSNumber *> *starts = [self chapterStarts:[self chapterRows] duration:duration];
     NSMutableArray<NSNumber *> *fractions = [NSMutableArray array];
-    for (NSNumber *start in [self chapterStarts:[self chapterRows] duration:duration]) {
+    for (NSNumber *start in starts) {
         [fractions addObject:@(start.doubleValue / duration)];
     }
     self.seek.chapterFractions = fractions;
+    [self updateChapterButtons:starts];
+}
+- (void)updateChapterButtons:(NSArray<NSNumber *> *)starts {
+    BOOL hidden = starts.count == 0;
+    if (self.chapterBackButton.hidden != hidden) {
+        self.chapterBackButton.hidden = self.chapterForwardButton.hidden = hidden;
+        [self.view setNeedsLayout];
+    }
+    BOOL enabled = !hidden && !self.controlsLocked;
+    self.chapterBackButton.enabled = enabled && [self chapterTarget:starts next:NO] != nil;
+    self.chapterForwardButton.enabled = enabled && [self chapterTarget:starts next:YES] != nil;
 }
 - (NSNumber *)chapterTarget:(NSArray<NSNumber *> *)starts next:(BOOL)next {
     int64_t position = self.ended ? [self durationMilliseconds] : [self positionMilliseconds];
@@ -1594,10 +1610,13 @@ typedef struct {
     NSArray *starts = [self chapterStarts:[self chapterRows] duration:[self durationMilliseconds]];
     [self seekChapter:[self chapterTarget:starts next:next]];
 }
+- (void)previousChapter:(id)sender { [self skipChapter:NO]; }
+- (void)nextChapter:(id)sender { [self skipChapter:YES]; }
 - (void)invalidateChapters {
     self.chaptersInvalidated = YES;
     self.localChapters = self.airPlayChapters = nil;
     self.seek.chapterFractions = @[];
+    [self updateChapterButtons:@[]];
     UIViewController *presented = self.presentedViewController;
     if (presented == self.chapterDialog || ([presented isKindOfClass:LGVideoDeckSettings.class] &&
         ((LGVideoDeckSettings *)presented).dialog == self.chapterDialog)) {
@@ -2066,10 +2085,17 @@ typedef struct {
     self.transport.alignment = UIStackViewAlignmentCenter;
     self.transport.distribution = UIStackViewDistributionEqualCentering;
     self.transport.spacing = 28;
+    self.chapterBackButton = [self deckButton:@"Previous chapter" symbol:@"backward.end.fill"
+        selector:@selector(previousChapter:) primary:NO];
+    self.chapterForwardButton = [self deckButton:@"Next chapter" symbol:@"forward.end.fill"
+        selector:@selector(nextChapter:) primary:NO];
+    self.chapterBackButton.hidden = self.chapterForwardButton.hidden = YES;
+    [self.transport addArrangedSubview:self.chapterBackButton];
     [self.transport addArrangedSubview:[self deckButton:@"Back 10 seconds" symbol:@"gobackward.10" selector:@selector(back:) primary:NO]];
     self.playButton = [self deckButton:@"Play" symbol:@"play.fill" selector:@selector(togglePlay:) primary:YES];
     [self.transport addArrangedSubview:self.playButton];
     [self.transport addArrangedSubview:[self deckButton:@"Forward 10 seconds" symbol:@"goforward.10" selector:@selector(forward:) primary:NO]];
+    [self.transport addArrangedSubview:self.chapterForwardButton];
     [self.controls addArrangedSubview:self.transport];
     if (self.airPlayAvailable) [self installAirPlayControls];
 }
@@ -2291,11 +2317,16 @@ typedef struct {
     self.controls.spacing = portrait ? (available.size.height >= 380 ? 10 : 4) : tabletop ? 2 : 4;
     self.controls.layoutMarginsRelativeArrangement = YES;
     self.controls.layoutMargins = portrait ? UIEdgeInsetsMake(8, 16, 8, 16) : UIEdgeInsetsMake(4, 12, 6, 12);
-    CGFloat transportInset = tabletop ? 0 : MAX(0, (available.size.width - 2 * margin - 24 - 260) / 2);
-    self.transport.spacing = tabletop ? 28 : 12;
+    if (tabletop) available = [self tabletopControlsAreaFromArea:available];
+    BOOL chapterButtonsShown = !self.chapterBackButton.hidden;
+    CGFloat transportWidth = available.size.width - 2 * margin
+        - self.controls.layoutMargins.left - self.controls.layoutMargins.right;
+    CGFloat transportInset = tabletop ? 0 : MAX(0, (transportWidth - (chapterButtonsShown ? 320 : 260)) / 2);
+    CGFloat spacing = tabletop ? 28 : 12;
+    self.transport.spacing = chapterButtonsShown
+        ? MIN(spacing, MAX(0, (transportWidth - 248) / 4)) : spacing;
     self.transport.layoutMarginsRelativeArrangement = !tabletop;
     self.transport.layoutMargins = UIEdgeInsetsMake(0, transportInset, 0, transportInset);
-    if (tabletop) available = [self tabletopControlsAreaFromArea:available];
     self.tabletopArea = available;
     self.portraitDeckHeight.active = portrait;
     self.portraitDeckHeight.constant = MAX(44, available.size.height - 16);

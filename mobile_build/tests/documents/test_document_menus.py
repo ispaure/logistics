@@ -126,7 +126,9 @@ class NativeDocumentMenuTests(TestCase):
         button = SimpleNamespace(_impl=impl)
         menu_class = SimpleNamespace(menuWithTitle=lambda title, **kwargs: SimpleNamespace(**kwargs))
         action_class = SimpleNamespace(actionWithTitle=lambda title, **kwargs: SimpleNamespace(title=title, **kwargs))
-        module = SimpleNamespace(ObjCClass=lambda name: menu_class if name == 'UIMenu' else action_class,
+        image_class = SimpleNamespace(systemImageNamed=lambda name: name)
+        classes = {'UIMenu': menu_class, 'UIAction': action_class, 'UIImage': image_class}
+        module = SimpleNamespace(ObjCClass=classes.__getitem__,
                                  Block=lambda callback, *args: callback, objc_id=object)
         with patch.dict('sys.modules', {'rubicon.objc': module}):
             menu = DocumentNativeMenu(button, actions, invoke=lambda callback: callback(),
@@ -135,6 +137,8 @@ class NativeDocumentMenuTests(TestCase):
         self.assertTrue(all(section.options == 1 for section in sections))
         self.assertEqual([action.title for section in sections for action in section.children],
                          [title for title, _ in actions])
+        self.assertEqual([action.image for section in sections for action in section.children],
+                         ['speaker.wave.2', 'textformat.size', 'doc.text', 'trash'])
         sections[-1].children[0].handler(None)
         self.assertEqual(calls, ['Delete document…'])
         self.assertEqual(sections[-1].children[0].attributes, 2)
@@ -156,12 +160,16 @@ class NativeDocumentMenuTests(TestCase):
         }
         modules['android.widget'].PopupMenu.OnMenuItemClickListener = object
         with patch.dict('sys.modules', modules), \
-                patch('mobile.action_menu.android_menu_context', side_effect=lambda context: context):
+                patch('mobile.action_menu.android_menu_context', side_effect=lambda context: context), \
+                patch('mobile.action_menu.menu_drawable', side_effect=lambda name, context: name):
             menu = DocumentNativeMenu(SimpleNamespace(_impl=impl), actions,
                 invoke=lambda callback: callback(), context=lambda: object(), fallback=Mock())
             menu.show()
         self.assertEqual([call.args[:3] for call in native.add.call_args_list], [(0, 0, 0), (0, 1, 1), (1, 2, 2)])
         native.setGroupDividerEnabled.assert_called_once_with(True)
+        popup.setForceShowIcon.assert_called_once_with(True)
+        self.assertEqual([call.args[0] for call in native.add.return_value.setIcon.call_args_list],
+                         ['folder_hub', 'view', 'close'])
         menu.listener.onMenuItemClick(SimpleNamespace(getItemId=lambda: 2))
         self.assertEqual(selected, ['Close document'])
         listener = menu.listener

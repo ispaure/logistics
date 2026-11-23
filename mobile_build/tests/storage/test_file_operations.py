@@ -115,10 +115,100 @@ class FileOperationTests(unittest.TestCase):
         dict(app.file_item_commands(row=row))['Select items']()
         self.assertEqual([item['path'] for item in app.file_checked.values()], ['second.txt'])
         self.assertEqual(app.file_selection_count.text, '1 selected')
+        self.assertEqual(app.file_move_button.leading_icons, (('move_file', ''),))
+        self.assertEqual(app.file_archive_button.accessible_name, 'Archive selected items')
+        self.assertEqual(app.file_select_done.accessible_name, 'Done selecting items')
         self.assertTrue(app.file_move_button.enabled)
         app.end_file_selection()
         dict(app.current_folder_commands())['Select items']()
         self.assertFalse(app.file_checked)
+
+    def test_drag_moves_a_folder_and_its_contents_into_a_sibling_folder(self):
+        from mobile.file_drag import FileDrag
+
+        source = self.source.root / 'Folder'
+        source.mkdir()
+        (source / 'note.txt').write_text('Nested content')
+        target = self.source.root / 'Destination'
+        target.mkdir()
+        self.run_async(self.app.browse_files())
+        browser = self.app.file_browser
+        entries = {entry.payload['path']: entry for entry in browser.entries}
+        drag = FileDrag(self.app, browser)
+
+        async def drop():
+            token = drag.begin(entries['Folder'])
+            self.assertIsNotNone(token)
+            self.assertFalse(drag.drop(token, entries['Folder']))
+            self.assertFalse(drag.drop(token, entries['first.txt']))
+            self.assertFalse(drag.drop('retired-token', entries['Destination']))
+            self.assertTrue(drag.drop(token, entries['Destination']))
+            self.assertFalse(drag.drop(token, entries['Destination']))
+            return await drag.task
+
+        self.assertTrue(self.run_async(drop()))
+        self.assertFalse(source.exists())
+        self.assertEqual((target / 'Folder' / 'note.txt').read_text(), 'Nested content')
+        self.assertEqual(self.app.file_status.value, 'Moved to Destination.')
+
+    def test_drag_preserves_originals_when_folder_changes_or_item_exists(self):
+        from mobile.file_drag import FileDrag
+
+        target = self.source.root / 'Destination'
+        target.mkdir()
+        self.run_async(self.app.browse_files())
+        browser = self.app.file_browser
+        drag = FileDrag(self.app, browser)
+
+        async def drop(replace_folder=False):
+            entries = {entry.payload['path']: entry for entry in browser.entries}
+            token = drag.begin(entries['first.txt'])
+            if replace_folder:
+                target.rename(target.with_name('Original folder'))
+                target.mkdir()
+            self.assertTrue(drag.drop(token, entries['Destination']))
+            return await drag.task
+
+        self.assertFalse(self.run_async(drop(replace_folder=True)))
+        self.assertIn('destination folder changed', self.app.file_status.value)
+        self.assertFalse((target / 'first.txt').exists())
+        (target / 'first.txt').write_text('Existing destination')
+        self.run_async(self.app.browse_files())
+        self.assertFalse(self.run_async(drop()))
+        self.assertEqual((target / 'first.txt').read_text(), 'Existing destination')
+        self.assertEqual((self.source.root / 'first.txt').read_text(), 'First')
+
+    def test_drag_spring_opens_nested_folders_and_drops_in_the_open_folder(self):
+        from mobile.file_drag import FileDrag
+
+        nested = self.source.root / 'Destination' / 'Nested'
+        nested.mkdir(parents=True)
+        self.run_async(self.app.browse_files())
+        browser = self.app.file_browser
+        drag = FileDrag(self.app, browser)
+        flashes = []
+
+        def entry(path):
+            return next(entry for entry in browser.entries if entry.payload['path'] == path)
+
+        async def drop():
+            token = drag.begin(entry('first.txt'))
+            drag.hover(token, entry('Destination'), flashes.append, (20, 40))
+            await drag.hover_task
+            self.assertEqual(self.app.file_path, 'Destination')
+            self.assertIsNone(drag.target_entry(entry('Destination/Nested'), (21, 41)))
+            row = drag.target_entry(entry('Destination/Nested'), (50, 70))
+            drag.hover(token, row, flashes.append, (50, 70))
+            await drag.hover_task
+            self.assertEqual(self.app.file_path, 'Destination/Nested')
+            self.assertTrue(drag.drop(token, None))
+            return await drag.task
+
+        with patch('mobile.file_drag.SPRING_DELAY', 0), patch('mobile.file_drag.SPRING_FLASH', 0):
+            self.assertTrue(self.run_async(drop()))
+        self.assertEqual(flashes, [True, False, True, False] * 2)
+        self.assertEqual((nested / 'first.txt').read_text(), 'First')
+        self.assertFalse((self.source.root / 'first.txt').exists())
 
     def test_collection_name_listing_avoids_metadata_formatting(self):
         from services.documents.locations import CollectionFiles

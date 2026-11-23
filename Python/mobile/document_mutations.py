@@ -165,6 +165,10 @@ class DocumentMutation:
             if (request.expected_revision is not None
                     and request.provider.entry(request.path)['revision'] != request.expected_revision):
                 raise ValueError('The selected item changed. Select it again before moving.')
+            if request.expected_parent_revision is not None:
+                folder = destination.entry(target.rpartition('/')[0])
+                if not folder['directory'] or folder['revision'] != request.expected_parent_revision:
+                    raise ValueError('The destination folder changed. Refresh before moving this item.')
             self._verify_text_bindings(target, cancelled)
             self.notebooks.prepare(destination, target, cancelled)
             reference_error = progress_error = None

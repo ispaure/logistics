@@ -14,6 +14,38 @@ import weakref
 from pathlib import PurePosixPath
 from commonUtils.ui.native.menus import NativeMenu as SharedNativeMenu
 from .outbound_share import SEND
+from .control_icons import ICONS, menu_drawable
+
+
+_COMMAND_ICONS = {
+    SEND.removesuffix('…'): 'send_file',
+    'Open': 'forward', 'Open from Files': 'folder_hub', 'Details': 'info', 'Info': 'info',
+    'New folder': 'folder_add', 'Change location': 'folder_hub', 'Select items': 'selected_item',
+    'Move': 'move_file', 'Duplicate': 'duplicate_file', 'Rename': 'edit', 'Rename document': 'edit',
+    'Archive password': 'storage_crypt', 'Create archive': 'archive', 'Extract archive': 'archive',
+    'Archive': 'archive', 'Manage archive': 'archive', 'Delete': 'trash_file', 'Delete document': 'trash_file',
+    'Add to Favourites': 'favourite', 'Remove from Favourites': 'favourite', 'Favourite file': 'favourite',
+    'Show in folder': 'folder_hub', 'Show cached copy in folder': 'folder_hub',
+    'All documents': 'view', 'File actions': 'more', 'New document': 'compose',
+    'View document': 'view', 'View Markdown': 'view', 'View source text': 'view', 'Edit Markdown': 'edit',
+    'Read aloud': 'speaker', 'Find and replace': 'find', 'Find in this page': 'find',
+    'Find in chapter': 'find', 'Chapters and bookmarks': 'contents', 'Comic pages': 'file_tiles',
+    'Pages and search': 'find', 'Appearance': 'appearance', 'Fullscreen': 'fullscreen',
+    'Fit comic page': 'fit', 'Fit image': 'fit', 'Save a copy': 'duplicate_file',
+    'Save As': 'duplicate_file', 'Export': 'send_file', 'Close document': 'close',
+    'Edit metadata': 'edit', 'Open / Metadata': 'view', 'Reader tools': 'contents',
+    'Browse documentation': 'contents', 'Parent folder page': 'up', 'Reading mode': 'fullscreen',
+}
+
+
+def command_icon(title):
+    return _COMMAND_ICONS.get(title.removesuffix('…'))
+
+
+def apple_command_image(title):
+    from rubicon.objc import ObjCClass
+    name = command_icon(title)
+    return ObjCClass('UIImage').systemImageNamed(ICONS[name][0]) if name else None
 
 
 def android_menu_context(context):
@@ -41,11 +73,70 @@ class NativeMenu(SharedNativeMenu):
             original_context = context
             context = lambda: android_menu_context(original_context())
         super().__init__(button, actions, context=context, **kwargs)
-        if type(button._impl).__module__.startswith('toga_iOS.') and any(title == SEND for title, _ in self.actions):
-            from rubicon.objc import ObjCClass
+        if type(button._impl).__module__.startswith('toga_iOS.'):
             for (title, _), action in zip(self.actions, button._impl.native.menu.children):
-                if title == SEND:
-                    action.image = ObjCClass('UIImage').systemImageNamed('square.and.arrow.up')
+                if command_icon(title):
+                    action.image = apple_command_image(title)
+
+    def popup_groups(self):
+        return (self.actions,)
+
+    def show(self, widget=None, **kwargs):
+        if self.disposed:
+            return
+        if not type(self.button._impl).__module__.startswith('toga_android.'):
+            return super().show(widget, **kwargs)
+        from android.widget import PopupMenu
+        from java import dynamic_proxy
+        context = self.context()
+        if context is None:
+            return
+        self.popup = PopupMenu(context, self.button._impl.native)
+        menu = self
+        class Listener(dynamic_proxy(PopupMenu.OnMenuItemClickListener)):
+            def onMenuItemClick(self, item):
+                if not menu.disposed:
+                    menu.invoke(menu.actions[item.getItemId()][1])
+                return True
+        self.listener = Listener()
+        native = self.popup.getMenu()
+        force_icons = getattr(self.popup, 'setForceShowIcon', None)
+        if force_icons:
+            force_icons(True)
+        index = 0
+        groups = self.popup_groups()
+        for group_id, group in enumerate(groups):
+            for title, _ in group:
+                item = native.add(group_id, index, index, android_command_label(title))
+                icon = command_icon(title)
+                if icon and force_icons:
+                    item.setIcon(menu_drawable(icon, context))
+                index += 1
+        from android.os import Build
+        if len(groups) > 1 and Build.VERSION.SDK_INT >= 28:
+            native.setGroupDividerEnabled(True)
+        self.popup.setOnMenuItemClickListener(self.listener)
+        self.popup.show()
+
+
+def android_command_label(title, *, icon_context=None):
+    icon = command_icon(title) if icon_context is not None else None
+    destructive = title.startswith('Delete')
+    if not icon and not destructive:
+        return title
+    from android.text import SpannableString
+    prefix = '  ' if icon else ''
+    label = SpannableString(prefix + title)
+    if icon:
+        from android.text.style import ImageSpan
+        label.setSpan(ImageSpan(menu_drawable(icon, icon_context), 1), 0, 1, 33)
+    if destructive:
+        from android.text.style import ForegroundColorSpan
+        from android.graphics import Color
+        from .palette import eink_enabled
+        color = Color.rgb(0, 0, 0) if eink_enabled() else Color.rgb(190, 30, 45)
+        label.setSpan(ForegroundColorSpan(color), len(prefix), len(prefix) + len(title), 33)
+    return label
 
 
 def ios_menu_actions(actions, invoke, blocks):
@@ -57,7 +148,7 @@ def ios_menu_actions(actions, invoke, blocks):
             invoke(target)
         block = Block(selected, None, objc_id)
         blocks.append(block)
-        image = ObjCClass('UIImage').systemImageNamed('square.and.arrow.up') if title == SEND else None
+        image = apple_command_image(title)
         action = ObjCClass('UIAction').actionWithTitle(title, image=image, identifier=None, handler=block)
         if title.startswith('Delete'):
             action.attributes = 2
@@ -154,8 +245,9 @@ class BrowserActions:
                     if 0 <= index < len(menu.actions):
                         menu.invoke(menu.actions[index][1])
             self.listener = Listener()
+            labels = [android_command_label(label, icon_context=context) for label, _ in self.actions]
             self.native = (AlertDialog.Builder(context).setCustomTitle(title)
-                .setItems([label for label, _ in self.actions], self.listener)
+                .setItems(labels, self.listener)
                 .setNegativeButton('Cancel', None).create())
             self.native.show()
         elif backend.startswith('toga_iOS.'):
@@ -270,45 +362,8 @@ class DocumentNativeMenu(NativeMenu):
                 offset += len(group)
             native.menu = ObjCClass('UIMenu').menuWithTitle('', children=sections)
 
-    def show(self, widget=None, **kwargs):
-        if self.disposed:
-            return
-        if not type(self.button._impl).__module__.startswith('toga_android.'):
-            return super().show(widget, **kwargs)
-        from android.widget import PopupMenu
-        from java import dynamic_proxy
-        context = self.context()
-        if context is None:
-            return
-        self.popup = PopupMenu(context, self.button._impl.native)
-        menu = self
-        class Listener(dynamic_proxy(PopupMenu.OnMenuItemClickListener)):
-            def onMenuItemClick(self, item):
-                if not menu.disposed:
-                    menu.invoke(menu.actions[item.getItemId()][1])
-                return True
-        self.listener = Listener()
-        native = self.popup.getMenu()
-        index = 0
-        for group_id, group in enumerate(command_groups(self.actions)):
-            for title, callback in group:
-                if title == 'Delete document…':
-                    from android.text import SpannableString
-                    from android.text.style import ForegroundColorSpan
-                    from android.graphics import Color
-                    from .palette import eink_enabled
-                    label = SpannableString(title)
-                    color = Color.rgb(0, 0, 0) if eink_enabled() else Color.rgb(190, 30, 45)
-                    label.setSpan(ForegroundColorSpan(color), 0, len(title), 33)
-                else:
-                    label = title
-                native.add(group_id, index, index, label)
-                index += 1
-        from android.os import Build
-        if Build.VERSION.SDK_INT >= 28:
-            native.setGroupDividerEnabled(True)
-        self.popup.setOnMenuItemClickListener(self.listener)
-        self.popup.show()
+    def popup_groups(self):
+        return command_groups(self.actions)
 
 
 def refresh_document_menus(app):

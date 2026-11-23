@@ -16,7 +16,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, NONE
 
-from .control_icons import icon_button
+from .control_icons import ICONS, button_icons, icon_button
 
 
 class PickerMessage(toga.Box):
@@ -92,6 +92,9 @@ class DestinationForm:
         self.move_progress = toga.ProgressBar(max=None)
         self.move_notice = toga.Box(style=Pack(direction=COLUMN, margin_left=12, margin_right=12))
         title, primary = self._destination_labels()
+        action = getattr(destination_action, 'kind', '')
+        primary_icon = {'move': 'move_file', 'move-selection': 'move_file',
+                        'duplicate': 'duplicate_file'}.get(action)
         self.picker_parent = icon_button('up', 'Parent folder', on_press=self.parent_editor_folder)
         self.picker_header = self.editor_browser.attach_location_header(
             self.editor_browser.status_label(''), self.picker_parent)
@@ -106,7 +109,10 @@ class DestinationForm:
         self.picker_destination.style.flex = 0
         from .appearance import action_button
         self.picker_primary = action_button(toga.Button(primary, on_press=self.confirm_editor_file, style=Pack(height=48, flex=1)))
-        self.picker_new_folder = toga.Button('New folder', on_press=self.toggle_editor_new_folder, style=Pack(height=48))
+        if primary_icon:
+            button_icons(self.picker_primary, [(primary_icon, '')])
+        self.picker_new_folder = button_icons(toga.Button(
+            'New folder', on_press=self.toggle_editor_new_folder, style=Pack(height=48)), [('folder_add', '')])
         self.new_folder_name = toga.TextInput(placeholder='New folder name', style=Pack(height=48, flex=0 if creation is not None else 1))
         from .keyboard import prepare_picker_input
         for control in (self.save_as_name, self.new_folder_name):
@@ -115,7 +121,6 @@ class DestinationForm:
             toga.Button('Cancel', on_press=self.hide_new_folder, style=Pack(height=48))], style=Pack(direction=ROW))
         self.new_folder_form = toga.Box(children=[self.new_folder_name, folder_actions], style=Pack(
             direction=COLUMN if creation is not None else ROW))
-        action = getattr(destination_action, 'kind', '')
         name_fields = [toga.Label('Name' if destination_action is not None else name_label), self.save_as_name]
         if action == 'archive-add':
             name_fields[0].text = 'Select an item or enter its name'
@@ -124,6 +129,11 @@ class DestinationForm:
             self.archive_format = toga.Selection(items=list(FORMATS), style=Pack(height=48))
             name_fields += [self.archive_format]
         location_fields = [self.picker_destination, self.save_as_status]
+        if action == 'move-selection':
+            count = len(destination_action.entries)
+            summary = self.editor_browser.status_label(f'{count} selected item' + ('s' if count != 1 else ''))
+            summary.style.flex = 0
+            location_fields.insert(0, summary)
         if creation is not None:
             self._build_creation_naming(operation, name_fields)
             self.save_as_view = toga.Box(children=location_fields,
@@ -163,7 +173,8 @@ class DestinationForm:
             self.creation_layout = CreationLayout(self)
             self.listed_path = ''
         else:
-            prepare_form(panel, primary=primary, cancel='Cancel')
+            prepare_form(panel, primary=primary, cancel='Cancel',
+                         primary_symbol=ICONS[primary_icon][0] if primary_icon else 'checkmark')
         self.panel = panel
         self._compact_keyboard = False
         self._naming_keyboard_active = False

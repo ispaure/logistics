@@ -544,20 +544,23 @@ class FileBrowser(RecycledBrowser):
         return show_browser_actions(self, actions)
 
     def install_item_commands(self, commands):
+        self._item_commands = commands
         self.on_item_actions = lambda row: self.show_item_menu(commands(row))
         if self.native_list.factory.DetailedList.__module__.startswith('toga_iOS.'):
-            async def provide(row):
-                if (self.closed or self.navigation_busy or self.on_check_entry is not None
-                        or row.epoch != self.epoch or not self._entry_current(row.entry)):
-                    return []
-                entry = await self.validate_cached_entry(row.entry)
-                if entry is None or not self._entry_current(entry):
-                    return []
-                await self.select(entry)
-                if self.selected != entry.identity or not self._entry_current(entry):
-                    return []
-                from .action_menu import BrowserActions, ios_menu_actions
-                self.dismiss_item_menu()
-                menu = self._item_menu = BrowserActions(self, commands(entry.payload))
-                return ios_menu_actions(menu.actions, menu.invoke, menu.blocks)
-            self.native_list.menu_provider = provide
+            self.native_list.menu_provider = lambda row: self.native_item_menu(row.entry, row.epoch)
+
+    async def native_item_menu(self, entry, epoch):
+        if (self.closed or self.navigation_busy or self.on_check_entry is not None
+                or epoch != self.epoch or not self._entry_current(entry)):
+            return []
+        entry = await self.validate_cached_entry(entry)
+        if entry is None or not self._entry_current(entry):
+            return []
+        await self.select(entry)
+        if (self.selected != entry.identity or not self._entry_current(entry)
+                or self.navigation_busy or self.on_check_entry is not None or epoch != self.epoch):
+            return []
+        from .action_menu import BrowserActions, ios_menu_actions
+        self.dismiss_item_menu()
+        menu = self._item_menu = BrowserActions(self, self._item_commands(entry.payload))
+        return ios_menu_actions(menu.actions, menu.invoke, menu.blocks)

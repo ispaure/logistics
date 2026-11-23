@@ -224,6 +224,9 @@ class FilesUI:
         from .file_browser_view import LocalFileBrowser
         self.file_browser = LocalFileBrowser(folder_visible=self.folder_path_visible, selected=self.browser_file_selected, open_folder=self.browser_file_folder, navigate=self.browser_file_location, open_file=self.browser_file_open)
         self.file_browser.install_item_commands(lambda row: self.file_item_commands(row=row))
+        if self.file_browser.native_list.factory.DetailedList.__module__.startswith('toga_iOS.'):
+            from .native.file_drag_ios import install as install_file_drag
+            install_file_drag(self, self.file_browser)
         self.file_browser.finish_selection = self.end_file_selection
         from weakref import ref
         from .native.file_shortcuts import install
@@ -280,11 +283,12 @@ class FilesUI:
         self.file_checked = {}
         from .appearance import action_button, surface
         self.file_selection_count = toga.Label('0 selected', style=Pack(flex=1, font_size=14, margin_left=8))
-        self.file_move_button = action_button(toga.Button('Move…', on_press=self.move_checked_files,
-                                                          style=Pack(height=48)))
-        self.file_archive_button = toga.Button('Archive…', on_press=self.create_file_archive,
-                                               enabled=False, style=Pack(height=48))
-        self.file_select_done = toga.Button('Done', on_press=self.end_file_selection, style=Pack(height=48))
+        from .control_icons import button_icons
+        self.file_move_button = button_icons(action_button(toga.Button(
+            'Move…', on_press=self.move_checked_files, style=Pack(height=48))), [('move_file', '')])
+        self.file_archive_button = icon_button('archive', 'Archive selected items',
+            on_press=self.create_file_archive, enabled=False)
+        self.file_select_done = icon_button('done', 'Done selecting items', on_press=self.end_file_selection)
         self.file_select_bar = surface(toga.Box(children=[self.file_selection_count, self.file_move_button,
             self.file_archive_button, self.file_select_done], style=Pack(direction=ROW, align_items=CENTER,
                 gap=4)), radius=10, background='alternate')

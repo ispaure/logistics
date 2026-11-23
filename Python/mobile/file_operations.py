@@ -56,6 +56,7 @@ class FileOperationRequest:
     destination: FileDestination | None = None
     plaintext_approved: bool = False
     expected_revision: object = None
+    expected_parent_revision: object = None
 
     def execute(self, cancelled, *, destination=None, progress=None):
         check_cancelled(cancelled)

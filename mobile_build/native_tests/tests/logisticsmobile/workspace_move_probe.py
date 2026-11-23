@@ -143,9 +143,12 @@ class WorkspaceMoveProbe(DocumentWorkspaceProbe):
             report['cases'].append('android_native_list_drag_keeps_files_in_place')
         if android:
             app.begin_file_selection()
+            unselected_rows = rows
         else:
             await self.ios_item_action(browser, rows[0], 'Select items')
-        for row in rows:
+            assert list(app.file_checked) == [rows[0].entry.identity]
+            unselected_rows = rows[1:]
+        for row in unselected_rows:
             if android:
                 child = native.getChildAt(row.index - native.getFirstVisiblePosition())
                 assert native.performItemClick(child, row.index, native.getItemIdAtPosition(row.index))
@@ -157,6 +160,8 @@ class WorkspaceMoveProbe(DocumentWorkspaceProbe):
             assert native.getCheckedItemCount() == 2
         from .video_probe import until
         assert app.file_selection_count.text == '2 selected'
+        assert app.file_move_button.leading_icons == (('move_file', ''),)
+        assert app.file_archive_button.accessible_name == 'Archive selected items'
         picker = app.editor_picker()
         if android:
             await app.move_checked_files()
@@ -164,6 +169,8 @@ class WorkspaceMoveProbe(DocumentWorkspaceProbe):
             app.file_move_button._impl.native.sendActionsForControlEvents(1 << 6)
             await until(lambda: picker.active_host and getattr(getattr(picker, 'picker_primary', None), 'enabled', False))
         assert await picker.browser_editor_location((picker.save_as_storage.value, 'Destination'))
+        assert picker.picker_primary.leading_icons == (('move_file', ''),)
+        assert picker.picker_new_folder.leading_icons == (('folder_add', ''),)
         if android:
             await picker.confirm_editor_file()
         else:
@@ -194,7 +201,9 @@ class WorkspaceMoveProbe(DocumentWorkspaceProbe):
         accessory = native.cellForRowAtIndexPath(path).accessoryView
         assert accessory.row.title == row.title
         actions = await browser.native_list.menu_provider(accessory.row)
-        assert title in [str(action.title) for action in actions]
+        action = next(action for action in actions if str(action.title) == title)
+        if title in {'Move…', 'Select items'}:
+            assert action.image is not None
         menu = browser._item_menu
         menu.invoke(dict(menu.actions)[title])
         browser.dismiss_item_menu()

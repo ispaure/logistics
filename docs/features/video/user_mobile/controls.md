@@ -2,7 +2,7 @@
 
 Tap to reveal controls. Double-tap the left or right side to skip ten seconds, or the center to play/pause. **Lock controls** guards against accidental input. Use **Unlock controls** or Escape to unlock. Undo seek is desktop-only.
 
-Timeline ticks mark embedded chapter starts. Open **Chapters** to choose a named position or use **Previous chapter** and **Next chapter**. Within the first second of a chapter, **Previous chapter** jumps to the preceding chapter if there is one. After that it restarts the current chapter. **Next chapter** is unavailable in the final chapter. Jumps keep the current Play/Pause state. Videos without chapters have no chapter ticks or skip actions.
+Timeline ticks mark embedded chapter starts. On iPhone and iPad, **Previous chapter** and **Next chapter** sit beside the 10-second skip buttons. Open **Chapters** to jump to a named position. Within the first second of a chapter, **Previous chapter** jumps to the preceding chapter if there is one. After that it restarts the current chapter. **Next chapter** is unavailable in the final chapter. Jumps keep the current Play/Pause state. Videos without chapters have no chapter ticks or skip actions.
 
 Open **Playback** on iOS or **More playback options → Playback…** on Android for **Go to time**, **Start over**, speed, folder order and autoplay. **Show in folder** closes playback and selects the source. Reopening resumes at the saved position. See the [shared control guide](../user/controls.md).
 

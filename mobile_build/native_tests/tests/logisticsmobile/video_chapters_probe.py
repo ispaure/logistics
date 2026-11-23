@@ -124,13 +124,26 @@ async def exercise(app):
             else:
                 hint = lambda: str(native.seek.accessibilityHint or '')
                 markers = lambda: [round(float(value.doubleValue) * 18000) for value in native.seek.chapterFractions]
+                chapter_buttons = (native.chapterBackButton, native.chapterForwardButton)
             if marked:
                 await until(lambda: 'Open Chapters' in hint())
                 row['markers_ms'] = markers()
                 assert all(abs(a - b) <= 50 for a, b in zip(row['markers_ms'], (0, 5000, 10000), strict=True)), row
+                if not android:
+                    from rubicon.objc import send_message
+                    from rubicon.objc.types import NSUInteger
+                    await until(lambda: all(not native_value(button, 'isHidden') for button in chapter_buttons))
+                    transport = native.transport.arrangedSubviews
+                    assert int(send_message(transport, 'count', restype=NSUInteger)) == 5
+                    assert transport.objectAtIndex(0) == chapter_buttons[0] and transport.objectAtIndex(4) == chapter_buttons[1]
+                    assert [bool(native_value(button, 'isEnabled')) for button in chapter_buttons] == [False, True]
+                    assert all(native_value(button, 'bounds').size.width >= 44 for button in chapter_buttons)
+                    assert all(button.configuration.image is not None for button in chapter_buttons)
                 await capture_window(app, Path(app.paths.cache) / 'chapter-timeline.png')
             else:
                 assert markers() == [] and 'Open Chapters' not in hint()
+                if not android:
+                    assert all(native_value(button, 'isHidden') for button in chapter_buttons)
             if android:
                 row['pixel_ticks'] = android_timeline_ticks(slider)
                 assert row['pixel_ticks'] == [marked, marked], row
@@ -185,7 +198,10 @@ async def exercise(app):
             row['paused_jumps'] = [5000, 0]
             adapter.play()
             await until(lambda: playing() and clock() > 400)
-            await activate(open_chapters(native, android), True)
+            if android:
+                await activate(open_chapters(native, android), True)
+            else:
+                chapter_buttons[1].sendActionsForControlEvents(1 << 6)
             await until(lambda: 5300 <= clock() < 9000 and playing(), timeout=25)
             await activate(open_chapters(native, android), True)
             await until(lambda: 10300 <= clock() < 16000 and playing(), timeout=25)
@@ -197,6 +213,8 @@ async def exercise(app):
             dismissed = ((lambda: android_field(native, 'chapterDialog') is None) if android
                          else (lambda: native.presentedViewController is None))
             await until(lambda: not markers() and dismissed())
+            if not android:
+                assert all(native_value(button, 'isHidden') for button in chapter_buttons)
             row['stale_markers_cleared'] = True
             await owner.close()
         report['success'] = True

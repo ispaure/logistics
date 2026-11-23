@@ -50,6 +50,14 @@ Use the open folder’s **…** button beside its view controls to create a
 **New folder…** or enter **Select items**. An individual item's menu
 offers **Move…** and, where the storage supports it, **Duplicate…**.
 
+On iPhone and iPad, press and hold a file or folder in List or Tiles,
+then drop it on a folder in the same writable location. If that folder
+already contains an item of the same name, the move stops and both
+items stay in place.
+Keep holding over a folder to make it flash twice and open. Continue
+dragging to another folder, or release to move the item into the open
+folder.
+
 Tap **Transfers** below the Workspaces source tabs to see transfer
 progress or find interrupted downloads.
 

@@ -151,6 +151,7 @@ def _post_android(app, notice):
 
 
 def banner(app, notice, details):
+    icon = 'attention' if notice.outcome == 'failure' else 'selected_item'
     text = notice.title + '\n' + notice.message
     if backend(app) == 'toga_android':
         from android.view import View
@@ -164,20 +165,32 @@ def banner(app, notice, details):
         root = app._impl.native.findViewById(jclass('android.R$id').content)
         bar = Snackbar.make(root, text, Snackbar.LENGTH_INDEFINITE)
         bar.setAction('Details', OpenDetails())
+        view = bar.getView()
+        resources = view.getResources()
+        message_id = resources.getIdentifier('snackbar_text', 'id', view.getContext().getPackageName())
+        if message_id and (message := view.findViewById(message_id)) is not None:
+            from .control_icons import menu_drawable
+            image = menu_drawable(icon, view.getContext())
+            image.setTint(message.getCurrentTextColor())
+            message.setCompoundDrawablesRelative(image, None, None, None)
+            message.setCompoundDrawablePadding(round(10 * resources.getDisplayMetrics().density))
         bar.show()
         return bar.dismiss
     if backend(app) == 'toga_iOS':
-        return _ios_banner(app, text, details)
+        return _ios_banner(app, text, details, icon)
     return None
 
 
-def _ios_banner(app, text, details):
+def _ios_banner(app, text, details, icon):
     from rubicon.objc import Block, ObjCClass, objc_id
+    from .control_icons import ICONS
 
     action = ObjCClass('UIAction').actionWithHandler(Block(lambda sender: details(), None, objc_id))
     config = ObjCClass('UIButtonConfiguration').filledButtonConfiguration()
     title, _, message = text.partition('\n')
     config.title, config.subtitle = title, message
+    config.image = ObjCClass('UIImage').systemImageNamed(ICONS[icon][0])
+    config.imagePadding = 10
     button = ObjCClass('UIButton').buttonWithConfiguration(config, primaryAction=action)
     button.accessibilityHint = 'Opens transfer details'
     button.translatesAutoresizingMaskIntoConstraints = False
