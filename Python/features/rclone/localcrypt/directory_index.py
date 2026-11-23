@@ -206,6 +206,23 @@ class DirectoryIndex:
             return binding[3], rows, tuple(stamp)
         return None
 
+    def _legacy_candidates(self, file, scope, path):
+        slot = f'root-{scope[0]}.zip' if not path else f'{int(scope[:3], 16) % 1024:03x}.zip'
+        return file, self.folder / slot, self.folder / f'{scope[:2]}.zip'
+
+    def _retire_legacy_records(self, file, scope, path, cancelled):
+        for candidate in self._legacy_candidates(file, scope, path):
+            try:
+                before = candidate.stat(follow_symlinks=False)
+                if not stat.S_ISREG(before.st_mode) or self._load_record(candidate, scope, path) is None:
+                    continue
+                self._check(cancelled)
+                after = candidate.stat(follow_symlinks=False)
+                if (_directory_revision(before), before.st_size) == (_directory_revision(after), after.st_size):
+                    candidate.unlink()
+            except (OSError, TypeError, ValueError, KeyError, RuntimeError):
+                pass
+
     def _read_record(self, file, scope, path, revision=None):
         if file is None:
             return None
@@ -213,13 +230,13 @@ class DirectoryIndex:
             try:
                 record = self._validated_record(store.read(scope), scope, path, revision)
                 if record is not None:
+                    self._retire_legacy_records(file, scope, path, self._batch_work.current['cancelled'])
                     return (*record, True)
             except (ValueError, KeyError, TypeError):
                 pass
-        legacy_slot = f'root-{scope[0]}.zip' if not path else f'{int(scope[:3], 16) % 1024:03x}.zip'
         # Read old slots after checking the exact key, and migrate a verified
         # old record when the provider next validates its folder.
-        for candidate in (file, self.folder / legacy_slot, self.folder / f'{scope[:2]}.zip'):
+        for candidate in self._legacy_candidates(file, scope, path):
             if candidate.is_symlink():
                 continue
             try:
@@ -256,7 +273,10 @@ class DirectoryIndex:
         record = dict(binding=[1, scope, path, revision], rows=rows, folder_revision=folder_revision)
         if self.memory is not None:
             if (store := self._batch_store()) is not None:
-                store.add(scope, record, root=not path)
+                retire = None
+                if any(candidate.is_file() for candidate in self._legacy_candidates(file, scope, path)):
+                    retire = lambda: self._retire_legacy_records(file, scope, path, cancelled)
+                store.add(scope, record, root=not path, retire=retire)
             return
         raw = json.dumps(record).encode()
         if len(raw) > LIMIT:

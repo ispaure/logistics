@@ -19,6 +19,7 @@ class EncryptedNameBatches:
         self.disabled = False
         self.opened = OrderedDict()
         self.pending = {}
+        self.retirements = {}
         self.pending_size = 128
         self.pending_root = None
 
@@ -77,7 +78,7 @@ class EncryptedNameBatches:
         except (OSError, sqlite3.Error, ValueError, TypeError, RuntimeError):
             return None
 
-    def add(self, scope, record, *, root=False):
+    def add(self, scope, record, *, root=False, retire=None):
         if self.disabled:
             return
         packed = json.dumps(record, separators=(',', ':')).encode()
@@ -87,6 +88,8 @@ class EncryptedNameBatches:
         if len(self.pending) >= _MAX_BATCH_ROWS or self.pending_size + size > LIMIT:
             self.flush()
         self.pending[scope] = packed
+        if retire is not None:
+            self.retirements[scope] = retire
         self.pending_size += size
         if root:
             self.pending_root = scope
@@ -95,6 +98,7 @@ class EncryptedNameBatches:
         if not self.pending:
             return
         pending, root = self.pending, self.pending_root
+        retirements, self.retirements = self.retirements, {}
         self.pending, self.pending_size, self.pending_root = {}, 128, None
         database = self._connect(create=True)
         if database is None:
@@ -115,7 +119,12 @@ class EncryptedNameBatches:
                 self._trim(database)
                 self.validate()
         except (OSError, sqlite3.Error, ValueError, RuntimeError):
-            pass  # A missing batch can be rebuilt from a later search.
+            return  # A missing batch can be rebuilt from a later search.
+        for scope, retire in retirements.items():
+            # The committed row must still exist after retention and decrypt
+            # successfully before removing its old sealed file.
+            if self.read(scope) == json.loads(pending[scope]):
+                retire()
 
     @staticmethod
     def _trim(database):
@@ -138,3 +147,4 @@ class EncryptedNameBatches:
             self.database = None
         self.opened.clear()
         self.pending.clear()
+        self.retirements.clear()

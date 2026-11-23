@@ -639,6 +639,22 @@ class LocalCryptAccessTests(unittest.TestCase):
                 client.credential_state.publish('clear', {}, {})
                 reopened = self.provider(root / 'copy-one', client)
                 self.addCleanup(reopened.close)
+                info = reopened.root.stat()
+                index = reopened._directory_index
+                old, scope = index._record_path((info.st_dev, info.st_ino), root=True)
+                with reopened.operation(lambda: False):
+                    sealed_root = index._batch_store().read(scope)
+                self.assertIsNotNone(sealed_root)
+                import json
+                old.parent.mkdir(parents=True)
+                old.write_bytes(index.cipher.transform(json.dumps(sealed_root).encode()))
+                occupied_slot = client.directory_index_root / f'root-{scope[0]}.zip'
+                foreign = dict(sealed_root, binding=[1, 'different-locked-copy', '', 'old'])
+                occupied_slot.write_bytes(index.cipher.transform(json.dumps(foreign).encode()))
+                untouched = occupied_slot.read_bytes()
+                self.assertTrue(reopened.cached_search_listing('', cancelled=lambda: False))
+                self.assertFalse(old.exists())
+                self.assertEqual(occupied_slot.read_bytes(), untouched)
                 calls.reset_mock()
                 with reopened.operation(lambda: False):
                     for number in range(35):
@@ -654,6 +670,24 @@ class LocalCryptAccessTests(unittest.TestCase):
                 with closing(connect(second)) as database:
                     self.assertEqual(database.execute('SELECT count(*) FROM batches').fetchone()[0], 1)
                 self.assertEqual(first.read_bytes(), original)
+
+    def test_legacy_retirement_requires_durable_authenticated_batch(self):
+        from features.rclone.localcrypt.cache_batches import EncryptedNameBatches
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            old = root / 'old.zip'
+            old.touch()
+            cipher = SimpleNamespace(transform=Mock(side_effect=ValueError('cannot seal')))
+            cache = EncryptedNameBatches(root / ('a' * 64 + '.sqlite3'), cipher, lambda: None)
+            self.addCleanup(cache.close)
+            cache.add('b' * 64, {'rows': []}, retire=old.unlink)
+            cache.flush()
+            self.assertTrue(old.exists())
+            cipher.transform.side_effect = lambda data, **kwargs: data
+            cache.add('b' * 64, {'rows': []}, retire=old.unlink)
+            cache.flush()
+            self.assertFalse(old.exists())
 
     def test_native_write_progress_reports_bytes_and_cancels_without_reading_plaintext(self):
         from threading import Event

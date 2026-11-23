@@ -136,6 +136,9 @@ belong to the credential's `Cache/LocalCryptNames` store. Mobile keeps a
 separate SQLite cache per copy and credential package. SQLite stores opaque
 keys and credential-sealed batches. Filename data is decrypted for search
 under the active credential, and retention stays within that copy's cache.
+Mobile removes a legacy sealed record after its authenticated replacement
+is durable in SQLite. Records belonging to copies that remain locked stay
+available for later migration.
 
 ### Desktop process lifetime
 
