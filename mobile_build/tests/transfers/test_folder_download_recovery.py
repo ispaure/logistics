@@ -11,6 +11,7 @@ __status__ = "Production"
 
 import asyncio
 import base64
+import os
 from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -82,6 +83,30 @@ class Source:
             raise AssertionError('Unexpected native range request.')
 
 
+class StreamingSource(Source):
+    def __init__(self, files):
+        super().__init__(files)
+        self.client.supports_download_streams = True
+        self.client.cancel = lambda: None
+
+    def request(self, action, *, path, **values):
+        if action != 'download_stream':
+            if action == 'download_range':
+                raise AssertionError('Reopened a remote range within one file transfer.')
+            return super().request(action, path=path, **values)
+        data = self.files[path]
+        offset = values['offset']
+        if values['expected'] != sha256(data).hexdigest():
+            raise ValueError('Source changed')
+        self.reads.append((path, offset))
+        with os.fdopen(os.dup(values['fd']), 'wb') as pipe:
+            if self.interrupt and self.interrupt[0] == path:
+                pipe.write(data[offset:self.interrupt[1]])
+                raise OSError('Connection interrupted')
+            pipe.write(data[offset:])
+        return len(data) - offset
+
+
 class FolderDownloadRecoveryTests(unittest.TestCase):
     def setUp(self):
         self.root = Path(self.enterContext(TemporaryDirectory())).resolve()
@@ -126,6 +151,17 @@ class FolderDownloadRecoveryTests(unittest.TestCase):
         self.assertTrue((final / 'empty').is_dir())
         self.assertEqual(self.queue.jobs(), [])
         self.assertEqual([path.name for path in self.destination.root.iterdir()], ['Saved Folder'])
+
+    def test_one_stream_per_member_keeps_four_mib_checkpoints_on_disconnect(self):
+        self.source = StreamingSource(self.source.files)
+        job = self.interrupt()
+        self.assertEqual(self.source.reads, [('fixture/early.txt', 0), ('fixture/large/data.bin', 0)])
+        self.source = StreamingSource(self.source.files)
+        self.assertTrue(self.download(job['id']))
+        self.assertEqual(self.source.reads, [('fixture/large/data.bin', CHUNK)])
+        result = self.destination.root / 'Saved Folder' / 'large' / 'data.bin'
+        self.assertEqual(result.read_bytes(), self.source.files['fixture/large/data.bin'])
+        self.assertFalse(self.queue.jobs())
 
     def test_recovers_publication_after_the_folder_was_renamed(self):
         with patch.object(FolderQueue, 'remove', side_effect=OSError('Exit before checkpoint cleanup')):

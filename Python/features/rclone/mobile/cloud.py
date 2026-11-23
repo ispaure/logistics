@@ -23,6 +23,7 @@ PACKAGE_LIMIT = 1024 * 1024
 
 class CloudClient:
     supports_streaming = True
+    supports_download_streams = True
     # The native engine is process-global across scenes; so is its publication state.
     credential_state = NativeCredentialState()
 

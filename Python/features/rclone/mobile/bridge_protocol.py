@@ -42,6 +42,7 @@ ACTIONS = frozenset(
         "document_lists_seal",
         "download_range",
         "download_stat",
+        "download_stream",
         "file_archive",
         "file_thumbnail",
         "forget_package",
@@ -122,6 +123,9 @@ def validate_result(action, value):
             if (not isinstance(algorithm, str) or algorithm not in lengths or not isinstance(checksum, str)
                     or len(checksum) != lengths[algorithm] or any(c not in "0123456789abcdef" for c in checksum)):
                 invalid()
+    elif action == "download_stream":
+        if type(value) is not int or value <= 0:
+            invalid()
     elif action == "download_range":
         if not isinstance(value, str) or len(value) > 6 * PACKAGE_LIMIT:
             invalid()

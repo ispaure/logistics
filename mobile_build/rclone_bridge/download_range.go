@@ -12,15 +12,23 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 
 	"github.com/rclone/rclone/fs/hash"
+	"golang.org/x/sys/unix"
 )
+
+const downloadChunk = 4 * 1024 * 1024
 
 var downloadRangeUnavailable = errors.New("the source cannot supply a verified byte range")
 
 // A resumable plaintext object needs a provider-supplied content hash. Crypt
 // supplies a fresh file nonce on every rewrite and authenticates each block.
 func downloadRange(ctx context.Context, request bridgeRequest, read bool) (any, error) {
+	return readDownload(ctx, request, read, false)
+}
+
+func readDownload(ctx context.Context, request bridgeRequest, read, streaming bool) (any, error) {
 	reader, size, stamp, err := remoteDocument(ctx, request.Remote, request.Path, request.Identity)
 	if err != nil {
 		return nil, err
@@ -92,9 +100,15 @@ func downloadRange(ctx context.Context, request bridgeRequest, read bool) (any, 
 		return map[string]any{"supported": true, "size": size, "version": version, "encoded": encoded,
 			"algorithm": algorithm, "checksum": checksum}, nil
 	}
-	offset, count := request.Offset, int64(request.Count)
-	if request.Expected != version || offset < 0 || offset%65536 != 0 || count <= 0 ||
-		count > 4*1024*1024 || count > size-offset || (offset+count < size && count%65536 != 0) {
+	offset := request.Offset
+	if request.Expected != version || offset < 0 || offset%65536 != 0 || offset >= size {
+		return nil, errors.New("source changed or download range is invalid")
+	}
+	if streaming {
+		return streamDownload(ctx, reader, header, offset, size-offset, encoded, request.FD)
+	}
+	count := int64(request.Count)
+	if count <= 0 || count > downloadChunk || count > size-offset || (offset+count < size && count%65536 != 0) {
 		return nil, errors.New("source changed or download range is invalid")
 	}
 	var data []byte
@@ -118,6 +132,69 @@ func authenticatedDownloadRange(ctx context.Context, reader remoteReaderAt, head
 	if err != nil {
 		return nil, err
 	}
+	return authenticateDownloadBlocks(ctx, reader, header, raw, offset, count, encoded)
+}
+
+// A single response supplies every checkpoint. Each chunk is authenticated
+// before it crosses the pipe, and Python retains all checkpoint ownership.
+func streamDownload(ctx context.Context, reader remoteReaderAt, header []byte, offset, count int64, encoded bool, fd int) (int64, error) {
+	if fd < 3 {
+		return 0, errors.New("a private download pipe is required")
+	}
+	duplicate, err := unix.FcntlInt(uintptr(fd), unix.F_DUPFD_CLOEXEC, 0)
+	if err != nil {
+		return 0, errors.New("the download pipe is unavailable")
+	}
+	output := os.NewFile(uintptr(duplicate), "download pipe")
+	defer output.Close()
+	info, err := output.Stat()
+	if err != nil || info.Mode()&os.ModeNamedPipe == 0 {
+		return 0, errors.New("a private download pipe is required")
+	}
+	// A reader that stops consuming data cannot hold the native transfer lock.
+	stop := context.AfterFunc(ctx, func() { output.Close() })
+	defer stop()
+	start, length := offset, count
+	if reader.cipher != nil {
+		start = reader.cipher.EncryptedSize(offset)
+		length = reader.cipher.EncryptedSize(offset+count) - start
+	}
+	input, err := reader.open(ctx, start, length)
+	if err != nil {
+		return 0, errors.New("the download stream could not be opened")
+	}
+	defer input.Close()
+	if reader.cipher == nil {
+		written, err := io.CopyN(output, input, count)
+		if err != nil {
+			return 0, errors.New("the download stream was interrupted")
+		}
+		return written, nil
+	}
+	raw := make([]byte, reader.cipher.EncryptedSize(downloadChunk)-reader.cipher.EncryptedSize(0))
+	for position := offset; position < offset+count; {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		size := min(downloadChunk, offset+count-position)
+		length := reader.cipher.EncryptedSize(position+size) - reader.cipher.EncryptedSize(position)
+		if _, err := io.ReadFull(input, raw[:length]); err != nil {
+			return 0, errors.New("the download stream was interrupted")
+		}
+		verified, err := authenticateDownloadBlocks(ctx, reader, header, raw[:length], position, size, encoded)
+		if err != nil {
+			return 0, err
+		}
+		if _, err := output.Write(verified); err != nil {
+			return 0, errors.New("the download stream was interrupted")
+		}
+		position += size
+	}
+	return count, nil
+}
+
+func authenticateDownloadBlocks(ctx context.Context, reader remoteReaderAt, header, raw []byte, offset, count int64, encoded bool) ([]byte, error) {
+	start := reader.cipher.EncryptedSize(offset)
 	open := func(_ context.Context, pos, _ int64) (io.ReadCloser, error) {
 		switch {
 		case pos == 0 && offset == 0:

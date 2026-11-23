@@ -11,12 +11,14 @@ __status__ = "Production"
 
 import base64
 from hashlib import sha256
+import os
 from pathlib import Path
+from threading import Thread
 from time import monotonic, sleep
 
 from commonUtils.runtime.operations import check_cancelled
 from services.documents.credential_state import MobileCredentialCipher
-from features.rclone.transfers.download_recovery import DownloadQueue, RestartRequired, recover
+from features.rclone.transfers.download_recovery import DownloadQueue, RestartRequired, _stored, recover
 
 
 class SavedTransferCipher:
@@ -55,6 +57,56 @@ def mobile_queue(root, source):
                                 record.get('document_cache_id')], source.check, cipher)
 
 
+class DownloadPipe:
+    """Keep one native response open while the writer verifies each checkpoint."""
+
+    def __init__(self, client, values, version, offset):
+        self.client = client
+        self.error = None
+        read_fd, write_fd = os.pipe()
+        self.reader = os.fdopen(read_fd, 'rb')
+
+        def produce():
+            try:
+                written = client.request('download_stream', **values, expected=version['version'],
+                                         offset=offset, fd=write_fd)
+                if written != version['size'] - offset:
+                    raise OSError('The download stream stopped before the saved file was complete.')
+            except BaseException as error:
+                self.error = error
+            finally:
+                os.close(write_fd)
+
+        self.worker = Thread(target=produce, name='Logistics download stream')
+        try:
+            self.worker.start()
+        except BaseException:
+            self.reader.close()
+            os.close(write_fd)
+            raise
+
+    def read(self, count):
+        data = self.reader.read(count)
+        if len(data) != count:
+            self.finish()
+            raise OSError('The download stream ended before the current checkpoint.')
+        return data
+
+    def finish(self):
+        self.worker.join()
+        if self.error is not None:
+            raise self.error
+
+    def close(self):
+        self.reader.close()
+        if self.worker.is_alive():
+            try:
+                self.client.cancel()
+            except (OSError, ValueError):
+                pass
+        self.worker.join()
+
+
 class NativeRanges:
     def __init__(self, source, path, destination, bandwidth, check):
         self.client = source.client
@@ -64,8 +116,18 @@ class NativeRanges:
                 raise RestartRequired('This encrypted destination needs a new encryption stream. Download from byte zero?')
             self.values.update(destination_remote=destination.remote, destination_identity=destination.identity)
         self.bandwidth, self.check = bandwidth, check
+        self.pipe = None
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        if self.pipe is not None:
+            self.pipe.close()
 
     def stat(self):
+        if self.pipe is not None:
+            self.pipe.finish()
         info = self.client.request('download_stat', **self.values)
         if not info['supported']:
             raise RestartRequired('This source and destination cannot verify a byte offset. Download from byte zero?')
@@ -73,13 +135,21 @@ class NativeRanges:
 
     def read(self, version, offset, count):
         start = monotonic()
-        data = self.client.request('download_range', **self.values, expected=version['version'], offset=offset, count=count)
+        if getattr(self.client, 'supports_download_streams', False):
+            if self.pipe is None:
+                self.pipe = DownloadPipe(self.client, self.values, version, offset)
+            encoded = version['encoded']
+            data = self.pipe.read(_stored(offset + count, encoded) - _stored(offset, encoded))
+        else:
+            data = self.client.request('download_range', **self.values, expected=version['version'],
+                                       offset=offset, count=count)
+            data = base64.b64decode(data, validate=True)
         if self.bandwidth:
             deadline = start + count / (self.bandwidth * 1024 * 1024)
             while (remaining := deadline - monotonic()) > 0:
                 self.check()
                 sleep(min(remaining, .1))
-        return base64.b64decode(data, validate=True)
+        return data
 
 
 def run_download(root, source, path, destination, target, cancelled, progress, options, work,
@@ -120,8 +190,9 @@ def run_download(root, source, path, destination, target, cancelled, progress, o
         if 0 <= size < MINIMUM:
             return False
     queue = queue or mobile_queue(root, source)
-    recover(queue, selection, physical, lambda: NativeRanges(source, path, destination,
-            getattr(options, 'bw_limit', None), check), check=check, progress=report, key=key)
+    recover(queue, selection, physical, lambda: work.enter_context(NativeRanges(
+        source, path, destination, getattr(options, 'bw_limit', None), check)),
+        check=check, progress=report, key=key)
     return True
 
 

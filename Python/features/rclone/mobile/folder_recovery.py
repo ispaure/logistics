@@ -385,9 +385,9 @@ def run_folder_download(root, source, path, destination, target, cancelled, prog
                          done=job['bytes'] + offset, total=total, active=int(offset < size),
                          active_files=[dict(name=name, bytes=offset, size=size)] if offset < size else [])
 
-            ranges = _VersionedRanges(source, member, destination, bandwidth, check_stage, version)
             try:
-                recover(tracker, child_selection, target_file, ranges, check=check_stage, progress=report)
+                with _VersionedRanges(source, member, destination, bandwidth, check_stage, version) as ranges:
+                    recover(tracker, child_selection, target_file, ranges, check=check_stage, progress=report)
             except RestartRequired as error:
                 raise ValueError('A file no longer supports verified resume. Discard this job before starting again.') from error
 

@@ -25,6 +25,7 @@
     "document_lists_seal",
     "download_range",
     "download_stat",
+    "download_stream",
     "file_archive",
     "file_thumbnail",
     "forget_package",

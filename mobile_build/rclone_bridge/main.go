@@ -157,7 +157,7 @@ func cancel() {
 func operationTimeout(action string) time.Duration {
 	duration := 2 * time.Minute
 	switch action {
-	case "mirror_sync", "mirror_review":
+	case "mirror_sync", "mirror_review", "download_stream":
 		return 0 // Sync runs until completion or explicit cancellation, as on desktop.
 	case "crypt_raw_write", "crypt_metadata", "crypt_manifest", "mirror_validate":
 		duration = 30 * time.Minute

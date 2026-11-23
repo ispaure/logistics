@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"math/bits"
+	"os"
 	"testing"
 
 	"github.com/rclone/rclone/fs"
@@ -78,5 +79,69 @@ func TestAuthenticatedDownloadRangeAt100GiB(t *testing.T) {
 		if err != nil || !bytes.Equal(got, want) {
 			t.Fatal("large authenticated range mismatch", encrypted, err)
 		}
+	}
+}
+
+func TestDownloadStreamAuthenticatesChunksAndResumes(t *testing.T) {
+	clearSession()
+	t.Cleanup(clearSession)
+	if _, err := importPackage(cryptPackage(t, "Cloud:stream-range"), ""); err != nil {
+		t.Fatal(err)
+	}
+	cipher, _, _, _, err := cryptConnection("Secret")
+	if err != nil {
+		t.Fatal(err)
+	}
+	payload := bytes.Repeat([]byte("checkpoint"), downloadChunk/2)
+	stream, err := cipher.EncryptData(bytes.NewReader(payload))
+	if err != nil {
+		t.Fatal(err)
+	}
+	ciphertext, err := io.ReadAll(stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	header := ciphertext[:32]
+	for _, offset := range []int64{0, downloadChunk} {
+		for _, encoded := range []bool{false, true} {
+			start := cipher.EncryptedSize(offset)
+			backing := fixedDownloadRange{start: start, data: ciphertext[start:]}
+			reader := remoteReaderAt{object: backing, cipher: cipher}
+			pipeReader, pipeWriter, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			finished := make(chan error, 1)
+			remaining := int64(len(payload)) - offset
+			go func() {
+				size, err := streamDownload(context.Background(), reader, header, offset, remaining, encoded, int(pipeWriter.Fd()))
+				pipeWriter.Close()
+				if err == nil && size != remaining {
+					err = fmt.Errorf("wrong logical byte count: %d", size)
+				}
+				finished <- err
+			}()
+			data, readErr := io.ReadAll(pipeReader)
+			pipeReader.Close()
+			want := payload[offset:]
+			if encoded && offset == 0 {
+				want = ciphertext
+			} else if encoded {
+				want = ciphertext[start:]
+			}
+			if err := <-finished; err != nil || readErr != nil || !bytes.Equal(data, want) {
+				t.Fatal("wrong streamed data", offset, encoded, readErr, err)
+			}
+		}
+	}
+
+	regular, err := os.CreateTemp(t.TempDir(), "not-a-pipe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer regular.Close()
+	reader := remoteReaderAt{object: fixedDownloadRange{start: 32, data: ciphertext[32:]}, cipher: cipher}
+	if _, err := streamDownload(context.Background(), reader, header, 0, int64(len(payload)), false, int(regular.Fd())); err == nil {
+		t.Fatal("accepted a regular file as the download pipe")
 	}
 }
