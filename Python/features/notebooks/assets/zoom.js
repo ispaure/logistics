@@ -53,7 +53,8 @@ function assignZoomValue(value) {
       $('zoom').append(custom)
     }
     custom.value = value;
-    custom.textContent = Number.isFinite(Number(value)) ? Math.round(Number(value) * 100) + '%' : 'Fit page'
+    custom.textContent = Number.isFinite(Number(value)) ? Math.round(Number(value) * 100) + '%' :
+      value === 'fill' ? 'Fill screen' : 'Fit page'
   }
   $('zoom').value = value
 }
@@ -68,11 +69,19 @@ function captureViewportZoom() {
   if (!viewportZoomMemory || viewportZoomMemory.layout === viewportLayoutKey()) rememberViewportZoom();
   return {manual: !defaultViewportZoom, memory: viewportZoomMemory}
 }
+function explicitPageFraming() {
+  return !defaultViewportZoom && ['page', 'fill'].includes($('zoom').value)
+}
+function pageZoomScale(zoom, widthFit, heightFit) {
+  return zoom === 'fill' ? Math.min(Math.max(widthFit, heightFit), maxZoom) :
+    Math.min(widthFit, heightFit, defaultViewportZoom && !mobileViewport() ? 1 : maxZoom)
+}
 function prepareViewportZoom() {
   const changed = viewportZoomMemory && viewportZoomMemory.layout !== viewportLayoutKey();
   // Explicit fit selections remain fits. Numeric zoom is the user's magnified
   // page scale, which should survive a new window/posture without snapping out.
-  const previous = changed && !defaultViewportZoom && !['page', 'fit'].includes($('zoom').value) ? viewportZoomMemory : null;
+  const previous = changed && !defaultViewportZoom && !['page', 'fit', 'fill'].includes($('zoom').value) ? viewportZoomMemory : null;
+  if (changed && explicitPageFraming()) resetViewportPosition = true;
   if (defaultViewportZoom) {
     const choice = defaultViewportChoice();
     if (documentPaperView !== null) {
@@ -94,7 +103,8 @@ function finishViewportZoom(previous) {
   } else if (resetViewportPosition) {
     // Center the canonical Move strip independently of existing ink and the
     // full native page which remains reachable by panning.
-    viewport.scrollLeft += rect.left + rect.width / 2 - viewportCenterX(viewport, box);
+    const paper = explicitPageFraming() ? $('paperWrap').getBoundingClientRect() : rect;
+    viewport.scrollLeft += paper.left + paper.width / 2 - viewportCenterX(viewport, box);
     viewport.scrollTop = 0
   }
   resetViewportPosition = false;
@@ -130,7 +140,22 @@ function updateZoomChrome(heightFitScale) {
   const label = mobileViewport() ? relative.toFixed(1) + '×' : Math.round(scale * 100) + '%';
   if ($('zoomLevel') && $('zoomLevel').textContent !== label) $('zoomLevel').textContent = label;
   if ($('zoomOut')) $('zoomOut').disabled = scale <= minZoom + .0001;
-  if ($('zoomIn')) $('zoomIn').disabled = scale >= maxZoom - .0001
+  if ($('zoomIn')) $('zoomIn').disabled = scale >= maxZoom - .0001;
+  for (const [id, mode] of [['zoomPageFit', 'page'], ['zoomPageFill', 'fill']])
+    $(id)?.setAttribute('aria-pressed', String(explicitPageFraming() && appliedZoom === mode))
+}
+function setPageFraming(mode) {
+  if (active !== null) { $('zoom').value = appliedZoom; return }
+  if (documentPaperView === null && !fixedTemplateSize()) {
+    paperView = 'pro';
+    if ($('paperView')) $('paperView').value = paperView
+  }
+  defaultViewportZoom = false;
+  resetViewportPosition = true;
+  viewportZoomMemory = null;
+  assignZoomValue(mode);
+  resize();
+  revealZoomControls()
 }
 function setZoom(value, anchor = null, paperPoint = null, touch = null) {
   if (active !== null) {
@@ -181,9 +206,20 @@ function createZoomControls(container) {
   container.className = 'zoom-controls';
   container.setAttribute('role', 'group');
   container.setAttribute('aria-label', 'Page zoom');
-  container.innerHTML = '<button id="zoomOut" type="button" aria-label="Zoom out" title="Zoom out">−</button><output id="zoomLevel" aria-label="Current zoom"></output><button id="zoomIn" type="button" aria-label="Zoom in" title="Zoom in">+</button><button id="zoomFit" type="button" title="Reset zoom" aria-label="Reset zoom">Reset</button>';
+  container.innerHTML = `<button id="zoomOut" type="button" aria-label="Zoom out" title="Zoom out">−</button>
+    <output id="zoomLevel" aria-label="Current zoom"></output>
+    <button id="zoomIn" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+    <button id="zoomPageFit" class="zoom-framing" type="button" title="Fit page" aria-label="Fit page">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4"/><rect x="8.5" y="7" width="7" height="10" rx="1"/></svg>
+    </button>
+    <button id="zoomPageFill" class="zoom-framing" type="button" title="Fill screen" aria-label="Fill screen">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4H4v4m12-4h4v4M4 16v4h4m12-4v4h-4M8 8l-4-4m12 4 4-4M8 16l-4 4m12-4 4 4"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+    </button>
+    <button id="zoomFit" type="button" title="Reset zoom" aria-label="Reset zoom">Reset</button>`;
   $('zoomOut').onclick = () => zoomBy(1 / 1.2);
   $('zoomIn').onclick = () => zoomBy(1.2);
+  $('zoomPageFit').onclick = () => setPageFraming('page');
+  $('zoomPageFill').onclick = () => setPageFraming('fill');
   $('zoomFit').onclick = () => {
     if (active !== null) return;
     resetViewportZoom();
@@ -192,7 +228,11 @@ function createZoomControls(container) {
   container.hidden = mobileViewport();
   updateZoomChrome()
 }
-$('zoom').onchange = () => setZoom($('zoom').value);
+$('zoom').onchange = () => {
+  const value = $('zoom').value;
+  if (value === 'page' || value === 'fill') setPageFraming(value);
+  else setZoom(value)
+};
 const zoomViewport = $('viewport');
 zoomViewport.addEventListener('scroll', () => {
   if (!viewportZoomMemory || viewportZoomMemory.layout === viewportLayoutKey()) rememberViewportZoom()

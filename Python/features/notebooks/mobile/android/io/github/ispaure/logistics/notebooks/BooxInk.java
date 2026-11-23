@@ -23,6 +23,8 @@ import org.json.JSONArray;
 /** Optional direct Boox preview; canonical brush geometry and saving stay in the WebView. */
 public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListener,
         View.OnAttachStateChangeListener {
+    private static final long PREVIEW_IDLE_MS = 120;
+    private static final long PREVIEW_ACK_TIMEOUT_MS = 750;
     private final WebView view;
     private TouchHelper helper;
     private float maxPressure;
@@ -43,6 +45,8 @@ public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListen
     private boolean widthUnavailable;
     private long reconciliationStarted, lastReconciliationMs, longestReconciliationMs;
     private int handoffGeneration;
+    private int previewBatchStrokes, handoffs, lastHandoffStrokes;
+    private final Runnable settlePreview = this::beginHandoff;
     private Runnable frameCommit;
     private ViewTreeObserver commitObserver;
 
@@ -201,6 +205,8 @@ public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListen
 
     private void cancel() {
         handoffGeneration++;
+        view.removeCallbacks(settlePreview);
+        previewBatchStrokes = 0;
         if (android.os.Build.VERSION.SDK_INT >= 29 && frameCommit != null
                 && commitObserver != null && commitObserver.isAlive())
             commitObserver.unregisterFrameCommitCallback(frameCommit);
@@ -219,6 +225,8 @@ public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListen
     private final RawInputCallback callback = new RawInputCallback() {
         @Override public void onBeginRawDrawing(boolean shortcut, TouchPoint point) {
             if (!enabled || closed || reconciling || ordinaryContact || !contains(point.getX(), point.getY())) return;
+            view.removeCallbacks(settlePreview);
+            handoffGeneration++;
             begins++; active = true; live.clear(); completed = null;
             live.add(point);
             preview(point);
@@ -265,33 +273,18 @@ public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListen
                 + "if(p.length>1)window.logisticsNativePen('move',999,p.slice(1),w,h);"
                 + "window.logisticsNativePen('up',999,[p[p.length-1]],w,h)})()";
             active = false;
-            reconciling = true;
+            previewBatchStrokes++;
             final int generation = ++handoffGeneration;
-            reconciliationStarted = android.os.SystemClock.uptimeMillis();
-            // Raw rendering suppresses normal screen refreshes on Boox. Release
-            // BOTH renderer and reader before Chromium paints the canonical
-            // stroke; otherwise its visual callback is requested while normal
-            // screen refreshes are still suppressed by scribble mode.
-            helper.setRawDrawingEnabled(false);
-            view.evaluateJavascript(js, ignored -> view.postVisualStateCallback(ends,
-                new WebView.VisualStateCallback() {
-                    @Override public void onComplete(long id) {
-                        if (closed || generation != handoffGeneration) return;
-                        try {
-                            // VisualStateCallback only makes content ready for
-                            // the NEXT draw. Keep scribble mode off until that
-                            // frame is actually submitted to the swap chain.
-                            if (android.os.Build.VERSION.SDK_INT >= 29 && view.isHardwareAccelerated()) {
-                                commitObserver = view.getViewTreeObserver();
-                                frameCommit = () -> view.post(() -> finishHandoff(generation));
-                                commitObserver.registerFrameCommitCallback(frameCommit);
-                            } else {
-                                view.postOnAnimation(() -> view.post(() -> finishHandoff(generation)));
-                            }
-                            view.invalidate();
-                        } catch (RuntimeException | LinkageError failure) { fail(failure); }
-                    }
-                }));
+            // Save every stroke immediately. Keep the vendor ink visible and
+            // accept the next contact until the writer pauses. Only the latest
+            // acknowledged pen-up can schedule a compositor handoff.
+            view.postDelayed(settlePreview, PREVIEW_ACK_TIMEOUT_MS);
+            view.evaluateJavascript(js, ignored -> {
+                if (!closed && !active && !reconciling && generation == handoffGeneration) {
+                    view.removeCallbacks(settlePreview);
+                    view.postDelayed(settlePreview, PREVIEW_IDLE_MS);
+                }
+            });
             completed = null; live.clear();
         }
         @Override public void onBeginRawErasing(boolean shortcut, TouchPoint point) { rejected++; }
@@ -300,11 +293,43 @@ public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListen
         @Override public void onRawErasingTouchPointListReceived(TouchPointList points) {}
     };
 
+    private void beginHandoff() {
+        if (closed || active || reconciling || previewBatchStrokes == 0) return;
+        final int generation = handoffGeneration;
+        reconciling = true;
+        reconciliationStarted = android.os.SystemClock.uptimeMillis();
+        try {
+            // Release both raw input and rendering once the strokes are in
+            // WebView. Ordinary screen updates are suppressed while raw ink runs.
+            helper.setRawDrawingEnabled(false);
+            view.postVisualStateCallback(ends, new WebView.VisualStateCallback() {
+                @Override public void onComplete(long id) {
+                    if (closed || generation != handoffGeneration) return;
+                    try {
+                        // Wait for the next frame to be submitted before
+                        // enabling the direct renderer again.
+                        if (android.os.Build.VERSION.SDK_INT >= 29 && view.isHardwareAccelerated()) {
+                            commitObserver = view.getViewTreeObserver();
+                            frameCommit = () -> view.post(() -> finishHandoff(generation));
+                            commitObserver.registerFrameCommitCallback(frameCommit);
+                        } else {
+                            view.postOnAnimation(() -> view.post(() -> finishHandoff(generation)));
+                        }
+                        view.invalidate();
+                    } catch (RuntimeException | LinkageError failure) { fail(failure); }
+                }
+            });
+        } catch (RuntimeException | LinkageError failure) { fail(failure); }
+    }
+
     private void finishHandoff(int generation) {
         if (closed || generation != handoffGeneration) return;
         frameCommit = null; commitObserver = null;
         try {
             reconciling = false;
+            lastHandoffStrokes = previewBatchStrokes;
+            previewBatchStrokes = 0;
+            handoffs++;
             apply();
             lastReconciliationMs = android.os.SystemClock.uptimeMillis() - reconciliationStarted;
             longestReconciliationMs = Math.max(longestReconciliationMs, lastReconciliationMs);
@@ -354,6 +379,8 @@ public final class BooxInk implements ViewTreeObserver.OnWindowFocusChangeListen
             out.put("width_updates", ballpoint.submissions());
             out.put("enabled", enabled); out.put("reconciling", reconciling);
             out.put("ordinary_contact", ordinaryContact);
+            out.put("preview_batch_strokes", previewBatchStrokes);
+            out.put("handoffs", handoffs); out.put("last_handoff_strokes", lastHandoffStrokes);
             out.put("handoff_ms", lastReconciliationMs); out.put("longest_handoff_ms", longestReconciliationMs);
         } catch (Exception failure) { throw new IllegalStateException(failure); }
         return out.toString();

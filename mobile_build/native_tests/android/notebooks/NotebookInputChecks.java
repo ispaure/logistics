@@ -13,8 +13,8 @@ import android.webkit.WebView;
 public final class NotebookInputChecks {
     private NotebookInputChecks() {}
     private static long contactStart;
-    private static boolean handoffReleased;
-    public static boolean handoffReleased() { return handoffReleased; }
+    private static boolean previewHeld;
+    public static boolean previewHeld() { return previewHeld; }
     public static float ballpointWidth(float pressure, float base) { return BooxBallpoint.width(pressure, base); }
 
     /** A new contact starts before the previous stroke's visual callback. */
@@ -46,14 +46,20 @@ public final class NotebookInputChecks {
     }
 
     public static void rawStroke(NotebookInput input, WebView view, float x, float y, int count, int interval) throws Exception {
-        rawStroke(input, view, x, y, count, interval, false);
+        rawStroke(input, view, x, y, count, interval, false, 0);
     }
 
     public static void rawPressureStroke(NotebookInput input, WebView view, float x, float y, int count, int interval) throws Exception {
-        rawStroke(input, view, x, y, count, interval, true);
+        rawStroke(input, view, x, y, count, interval, true, 0);
     }
 
-    private static void rawStroke(NotebookInput input, WebView view, float x, float y, int count, int interval, boolean fluctuating) throws Exception {
+    public static void rawBurst(NotebookInput input, WebView view, float x, float y) throws Exception {
+        for (int stroke = 0; stroke < 3; stroke++)
+            rawStroke(input, view, x, y + stroke * 18f, 8, 8, false, stroke * 92L);
+    }
+
+    private static void rawStroke(NotebookInput input, WebView view, float x, float y, int count, int interval,
+            boolean fluctuating, long delay) throws Exception {
         java.lang.reflect.Field inkField = NotebookInput.class.getDeclaredField("ink");
         inkField.setAccessible(true);
         Object ink = inkField.get(input);
@@ -75,11 +81,11 @@ public final class NotebookInputChecks {
                     callback.onEndRawDrawing(false, point);
                     try {
                         org.json.JSONObject state = new org.json.JSONObject(((BooxInk) ink).status());
-                        handoffReleased = state.getBoolean("reconciling")
-                            && !state.getBoolean("input") && !state.getBoolean("render");
+                        previewHeld = !state.getBoolean("reconciling") && state.getBoolean("input")
+                            && state.getBoolean("render") && state.getInt("preview_batch_strokes") > 0;
                     } catch (org.json.JSONException failure) { throw new IllegalStateException(failure); }
                 }
-            }, i * (long) interval);
+            }, delay + i * (long) interval);
         }
     }
 

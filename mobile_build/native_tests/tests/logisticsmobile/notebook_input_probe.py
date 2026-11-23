@@ -216,8 +216,8 @@ class NotebookInputProbe(NotebookProbe):
                             break
                         await asyncio.sleep(.05)
                     await idle()
-                    assert jclass('io.github.ispaure.logistics.notebooks.NotebookInputChecks').handoffReleased(), (
-                        'Native render/input remained active during canonical handoff')
+                    assert jclass('io.github.ispaure.logistics.notebooks.NotebookInputChecks').previewHeld(), (
+                        'Direct ink vanished immediately on pen-up')
                     ink = panel.editor.notebook.page(0).strokes
                     assert len(ink) == count + 1, (len(ink), count)
                     stroke = ink[-1]
@@ -236,6 +236,22 @@ class NotebookInputProbe(NotebookProbe):
                     ballpoints.append(dict(tool=tool, color=color, widths=[p[3] for p in stroke.points],
                         saved_widths=[p[3] for p in after.points], pressure=[p[2] for p in stroke.points], native=status))
                 result['native_ballpoint_handoff'] = ballpoints
+                native_checks = jclass('io.github.ispaure.logistics.notebooks.NotebookInputChecks')
+                await asyncio.sleep(.4)
+                before = json.loads(panel.pen_input.nativeStatus())['handoffs']
+                count = len(panel.editor.notebook.page(0).strokes)
+                native_checks.rawBurst(panel.pen_input, native, x, y)
+                for _ in range(100):
+                    status = json.loads(panel.pen_input.nativeStatus())
+                    if status['handoffs'] > before and len(panel.editor.notebook.page(0).strokes) == count + 3:
+                        break
+                    await asyncio.sleep(.05)
+                await idle()
+                saved = Notebook.read(panel.editor.notebook.to_bytes()).page(0).strokes
+                assert native_checks.previewHeld() and status['handoffs'] == before + 1, status
+                assert status['last_handoff_strokes'] == 3 and len(saved) == count + 3, status
+                assert [s.points[0][1] for s in saved[-3:]] == sorted(s.points[0][1] for s in saved[-3:])
+                result['coalesced_native_handoff'] = dict(strokes=3, handoffs=1, native=status)
                 # Repeatedly force the rapid-contact race: down during visual
                 # reconciliation, then the previous frame completes before up.
                 # This previously backed up only the tail and closed native ink.

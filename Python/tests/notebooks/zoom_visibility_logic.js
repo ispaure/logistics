@@ -12,7 +12,7 @@ function fixture(mobile = true) {
   function node(id) {
     return {id, value:'1', hidden:false, options:[{value:'1'},{value:'page'},{value:'fit'}],
       clientWidth:400,clientHeight:600,scrollLeft:0,scrollTop:0,style:{},classList:{remove(){},toggle(){}},
-      setAttribute(){},append(){},setPointerCapture(){},
+      setAttribute(name,value){this[name]=value},append(){},setPointerCapture(){},
       addEventListener(type,fn){const key=id+':'+type;(listeners.get(key)||listeners.set(key,[]).get(key)).push(fn)},
       closest(selector){return selector==='#viewport'?$('viewport'):null},
       getBoundingClientRect(){return {left:0,top:0,width:id==='paper'?1000*scale:400,height:id==='paper'?1500*scale:600}}};
@@ -46,6 +46,22 @@ f.run("active=null;setZoom('invalid')");f.check(f.$('zoomControls').hidden,'inva
 f.run("window.notebookNativeZoom(1.2,100,100)");f.check(!f.$('zoomControls').hidden,'accepted native pinch reveals');f.advance(3000);
 f.run("$('zoomFit').onclick()");f.check(!f.$('zoomControls').hidden,'explicit reset reveals');f.advance(3000);
 f.run('updateZoomChrome();resetViewportZoom(false)');f.check(f.$('zoomControls').hidden,'passive page/layout update stays hidden after prior use');
+f.run("paperView='move';$('zoomPageFit').onclick()");
+f.check(f.$('zoom').value==='page'&&f.c.paperView==='pro'&&f.$('zoomPageFit')['aria-pressed']==='true',
+  'Fit page selects the full page instead of the automatic phone strip');
+f.run("$('zoomPageFill').onclick();rememberViewportZoom()");
+f.c.innerWidth=800;f.c.innerHeight=400;
+f.run('prepareViewportZoom();updateZoomChrome()');
+f.check(f.$('zoom').value==='fill'&&f.$('zoomPageFill')['aria-pressed']==='true'&&f.$('zoomPageFit')['aria-pressed']==='false',
+  'Fill stays selected after rotating and exposes its active state');
+for (const [pageWidth,pageHeight] of [[1000,1500],[1500,1000]]) {
+  const widthFit=400/pageWidth, heightFit=600/pageHeight;
+  f.check(f.run(`pageZoomScale('page',${widthFit},${heightFit})`)===Math.min(widthFit,heightFit),'Fit contains portrait and landscape');
+  f.check(f.run(`pageZoomScale('fill',${widthFit},${heightFit})`)===Math.max(widthFit,heightFit),'Fill covers portrait and landscape');
+}
+f.run("$('zoomFit').onclick();prepareViewportZoom();updateZoomChrome()");
+f.check(f.$('zoomPageFit')['aria-pressed']==='false'&&f.$('zoomPageFill')['aria-pressed']==='false','Reset restores automatic framing');
+f.advance(3000);
 f.classes.add('tools-hidden');f.run("setZoom('2')");f.check(f.$('zoomControls').hidden&&!f.timers.size,'focus mode stays hidden');
 f=fixture(false);f.check(!f.$('zoomControls').hidden,'desktop controls stay visible');f.run("setZoom('2')");f.check(!f.timers.size,'desktop has no mobile auto-hide timer');
 // Real production touch handlers: an accepted pinch reveals, pen-owned contact does not.

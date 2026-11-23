@@ -219,7 +219,8 @@ function render() {
     index: state.index + 1
   });
   if (render.pageIndex !== state.index) {
-    resetViewportZoom(false);
+    if (explicitPageFraming()) resetViewportPosition = true;
+    else resetViewportZoom(false);
     render.pageIndex = state.index
   }
   resize();
@@ -242,23 +243,36 @@ function resize() {
   displayedPaperBounds = bounds;
   const zoom = $('zoom').value;
   const {width: availableWidth, height: availableHeight} = pageViewportSpace();
-  const heightFit = availableHeight / bounds.height;
+  let heightFit = availableHeight / bounds.height;
   let fitWidth = bounds.width;
   if (documentPaperView === null && defaultViewportZoom && mobileViewport()) {
     if (paperView === 'move' && zoom === 'fit') fitWidth = compactPaper().width;
     else if (fitLandscapePdf()) fitWidth = backgroundContentBounds()?.width ?? bounds.width;
   }
   let scale;
-  if (zoom === 'page') scale = Math.min(availableWidth / bounds.width, availableHeight / bounds.height, mobileViewport() ? maxZoom : 1);
+  if (zoom === 'page' || zoom === 'fill') scale = pageZoomScale(zoom, availableWidth / bounds.width, heightFit);
   else if (zoom === 'compact-height') scale = Math.min(availableHeight / compactPaper().height, maxZoom);
   else if (zoom === 'fit') scale = Math.min(availableWidth / fitWidth, mobileViewport() ? maxZoom : 1);
   else scale = Number(zoom);
+  const wrap = $('paperWrap'), layers = $('inkLayers'), background = $('pdfBackground');
+  wrap.style.margin = mobileViewport() || paperView === 'move' ? '0 auto auto' : 'auto';
+  function sizePaper() {
+    wrap.style.width = (bounds.width * scale) + 'px';
+    wrap.style.height = (bounds.height * scale) + 'px';
+  }
+  sizePaper();
+  if (explicitPageFraming()) {
+    // Desktop scrollbars can appear for Fill and disappear for Fit. Measure
+    // the resulting viewport before sizing or repainting the backing canvases.
+    const space = pageViewportSpace();
+    if (space.width !== availableWidth || space.height !== availableHeight) {
+      heightFit = space.height / bounds.height;
+      scale = pageZoomScale(zoom, space.width / bounds.width, heightFit);
+      sizePaper();
+    }
+  }
   canvas.style.width = (state.width * scale) + 'px';
   canvas.style.height = (state.height * scale) + 'px';
-  const wrap = $('paperWrap'), layers = $('inkLayers'), background = $('pdfBackground');
-  wrap.style.width = (bounds.width * scale) + 'px';
-  wrap.style.height = (bounds.height * scale) + 'px';
-  wrap.style.margin = mobileViewport() || paperView === 'move' ? '0 auto auto' : 'auto';
   layers.style.left = (-bounds.x * scale) + 'px';
   layers.style.width = (state.width * scale) + 'px';
   const imageBounds = backgroundPaperBounds();
