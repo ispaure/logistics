@@ -16,7 +16,7 @@ Use `acceptance.rmdoc` for legacy page order and `modern.rmdoc` for reordered/co
 2. Add a page and layer, reorder and copy pages. Export through the native picker and hash the copy. Cancel a second export and verify writing resumes.
 3. Check stock lined paper and a custom Move form. Change one page's paper and visibility. Verify insertion inherits paper with empty ink, Save/reopen and Undo/Redo. Export the form and verify fixed artwork stays separate from selectable ink. Retain the editable original.
 4. Draw and immediately Save or close, including Keep editing. Verify the last saved stroke survives reopening and a retired canvas cannot edit its replacement.
-5. For visible latency use an external camera and record frame rate and method.
+5. For visible latency, film the pen tip and panel together with an external camera. On the same page and refresh mode, compare Medium Fineliner (Onyx raw preview), Pencil (Canvas), and the built-in BOOX Notes pen. Record the first visible ink and the gap while the pen is moving separately from the pen-up redraw. Record the camera frame rate. Use the app's paint timing to estimate software delay and the film to capture the full display delay.
 
 ## Apple Pencil delivery
 

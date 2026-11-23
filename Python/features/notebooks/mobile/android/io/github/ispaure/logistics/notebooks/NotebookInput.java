@@ -134,11 +134,16 @@ public final class NotebookInput implements View.OnTouchListener, View.OnHoverLi
         // The canvas ignores duplicate trusted Chromium pen events only.
     }
 
-    private static void point(StringBuilder data, float x, float y, float pressure) {
+    private static void point(StringBuilder data, float x, float y, float pressure, float tilt) {
         if (!Float.isFinite(x) || !Float.isFinite(y) || !Float.isFinite(pressure)) return;
         if (data.length() > 0) data.append(',');
         data.append('[').append(x).append(',').append(y).append(',')
-            .append(Math.max(0, Math.min(1, pressure))).append(']');
+            .append(Math.max(0, Math.min(1, pressure)));
+        if (Float.isFinite(tilt) && tilt > 0) {
+            float normalized = Math.min(1, tilt / (float) (Math.PI / 2));
+            data.append(',').append(Math.round(normalized * 100) / 100f);
+        }
+        data.append(']');
     }
 
     private void deliver(String action, MotionEvent event, int index) {
@@ -149,11 +154,11 @@ public final class NotebookInput implements View.OnTouchListener, View.OnHoverLi
         StringBuilder data = moving || action.equals("up") ? pendingMoves : new StringBuilder();
         for (int h = 0; h < event.getHistorySize(); h++) {
             point(data, event.getHistoricalX(index, h), event.getHistoricalY(index, h),
-                event.getHistoricalPressure(index, h));
+                event.getHistoricalPressure(index, h), event.getHistoricalAxisValue(MotionEvent.AXIS_TILT, index, h));
         }
         x = event.getX(index);
         y = event.getY(index);
-        point(data, x, y, event.getPressure(index));
+        point(data, x, y, event.getPressure(index), event.getAxisValue(MotionEvent.AXIS_TILT, index));
         if (moving) {
             if (data.length() >= 32_768) flushMoves();
             else if (schedule && data.length() > 0) view.postOnAnimation(deliverMoves);
@@ -188,7 +193,7 @@ public final class NotebookInput implements View.OnTouchListener, View.OnHoverLi
         clearMoves();
         if (pointer < 0) return;
         StringBuilder data = new StringBuilder();
-        point(data, x, y, 0);
+        point(data, x, y, 0, 0);
         evaluate("cancel", data.toString());
         pointer = -1;
     }

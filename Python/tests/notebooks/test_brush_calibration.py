@@ -39,6 +39,19 @@ class BrushCalibrationTests(unittest.TestCase):
         for width, low, high in [(1, 3.5, 10.75), (2, 6.5, 19.5), (3, 9.25, 28)]:
             self.assertEqual([p[3] for p in stroke_points(samples, 23, width)], [low, high, high, high])
 
+    def test_new_shader_tilt_widens_ink_and_survives_save(self):
+        samples = [[20, 30, .5], [60, 30, .5, .5], [100, 30, .5, 1]]
+        page = InkPage.blank()
+        stroke = page.add(samples, tool=23, color=1, width=2)
+        self.assertEqual([p[3] for p in stroke.points], [19.5, 24.75, 30.25])
+        self.assertEqual([p[3] for p in InkPage.read(page.to_bytes()).strokes[0].points],
+                         [19.5, 24.75, 30.25])
+        for sample in ([20, 30, .5, -1], [20, 30, .5, 2], [20, 30, .5, float('nan')]):
+            with self.assertRaises(ValueError):
+                page.add([sample], tool=23, color=1)
+        with self.assertRaises(ValueError):
+            page.add([samples[1]], tool=13)
+
     def test_measured_thickness_scales_are_written_once(self):
         for width, expected in enumerate(NATIVE_SCALES, 1):
             page = InkPage.blank()

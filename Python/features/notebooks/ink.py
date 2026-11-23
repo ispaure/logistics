@@ -21,7 +21,7 @@ from ._vendor.rmscene.crdt_sequence import CrdtSequenceItem
 from ._vendor.rmscene.tagged_block_common import CrdtId, LwwValue, HEADER_V6
 from ._vendor.rmscene.scene_tree import SceneTree
 from .images import ImageResources, ImageItem, ImageQuad, Picture
-from .brushes import TOOLS, COLORS, WIDTHS, native_color, native_scale, stroke_points
+from .brushes import BRUSHES, TOOLS, COLORS, WIDTHS, native_color, native_scale, stroke_points
 
 WIDTH, HEIGHT = 1404, 1872
 MAX_POINTS = 100_000
@@ -243,14 +243,18 @@ class InkPage:
         if not isinstance(points, list) or not 1 <= len(points) <= MAX_POINTS:
             raise ValueError('Invalid stroke length.')
         clean = []
+        sizes = (3, 4) if 'tilt_gain' in BRUSHES[tool] else (3,)
         for point in points:
-            if len(point) != 3 or any(type(v) not in (int, float) or not math.isfinite(v) for v in point):
+            if (not isinstance(point, (tuple, list)) or len(point) not in sizes
+                    or any(type(v) not in (int, float) or not math.isfinite(v) for v in point)):
                 raise ValueError('Invalid stroke point.')
-            x, y, pressure = point
+            x, y, pressure = point[0], point[1], point[2]
             x += x_offset
-            if not x_bounds[0] <= x <= x_bounds[1] or not 0 <= y <= page_height or not 0 <= pressure <= 1:
+            has_tilt = len(point) == 4
+            if (not x_bounds[0] <= x <= x_bounds[1] or not 0 <= y <= page_height
+                    or not 0 <= pressure <= 1 or (has_tilt and not 0 <= point[3] <= 1)):
                 raise ValueError('Stroke is outside the page.')
-            clean.append([x, y, pressure])
+            clean.append([x, y, pressure, point[3]] if has_tilt else [x, y, pressure])
         clean = stroke_points(clean, tool, int(width), expanded=expanded)
         from .sampling import simplify_stroke
         clean = simplify_stroke(clean, tool, native_x_origin=WIDTH / 2)

@@ -93,8 +93,8 @@ function pressureWidth(brush, width, pressure) {
 
 function strokePoint(samples, i, tool, width) {
   let brush = brushFor(tool),
-    [x, y, p] = samples[i];
-  let w = pressureWidth(brush, width, p);
+    [x, y, p, tilt = 0] = samples[i];
+  let w = pressureWidth(brush, width, p) * (1 + (brush.tilt_gain || 0) * tilt);
   if (brush.directional) {
     let before = samples[i ? i - 1 : Math.min(1, samples.length - 1)],
       angle = Math.atan2(y - before[1], x - before[0]);
@@ -161,11 +161,11 @@ function graphiteMask(mechanical) {
         bottom = field[((cy + 1) % cells) * cells + cx] * (1 - sx) + field[((cy + 1) % cells) * cells + (cx + 1) % cells] * sx,
         paper = top * (1 - sy) + bottom * sy,
         tooth = graphiteNoise(x, y, seed),
-        deposit = graphiteNoise(Math.floor(x / 2), Math.floor(y / 2), seed + 71);
-      // Pencil leaves clustered paper gaps and a softer graphite body. A fine
-      // mechanical lead stays dense and crisp, with only sparse tiny pinholes.
-      const opacity = mechanical ? (tooth < .035 ? .32 : .74 + .2 * tooth + .06 * paper) :
-        (deposit < .055 || tooth < .025 ? .22 : .16 + .42 * deposit + .24 * tooth + .16 * paper);
+        deposit = .68 * tooth + .32 * graphiteNoise(x + 1, y, seed);
+      // A soft lead leaves more paper visible where the tooth is low. Keep
+      // the mechanical lead continuous, with finer and shallower variation.
+      const opacity = mechanical ? .74 + .2 * deposit + .05 * paper :
+        .30 + .38 * deposit + .23 * paper - .28 * Math.max(0, 1 - deposit * 5);
       mask[y * side + x] = Math.round(opacity * 255)
     }
   }

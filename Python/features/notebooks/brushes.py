@@ -69,6 +69,7 @@ BRUSHES = {
     # Accept old three-width commands without inventing extra firmware sizes.
     18: profile((26, 26, 26), colors=tuple(HIGHLIGHTS), family='highlighter', fixed_width=True),
     23: profile((10.75, 19.5, 28), colors=tuple(SHADERS), family='shader',
+                tilt_gain=.55,
                 pressure_widths=((0, (3.5, 6.5, 9.25)), (.1, (3.5, 6.5, 9.25)),
                                  (.2, (7, 13, 18.5)), (.3, (10.75, 19.5, 28)),
                                  (1, (10.75, 19.5, 28)))),
@@ -122,9 +123,13 @@ def pressure_width(brush, width, pressure):
 
 def stroke_points(points, tool, width, *, expanded=False):
     brush = (EXPANDED_BRUSHES if expanded else BRUSHES)[tool]
+    tilt_gain = brush.get('tilt_gain', 0)
     result = []
-    for index, (x, y, pressure) in enumerate(points):
+    for index, point in enumerate(points):
+        x, y, pressure = point[0], point[1], point[2]
         value = pressure_width(brush, width, pressure)
+        if tilt_gain and len(point) == 4:
+            value *= 1 + tilt_gain * point[3]
         if brush.get('directional'):
             before = points[index - 1] if index else points[min(1, len(points) - 1)]
             angle = math.atan2(y - before[1], x - before[0])

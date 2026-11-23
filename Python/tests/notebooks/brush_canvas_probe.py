@@ -109,6 +109,17 @@ line({tool,...nativeColor(tool,color),points:strokePoints(samples,tool,2)},targe
 signatures.push(surface.toDataURL());
 }
 check(new Set(signatures).size===9,'Brush renderings must be distinct');
+const tiltSamples=[[30,60,.5],[85,60,.5,.5],[140,60,.5,1]];
+check(strokePoints(tiltSamples,23,2).map(point=>point[3]).join(',')==='19.5,24.75,30.25','Shader tilt width differs from the saved model');
+const previousInk=inkSettings;inkSettings={tool:23};
+const pen=event(100,100);
+check(Math.abs(coord({...pen,tiltX:45,tiltY:0})[3]-.5)<1e-8,'Pointer tilt was lost');
+check(coord({...pen,nativeTilt:.75})[3]===.75&&coord(pen)[3]===0,'Android tilt or no-tilt fallback was lost');
+inkSettings=previousInk;
+const graphite=graphiteMask(false),lead=graphiteMask(true);
+const average=mask=>mask.reduce((total,value)=>total+value,0)/mask.length;
+check(average(lead)>average(graphite)+30,'Pencil and mechanical lead lost their density difference');
+check(lead.every(value=>value>=185)&&graphite.some(value=>value<80),'Graphite tooth must break only the soft pencil line');
 // Bounded filtered ink must preserve the established full-surface raster,
 // including transformed and edge-clipped strokes. Readback forces completion.
 const boundedPaintbrush=clipPaintbrush;
@@ -224,7 +235,7 @@ let y=70+row*180;g.fillStyle='#fff';g.fillRect(10,y,1080,170);g.fillStyle='#222'
 for(let width=1;width<=3;width++){g.save();g.translate(195+(width-1)*290,y+30);line({tool,...nativeColor(tool,tool===18?13:tool===23?1:0),points:strokePoints(samples,tool,width)},g);g.restore()}
 row++}
 choose(17);$('zoom').value='fit';resize();
-return JSON.stringify({success:true,controls,distinct:signatures.length,grayscale:true,native_rgba:true,width_parity:true,eraser_controls:true,eraser_pointer_path:true,shader_blending:true,bounded_filter_raster:true,previewErrors,previewWork,committedBrushes,frame_batching:true,sheet:sheet.toDataURL()});
+return JSON.stringify({success:true,controls,distinct:signatures.length,grayscale:true,native_rgba:true,width_parity:true,eraser_controls:true,eraser_pointer_path:true,shader_blending:true,shader_tilt:true,graphite_density:true,bounded_filter_raster:true,previewErrors,previewWork,committedBrushes,frame_batching:true,sheet:sheet.toDataURL()});
 }catch(error){return JSON.stringify({success:false,error:String(error),stack:error.stack})}})()
 '''
 

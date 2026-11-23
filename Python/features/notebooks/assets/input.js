@@ -91,7 +91,17 @@ function sample(event, bounds) {
 function coord(e, r = canvas.getBoundingClientRect()) {
   const pressure = e.pointerType === 'pen' && !constantPenPressure
     ? Math.max(0, Math.min(1, e.pressure)) : fallbackPressure;
-  return [Math.max(0, Math.min(state.width, (e.clientX - r.left) / r.width * state.width)), Math.max(0, Math.min(state.height, (e.clientY - r.top) / r.height * state.height)), pressure]
+  const point = [Math.max(0, Math.min(state.width, (e.clientX - r.left) / r.width * state.width)), Math.max(0, Math.min(state.height, (e.clientY - r.top) / r.height * state.height)), pressure];
+  if (mode === 'ink' && e.pointerType === 'pen' && brushFor(inkSettings.tool).tilt_gain) {
+    // Pointer events may expose either altitude above the page or axis angles
+    // from vertical. Android sends the digitizer's normalized angle directly.
+    const radians = Math.PI / 180, horizontal = Math.PI / 2;
+    const axisTilt = Math.atan(Math.hypot(Math.tan((e.tiltX || 0) * radians), Math.tan((e.tiltY || 0) * radians)));
+    const tilt = e.nativeTilt ?? (Number.isFinite(e.altitudeAngle) && e.altitudeAngle < horizontal
+      ? 1 - e.altitudeAngle / horizontal : axisTilt / horizontal);
+    point.push(Math.max(0, Math.min(1, tilt)));
+  }
+  return point
 }
 
 function distance(p, a, b) {
@@ -294,7 +304,7 @@ window.logisticsNativePen = (action, id, samples, width, height) => {
   if (!state.native_pen || !width || !height || !samples.length) return;
   const event = sample => ({pointerId: id + 100000, pointerType: 'pen', nativePen: true,
     clientX: sample[0] * innerWidth / width, clientY: sample[1] * innerHeight / height,
-    pressure: sample[2], preventDefault() {}});
+    pressure: sample[2], nativeTilt: sample[3], preventDefault() {}});
   let lastEvent = event(samples[samples.length - 1]);
   if (action === 'down') {
     if (document.elementFromPoint(lastEvent.clientX, lastEvent.clientY) !== canvas) return;

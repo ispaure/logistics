@@ -22,13 +22,13 @@ Measurements come from the November 4, 2026 Paper Pro worksheet, OS **3.29.0.153
 | Calligraphy | 2.5 / 4.5 / 6.5 nominal nib spans |
 | Shader | 10.75 / 19.5 / 28 plateau near 0.3 pressure |
 
-Dynamics approximate measured profiles. Tilt, speed and native texture fidelity remain open. Thickness scales are approximately 0.8705015 / 1.7410030 / 2.6115046. Highlighter always uses the first scale and maps legacy size choices to Fixed.
+Dynamics approximate measured profiles. Shader uses stylus tilt, when available, to widen newly drawn strokes as the pen slopes toward the page. The width is saved in the native points. Upright and pressure-only input use the measured pressure curve. Physical tilt calibration, speed and native texture fidelity remain open. Thickness scales are approximately 0.8705015 / 1.7410030 / 2.6115046. Highlighter always uses the first scale and maps legacy size choices to Fixed.
 
 PDF writing colors are blue `#304ae0`, red `#c23132`, green `#91da71`, yellow `#fae719`, cyan `#74d2e8` and magenta `#c07fd2`. Highlighter uses native IDs 3/4/5 for yellow/green/pink and 14/15/16 for blue/orange/gray. Preserve legacy color-9 RGBA and use preservation-only for unknown future colors. Shader uses color 9 and eight measured RGBA values. Supplementary sources include [Paper Pro field measurements](https://cable729.github.io/inkterop/docs/formats/remarkable/), [native RGBA examples](https://github.com/Scratchydisk/remarkable-rm#rgba-colour-discovery) and [Shader color definitions](https://github.com/ingatellent/xovi-qmd-extensions#changegreencolorqmd).
 
 ## App graphite appearance
 
-`assets/drawing.js` anchors deterministic graphite grain to page units across live ink, saved ink and thumbnails. Pencil uses softer clustered gaps and Mechanical Pencil denser fine pits. Highlighter multiplies combined same-color coverage once per consecutive run.
+`assets/drawing.js` anchors deterministic graphite grain to page units across live ink, saved ink and thumbnails. Pencil uses soft variation with visible paper tooth. Mechanical Pencil uses a denser, continuous fine lead. Highlighter multiplies combined same-color coverage once per consecutive run.
 
 ## Canvas probe
 
