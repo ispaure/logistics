@@ -11,8 +11,12 @@ import asyncio
 import json
 from pathlib import Path
 
+from commonUtils.testing.stages import TestStage
 from . import start_native_check
 from .notebook_probe import NotebookProbe
+
+
+TEST_STAGE = TestStage.EXTENDED
 
 
 class FileDragGestureProbe(NotebookProbe):
