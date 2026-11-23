@@ -12,6 +12,7 @@ __status__ = "Production"
 import argparse
 from dataclasses import replace
 import hashlib
+from ipaddress import IPv6Address
 import json
 import os
 import plistlib
@@ -28,6 +29,7 @@ from build_manager.run_fields import selection_ids
 from commonUtils.runtime.streams import file_sha256
 
 BUNDLE = 'io.github.ispaure.logisticsmobile'
+RETRY_CONNECTION = 'BUILD_MANAGER_DEVICE_RETRY_CONNECTION'
 
 
 def ios_provisioning_args(source, ios, overrides=None):
@@ -62,15 +64,20 @@ def android_signing_policy(value):
 def save_android_signing(root, device, mode, certificate):
     """Persist explicit public identity metadata; never create or move a key."""
     policy = android_signing_policy(dict(mode=mode, certificate=certificate))
-    path = Path(root) / 'mobile_build/.tools/test-devices.json'
+    update_saved_android(Path(root) / 'mobile_build/.tools/test-devices.json', device,
+                         android_signing=policy)
+
+
+def update_saved_android(path, device, **metadata):
     rows = read_json(path)
     if not isinstance(rows, list):
         raise ValueError('Saved device inventory must be a list.')
     selected = [row for row in rows if row.get('platform') == 'Android' and row.get('id') == device]
     if len(selected) != 1:
-        raise ValueError('Choose one existing saved Android device for signing policy.')
-    selected[0]['android_signing'] = policy
-    save_json(path, rows)
+        raise ValueError('Choose one existing saved Android device.')
+    if any(selected[0].get(key) != value for key, value in metadata.items()):
+        selected[0].update(metadata)
+        save_json(path, rows)
 
 
 def validate_android_identity(data):
@@ -98,7 +105,11 @@ def saved_devices(root, only=None):
         platform = {'Android': 'android', 'iOS': 'ios'}.get(row.get('platform'))
         if not platform or (platform == 'ios' and row.get('id') not in ios_ids):continue
         key = row.get('id'); selection_ids(json.dumps([key]))
-        connection = row.get('connection', key); selection_ids(json.dumps([connection]))
+        connection = row.get('connection', key)
+        if platform == 'android':
+            validate_android_serial(connection)
+        else:
+            selection_ids(json.dumps([connection]))
         result[platform][key] = dict(id=key, name=str(row.get('name') or key), connection=connection)
         if platform == 'android' and 'android_signing' in row:
             result[platform][key]['android_signing'] = android_signing_policy(row['android_signing'])
@@ -140,8 +151,17 @@ def android_connections(value):
     if not isinstance(connections, dict):
         raise ValueError('Android connections must be a JSON object of device ID to ADB serial.')
     selection_ids(json.dumps(list(connections)))
-    selection_ids(json.dumps(list(connections.values())))
+    for serial in connections.values():
+        validate_android_serial(serial)
     return connections
+
+
+def validate_android_serial(serial):
+    if isinstance(serial, str) and (match := re.fullmatch(r'\[([0-9a-fA-F:]+)\]:([0-9]{1,5})', serial)):
+        IPv6Address(match[1])
+        if 1 <= int(match[2]) <= 65535:
+            return
+    selection_ids(json.dumps([serial]))
 
 
 def availability_policy(choice='bounded'):
@@ -215,6 +235,8 @@ def make_plan(project, platform, targets, context, revision, *, shared=None, ret
     workspace = parent / uuid4().hex
     workspace.mkdir(parents=True, exist_ok=True)
     recipe = dict(schema=1, platform=platform, source=source, root=str(snapshot), workspace=str(workspace), targets=targets)
+    if platform == 'android':
+        recipe['device_catalog'] = str(project.mobile / '.tools/test-devices.json')
     if skip_tests:
         recipe['skip_tests'] = True
     if signing_mode is not None:
@@ -250,6 +272,7 @@ def make_plan(project, platform, targets, context, revision, *, shared=None, ret
     if signing_mode is not None:
         prepare = replace(prepare, description=prepare.description + ' · signing: ' + signing_mode)
     phases = [prepare]
+    install_env = dict(env, **{RETRY_CONNECTION: ''}) if platform == 'android' else env
     for index, target in enumerate(targets):
         receipt = workspace / ('device-' + str(index) + '.json')
         label = re.sub(r'[^A-Za-z0-9]+', '-', target['name']).strip('-')[:40] or 'device'
@@ -260,7 +283,7 @@ def make_plan(project, platform, targets, context, revision, *, shared=None, ret
             **availability_policy(source.get('run_overrides', {}).get('devices.availability', 'bounded'))))
         phases.append(Phase('install-' + str(index + 1) + '-' + label, (*command, 'install', '--report', str(report),
             '--device', target['id'], '--receipt', str(receipt)), str(snapshot), dependencies=(prepare.id, ready_id),
-            environment=env, effect='deploy', kind='distribution', approval_required=False, timeout=600, artifacts=(str(receipt),),
+            environment=install_env, effect='deploy', kind='distribution', approval_required=False, timeout=600, artifacts=(str(receipt),),
             resources={'device:' + platform + ':' + target['id']: 1, 'host.device-install': 1},
             label='Install on ' + target['name'], description='Install the prepared app on this selected device.' +
                 (' Signing: ' + signing_mode + ' · ' + target.get('android_signing', {}).get('certificate', 'certificate checked before install') if signing_mode else '')))
@@ -361,7 +384,8 @@ def android_signature_preflight(data, target, adb, env):
         return
     previous = Path(data['workspace']) / ('signature-check-' + uuid4().hex + '.apk')
     try:
-        android.run([*prefix, 'pull', installed, str(previous)], env)
+        # The installed APK can be hundreds of MB over a physical Wi-Fi link.
+        android.run([*prefix, 'pull', installed, str(previous)], env, timeout=240)
         if android.apk_certificate(previous, android.build_tools(env), env) != certificate:
             raise ValueError('Installed Android signing identity differs. Prepare a new package with its existing key; app data is preserved.')
     finally:
@@ -427,7 +451,7 @@ class DeviceUnavailable(ValueError):
     """A pre-install availability check may be retried without an uncertain effect."""
 
 
-def android_connection(target, adb, env):
+def android_connection(target, adb, env, *, endpoint=None):
     """Use an available transport for this exact hardware ID; never change pairing."""
     from mobile_build.deployment import android_deploy as android
     tried = set()
@@ -446,6 +470,10 @@ def android_connection(target, adb, env):
         if actual != target['id']:
             raise ValueError('Selected Android device identity changed; reload saved devices.')
         return serial
+    if endpoint:
+        if connected := check(endpoint):
+            return connected
+        raise DeviceUnavailable('Waiting for the selected Android device at ' + endpoint)
     for serial in (target['connection'], target['id'], *target.get('fallback_connections', ())):
         if connected := check(serial):
             return connected
@@ -517,9 +545,16 @@ def install(report, device, receipt):
     if data['platform'] == 'android':
         from mobile_build.deployment import android_deploy as android
         env, adb = android.tools_environment(android.deployment_environment())
-        serial = android_connection(target, adb, env)
+        endpoint = os.environ.get(RETRY_CONNECTION)
+        if endpoint:
+            validate_android_serial(endpoint)
+            serial = android_connection(target, adb, env, endpoint=endpoint)
+        else:
+            serial = android_connection(target, adb, env)
         target = dict(target, connection=serial)
         android_signature_preflight(data, target, adb, env)
+        if endpoint:
+            update_saved_android(Path(data['device_catalog']), device, connection=serial)
         # Exact reviewed bytes, no compatibility re-sign, downgrade or uninstall.
         command = [str(adb), '-s', serial, 'install', '-r', str(package)]
         perform = lambda: android.run(command, env, timeout=300)

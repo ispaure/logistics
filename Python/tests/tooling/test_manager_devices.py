@@ -275,6 +275,31 @@ class ManagerDeviceTests(unittest.TestCase):
             self.assertEqual(wifi.device_endpoints('/fake/adb', {}, run, 'hardware-1'), ['192.0.2.1:12345'])
         self.assertEqual(run.call_args.args[0], ['/fake/adb', 'mdns', 'services'])
 
+    def test_retry_endpoint_is_saved_only_for_verified_android_device(self):
+        from mobile_build.deployment import android_deploy as android
+        catalog = self.mobile / '.tools/test-devices.json'
+        devices.save_android_signing(self.root, 'hardware-1', 'beta', 'a' * 64)
+        self.data['device_catalog'] = str(catalog)
+        self.report.write_text(json.dumps(self.data))
+        self.env['BUILD_MANAGER_APPROVED_ARTIFACTS'] = json.dumps([
+            dict(original_path=str(self.report.resolve()), sha256=file_sha256(self.report))])
+        endpoint = '[2001:db8::12]:43521'
+        with patch.dict(os.environ, dict(self.env, **{devices.RETRY_CONNECTION: endpoint})), \
+                patch.object(android, 'tools_environment', return_value=({}, '/adb')), \
+                patch.object(android, 'run', side_effect=['connected', 'device', 'another-hardware']) as run:
+            with self.assertRaisesRegex(ValueError, 'identity changed'):
+                devices.install(self.report, 'hardware-1', self.receipt)
+            self.assertEqual(run.call_count, 3)
+        self.assertEqual(devices.saved_devices(self.root)['android']['hardware-1']['connection'], 'usb-1')
+        with patch.dict(os.environ, dict(self.env, **{devices.RETRY_CONNECTION: endpoint})), \
+                patch.object(android, 'tools_environment', return_value=({}, '/adb')), \
+                patch.object(android, 'run', side_effect=['connected', 'device', 'hardware-1', 'Success']) as run:
+            devices.install(self.report, 'hardware-1', self.receipt)
+            self.assertEqual(run.call_args.args[0][:4], ['/adb', '-s', endpoint, 'install'])
+        saved = devices.saved_devices(self.root)['android']['hardware-1']
+        self.assertEqual(saved['connection'], endpoint)
+        self.assertEqual(saved['android_signing']['certificate'], 'a' * 64)
+
     def test_ios_readiness_retries_absent_or_disconnected_selected_device_only(self):
         from mobile_build.deployment import device_tools as ios
         recipe = self.root / 'recipe.json'
