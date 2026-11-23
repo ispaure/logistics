@@ -15,14 +15,52 @@ __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
 import weakref
+from collections import OrderedDict
 from threading import RLock, local
 from contextlib import contextmanager
 
 
+class DirectoryNameMemory:
+    """Bounded filename snapshots shared by views in one credential generation."""
+    def __init__(self):
+        self.generation = 0
+        self.rows = OrderedDict()
+        self.size = 0
+        self.lock = RLock()
+
+    def reset(self, generation):
+        with self.lock:
+            self.generation = generation
+            self.rows.clear()
+            self.size = 0
+
+    def get(self, generation, key):
+        with self.lock:
+            if generation != self.generation or key not in self.rows:
+                return None
+            self.rows.move_to_end(key)
+            return self.rows[key]
+
+    def put(self, generation, key, value):
+        limit = 8 * 1024 * 1024
+        size = len(value[1])
+        with self.lock:
+            if generation != self.generation or size > limit:
+                return
+            previous = self.rows.pop(key, None)
+            if previous is not None:
+                self.size -= len(previous[1])
+            self.rows[key] = value
+            self.size += size
+            while self.size > limit or len(self.rows) > 4096:
+                # A cached tree starts at its root. Keep that entry when
+                # scanning a share too large to fit its entire tree in RAM.
+                oldest = next((row for row in self.rows if row[-1]), next(iter(self.rows)))
+                self.size -= len(self.rows.pop(oldest)[1])
+
+
 class NativeCredentialState:
     def __init__(self):
-        from features.rclone.localcrypt.directory_index import DirectoryNameMemory
-
         self.generation = 0
         self.directory_names = DirectoryNameMemory()
         self.observers = weakref.WeakSet()

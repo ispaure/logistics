@@ -447,23 +447,21 @@ class NotebookReplacementTests(TestCase):
     def unconfirm_checkpoint(self):
         from features.notebooks.recovery import RecoveryIncomplete
         from mobile_build.tests.support.notebooks import draw_stroke
-        document = self.panel.document
-        manifest = document.recovery.root / document.key / 'state.json'
         read_bytes = Path.read_bytes
-        attempted = False
-        def reject_publication(*args, **kwargs):
-            nonlocal attempted
-            attempted = True
+        publication_target = None
+        def reject_publication(target, *args, **kwargs):
+            nonlocal publication_target
+            publication_target = target
             raise OSError('Synthetic interrupted publication')
         def unreadable(path):
-            if attempted and path == manifest:
+            if path == publication_target:
                 raise OSError('Synthetic readback unavailable')
             return read_bytes(path)
         with patch('features.notebooks.recovery.atomic_write_json', side_effect=reject_publication), \
                 patch.object(Path, 'read_bytes', unreadable):
             with self.assertRaises(RecoveryIncomplete):
                 draw_stroke(self.panel)
-        self.assertTrue(document.dirty)
+        self.assertTrue(self.panel.document.dirty)
         self.assertTrue(self.panel.editor.checkpoint_unconfirmed)
 
     def assert_replacement_veto(self, *, synchronous=False):

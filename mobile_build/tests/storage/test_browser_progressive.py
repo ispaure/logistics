@@ -143,7 +143,8 @@ class RecycledBrowserTests(unittest.TestCase):
         self.provider.list = listing
         browser.set_entries(self.provider, '', root)
         browser.open_search()
-        self.assertIn(browser.page_label, browser.widget.children)
+        self.assertIn(browser._search_status, browser.widget.children)
+        self.assertIn(browser.page_label, browser._search_status.children)
         browser.search.value = 'murakami'
         async def check():
             try:
@@ -154,15 +155,15 @@ class RecycledBrowserTests(unittest.TestCase):
                 row = browser.native_list.data[0]
                 self.assertEqual(row.title, 'Haruki Murakami')
                 self.assertEqual(row.entry.payload['path'], folder['path'])
-                self.assertIn('Searching', browser.page_label.text)
+                self.assertIn('Scanning filenames', browser.page_label.text)
                 browser.sort.value = 'Name Z–A'
-                self.assertIn('Searching', browser.page_label.text)
+                self.assertIn('Scanning filenames', browser.page_label.text)
                 # Clearing search invalidates any later worker result.
                 browser.close_search()
                 await wait_until(
                     lambda: browser.tree is browser.folder_tree, timeout=2, interval=.01,
                     message='Clearing search did not restore the original folder tree')
-                self.assertNotIn(browser.page_label, browser.widget.children)
+                self.assertNotIn(browser._search_status, browser.widget.children)
                 self.assertEqual([entry.payload['path'] for entry in browser.entries], ['Books'])
             finally:
                 release.set()
@@ -185,7 +186,7 @@ class RecycledBrowserTests(unittest.TestCase):
             await browser._search_subfolders(browser.search_epoch, browser.search_cancelled)
             self.assertEqual(browser.native_list.data[0].title, 'Murakami')
             self.assertIn('Partial results', browser.page_label.text)
-            self.assertIn(browser.page_label, browser.widget.children)
+            self.assertIn(browser._search_status, browser.widget.children)
         self.app.loop.run_until_complete(check())
 
     def test_folder_taps_and_busy_guard_keep_existing_navigation(self):
