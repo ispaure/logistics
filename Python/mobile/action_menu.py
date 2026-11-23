@@ -20,7 +20,7 @@ from .control_icons import ICONS, menu_drawable
 _COMMAND_ICONS = {
     SEND.removesuffix('…'): 'send_file',
     'Open': 'forward', 'Open from Files': 'folder_hub', 'Details': 'info', 'Info': 'info',
-    'New folder': 'folder_add', 'Change location': 'folder_hub', 'Select items': 'selected_item',
+    'New folder': 'folder_add', 'Select items': 'selected_item',
     'Move': 'move_file', 'Duplicate': 'duplicate_file', 'Rename': 'edit', 'Rename document': 'edit',
     'Archive password': 'storage_crypt', 'Create archive': 'archive', 'Extract archive': 'archive',
     'Archive': 'archive', 'Manage archive': 'archive', 'Delete': 'trash_file', 'Delete document': 'trash_file',

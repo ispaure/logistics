@@ -27,6 +27,8 @@ from .archive_operations import ACTION_KINDS, ordinary
 from services.documents.storage import DocumentPolicy
 from services.workflow_host import HostService, StateAttribute
 
+MOVE_ACTIONS = ('move', 'move-selection')
+
 
 @dataclass(frozen=True)
 class PickerOrigin:
@@ -289,14 +291,15 @@ class EditorPicker(DestinationForm):
             return
         await self.show_editor_browser('save', name, data if data is not None else b'', creation=origin)
 
-    async def show_destination(self, name, action):
+    async def show_destination(self, name, action, *, start_folder=None):
         if not self.cloud_busy and self.active_host and getattr(action, 'kind', '') == 'download':
             # An older picker can sit below the current cloud folder. Reusing
             # its route would trim away that newer source before downloading.
             self.app.routes.retire_destination_picker(self.app.native_host.state.destination)
-        await self.show_editor_browser('destination', name, destination_action=action)
+        await self.show_editor_browser('destination', name, destination_action=action, start_folder=start_folder)
 
-    async def show_editor_browser(self, mode, name='', data=None, *, creation=None, destination_action=None, operation=None):
+    async def show_editor_browser(self, mode, name='', data=None, *, creation=None, destination_action=None,
+                                  operation=None, start_folder=None):
         if self.cloud_busy or not self.active_host:
             return
         self._epoch += 1
@@ -321,27 +324,7 @@ class EditorPicker(DestinationForm):
         elif creation is not None or mode == 'folder':
             self.creation_storage()
         else:
-            action = getattr(destination_action, 'kind', '')
-            roots = (self.app.file_roots if destination_action is not None and action != 'download'
-                     else self.app.ordinary_file_roots(include_collections=action != 'download'))
-            self.editor_storage_roots = destination_location_labels(self.app, roots)
-            self.editor_storage_folders = {}
-            self.editor_locked_roots = {}
-            self.editor_linked_roots = {}
-            if self.app.feature_enabled('rclone'):
-                from services.documents.mobile_locations import enabled
-                if enabled(self.app.private_root):
-                    self.add_local_copy_destinations(roots)
-                if action == 'download':
-                    unlocked = {}
-                    existing = self.existing_crypt_locations(roots=unlocked)
-                    # Downloads can initialize unlocked LocalCrypt storage.
-                    self.editor_storage_roots.update({label: location[0] for label, location in unlocked.items()})
-                else:
-                    existing = self.existing_crypt_locations()
-                self.editor_storage_roots.update(existing)
-                self.editor_linked_roots = self.linked_crypt_locations()
-                self.editor_storage_roots.update(self.editor_linked_roots)
+            self.destination_storage(destination_action)
         source_store = getattr(getattr(self.operation.origin, 'owner', None), '_crypt_reader_store', None)
         source_provider = getattr(source_store, 'provider', None)
         source_reader = getattr(getattr(self.operation.origin, 'owner', None), 'crypt_reader', None)
@@ -358,6 +341,12 @@ class EditorPicker(DestinationForm):
             source_label = 'Source location'
             self.editor_storage_roots[source_label] = destination_action.provider
             source_folder = destination_action.path.rpartition('/')[0]
+        elif action in MOVE_ACTIONS:
+            provider = destination_action.provider
+            source_label = self.move_source_label(provider)
+            if start_folder is None:
+                start_folder = destination_action.path.rpartition('/')[0] if action == 'move' else ''
+            source_folder = start_folder
         if mode == 'save' and creation is None and source_provider is not None and not getattr(source_provider, 'remote_storage', False):
             source_label = 'Source location'
             self.editor_storage_roots[source_label] = source_provider
@@ -374,6 +363,57 @@ class EditorPicker(DestinationForm):
             return
         self.show_view(panel, route='text-destination', title=title)
         await self.load_picker_location()
+
+    def destination_storage(self, destination_action, *, include_encrypted=True):
+        action = getattr(destination_action, 'kind', '')
+        roots = (self.app.file_roots if destination_action is not None and action != 'download'
+                 else self.app.ordinary_file_roots(include_collections=action != 'download'))
+        if not include_encrypted:
+            from commonUtils.runtime.resources.local import LocalFiles
+            roots = {label: provider for label, provider in roots.items()
+                     if provider is None or isinstance(provider, LocalFiles) and not provider.private}
+        self.editor_storage_roots = destination_location_labels(self.app, roots)
+        self.editor_storage_folders = {}
+        self.editor_locked_roots = {}
+        self.editor_linked_roots = {}
+        if not self.app.feature_enabled('rclone'):
+            return
+        from services.documents.mobile_locations import enabled
+        if enabled(self.app.private_root):
+            self.add_local_copy_destinations(roots)
+        if not include_encrypted:
+            return
+        if action == 'download':
+            unlocked = {}
+            existing = self.existing_crypt_locations(roots=unlocked)
+            # Downloads can initialize unlocked LocalCrypt storage.
+            self.editor_storage_roots.update({label: location[0] for label, location in unlocked.items()})
+        else:
+            existing = self.existing_crypt_locations()
+        self.editor_storage_roots.update(existing)
+        if action in MOVE_ACTIONS:
+            self.editor_linked_roots = self.linked_crypt_locations(
+                folders=self.editor_storage_folders, locked=self.editor_locked_roots, include_missing_credentials=True)
+        else:
+            self.editor_linked_roots = self.linked_crypt_locations()
+        self.editor_storage_roots.update(self.editor_linked_roots)
+
+    def move_source_label(self, provider):
+        from services.documents.locations import CollectionFiles
+
+        location = getattr(provider, 'location', None)
+        for label, root in self.editor_storage_roots.items():
+            if root is provider or (location is not None and root == location):
+                return label
+        if (isinstance(provider, CollectionFiles) and provider.private_root == self.app.private_root
+                and 'Local' in self.editor_storage_roots and self.editor_storage_roots['Local'] is None):
+            return 'Local'
+        label, suffix = 'Source location', 1
+        while label in self.editor_storage_roots or label in self.editor_locked_roots:
+            suffix += 1
+            label = f'Source location ({suffix})'
+        self.editor_storage_roots[label] = provider
+        return label
 
     def creation_storage(self, *, include_encrypted=True):
         """Use the same on-device destination inventory for both creation forms."""
@@ -399,10 +439,12 @@ class EditorPicker(DestinationForm):
         self.editor_storage_folders.update(folders)
         self.editor_storage_roots.update(dict.fromkeys(folders, roots['Local files']))
 
-    def refresh_creation_storage(self, *, include_encrypted):
-        label = self.save_as_storage.value
-        locked = self.editor_locked_roots
-        self.creation_storage(include_encrypted=include_encrypted)
+    def refresh_unlock_storage(self, *, include_encrypted):
+        label, locked = self.save_as_storage.value, self.editor_locked_roots
+        if getattr(self.operation.destination_action, 'kind', '') in MOVE_ACTIONS:
+            self.destination_storage(self.operation.destination_action, include_encrypted=include_encrypted)
+        else:
+            self.creation_storage(include_encrypted=include_encrypted)
         if not include_encrypted:
             # A wrong password must still allow another attempt after Back.
             self.editor_locked_roots = locked
@@ -413,27 +455,73 @@ class EditorPicker(DestinationForm):
         finally:
             self._changing_location = False
 
-    async def unlock_creation_storage(self, label):
+    def preserve_for_destination_unlock(self):
+        if (self.panel is None or self.editor_picker_location is None or not ordinary(self._listed_provider)
+                or self.save_as_storage.value != self.editor_picker_location[0]):
+            return False
+        if (getattr(self.operation.destination_action, 'kind', '') not in MOVE_ACTIONS
+                and self.operation.creation is None and self.operation.mode != 'folder'):
+            return False
+        self.refresh_unlock_storage(include_encrypted=False)
+        return True
+
+    async def rebind_move_source(self, operation):
+        action = operation.destination_action
+        source = action.provider
+        if not source.private:
+            return True
+        from features.rclone.localcrypt.mobile.locations import LocalCryptLocation
+        from features.rclone.mobile.service import native_service
+        if not isinstance(getattr(source, 'location', None), LocalCryptLocation):
+            raise ValueError('The encrypted source could not be reopened.')
+        client = self.app.cloud_client
+        generation = client.generation
+        remote = client.resolve_remote(source.location.remote, source.location.cipher_identity, cipher=True)
+        provider = await asyncio.to_thread(native_service(client).localcrypt.open, replace(source.location, remote=remote))
+        if (self.operation is not operation or not self.visible() or self.app.cloud_client is not client
+                or client.generation != generation):
+            provider.close()
+            return False
+        operation.destination_action = replace(action, provider=provider)
+        return True
+
+    async def unlock_picker_storage(self, label):
         key, remote, identity, unlocked = self.editor_locked_roots[label]
         from services.documents.mobile_locations import enabled
         from .local_sources import device_files_label
         label_on_device = device_files_label(self.app) if enabled(self.app.private_root) else 'Local'
-        if not await self.browser_editor_location((label_on_device, '')):
+        moving = getattr(self.operation.destination_action, 'kind', '') in MOVE_ACTIONS
+        previous = (self.editor_picker_location if moving and ordinary(self._listed_provider)
+                    else (label_on_device, ''))
+        if not await self.browser_editor_location(previous):
             return False
         operation = self.operation
+        if key is None:
+            await self.app.main_window.dialog(toga.InfoDialog(
+                'Unlock required', 'Load the matching credential ZIP in Workspaces to unlock this copy.'))
+            return False
 
         async def resume():
             if self.operation is not operation or not self.visible():
                 return
-            self.refresh_creation_storage(include_encrypted=True)
+            self.refresh_unlock_storage(include_encrypted=True)
             if unlocked in self.editor_storage_roots:
-                await self.browser_editor_location((unlocked, ''))
+                if moving:
+                    try:
+                        if not await self.rebind_move_source(operation):
+                            return
+                    except (OSError, ValueError):
+                        if self.operation is operation and self.visible():
+                            self.save_as_status.value = 'The source copy is locked. Unlock it and start the move again.'
+                            self.update_picker_actions()
+                        return
+                await self.browser_editor_location((unlocked, self.editor_storage_folders.get(unlocked, '')))
             else:
                 self.save_as_status.value = 'The encrypted copy is no longer available.'
 
         self.app.show_cloud(present=False)
         self.app.show_retained_unlock(key, remote, identity=identity, resume=resume,
-            destination=self.app.native_host.state.destination, preserve_creation_picker=True)
+            destination=self.app.native_host.state.destination, preserve_destination_picker=True)
         return False
 
     def show_creation_name(self, widget=None, **kwargs):
@@ -921,7 +1009,8 @@ class EditorPicker(DestinationForm):
         if (self.panel is None or (self.panel is self.name_panel and not self.creation_layout.paired)
                 or getattr(self, '_changing_location', False)):
             return
-        if self.creation is not None or self.operation.mode == 'folder':
+        if (self.creation is not None or self.operation.mode == 'folder'
+                or getattr(self.operation.destination_action, 'kind', '') in MOVE_ACTIONS):
             # Native selectors may echo a programmatic change after navigation
             # has already started (or completed) the matching directory read.
             location = self.save_as_storage.value, self.picker_folder.value
@@ -950,7 +1039,7 @@ class EditorPicker(DestinationForm):
             return
         label, folder = self.save_as_storage.value, self.picker_folder.value
         if label in self.editor_locked_roots:
-            return await self.unlock_creation_storage(label)
+            return await self.unlock_picker_storage(label)
         work = self._begin_work()
         previous_destination = self.picker_destination.text
         if self.creation is not None:

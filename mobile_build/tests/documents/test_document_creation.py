@@ -628,10 +628,12 @@ class DocumentCreationTests(unittest.TestCase):
                 ('Office', 'Office', False, True),
                 ('Deleted', 'Deleted', False, False),
                 ('Missing', 'Missing', True, False),
+                ('Unconfigured', 'Unconfigured', True, True),
                 ('Locked', 'Locked', True, True),
-                ('legacy-Old', 'legacy-Old', False, True)):
+                ('legacy-Old', 'legacy-Old', True, True)):
             prefix = 'Projects'.encode().hex() if crypt else ''
-            connection = 'c' * 64 if remote == 'Locked' else client.connection
+            connection = {'Locked': 'c' * 64, 'legacy-Old': 'd' * 64,
+                          'Unconfigured': 'e' * 64}.get(remote, client.connection)
             job = dict(id=target, remote=remote, target=target, crypt=crypt, prefix=prefix, identity=connection,
                        cipher_identity=client.identity if crypt else '')
             store.jobs[target] = job
@@ -640,7 +642,7 @@ class DocumentCreationTests(unittest.TestCase):
 
         locked = 'Locked - Encrypted Copy (Locked)'
         unlocked = 'Locked - Encrypted Copy'
-        package = ('zip-key', {'remotes': {'Locked': 'c' * 64}})
+        package = ('zip-key', {'remotes': {'Locked': 'c' * 64, 'legacy-Old': 'd' * 64}})
         local = 'Office - Local Copy'
         office = store.target(store.jobs['Office'])
         (office / 'Existing' / 'Nested').mkdir(parents=True)
@@ -680,7 +682,7 @@ class DocumentCreationTests(unittest.TestCase):
                     unlock.assert_called_once()
                     self.assertEqual(unlock.call_args.args, ('zip-key', 'Locked'))
                     self.assertEqual(unlock.call_args.kwargs['identity'], 'c' * 64)
-                    app.clear_private_catalog(preserve_creation_picker=True)
+                    app.clear_private_catalog(preserve_destination_picker=True)
                     self.assertEqual(picker.save_as_name.value, name)
                     client.connection = 'c' * 64
                     await unlock.call_args.kwargs['resume']()
@@ -689,6 +691,47 @@ class DocumentCreationTests(unittest.TestCase):
                     await picker.confirm_editor_file()
                     marker = store.target(store.jobs['Locked']) / name.encode().hex() / LIBRARY_MARKER.encode().hex()
                     self.assertEqual(marker.read_bytes(), b'cipher:')
+
+            from mobile.file_operations import FileOperationRequest
+            await app.show_files(location=('Local files', 'Office'))
+            client.connection = 'b' * 64
+            provider = app.file_provider
+            entry = provider.entry('Office/Readme.txt')
+            move = FileOperationRequest('move', provider, entry['path'], expected_revision=entry['revision'])
+            await picker.show_destination('Readme.txt', move)
+            self.assertEqual(picker.picker_folder.value, 'Office')
+            labels = {row.value for row in picker.save_as_storage.items}
+            self.assertIn(locked, labels)
+            self.assertNotIn('legacy-Old - Encrypted Copy (Locked)', labels)
+            unavailable = 'Unconfigured - Encrypted Copy (Locked)'
+            self.assertIn(unavailable, labels)
+            with patch.object(app.main_window, 'dialog', new=AsyncMock()) as dialog:
+                await picker.browser_editor_location((unavailable, ''))
+                dialog.assert_awaited_once()
+            self.assertIs(picker.operation.destination_action, move)
+            self.assertEqual(picker.picker_folder.value, 'Office')
+            unlock.reset_mock()
+            await picker.browser_editor_location((locked, ''))
+            unlock.assert_called_once()
+            self.assertEqual(unlock.call_args.args, ('zip-key', 'Locked'))
+            self.assertEqual(picker.picker_folder.value, 'Office')
+            app.clear_private_catalog(preserve_destination_picker=True)
+            self.assertIs(picker.operation.destination_action, move)
+            self.assertEqual(picker.save_as_name.value, 'Readme.txt')
+            client.connection = 'c' * 64
+            client.generation += 1
+            await unlock.call_args.kwargs['resume']()
+            self.assertEqual(picker.editor_picker_location, (unlocked, 'Projects'))
+            destination_location = picker._listed_provider.location
+            await picker.confirm_editor_file()
+            self.assertFalse((office / 'Readme.txt').exists(), picker.save_as_status.value)
+            from features.rclone.mobile.service import native_service
+            target = native_service(client).localcrypt.open(destination_location)
+            try:
+                with target.open('Projects/Readme.txt') as stream:
+                    self.assertEqual(stream.read(), b'Ordinary file')
+            finally:
+                target.close()
 
         with (patch.object(app, 'home_unlock_candidates', return_value=[package]),
               patch.object(app, 'folder_path_visible', side_effect=lambda name, **kwargs: not str(name).startswith('legacy-')),

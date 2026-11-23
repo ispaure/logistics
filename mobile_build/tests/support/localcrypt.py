@@ -52,6 +52,10 @@ class ReaderClient(CryptClient):
 
 class CreationClient(ReaderClient):
     def request(self, action, **values):
+        if action == 'crypt_raw_write':
+            data = os.read(values['fd'], 1024 * 1024)
+            os.write(values['output_fd'], b'cipher:' + data[::-1])
+            return {}
         if action in {'crypt_encode', 'crypt_write_buffer'}:
             data = base64.b64decode(values['data'])
             os.write(values['fd'], b'cipher:' + data[::-1])

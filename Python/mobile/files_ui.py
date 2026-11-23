@@ -277,6 +277,7 @@ class FilesUI:
         operation_box.remove(self.file_storage)
         from .action_menu import FeatureCommands
         self.file_actions_button = icon_button('overflow', 'File and folder actions')
+        self.file_actions_button.style.update(display='none', visibility='hidden')
         self.file_actions = FeatureCommands(self.file_actions_button, self,
             self.current_folder_commands(), self.show_file_actions)
         self.file_browser.attach_location_header(self.file_status,
@@ -371,7 +372,7 @@ class FilesUI:
                 from services.documents.mutations import copy_path
                 name = copy_path(name, directory=row['directory'])
             return self.loop.create_task(self.editor_picker().show_destination(
-                name, request))
+                name, request, start_folder=self.file_path if operation == 'move' else None))
         box = self.file_operation_view.content
         for child in list(box.children):
             box.remove(child)
@@ -395,9 +396,6 @@ class FilesUI:
         elif operation == 'password':
             box.add(self.file_password,
                     toga.Button('Open with password', on_press=self.read_managed_file, style=Pack(height=48)))
-        elif operation == 'location':
-            box.add(self.file_location)
-            box.add(self.file_commands[0])
         else:
             for label, callback in self.current_folder_commands():
                 async def run(widget=None, target=callback, **kw):
@@ -413,9 +411,9 @@ class FilesUI:
     def current_folder_commands(self):
         provider = self.file_provider
         access = capabilities(provider)
-        commands = [('Change location…', lambda: self.show_file_actions(operation='location'))]
+        commands = []
         if access.create and not getattr(provider, 'read_only', False):
-            commands.insert(0, ('New folder…', lambda: self.show_file_actions(operation='new')))
+            commands.append(('New folder…', lambda: self.show_file_actions(operation='new')))
         if self.can_select_file_entries(provider):
             commands.append(('Select items', self.begin_file_selection))
         return commands
@@ -497,6 +495,7 @@ class FilesUI:
             for control, display, visibility in header._file_selection_actions:
                 control.style.update(display=display, visibility=visibility)
             del header._file_selection_actions
+            self._update_file_actions_visibility()
         header.update_back_icon()
         if getattr(header, '_android_title', False):
             header.balance_android_title()
@@ -528,8 +527,9 @@ class FilesUI:
                 or getattr(provider, 'read_only', False)):
             return
         selection = self.selected_file_roots()
+        folder = self.file_path
         self.end_file_selection()
-        await self.editor_picker().show_destination('', FileSelectionMove(provider, selection))
+        await self.editor_picker().show_destination('', FileSelectionMove(provider, selection), start_folder=folder)
 
     def selected_file_roots(self):
         entries = {row['path']: row['revision'] for row in self.file_checked.values()}
@@ -824,6 +824,11 @@ class FilesUI:
         # download discovery out of the navigation path, including idle browsing.
         return await self.browse_local_during_transfer(self.file_location.value)
 
+    def _update_file_actions_visibility(self):
+        available = bool(self.file_actions.actions) and self.file_browser.on_check_entry is None
+        self.file_actions_button.style.update(display='pack' if available else 'none',
+                                              visibility='visible' if available else 'hidden')
+
     def populate_file_browser(self, rows, password='', *, location=None):
         from .browser_preview import LocalThumbnails
         client = self.cloud_client
@@ -833,6 +838,7 @@ class FilesUI:
         self.file_browser.details = source.details
         self.file_actions.raw_actions = self.current_folder_commands()
         self.file_actions.refresh()
+        self._update_file_actions_visibility()
         if location is None:
             self.file_browser.history.clear()
         self.file_browser.set_entries(self.file_provider, self.file_path, rows, location=location)

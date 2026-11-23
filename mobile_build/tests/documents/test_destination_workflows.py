@@ -276,12 +276,13 @@ class DestinationWorkflowTests(unittest.TestCase):
                 (provider.root / path).write_bytes(b'opaque fixture')
                 await self.app.show_files()
                 self.app.file_provider = provider
-                rows = provider.list(path.rpartition('/')[0])
+                self.app.file_path = folder = path.rpartition('/')[0]
+                rows = provider.list(folder)
                 self.app.file_rows = {row['name']: row for row in rows}
                 self.app.set_file_items(list(self.app.file_rows))
                 self.app.file_selection.value = path.rpartition('/')[2]
                 browser = self.app.file_browser
-                browser.set_entries(provider, path.rpartition('/')[0], rows)
+                browser.set_entries(provider, folder, rows)
                 entry = next(entry for entry in browser.tree.entries.values()
                              if entry.payload and entry.payload.get('path') == path)
                 await browser.select(entry)
@@ -291,6 +292,18 @@ class DestinationWorkflowTests(unittest.TestCase):
                 self.assertEqual(self.picker.operation.mode, 'destination')
                 self.assertEqual(self.picker.operation.destination_action.path, path)
                 self.assertEqual(self.picker.save_as_name.value, path.rpartition('/')[2])
+                self.assertEqual(self.picker.editor_picker_location, ('Source location', folder))
+                self.assertIs(self.picker._listed_provider, provider)
+                if folder:
+                    with (patch.object(self.app, 'cloud_client', provider.client),
+                          patch.object(provider.client, 'resolve_remote', return_value='Secret alias', create=True) as resolve):
+                        provider.client.generation += 1
+                        self.assertTrue(await self.picker.rebind_move_source(self.picker.operation))
+                        resolve.assert_called_once_with('Secret', provider.identity, cipher=True)
+                        rebound = self.picker.destination_action.provider
+                        self.assertEqual(rebound.root, provider.root)
+                        self.assertEqual(rebound.entry(path)['path'], path)
+                        rebound.close()
                 self.picker.cancel_text_destination()
 
         self.run_async(exercise())
@@ -332,13 +345,18 @@ class DestinationWorkflowTests(unittest.TestCase):
             FileOperationRequest('move', provider, source.name)))
         self.run_async(self.picker.browser_editor_location(('Shared Files', 'Movies')))
         local_move_path = MobileLocalFiles.local_move_path
+        local_open = LocalFiles.open
         def iphone_move_path(provider, path):
             # Exercise iOS provider policy while leaving the host's actual
             # exclusive-rename syscall in place (Linux has no renamex_np).
             with patch('commonUtils.runtime.platform.get_os', return_value=OS.IOS):
                 return local_move_path(provider, path)
+        def reject_video_read(provider, path):
+            if Path(path).name == source.name:
+                raise AssertionError('Must not read video')
+            return local_open(provider, path)
         with patch.object(MobileLocalFiles, 'local_move_path', iphone_move_path), \
-                patch.object(LocalFiles, 'open', side_effect=AssertionError('Must not read video')), \
+                patch.object(LocalFiles, 'open', reject_video_read), \
                 patch.object(LocalFiles, 'create_file', side_effect=AssertionError('Must not copy video')):
             self.run_async(self.picker.confirm_editor_file())
         target = shared / 'Movies/Movie.mkv'

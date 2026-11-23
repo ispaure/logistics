@@ -85,7 +85,8 @@ class FileOperationTests(unittest.TestCase):
         (self.source.root / 'comic folder').mkdir()
         self.run_async(self.app.browse_files())
         folder_commands = dict(self.app.file_actions.actions)
-        self.assertEqual(set(folder_commands), {'New folder…', 'Change location…', 'Select items'})
+        self.assertEqual(set(folder_commands), {'New folder…', 'Select items'})
+        self.assertEqual(self.app.file_actions_button.style.display, 'pack')
 
         for name in ('first.txt', 'chapter.CBZ', 'comic folder'):
             with self.subTest(name=name):
@@ -102,6 +103,13 @@ class FileOperationTests(unittest.TestCase):
             self.assertTrue({'Open', 'Details'} <= read_only_commands.keys())
             self.assertFalse({'Rename…', 'Move…', 'Duplicate…', 'Delete…'} & read_only_commands.keys())
             self.assertNotIn('New folder…', dict(self.app.current_folder_commands()))
+            with (patch.object(self.app, 'feature_enabled', return_value=False),
+                  patch.object(self.app, 'file_provider_for', return_value=provider)):
+                self.run_async(self.app.browse_files())
+                self.assertEqual(self.app.file_actions.actions, [])
+                self.assertEqual(self.app.file_actions_button.style.display, 'none')
+        self.run_async(self.app.browse_files())
+        self.assertEqual(self.app.file_actions_button.style.display, 'pack')
 
         shared = SharedFiles(self.destination.root)
         (shared.root / 'Received Files').mkdir()
@@ -131,6 +139,29 @@ class FileOperationTests(unittest.TestCase):
         self.assertFalse(app.file_checked)
         self.assertIsNone(browser.on_check_entry)
         self.assertEqual(app.file_actions_button.style.display, 'pack')
+
+    def test_move_destination_starts_in_the_open_folder(self):
+        app = self.app
+        current = self.source.root / 'Projects' / 'Current'
+        (current / 'Folder').mkdir(parents=True)
+        (current / 'File.txt').write_text('Move me')
+        self.run_async(app.browser_file_location(('Local files', 'Projects/Current')))
+        picker = app.editor_picker()
+        for name in ('File.txt', 'Folder'):
+            with self.subTest(name=name):
+                self.select(name)
+                self.run_async(dict(app.file_item_commands())['Move…']())
+                self.assertEqual(picker.editor_picker_location, ('Local', 'Projects/Current'))
+                self.assertTrue(picker.picker_parent.enabled)
+                self.run_async(picker.parent_editor_folder())
+                self.assertEqual(picker.editor_picker_location, ('Local', 'Projects'))
+                picker.cancel_text_destination()
+        app.begin_file_selection()
+        for entry in app.file_browser.entries:
+            app.check_file_entry(entry)
+        self.run_async(app.move_checked_files())
+        self.assertEqual(picker.editor_picker_location, ('Local', 'Projects/Current'))
+        self.assertEqual(picker.operation.destination_action.kind, 'move-selection')
 
     def test_delete_selection_confirms_then_removes_only_selected_items(self):
         app = self.app

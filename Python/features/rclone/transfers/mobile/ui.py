@@ -70,7 +70,7 @@ class MirrorUI(TransferReviewUI):
         identity = self.cloud_client.request('crypt_path', remote=remote, path='', directory=True)['identity']
         return self.mirror_store().guard(collection_path(self.private_root, True) / identity)
 
-    def linked_crypt_locations(self, *, folders=None, locked=None):
+    def linked_crypt_locations(self, *, folders=None, locked=None, include_missing_credentials=False):
         if not self.app.feature_enabled('rclone'):
             return {}
         result = {}
@@ -119,6 +119,9 @@ class MirrorUI(TransferReviewUI):
                 if item['remotes'].get(name) == job['identity']:
                     locked[label + ' (Locked)'] = key, name, job['identity'], label
                     break
+            else:
+                if locked is not None and include_missing_credentials:
+                    locked[label + ' (Locked)'] = None, job['remote'], job['identity'], label
         return result
 
     def mirror_store(self):
