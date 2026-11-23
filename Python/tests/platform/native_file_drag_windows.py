@@ -229,7 +229,7 @@ def exercise(root, cleanup):
             sleep(.025)
         raise AssertionError(description)
 
-    def step(source, destination, source_window, target_window, *, key=None, escape=False):
+    def step(source, destination, source_window, target_window, *, key=None, escape=False, after_release=None):
         windows = ((source, source_window), (destination, target_window))
         # Let a transient shell overlay settle. Send no input while a point
         # belongs to anything other than the generated test windows.
@@ -245,6 +245,8 @@ def exercise(root, cleanup):
         def gesture():
             try:
                 desktop.drag(source, destination, key=key, escape=escape)
+                if after_release is not None:
+                    after_release()
             except Exception as error:
                 errors.append(error)
         thread = Thread(target=gesture, daemon=True)
@@ -279,13 +281,13 @@ def exercise(root, cleanup):
         until(lambda: all(other is not job for other in _windows), 'Completed transfer window did not close.')
         return outcome
 
-    def to_explorer(path, key, *, escape=False):
+    def to_explorer(path, key, *, escape=False, after_release=None):
         desktop.user.SetForegroundWindow(logistics)
         until(lambda: browser.model.browse_index(path).isValid(), 'Logistics source did not load.')
         index = browser.sort_model.mapFromSource(browser.model.browse_index(path))
         until(lambda: not view.visualRect(index).isEmpty(), 'Logistics row is not visible.')
         step(qt_point(view.visualRect(index).center()), shell_point(receive.name), logistics, explorer,
-             key=key, escape=escape)
+             key=key, escape=escape, after_release=after_release)
 
     until(lambda: not browser.busy and view.isVisible(), 'Logistics native browser did not settle.')
     assert to_qt(copied, 17) == 'succeeded'
@@ -314,14 +316,24 @@ def exercise(root, cleanup):
     collision = local / 'Collision.txt'
     existing = receive / collision.name
     existing.write_bytes(b'existing at native destination')
-    assert not desktop.user.FindWindowW(None, 'Replace or Skip Files')
-    to_explorer(collision, 17)
-    until(lambda: desktop.user.FindWindowW(None, 'Replace or Skip Files'), 'Explorer did not show its conflict dialog.')
-    dialog = desktop.user.FindWindowW(None, 'Replace or Skip Files')
-    desktop.user.SetForegroundWindow(dialog)
-    desktop.key(27)
-    desktop.key(27, up=True)
-    until(lambda: not desktop.user.FindWindowW(None, 'Replace or Skip Files'), 'Explorer conflict remains open.')
+    conflict_title = 'Replace or Skip Files'
+    assert not desktop.user.FindWindowW(None, conflict_title)
+
+    def close_explorer_conflict():
+        # Explorer can block the Qt drag call while its conflict dialog is open.
+        # Observe and dismiss the dialog on the gesture thread.
+        deadline = monotonic() + 8
+        while monotonic() < deadline:
+            dialog = desktop.user.FindWindowW(None, conflict_title)
+            if dialog:
+                if not desktop.user.PostMessageW(dialog, 0x10, 0, 0):
+                    raise AssertionError('Explorer conflict dialog could not be closed.')
+                return
+            sleep(.05)
+        raise AssertionError('Explorer did not show its conflict dialog.')
+
+    to_explorer(collision, 17, after_release=close_explorer_conflict)
+    until(lambda: not desktop.user.FindWindowW(None, conflict_title), 'Explorer conflict remains open.')
     assert existing.read_bytes() == b'existing at native destination' and collision.read_bytes() == b'existing'
     print('Logistics → Explorer: native conflict dialog cancelled and preserved both files.', flush=True)
     to_qt(cancelled, 17, escape=True)
