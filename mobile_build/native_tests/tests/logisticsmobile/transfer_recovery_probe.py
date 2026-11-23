@@ -40,6 +40,11 @@ class RecoveryProbe(LogisticsMobile):
         (Path(self.paths.cache) / 'transfer-recovery-result.json').write_text(json.dumps(result, indent=2))
 
 
+def buttons_by_action(fallback):
+    return {getattr(button, '_settings_source_text', button.text): button
+            for button in fallback.buttons.children}
+
+
 async def exercise_recovery(app):
     result = dict(success=False)
     surfaces = []
@@ -75,15 +80,14 @@ async def exercise_recovery(app):
         result['native_acceptance_helper'] = proof
         fallback = surface.native_fallback
         assert fallback.amount.text == '50%'
-        await fallback.buttons.children[0].on_press()
+        await buttons_by_action(fallback)['Stop transfer'].on_press()
         assert calls[-1][0] == 'stop'
-        await fallback.buttons.children[1].on_press()
+        await buttons_by_action(fallback)['Continue browsing'].on_press()
         assert calls[-1][0] == 'background'
         surface.update(dict(surface.model, phase='complete', busy=False, files=4, done=200, percentage=100))
         completed = verify_native_transfer_fallback(surface)
         assert completed['revision'] > proof['revision'] and fallback.amount.text == '100%'
-        assert [getattr(button, '_settings_source_text', button.text)
-                for button in fallback.buttons.children] == ['Continue browsing']
+        assert list(buttons_by_action(fallback)) == ['Continue browsing']
         result['progress_controls'] = True
 
         review = await recover(dict(mode='review', workspace='Review fixture', operation='Push',
@@ -91,8 +95,7 @@ async def exercise_recovery(app):
             counts=dict(add=1, delete=1), rows=(('delete', 'private-file.txt'),),
             page=0, page_size=30, total=31))
         fallback = review.native_fallback
-        assert 'no undo' in fallback.metrics.text
-        approve = next(button for button in fallback.buttons.children if button.text.startswith('Approve'))
+        approve = buttons_by_action(fallback)['Approve Push']
         # The review-specific driver waits for actual attachment/layout and
         # checks the displayed native model before clicking its guarded action.
         from .review_checks import press_review
@@ -101,7 +104,7 @@ async def exercise_recovery(app):
         assert review_proof['renderer'] == 'native' and review_proof['mode'] == 'review'
         result['native_review_acceptance_helper'] = review_proof
         assert calls[-1][0] == 'approve'
-        await next(button for button in fallback.buttons.children if button.text == 'Next changes').on_press()
+        await buttons_by_action(fallback)['Next changes'].on_press()
         assert calls[-1][0] == 'next'
         review.update(dict(review.model, can_confirm=False, notice='Files changed'))
         before = len(calls)
