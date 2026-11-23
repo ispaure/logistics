@@ -137,9 +137,15 @@ with patch.object(registry, 'get_browser_extensions', return_value=[]):
             sample['leave_event_phases'] = events
             sample['left_loaded_at_selection'] = (str(leave_folder) in loaded
                 and loaded[str(leave_folder)] - leave <= events['selection'])
-            if sample['cold']:
-                until(lambda: str(leave_folder) in loaded)
             until(lambda: not browser.folder_busy)
+            if sample['cold']:
+                # Navigation away may cancel the native scan. QFileSystemModel
+                # need not emit directoryLoaded for a relinquished folder.
+                # Drain late events without requiring the old folder to finish.
+                settle = qt.QEventLoop()
+                qt.QTimer.singleShot(350, settle.quit)
+                settle.exec()
+                sample['left_loaded_after_navigation'] = str(leave_folder) in loaded
             current = browser.views.source_index(browser.views.currentWidget().currentIndex())
             assert Path(model.filePath(current)).name == 'select-next.txt'
     last = root / 'small' / 'file-00000.txt'
