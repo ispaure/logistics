@@ -116,6 +116,21 @@ class BlenderManagerTests(unittest.TestCase):
         self.assertEqual(list(destination.iterdir()), [])
         self.assertEqual(list(destination.parent.iterdir()), [destination])
 
+    def test_installs_and_removes_nested_zip_paths_over_windows_legacy_limit(self):
+        from commonUtils.filesystem.native_paths import native_path
+
+        nested = '/'.join(['asset_directory_' + str(index) * 24 for index in range(7)]) + '/asset.txt'
+        payload = self._zip({'blender-package/blender.exe': b'blender',
+                             'blender-package/' + nested: b'nested asset'})
+        build = replace(self.release, sha256=hashlib.sha256(payload).hexdigest())
+        destination = self.manager.installation(build)
+        self.assertGreater(len(str(destination / nested)), 260)
+        with patch('commonUtils.runtime.streams.downloads.urlopen', return_value=self._response(payload)):
+            self.assertEqual(install_release(build, destination), destination)
+        self.assertEqual((native_path(destination) / nested).read_bytes(), b'nested asset')
+        remove_installation(build, destination)
+        self.assertEqual(list(destination.parent.iterdir()), [])
+
     def test_preset_publication_refuses_a_racing_empty_directory(self):
         original = self.manager.create_preset(self.release, 'Original')
         (original / 'config/userpref.blend').write_bytes(b'preferences')

@@ -21,6 +21,7 @@ import tarfile
 from tempfile import TemporaryDirectory
 import zipfile
 
+from commonUtils.filesystem.native_paths import native_path
 from commonUtils.persistence.publication import rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.streams import copy_stream
@@ -105,14 +106,15 @@ def extract_dmg(package, output, cancelled):
 
 def install_release(release, destination, *, report=lambda *args: None, cancelled=lambda: False):
     destination = Path(destination)
-    with installation_lock(destination):
+    target = native_path(destination)
+    with installation_lock(target):
         check_cancelled(cancelled)
-        if installed(release, destination):
+        if installed(release, target):
             return destination
-        if destination.exists() or destination.is_symlink():
+        if target.exists() or target.is_symlink():
             raise ValueError('Installation folder already exists but is incomplete or belongs to another build. '
                              'Inspect it before removing it and reinstalling.')
-        with TemporaryDirectory(prefix=f'.blender-{release.version}-', dir=destination.parent) as workspace:
+        with TemporaryDirectory(prefix=f'.blender-{release.version}-', dir=target.parent) as workspace:
             workspace = Path(workspace)
             package = workspace / 'package'
             provision(release.download_spec(), package, cancelled=cancelled,
@@ -132,11 +134,12 @@ def install_release(release, destination, *, report=lambda *args: None, cancelle
                                                     'sha256': release.sha256, 'executable': release.executable}),
                                          encoding='utf-8')
             check_cancelled(cancelled)
-            rename_exclusive(bundle, destination)
+            rename_exclusive(bundle, target)
     return destination
 
 
 def remove_installation(release, destination):
+    destination = native_path(destination)
     with installation_lock(destination):
         if destination.is_symlink() or not installed(release, destination):
             raise ValueError('Only a complete Logistics-managed installation can be removed here')
