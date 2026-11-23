@@ -550,39 +550,51 @@
     },
     {
       "module": "features.notebooks.recovery",
-      "scope": "Repository.open",
-      "operation": "raw-method:read_text",
-      "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
+      "scope": "replay_stroke",
+      "operation": "raw-method:open",
+      "reason": "Reads a bounded, checksum-verified stroke in the app-owned ordinary notebook journal."
     },
     {
       "module": "features.notebooks.recovery",
-      "scope": "Repository.save",
+      "scope": "Repository._save",
       "operation": "raw-call:commonUtils.persistence.atomic.atomic_write_bytes",
       "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
     },
     {
       "module": "features.notebooks.recovery",
-      "scope": "Repository.save",
+      "scope": "Repository._save",
       "operation": "raw-call:commonUtils.persistence.atomic_write_json",
       "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
     },
     {
       "module": "features.notebooks.recovery",
-      "scope": "Repository.save",
+      "scope": "Repository._save",
       "operation": "raw-method:read_bytes",
       "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
     },
     {
       "module": "features.notebooks.recovery",
-      "scope": "Repository.check_revision",
+      "scope": "Repository._checked_revision",
       "operation": "raw-method:read_bytes",
       "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
     },
     {
       "module": "features.notebooks.recovery",
-      "scope": "Repository.save",
+      "scope": "Repository._save",
       "operation": "raw-method:unlink",
       "reason": "Ordinary notebook recovery repository owns private app-state records; private documents never checkpoint here."
+    },
+    {
+      "module": "features.notebooks.recovery",
+      "scope": "Repository.append_stroke",
+      "operation": "raw-call:commonUtils.persistence.atomic_write_json",
+      "reason": "Publishes a bounded stroke record in the app-owned ordinary notebook recovery journal."
+    },
+    {
+      "module": "features.notebooks.recovery",
+      "scope": "Repository.append_stroke",
+      "operation": "raw-method:read_bytes",
+      "reason": "Verifies publication of the just-written app-owned stroke record after a write failure."
     },
     {
       "module": "features.pdf.backends.android",

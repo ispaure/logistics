@@ -409,13 +409,6 @@ class FileBrowser(RecycledBrowser):
         if not self._search_suspended or widget is self.sort:
             super().query_changed(widget, **kwargs)
 
-    @property
-    def entries(self):
-        if (self.search.value and self.tree is not None and self.tree is not self.folder_tree
-                and self._sorted_search_epoch != self.search_epoch):
-            return [self.tree.entries[key] for key in self.tree.children.get(self.tree.root, ())]
-        return super().entries
-
     async def _prepare_local_search(self, provider, directory, cancelled):
         from commonUtils.runtime.operations import OperationCancelled
         try:
@@ -511,7 +504,11 @@ class FileBrowser(RecycledBrowser):
     def entries(self):
         if self._render_entries is not None:
             return self._render_entries
-        rows = super().entries
+        if (self.search.value and self.tree is not None and self.tree is not self.folder_tree
+                and self._sorted_search_epoch != self.search_epoch):
+            rows = [self.tree.entries[key] for key in self.tree.children.get(self.tree.root, ())]
+        else:
+            rows = super().entries
         if self.folder_visible is None:
             return rows
         provider = getattr(self, 'search_provider', None)
