@@ -42,6 +42,11 @@ class LocalSearch(IndexedLocalSearch):
         indexed = getattr(provider, 'search_listing', None) or getattr(provider, 'indexed_list', None)
         if indexed is not None:
             return search_resources(provider, directory, query, list_children=indexed, **kwargs)
+        from services.documents.locations import MobileLocalFiles
+        from .local_sources import PhoneFiles
+        if (type(provider) in (PhoneFiles, MobileLocalFiles) and not provider.private
+                and not getattr(provider, 'session_only', False) and not getattr(provider, 'remote_storage', False)):
+            return self._search_names(provider, directory, query, **kwargs)
         if not self.supports(provider):
             return super().search(provider, directory, query, **kwargs)
         from services.directory_index import foreground
@@ -56,12 +61,25 @@ class LocalSearch(IndexedLocalSearch):
     def _search_without_snapshot(self, provider, directory, query, *, cancelled, progress):
         from commonUtils.filesystem.index.exclusions import scan_exclusions
         from commonUtils.filesystem.local_access import check_local_path
-        from services.documents.locations import visible_transfer_rows
 
         root = provider._locate(directory)
         check_local_path(root, recursive=True)
         excluded = {path.relative_to(provider.root).as_posix()
                     for path in scan_exclusions(root, self.cache.database)}
+
+        try:
+            result = self._search_names(provider, directory, query, cancelled=cancelled, progress=progress,
+                                        excluded=excluded)
+            provider._guard(root)
+            return result
+        except ValueError:
+            # The filesystem index can skip individual unsupported links and
+            # special files when the rooted listing would reject the folder.
+            return self._search(provider, directory, query, cancelled=cancelled, progress=progress)
+
+    @staticmethod
+    def _search_names(provider, directory, query, *, cancelled=lambda: False, progress=None, excluded=()):
+        from services.documents.locations import visible_transfer_rows
 
         def names(folder, *, cancelled):
             if folder in excluded:
@@ -69,15 +87,8 @@ class LocalSearch(IndexedLocalSearch):
             rows = provider.list_names(folder, cancelled=cancelled)
             return (row for row in visible_transfer_rows(provider, rows) if row['path'] not in excluded)
 
-        try:
-            result = search_resources(provider, directory, query, cancelled=cancelled, progress=progress,
-                                      list_children=names, load_match=provider.entry)
-            provider._guard(root)
-            return result
-        except ValueError:
-            # The filesystem index can skip individual unsupported links and
-            # special files when the rooted listing would reject the folder.
-            return self._search(provider, directory, query, cancelled=cancelled, progress=progress)
+        return search_resources(provider, directory, query, cancelled=cancelled, progress=progress,
+                                list_children=names, load_match=provider.entry)
 
     @staticmethod
     def eligible_provider(provider):

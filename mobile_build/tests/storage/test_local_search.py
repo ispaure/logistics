@@ -74,6 +74,28 @@ class LocalSearchTests(unittest.TestCase):
         self.assertFalse(updates[0].cached)
         self.assertEqual(updates[0].rows, result.rows)
 
+    def test_device_files_search_is_scoped_and_only_loads_metadata_for_matches(self):
+        from mobile.local_sources import PhoneFiles
+
+        provider = PhoneFiles(self.root / 'app')
+        for folder in ('Current/Nested', 'Sibling', 'LocalCrypt'):
+            (provider.root / folder).mkdir(parents=True)
+            (provider.root / folder / 'needle.txt').touch()
+        (provider.root / 'Current' / 'other.txt').touch()
+
+        with patch.object(provider, 'entry', wraps=provider.entry) as load:
+            result = self.search.search(provider, 'Current', 'needle')
+            self.assertTrue(result.complete, result.errors)
+            self.assertEqual([row['path'] for row in result.rows], ['Current/Nested/needle.txt'])
+            load.assert_called_once_with('Current/Nested/needle.txt')
+
+        all_files = self.search.search(provider, '', 'needle')
+        self.assertTrue(all_files.complete, all_files.errors)
+        self.assertEqual({row['path'] for row in all_files.rows}, {
+            'Current/Nested/needle.txt', 'Sibling/needle.txt',
+        })
+        self.assertFalse(self.database.exists())
+
     def test_reopened_database_answers_without_directory_enumeration(self):
         self.prepare()
         restarted = LocalSearch(self.database)
