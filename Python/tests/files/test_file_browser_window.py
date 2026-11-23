@@ -218,6 +218,43 @@ class BrowserWindowTests(QtTestCase):
         self.assertEqual(len(window.workspace.docks), 1)
         self.assertEqual(first.file_browser.navigation.directory, child)
 
+    def test_cocoa_drag_preserves_the_selection_at_mouse_down(self):
+        from desktop.browser_drop import BrowserDropTargets
+
+        second = self.root / 'second.txt'
+        second.write_text('selected with the first item')
+        browser = self.window([]).file_browser
+        controller = BrowserDropTargets.instance()
+        view = browser.views.navigation_views[0]
+        viewport = view.viewport()
+        paths = (self.path, second)
+
+        def row(path):
+            return browser.sort_model.mapFromSource(browser.model.browse_index(path))
+
+        self.wait_until(lambda: all(row(path).isValid() for path in paths))
+        first = row(self.path)
+        selection = view.selectionModel()
+        flags = qt.QItemSelectionModel.SelectionFlag
+        for path in paths:
+            selection.select(row(path), flags.Select | flags.Rows)
+        origin = view.visualRect(first).center()
+        target = origin + qt.QPoint(qt.QApplication.startDragDistance() + 1, 0)
+        left = qt.Qt.MouseButton.LeftButton
+        modifiers = qt.Qt.KeyboardModifier.NoModifier
+        press = qt.QMouseEvent(qt.QEvent.Type.MouseButtonPress, qt.QPointF(origin),
+                              qt.QPointF(viewport.mapToGlobal(origin)), left, left, modifiers)
+        move = qt.QMouseEvent(qt.QEvent.Type.MouseMove, qt.QPointF(target),
+                             qt.QPointF(viewport.mapToGlobal(target)), qt.Qt.MouseButton.NoButton, left, modifiers)
+
+        with (patch.object(controller, 'cocoa', True),
+              patch('desktop.browser_drop.start_file_drag') as start):
+            controller.eventFilter(viewport, press)
+            selection.select(first, flags.ClearAndSelect | flags.Rows)
+            self.assertTrue(controller.eventFilter(viewport, move))
+        start.assert_called_once()
+        self.assertEqual(set(start.call_args.args[1]), set(paths))
+
     def test_file_drop_pulses_then_opens_folder_and_escape_cancels_pending_hover(self):
         from PySide6.QtGui import QDragEnterEvent, QKeyEvent
         from desktop.browser_drop import BrowserDropTargets, MIME, SESSION

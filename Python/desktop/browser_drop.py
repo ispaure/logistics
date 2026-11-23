@@ -22,13 +22,66 @@ from .browser_moves import MoveSource, PrivateMoveMime
 from .native_file_drag import LocalFileDrag, handoff_message, local_drag_paths, native_drop_action, start_file_drag
 
 
+class _CocoaDragTimer:
+    """Run hover pulses in AppKit's drag tracking loop."""
+
+    def __init__(self, milliseconds, callback):
+        import ctypes as ct
+
+        self.interval = milliseconds / 1000
+        self.timer = None
+        cf = ct.CDLL('/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation')
+        appkit = ct.CDLL('/System/Library/Frameworks/AppKit.framework/AppKit')
+        pointer = ct.c_void_p
+        timer_callback = ct.CFUNCTYPE(None, pointer, pointer)
+        cf.CFRunLoopGetMain.restype = pointer
+        cf.CFAbsoluteTimeGetCurrent.restype = ct.c_double
+        cf.CFRunLoopTimerCreate.argtypes = [
+            pointer, ct.c_double, ct.c_double, ct.c_ulong, ct.c_long, timer_callback, pointer,
+        ]
+        cf.CFRunLoopTimerCreate.restype = pointer
+        cf.CFRunLoopAddTimer.argtypes = [pointer, pointer, pointer]
+        cf.CFRunLoopTimerInvalidate.argtypes = [pointer]
+        cf.CFRelease.argtypes = [pointer]
+        cf.CFRunLoopAddTimer.restype = cf.CFRunLoopTimerInvalidate.restype = cf.CFRelease.restype = None
+        self.cf = cf
+        self.tracking = pointer.in_dll(appkit, 'NSEventTrackingRunLoopMode')
+        self.common = pointer.in_dll(cf, 'kCFRunLoopCommonModes')
+        self.dispatch = timer_callback(lambda _timer, _context: callback())
+
+    def start(self):
+        self.stop()
+        cf = self.cf
+        self.timer = cf.CFRunLoopTimerCreate(
+            None, cf.CFAbsoluteTimeGetCurrent() + self.interval, self.interval, 0, 0, self.dispatch, None,
+        )
+        if self.timer:
+            loop = cf.CFRunLoopGetMain()
+            cf.CFRunLoopAddTimer(loop, self.timer, self.common)
+            cf.CFRunLoopAddTimer(loop, self.timer, self.tracking)
+
+    def stop(self):
+        if self.timer:
+            self.cf.CFRunLoopTimerInvalidate(self.timer)
+            self.cf.CFRelease(self.timer)
+            self.timer = None
+
+    def isActive(self):
+        return self.timer is not None
+
+
 class BrowserDropTargets(qt.QObject):
     def __init__(self, app):
         super().__init__(app)
         self.workspaces = WeakSet()
-        self.timer = qt.QTimer(self)
-        self.timer.setInterval(130)
-        self.timer.timeout.connect(self.advance)
+        self.cocoa = app.platformName() == 'cocoa'
+        if self.cocoa:
+            self.timer = _CocoaDragTimer(130, self.advance)
+            self.destroyed.connect(self.timer.stop)
+        else:
+            self.timer = qt.QTimer(self)
+            self.timer.setInterval(130)
+            self.timer.timeout.connect(self.advance)
         self.target = self.band = None
         self.press = None
         app.installEventFilter(self)
@@ -136,7 +189,7 @@ class BrowserDropTargets(qt.QObject):
     def start_drag(self, widget, moves, view, event):
         if not self.press:
             return False
-        viewport, origin = self.press
+        viewport, origin, saved = self.press
         if viewport is not widget or (event.position().toPoint() - origin).manhattanLength() < qt.QApplication.startDragDistance():
             return False
         self.press = None
@@ -147,8 +200,12 @@ class BrowserDropTargets(qt.QObject):
             actions.drag_drop.press = None
         if not moves.available():
             return True
-        if not view.indexAt(origin).isValid():
+        index = view.indexAt(origin)
+        if not index.isValid():
             return False
+        if saved is not None and saved[0] == index:
+            # Cocoa can narrow a selection in a mouse move below the drag threshold.
+            view.selectionModel().select(saved[1], qt.QItemSelectionModel.SelectionFlag.ClearAndSelect)
         if getattr(moves.host, 'provider', None) is None:
             browser = moves.browser
             selection = view.selectionModel()
@@ -204,7 +261,16 @@ class BrowserDropTargets(qt.QObject):
             if moves is not None:
                 left = qt.Qt.MouseButton.LeftButton
                 if kind == qt.QEvent.Type.MouseButtonPress:
-                    self.press = (widget, event.position().toPoint()) if event.button() == left else None
+                    self.press = None
+                    if event.button() == left:
+                        origin = event.position().toPoint()
+                        saved = None
+                        if self.cocoa and event.modifiers() == qt.Qt.KeyboardModifier.NoModifier:
+                            index = view.indexAt(origin)
+                            selection = view.selectionModel()
+                            if index.isValid() and selection.isSelected(index):
+                                saved = qt.QPersistentModelIndex(index), selection.selection()
+                        self.press = widget, origin, saved
                 elif kind == qt.QEvent.Type.MouseButtonRelease:
                     self.press = None
                 elif kind == qt.QEvent.Type.MouseMove and event.buttons() & left:
