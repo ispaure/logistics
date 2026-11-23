@@ -529,7 +529,9 @@ class ObsidianTests(unittest.TestCase):
                     released.set()
                     await task
         self.run_async(exercise())
-        owner.dispose()
+        with patch('commonUtils.filesystem.index.store.directory_index_path',
+                   side_effect=AssertionError('Private Notes must not resolve a desktop cache')):
+            owner.dispose()
         self.assertEqual(owner.rows.children, [])
         self.assertIsNone(owner.path)
         self.assertEqual(owner.title.text, 'Notes Library closed')

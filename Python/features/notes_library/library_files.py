@@ -27,14 +27,16 @@ def focus(library, path=None):
         database = library.index_database or directory_index_path()
         path = library.root if path is None else library.contained(path)
         hint(database, library._index_hint, (library.provider.root / path,))
+        library._index_hint_database = database
 
 
 def clear_focus(library):
-    if library.filename_listing is not None:
+    database = library._index_hint_database
+    if database is None:
         return
-    from commonUtils.filesystem.index.store import directory_index_path
     from services.directory_index import focus as hint
-    hint(library.index_database or directory_index_path(), library._index_hint)
+    hint(database, library._index_hint)
+    library._index_hint_database = None
 
 
 def directory_index(library):

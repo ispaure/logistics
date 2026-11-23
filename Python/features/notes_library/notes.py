@@ -133,6 +133,7 @@ class NotesLibrary:
         self.index_database = index_database
         self.filename_listing = filename_listing
         self._index_hint = object()
+        self._index_hint_database = None
         self._link_folders = {}
         self._resolved_links = {}
         self._link_lock = RLock()
