@@ -6,9 +6,8 @@ its main screen. Your open files and drafts stay available under
 [Documents](../documents/documents.md).
 
 Opening a file from a folder leaves you in the same destination. Back returns
-to the previous screen or folder with its search and selection. Use
-**••• → All documents** to go straight to the Documents list while keeping
-the current reader or editor open.
+to the previous screen or folder with its search and selection. Use the
+**Documents** tab to return to open readers and editors.
 
 ## iOS toolbars and iPhone Duo
 

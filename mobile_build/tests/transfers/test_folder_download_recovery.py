@@ -177,6 +177,64 @@ class FolderDownloadRecoveryTests(unittest.TestCase):
             self.assertEqual(available_jobs(app), [])
         self.assertEqual(self.source.reads, [('fixture/large/data.bin', CHUNK)])
 
+    def test_reopens_cloud_crypt_job_after_destination_root_moves(self):
+        self.source.remote = 'Cloud Crypt'
+        self.source.client.package_records = ({'saved': False, 'identities': {'Cloud Crypt': self.source.identity}},)
+        job = self.interrupt()
+        self.source.reads.clear()
+        moved = self.root / 'relocated storage'
+        self.destination.root.rename(moved)
+        self.destination = LocalFiles(moved)
+
+        async def run_mirror_work(work, operation, **kwargs):
+            self.assertEqual(kwargs['source'], 'Cloud Crypt:fixture')
+            result = await asyncio.to_thread(work, self.source.client, lambda: False, lambda **values: None)
+            return result.status == 'complete'
+
+        app = SimpleNamespace(cloud_client=self.source.client, private_root=self.records,
+            ordinary_file_roots=lambda: {'On My Phone': self.destination}, transfer_options=lambda: None,
+            run_mirror_work=run_mirror_work)
+        surface = SimpleNamespace(closed=False)
+        refresh = AsyncMock()
+        controller = SimpleNamespace(app=app, _progress_surface=surface, transfer_busy=False,
+                                     rclone_ui=SimpleNamespace(refresh_download_directory=refresh))
+        native = SimpleNamespace(remotes=SimpleNamespace(open=Mock(return_value=self.source)))
+        with patch('features.rclone.mobile.download_recovery.mobile_queue', return_value=self.new_queue()), \
+                patch('features.rclone.mobile.service.native_service', return_value=native):
+            asyncio.run(queue_command(controller, 'resume-download', {'id': job['id']}, lambda: True))
+        self.assertEqual(self.source.reads, [('fixture/large/data.bin', CHUNK)])
+        self.assertEqual((moved / 'Saved Folder' / 'large' / 'data.bin').read_bytes(),
+                         self.source.files['fixture/large/data.bin'])
+        self.assertFalse(self.queue.jobs())
+        refresh.assert_awaited_once_with(self.destination, 'Saved Folder')
+
+    def test_discard_unavailable_folder_retires_only_the_queue_entry(self):
+        job = self.interrupt()
+        old = self.destination.root
+        moved = self.root / 'detached storage'
+        old.rename(moved)
+        # A replacement directory at the same path must not be touched.
+        old.mkdir()
+        replacement = self.queue.staged(old / 'Saved Folder', job)
+        replacement.mkdir()
+        (replacement / 'Do not delete').write_bytes(b'Unrelated bytes')
+        dialog = AsyncMock(side_effect=[False, True])
+        app = SimpleNamespace(cloud_client=self.source.client, private_root=self.records,
+            ordinary_file_roots=lambda: {'On My Phone': self.destination},
+            main_window=SimpleNamespace(dialog=dialog))
+        controller = SimpleNamespace(app=app, _progress_surface=SimpleNamespace(closed=False), transfer_busy=False)
+        native = SimpleNamespace(remotes=SimpleNamespace(open=Mock(return_value=self.source)))
+        with patch('features.rclone.mobile.download_recovery.mobile_queue', return_value=self.new_queue()), \
+                patch('features.rclone.mobile.service.native_service', return_value=native):
+            asyncio.run(queue_command(controller, 'discard-download', {'id': job['id']}, lambda: True))
+            self.assertEqual(self.queue.jobs(), [job])
+            asyncio.run(queue_command(controller, 'discard-download', {'id': job['id']}, lambda: True))
+        self.assertFalse(self.queue.jobs())
+        self.assertEqual((replacement / 'Do not delete').read_bytes(), b'Unrelated bytes')
+        original = moved / replacement.name
+        self.assertTrue((original / 'early.txt').is_file())
+        self.assertEqual(dialog.await_count, 2)
+
     def test_browser_keeps_dotfiles_but_hides_checkpoint_subtrees(self):
         from services.documents.locations import visible_transfer_rows
         stage = '.logistics-' + 'a' * 32 + '.00000000.partial'

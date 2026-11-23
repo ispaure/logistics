@@ -56,9 +56,6 @@ def browser_item(drag, gesture, *, lifting=False):
         for entry, card, *_ in browser._tile_cards.values():
             view = card._impl.native
             if contains(view, gesture):
-                command = getattr(card, '_tile_command', None)
-                if lifting and command is not None and contains(command._impl.native, gesture):
-                    return None, None
                 return entry, view
     return None, None
 
@@ -72,6 +69,7 @@ class BrowserFileDrag(ObjCClass('NSObject'), protocols=(ObjCProtocol('UIGestureR
     owner = objc_property(object)
     token = objc_property(object)
     preview = objc_property(object)
+    tile_press = objc_property(object)
 
     @objc_method
     def gestureRecognizer_shouldReceiveTouch_(self, gesture, touch) -> bool:
@@ -79,7 +77,7 @@ class BrowserFileDrag(ObjCClass('NSObject'), protocols=(ObjCProtocol('UIGestureR
         if drag is None:
             return False
         browser = drag.browser()
-        if browser is None or drag.context() is None:
+        if browser is None or not (browser.can_show_tile_actions or drag.context() is not None):
             return False
         listing = browser.native_list if browser.mode == 'List' else browser._tile_scroll
         view = native_value(touch.view)
@@ -88,7 +86,8 @@ class BrowserFileDrag(ObjCClass('NSObject'), protocols=(ObjCProtocol('UIGestureR
     @objc_method
     def gestureRecognizerShouldBegin_(self, gesture) -> bool:
         drag = self.owner()
-        if drag is None or drag.context() is None:
+        browser = drag.browser() if drag is not None else None
+        if browser is None or not (browser.can_show_tile_actions or drag.context() is not None):
             return False
         entry, _ = browser_item(drag, gesture, lifting=True)
         return entry is not None
@@ -102,20 +101,27 @@ class BrowserFileDrag(ObjCClass('NSObject'), protocols=(ObjCProtocol('UIGestureR
         window = native_value(gesture.view)
         if state == 1 and window is not None:  # Began
             entry, view = browser_item(drag, gesture, lifting=True)
+            browser = drag.browser()
             self.token = drag.begin(entry)
-            if self.token is None or view is None:
+            self.tile_press = None
+            if browser is not None and browser.can_show_tile_actions and entry is not None:
+                point = gesture.locationInView(window)
+                self.tile_press = (entry, browser.epoch, float(point.x), float(point.y))
+            elif self.token is not None:
+                lift_preview(self, view, window, gesture)
+        elif state == 2 and window is not None:  # Changed
+            if self.tile_press is not None:
+                entry, _, x, y = self.tile_press
+                point = gesture.locationInView(window)
+                if (float(point.x) - x) ** 2 + (float(point.y) - y) ** 2 < 10 ** 2:
+                    return
+                self.tile_press = None
+                browser = drag.browser()
+                card = browser._tile_cards.get(entry.identity) if browser is not None else None
+                if self.token is not None and card is not None:
+                    lift_preview(self, card[1]._impl.native, window, gesture)
+            if self.token is None:
                 return
-            preview = view.snapshotViewAfterScreenUpdates(False)
-            if preview is not None:
-                preview.userInteractionEnabled = False
-                preview.accessibilityElementsHidden = True
-                preview.alpha = .85
-                preview.layer.cornerRadius = 8
-                preview.layer.masksToBounds = True
-                window.addSubview(preview)
-                self.preview = preview
-                move_preview(preview, gesture)
-        elif state == 2 and self.token is not None and window is not None:  # Changed
             if self.preview is not None:
                 move_preview(self.preview, gesture)
             point = gesture.locationInView(window)
@@ -128,13 +134,20 @@ class BrowserFileDrag(ObjCClass('NSObject'), protocols=(ObjCProtocol('UIGestureR
                 drag.hover_point = coordinates
         elif state in (3, 4, 5):  # Ended, cancelled, or failed
             token = self.token
-            self.token = None
+            tile_press = self.tile_press
+            self.token = self.tile_press = None
             if self.preview is not None:
                 self.preview.removeFromSuperview()
                 self.preview = None
+            browser = drag.browser()
+            if tile_press is not None:
+                drag.end(token)
+                entry, epoch, _, _ = tile_press
+                if state == 3 and browser is not None and browser.can_show_tile_actions and browser.epoch == epoch:
+                    browser._loop.create_task(browser._tile_actions(entry))
+                return
             if token is None:
                 return
-            browser = drag.browser()
             if state == 3 and window is not None and browser is not None and contains(browser.widget._impl.native, gesture):
                 point = gesture.locationInView(window)
                 entry, _ = browser_item(drag, gesture)
@@ -144,11 +157,49 @@ class BrowserFileDrag(ObjCClass('NSObject'), protocols=(ObjCProtocol('UIGestureR
                 drag.end(token)
 
 
+
+def lift_preview(delegate, view, window, gesture):
+    if view is None:
+        return
+    preview = view.snapshotViewAfterScreenUpdates(False)
+    if preview is not None:
+        preview.userInteractionEnabled = False
+        preview.accessibilityElementsHidden = True
+        preview.alpha = .85
+        preview.layer.cornerRadius = 8
+        preview.layer.masksToBounds = True
+        window.addSubview(preview)
+        delegate.preview = preview
+        move_preview(preview, gesture)
+
+class TileAccessibilityAction(ObjCClass('NSObject')):
+    browser = objc_property(object)
+    entry = objc_property(object)
+
+    @objc_method
+    def openTileActions_(self, action) -> bool:
+        browser = self.browser()
+        if browser is None or not browser.can_show_tile_actions:
+            return False
+        browser._loop.create_task(browser._tile_actions(self.entry))
+        return True
+
+
+def attach_accessibility_action(browser, view, entry):
+    target = TileAccessibilityAction.alloc().init()
+    target.browser, target.entry = ref(browser), entry
+    action = ObjCClass('UIAccessibilityCustomAction').alloc().initWithName(
+        'File actions', target=target, selector=SEL('openTileActions:'))
+    view.accessibilityCustomActions = [action]
+    return target
+
+
 def install(owner, browser):
     from ..file_drag import FileDrag
     browser.file_drag = model = FileDrag(owner, browser)
     delegate = BrowserFileDrag.alloc().init()
     delegate.owner = ref(model)
+    delegate.token = delegate.preview = delegate.tile_press = None
     gesture = ObjCClass('UILongPressGestureRecognizer').alloc().initWithTarget(delegate, action=SEL('holdFile:'))
     gesture.delegate = delegate
     gesture.minimumPressDuration = .45

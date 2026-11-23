@@ -148,7 +148,6 @@ def _private_actions(self, view, comic):
     from .document_sources import folder_location, show_in_folder
     if folder_location(self.app, self.session, view) is not None:
         actions.append(('Show in folder', lambda: show_in_folder(self.app, self.session, self)))
-    actions.append(('All documents', self.show_documents_hub))
     return actions, neighbors if comic else False
 
 

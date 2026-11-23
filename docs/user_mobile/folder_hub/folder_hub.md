@@ -39,7 +39,8 @@ running. Tapping a saved result checks that file immediately. A result
 that is missing or inaccessible leaves the list and shows a message.
 Private names stay out of the saved local index.
 
-Tap **…** beside an item for eligible actions such as **Details**,
+In List, tap **…** beside an item. In Tiles, press and hold the tile to
+show eligible actions such as **Details**,
 **Rename** or **Move**. **Details** opens a panel over the current folder.
 Keep the app open during a long move. Switching
 apps or locking the device interrupts the operation, so inspect the

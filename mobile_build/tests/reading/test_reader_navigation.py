@@ -117,7 +117,7 @@ class ReaderNavigationTests(unittest.TestCase):
                 app.main_window.close()
                 close_loop(app.loop)
 
-    def test_all_documents_from_home_reader_keeps_session_and_can_resume(self):
+    def test_documents_tab_keeps_home_reader_session_and_can_resume(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             LogisticsMobile.storage_root = root
@@ -140,7 +140,8 @@ class ReaderNavigationTests(unittest.TestCase):
                         self.assertEqual(app.native_host.state.destination, 'home')
                         self.assertEqual(app.routes.screens['home'][-1][0], 'reader:' + key)
                         self.assertFalse(app.routes.origins)
-                        owner.reader_actions.invoke(dict(owner.reader_actions.actions)['All documents'])
+                        self.assertNotIn('All documents', dict(owner.reader_actions.actions))
+                        app.show_documents_hub()
                         self.assertEqual(app.native_host.state.destination, 'documents')
                         self.assertFalse(app.routes.screens['documents'])
                         self.assertIs(app.body, app.routes.roots['documents'])

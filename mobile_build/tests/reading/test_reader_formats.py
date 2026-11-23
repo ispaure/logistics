@@ -139,7 +139,7 @@ class ReaderFormatTests(unittest.TestCase):
 
             def check(actions, tools, appearance, is_comic):
                 menu = {title for title, _ in actions}
-                self.assertIn('All documents', menu)
+                self.assertNotIn('All documents', menu)
                 tools_text = '\n'.join(labels(tools)).lower()
                 form = '\n'.join(labels(appearance)).lower()
                 if is_comic:
@@ -227,7 +227,8 @@ class ReaderFormatTests(unittest.TestCase):
                             await provider.apply_provider_layout()
                             for key in before.keys() - {'comic_layout'}:
                                 self.assertEqual(app.preferences.values[key], before[key])
-                        provider.crypt_actions_menu.invoke(dict(provider.crypt_actions_menu.actions)['All documents'])
+                        self.assertNotIn('All documents', dict(provider.crypt_actions_menu.actions))
+                        app.show_documents_hub()
                         self.assertEqual(app.native_host.state.destination, 'documents')
                         self.assertFalse(app.routes.screens['documents'])
                         self.assertIn(provider.session.id, app.workspace.sessions)

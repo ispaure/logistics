@@ -9,7 +9,7 @@ __maintainer__ = "Marc-André Voyer"
 __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
 from hashlib import new as new_hash, sha256
 import json
 import os
@@ -120,19 +120,20 @@ class DownloadQueue:
         _sync_directory(self.bucket)
 
     @contextmanager
-    def writer(self, target):
+    def writer(self, *targets):
         self.validate()
         self.bucket.mkdir(parents=True, exist_ok=True, mode=0o700)
         _sync_directory(self.root.parent)
         _sync_directory(self.root)
         # A bounded set of stable locks also serializes duplicate selections in other processes.
-        stripe = sha256(os.fsencode(target)).hexdigest()[:2]
-        path = self.root / (stripe + '.lock')
-        if path.is_symlink():
-            raise ValueError('Linked transfer lock.')
-        with file_lock(path) as acquired:
-            if not acquired:
-                raise ValueError('Another download is using this destination. Retry when it finishes.')
+        stripes = sorted({sha256(os.fsencode(target)).hexdigest()[:2] for target in targets})
+        with ExitStack() as leases:
+            for stripe in stripes:
+                path = self.root / (stripe + '.lock')
+                if path.is_symlink():
+                    raise ValueError('Linked transfer lock.')
+                if not leases.enter_context(file_lock(path)):
+                    raise ValueError('Another download is using this destination. Retry when it finishes.')
             self.validate()
             yield
 

@@ -234,7 +234,7 @@ class NotesLibraryTests(unittest.TestCase):
                 await owner.edit.on_press()
                 self.assertFalse(owner.editing)
                 self.assertIn('Contents…', [label for label, _ in owner.reader_actions.actions])
-                self.assertFalse({'New document…', 'New folder…'} & dict(owner.reader_actions.actions).keys())
+                self.assertFalse({'New document…', 'New folder…', 'All documents'} & dict(owner.reader_actions.actions).keys())
             await owner.open_note('Vault/attachment.txt')
             self.assertNotIn(owner.edit, owner.view._native_reader_buttons())
         self.run_async(exercise())

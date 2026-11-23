@@ -661,7 +661,6 @@ class VaultBrowser(LibraryFileForms, LibraryPanels):
             actions.append(('Add to playlist…', add_to_playlist))
         if self.up_button.enabled:
             actions.append(("Browse parent folder", self.browse_parent))
-        actions.append(("All documents", self.host.show_documents))
         self.reader_actions = self.host.commands(
             self.reader_actions_button, actions, self.browse_parent
         )

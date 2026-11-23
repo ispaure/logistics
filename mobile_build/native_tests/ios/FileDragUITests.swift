@@ -56,9 +56,10 @@ final class FileDragUITests: XCTestCase {
         exitSelection.tap()
         XCTAssertTrue(menu.waitForExistence(timeout: 8), app.debugDescription)
         app.buttons["Show tiles"].firstMatch.tap()
-        let itemActions = app.buttons["Actions for Tile source.txt"].firstMatch
-        XCTAssertTrue(itemActions.waitForExistence(timeout: 8), app.debugDescription)
-        itemActions.tap()
+        let item = app.buttons["Tile source.txt"].firstMatch
+        XCTAssertTrue(item.waitForExistence(timeout: 8), app.debugDescription)
+        XCTAssertFalse(app.buttons["Actions for Tile source.txt"].exists, app.debugDescription)
+        item.press(forDuration: 0.8)
         let details = app.buttons["Details"].firstMatch
         XCTAssertTrue(details.waitForExistence(timeout: 8), app.debugDescription)
         details.tap()
@@ -69,7 +70,7 @@ final class FileDragUITests: XCTestCase {
         detailsScreenshot.lifetime = .keepAlways
         add(detailsScreenshot)
         closeDetails.tap()
-        XCTAssertTrue(itemActions.waitForExistence(timeout: 8), app.debugDescription)
+        XCTAssertTrue(item.waitForExistence(timeout: 8), app.debugDescription)
         menu.tap()
         XCTAssertTrue(select.waitForExistence(timeout: 8), app.debugDescription)
         select.tap()

@@ -141,6 +141,20 @@ class WorkspaceMoveProbe(DocumentWorkspaceProbe):
             assert browser._item_menu is None and app.file_path == ''
             assert (root / rows[0].title).is_file()
             report['cases'].append('android_native_list_drag_keeps_files_in_place')
+            browser.show_tiles()
+            tile = next(value for value in browser._tile_cards.values() if value[0].label == 'Move alpha.txt')
+            _, card, caption, *_ = tile
+            assert list(card._tile_caption.children) == [caption]
+            assert caption._impl.native.performLongClick()
+            for _ in range(100):
+                if browser._item_menu is not None:
+                    break
+                await asyncio.sleep(.02)
+            assert 'Move…' in dict(browser._item_menu.actions)
+            browser.dismiss_item_menu()
+            report['cases'].append('android_tile_hold_opens_actions_without_an_overflow_button')
+            browser.show_list()
+            rows = [row for row in browser.native_list.data if row.title.startswith('Move ')]
         app.begin_file_selection()
         assert not app.file_checked
         for row in rows:

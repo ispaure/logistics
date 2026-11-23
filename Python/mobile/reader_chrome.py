@@ -153,7 +153,6 @@ class ReaderChrome:
         folder_actions = folder_action(self.app, self.session)
         self._folder_menu_available = bool(folder_actions)
         actions.extend(folder_actions)
-        actions.append(('All documents', self.app.show_documents_hub))
         self.reader_actions = FeatureCommands(self.reader_actions_button, self, actions, self.show_reader_tools, document=True)
         from .workspace_navigation import menu_button
         if comic:

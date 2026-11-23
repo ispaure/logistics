@@ -90,28 +90,25 @@ class FilenameDisplayTests(unittest.TestCase):
                 browser.items.style.layout(SimpleNamespace(width=width, height=600))
                 for entry in entries:
                     _, card, title, _, _ = browser._tile_cards[entry.identity]
-                    band, _ = card.children
-                    media, menu = band.children
-                    self.assertEqual(title.layout.content_width, card.children[1].layout.content_width)
+                    media, caption = card.children
+                    icon = media.children[0].layout
+                    self.assertEqual(list(caption.children), [title])
+                    self.assertEqual(title.layout.content_width, caption.layout.content_width)
                     self.assertIsNone(card._tile_selection.parent)
                     self.assertGreaterEqual(title.layout.content_height, 64)
-                    self.assertLessEqual(menu.layout.absolute_content_top + menu.layout.content_height,
+                    self.assertEqual(icon.absolute_content_left + icon.content_width / 2,
+                                     media.layout.absolute_content_left + media.layout.content_width / 2)
+                    self.assertLessEqual(media.layout.absolute_content_top + media.layout.content_height,
                                          title.layout.absolute_content_top)
-                    self.assertEqual(menu.layout.content_width, 48)
-                    self.assertEqual(menu.layout.content_height, 48)
-                    self.assertLessEqual(media.layout.absolute_content_left + media.layout.content_width,
-                                         menu.layout.absolute_content_left)
                     self.assertEqual(title.accessible_name, entry.label)
-                    self.assertEqual(menu.accessible_name, 'Actions for ' + entry.label)
                 row = browser._tile_row_views[0]
                 self.assertLessEqual(row.children[-1].layout.absolute_content_left
                                      + row.children[-1].layout.content_width, width)
 
         dir_entry, file_entry, _ = entries
         file_card = browser._tile_cards[file_entry.identity][1]
-        menu = file_card.children[0].children[1]
         title = file_card.children[-1].children[-1]
-        app.loop.run_until_complete(menu.on_press())
+        app.loop.run_until_complete(browser._tile_actions(file_entry))
         self.assertEqual([row['path'] for row in actions], [names[0]])
         self.assertFalse(opened)
         app.loop.run_until_complete(title.on_press())

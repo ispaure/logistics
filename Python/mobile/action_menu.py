@@ -264,9 +264,11 @@ class BrowserActions:
             self.native.addAction(ObjCClass('UIAlertAction').actionWithTitle('Cancel', style=1, handler=None))
             popover = self.native.popoverPresentationController
             if popover is not None:
-                popover.sourceView = native
-                popover.sourceRect = native.bounds
-                row = browser._list_rows.get(self.selected)
+                tile = browser.buttons.get(self.selected) if browser.mode == 'Tiles' else None
+                anchor = tile._impl.native if tile is not None else native
+                popover.sourceView = anchor
+                popover.sourceRect = anchor.bounds
+                row = browser._list_rows.get(self.selected) if tile is None else None
                 if row is not None:
                     from toga_iOS.libs import NSIndexPath
                     popover.sourceRect = native.rectForRowAtIndexPath(
@@ -410,16 +412,14 @@ class ActionMenu:
                 actions = [item for item in actions if item[0] not in folder_titles]
             if not any(title in folder_titles for title, _ in actions):
                 actions.extend(folder_action(app, session, host))
-            aliases = {'Open documents': 'All documents', 'Close private document': 'Close document',
-                       'Close comic': 'Close document'}
+            aliases = {'Close private document': 'Close document', 'Close comic': 'Close document'}
             paired = can_pair_document(app, session)
             actions = [(aliases.get(title, title), callback) for title, callback in actions
                        if title != 'Open beside another document' or paired]
             if paired and not any(title == 'Open beside another document' for title, _ in actions):
                 actions.append(('Open beside another document', app.adaptive.show_pair_picker))
-            if not any(title == 'All documents' for title, _ in actions):
-                actions.append(('All documents', app.show_documents_hub))
-            redundant = {'New document', 'Open from Files…', 'Import…', 'Close document'}
+            redundant = {'New document', 'Open from Files…', 'Import…', 'Close document',
+                         'All documents', 'Open documents'}
             actions = [item for item in actions if item[0] not in redundant]
             actions.sort(key=lambda item: _COMMAND_ORDER.get(item[0], (2, 0)))
         if (self.menu is not None and favourite_session is self._favourite_session

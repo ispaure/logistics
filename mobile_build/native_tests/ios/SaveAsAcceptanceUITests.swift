@@ -72,10 +72,11 @@ final class SaveAsAcceptanceTests: XCTestCase {
   exportItem.tap()
   cancelPicker()
   XCTAssertTrue(app.staticTexts["Export cancelled."].waitForExistence(timeout: 15), app.debugDescription)
-  waitHittable(actions)
-  actions.tap()
-  let documents = app.buttons["All documents"].firstMatch
-  XCTAssertTrue(documents.waitForExistence(timeout: 10), app.debugDescription)
+  let close = app.buttons["Close document"].firstMatch
+  waitHittable(close)
+  close.tap()
+  let documents = app.buttons["Documents"].firstMatch
+  waitHittable(documents)
   documents.tap()
   let library = app.buttons["Open Books & Comics library"].firstMatch
   for _ in 0..<5 {

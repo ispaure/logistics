@@ -155,6 +155,15 @@ def available_jobs(app, *, client=None):
     return rows
 
 
+def destination_target(destination, job):
+    return destination.transfer_location(job['selection']['name'], directory=job.get('kind') == 'folder')
+
+
+def matches_parent(target, job):
+    info = target.parent.stat()
+    return [info.st_dev, info.st_ino] == job['parent']
+
+
 def restored_destination(app, source, job):
     selection = job['selection']
     if selection['encrypted']:
@@ -164,18 +173,66 @@ def restored_destination(app, source, job):
         destination = native_service(source.client).localcrypt.open(LocalCryptLocation(
             collection_path(app.private_root, True), source.remote, namespace=selection['namespace'],
             storage_root=app.private_root, create=False))
+        providers = [destination]
     else:
         from services.documents.locations import CollectionFiles
         locations = app.ordinary_file_roots()
         providers = [CollectionFiles(app.private_root), *(p for p in locations.values() if p is not None)]
-        destination = next((p for p in providers if str(p.root) == selection['root']), None)
-        if destination is None:
-            raise ValueError('The original download folder is unavailable.')
-    if str(destination.transfer_location(selection['name'], directory=job.get('kind') == 'folder')) != job['target']:
-        if destination.private:
+    try:
+        exact = next((provider for provider in providers if str(provider.root) == selection['root']), None)
+        if exact is not None and str(target := destination_target(exact, job)) == job['target'] and matches_parent(target, job):
+            return exact
+        # iOS can move the application's data container between builds. Admit
+        # a current storage provider only when it reaches the recorded directory.
+        for provider in providers:
+            try:
+                target = destination_target(provider, job)
+                if target.name == Path(job['target']).name and matches_parent(target, job):
+                    return provider
+            except (OSError, ValueError):
+                continue
+    except BaseException:
+        if selection['encrypted']:
             destination.close()
-        raise ValueError('The destination changed. Reopen the original storage.')
-    return destination
+        raise
+    if selection['encrypted']:
+        destination.close()
+    raise ValueError('The saved download destination cannot be verified.')
+
+
+def check_checkpoint(before, after):
+    if (after['target'], after['offset'], after['digest']) != (before['target'], before['offset'], before['digest']):
+        raise ValueError('The saved download changed. Review its current progress and try again.')
+
+
+def rebind_checkpoint(queue, recovery, job, destination):
+    old = Path(job['target'])
+    target = destination_target(destination, job)
+    if target == old:
+        return
+    if not old.is_absolute():
+        raise ValueError('Invalid saved download destination.')
+    with queue.writer(old, target):
+        current = recovery.load(job['id'])
+        check_checkpoint(job, current)
+        if target.name != old.name or not matches_parent(target, current):
+            raise ValueError('The download destination changed.')
+        if current.get('child') is not None:
+            old_stage = recovery.staged(old, current)
+            member = Path(current['child']['target']).relative_to(old_stage)
+            current['child']['target'] = str(recovery.staged(target, current) / member)
+        current['selection']['root'] = str(destination.root)
+        current['target'] = str(target)
+        recovery.save(current)
+
+
+def forget_checkpoint(queue, recovery, job):
+    # A detached destination is never used for filesystem mutation. Retire only
+    # the authenticated queue record, with its original writer lease.
+    with queue.writer(Path(job['target'])):
+        current = recovery.load(job['id'])
+        check_checkpoint(job, current)
+        recovery.remove(current)
 
 
 async def queue_command(controller, action, args, visible):
@@ -204,14 +261,24 @@ async def queue_command(controller, action, args, visible):
         source = native_service(client).remotes.open(origin)
         destination = None
         try:
-            destination = restored_destination(app, source, job)
+            queue = mobile_queue(app.private_root, source)
+            recovery = FolderQueue(queue) if folder else queue
+            try:
+                destination = restored_destination(app, source, job)
+                await asyncio.to_thread(rebind_checkpoint, queue, recovery, job, destination)
+            except (OSError, ValueError):
+                if action != 'discard-download':
+                    raise
+                confirmed = await app.main_window.dialog(toga.ConfirmDialog('Remove interrupted download?',
+                    'The saved folder cannot be verified. Remove this entry from Transfers and leave any partial data in place?'))
+                if confirmed and current():
+                    await asyncio.to_thread(forget_checkpoint, queue, recovery, job)
+                return
             if action == 'discard-download':
                 confirmed = await app.main_window.dialog(toga.ConfirmDialog('Discard interrupted download?',
                     'Remove this job and its partial data?'))
                 if confirmed and current():
-                    queue = mobile_queue(app.private_root, source)
-                    recovery = FolderQueue(queue) if folder else queue
-                    target = destination.transfer_location(job['selection']['name'], directory=folder)
+                    target = destination_target(destination, job)
                     await asyncio.to_thread(recovery.discard, job['id'], target,
                                             expected=(job['id'], job['offset'], job['digest']))
                     controller.render_transfer_summary()
@@ -225,4 +292,5 @@ async def queue_command(controller, action, args, visible):
             source.close()
     except (OSError, ValueError) as error:
         if current():
-            surface.update(dict(surface.model, message=str(error)))
+            await app.main_window.dialog(toga.ErrorDialog(
+                'Could not discard download' if action == 'discard-download' else 'Could not resume download', str(error)))

@@ -355,7 +355,7 @@ class DocumentMenuTests(TestCase):
                     menu = app.editor_view.actions
                 labels = self.labels(menu)
                 self.assertIn('Show in folder', labels, path.name)
-                self.assertLess(labels.index('Show in folder'), labels.index('All documents'))
+                self.assertNotIn('All documents', labels)
                 self.assertNotIn('Close document', labels)
                 self.assertTrue(await show_in_folder(app, session))
                 self.assertEqual(app.folder_source, 'Local')
@@ -388,7 +388,7 @@ class DocumentMenuTests(TestCase):
                 self.assertIn('Show cached copy in folder', labels)
                 self.assertNotIn('Show in folder', labels)
                 self.assertEqual(labels.count('Show cached copy in folder'), 1)
-                self.assertLess(labels.index('Show cached copy in folder'), labels.index('All documents'))
+                self.assertNotIn('All documents', labels)
                 self.assertTrue(await show_in_folder(app, owner.session))
                 drawer = app.adaptive.browser('files')
                 self.assertEqual(Path(drawer.provider.root), store.root)

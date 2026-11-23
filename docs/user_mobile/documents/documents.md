@@ -9,8 +9,7 @@ lives, whether its source is locked and whether it is read-only.
 ## Return to something you opened
 
 **Open** in Documents lists your current readers and editors. Tap an entry
-to continue with any unsaved edits still in that editor. In a reader, use
-**••• → All documents** to return to the list without closing it. On Home,
+to continue with any unsaved edits still in that editor. On Home,
 **Open now** is a shortcut to a current session. **Recent** on Home previews
 the latest closed file, and **See all** opens its collection in Documents.
 

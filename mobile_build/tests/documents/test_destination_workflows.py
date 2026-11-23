@@ -101,7 +101,6 @@ class DestinationWorkflowTests(unittest.TestCase):
         card = browser.entry_rows[entry.identity]
         circle = card._tile_selection
         self.assertEqual(circle.style.visibility, 'visible')
-        self.assertEqual(card._tile_command.style.visibility, 'hidden')
         self.assertEqual(circle.accessible_name, 'Select ' + entry.label)
         self.run_async(browser._select_pressed(entry, circle))
         self.assertEqual(circle.accessible_name, 'Deselect ' + entry.label)

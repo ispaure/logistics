@@ -174,13 +174,11 @@ class FileOperationTests(unittest.TestCase):
             _, card, title, *_ = browser._tile_cards[entry.identity]
             self.assertEqual(title.text, name)
             self.assertEqual(card._tile_selection.style.visibility, 'visible')
-            self.assertEqual(card._tile_command.style.visibility, 'hidden')
             self.assertEqual(card._tile_selection.accessible_name,
                 ('Deselect ' if name == 'first.txt' else 'Select ') + name)
         app.end_file_selection()
         for _, card, *_ in browser._tile_cards.values():
             self.assertEqual(card._tile_selection.style.visibility, 'hidden')
-            self.assertEqual(card._tile_command.style.visibility, 'visible')
 
     def test_drag_moves_a_folder_and_its_contents_into_a_sibling_folder(self):
         from mobile.file_drag import FileDrag

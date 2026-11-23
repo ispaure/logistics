@@ -16,7 +16,7 @@ from weakref import ref
 
 import toga
 from toga.style import Pack
-from toga.style.pack import CENTER, COLUMN, ROW, START
+from toga.style.pack import CENTER, COLUMN, ROW
 
 from commonUtils.ui.native.presentation import allow_label_to_shrink
 
@@ -35,12 +35,12 @@ def _style_tile_title(button):
     impl = button._impl
     backend = type(impl).__module__
     if backend.startswith('toga_iOS.'):
-        impl.native.contentHorizontalAlignment = 1
+        impl.native.contentHorizontalAlignment = 0
     elif backend.startswith('toga_android.'):
         native = impl.native
         padding = impl.scale_in(_TILE_TITLE_INSET)
         native.setPaddingRelative(padding, 0, padding, 0)
-        native.setGravity(3 | 16)
+        native.setGravity(17)
 
 
 def _android_tile_title(title, paint, width, lines):
@@ -123,25 +123,12 @@ def _install_android_tile_title(button):
     impl._tile_title_layout = True
 
 
-def _tile_menu(name, on_press, backend):
-    label = 'Actions for ' + name
-    if backend.startswith('toga_android.'):
-        # The glyph needs no per-tile drawable or tint setup.
-        command = toga.Button('⋮', on_press=on_press,
-            style=Pack(width=TOUCH_TARGET, height=TOUCH_TARGET, font_size=22))
-        command._impl.native.setPadding(0, 0, 0, 0)
-        command._impl.native.setGravity(17)  # Gravity.CENTER
-        accessible_name(command, label)
-    else:
-        command = icon_button('overflow', label, on_press=on_press)
-    return surface(command, background='transparent', foreground='text', eink_outlined=False)
-
-
 def _tile_filename(button):
     backend = type(button._impl).__module__
     if backend.startswith('toga_iOS.'):
         title = button._impl.native.titleLabel
         title.numberOfLines = 2
+        title.textAlignment = 1
         title.lineBreakMode = 5  # NSLineBreakByTruncatingMiddle
     elif backend.startswith('toga_android.') and not getattr(button._impl, '_tile_title_layout', False):
         _install_android_tile_title(button)
@@ -445,8 +432,6 @@ class LocalFileBrowser(FileBrowser):
         if self.on_item_actions is not None:
             name = entry.payload.get('display_name') or PurePosixPath(entry.label).name
             backend = type(button._impl).__module__
-            command = _tile_menu(name, partial(self._tile_actions, entry), backend)
-            card._tile_command = command
             card._selection_display = object()
             circle = card._tile_selection = icon_button('select_item', 'Select ' + name,
                 on_press=partial(self._select_pressed, entry))
@@ -458,19 +443,10 @@ class LocalFileBrowser(FileBrowser):
                 style=Pack(direction=ROW, height=72, align_items=CENTER))
             card.add(card._tile_caption)
             self._show_tile_selection(entry, card)
-            card.remove(image_box)
-            image_box.style.flex = 1
-            card.insert(0, toga.Box(children=[image_box, command],
-                                    style=Pack(direction=ROW, height=96, align_items=START)))
-            controls.extend((command, circle))
-            if backend.startswith('toga_iOS.'):
-                if hasattr(self, '_item_commands'):
-                    self._attach_tile_menu(command, entry)
-            elif backend.startswith('toga_android.'):
-                from android.view import View
-                title_id = View.generateViewId()
-                button._impl.native.setId(title_id)
-                command._impl.native.setAccessibilityTraversalAfter(title_id)
+            controls.append(circle)
+            if self.on_check_entry is None:
+                for control in (image_box, button):
+                    self._attach_tile_hold(control, entry)
         binding = getattr(self._tile_scroll, '_file_key_binding', None)
         if binding is not None and button.factory.Button.__module__.startswith('toga_android.'):
             # All tile controls dispatch to the same browser and transfer
@@ -499,7 +475,7 @@ class LocalFileBrowser(FileBrowser):
                     self._update_tile_window(position)
                     return
             for entry, card, _, _, _ in self._tile_cards.values():
-                if hasattr(card, '_tile_command'):
+                if hasattr(card, '_tile_selection'):
                     self._show_tile_selection(entry, card)
 
     def _show_tile_selection(self, entry, card):
@@ -507,10 +483,8 @@ class LocalFileBrowser(FileBrowser):
         if card._selection_display is state:
             return
         card._selection_display = state
-        command, circle = card._tile_command, card._tile_selection
+        circle = card._tile_selection
         selected_mode = state is not None
-        command.style.update(display='none' if selected_mode else 'pack',
-                             visibility='hidden' if selected_mode else 'visible')
         circle.style.update(display='pack' if selected_mode else 'none',
                             visibility='visible' if selected_mode else 'hidden')
         if selected_mode:
@@ -519,39 +493,37 @@ class LocalFileBrowser(FileBrowser):
                        ('Deselect ' if state else 'Select ') + name)
         if type(card._impl).__module__.startswith('toga_iOS.'):
             title = card._tile_caption.children[-1]
-            controls = (title, circle) if selected_mode else (title, command)
+            controls = (title, circle) if selected_mode else (title,)
             card._impl.native.accessibilityElements = [control._impl.native for control in controls]
 
-    def _attach_tile_menu(self, command, entry):
-        from rubicon.objc import Block, ObjCBlock, ObjCClass, ObjCInstance, ns_from_py, objc_id
-        from weakref import ref
+    def _attach_tile_hold(self, control, entry):
+        backend = type(control._impl).__module__
+        if backend.startswith('toga_android.'):
+            from android.view import View
+            from java import dynamic_proxy
 
-        browser_ref, command_ref = ref(self), ref(command)
-        epoch = self.epoch
+            browser_ref = ref(self)
+            epoch = self.epoch
 
-        def provide(completion):
-            completion = ObjCInstance(completion).copy()
+            class TileHold(dynamic_proxy(View.OnLongClickListener)):
+                def onLongClick(self, native):
+                    browser = browser_ref()
+                    if browser is None or not browser.can_show_tile_actions or browser.epoch != epoch:
+                        return False
+                    browser._loop.create_task(browser._tile_actions(entry))
+                    return True
 
-            async def load():
-                actions = []
-                try:
-                    browser, control = browser_ref(), command_ref()
-                    if (browser is not None and control is not None
-                            and getattr(control, '_tile_native_menu', None) is not None):
-                        actions = await browser.native_item_menu(entry, epoch)
-                        if control._tile_native_menu is None:
-                            actions = []
-                finally:
-                    ObjCBlock(completion, None, objc_id)(ns_from_py(actions))
+            control._tile_hold = TileHold()
+            control._impl.native.setOnLongClickListener(control._tile_hold)
+        elif backend.startswith('toga_iOS.') and isinstance(control, toga.Button):
+            from .native.file_drag_ios import attach_accessibility_action
 
-            toga.App.app.loop.create_task(load())
+            control._tile_hold = attach_accessibility_action(self, control._impl.native, entry)
 
-        command._tile_menu_provider = Block(provide, None, objc_id)
-        deferred = ObjCClass('UIDeferredMenuElement').elementWithUncachedProvider(command._tile_menu_provider)
-        command._tile_native_menu = ObjCClass('UIMenu').menuWithTitle('', children=[deferred])
-        if self.on_check_entry is None:
-            command._impl.native.menu = command._tile_native_menu
-            command._impl.native.showsMenuAsPrimaryAction = True
+    @property
+    def can_show_tile_actions(self):
+        return (self.mode == 'Tiles' and not self.closed and not self.navigation_busy
+                and self.on_check_entry is None and self.on_item_actions is not None)
 
     async def _select_pressed(self, entry, widget, **kwargs):
         if self.mode == 'Tiles' and widget is self.buttons.get(entry.identity):
@@ -560,9 +532,7 @@ class LocalFileBrowser(FileBrowser):
         return await super()._select_pressed(entry, widget, **kwargs)
 
     async def _tile_actions(self, entry, widget=None, **kwargs):
-        if self.on_check_entry is not None:
-            return await self._select_pressed(entry, widget, **kwargs)
-        if self.closed or self.navigation_busy or not self._entry_current(entry):
+        if not self.can_show_tile_actions or not self._entry_current(entry):
             return
         from .native.file_shortcuts import focus
         focus(self._tile_scroll)
@@ -570,16 +540,20 @@ class LocalFileBrowser(FileBrowser):
         if entry is None or not self._entry_current(entry):
             return
         await self.select(entry)
-        if self.selected == entry.identity and self._entry_current(entry):
+        if self.can_show_tile_actions and self.selected == entry.identity and self._entry_current(entry):
             self.on_item_actions(entry.payload)
 
     def _retire_tile(self, identity):
         _, card, *_ = self._tile_cards[identity]
-        command = getattr(card, '_tile_command', None)
-        if getattr(command, '_tile_native_menu', None) is not None:
-            command._impl.native.menu = None
-            command._impl.native.showsMenuAsPrimaryAction = False
-            command._tile_native_menu = command._tile_menu_provider = None
+        button, image = self.buttons[identity], card.children[0]
+        for control in (image, button):
+            if getattr(control, '_tile_hold', None) is None:
+                continue
+            if type(control._impl).__module__.startswith('toga_android.'):
+                control._impl.native.setOnLongClickListener(None)
+            else:
+                control._impl.native.accessibilityCustomActions = None
+            control._tile_hold = None
         target = self._tile_previews.pop(identity, None)
         if target is not None:
             box, placeholder = target

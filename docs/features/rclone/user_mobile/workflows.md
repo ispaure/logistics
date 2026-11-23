@@ -73,7 +73,9 @@ Open **Workspaces → Transfers**. The panel shows the current transfer,
 up to 60 recent completed transfers recorded by the app, and interrupted
 downloads with a verified checkpoint. A stopped download can appear here after you relaunch.
 Choose **Resume** to check the saved bytes and fetch the remainder, or
-**Discard** to remove that job and its partial data. The destination listing
+**Discard** to remove that job and its verified partial data. If the app
+can no longer verify the destination folder, you can remove the saved entry
+from Transfers and leave the partial data in place. The destination listing
 refreshes when the verified item is published.
 
 Unlock the original connection to see its interrupted downloads. Completed
