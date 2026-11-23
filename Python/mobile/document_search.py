@@ -43,19 +43,17 @@ def scan_local_documents(app, query, *, cancelled=lambda: False, progress=None):
 
 def _scan_locations(app, roots, query, *, cancelled, progress):
     failures, hits, seen = [], [], set()
-    checked = 0
+
     def run(location, listing, load_match, phase, *, cache_pass=False):
-        nonlocal checked
         label, provider = location.label, location.provider
-        consumed = scanned = 0
+        consumed = 0
 
         def report_cache(value):
             nonlocal phase
             phase = value
 
         def report(result):
-            nonlocal consumed, scanned
-            scanned = result.scanned
+            nonlocal consumed
             for row in result.rows[consumed:]:
                 check_cancelled(cancelled)
                 key = provider.relative(row['path'])
@@ -73,7 +71,7 @@ def _scan_locations(app, roots, query, *, cancelled, progress):
                                      source=source, private=private, directory=row['directory']))
             consumed = len(result.rows)
             if progress is not None:
-                progress(checked + scanned, phase, tuple(hits[:50]), location.name)
+                progress(result.scanned, phase, tuple(hits[:50]), location.name)
 
         def children(folder, *, cancelled):
             rows = listing(folder, cancelled=cancelled, status=report_cache)
@@ -82,7 +80,7 @@ def _scan_locations(app, roots, query, *, cancelled, progress):
 
         try:
             if progress is not None:
-                progress(checked, phase, tuple(hits[:50]), location.name)
+                progress(0, phase, tuple(hits[:50]), location.name)
             result = search_resources(provider, '', query, cancelled=cancelled,
                                       list_children=children, load_match=load_match,
                                       progress=report if progress is not None else None)
@@ -92,9 +90,6 @@ def _scan_locations(app, roots, query, *, cancelled, progress):
         except (OSError, ValueError):
             if not cache_pass:
                 failures.append((label, 'Location could not be searched.'))
-        finally:
-            checked += scanned
-
     # Local and Received are enumerated separately from legacy Shared to avoid aliases.
     with ExitStack() as cleanup:
         locations = []
@@ -223,7 +218,7 @@ class DocumentSearch:
         last_report = float('-inf')
         last_location = ''
         last_cache_pass = None
-        observed_count = 0
+        last_checked = 0
         checked_localcrypt_cache = False
         first_match_shown = False
         finished = False
@@ -234,15 +229,16 @@ class DocumentSearch:
 
         def report(checked, cache_phase, hits, location):
             nonlocal last_report, first_match_shown, last_location, last_cache_pass
-            nonlocal observed_count, checked_localcrypt_cache
+            nonlocal last_checked, checked_localcrypt_cache
             now = monotonic()
             first_hit = bool(hits) and not first_match_shown
             cache_pass = cache_phase in ('cached_hints', 'crypt_cached_hints')
-            if cache_phase == 'crypt_cached_hints' and checked > observed_count:
+            if cache_phase == 'crypt_cached_hints' and checked:
                 checked_localcrypt_cache = True
-            observed_count = checked
+            reset = not checked and last_checked > 0
+            last_checked = checked
             if not work.cancel.is_set() and (location != last_location or cache_pass != last_cache_pass
-                                             or first_hit or now - last_report >= .25):
+                                             or reset or first_hit or now - last_report >= .25):
                 last_report = now
                 last_location = location
                 last_cache_pass = cache_pass

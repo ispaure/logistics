@@ -133,9 +133,20 @@ class LocalDocumentSearchTests(TestCase):
             hits, failures = scan_local_documents(
                 app, 'nEeDlE', progress=lambda *update: progress.append(update))
         self.assertFalse(failures)
-        checked = [count for count, _, _, _ in progress]
-        self.assertEqual(checked, sorted(checked))
-        self.assertEqual(checked[-1], 20)
+        from itertools import groupby
+
+        def group(update):
+            _, phase, _, location = update
+            return location, phase in ('cached_hints', 'crypt_cached_hints')
+
+        storage_counts = []
+        for (_, cache_pass), updates in groupby(progress, group):
+            checked = [count for count, _, _, _ in updates]
+            self.assertEqual(checked[0], 0)
+            self.assertEqual(checked, sorted(checked))
+            if not cache_pass:
+                storage_counts.append(checked[-1])
+        self.assertEqual(storage_counts, [5, 5, 5, 5])
         self.assertIn('refreshing', [phase for _, phase, _, _ in progress])
         self.assertEqual(list(dict.fromkeys(location for _, phase, _, location in progress
                                             if phase != 'crypt_cached_hints')),

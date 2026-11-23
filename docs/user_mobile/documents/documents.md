@@ -29,8 +29,8 @@ on-device filenames and folders, including files you have never opened and
 files in unlocked LocalCrypt copies. Search checks cached matches first and
 shows those it verifies on storage. It then checks for new files and adds
 matches as it finds them. The status shows the current location, phase, and
-how many names have been checked. Search reports locations it could not
-access. Tap **×** to leave search.
+how many names have been checked in that location during the current pass.
+Search reports locations it could not access. Tap **×** to leave search.
 
 From a document or search result with a browsable source, choose
 **••• → Show in folder** to select it in Workspaces. The document remains
