@@ -979,7 +979,11 @@ class EditorPicker(DestinationForm):
     async def browser_editor_folder(self, row):
         if self.cloud_busy:
             return False
-        return await self.browser_editor_location((self.save_as_storage.value, row['path']))
+        browser = self.editor_browser
+        loaded = await self.browser_editor_location((self.save_as_storage.value, row['path']))
+        if loaded and browser is self.editor_browser and browser.search_open:
+            browser.close_search()
+        return loaded
 
     async def browser_editor_location(self, location):
         if self.cloud_busy or self.entering_creation_folder():

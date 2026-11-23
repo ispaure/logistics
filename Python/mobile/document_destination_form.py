@@ -178,6 +178,7 @@ class DestinationForm:
         self.panel = panel
         self._compact_keyboard = False
         self._naming_keyboard_active = False
+        self._search_keyboard_active = False
         self.save_as_storage.on_change = self.change_editor_storage
         return panel, title
 
@@ -281,13 +282,23 @@ class DestinationForm:
                 return bool(getattr(getattr(control._impl, 'native', None), 'isFirstResponder', False))
             if not compact or not apple or focused(self.save_as_storage):
                 self._naming_keyboard_active = False
+                self._search_keyboard_active = False
             elif focused(self.save_as_name) or focused(self.new_folder_name):
                 self._naming_keyboard_active = True
+                self._search_keyboard_active = False
+            elif self.editor_browser.search_open and focused(self.editor_browser.search):
+                self._naming_keyboard_active = False
+                self._search_keyboard_active = True
             naming = self.panel is self.name_panel
             paired = self.creation_layout is not None and self.creation_layout.paired
             controls = () if naming else self._browse_controls
             editing_folder = self.entering_creation_folder()
-            hide_browser = editing_folder or (compact and not paired)
+            searching = self._search_keyboard_active and not paired and not naming and not editing_folder
+            # The search field is mounted inside the browser header or list.
+            # Keep both attached while typing, with the list using the space
+            # normally reserved for the destination details.
+            _tuck_control(self.picker_form, searching)
+            hide_browser = editing_folder or (compact and not paired and not searching)
             if not hide_browser:
                 controls = reversed(controls)
             for control in controls:
@@ -298,7 +309,9 @@ class DestinationForm:
                 preserve_selector = ((control is self.save_as_storage or
                     (self.creation_type is not None and control is self.creation_location.storage)) and apple
                     and not self._naming_keyboard_active)
-                _tuck_control(control, hide_browser and (editing_folder or not preserve_selector))
+                secondary = control is self.save_as_storage or control is self.picker_new_folder
+                _tuck_control(control, (searching and secondary)
+                              or (hide_browser and (editing_folder or not preserve_selector)))
             # A landscape keyboard can leave only ~100 logical pixels.
             # Put full-size completion buttons beside the scrollable form;
             # stacking both areas would squash the native buttons to a sliver.
@@ -317,7 +330,7 @@ class DestinationForm:
                 self.creation_formats.fit(format_keyboard, visible_height - 120, width)
             # Creation's UIKit completion lives in its native navigation bar.
             # Other picker forms retain their existing short-viewport layout.
-            tight = (compact and not paired and visible_height < 220
+            tight = (compact and not paired and not searching and visible_height < 220
                      and (not apple or self.creation_type is None))
             actions = self.name_actions if naming else self.picker_actions
             changes = ((self.panel, 'direction', ROW if tight else COLUMN),
@@ -348,7 +361,7 @@ class DestinationForm:
         if pending is not None:
             pending.cancel()
             self._keyboard_reveal = None
-        if compact and apple:
+        if compact and apple and not searching:
             # UIKit and Toga resize the scroll viewport after the keyboard/rotation
             # callback. Reveal the existing first responder in that final layout.
             panel = self.panel

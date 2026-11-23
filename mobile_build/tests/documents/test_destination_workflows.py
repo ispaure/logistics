@@ -17,6 +17,7 @@ import asyncio
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from threading import Event
+from types import SimpleNamespace
 import unittest
 from unittest.mock import AsyncMock, patch
 
@@ -130,6 +131,45 @@ class DestinationWorkflowTests(unittest.TestCase):
         self.assertEqual((destination / 'conflict.txt').read_text(), 'conflict.txt')
         self.assertFalse((self.root / 'conflict.txt').exists())
         self.assertEqual(self.app.file_status.value, 'Move finished.')
+
+    def test_ios_move_search_keeps_browser_mounted_through_keyboard_resize(self):
+        destination = self.root / 'Search destination'
+        destination.mkdir()
+        (self.root / 'original.txt').write_bytes(b'Original bytes')
+        (self.root / 'Unrelated').mkdir()
+        self.run_async(self.app.show_files(location=('Local files', '')))
+        self.app.browser_file_selected(self.app.file_provider.entry('original.txt'))
+        self.run_async(dict(self.app.file_item_commands())['Move…']())
+        picker = self.picker
+        browser = picker.editor_browser
+        original_layout = list(picker.panel.children)
+        browser.open_search()
+        backend = type(self.app._impl)
+        search_field = SimpleNamespace(isFirstResponder=True)
+        with (patch.object(backend, '__module__', 'toga_iOS.app'),
+              patch.object(self.app.native_host, 'adapter', SimpleNamespace(keyboard_inset=300)),
+              patch.object(browser.search._impl, 'native', search_field, create=True)):
+            picker.fit_keyboard(True)
+            picker.fit_keyboard(True)
+            self.assertIs(browser.widget.parent, picker.panel)
+            self.assertIs(picker.picker_header.parent, picker.panel)
+            self.assertTrue(browser.search_open)
+            self.assertIsNone(picker.picker_form.parent)
+            browser.search.value = 'Search destination'
+            browser.render()
+            result, = browser.entries
+            self.assertEqual(result.label, 'Search destination')
+            self.run_async(browser.activate_entry(result))
+            self.assertFalse(browser.search_open)
+            search_field.isFirstResponder = False
+            picker.fit_keyboard(True)
+            self.assertIs(browser.widget.parent, picker.panel)
+        picker.fit_keyboard(False)
+        self.assertEqual(list(picker.panel.children), original_layout)
+        self.assertEqual(picker.picker_folder.value, destination.name)
+        self.run_async(picker.confirm_editor_file())
+        self.assertEqual((destination / 'original.txt').read_bytes(), b'Original bytes')
+        self.assertFalse((self.root / 'original.txt').exists())
 
     def test_duplicate_uses_chosen_folder_and_name_without_overwriting(self):
         destination = self.root / 'Destination'
