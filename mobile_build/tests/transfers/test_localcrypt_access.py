@@ -470,6 +470,36 @@ class LocalCryptAccessTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'index closed'):
                 provider.indexed_list()
 
+    def test_session_only_folder_names_survive_new_views_until_credentials_change(self):
+        from features.rclone.mobile.credential_state import NativeCredentialState
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            client = Client()
+            state = client.credential_state = NativeCredentialState()
+            client.directory_index_root = root / 'cache'
+            first = self.provider(root / 'copy', client)
+            (first.root / 'private-note.md').write_bytes(b'ciphertext fixture')
+            self.assertEqual(first.search_listing()[0]['name'], 'private-note.md')
+            first.close()
+            self.assertFalse(first._directory_index.rows)
+            self.assertFalse(client.directory_index_root.exists())
+            other = self.provider(root / 'other-copy', client)
+            self.assertEqual(other.cached_search_listing('', cancelled=lambda: False), ())
+            other.close()
+
+            reopened = self.provider(root / 'copy', client)
+            with patch.object(reopened._directory_index, '_fingerprint', side_effect=AssertionError('live scan')):
+                hints = reopened.cached_search_listing('', cancelled=lambda: False)
+            self.assertEqual([row['name'] for row in hints], ['private-note.md'])
+            state.publish('clear', {}, {})
+            self.assertFalse(state.directory_names.rows)
+            with self.assertRaises(ValueError):
+                reopened.cached_search_listing('', cancelled=lambda: False)
+            current = self.provider(root / 'copy', client)
+            self.addCleanup(current.close)
+            self.assertEqual(current.cached_search_listing('', cancelled=lambda: False), ())
+
     def test_native_write_progress_reports_bytes_and_cancels_without_reading_plaintext(self):
         from threading import Event
         from features.rclone.localcrypt.mobile.resources import write_progress

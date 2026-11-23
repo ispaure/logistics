@@ -23,7 +23,7 @@ def filename_scan_label(cache_phase):
         'device_cached': 'Searching cached filenames…',
         'device_refreshing': 'Refreshing filename cache…',
         'cached_hints': 'Verifying cached matches…',
-        'crypt_cached_hints': 'Verifying cached LocalCrypt matches…',
+        'crypt_cached_hints': 'Searching cached LocalCrypt names…',
         'checking_storage': 'Checking for new files…',
     }.get(cache_phase, 'Scanning filenames…')
 

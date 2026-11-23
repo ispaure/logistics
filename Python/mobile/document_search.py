@@ -223,6 +223,8 @@ class DocumentSearch:
         last_report = float('-inf')
         last_location = ''
         last_cache_pass = None
+        observed_count = 0
+        checked_localcrypt_cache = False
         first_match_shown = False
         finished = False
 
@@ -232,9 +234,13 @@ class DocumentSearch:
 
         def report(checked, cache_phase, hits, location):
             nonlocal last_report, first_match_shown, last_location, last_cache_pass
+            nonlocal observed_count, checked_localcrypt_cache
             now = monotonic()
             first_hit = bool(hits) and not first_match_shown
             cache_pass = cache_phase in ('cached_hints', 'crypt_cached_hints')
+            if cache_phase == 'crypt_cached_hints' and checked > observed_count:
+                checked_localcrypt_cache = True
+            observed_count = checked
             if not work.cancel.is_set() and (location != last_location or cache_pass != last_cache_pass
                                              or first_hit or now - last_report >= .25):
                 last_report = now
@@ -250,7 +256,7 @@ class DocumentSearch:
                                                          cancelled=work.cancel.is_set, progress=report)
                 finished = True
                 if self.listing.accepts(work, private=True):
-                    self.publish(hits, failures)
+                    self.publish(hits, failures, checked_localcrypt_cache=checked_localcrypt_cache)
             except (asyncio.CancelledError, OperationCancelled):
                 work.cancel.set()
             except (OSError, ValueError):

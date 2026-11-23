@@ -377,7 +377,7 @@ class DocumentsHub:
         if len(hits) > getattr(self, '_document_search_published', 0):
             self.publish_document_search(hits, (), finished=False)
 
-    def publish_document_search(self, hits, failures, *, finished=True):
+    def publish_document_search(self, hits, failures, *, finished=True, checked_localcrypt_cache=False):
         target = self.document_search_results
         published = getattr(self, '_document_search_published', 0)
         rows = []
@@ -438,7 +438,8 @@ class DocumentsHub:
                 # Reserve the location line through completion to keep live
                 # results under the same touch targets.
                 self._documents_search_location.style.visibility = 'hidden'
-                self._documents_search_status.text = f'{count:,} matches'
+                cache_status = ' · LocalCrypt cache checked' if checked_localcrypt_cache else ''
+                self._documents_search_status.text = f'{count:,} matches{cache_status}'
             if not count:
                 target.add(empty_document_row('No matching local documents.'))
         if failures:

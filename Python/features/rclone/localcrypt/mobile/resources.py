@@ -140,12 +140,17 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
         from services.documents.credential_state import MobileCredentialCipher
         from ..directory_index import DirectoryIndex
         index_root = getattr(client, 'directory_index_root', None)
-        self._directory_index = DirectoryIndex(self, index_root, MobileCredentialCipher(self, client=client))
         credential_state = getattr(client, 'credential_state', None)
         if credential_state is not None:
             with credential_state.lock:
                 self._access.check()
+                scope = (credential_state.generation, self.root, remote, self.identity, namespace)
+                self._directory_index = DirectoryIndex(
+                    self, index_root, MobileCredentialCipher(self, client=client),
+                    memory=credential_state.directory_names, scope=scope)
                 credential_state.document_observers.add(self._directory_index)
+        else:
+            self._directory_index = DirectoryIndex(self, index_root, MobileCredentialCipher(self, client=client))
 
     @property
     def closed(self):

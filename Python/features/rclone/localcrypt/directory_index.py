@@ -25,9 +25,47 @@ def _directory_revision(info):
     return info.st_dev, info.st_ino, info.st_mode, info.st_mtime_ns, info.st_ctime_ns
 
 
+class DirectoryNameMemory:
+    """Bounded filename snapshots shared by views in one credential generation."""
+    def __init__(self):
+        self.generation = 0
+        self.rows = OrderedDict()
+        self.size = 0
+        self.lock = RLock()
+
+    def reset(self, generation):
+        with self.lock:
+            self.generation = generation
+            self.rows.clear()
+            self.size = 0
+
+    def get(self, generation, key):
+        with self.lock:
+            if generation != self.generation or key not in self.rows:
+                return None
+            self.rows.move_to_end(key)
+            return self.rows[key]
+
+    def put(self, generation, key, value):
+        limit = 8 * 1024 * 1024
+        size = len(value[1])
+        with self.lock:
+            if generation != self.generation or size > limit:
+                return
+            previous = self.rows.pop(key, None)
+            if previous is not None:
+                self.size -= len(previous[1])
+            self.rows[key] = value
+            self.size += size
+            while self.size > limit or len(self.rows) > 256:
+                _, (_, data) = self.rows.popitem(last=False)
+                self.size -= len(data)
+
+
 class DirectoryIndex:
-    def __init__(self, provider, folder, cipher):
+    def __init__(self, provider, folder, cipher, *, memory=None, scope=None):
         self.provider, self.folder, self.cipher = provider, folder, cipher
+        self.memory, self.scope = memory, scope
         self.rows, self.lock = OrderedDict(), RLock()
         self.closed = False
 
@@ -116,8 +154,9 @@ class DirectoryIndex:
         with self.provider.operation(cancelled):
             self._check(cancelled)
             with self.lock:
-                saved = self.rows.get(path)
+                saved = self._cached_rows(path)
             if saved is not None:
+                self._check(cancelled)
                 return json.loads(saved[1])
             if self.folder is None:
                 return ()
@@ -150,10 +189,9 @@ class DirectoryIndex:
                 return provider.list(path, cancelled=cancelled)
             inode, revision, parent_revision = signature
             with self.lock:
-                cached = self.rows.pop(path, None)
+                cached = self._cached_rows(path)
                 if cached is not None and cached[0] == revision:
                     self._check(cancelled)
-                    self.rows[path] = cached
                     cache_status('cached')
                     return json.loads(cached[1])
             file = scope = None
@@ -203,11 +241,26 @@ class DirectoryIndex:
             self._check(cancelled)
             return rows
 
+    def _cached_rows(self, path):
+        if self.memory is not None:
+            generation, *key = self.scope
+            shared = self.memory.get(generation, (*key, path))
+            if shared is not None:
+                return shared
+        if path in self.rows:
+            self.rows.move_to_end(path)
+            return self.rows[path]
+        return None
+
     def _remember(self, path, revision, rows, cancelled):
         data = json.dumps(rows).encode()
         with self.lock:
             self._check(cancelled)
+            if self.memory is not None:
+                generation, *key = self.scope
+                self.memory.put(generation, (*key, path), (revision, data))
             if len(data) <= LIMIT:
+                self.rows.pop(path, None)
                 self.rows[path] = revision, data
                 while len(self.rows) > 64:
                     self.rows.popitem(last=False)

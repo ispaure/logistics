@@ -322,11 +322,11 @@ class LocalDocumentSearchTests(TestCase):
         group = hub._document_search_group
         original = group.children[0]
         hub.show_document_search_progress(9, '', (first, second))
-        hub.publish_document_search([first, second], [])
+        hub.publish_document_search([first, second], [], checked_localcrypt_cache=True)
         self.assertIs(group.children[0], original)
         self.assertEqual([w.text for w in widgets(group) if isinstance(w, toga.Button) and w.text.endswith('.txt')],
                          ['Zulu.txt', 'Alpha.txt'])
-        self.assertEqual(hub._documents_search_status.text, '2 matches')
+        self.assertEqual(hub._documents_search_status.text, '2 matches · LocalCrypt cache checked')
 
     def test_libraries_have_direct_lists_with_bounded_discovery(self):
         app = self.app

@@ -21,7 +21,10 @@ from contextlib import contextmanager
 
 class NativeCredentialState:
     def __init__(self):
+        from features.rclone.localcrypt.directory_index import DirectoryNameMemory
+
         self.generation = 0
+        self.directory_names = DirectoryNameMemory()
         self.observers = weakref.WeakSet()
         self.document_observers = weakref.WeakSet()
         self.session_privacy = None
@@ -116,6 +119,7 @@ class NativeCredentialState:
                     self.package_privacy = {name: gate for name, gate in self.package_privacy.items() if name in labels}
             self.session_privacy = next(iter(self.package_privacy.values()), None)
             self.generation += 1
+            self.directory_names.reset(self.generation)
             return (*tuple(self.protection_observers), *tuple(self.observers), *tuple(self.document_observers))
 
     def notify(self, observers):
