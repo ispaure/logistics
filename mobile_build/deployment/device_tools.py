@@ -49,7 +49,7 @@ def run(args, *, env=None, log=None):
 
 
 def device_json(args, env, *, timeout=60):
-    if args[0] == 'list' or args[:2] == ['device', 'info']:
+    if args[0] == 'list' or tuple(args[:2]) == ('device', 'info'):
         try:
             from build_manager.apple_devices import device_json as invoke
         except ModuleNotFoundError as error:

@@ -24,6 +24,42 @@ from build_manager.test_manifest import discover as _discover
 from mobile_build.deployment import firebase_deploy, manager_settings, testflight_deploy, testflight_external
 
 
+class BridgeProtocolTests(unittest.TestCase):
+    def test_normal_request_uses_sdk_and_preserves_bootstrap_routing(self):
+        from contextlib import redirect_stderr, redirect_stdout
+        from io import StringIO
+        from logistics_build import manager_bridge
+
+        def request(action, values):
+            payload = dict(schema=1, action=action, values=values, settings_profile='/test/profile.json')
+            stdout, stderr = StringIO(), StringIO()
+            with patch('sys.stdin', StringIO(json.dumps(payload))), redirect_stdout(stdout), redirect_stderr(stderr):
+                self.assertEqual(manager_bridge.main(), 0)
+            return json.loads(stdout.getvalue()), stderr.getvalue()
+
+        def settings(action, values, context):
+            self.assertEqual(action, 'settings')
+            self.assertEqual(values, {})
+            self.assertEqual(context['settings_profile'], '/test/profile.json')
+            print('diagnostic')
+            return {'field': {'value': 'choice'}}
+
+        with patch.object(manager_bridge, 'dispatch', side_effect=settings) as dispatch:
+            response, diagnostic = request('settings', {})
+            self.assertEqual(response, dict(schema=1, result={'field': {'value': 'choice'}}))
+            self.assertEqual(diagnostic, 'diagnostic\n')
+            dispatch.assert_called_once()
+            with self.assertRaisesRegex(ValueError, 'protected credential'):
+                request('settings', {'token': 'fixture-value'})
+            dispatch.assert_called_once()
+        with patch.object(manager_bridge, 'dispatch') as dispatch, \
+                patch('logistics_build.tooling_bootstrap.handle', return_value={'status': 'fixture'}) as bootstrap:
+            response, _ = request('tooling_status', {})
+            self.assertEqual(response, dict(schema=1, result={'status': 'fixture'}))
+            bootstrap.assert_called_once_with(manager_bridge.ROOT, 'tooling_status', {})
+            dispatch.assert_not_called()
+
+
 class ManagerAdapterTests(unittest.TestCase):
     def setUp(self):
         temporary = TemporaryDirectory(prefix='logistics-adapter-contracts-')

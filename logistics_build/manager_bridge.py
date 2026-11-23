@@ -25,8 +25,11 @@ def main():
     request = json.loads(payload)
     if not isinstance(request, dict) or request.get('schema') != 1:
         raise ValueError('Unsupported bridge schema.')
+    action = request.get('action')
+    if not isinstance(action, str):
+        raise ValueError('Unsupported bridge action.')
     # Setup remains available before the external SDK exists in this interpreter.
-    if request.get('action') in {'tooling_status', 'tooling_update'}:
+    if action in {'tooling_status', 'tooling_update'}:
         from logistics_build.tooling_bootstrap import handle
         values = request.get('values', {})
         if not isinstance(values, dict):
@@ -38,9 +41,6 @@ def main():
     from build_manager.adapter_sdk import serve
 
     # Replay the request after the SDK-free bootstrap routing above.
-    action = request.get('action')
-    if not isinstance(action, str):
-        raise ValueError('Unsupported bridge action.')
     serve({action: lambda values, context: dispatch(action, values, context)}, stdin=StringIO(payload))
     return 0
 
