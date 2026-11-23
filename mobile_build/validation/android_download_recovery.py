@@ -53,14 +53,17 @@ def check_ranges(ranges, start, end, crypt):
 
 
 class Ranges(Server):
-    def do_GET(self):
-        if self.server.armed and self.headers.get('Range', '').startswith(f'bytes={self.server.stop}-'):
-            self.server.blocked.set()
-            self.server.release.wait(100)
-            # Nothing from the held request belongs to either process.
-            self.close_connection = True
-            return
-        super().do_GET()
+    def send_body(self, start, stop, source, tag):
+        checkpoint = getattr(self.server, 'stop', None)
+        if not self.server.armed or checkpoint is None or not start <= checkpoint < stop:
+            return super().send_body(start, stop, source, tag)
+        # The response is already open. Deliver exactly the bytes the app
+        # can persist, then hold the unread tail for the process boundary.
+        super().send_body(start, checkpoint, source, tag)
+        self.wfile.flush()
+        self.server.blocked.set()
+        self.server.release.wait(100)
+        self.close_connection = True
 
 
 def ranged_server(stack, ca, key, file, *, ranged):

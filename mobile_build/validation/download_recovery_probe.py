@@ -110,20 +110,24 @@ class Server(BaseHTTPRequestHandler):
         if interval:
             self.send_header('Content-Range', f'bytes {start}-{end}/{size}')
         self.end_headers()
-        if not body:
+        if body:
+            self.send_body(start, end + 1, source, tag)
+
+    def send_body(self, start, stop, source, tag):
+        if start == stop:
             return
         if source is None:
-            for block in blocks(tag, start, end-start+1):
+            for block in blocks(tag, start, stop - start):
                 self.wfile.write(block)
         else:
             with source.open('rb') as stream:
                 stream.seek(start)
-                remaining = end-start+1
+                remaining = stop - start
                 while remaining:
                     block = stream.read(min(MIB, remaining))
                     self.wfile.write(block)
                     remaining -= len(block)
-        self.server.counts.append((start, end-start+1))
+        self.server.counts.append((start, stop - start))
 
 
 def worker(workspace, mode, stop):

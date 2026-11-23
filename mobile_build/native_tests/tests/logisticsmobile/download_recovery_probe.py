@@ -189,10 +189,12 @@ class AndroidRecoveryProbe(LogisticsMobile):
             self.write_result(report)
 
     def interrupted_rows(self):
+        interrupted = False
         for widget in self.transfer_view.native_fallback.history.children:
-            if getattr(widget, 'text', None) == 'Completed transfers':
-                break
-            if getattr(widget, 'children', ()):
+            if getattr(widget, 'text', None) == 'Interrupted downloads':
+                interrupted = True
+                continue
+            if interrupted and getattr(widget, 'children', ()):
                 title, details, actions = widget.children[0].children
                 yield title.text, details.text, actions.children[0]
 
@@ -269,8 +271,15 @@ class AndroidRecoveryProbe(LogisticsMobile):
         assert not target.exists()
         report['cases'][mode] = dict(initial_pid=os.getpid(), target=str(target))
         self.write('state.json', report)
+        for _ in range(300):
+            jobs = await asyncio.to_thread(available_jobs, self)
+            if any(job['offset'] == self.config['stop'] for _, job in jobs):
+                break
+            await asyncio.sleep(.1)
+        else:
+            raise AssertionError('The checkpoint did not reach durable storage')
         await self.host_action('can-stop', mode=mode)
-        # The host force-stops the process with the next GET held before its body.
+        # The host force-stops the process while the response's tail is held.
         await asyncio.sleep(100)
         raise AssertionError('The owned Android process was not stopped at the checkpoint')
 
