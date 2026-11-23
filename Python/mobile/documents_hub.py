@@ -196,7 +196,9 @@ class DocumentsHub:
             style=Pack(direction=COLUMN, flex=1))
         box.add(self._document_collection_body)
         from .document_search import DocumentSearch
-        self._documents_file_search = DocumentSearch(self.app, self.publish_document_search)
+        self._documents_search_status = empty_document_row('Searching local filenames…')
+        self._documents_file_search = DocumentSearch(
+            self.app, self.publish_document_search, self.show_document_search_progress)
         self.documents_sections = box
         self.refresh_document_list()
         if self.workspace.error:
@@ -285,6 +287,17 @@ class DocumentsHub:
         self._document_search_menus = []
         self.document_search_results.clear()
 
+    def show_document_search_progress(self, checked=0, cache_phase=''):
+        from .local_search import filename_scan_label
+
+        status = self._documents_search_status
+        message = (f'{filename_scan_label(cache_phase)} · {checked:,} checked'
+                   if checked else 'Searching local filenames…')
+        if status.text != message:
+            status.text = message
+        if status.parent is None:
+            self.document_search_results.add(status)
+
     def publish_document_search(self, hits, failures):
         target = self.document_search_results
         self.clear_document_search_results()
@@ -361,7 +374,7 @@ class DocumentsHub:
         self._documents_file_search.stop_local_search()
         self.clear_document_search_results()
         if widget.value.strip():
-            self.document_search_results.add(empty_document_row('Searching local filenames…'))
+            self.show_document_search_progress()
         self.show_document_collection()
         self._document_search_delay()
 
@@ -385,7 +398,7 @@ class DocumentsHub:
         query = getattr(self, 'documents_query', '').strip().casefold()
         if query:
             self.clear_document_search_results()
-            self.document_search_results.add(empty_document_row('Searching local filenames…'))
+            self.show_document_search_progress()
             self._documents_file_search.start(query)
             self.show_document_collection()
             return

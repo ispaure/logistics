@@ -251,10 +251,30 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
             self._access.check()
         return found
 
-    def search_listing(self, path='', *, cancelled=lambda: False):
-        """Reuse the credential-scoped index inventory for filename search."""
-        return self._directory_index.listing(self.relative(path), cancelled=cancelled,
-                                             from_inventory=self._list_inventory)
+    def _locate_listing_folder(self, path):
+        if not path:
+            return self._guard(self.root)
+        from ..path_batches import native_path_entries
+
+        encoded_file, encoded_folder = native_path_entries(
+            self.client, self.remote, self.identity, ((path, False), (path, True)),
+            check=self._access.check, encode=True)
+        file = self._guard(self.root / self.relative(encoded_file))
+        folder = self.root / self.relative(encoded_folder)
+        if file == folder:
+            return file
+        folder = self._guard(folder)
+        if file.exists():
+            if folder.exists():
+                raise ValueError('Ambiguous file and folder names.')
+            return file
+        return folder
+
+    def search_listing(self, path='', *, cancelled=lambda: False, cache_status=lambda phase: None):
+        """Reuse the ciphertext inventory and batch the two path encodings."""
+        return self._directory_index.listing(
+            self.relative(path), cancelled=cancelled, from_inventory=self._list_inventory,
+            locate=self._locate_listing_folder, cache_status=cache_status)
 
     def list(self, path='', *, cancelled=lambda: False):
         path = self.relative(path)

@@ -364,6 +364,13 @@ class FileBrowser(RecycledBrowser):
         self._submitted_search_epoch = epoch
         await super()._search_subfolders(epoch, cancelled)
 
+    def search_progress_text(self, result, visible_count):
+        from .local_search import filename_scan_label
+
+        if result.cached:
+            return f'{visible_count:,} cached matches · Checking against storage…'
+        return f'{filename_scan_label(result.cache_phase)} {visible_count:,} found · {result.scanned:,} checked'
+
     def _start_local_index(self):
         provider = self.search_provider
         if (not self._search_suspended and not self._index_started and provider is not None and self.local_search is not None

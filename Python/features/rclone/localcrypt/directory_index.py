@@ -90,11 +90,12 @@ class DirectoryIndex:
             raise ValueError('Linked encrypted directory index is not supported.')
         return file, scope
 
-    def listing(self, path, *, cancelled, from_inventory=None):
+    def listing(self, path, *, cancelled, from_inventory=None, locate=None, cache_status=lambda phase: None):
         provider = self.provider
         with provider.operation(cancelled):
             self._check(cancelled)
-            folder = provider._locate(path)
+            folder = (locate or provider._locate)(path)
+            cache_status('checking')
             inventory = [] if from_inventory is not None else None
             try:
                 signature = (self._fingerprint(folder, cancelled, inventory)
@@ -102,6 +103,7 @@ class DirectoryIndex:
             except FileNotFoundError:
                 signature = None
             if signature is None:
+                cache_status('refreshing')
                 return provider.list(path, cancelled=cancelled)
             inode, revision, parent_revision = signature
             with self.lock:
@@ -109,6 +111,7 @@ class DirectoryIndex:
                 if cached is not None and cached[0] == revision:
                     self._check(cancelled)
                     self.rows[path] = cached
+                    cache_status('cached')
                     return json.loads(cached[1])
             file = scope = None
             try:
@@ -126,9 +129,11 @@ class DirectoryIndex:
                                     and row['path'] == '/'.join(filter(None, (path, row['name'])))
                                     and row['path'].rpartition('/')[0] == path for row in rows):
                                 self._remember(path, revision, rows, cancelled)
+                                cache_status('cached')
                                 return rows
             except (OSError, ValueError, TypeError, KeyError, RuntimeError):
                 pass  # A disposable cache can always be rebuilt from the provider.
+            cache_status('refreshing')
             if from_inventory is None:
                 rows = provider.list(path, cancelled=cancelled)
                 try:

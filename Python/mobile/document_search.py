@@ -16,13 +16,14 @@ __status__ = "Production"
 import asyncio
 from contextlib import ExitStack
 from pathlib import Path, PurePosixPath
+from time import monotonic
 from commonUtils.runtime.operations import OperationCancelled, check_cancelled
 from commonUtils.search.providers import search_resources
 from .folder_listing import FolderListing
 from .files_ui import local_read_available
 
 
-def scan_local_documents(app, query, *, cancelled=lambda: False):
+def scan_local_documents(app, query, *, cancelled=lambda: False, progress=None):
     with ExitStack() as cleanup:
         roots = app.ordinary_file_roots(include_collections=False)
         if local_read_available(app) and app.feature_enabled('rclone'):
@@ -34,28 +35,46 @@ def scan_local_documents(app, query, *, cancelled=lambda: False):
                 if hasattr(provider, 'close'):
                     cleanup.callback(provider.close)
             roots.update(linked)
-        return _scan_locations(app, roots, query, cancelled=cancelled)
+        return _scan_locations(app, roots, query, cancelled=cancelled, progress=progress)
 
 
-def _scan_locations(app, roots, query, *, cancelled):
+def _scan_locations(app, roots, query, *, cancelled, progress):
     failures, hits, seen = [], [], set()
+    checked = 0
     # Local and Received are enumerated separately from Shared to avoid aliases.
     for label in roots:
         check_cancelled(cancelled)
         provider = None
+        location_checked = 0
+        cache_phase = ''
+
+        def report_cache(phase):
+            nonlocal cache_phase
+            cache_phase = phase
+
+        def report(result):
+            nonlocal location_checked
+            location_checked = result.scanned
+            if progress is not None:
+                progress(checked + location_checked, cache_phase)
+
         try:
             provider = app.storage_provider(label, roots)
             if getattr(provider, 'remote_storage', False):
                 continue
             # SharedFiles excludes collection roots here. Its recursive hook
             # otherwise includes them, so use the guarded ordinary list path.
-            listing = (getattr(provider, 'indexed_list', None)
+            search_listing = getattr(provider, 'search_listing', None)
+            listing = (search_listing or getattr(provider, 'indexed_list', None)
                        or getattr(provider, 'list_names', provider.list))
             def children(folder, *, cancelled):
-                return [row for row in listing(folder, cancelled=cancelled)
+                rows = (search_listing(folder, cancelled=cancelled, cache_status=report_cache)
+                        if search_listing is not None else listing(folder, cancelled=cancelled))
+                return [row for row in rows
                         if app.folder_path_visible(row['path'], directory=row['directory'])]
             result = search_resources(provider, '', query, cancelled=cancelled,
-                                      list_children=children)
+                                      list_children=children, progress=report if progress is not None else None)
+            report(result)
             failures.extend(result.errors)
             for row in result.rows:
                 key = provider.relative(row['path'])
@@ -75,6 +94,7 @@ def _scan_locations(app, roots, query, *, cancelled):
         except (OSError, ValueError):
             failures.append((label, 'Location could not be searched.'))
         finally:
+            checked += location_checked
             if provider is not None and hasattr(provider, 'close'):
                 provider.close()
     check_cancelled(cancelled)
@@ -114,8 +134,9 @@ async def reveal_search_hit(app, hit):
 
 
 class DocumentSearch:
-    def __init__(self, app, publish):
+    def __init__(self, app, publish, publish_progress):
         self.app, self.publish = app, publish
+        self.publish_progress = publish_progress
         self.task = None
         self.listing = FolderListing(active=lambda: app.active_host,
             context=lambda: app.documents_query.strip(), location=lambda: None,
@@ -131,15 +152,32 @@ class DocumentSearch:
     def start(self, query):
         self.stop_local_search()
         work = self.listing.begin()
+        last_report = float('-inf')
+        finished = False
+
+        def display_progress(checked, cache_phase):
+            if not finished and self.listing.accepts(work, private=True):
+                self.publish_progress(checked, cache_phase)
+
+        def report(checked, cache_phase):
+            nonlocal last_report
+            now = monotonic()
+            if checked and not work.cancel.is_set() and now - last_report >= .25:
+                last_report = now
+                self.app.loop.call_soon_threadsafe(display_progress, checked, cache_phase)
+
         async def search():
+            nonlocal finished
             try:
                 hits, failures = await asyncio.to_thread(scan_local_documents, self.app, query,
-                                                         cancelled=work.cancel.is_set)
+                                                         cancelled=work.cancel.is_set, progress=report)
+                finished = True
                 if self.listing.accepts(work, private=True):
                     self.publish(hits, failures)
             except (asyncio.CancelledError, OperationCancelled):
                 work.cancel.set()
             except (OSError, ValueError):
+                finished = True
                 if self.listing.accepts(work, private=True):
                     self.publish([], [('Local files', 'Search could not finish.')])
         self.task = self.app.loop.create_task(search())

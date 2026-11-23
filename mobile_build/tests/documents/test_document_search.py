@@ -124,13 +124,18 @@ class LocalDocumentSearchTests(TestCase):
         (crypt.root / 'One/Two/Three/Needle.md').write_bytes(b'opaque cipher fixture')
         (crypt.root / 'Different.txt').write_bytes(b'opaque cipher fixture')
         providers['Fixture - Encrypted Copy'] = crypt
+        progress = []
         with (patch.object(app, 'ordinary_file_roots', return_value={label: p for label, p in providers.items() if not p.private}),
               patch.object(app, 'existing_crypt_locations', return_value={'Fixture - Encrypted Copy': crypt}),
               patch.object(app, 'linked_crypt_locations', return_value={}),
               patch.object(app, 'storage_provider', side_effect=lambda label, roots: roots[label]),
               patch.object(LocalFiles, 'open', side_effect=AssertionError('Search read file content'))):
-            hits, failures = scan_local_documents(app, 'nEeDlE')
+            hits, failures = scan_local_documents(app, 'nEeDlE', progress=lambda count, phase: progress.append((count, phase)))
         self.assertFalse(failures)
+        checked = [count for count, _ in progress]
+        self.assertEqual(checked, sorted(checked))
+        self.assertEqual(checked[-1], 20)
+        self.assertIn('refreshing', [phase for _, phase in progress])
         self.assertEqual({hit['location'] for hit in hits}, set(providers))
         self.assertTrue(all(hit['name'] == 'Needle.md' for hit in hits))
         self.assertEqual(next(hit['source'] for hit in hits if hit['private']), dict(
@@ -230,6 +235,7 @@ class LocalDocumentSearchTests(TestCase):
         app.show_documents_hub()
         started, release = Event(), Event()
         def slow(*args, **kwargs):
+            kwargs['progress'](4501, 'cached')
             started.set()
             release.wait(4)
             return [dict(name='Private stale.md')], []
@@ -241,6 +247,9 @@ class LocalDocumentSearchTests(TestCase):
             with patch('mobile.document_search.scan_local_documents', side_effect=slow):
                 owner.start('private')
                 self.assertTrue(await asyncio.to_thread(started.wait, 2))
+                await wait_until(lambda: '4,501 checked' in app.hub_controller()._documents_search_status.text,
+                                 timeout=2, interval=.01, message='No progress in the Documents status row')
+                self.assertIn('cached LocalCrypt names', app.hub_controller()._documents_search_status.text)
                 with patch.object(app, 'cloud_client', SimpleNamespace(generation=2)):
                     release.set()
                     await owner.task

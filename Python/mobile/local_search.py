@@ -15,6 +15,14 @@ from commonUtils.search.indexed import IndexedLocalSearch
 from commonUtils.search.providers import search_resources
 
 
+def filename_scan_label(cache_phase):
+    return {
+        'checking': 'Checking LocalCrypt folder cache…',
+        'cached': 'Searching cached LocalCrypt names…',
+        'refreshing': 'Refreshing LocalCrypt folder names…',
+    }.get(cache_phase, 'Scanning filenames…')
+
+
 class LocalSearch(IndexedLocalSearch):
     def __init__(self, database):
         super().__init__(database, eligible=self.eligible_provider)
@@ -39,7 +47,20 @@ class LocalSearch(IndexedLocalSearch):
         return visible(self._search_provider(provider, directory, query, **kwargs))
 
     def _search_provider(self, provider, directory, query, **kwargs):
-        indexed = getattr(provider, 'search_listing', None) or getattr(provider, 'indexed_list', None)
+        listing = getattr(provider, 'search_listing', None)
+        if listing is not None and (progress := kwargs.get('progress')) is not None:
+            cache_phase = ''
+
+            def report_cache(phase):
+                nonlocal cache_phase
+                cache_phase = phase
+
+            def children(folder, *, cancelled):
+                return listing(folder, cancelled=cancelled, cache_status=report_cache)
+
+            kwargs['progress'] = lambda result: progress(replace(result, cache_phase=cache_phase))
+            return search_resources(provider, directory, query, list_children=children, **kwargs)
+        indexed = listing or getattr(provider, 'indexed_list', None)
         if indexed is not None:
             return search_resources(provider, directory, query, list_children=indexed, **kwargs)
         from services.documents.locations import MobileLocalFiles
