@@ -250,10 +250,35 @@ class BrowserWindowTests(QtTestCase):
         with (patch.object(controller, 'cocoa', True),
               patch('desktop.browser_drop.start_file_drag') as start):
             controller.eventFilter(viewport, press)
+            slight = origin + qt.QPoint(1, 0)
+            below_threshold = qt.QMouseEvent(qt.QEvent.Type.MouseMove, qt.QPointF(slight),
+                                             qt.QPointF(viewport.mapToGlobal(slight)),
+                                             qt.Qt.MouseButton.NoButton, left, modifiers)
+            self.assertTrue(controller.eventFilter(viewport, below_threshold))
+            start.assert_not_called()
             selection.select(first, flags.ClearAndSelect | flags.Rows)
             self.assertTrue(controller.eventFilter(viewport, move))
         start.assert_called_once()
         self.assertEqual(set(start.call_args.args[1]), set(paths))
+
+    def test_cocoa_browser_batches_use_in_process_paths_and_exports_publish_urls(self):
+        from desktop.native_file_drag import local_drag_paths, start_file_drag
+
+        second = self.root / 'second.txt'
+        second.touch()
+        paths = (self.path, second)
+        widget = qt.QWidget()
+
+        def receive(drag, actions, default):
+            mime = drag.mimeData()
+            self.assertEqual(local_drag_paths(mime), expected)
+            self.assertEqual(mime.hasUrls(), publish_urls)
+            return qt.Qt.DropAction.IgnoreAction
+
+        with patch.object(qt.QApplication, 'platformName', return_value='cocoa'), patch.object(qt.QDrag, 'exec', receive):
+            for expected, internal, publish_urls in ((paths, True, False), (paths[:1], True, True), (paths, False, True)):
+                with self.subTest(internal=internal, publish_urls=publish_urls):
+                    start_file_drag(widget, expected, internal=internal)
 
     def test_file_drop_pulses_then_opens_folder_and_escape_cancels_pending_hover(self):
         from PySide6.QtGui import QDragEnterEvent, QKeyEvent

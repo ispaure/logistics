@@ -18,10 +18,12 @@ from commonUtils.ui.file_browser.drag_drop import MIME, SESSION
 
 
 def local_drag_paths(mime):
-    urls = mime.urls()
-    if not urls or any(not url.isValid() or not url.isLocalFile() for url in urls):
-        return ()
-    names = [url.toLocalFile() for url in urls]
+    names = mime.internal_names if isinstance(mime, LocalFileDrag) else ()
+    if not names:
+        urls = mime.urls()
+        if not urls or any(not url.isValid() or not url.isLocalFile() for url in urls):
+            return ()
+        names = [url.toLocalFile() for url in urls]
     if any('\x00' in name or not Path(name).is_absolute() or not Path(name).name for name in names):
         return ()
     return tuple(dict.fromkeys(Path(name) for name in names))
@@ -59,20 +61,26 @@ def native_drop_action(event, paths, directory, *, protected=False, platform=Non
 
 
 class LocalFileDrag(qt.QMimeData):
-    def __init__(self, paths, *, internal=False):
+    def __init__(self, paths, *, internal=False, internal_only=False):
         super().__init__()
         self.handled = False
-        self.setUrls([qt.QUrl.fromLocalFile(str(path)) for path in paths])
+        self.internal_names = tuple(map(str, paths)) if internal_only else ()
+        if not internal_only:
+            self.setUrls([qt.QUrl.fromLocalFile(str(path)) for path in paths])
         if internal:
             self.setData(MIME, SESSION)
 
 
 def start_file_drag(widget, paths, *, internal=False):
-    """Give the file manager real, durable paths. The receiver owns the transfer."""
+    """Start a local file drag. The receiver owns the transfer."""
     for path in paths:
         check_local_path(path, recursive=True)
         path.lstat()
-    mime = LocalFileDrag(paths, internal=internal)
+    # Qt's Cocoa session can hang when it publishes several native URL items.
+    # Keep browser-to-browser batches in the process while using the normal
+    # native URLs for single files and explicit file-manager exports.
+    internal_only = internal and len(paths) > 1 and qt.QApplication.platformName() == 'cocoa'
+    mime = LocalFileDrag(paths, internal=internal, internal_only=internal_only)
     drag = qt.QDrag(widget)
     drag.setMimeData(mime)
     actions = qt.Qt.DropAction
@@ -80,7 +88,7 @@ def start_file_drag(widget, paths, *, internal=False):
     # Qt owns the drag after exec(). On X11 it still serves MIME data after
     # exec() returns, until the receiving application acknowledges the drop.
     action = drag.exec(offered, actions.CopyAction)
-    return None if mime.handled else action
+    return None if internal_only or mime.handled else action
 
 
 def handoff_message(action):

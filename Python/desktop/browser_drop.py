@@ -190,8 +190,10 @@ class BrowserDropTargets(qt.QObject):
         if not self.press:
             return False
         viewport, origin, saved = self.press
-        if viewport is not widget or (event.position().toPoint() - origin).manhattanLength() < qt.QApplication.startDragDistance():
+        if viewport is not widget:
             return False
+        if (event.position().toPoint() - origin).manhattanLength() < qt.QApplication.startDragDistance():
+            return saved is not None
         self.press = None
         # The common browser has its own fallback gesture. Once Logistics has
         # consumed this press, the fallback must not publish unguarded URLs.
@@ -268,7 +270,7 @@ class BrowserDropTargets(qt.QObject):
                         if self.cocoa and event.modifiers() == qt.Qt.KeyboardModifier.NoModifier:
                             index = view.indexAt(origin)
                             selection = view.selectionModel()
-                            if index.isValid() and selection.isSelected(index):
+                            if index.isValid() and selection.isSelected(index) and len(selection.selectedRows()) > 1:
                                 saved = qt.QPersistentModelIndex(index), selection.selection()
                         self.press = widget, origin, saved
                 elif kind == qt.QEvent.Type.MouseButtonRelease:
