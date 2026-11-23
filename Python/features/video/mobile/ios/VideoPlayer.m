@@ -25,7 +25,7 @@
 
 #import "ScreenAwake.m"
 
-static NSString *const LGVideoChapterHint = @"Open Chapters for named positions, or use the chapter buttons beside Play.";
+static NSString *const LGVideoChapterHint = @"Open Chapters to jump to a chapter.";
 static const int64_t LGVideoChapterRestartMilliseconds = 1000;
 
 @interface LGVideoTimeline : UISlider
@@ -195,7 +195,8 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic, strong) UIStackView *videoIdentity;
 @property(nonatomic, strong) UIStackView *transport, *tabletopUtilities;
 @property(nonatomic, strong) UIButton *playButton;
-@property(nonatomic, strong) UIButton *chapterBackButton, *chapterForwardButton;
+@property(nonatomic, strong) UIButton *previousVideoButton, *nextVideoButton;
+@property(nonatomic) BOOL hasPreviousVideo, hasNextVideo;
 @property(nonatomic, strong) NSLayoutConstraint *movieWidth, *movieHeight, *movieCenterY, *deckCenterY, *controlsHeightLimit;
 
 @property(nonatomic) BOOL networkWaiting, networkResumePending, playRequested;
@@ -246,6 +247,7 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic) int64_t progressSeek;
 @property(nonatomic) NSUInteger lastAudioTrackCount, lastTextTrackCount;
 @property(nonatomic, copy) NSString *optionsJSON, *queueJSON, *pictureGeometry;
+@property(nonatomic, weak) UIView *brightnessSubtitleView;
 @property(nonatomic, copy) void (^command)(NSString *, NSString *);
 @property(nonatomic) BOOL controlsLocked, cacheApproximate;
 @property(nonatomic, strong) UIButton *unlockButton;
@@ -303,6 +305,10 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 - (NSDictionary *)playbackOptions;
 - (void)emitCommand:(NSString *)name value:(NSString *)value;
 - (void)playbackTools:(id)sender;
+- (void)previousVideo:(id)sender;
+- (void)nextVideo:(id)sender;
+- (void)updateVideoSkipButtons;
+- (void)addSubtitleBrightnessToMenu:(UIAlertController *)menu sender:(id)sender;
 @end
 
 @interface LGVideoController (HDRDiagnostics)
@@ -319,6 +325,8 @@ static id<VLCPictureInPictureWindowControlling> LGCreateCaptionPiP(LGVideoContro
 @interface LGVideoController (InlineSubtitles)
 - (void)updateInlineSubtitles;
 - (void)resetInlineSubtitles;
+- (void)updateInlineSubtitleBrightness;
+- (BOOL)canAdjustInlineSubtitleBrightness;
 - (CGRect)naturalSubtitleFrame:(UIView *)surface relativeTo:(UIView *)parent;
 @end
 
@@ -517,6 +525,7 @@ typedef struct {
 - (void)viewWillDisappear:(BOOL)animated {
     [super viewWillDisappear:animated];
     self.surfaceVisible = NO;
+    [self updateInlineSubtitleBrightness];
     [self resetInlineSubtitles];
     [self clearPausePresentation];
     [self setScreenAwake:NO];
@@ -581,6 +590,7 @@ typedef struct {
     }
     [self layoutVideoDrawable];
     [self applyPictureSize];
+    [self updateInlineSubtitleBrightness];
     [self updateInlineSubtitles];
     return YES;
 }
@@ -1411,6 +1421,7 @@ typedef struct {
     [self applyPictureSize];
     if (self.controlsLocked) [self.view bringSubviewToFront:self.unlockButton];
     [self updateScreenAwake];
+    [self updateInlineSubtitleBrightness];
     [self updateTimeline];
 }
 
@@ -1432,6 +1443,7 @@ typedef struct {
     self.timeLabel.accessibilityValue = self.timeLabel.text;
     self.seek.accessibilityValue = self.timeLabel.text;
     [self updateChapterMarkers:duration];
+    [self updateVideoSkipButtons];
     self.lastPosition = position;
     [self updatePlayButton];
 }
@@ -1574,17 +1586,6 @@ typedef struct {
         [fractions addObject:@(start.doubleValue / duration)];
     }
     self.seek.chapterFractions = fractions;
-    [self updateChapterButtons:starts];
-}
-- (void)updateChapterButtons:(NSArray<NSNumber *> *)starts {
-    BOOL hidden = starts.count == 0;
-    if (self.chapterBackButton.hidden != hidden) {
-        self.chapterBackButton.hidden = self.chapterForwardButton.hidden = hidden;
-        [self.view setNeedsLayout];
-    }
-    BOOL enabled = !hidden && !self.controlsLocked;
-    self.chapterBackButton.enabled = enabled && [self chapterTarget:starts next:NO] != nil;
-    self.chapterForwardButton.enabled = enabled && [self chapterTarget:starts next:YES] != nil;
 }
 - (NSNumber *)chapterTarget:(NSArray<NSNumber *> *)starts next:(BOOL)next {
     int64_t position = self.ended ? [self durationMilliseconds] : [self positionMilliseconds];
@@ -1610,13 +1611,10 @@ typedef struct {
     NSArray *starts = [self chapterStarts:[self chapterRows] duration:[self durationMilliseconds]];
     [self seekChapter:[self chapterTarget:starts next:next]];
 }
-- (void)previousChapter:(id)sender { [self skipChapter:NO]; }
-- (void)nextChapter:(id)sender { [self skipChapter:YES]; }
 - (void)invalidateChapters {
     self.chaptersInvalidated = YES;
     self.localChapters = self.airPlayChapters = nil;
     self.seek.chapterFractions = @[];
-    [self updateChapterButtons:@[]];
     UIViewController *presented = self.presentedViewController;
     if (presented == self.chapterDialog || ([presented isKindOfClass:LGVideoDeckSettings.class] &&
         ((LGVideoDeckSettings *)presented).dialog == self.chapterDialog)) {
@@ -1724,6 +1722,7 @@ typedef struct {
         }
     }
     if (!tracks.count) menu.message = @"No embedded tracks available yet. Start playback to discover tracks.";
+    if (text) [self addSubtitleBrightnessToMenu:menu sender:sender];
     [self presentPlaybackDialog:menu];
 }
 - (void)mediaPlayerBufferingChanged:(float)progress {
@@ -1828,6 +1827,7 @@ typedef struct {
     view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     [self.movie addSubview:view];
     [self configureVideoDynamicRange:view.layer];
+    [self updateInlineSubtitleBrightness];
     [self updateInlineSubtitles];
 }
 - (void)configureVideoDynamicRange:(CALayer *)layer {
@@ -2085,17 +2085,17 @@ typedef struct {
     self.transport.alignment = UIStackViewAlignmentCenter;
     self.transport.distribution = UIStackViewDistributionEqualCentering;
     self.transport.spacing = 28;
-    self.chapterBackButton = [self deckButton:@"Previous chapter" symbol:@"backward.end.fill"
-        selector:@selector(previousChapter:) primary:NO];
-    self.chapterForwardButton = [self deckButton:@"Next chapter" symbol:@"forward.end.fill"
-        selector:@selector(nextChapter:) primary:NO];
-    self.chapterBackButton.hidden = self.chapterForwardButton.hidden = YES;
-    [self.transport addArrangedSubview:self.chapterBackButton];
+    self.previousVideoButton = [self deckButton:@"Previous video" symbol:@"backward.end.fill"
+        selector:@selector(previousVideo:) primary:NO];
+    self.nextVideoButton = [self deckButton:@"Next video" symbol:@"forward.end.fill"
+        selector:@selector(nextVideo:) primary:NO];
+    self.previousVideoButton.hidden = self.nextVideoButton.hidden = YES;
+    [self.transport addArrangedSubview:self.previousVideoButton];
     [self.transport addArrangedSubview:[self deckButton:@"Back 10 seconds" symbol:@"gobackward.10" selector:@selector(back:) primary:NO]];
     self.playButton = [self deckButton:@"Play" symbol:@"play.fill" selector:@selector(togglePlay:) primary:YES];
     [self.transport addArrangedSubview:self.playButton];
     [self.transport addArrangedSubview:[self deckButton:@"Forward 10 seconds" symbol:@"goforward.10" selector:@selector(forward:) primary:NO]];
-    [self.transport addArrangedSubview:self.chapterForwardButton];
+    [self.transport addArrangedSubview:self.nextVideoButton];
     [self.controls addArrangedSubview:self.transport];
     if (self.airPlayAvailable) [self installAirPlayControls];
 }
@@ -2111,7 +2111,6 @@ typedef struct {
                             @[@"Audio", @"speaker.wave.2", @"audioTracks:"],
                             @[@"Subtitles", @"captions.bubble", @"subtitleTracks:"],
                             @[@"Chapters", @"list.bullet", @"chapters:"],
-                            @[@"Go to time", @"clock", @"goToTime:"],
                             @[@"Playback", @"slider.horizontal.3", @"playbackTools:"],
                             @[@"Done", @"xmark", @"done:"]]) {
         if (utilityIndex++ % 4 == 0) {
@@ -2318,12 +2317,12 @@ typedef struct {
     self.controls.layoutMarginsRelativeArrangement = YES;
     self.controls.layoutMargins = portrait ? UIEdgeInsetsMake(8, 16, 8, 16) : UIEdgeInsetsMake(4, 12, 6, 12);
     if (tabletop) available = [self tabletopControlsAreaFromArea:available];
-    BOOL chapterButtonsShown = !self.chapterBackButton.hidden;
+    BOOL videoSkipButtonsShown = !self.previousVideoButton.hidden;
     CGFloat transportWidth = available.size.width - 2 * margin
         - self.controls.layoutMargins.left - self.controls.layoutMargins.right;
-    CGFloat transportInset = tabletop ? 0 : MAX(0, (transportWidth - (chapterButtonsShown ? 320 : 260)) / 2);
+    CGFloat transportInset = tabletop ? 0 : MAX(0, (transportWidth - (videoSkipButtonsShown ? 320 : 260)) / 2);
     CGFloat spacing = tabletop ? 28 : 12;
-    self.transport.spacing = chapterButtonsShown
+    self.transport.spacing = videoSkipButtonsShown
         ? MIN(spacing, MAX(0, (transportWidth - 248) / 4)) : spacing;
     self.transport.layoutMarginsRelativeArrangement = !tabletop;
     self.transport.layoutMargins = UIEdgeInsetsMake(0, transportInset, 0, transportInset);

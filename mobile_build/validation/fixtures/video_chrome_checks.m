@@ -10,6 +10,30 @@
 @implementation LGVideoMenuTouch
 - (CGPoint)locationInView:(UIView *)view { return [self.coordinateView convertPoint:self.point toView:view]; }
 @end
+
+static NSUInteger LGSubtitlePeakRGB(UIView *view) {
+    size_t width = ceil(view.bounds.size.width), height = ceil(view.bounds.size.height);
+    CGColorSpaceRef space = CGColorSpaceCreateWithName(kCGColorSpaceSRGB);
+    CGContextRef context = CGBitmapContextCreate(NULL, width, height, 8, width * 4, space, (CGBitmapInfo)kCGImageAlphaPremultipliedLast);
+    CGColorSpaceRelease(space);
+    if (!context) return 0;
+    [view.layer renderInContext:context];
+    const uint8_t *pixels = CGBitmapContextGetData(context);
+    NSUInteger peak = 0;
+    for (size_t index = 0; index < width * height; index++) {
+        const uint8_t *pixel = pixels + index * 4;
+        peak = MAX(peak, MAX(pixel[0], MAX(pixel[1], pixel[2])));
+    }
+    CGContextRelease(context);
+    return peak;
+}
+
+static void LGChooseVideoAction(UIAlertController *menu, NSUInteger index) {
+    NSArray *handlers = objc_getAssociatedObject(menu, &LGVideoDialogHandlersKey);
+    void (^handler)(UIAlertAction *) = handlers[index];
+    handler(menu.actions[index]);
+}
+
 @interface LGVideoChromeChecks : UIResponder <UIApplicationDelegate, UIWindowSceneDelegate>
 @property(nonatomic, strong) UIWindow *window;
 @property(nonatomic, strong) LGVideoController *video;
@@ -229,6 +253,46 @@
     });
 }
 - (BOOL)application:(UIApplication *)app didFinishLaunchingWithOptions:(NSDictionary *)options { return YES; }
+- (NSString *)checkInlineSubtitleBrightness:(UIView *)surface {
+    LGVideoController *v = self.video;
+    [v setControlsShown:YES];
+    NSUInteger nativePeak = LGSubtitlePeakRGB(surface);
+    int64_t pausedClock = [v positionMilliseconds];
+    __block NSDictionary *saved;
+    v.command = ^(NSString *name, NSString *value) {
+        if ([name isEqualToString:@"settings"])
+            saved = [NSJSONSerialization JSONObjectWithData:[value dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
+    };
+    [v subtitleBrightnessOptions:v.playButton];
+    UIAlertController *brightness = (UIAlertController *)v.presentedViewController;
+    if (![brightness.title isEqualToString:@"Subtitle brightness"] || ![brightness.actions.firstObject.title isEqualToString:@"Dim"]) {
+        return @"Inline playback could not open subtitle brightness";
+    }
+    LGChooseVideoAction(brightness, 0);
+    NSUInteger dimPeak = LGSubtitlePeakRGB(surface);
+    if (nativePeak < 220 || dimPeak < 160 || dimPeak >= nativePeak - 25 ||
+        ![saved[@"subtitle_brightness"] isEqualToString:@"dim"] || v.pipActive || v.captionPiP ||
+        v.subtitlePiPEnabled || v.player.isPlaying || [v positionMilliseconds] != pausedClock) {
+        return [NSString stringWithFormat:@"Inline brightness changed the wrong pixels or playback (%lu → %lu)",
+            (unsigned long)nativePeak, (unsigned long)dimPeak];
+    }
+    [self.samples addObject:@{@"inlineSubtitleDefaultRGB": @(nativePeak), @"inlineSubtitleDimRGB": @(dimPeak),
+        @"pausedClockUnchanged": @YES, @"settingsCommand": saved}];
+    UIView *external = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 320, 180)];
+    [self.window addSubview:external];
+    v.externalDisplayAllowed = ^BOOL { return YES; };
+    BOOL moved = [v moveVideoToExternalHost:external];
+    BOOL externalUsesDefault = v.brightnessSubtitleView == nil && LGSubtitlePeakRGB(surface) == nativePeak;
+    BOOL returned = [v moveVideoToExternalHost:nil];
+    [external removeFromSuperview];
+    if (!moved || !returned || !externalUsesDefault || LGSubtitlePeakRGB(surface) != dimPeak)
+        return @"Inline brightness did not follow the local route";
+    [v setting:@"subtitle_brightness" value:@"default"];
+    if (LGSubtitlePeakRGB(surface) != nativePeak || v.brightnessSubtitleView)
+        return @"Default did not restore native subtitle rendering";
+    [brightness dismissViewControllerAnimated:NO completion:nil];
+    return nil;
+}
 - (void)sampleInlineSubtitles:(NSTimer *)timer {
     LGVideoController *v = self.video;
     NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
@@ -284,7 +348,7 @@
     } else {
         NSString *error = v.controlsScroll.hidden && v.subtitleClearance == 0 &&
             CGRectEqualToRect(cue, self.subtitleNaturalCue) ? nil : @"The cue did not return after the controls faded";
-        [self finish:error];
+        [self finish:error ?: [self checkInlineSubtitleBrightness:surface]];
         return;
     }
     self.subtitleStage++;
@@ -367,7 +431,6 @@
     self.video.knownDuration = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QADuration"] longLongValue] ?: 30000;
     if ([[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAUnknownDuration"] boolValue]) self.video.knownDuration = 0;
     self.video.subtitleJSON = @"[]";
-    self.video.queueJSON = @"[]";
     BOOL pipSubtitles = [[NSBundle.mainBundle objectForInfoDictionaryKey:@"QAPipSubtitles"] boolValue];
     NSDictionary *playback = @{@"video_title": @"A long video filename for title alignment.mp4",
         @"source_label": @"Cloud file", @"source_remote": @YES, @"pip_subtitles": @(pipSubtitles)};
@@ -532,12 +595,40 @@
             CGRectGetHeight(strip) <= 0) {
             [self finish:@"Cached ranges are clipped outside the slider"]; return;
         }
+        if (!v.previousVideoButton.hidden || !v.nextVideoButton.hidden) {
+            [self finish:@"A standalone video exposed video-skip buttons"]; return;
+        }
+        NSString *settings = v.optionsJSON;
+        [v configurePlayback:settings queue:@"[{\"current\":true},{}]"];
+        if (v.previousVideoButton.enabled || !v.nextVideoButton.enabled) {
+            [self finish:@"Video-skip buttons ignored the start of the folder"]; return;
+        }
+        [v configurePlayback:settings queue:@"[{},{\"current\":true}]"];
+        if (!v.previousVideoButton.enabled || v.nextVideoButton.enabled) {
+            [self finish:@"Video-skip buttons ignored the end of the folder"]; return;
+        }
+        [v configurePlayback:settings queue:@"[{},{\"current\":true},{}]"];
+        NSMutableArray *skips = [NSMutableArray array];
+        v.command = ^(NSString *name, NSString *value) { [skips addObject:name]; };
+        for (UIButton *button in @[v.previousVideoButton, v.nextVideoButton]) {
+            if (button.configuration.title.length || button.configuration.attributedTitle.length || !button.accessibilityLabel.length) {
+                [self finish:@"Video-skip buttons should show icons and have VoiceOver labels"]; return;
+            }
+            [button sendActionsForControlEvents:UIControlEventTouchUpInside];
+        }
+        v.command = nil;
+        if (![skips isEqualToArray:@[@"previous", @"next"]]) {
+            [self finish:@"Video-skip buttons did not dispatch folder navigation"]; return;
+        }
+        [self.samples addObject:@{@"videoSkipCommands": skips}];
+        [v.view layoutIfNeeded];
         CGRect deckFrame = [v.controlsScroll convertRect:v.controlsScroll.bounds toView:self.window];
         for (UIButton *button in v.transport.arrangedSubviews) {
             CGRect frame = [button convertRect:button.bounds toView:self.window];
             if (!button.configuration.image || !CGRectContainsRect(CGRectInset(deckFrame, -1, -1), frame)
                 || frame.size.width < 44 || frame.size.height < 44) {
-                [self finish:@"Video transport icon or touch target is missing from the controls"]; return;
+                [self finish:[NSString stringWithFormat:@"Transport target clipped: %@ %@ in %@", button.accessibilityLabel,
+                    NSStringFromCGRect(frame), NSStringFromCGRect(deckFrame)]]; return;
             }
         }
         if (v.navigationItem.prompt.length || (v.navigationItem.titleView != v.videoHeader && v.videoHeader.superview != v.view && v.videoHeader.superview != v.controls && v.videoHeader.superview != v.portraitHeader) || !v.videoHeader.window ||
@@ -563,7 +654,7 @@
                     }
                 }
             }
-            if (![labels containsObject:@"Speed"] || ![labels containsObject:@"Fill view"] || labels.count != (v.portraitTabletop ? 6 : 8)) {
+            if (![labels containsObject:@"Speed"] || ![labels containsObject:@"Fill view"] || labels.count != (v.portraitTabletop ? 6 : 7)) {
                 [self finish:@"Laptop quick settings missing"]; return;
             }
             if (!CGRectContainsRect(deck, title) || CGRectGetMinY(title) < CGRectGetMaxY(movie)) {
@@ -601,7 +692,7 @@
     NSString *progress = [self outputPath:@"progress.json"];
     [[NSJSONSerialization dataWithJSONObject:@{@"fadePassed": @YES, @"menuIndex": @(index)} options:0 error:nil]
         writeToFile:progress atomically:YES];
-    NSArray *selectors = @[@"playbackTools:", @"speedOptions:", @"subtitleOptions:", @"queueVideos:", @"audioTracks:", @"subtitleTracks:", @"chapters:", @"goToTime:", @"hdrDisplayOptions:", @"subtitleSizeOptions:"];
+    NSArray *selectors = @[@"playbackTools:", @"speedOptions:", @"subtitleOptions:", @"videoOptions:", @"audioTracks:", @"subtitleTracks:", @"chapters:", @"goToTime:", @"hdrDisplayOptions:", @"subtitleSizeOptions:"];
     if (index >= selectors.count) {
 #ifdef LG_VIDEO_FOLD_QA
         [(LGVideoPoseQAController *)v applyTestFold:NO];
@@ -634,7 +725,30 @@
             ? ((LGVideoDeckSettings *)presentation).dialog : (UIAlertController *)presentation;
         if (!menu) { [self finish:@"Playback menu did not present"]; return; }
         if (index == 0) for (UIAlertAction *action in menu.actions) {
-            if ([action.title hasPrefix:@"Picture size"]) { [self finish:@"Playback duplicates the Picture icon"]; return; }
+            for (NSString *removed in @[@"Picture size", @"Go to time", @"Current folder", @"Previous episode", @"Next episode", @"Previous video", @"Next video"])
+                if ([action.title hasPrefix:removed]) { [self finish:[@"Unexpected Playback action: " stringByAppendingString:removed]]; return; }
+        }
+        if ((index == 2 || index == 5) && ![[menu.actions valueForKey:@"title"] containsObject:@"Subtitle brightness…"]) {
+            [self finish:@"Local subtitle menu is missing inline brightness"]; return;
+        }
+        if (index == 0 || index == 3) {
+            NSString *label = index == 0 ? @"Play next automatically" : @"Subtitle PiP (reopen video)";
+            NSString *key = index == 0 ? @"autoplay_next" : @"pip_subtitles";
+            NSUInteger toggle = [menu.actions indexOfObjectPassingTest:^BOOL(UIAlertAction *action, NSUInteger i, BOOL *stop) {
+                return [action.title isEqualToString:label];
+            }];
+            if (toggle == NSNotFound) { [self finish:[@"Missing toggle: " stringByAppendingString:label]]; return; }
+            __block id saved;
+            v.command = ^(NSString *name, NSString *value) {
+                if ([name isEqualToString:@"settings"])
+                    saved = [NSJSONSerialization JSONObjectWithData:[value dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil][key];
+            };
+            LGChooseVideoAction(menu, toggle);
+            if (saved != (__bridge id)kCFBooleanTrue || v.subtitlePiPEnabled) {
+                [self finish:[@"Toggle failed to send true as a JSON boolean: " stringByAppendingString:label]]; return;
+            }
+            [self.samples addObject:@{key: saved}];
+            v.command = nil;
         }
         NSUInteger cancel = 0;
         for (UIAlertAction *action in menu.actions) if (action.style == UIAlertActionStyleCancel) cancel++;

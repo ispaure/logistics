@@ -37,17 +37,20 @@ apply to the current cue without requesting a different track or seeking.
 | macOS automatic | Legacy libmpv OpenGL blends color-managed SDR subtitles after the video pass. The live `sub-color` setting changes unstyled text only. HDR source metadata (PQ or HLG) selects a reduced default gray and white at Bright. SDR keeps the original white default. The color and tone-mapping settings for the picture are independent. |
 | Qt desktop fallback | Logistics draws sidecar SRT/VTT in a separate sRGB label. Dim changes the glyph color. Embedded subtitles stay with Qt. |
 | Desktop VLC (macOS compatibility, Windows, Linux) | VLC blends subtitles into the decoded SDR picture before the app receives the frame. The receiver path uses VLC renderer discovery. |
-| iOS inline and connected display | The sample-buffer output draws SDR subpictures separately from the SDR or HDR video layer. The app can position the subtitle view. VLC controls its pixels. OpenGL fallback blends subtitles with video. The external scene reparents the same drawable. |
+| iOS inline | The sample-buffer output draws subtitles in a separate view. Logistics adjusts that view at cue redraw and preserves caption alpha. Dim uses 0.60 linear RGB gain. Bright uses 1.25 when the display supports extended range. Default uses the native view directly. OpenGL fallback blends subtitles into video and has no separate adjustment. |
+| iOS connected display | The external scene reparents the drawable and uses VLC's native subtitle appearance. |
 | iOS Subtitle PiP | Logistics composites captured subtitle pixels onto video in Core Image. Dim scales caption-only RGB by 0.60 in linear light. Bright uses 1.25 for PQ/HLG and unity for SDR. The default bypasses the filter. Source color tags and caption alpha are preserved. |
 | iOS classic PiP and Android | Classic iOS PiP uses VLC's video layer. Android inline and PiP use VLC's subtitle surface where available, with the native compositor responsible for the video and caption colors. |
 | Native AirPlay and VLC Cast | Native AirPlay uses AVPlayer with native or HLS text renditions. The TV controls appearance. VLC Cast hands output to the renderer without an app-owned caption layer. |
 
 The Cocoa brightness test uses generated PQ and BT.709 files with light and
 dark scenes, two subtitle tracks, and forced float headroom. It measures cue
-changes and unchanged video samples before display tone mapping. The native
-Subtitle PiP probe checks dark and light backgrounds in the Core Image
-compositor and verifies actual caption delivery and track switching. Physical
-HDR luminance and receiver behavior require the corresponding hardware.
+changes and unchanged video samples before display tone mapping. The iOS inline
+probe measures the current cue through Dim, Default and the connected-display
+handoff while playback is paused. The native Subtitle PiP probe checks dark and
+light backgrounds in the Core Image compositor and verifies caption delivery
+and track switching. Physical HDR luminance and receiver behavior require the
+corresponding hardware.
 
 ## Mobile PiP controls and captions
 

@@ -7,17 +7,7 @@
 #import <CoreImage/CoreImage.h>
 
 static CIImage *LGAdjustCaptionBrightness(CIImage *caption, NSString *level, BOOL hdr) {
-    CGFloat gain = 1;
-    if ([level isEqualToString:@"dim"]) gain = .6;
-    else if (hdr && [level isEqualToString:@"bright"]) gain = 1.25;
-    if (gain == 1) return caption;
-    // Scale only caption RGB in the CI context's extended linear working space.
-    // The alpha vector stays at its identity, including at antialiased edges.
-    return [caption imageByApplyingFilter:@"CIColorMatrix" withInputParameters:@{
-        @"inputRVector": [CIVector vectorWithX:gain Y:0 Z:0 W:0],
-        @"inputGVector": [CIVector vectorWithX:0 Y:gain Z:0 W:0],
-        @"inputBVector": [CIVector vectorWithX:0 Y:0 Z:gain W:0],
-    }];
+    return LGScaleCaptionRGB(caption, LGCaptionGain(level, hdr));
 }
 
 API_AVAILABLE(ios(17.4))
@@ -84,8 +74,12 @@ API_AVAILABLE(ios(17.4))
         CGContextSaveGState(cg);
         CGContextTranslateCTM(cg, frame.origin.x, frame.origin.y);
         CGContextSetAlpha(cg, view.alpha);
-        [view.layer displayIfNeeded];
-        [view.layer renderInContext:cg];
+        // While PiP is starting, inline playback may still show the adjusted
+        // cue. Use the original pixels before applying PiP's own gain.
+        if (!LGDrawOriginalSubtitle(view, cg)) {
+            [view.layer displayIfNeeded];
+            [view.layer renderInContext:cg];
+        }
         CGContextRestoreGState(cg);
     }
 }

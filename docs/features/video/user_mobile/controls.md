@@ -2,20 +2,15 @@
 
 Tap to reveal controls. Double-tap the left or right side to skip ten seconds, or the center to play/pause. **Lock controls** guards against accidental input. Use **Unlock controls** or Escape to unlock. Undo seek is desktop-only.
 
-Timeline ticks mark embedded chapter starts. **Previous chapter** and **Next chapter** sit beside the 10-second skip buttons. Open **Chapters** to jump to a named position. Within the first second of a chapter, **Previous chapter** jumps to the preceding chapter if there is one. After that it restarts the current chapter. **Next chapter** is unavailable in the final chapter. Jumps keep the current Play/Pause state. Videos without chapters have no chapter ticks or skip actions.
+Timeline ticks mark embedded chapter starts. Open **Chapters** to jump to a named position or use **Previous chapter** and **Next chapter**. Within the first second of a chapter, **Previous chapter** jumps to the preceding chapter if there is one. After that it restarts the current chapter. **Next chapter** is unavailable in the final chapter. Jumps keep the current Play/Pause state.
 
-Open **Playback** on iOS or **More playback options → Playback…** on Android for **Go to time**, **Start over**, speed, folder order and autoplay. **Show in folder** closes playback and selects the source. Reopening resumes at the saved position. See the [shared control guide](../user/controls.md).
+On iPhone and iPad, the outer skip icons beside Play go to the previous or next video in the current folder's natural filename order. They appear when the folder contains an adjacent video. Open **Playback** for **Start over**, speed and autoplay. Android keeps **Go to time** and **Current folder** under **More playback options → Playback…**. **Show in folder** closes playback and selects the source. Reopening resumes at the saved position. See the [shared control guide](../user/controls.md).
 
 Keyboard shortcuts include Space, Left/Right, M, F, G, P/N and Escape. **Subtitles and audio** browses the current provider for SRT, VTT, ASS and SSA up to 8 MiB. Set preferred languages, subtitle size and delay, or audio sync offset. Positive delay means later. Android font/language changes can briefly rebuffer. **Cache ≈** maps remote cached bytes to time approximately.
 
-On iOS 17.4 or later, turn on **Playback → Subtitle PiP (reopen video)** and reopen to enable subtitle composition. Turn it off and reopen for classic PiP. See the [iOS pause presentation and physical checks](../development/hdr-play-pause.md).
+On iPhone or iPad, open **Subtitles → Subtitle brightness…** during playback, or find it in **Playback → Subtitles and audio…**. Choose **Dim**, **Default**, or **Bright**. The current cue updates in place. The choice is saved with the video. Bright uses extra brightness when the display has headroom. These controls are available when the player renders subtitles in a separate layer. Android and external playback use their native subtitle appearance.
 
-With Subtitle PiP enabled, choose **Subtitles and audio → Subtitle brightness
-in PiP**. Choosing a level opens Picture in Picture to preview the current cue. **Dim** lowers
-the caption brightness and **Default** keeps the normal level. **Bright**
-raises caption brightness for HDR video when the output has headroom.
-Inline iOS playback, classic PiP, Android, Cast, AirPlay and connected displays
-keep their native subtitle appearance.
+On iOS 17.4 or later, **Playback → Video options… → Subtitle PiP (reopen video)** controls whether Picture in Picture includes subtitles. Reopen the video after changing the setting. Subtitle PiP uses the saved caption brightness and gives Bright extra headroom for HDR sources. See the [iOS pause presentation and physical checks](../development/hdr-play-pause.md).
 
 ## Watching on a TV with Android
 

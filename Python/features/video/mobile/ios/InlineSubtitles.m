@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Marc-Andre Voyer (marcandre.voyer@gmail.com)
 // SPDX-License-Identifier: MIT
 
+#import <CoreImage/CoreImage.h>
+#import <objc/runtime.h>
+
 // The pinned sample-buffer output draws VLC's subpictures in a transparent
 // view next to the video layer. The OpenGL fallback blends them into the video.
 static UIView *LGSubtitleSurface(UIView *container) {
@@ -12,6 +15,103 @@ static UIView *LGSubtitleSurface(UIView *container) {
         if (nested) return nested;
     }
     return nil;
+}
+
+static CGFloat LGCaptionGain(NSString *level, BOOL brightAvailable) {
+    if ([level isEqualToString:@"dim"]) return .60;
+    return brightAvailable && [level isEqualToString:@"bright"] ? 1.25 : 1;
+}
+
+static CIImage *LGScaleCaptionRGB(CIImage *caption, CGFloat gain) {
+    if (gain == 1) return caption;
+    // Core Image works in extended linear RGB. Keep the original alpha.
+    return [caption imageByApplyingFilter:@"CIColorMatrix" withInputParameters:@{
+        @"inputRVector": [CIVector vectorWithX:gain Y:0 Z:0 W:0],
+        @"inputGVector": [CIVector vectorWithX:0 Y:gain Z:0 W:0],
+        @"inputBVector": [CIVector vectorWithX:0 Y:0 Z:gain W:0],
+    }];
+}
+
+@interface LGInlineCaptionLayer : CALayer
+@property(nonatomic) CGFloat gain;
+@end
+@implementation LGInlineCaptionLayer
+@end
+
+static char LGInlineCaptionLayerKey;
+static void (*LGDrawVLCSubtitle)(UIView *, SEL, CGRect);
+
+static BOOL LGDrawOriginalSubtitle(UIView *view, CGContextRef context) {
+    if (!objc_getAssociatedObject(view, &LGInlineCaptionLayerKey)) return NO;
+    UIGraphicsPushContext(context);
+    LGDrawVLCSubtitle(view, @selector(drawRect:), view.bounds);
+    UIGraphicsPopContext();
+    return YES;
+}
+
+static void LGDrawInlineSubtitle(UIView *view, SEL selector, CGRect dirtyRect) {
+    LGInlineCaptionLayer *layer = objc_getAssociatedObject(view, &LGInlineCaptionLayerKey);
+    if (!layer || CGRectIsEmpty(view.bounds)) {
+        LGDrawVLCSubtitle(view, selector, dirtyRect);
+        return;
+    }
+    static CIContext *context;
+    if (!context) context = [CIContext contextWithOptions:@{kCIContextCacheIntermediates: @NO}];
+    UIGraphicsImageRendererFormat *format = [UIGraphicsImageRendererFormat defaultFormat];
+    format.scale = view.contentScaleFactor;
+    format.preferredRange = UIGraphicsImageRendererFormatRangeStandard;
+    UIGraphicsImageRenderer *renderer = [[UIGraphicsImageRenderer alloc] initWithBounds:view.bounds format:format];
+    UIImage *native = [renderer imageWithActions:^(UIGraphicsImageRendererContext *drawing) {
+        LGDrawOriginalSubtitle(view, drawing.CGContext);
+    }];
+    CIImage *caption = LGScaleCaptionRGB([CIImage imageWithCGImage:native.CGImage], layer.gain);
+    BOOL bright = layer.gain > 1;
+    CGColorSpaceRef colorSpace = CGColorSpaceCreateWithName(bright ? kCGColorSpaceExtendedLinearSRGB : kCGColorSpaceSRGB);
+    CGImageRef image = [context createCGImage:caption fromRect:caption.extent
+        format:bright ? kCIFormatRGBAh : kCIFormatRGBA8 colorSpace:colorSpace deferred:YES];
+    CGColorSpaceRelease(colorSpace);
+
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+    layer.frame = view.bounds;
+    layer.contents = (__bridge id)image;
+    [CATransaction commit];
+    if (image) {
+        CGImageRelease(image);
+        CGContextClearRect(UIGraphicsGetCurrentContext(), view.bounds);
+    } else LGDrawVLCSubtitle(view, selector, dirtyRect);
+}
+
+static void LGSetInlineCaptionGain(UIView *surface, CGFloat gain) {
+    if (!surface) return;
+    LGInlineCaptionLayer *layer = objc_getAssociatedObject(surface, &LGInlineCaptionLayerKey);
+    if ((layer ? layer.gain : 1) == gain) return;
+    if (gain == 1) {
+        [layer removeFromSuperlayer];
+        objc_setAssociatedObject(surface, &LGInlineCaptionLayerKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    } else {
+        if (!LGDrawVLCSubtitle) {
+            // The pinned VLC renderer redraws this view on cue changes, including
+            // animated captions. Intercept only its drawRect; the video layer
+            // and unconfigured subtitle views use their native draw paths.
+            Class cls = NSClassFromString(@"VLCSampleBufferSubpictureView");
+            Method method = class_getInstanceMethod(cls, @selector(drawRect:));
+            LGDrawVLCSubtitle = (void (*)(UIView *, SEL, CGRect))method_getImplementation(method);
+            class_replaceMethod(cls, @selector(drawRect:), (IMP)LGDrawInlineSubtitle, method_getTypeEncoding(method));
+        }
+        if (!layer) {
+            layer = [LGInlineCaptionLayer layer];
+            [surface.layer addSublayer:layer];
+            objc_setAssociatedObject(surface, &LGInlineCaptionLayerKey, layer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+        layer.gain = gain;
+        if (@available(iOS 26.0, *)) {
+            layer.preferredDynamicRange = gain > 1 ? CADynamicRangeConstrainedHigh : CADynamicRangeStandard;
+            layer.contentsHeadroom = gain > 1 ? gain : 0;
+        } else if (@available(iOS 17.0, *)) layer.wantsExtendedDynamicRangeContent = gain > 1;
+    }
+    [surface setNeedsDisplay];
+    [surface.layer displayIfNeeded];
 }
 
 static BOOL LGHasPlainTextSubtitle(VLCMediaPlayer *player) {
@@ -56,6 +156,25 @@ static CGRect LGRenderedSubtitleBounds(UIView *surface) {
 }
 
 @implementation LGVideoController (InlineSubtitles)
+
+- (BOOL)canAdjustInlineSubtitleBrightness {
+    return ![self hasAirPlay] && !self.externalVideoHost && !self.casting && LGSubtitleSurface(self.movie) != nil;
+}
+
+- (void)updateInlineSubtitleBrightness {
+    CGFloat gain = 1;
+    UIView *surface = nil;
+    if (self.surfaceVisible && !self.retired && !self.lockHidden && !self.pipActive && !self.movie.hidden &&
+        ![self hasAirPlay] && !self.externalVideoHost && !self.casting) {
+        BOOL brightAvailable = NO;
+        if (@available(iOS 17.0, *)) brightAvailable = self.view.window.screen.potentialEDRHeadroom > 1;
+        gain = LGCaptionGain([self playbackOptions][@"subtitle_brightness"], brightAvailable);
+        if (gain != 1) surface = LGSubtitleSurface(self.movie);
+    }
+    if (self.brightnessSubtitleView != surface) LGSetInlineCaptionGain(self.brightnessSubtitleView, 1);
+    self.brightnessSubtitleView = surface;
+    LGSetInlineCaptionGain(surface, gain);
+}
 
 - (CGRect)naturalSubtitleFrame:(UIView *)surface relativeTo:(UIView *)parent {
     CGRect frame = [surface convertRect:surface.bounds toView:parent];

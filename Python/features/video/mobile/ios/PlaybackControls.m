@@ -102,8 +102,25 @@
     return [value isKindOfClass:NSDictionary.class] ? value : @{};
 }
 - (void)configurePlayback:(NSString *)settings queue:(NSString *)queue {
-    self.optionsJSON = settings; self.queueJSON = queue;
+    self.optionsJSON = settings;
+    if (![self.queueJSON isEqualToString:queue]) {
+        self.queueJSON = queue;
+        NSData *data = [queue dataUsingEncoding:NSUTF8StringEncoding];
+        NSArray *rows = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+        self.hasPreviousVideo = self.hasNextVideo = NO;
+        NSUInteger index = 0;
+        for (NSDictionary *row in rows) {
+            if ([row[@"current"] boolValue]) {
+                self.hasPreviousVideo = index > 0;
+                self.hasNextVideo = index + 1 < rows.count;
+                break;
+            }
+            index++;
+        }
+        [self updateVideoSkipButtons];
+    }
     [self applyPlaybackOptions];
+    [self updateInlineSubtitleBrightness];
     [self updateVideoHeader];
 }
 - (void)applyPlaybackOptions {
@@ -236,7 +253,8 @@
     NSMutableDictionary *options = [[self playbackOptions] mutableCopy]; options[key] = value;
     NSData *data = [NSJSONSerialization dataWithJSONObject:options options:0 error:nil];
     self.optionsJSON = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
-    if (![key isEqualToString:@"subtitle_brightness"]) [self applyPlaybackOptions];
+    if ([key isEqualToString:@"subtitle_brightness"]) [self updateInlineSubtitleBrightness];
+    else if (![key isEqualToString:@"pip_subtitles"] && ![key isEqualToString:@"autoplay_next"]) [self applyPlaybackOptions];
     NSData *update = [NSJSONSerialization dataWithJSONObject:@{key: value} options:0 error:nil];
     [self emitCommand:@"settings" value:[[NSString alloc] initWithData:update encoding:NSUTF8StringEncoding]];
 }
@@ -285,6 +303,7 @@
     self.controlsLocked = !self.controlsLocked;
     self.unlockButton.hidden = !self.controlsLocked;
     self.seek.enabled = !self.controlsLocked;
+    [self updateVideoSkipButtons];
     [self setControlsShown:!self.controlsLocked];
     [self.view bringSubviewToFront:self.unlockButton];
 }
@@ -311,16 +330,21 @@
     if (self.controlsLocked) [self toggleControlLock:sender];
     else if (self.fullscreen) [self toggleFullscreen:sender];
 }
-- (void)nextVideo:(id)sender { if (!self.controlsLocked) [self emitCommand:@"next" value:@""]; }
-- (void)previousVideo:(id)sender { if (!self.controlsLocked) [self emitCommand:@"previous" value:@""]; }
-- (void)queueVideos:(id)sender {
-    UIAlertController *menu = [self menu:@"Current folder" sender:sender];
-    NSArray *rows = [NSJSONSerialization JSONObjectWithData:[self.queueJSON dataUsingEncoding:NSUTF8StringEncoding] options:0 error:nil];
-    for (NSDictionary *row in rows) {
-        NSString *title = [NSString stringWithFormat:@"%@%@", [row[@"current"] boolValue] ? @"✓ " : @"", row[@"name"]];
-        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:title style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self emitCommand:@"queue" value:row[@"path"]]; }]];
+- (void)nextVideo:(id)sender {
+    if (!self.controlsLocked && self.hasNextVideo) [self emitCommand:@"next" value:@""];
+}
+- (void)previousVideo:(id)sender {
+    if (!self.controlsLocked && self.hasPreviousVideo) [self emitCommand:@"previous" value:@""];
+}
+- (void)updateVideoSkipButtons {
+    BOOL hidden = !self.hasPreviousVideo && !self.hasNextVideo;
+    if (self.previousVideoButton.hidden != hidden) {
+        self.previousVideoButton.hidden = self.nextVideoButton.hidden = hidden;
+        [self.view setNeedsLayout];
     }
-    [self presentPlaybackDialog:menu];
+    BOOL enabled = !hidden && !self.controlsLocked && [self canPlay:NO];
+    self.previousVideoButton.enabled = enabled && self.hasPreviousVideo;
+    self.nextVideoButton.enabled = enabled && self.hasNextVideo;
 }
 - (void)togglePictureSize:(id)sender {
     BOOL filled = [[self playbackOptions][@"aspect"] isEqualToString:@"fill"];
@@ -349,32 +373,35 @@
         return;
     }
     UIAlertController *menu = [self menu:@"Subtitles and audio" sender:sender];
+    [self addSubtitleBrightnessToMenu:menu sender:sender];
+    [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Subtitle size…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+        [self subtitleSizeOptions:sender];
+    }]];
     [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Choose subtitle file…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self emitCommand:@"subtitleBrowse" value:@""]; }]];
     if (self.casting || self.externalVideoHost) {
         menu.message = @"Subtitle brightness is unavailable over Cast or on a connected display.";
-    } else if (self.subtitlePiPEnabled && [AVPictureInPictureController isPictureInPictureSupported] && [self canPlay:YES]) {
-        [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Subtitle brightness in PiP…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-            [self subtitleBrightnessOptions:sender];
-        }]];
-    } else if (!self.restricted) {
-        menu.message = @"Subtitle brightness applies in Subtitle PiP on supported devices.";
+    } else if (![self canAdjustInlineSubtitleBrightness]) {
+        menu.message = @"Subtitle brightness requires a separate subtitle layer. Start playback and try again.";
     }
     for (NSArray *entry in @[@[@"Subtitle delay (ms; positive = later)", @"subtitle_delay_ms"], @[@"Audio delay (ms; positive = later)", @"audio_delay_ms"], @[@"Preferred audio language (e.g. fr)", @"audio_language"], @[@"Preferred subtitle language (e.g. en)", @"subtitle_language"]])
         [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:entry[0] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self promptValue:entry[0] key:entry[1] numeric:[entry[1] hasSuffix:@"_ms"]]; }]];
     [self presentPlaybackDialog:menu];
 }
+- (void)addSubtitleBrightnessToMenu:(UIAlertController *)menu sender:(id)sender {
+    if (![self canAdjustInlineSubtitleBrightness]) return;
+    [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Subtitle brightness…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+        [self subtitleBrightnessOptions:sender];
+    }]];
+}
 - (void)subtitleBrightnessOptions:(id)sender {
-    if (self.controlsLocked || ![self canPlay:YES] || [self hasAirPlay] ||
-        self.externalVideoHost || self.casting || !self.subtitlePiPEnabled) return;
-    UIAlertController *menu = [self menu:@"Subtitle brightness in PiP" sender:sender];
-    menu.message = @"Choose a level to preview the current cue in Subtitle PiP. Bright adds brightness for HDR video.";
+    if (self.controlsLocked || ![self canPlay:NO] || ![self canAdjustInlineSubtitleBrightness]) return;
+    UIAlertController *menu = [self menu:@"Subtitle brightness" sender:sender];
+    menu.message = @"Changes apply immediately. Bright uses extra display brightness when available.";
     NSString *current = [self playbackOptions][@"subtitle_brightness"] ?: @"default";
     for (NSArray<NSString *> *choice in @[@[@"Dim", @"dim"], @[@"Default", @"default"], @[@"Bright", @"bright"]]) {
         NSString *title = [choice[1] isEqualToString:current] ? [@"✓ " stringByAppendingString:choice[0]] : choice[0];
         [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:title style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-            if (self.controlsLocked || [self hasAirPlay] || self.externalVideoHost || self.casting || ![self canPlay:YES]) return;
-            [self setting:@"subtitle_brightness" value:choice[1]];
-            [self pip:sender];
+            if ([self canAdjustInlineSubtitleBrightness]) [self setting:@"subtitle_brightness" value:choice[1]];
         }]];
     }
     [self presentPlaybackDialog:menu];
@@ -413,10 +440,9 @@
 - (void)playbackTools:(id)sender {
     if (![self canPlay:NO] || self.controlsLocked) return;
     UIAlertController *menu = [self menu:@"Playback" sender:sender];
-    for (NSArray *entry in @[@[@"Go to time…", @"goToTime:"], @[@"Speed…", @"speedOptions:"],
-        @[@"HDR display mode…", @"hdrDisplayOptions:"], @[@"Subtitle size…", @"subtitleSizeOptions:"], @[@"Subtitles and audio…", @"subtitleOptions:"],
-        @[@"Show in folder", @"showInFolder:"], @[@"Favourite file", @"favouriteFile:"], @[@"Current folder…", @"queueVideos:"], @[@"Previous episode", @"previousVideo:"],
-        @[@"Next episode", @"nextVideo:"], @[@"Mute / unmute", @"toggleMute:"], @[@"Lock controls", @"toggleControlLock:"]]) {
+    for (NSArray *entry in @[@[@"Speed…", @"speedOptions:"], @[@"Subtitles and audio…", @"subtitleOptions:"],
+        @[@"Video options…", @"videoOptions:"], @[@"Show in folder", @"showInFolder:"], @[@"Favourite file", @"favouriteFile:"],
+        @[@"Mute / unmute", @"toggleMute:"], @[@"Lock controls", @"toggleControlLock:"]]) {
         [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:entry[0] style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
             SEL selector = NSSelectorFromString(entry[1]);
             void (*invoke)(id, SEL, id) = (void (*)(id, SEL, id))[self methodForSelector:selector]; invoke(self,selector,sender);
@@ -427,16 +453,24 @@
             style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self presentVideoLocation]; }]];
     }
     [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"Start over" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self seekToMilliseconds:0]; }]];
+    BOOL autoNext = [[self playbackOptions][@"autoplay_next"] boolValue];
+    [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:autoNext ? @"✓ Play next automatically" : @"Play next automatically" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self setting:@"autoplay_next" value:autoNext ? @NO : @YES]; }]];
+    [self presentPlaybackDialog:menu];
+}
+- (void)videoOptions:(id)sender {
+    if (self.controlsLocked || ![self canPlay:NO]) return;
+    UIAlertController *menu = [self menu:@"Video options" sender:sender];
+    [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:@"HDR display mode…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
+        [self hdrDisplayOptions:sender];
+    }]];
     if (@available(iOS 17.4, *)) {
         BOOL subtitles = [[self playbackOptions][@"pip_subtitles"] boolValue];
         [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:subtitles ? @"✓ Subtitle PiP (reopen video)" : @"Subtitle PiP (reopen video)"
             style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-                [self setting:@"pip_subtitles" value:@(!subtitles)];
+                [self setting:@"pip_subtitles" value:subtitles ? @NO : @YES];
                 [self showStatus:@"Reopen this video to apply the picture-in-picture mode."];
             }]];
     }
-    BOOL autoNext = [[self playbackOptions][@"autoplay_next"] boolValue];
-    [menu lg_videoAddAction:[UIAlertAction lg_videoActionWithTitle:autoNext ? @"✓ Play next automatically" : @"Play next automatically" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) { [self setting:@"autoplay_next" value:@(!autoNext)]; }]];
     [self presentPlaybackDialog:menu];
 }
 - (void)attachSubtitleURL:(NSString *)url {
