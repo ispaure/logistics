@@ -259,7 +259,7 @@ class FolderNavigation:
 
     def paint_canvas(self, destination=None, *, retire_snapshots=False):
         routes = self.routes
-        if not routes.apple or not type(routes.app._impl).__module__.startswith('toga_iOS.'):
+        if not routes.apple or not type(getattr(routes.app, '_impl', None)).__module__.startswith('toga_iOS.'):
             return
         from .appearance import apple_color
 

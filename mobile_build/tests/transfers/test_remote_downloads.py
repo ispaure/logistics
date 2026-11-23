@@ -145,7 +145,7 @@ class RemoteDownloadPickerTests(unittest.TestCase):
                         patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
                     self.assertTrue(await picker.complete_destination(),
                                     (app.cloud_status.value, picker.save_as_status.value))
-                self.assertEqual(app.routes.screens['files'][-1][0], 'transfers')
+                self.assertEqual(app.routes.screens['files'][-1][0], 'transfer-detail')
                 self.assertEqual(browser.location, location)
                 self.assertEqual(browser.history.locations, history)
                 self.assertEqual(browser.selected, selected)
@@ -196,7 +196,7 @@ class RemoteDownloadPickerTests(unittest.TestCase):
         with patch.object(RemoteDownload, 'execute', return_value=TransferOutcome('download')), \
                 patch.object(app.main_window, 'dialog', new=AsyncMock(return_value=True)):
             self.assertTrue(app.loop.run_until_complete(picker.complete_destination()))
-        self.assertEqual(app.routes.screens['files'][-1][0], 'transfers')
+        self.assertEqual(app.routes.screens['files'][-1][0], 'transfer-detail')
         self.assertTrue(app.routes.back())
         self.assertIs(app.routes.body('files'), retained)
         self.assertIn(app.cloud_view, retained.children)

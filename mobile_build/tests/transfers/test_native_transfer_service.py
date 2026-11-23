@@ -414,15 +414,18 @@ class TransferSurfaceTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([button.text for button in fallback.buttons.children], ['Continue browsing'])
 
     async def test_native_history_exposes_resume_discard_clear_and_revokes_labels(self):
+        import toga
+
         surface, handler = self.surface()
         surface.recover_rendering()
         surface.recover_rendering()
-        surface.update(dict(mode='progress', phase='idle',
+        surface.update(dict(mode='overview', phase='idle',
             downloads=[dict(id='job', name='private clip.mp4', path='secret/clip.mp4',
                             offset=45_000_000_000, size=100_000_000_000)],
             history=[dict(time=1, operation='pull', source='secret:', destination='Local', bytes=0)]))
         fallback = surface.native_fallback
-        job = fallback.history.children[-1].children[0]
+        job = next(card.children[0] for card in fallback.history.children
+                   if isinstance(card, toga.Box) and card.children[0].children[0].text == 'private clip.mp4')
         self.assertIn('45.00 GB of 100.00 GB', job.children[1].text)
         resume, discard = job.children[-1].children
         await resume.on_press()
