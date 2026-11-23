@@ -10,6 +10,7 @@ __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
 from pathlib import PurePosixPath
+from dataclasses import replace
 from sqlite3 import Error as DatabaseError
 from commonUtils.runtime.operations import OperationCancelled, check_cancelled
 from commonUtils.search.names import natural_name_key
@@ -149,10 +150,26 @@ def search(library, query, *, include_text, visible=None, cancelled=lambda: Fals
 
     if library.filename_listing is not None:
         with library.filename_listing() as cached:
-            def children(folder, *, cancelled):
-                return library.visible_rows(cached(library.contained(folder), cancelled=cancelled))
+            cached_only = False
 
-            result = run(notify, load_match=library.entry)
+            def children(folder, *, cancelled):
+                return library.visible_rows(cached(library.contained(folder), cancelled=cancelled,
+                                                   cached_only=cached_only))
+
+            warm = False
+            if notify is not None and not include_text:
+                def provisional(result):
+                    if result.rows:
+                        notify(replace(result, cached=True,
+                                       rows=[dict(row, cached=True) for row in result.rows]))
+
+                cached_only = True
+                saved = run(provisional)
+                warm = bool(saved.rows)
+                if warm:
+                    provisional(saved)
+                cached_only = False
+            result = run(None if warm else notify, load_match=library.entry)
         return project(result) if collapse_folder_notes else result
 
     index = directory_index(library) if not include_text else None

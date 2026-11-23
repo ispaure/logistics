@@ -462,6 +462,14 @@ class ToolingBootstrapTests(TestCase):
             ' def __init__(self,root,*,results_directory=None): pass\n'
             ' def make_plan(self,*a,**kw): return self\n'
             ' def data(self): return dict(source={},phases=[],workspace="owned",resource_locks=["existing"])\n')
+        sdk = self.root / 'build_manager'
+        sdk.mkdir()
+        (sdk / 'adapter_sdk.py').write_text(
+            'import json\n'
+            'def serve(handlers, *, stdin):\n'
+            ' request = json.load(stdin)\n'
+            ' result = handlers[request["action"]](request["values"], {})\n'
+            ' print(json.dumps(dict(schema=1, result=result)))\n')
         request = dict(schema=1, action='plan', values=dict(operation='Test', target='android', backend='Local'))
         result = subprocess.run([sys.executable, '-I', '-S', str(package / 'manager_bridge.py')],
             input=json.dumps(request), capture_output=True, text=True, timeout=10)

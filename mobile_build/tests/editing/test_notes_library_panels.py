@@ -906,7 +906,6 @@ class NotesLibraryPanelTests(unittest.TestCase):
         self.run_async(exercise())
 
     def test_cached_notes_show_and_click_safely_while_refresh_is_blocked(self):
-        from commonUtils.search.indexed import IndexedLocalSearch
         from commonUtils.testing.waiting import wait_until
 
         async def exercise():
@@ -916,21 +915,21 @@ class NotesLibraryPanelTests(unittest.TestCase):
             await asyncio.to_thread(library_files.search, owner.library, 'Cached', include_text=False)
             (self.vault / 'Cached A.md').unlink()
             entered, release = Event(), Event()
-            prepare = IndexedLocalSearch.prepare
-
-            def refresh(searcher, *args, **kwargs):
+            list_names = owner.provider.list_names
+            def refresh(*args, **kwargs):
                 entered.set()
                 if not release.wait(5):
                     raise AssertionError('Test did not release the refresh')
-                return prepare(searcher, *args, **kwargs)
+                return list_names(*args, **kwargs)
 
             owner.select_panel_tab('Search')
-            with patch.object(IndexedLocalSearch, 'prepare', refresh), \
+            with patch.object(owner.provider, 'list_names', refresh), \
                     patch.object(owner, 'open_note', new_callable=AsyncMock, return_value=True) as open_note:
                 owner.search.value = 'Cached'
                 try:
                     await wait_until(lambda: entered.is_set() and len(owner.search_rows) == 2,
-                                     message='Cached notes waited for refresh')
+                                     message=lambda: f'Cached notes waited for refresh. Entered={entered.is_set()}, '
+                                     f'status={owner.search_status}, results={owner.search_rows}')
                     self.assertTrue(all(row.get('cached') for row in owner.search_rows))
                     self.assertIn('Checking', owner.search_status)
                     await owner.open_selected_note('Vault/Cached A.md')

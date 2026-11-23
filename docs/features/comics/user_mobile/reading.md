@@ -10,7 +10,7 @@ iOS and Android read CBZ/ZIP with PNG, JPEG or static WebP pages. Each page is l
 
 ## Native mobile library
 
-Browse configured Local or unlocked LocalCrypt libraries in **Books & Comics**. Local comics open from their source. Use **Import…** for standalone copies, including AES and ZipCrypto. Enter the comic ZIP password at **Unlock comic**. See [imports and password retries](../../books/user_mobile/library.md#books-and-comics).
+Browse configured Local or unlocked LocalCrypt libraries in **Books & Comics**. Local comics open from their source. Use **Import…** for standalone copies, including AES and ZipCrypto. Enter the comic ZIP password at **Unlock comic**. See [imports and password retries](../../books/user_mobile/library.md#browse-comics-and-import-individual-files).
 
 Tap the page for controls. Use **Comic pages…** or the footer slider to jump to a page. Use the separate buttons above the image for neighboring comics. Manga reverses reading order. **Close comic** keeps the file. **Show in folder** reveals its location when available, and **… → Info…** shows the current path.
 

@@ -187,6 +187,23 @@ class HostedObservationTests(unittest.TestCase):
         client.request.assert_not_called(); client.wait.assert_not_called()
         self.assertEqual(args.operation_receipt.read_bytes(), before)
 
+    def test_observation_retries_a_newly_accepted_run_without_dispatching_again(self):
+        from build_manager.github import GitHubHTTPError
+
+        args = self.arguments()
+        args.operation_receipt.write_text(json.dumps(self.accepted()))
+        client = Mock(base='/repos/fixture/repo')
+        client.request.side_effect = [GitHubHTTPError(404), dict(
+            id=777, head_sha=SHA, path='.github/workflows/mobile-runtime.yml',
+            repository={'full_name':'fixture/repo'}, event='workflow_dispatch', head_branch='alpha')]
+        client.wait.return_value = dict(status='completed', conclusion='success')
+        cancelled = Mock(wraps=Event())
+        cancelled.wait.return_value = False
+        self.assertEqual(owner.hosted_validation(client, self.values, args, cancelled), 0)
+        self.assertEqual([c.args for c in client.request.call_args_list],
+                         [('GET','/repos/fixture/repo/actions/runs/777')] * 2)
+        self.assertEqual(json.loads(args.observation_receipt.read_text())['run_id'], 777)
+
     def test_normal_cancellation_targets_only_verified_recorded_run(self):
         from build_manager.github import GitHub
         args = self.arguments(); args.operation_receipt.write_text(json.dumps(self.accepted()))

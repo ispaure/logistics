@@ -88,6 +88,19 @@
     "module": "androidx.webkit:webkit"
   },
   {
+    "name": "AndroidX WindowManager Java",
+    "version": "1.4.0",
+    "platforms": [
+      "android"
+    ],
+    "license": "Apache-2.0",
+    "source": "https://developer.android.com/jetpack/androidx/releases/window",
+    "files": [
+      "Apache-2.0.txt"
+    ],
+    "module": "androidx.window:window-java"
+  },
+  {
     "name": "Android Hidden API Bypass",
     "version": "4.3",
     "platforms": [

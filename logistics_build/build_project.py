@@ -938,7 +938,16 @@ def hosted_validation(client, values, args, cancelled):
             or args.observation_receipt.resolve() == receipt.resolve()):
         raise ValueError('Hosted observation requires a separate result receipt.')
     run_id = accepted['run_id']
-    remote = client.request('GET', client.base + f'/actions/runs/{run_id}')
+    from build_manager.github import GitHubHTTPError
+    for delay in (2, 4, 8, 0):
+        try:
+            remote = client.request('GET', client.base + f'/actions/runs/{run_id}')
+            break
+        except GitHubHTTPError as error:
+            # The dispatch API can return an ID before the read replica
+            # exposes it. Retry only observation of the accepted ID.
+            if error.status != 404 or not delay or cancelled.wait(delay):
+                raise
     if (type(remote.get('id')) is not int or remote['id'] != run_id or remote.get('head_sha') != args.commit
             or remote.get('event') != 'workflow_dispatch'
             or remote.get('path', '').split('@')[0] != '.github/workflows/' + args.workflow

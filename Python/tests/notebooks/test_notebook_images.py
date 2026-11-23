@@ -68,7 +68,8 @@ const s={console,events,$:control,document:{body:node(),createElement:node},
   chosenInk:()=>({tool:17,color:0,width:3,layer:'L'}),
   brushFor:()=>({family:'fineliner'}),brushOptions(){},
   notePenContact(value){s.penContactActive=value},penTouchBlocked:()=>false,
-  cancelTouchZoom(){},flushPreview(){if(s.points.length)events.push('paint')},
+  cancelTouchZoom(){},hideSwipePage(){events.push('hide-swipe-page')},
+  flushPreview(){if(s.points.length)events.push('paint')},
   cancelPreview(){},draw(){events.push('draw')},render(){events.push('render')},
   strokeExpandsPaper:()=>false};
 s.crypto=require('node:crypto').webcrypto;s.performance={now:()=>1000};s.window=s;vm.createContext(s);
@@ -86,6 +87,7 @@ const event=x=>({pointerId:7,pointerType:'pen',nativePen:true,clientX:x,clientY:
 s.canvas.onpointerdown(event(670));s.canvas.onpointermove(event(730));s.canvas.onpointerup(event(730));
 assert.equal(s.queue.length,1);assert.equal(s.queue[0].op,'stroke');
 assert.equal(s.queue[0].tool,17);assert.equal(s.queue[0].color,0);assert.equal(s.queue[0].layer,'L');
+assert.ok(events.includes('hide-swipe-page'));
 assert.ok(events.indexOf('paint')>=0&&events.indexOf('paint')<events.indexOf('send'),events);
 const painted=events.filter(value=>value==='paint').length;
 s.notebookStrokeUpdate(stroke,'Saved');

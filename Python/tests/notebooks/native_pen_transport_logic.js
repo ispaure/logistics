@@ -9,6 +9,7 @@ let end=source.indexOf('let eraserKind =',start);
 let code=source.slice(0,source.indexOf('// Bounded content-free input diagnostics'))+source.slice(source.indexOf('function coord('),source.indexOf('function distance('))+source.slice(start,end);
 let events=[];
 const context={window:{},state:{native_pen:true,width:100,height:100},innerWidth:200,innerHeight:100,active:null,
+ mode:'ink',inkSettings:{tool:17},brushFor:()=>({tilt_widths:null}),
  document:{elementFromPoint:()=>context.canvas},
  canvas:{getBoundingClientRect:()=>({left:0,top:0,width:200,height:100}),onpointerdown:e=>{context.active=e.pointerId;events.push(['down',e.pointerId,e.pressure])},
  onpointermove:e=>events.push(['move',e.pointerId,e.getCoalescedEvents().length])},
