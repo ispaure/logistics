@@ -331,7 +331,7 @@ async def exercise_ui_review(app):
     app.private_sessions.close(owner.session.id, discard=True)
     app.show_transfers()
     from .web_checks import wait_for_transfer_surface
-    assert app.transfer_view.model['mode'] == 'progress'
+    assert app.transfer_view.model['mode'] == 'overview'
     transfer_renderer = await wait_for_transfer_surface(app.transfer_view)
     assert app.cloud_remote not in app.cloud_view.children
     await capture('transfers')

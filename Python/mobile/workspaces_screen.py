@@ -142,7 +142,7 @@ class WorkspacesScreen:
             native.rightViewMode = 3  # UITextFieldViewModeAlways
             native.accessibilityHint = 'Opens the list of credentials'
         self.folder_transfers_button = SyncButton(self.app)
-        self.folder_transfers_button.update(False, None, False, 0)
+        self.folder_transfers_button.update(False, None, False)
         self.folder_add_share_button = toga.Button('Add share…', on_press=self.show_smb_connection,
                                                   style=Pack(height=TOUCH_TARGET, font_size=CONTROL_TEXT, flex=1))
         toolbar_button(self.folder_add_share_button, 'plus')

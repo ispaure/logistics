@@ -20,7 +20,7 @@ final class FileDragUITests: XCTestCase {
         let target = app.buttons["Drop destination"].firstMatch
         XCTAssertTrue(tile.waitForExistence(timeout: 8), app.debugDescription)
         XCTAssertTrue(target.exists, app.debugDescription)
-        tile.press(forDuration: 0.8, thenDragTo: target, withVelocity: .slow, thenHoldForDuration: 1.8)
+        tile.press(forDuration: 0.55, thenDragTo: target, withVelocity: .slow, thenHoldForDuration: 1.8)
         XCTAssertTrue(app.navigationBars["Drop destination"].waitForExistence(timeout: 8), app.debugDescription)
         let screenshot = XCTAttachment(screenshot: app.screenshot())
         screenshot.name = "file-browser-after-native-drops"
@@ -59,7 +59,7 @@ final class FileDragUITests: XCTestCase {
         let item = app.buttons["Tile source.txt"].firstMatch
         XCTAssertTrue(item.waitForExistence(timeout: 8), app.debugDescription)
         XCTAssertFalse(app.buttons["Actions for Tile source.txt"].exists, app.debugDescription)
-        item.press(forDuration: 0.8)
+        item.press(forDuration: 1.15)
         let details = app.buttons["Details"].firstMatch
         XCTAssertTrue(details.waitForExistence(timeout: 8), app.debugDescription)
         details.tap()

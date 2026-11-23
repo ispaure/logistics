@@ -71,7 +71,8 @@ def refresh_features(app):
     if not enabled(app.preferences, 'rclone'):
         retired.update(('remote-browser', 'remote-actions', 'remote-item', 'connections',
             'import-credentials', 'import-credentials-password', 'smb-connection', 'choose-credential', 'credential-package',
-            'unlock-credential', 'transfers', 'transfer-copy', 'transfer-settings', 'transfer-review', 'local-push'))
+            'unlock-credential', 'transfers', 'transfer-detail', 'transfer-copy', 'transfer-settings',
+            'transfer-review', 'local-push'))
     if not enabled(app.preferences, 'lm'):
         retired.add('chat-settings')
     if not enabled(app.preferences, 'books') and not enabled(app.preferences, 'comics'):

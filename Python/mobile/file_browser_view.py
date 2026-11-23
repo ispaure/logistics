@@ -305,6 +305,9 @@ class LocalFileBrowser(FileBrowser):
         if getattr(self, '_file_drag_delegate', None) is not None:
             from .native.file_drag_ios import uninstall
             uninstall(self)
+        if getattr(self, '_android_file_drag', None) is not None:
+            from .native.file_drag_android import uninstall
+            uninstall(self)
         self.set_previews_visible(False)
         self._reset_previews()
         self.thumbnails = self.details = None
@@ -426,6 +429,12 @@ class LocalFileBrowser(FileBrowser):
     def _tile_card(self, entry):
         card = super()._tile_card(entry)
         image_box, button = card.children
+        if type(image_box._impl).__module__.startswith('toga_android.'):
+            image_box.style.update(direction=ROW, width=96)
+            card.remove(image_box)
+            card.insert(0, toga.Box(children=[
+                toga.Box(style=Pack(flex=1)), image_box, toga.Box(style=Pack(flex=1)),
+            ], style=Pack(direction=ROW, height=96, align_items=CENTER)))
         if self.thumbnails is not None and self.thumbnails.supports(entry):
             self._tile_previews[entry.identity] = image_box, image_box.children[0]
         controls = [button]
@@ -445,7 +454,7 @@ class LocalFileBrowser(FileBrowser):
             self._show_tile_selection(entry, card)
             controls.append(circle)
             if self.on_check_entry is None:
-                for control in (image_box, button):
+                for control in (card.children[0], button):
                     self._attach_tile_hold(control, entry)
         binding = getattr(self._tile_scroll, '_file_key_binding', None)
         if binding is not None and button.factory.Button.__module__.startswith('toga_android.'):
@@ -499,22 +508,8 @@ class LocalFileBrowser(FileBrowser):
     def _attach_tile_hold(self, control, entry):
         backend = type(control._impl).__module__
         if backend.startswith('toga_android.'):
-            from android.view import View
-            from java import dynamic_proxy
-
-            browser_ref = ref(self)
-            epoch = self.epoch
-
-            class TileHold(dynamic_proxy(View.OnLongClickListener)):
-                def onLongClick(self, native):
-                    browser = browser_ref()
-                    if browser is None or not browser.can_show_tile_actions or browser.epoch != epoch:
-                        return False
-                    browser._loop.create_task(browser._tile_actions(entry))
-                    return True
-
-            control._tile_hold = TileHold()
-            control._impl.native.setOnLongClickListener(control._tile_hold)
+            from .native.file_drag_android import attach_tile_hold
+            control._tile_hold = attach_tile_hold(self, control._impl.native, entry)
         elif backend.startswith('toga_iOS.') and isinstance(control, toga.Button):
             from .native.file_drag_ios import attach_accessibility_action
 
@@ -550,7 +545,9 @@ class LocalFileBrowser(FileBrowser):
             if getattr(control, '_tile_hold', None) is None:
                 continue
             if type(control._impl).__module__.startswith('toga_android.'):
+                control._tile_hold[2]()
                 control._impl.native.setOnLongClickListener(None)
+                control._impl.native.setOnTouchListener(None)
             else:
                 control._impl.native.accessibilityCustomActions = None
             control._tile_hold = None

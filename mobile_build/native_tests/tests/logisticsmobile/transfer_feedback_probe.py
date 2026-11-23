@@ -80,14 +80,14 @@ class TransferFeedbackProbe(LogisticsMobile):
             for destination in ('home', 'files', 'documents'):
                 self.routes.return_to(destination)
                 origin = self.body
-                self.show_transfers()
+                self.show_transfers(detail=True)
                 self.publish_mirror_progress(1, dict(phase='Transferring', files=2, total_files=4,
                     done=12500000, total=25000000, active=1, listed=12, checks=8))
-                self.show_transfers()
+                self.show_transfers(detail=True)
                 assert self.native_host.state.destination == destination
                 assert self.transfer_progress.value == 50
-                back = next(child for child in self.transfer_view.content.children
-                            if isinstance(child, toga.Button) and child.text == 'Back')
+                back = next(child for child in self.transfer_view.native_fallback.buttons.children
+                            if isinstance(child, toga.Button) and child.text == 'Continue browsing')
                 if destination == 'files':
                     self.stage('transfer-details')
                     await asyncio.sleep(5)
@@ -97,7 +97,7 @@ class TransferFeedbackProbe(LogisticsMobile):
                 assert self.transfer_busy and not self._transfer_cancel.is_set()
             result['native_back_button_keeps_each_origin_and_transfer'] = True
 
-            self.show_transfers()
+            self.show_transfers(detail=True)
             self.stage('system-back')
             for _ in range(100):
                 if self.body is origin:

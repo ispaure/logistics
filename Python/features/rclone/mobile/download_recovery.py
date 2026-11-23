@@ -312,13 +312,13 @@ async def queue_command(controller, action, args, visible):
     from .folder_recovery import FolderQueue
     from .remote_downloads import RemoteDownload
     from .service import native_service
-    app, surface = controller.app, controller._progress_surface
+    app = controller.app
     client = app.cloud_client
     if client is None or not getattr(client, 'package_records', ()):
         return
     generation = client.generation
     def current():
-        return (visible() and not surface.closed and not controller.transfer_busy and
+        return (visible() and not controller.transfer_busy and
                 app.cloud_client is client and client.generation == generation)
     try:
         rows = await asyncio.to_thread(available_jobs, app, client=client)

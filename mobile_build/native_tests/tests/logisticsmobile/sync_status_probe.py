@@ -36,6 +36,22 @@ def control_frame(app, widget):
                 width=native.getWidth() / density, height=native.getHeight() / density)
 
 
+def tap(app, widget):
+    native = widget._impl.native
+    assert widget.enabled
+    if type(app._impl).__module__.startswith('toga_iOS.'):
+        from rubicon.objc import CGPoint
+
+        frame = control_frame(app, widget)
+        root = app.main_window._impl.native
+        point = CGPoint(frame['x'] + frame['width'] / 2, frame['y'] + frame['height'] / 2)
+        target = root.hitTest(point, withEvent=None)
+        assert target is not None and target.isDescendantOfView(native), frame
+        native.sendActionsForControlEvents(1 << 6)
+    else:
+        assert native.isShown() and native.performClick()
+
+
 class SyncStatusProbe(LogisticsMobile):
     def startup(self):
         self.storage_root = Path(self.paths.cache) / ('sync-status-' + uuid4().hex)
@@ -48,9 +64,13 @@ class SyncStatusProbe(LogisticsMobile):
         report = dict(success=False, samples=[], synthetic_progress=True)
         try:
             self.show_cloud(present=False)
+            restore = getattr(self, 'cloud_restore_task', None)
+            if restore is not None:
+                await restore
             self.show_locations()
             self.transfer_busy = self.transfer_notification = True
             self.transfer_percentage = 42
+            self.set_cloud_busy(True)
             for orientation in ('portrait', 'landscape-left'):
                 await rotate(self, orientation, settle=.5)
                 self.routes.return_to('files')
@@ -66,18 +86,31 @@ class SyncStatusProbe(LogisticsMobile):
                 assert 0 <= frame['x'] - (server['x'] + server['width']) <= 12, (frame, server)
                 assert frame['x'] + frame['width'] <= row_frame['x'] + row_frame['width'] + 1, (frame, row_frame)
                 for source in ('rclone', 'Network shares', 'Local'):
-                    self.change_folder_source(source)
+                    tap(self, self.folder_source_buttons[source])
                     await asyncio.sleep(.2)
+                    assert self.folder_source == source
                     assert list(self._files_status_row.children) == [self.folder_source_tabs, button]
                     await capture_window(self, Path(self.paths.cache) /
                         f'sync-{orientation}-files-{source.replace(" ", "-")}.png')
-                native = button._impl.native
-                if type(self._impl).__module__.startswith('toga_iOS.'):
-                    native.sendActionsForControlEvents(1 << 6)
-                else:
-                    native.performClick()
+                for group in ('Rclone', 'Others'):
+                    tap(self, self.folder_local_buttons[group])
+                    await asyncio.sleep(.2)
+                    assert self.folder_local_group == group
+                tap(self, button)
                 await asyncio.sleep(.2)
                 assert self.routes.screens['files'][-1][0] == 'transfers'
+                overview = self.body
+                surface = self.transfer_view
+                fallback = surface.native_fallback
+                card = fallback.active_card
+                assert card is not None and list(fallback.body.children).index(card) == 0
+                assert fallback.history in fallback.body.children
+                tap(self, card.children[0].children[0])
+                await asyncio.sleep(.2)
+                assert self.routes.screens['files'][-1][0] == 'transfer-detail'
+                assert self.transfer_view.native_fallback.history.parent is None
+                assert self.routes.back()
+                assert self.body is overview
                 self.routes.back()
                 assert not self.routes.screens['files']
                 assert self.transfer_busy
@@ -86,14 +119,16 @@ class SyncStatusProbe(LogisticsMobile):
             self.transfer_percentage = None
             self.refresh_transfer_status()
             await asyncio.sleep(.5)
-            assert self._sync_status_tick is not None
+            snapshot = self.folder_transfers_button.snapshot
+            self.refresh_transfer_status()
+            assert self.folder_transfers_button.snapshot is snapshot
             self.show_documents(destination='documents')
-            assert self._sync_status_tick is None
             report['success'] = True
         except Exception:
             report['error'] = traceback.format_exc()
         finally:
             self.transfer_busy = self.transfer_notification = False
+            self.set_cloud_busy(False)
             self.refresh_transfer_status()
         (Path(self.paths.cache) / 'sync-status-result.json').write_text(json.dumps(report, indent=2))
 

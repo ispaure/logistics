@@ -79,7 +79,7 @@ class RcloneTransferProbe(LogisticsMobile):
             self.transfer_busy = self.transfer_notification = True
             self.transfer_epoch = 1
             self.transfer_endpoints = ('Local/Personal', 'Personal:')
-            self.show_transfers()
+            self.show_transfers(detail=True)
             for name, values in (
                 ('progress', dict(phase='Transferring', files=28, total_files=64, done=125000000,
                     total=250000000, active=2, listed=82, checks=18,
@@ -100,7 +100,7 @@ class RcloneTransferProbe(LogisticsMobile):
             await asyncio.sleep(.2)
             assert hidden_surface.delivered_revision == delivered
             assert hidden_surface.send_task is None
-            self.show_transfers()
+            self.show_transfers(detail=True)
             await self.wait_surface(hidden_surface)
             progress_bar = hidden_surface.native_fallback.progress
             self.publish_mirror_progress(1, dict(phase='Transferring', files=30, done=127000000, total=250000000))
@@ -119,6 +119,7 @@ class RcloneTransferProbe(LogisticsMobile):
             state.result = 'idle'
             state.message = 'No transfer is running.'
             owner.render_transfer_summary()
+            self.show_transfers()
             surface = self.transfer_view
             surface.update(dict(surface.model, downloads=[dict(id='sample', name='World tour.mp4',
                 path='Videos/World tour.mp4', offset=45_000_000_000, size=100_000_000_000)],
@@ -366,7 +367,7 @@ class RcloneTransferProbe(LogisticsMobile):
                     assert browser.history.locations == history
                     assert browser.vertical_position >= position - 12, (browser.vertical_position, position)
                     assert target in {entry.label for entry in browser.entries}
-                    self.show_transfers()
+                    self.show_transfers(detail=True)
                 assert progress.model['phase'] == outcome, progress.model
                 await self.sample(progress, theme + '-' + outcome + '-' + suffix, report, evidence)
                 self.routes.back()

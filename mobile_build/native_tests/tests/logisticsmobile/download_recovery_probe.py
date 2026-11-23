@@ -234,7 +234,7 @@ class AndroidRecoveryProbe(LogisticsMobile):
         title, details, resume = row
         assert title.endswith(mode + '.bin') and resume.text == 'Resume'
         case['row'] = title + '\n' + details
-        case['status'] = self.transfer_view.native_fallback.status.text
+        case['status'] = 'Interrupted downloads'
         from android.view import WindowManager
         flags = self._impl.native.getWindow().getAttributes().flags
         case['secure_window'] = bool(flags & WindowManager.LayoutParams.FLAG_SECURE)
@@ -257,8 +257,10 @@ class AndroidRecoveryProbe(LogisticsMobile):
             case['sha256'] = physical_digest
         assert case['sha256'] == self.config['sha256']
         assert not await asyncio.to_thread(available_jobs, self)
+        self.routes.back()
+        owner = self.transfer_controller()
         await until(lambda: any(row['destination'].endswith(mode + '.bin')
-                               for row in self.transfer_view.model.get('history', ())),
+                               for row in owner._transfers_overview.model.get('history', ())),
                     'Verified download never appeared in Completed transfers')
         case['completed_history'] = True
         Path(case.pop('target')).unlink()

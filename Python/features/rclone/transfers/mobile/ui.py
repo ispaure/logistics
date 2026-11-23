@@ -126,64 +126,17 @@ class MirrorUI(TransferReviewUI):
             self.mirrors = MirrorJobs(self.private_root)
         return self.mirrors
 
-    def show_transfers(self, widget=None, *, present=True, **kwargs):
+    def show_transfers(self, widget=None, *, present=True, detail=False, **kwargs):
         if not self.app.require_feature('rclone'):
             return
-        if getattr(self, '_transfer_review_view', None) is not None:
-            if present:
-                self.show_view(self._transfer_review_view, destination='files', route='transfer-review', title='Transfer review')
-            return
         from types import SimpleNamespace
-        from .surface import TransferSurface
-        old = getattr(self, '_progress_surface', None)
-        credentials = getattr(self.cloud_client, 'credential_state', None)
-        if old is not None and old._credential_state is not credentials:
-            old.dispose()
-        if old is not None and not old.closed:
-            self.transfer_view = old
-        else:
-            async def command(action, args):
-                if not visible():
-                    return
-                if action == 'background':
-                    self.routes.back()
-                    screens = self.routes.screens[self.native_host.state.destination]
-                    if screens and screens[-1][0] == 'local-push':
-                        self.routes.back()
-                        setup = getattr(self, '_transfer_setup_surface', None)
-                        if setup is not None:
-                            setup.dispose()
-                elif action == 'stop' and self.transfer_busy:
-                    epoch = self.transfer_epoch
-                    confirmed = await self.main_window.dialog(toga.ConfirmDialog('Stop this transfer?',
-                        'Files already copied, replaced or deleted will stay changed.'))
-                    if confirmed and self.transfer_busy and epoch == self.transfer_epoch:
-                        self.cancel_mirror_transfer()
-                elif action == 'downloads':
-                    await self.refresh_transfer_history()
-                elif action in ('resume-download', 'discard-download') and not self.transfer_busy:
-                    from features.rclone.mobile.download_recovery import queue_command
-                    await queue_command(self, action, args, visible)
-                    await self.refresh_transfer_history()
-                elif action == 'clear-history' and not self.transfer_busy:
-                    from time import time_ns
-                    cutoff = time_ns()
-                    client = self.cloud_client
-                    generation = getattr(client, 'generation', None)
-                    confirmed = await self.main_window.dialog(toga.ConfirmDialog('Clear transfer history?',
-                        'Clear completed records for saved and unlocked connections? Files and interrupted downloads stay in place.'))
-                    if (confirmed and visible() and not self.transfer_busy and client is self.cloud_client
-                            and getattr(client, 'generation', None) == generation):
-                        await self.refresh_transfer_history(clear_through=cutoff)
-                elif action == 'settings' and not self.transfer_busy:
-                    self.show_transfer_options()
-            def visible():
-                if not self.active_host:
-                    return False
-                screens = self.routes.screens[self.native_host.state.destination]
-                return bool(screens and screens[-1][0] == 'transfers'
-                            and self._progress_surface in screens[-1][1].children)
-            self._progress_surface = self.transfer_view = TransferSurface(self.app, command, visible=visible, native=True)
+
+        route = 'transfer-detail' if detail else 'transfers'
+        name = '_progress_surface' if detail else '_transfers_overview'
+        surface = self.transfer_surface(name, route, detail=detail)
+        if not hasattr(self, 'transfer_view') or present:
+            self.transfer_view = surface
+
         # Retain the existing programmatic status handles used by cloud callers.
         if not hasattr(self, 'transfer_notice'):
             self.transfer_notice = toga.Label('')
@@ -195,38 +148,104 @@ class MirrorUI(TransferReviewUI):
         if present:
             if not self.transfer_busy:
                 self.dismiss_transfer_status()
-            self.show_view(self.transfer_view, route='transfers', title='Transfers')
-            self.transfer_view.queue_send()
-            self.loop.create_task(self.refresh_transfer_history())
+            self.show_view(surface, destination=None if detail else 'files', route=route,
+                           title='Transfer progress' if detail else 'Transfers')
+            surface.queue_send()
+            if not detail:
+                self.loop.create_task(self.refresh_transfer_history())
         percentage = getattr(self, 'transfer_percentage', None)
         self.transfer_progress.stop()
         self.transfer_progress.max = 100 if percentage is not None or not self.transfer_busy else None
         if self.transfer_progress.max is not None:
             self.transfer_progress.value = 100 if self.transfer_complete else percentage if percentage is not None else 0
 
+    def transfer_surface(self, name, route, *, detail):
+        from .surface import TransferSurface
+
+        old = getattr(self, name, None)
+        credentials = getattr(self.cloud_client, 'credential_state', None)
+        if old is not None and old._credential_state is not credentials:
+            old.dispose()
+        if old is not None and not old.closed:
+            return old
+
+        def visible():
+            if not self.active_host:
+                return False
+            screens = self.routes.screens[self.native_host.state.destination]
+            return bool(screens and screens[-1][0] == route
+                        and getattr(self, name, None) in screens[-1][1].children)
+
+        async def command(action, args):
+            if not visible():
+                return
+            if detail:
+                if action == 'background':
+                    self.routes.back()
+                elif action == 'stop' and self.transfer_busy:
+                    epoch = self.transfer_epoch
+                    confirmed = await self.main_window.dialog(toga.ConfirmDialog('Stop this transfer?',
+                        'Files already copied, replaced or deleted will stay changed.'))
+                    if confirmed and visible() and self.transfer_busy and epoch == self.transfer_epoch:
+                        self.cancel_mirror_transfer()
+                return
+            if action == 'open-transfer':
+                if self.transfer_busy and getattr(self, '_transfer_review_view', None) is not None:
+                    self.show_view(self._transfer_review_view, destination='files',
+                                   route='transfer-review', title='Review changes')
+                else:
+                    self.show_transfers(detail=True)
+            elif action == 'downloads':
+                await self.refresh_transfer_history()
+            elif action in ('resume-download', 'discard-download') and not self.transfer_busy:
+                from features.rclone.mobile.download_recovery import queue_command
+                await queue_command(self, action, args, visible)
+                await self.refresh_transfer_history()
+            elif action == 'clear-history' and not self.transfer_busy:
+                from time import time_ns
+                cutoff = time_ns()
+                client = self.cloud_client
+                generation = getattr(client, 'generation', None)
+                confirmed = await self.main_window.dialog(toga.ConfirmDialog('Clear transfer history?',
+                    'Clear completed records for saved and unlocked connections? Files and interrupted downloads stay in place.'))
+                if (confirmed and visible() and not self.transfer_busy and client is self.cloud_client
+                        and getattr(client, 'generation', None) == generation):
+                    await self.refresh_transfer_history(clear_through=cutoff)
+            elif action == 'settings' and not self.transfer_busy:
+                self.show_transfer_options()
+
+        surface = TransferSurface(self.app, command, visible=visible, native=True)
+        setattr(self, name, surface)
+        return surface
+
     def render_transfer_summary(self):
         from features.rclone.transfers.presentation import progress_model
         model = progress_model(self.state)
         if self.state.display_revoked and not self.transfer_busy:
             model.update(phase='idle', message='No transfer is running.')
-        surface = getattr(self, '_progress_surface', None)
-        if surface is not None and not surface.closed:
-            model.update({key: surface.model[key] for key in
-                          ('downloads', 'history', 'downloads_notice', 'history_notice', 'history_error') if key in surface.model})
         if self.mirror_store().error:
             model.update(phase='failed', message=self.mirror_store().error)
         self.transfer_notice.text = import_hint(self.transfer_message)
         self.transfer_files.text = 'Files\n' + f"{model['files']:,}" + (f" / {model['total_files']:,}" if model['total_files'] else '')
         self.transfer_bytes.text = f"Data (MB)\n{model['done'] / 1_000_000:,.2f} /\n{model['total'] / 1_000_000:,.2f}"
-        if surface is not None and not surface.closed:
-            surface.update(model)
+        detail = getattr(self, '_progress_surface', None)
+        if detail is not None and not detail.closed:
+            detail.update(dict(model, detail=True))
+        overview = getattr(self, '_transfers_overview', None)
+        if overview is not None and not overview.closed:
+            history = {key: overview.model[key] for key in
+                       ('downloads', 'history', 'downloads_notice', 'history_notice', 'history_error')
+                       if key in overview.model}
+            overview.update(dict(history, mode='overview', busy=model['busy'], phase=model['phase'],
+                                 operation=model['operation'], workspace=model['workspace'],
+                                 percentage=model['percentage']))
 
     async def refresh_transfer_history(self, *, clear_through=None, write_failed=False):
         from features.rclone.mobile.download_recovery import available_jobs
         from .history import visible_history
 
-        surface = getattr(self, '_progress_surface', None)
-        if surface is None or surface.closed or not surface.visible() or (self.transfer_busy and clear_through is not None):
+        surface = getattr(self, '_transfers_overview', None)
+        if surface is None or surface.closed or not self.active_host or (self.transfer_busy and clear_through is not None):
             return
         client = self.cloud_client
         generation = getattr(client, 'generation', None)
@@ -240,7 +259,7 @@ class MirrorUI(TransferReviewUI):
             history_notice = 'No completed transfers.'
             downloads, history = [], []
             try:
-                jobs = available_jobs(self.app, client=client) if client is not None and not busy else ()
+                jobs = available_jobs(self.app, client=client) if client is not None else ()
                 for _, job in jobs:
                     downloads.append(dict(id=job['id'], name=job['selection']['name'], path=job['selection']['path'],
                                           offset=job['offset'], size=job['source']['size'], folder=job.get('kind') == 'folder'))
@@ -256,7 +275,7 @@ class MirrorUI(TransferReviewUI):
                         history_notice=history_notice, history_error=history_error)
 
         model = await asyncio.to_thread(load)
-        if (not surface.closed and surface.visible() and self.active_host and busy == self.transfer_busy
+        if (not surface.closed and self.active_host and busy == self.transfer_busy
                 and self._history_refresh is refresh and self.cloud_client is client
                 and getattr(client, 'generation', None) == generation):
             surface.update(dict(surface.model, **model))
@@ -411,7 +430,7 @@ class MirrorUI(TransferReviewUI):
         done, total = snapshot.done, snapshot.total
         widgets = (id(self.transfer_notice), id(self.cloud_status), id(self.transfer_progress),
                    id(getattr(self, 'cloud_transfer_progress', None)), done, total)
-        if hasattr(self, '_progress_surface'):
+        if hasattr(self, '_progress_surface') or hasattr(self, '_transfers_overview'):
             self.render_transfer_summary()
         if self.transfer_message == previous and widgets == getattr(self, '_mirror_progress_widgets', None):
             # Repeated polling must not force native text/layout redraws while
@@ -453,7 +472,7 @@ class MirrorUI(TransferReviewUI):
                 self.cloud_client.cancel()
             self.transfer_message = 'Stopping transfer… Files already copied, replaced or deleted will stay changed.'
             self.transfer_notice.text = import_hint(self.transfer_message)
-            if hasattr(self, '_progress_surface'):
+            if hasattr(self, '_progress_surface') or hasattr(self, '_transfers_overview'):
                 self.render_transfer_summary()
 
 
@@ -514,18 +533,28 @@ class TransferExecutionPresentation:
         owner = self.controller
         return owner.active_host and owner.cloud_client is client and client.generation == generation
 
-    def unavailable(self):
+    def show_origin_detail(self):
         owner = self.controller
-        owner.show_transfers(present=(owner.native_host.state.destination == 'files'
-            and owner.navigation_generation == getattr(self, 'origin', None)))
+        destination = owner.native_host.state.destination
+        screens = owner.routes.screens[destination]
+        same_origin = owner.navigation_generation == getattr(self, 'origin', None)
+        if same_origin and screens and screens[-1][0] == 'local-push':
+            owner.routes.back()
+            setup = getattr(owner, '_transfer_setup_surface', None)
+            if setup is not None:
+                setup.dispose()
+        from_browser = bool(screens and screens[-1][0] in ('browser', 'remote-browser', 'workspace-browser'))
+        owner.show_transfers(present=same_origin and (destination == 'files' or from_browser), detail=True)
+
+    def unavailable(self):
+        self.show_origin_detail()
 
     def started(self):
         owner = self.controller
         self.completion = start_transfer_notice()
         self.awake = owner.app.acquire_awake_lease()
         owner.set_cloud_busy(True)
-        owner.show_transfers(present=(owner.native_host.state.destination == 'files'
-            and owner.navigation_generation == getattr(self, 'origin', None)))
+        self.show_origin_detail()
         owner.refresh_transfer_status()
 
     def progress(self, epoch, values):
@@ -540,9 +569,9 @@ class TransferExecutionPresentation:
         if not owner.active_host:
             return
         state = owner.state
-        surface = getattr(owner, '_progress_surface', None)
-        observed = (owner.rclone_ui.transfer_foreground()
-                    and surface is not None and not surface.closed and surface.visible())
+        surfaces = (getattr(owner, '_progress_surface', None), getattr(owner, '_transfers_overview', None))
+        observed = owner.rclone_ui.transfer_foreground() and any(
+            surface is not None and not surface.closed and surface.visible() for surface in surfaces)
         outcome = {'complete': 'success', 'conflict': 'failure', 'failed': 'failure'}.get(state.result, state.result)
         completion, self.completion = getattr(self, 'completion', None), None
         notice = transfer_notice(completion, outcome, observed=observed, details='Transfers',
@@ -570,6 +599,6 @@ class TransferExecutionPresentation:
 
             def details():
                 if owner.active_host and owner.state.epoch == epoch:
-                    owner.show_transfers()
+                    owner.show_transfers(detail=True)
 
             owner.rclone_ui.publish_transfer_notice(notice, details)

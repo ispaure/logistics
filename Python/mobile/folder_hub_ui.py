@@ -282,7 +282,7 @@ class FolderHubUI(WorkspacesScreen):
         box = toga.Box(children=[notice], style=Pack(direction=COLUMN, margin=16, flex=1))
         box._workspace_status_label = notice
         if waiting and self.transfer_busy:
-            box.add(action_button(toga.Button('View transfer progress', on_press=self.show_transfers,
+            box.add(action_button(toga.Button('View transfers', on_press=self.show_transfers,
                                               style=Pack(height=TOUCH_TARGET))))
         elif waiting:
             box.add(action_button(toga.Button('Cancel current request', on_press=self.cancel_cloud,

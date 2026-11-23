@@ -23,9 +23,9 @@ class SyncButton(toga.Button):
         from .appearance import surface
         surface(self, background='hover', foreground='text', outlined=False)
 
-    def update(self, busy, percentage, complete, phase, *, notified=False):
+    def update(self, busy, percentage, complete, *, notified=False):
         progress = None if percentage is None else max(0, min(100, round(percentage)))
-        state = busy, progress, complete, phase if busy and progress is None else 0, notified
+        state = busy, progress, complete, notified
         if state == self.snapshot:
             return
         initial = self.snapshot is None
@@ -33,22 +33,17 @@ class SyncButton(toga.Button):
         if not (busy or notified):
             self.renderer.apply(self, 'transfers', 'Transfers', preserve_layout=not initial)
             return
-        start = -90 if progress is not None or not busy else phase * 30 - 90
         sweep = max(3, 360 * progress / 100) if busy and progress is not None else 100 if busy else 360
         lines = (((8, 8), (15, 8), (13, 6)), ((15, 8), (13, 10)),
                  ((16, 16), (9, 16), (11, 14)), ((9, 16), (11, 18)))
         label = (f'Syncing: {progress}% of known work. Open transfers' if progress is not None else
                  'Syncing. Open transfers') if busy else 'Sync finished. Open transfers' if complete else 'Sync stopped. Open transfers'
         self.renderer.icons['sync-progress'] = IconSpec('', '↻', lines,
-            arcs=((2, 2, 22, 22, start, sweep),), stroke_width=1.6, apple_vector=True)
+            arcs=((2, 2, 22, 22, -90, sweep),), stroke_width=1.6, apple_vector=True)
         self.renderer.apply(self, 'sync-progress', label, preserve_layout=not initial)
 
 
 def refresh(app, destination=None):
-    pending = getattr(app, '_sync_status_tick', None)
-    if pending is not None:
-        pending.cancel()
-        app._sync_status_tick = None
     if not getattr(app, 'active_host', False) or not hasattr(app, 'routes'):
         return
     destination = destination or app.native_host.state.destination
@@ -59,8 +54,5 @@ def refresh(app, destination=None):
         return
     busy = bool(getattr(app, 'transfer_busy', False))
     percentage = getattr(app, 'transfer_percentage', None)
-    phase = int(app.loop.time() * 5) % 12
-    button.update(busy, percentage, getattr(app, 'transfer_complete', False), phase,
+    button.update(busy, percentage, getattr(app, 'transfer_complete', False),
                   notified=bool(getattr(app, 'transfer_notification', False)))
-    if busy and percentage is None and app.preferences.values.get('android_eink') != 'true':
-        app._sync_status_tick = app.loop.call_later(.2, refresh, app)

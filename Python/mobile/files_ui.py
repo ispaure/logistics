@@ -224,8 +224,12 @@ class FilesUI:
         from .file_browser_view import LocalFileBrowser
         self.file_browser = LocalFileBrowser(folder_visible=self.folder_path_visible, selected=self.browser_file_selected, open_folder=self.browser_file_folder, navigate=self.browser_file_location, open_file=self.browser_file_open)
         self.file_browser.install_item_commands(lambda row: self.file_item_commands(row=row))
-        if self.file_browser.native_list.factory.DetailedList.__module__.startswith('toga_iOS.'):
+        backend = self.file_browser.native_list.factory.DetailedList.__module__
+        if backend.startswith('toga_iOS.'):
             from .native.file_drag_ios import install as install_file_drag
+            install_file_drag(self, self.file_browser)
+        elif backend.startswith('toga_android.'):
+            from .native.file_drag_android import install as install_file_drag
             install_file_drag(self, self.file_browser)
         self.file_browser.finish_selection = self.end_file_selection
         from weakref import ref

@@ -73,7 +73,7 @@ class TransferController(MirrorUI):
         self._cancel_transfer_review = None
 
     def dispose(self):
-        for name in ('_transfer_review_view', '_progress_surface', '_transfer_setup_surface'):
+        for name in ('_transfer_review_view', '_progress_surface', '_transfers_overview', '_transfer_setup_surface'):
             surface = getattr(self, name, None)
             if surface is not None:
                 surface.dispose()

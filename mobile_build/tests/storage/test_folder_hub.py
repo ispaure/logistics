@@ -431,7 +431,7 @@ class FolderHubTests(unittest.TestCase):
                 self.assertEqual(app.routes.screens['files'][-1][0], 'workspace-status')
                 status = app.body.children[0]._workspace_frame.main
                 progress = next(child for child in status.children
-                                if child.text == 'View transfer progress')
+                                if child.text == 'View transfers')
                 progress.on_press()
                 self.assertTrue(contains(app.body, app.transfer_view))
                 app.transfer_busy = False
@@ -828,7 +828,7 @@ class FolderHubTests(unittest.TestCase):
                 self.assertEqual([label for label, _ in app.workspace_menu_actions('Unmapped local')
                                   if label.startswith('Browse ')], ['Browse Local'])
                 app.show_transfers()
-                self.assertEqual(app.transfer_view.model['mode'], 'progress')
+                self.assertEqual(app.transfer_view.model['mode'], 'overview')
                 self.assertEqual(app.transfer_view.model['phase'], 'idle')
                 self.assertNotIn(app.cloud_remote, app.cloud_view.children)
             finally:

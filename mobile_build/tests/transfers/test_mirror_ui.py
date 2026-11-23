@@ -285,7 +285,7 @@ class MirrorUITests(unittest.TestCase):
                     original = app.show_transfers
                     def show(*args, **kwargs):
                         original(*args, **kwargs)
-                        if getattr(app, 'transfer_endpoints', None):
+                        if kwargs.get('detail') and getattr(app, 'transfer_endpoints', None):
                             self.assertNotIn('transfer-review', app.native_host.state.routes['files'])
                             self.assertEqual(app.transfer_view.model['source'], source)
                             self.assertEqual(app.transfer_view.model['destination'], destination)
@@ -296,11 +296,11 @@ class MirrorUITests(unittest.TestCase):
                             app.begin_transfer_review(None if new else job['id'], push=push,
                                                       remote=remote, folder='folder', storage=storage)
                             self.assertTrue(await drive_review(app))
-                            self.assertEqual(app.routes.screens['files'][-1][0], 'transfers')
+                            self.assertEqual(app.routes.screens['files'][-1][0], 'transfer-detail')
                             app.routes.back()
                             self.assertNotIn('transfer-review', app.native_host.state.routes['files'])
                             app.show_locations()
-                            app.show_transfers()
+                            app.show_transfers(detail=True)
                         self.assertIn(True, shown)
                         self.assertIn(False, shown)
                     app.loop.run_until_complete(exercise())

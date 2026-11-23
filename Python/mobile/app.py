@@ -448,7 +448,8 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         origin = self.native_host.state.destination
         if destination != origin:
             screens = self.routes.screens[origin]
-            transfer = next((i for i, (route, *_) in enumerate(screens) if route == 'transfers'), None)
+            transfer = next((i for i, (route, *_) in enumerate(screens)
+                             if route in ('transfers', 'transfer-detail')), None)
             if transfer is not None:
                 self.routes.trim(origin, transfer)
                 self.routes.render(origin)

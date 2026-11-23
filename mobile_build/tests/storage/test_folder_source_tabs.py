@@ -209,7 +209,7 @@ class FolderSourceTabTests(unittest.TestCase):
         self.assertIsNone(app.folder_add_share_button.parent)
         self.assertIn(app.folder_credential_row, app.folder_picker_header.children)
 
-    def test_workspaces_transfers_opens_native_progress_and_explains_locked_downloads(self):
+    def test_workspaces_transfers_opens_native_overview_and_explains_locked_downloads(self):
         app = self.app
         app.show_locations()
         for source in ('Local', 'rclone', 'Network shares'):
@@ -221,7 +221,7 @@ class FolderSourceTabTests(unittest.TestCase):
                     node = node.parent
                 self.assertIs(node, app.folder_picker_view)
         app.folder_transfers_button.on_press()
-        surface = app.transfer_controller()._progress_surface
+        surface = app.transfer_controller()._transfers_overview
         self.assertIsNone(surface.web)
         fallback = surface.native_fallback
         app.loop.run_until_complete(app.transfer_controller().refresh_transfer_history())

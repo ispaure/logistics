@@ -24,7 +24,7 @@ class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
         from features.rclone.transfers.mobile.surface import TransferSurface
         handler = AsyncMock()
         view = State(ready=True, closed=False, revision=1, delivered_revision=1, pending=None,
-            host=State(active_host=True), model=dict(can_confirm=True), handler=handler, web=None)
+            host=State(active_host=True), model=dict(operation='Push', can_confirm=True), handler=handler, web=None)
         view.native_fallback = State(buttons=State(children=[]))
         clicks = []
         def button(revision):
@@ -34,7 +34,7 @@ class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
                     view.revision = view.delivered_revision = 2
                     view.native_fallback.buttons.children = [button(2)]
                 await TransferSurface.dispatch(view, 'approve', dict(revision=str(revision)))
-            return State(text='Approve Push', enabled=True, on_press=press)
+            return State(text='Start push', enabled=True, on_press=press)
         view.native_fallback.buttons.children = [button(1)]
         with patch('mobile_build.native_tests.tests.logisticsmobile.review_checks.verify_native_transfer_fallback') as verify:
             await press_review(view, 'approve', timeout=1)
@@ -47,7 +47,7 @@ class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
         handler, press = AsyncMock(), AsyncMock()
         view = State(ready=True, closed=False, revision=1, delivered_revision=1,
             handler=handler, web=None, native_fallback=State(buttons=State(children=[
-                State(text='Proceed without full review…', enabled=True, on_press=press)])))
+                State(text='Skip preview and start', enabled=True, on_press=press)])))
         with patch('mobile_build.native_tests.tests.logisticsmobile.review_checks.verify_native_transfer_fallback'):
             with self.assertRaisesRegex(AssertionError, 'not accepted: early'):
                 await press_review(view, 'early', timeout=.01)
@@ -59,7 +59,7 @@ class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
         handler, press = AsyncMock(), AsyncMock()
         view = State(ready=True, closed=False, revision=1, delivered_revision=1,
             handler=handler, web=None, native_fallback=State(buttons=State(children=[
-                State(text='Approve Push', enabled=True, on_press=press)])))
+                State(text='Start push', enabled=True, on_press=press)])))
         with patch('mobile_build.native_tests.tests.logisticsmobile.review_checks.verify_native_transfer_fallback',
                 side_effect=AssertionError('Native review rows are stale')):
             with self.assertRaisesRegex(AssertionError, 'rows are stale'):
@@ -73,7 +73,7 @@ class NativeReviewDriverTests(unittest.IsolatedAsyncioTestCase):
         from features.rclone.transfers.mobile.surface import TransferSurface
         handler = AsyncMock()
         view = State(ready=True, closed=False, revision=1, delivered_revision=1,
-            pending=None, host=State(active_host=True), model=dict(can_confirm=True), handler=handler)
+            pending=None, host=State(active_host=True), model=dict(operation='Push', can_confirm=True), handler=handler)
         clicks = []
         tasks = []
         async def evaluate(script):

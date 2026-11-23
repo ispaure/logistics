@@ -8,21 +8,23 @@ Both use rclone Sync.
 Destination files and empty folders can be replaced or deleted without a backup.
 One transfer runs at a time. Existing local copies stay available for browsing.
 
-Tap the **Transfers** icon next to **Server** in Workspaces. It shows live
-progress while a job runs. The Transfers page opens with the current job,
-its source and destination, MB/s, and progress for individual files as the
-source reports them. Percentages use the bytes or file counts found so far.
-Removal counters show attempts. Completion appears after verification.
-**Continue browsing** keeps the job active. **Stop transfer** asks before
-cancellation. Completed changes remain
-after a failure or stop.
+Tap the **Transfers** icon next to **Server** in Workspaces. The overview
+shows the active transfer above interrupted downloads and completed transfers.
+Tap the active card for its source, destination, MB/s, and individual
+file progress as the source reports it. Percentages use known bytes or file
+counts. Removal counters show attempts, and completion appears after verification.
 
-If you open an online workspace during a transfer, the detail pane explains
-why browsing must wait and offers **View transfer progress**. Workspaces
-becomes available again when the transfer ends.
+**Back** and **Continue browsing** return to the screen that opened the details.
+If you started a transfer in the File Browser, they return to that folder.
+**Stop transfer** asks before cancellation. Completed changes remain after
+a failure or stop.
+
+Workspaces source tabs and local folders stay usable during a transfer.
+Opening an online workspace that shares the connection can wait until the
+transfer ends. Its status page offers **View transfers**.
 
 When a managed sync or download runs for at least 30 seconds and you are away
-from its progress view, an in-app banner can take you back to **Transfers**.
+from its progress view, an in-app banner can open the transfer details.
 For a failed or incomplete transfer, review what changed before retrying.
 Short jobs and cancellations report their outcome in **Transfers**.
 

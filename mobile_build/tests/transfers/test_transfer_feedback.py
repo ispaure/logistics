@@ -242,7 +242,7 @@ class TransferFeedbackTests(TestCase):
             owner.execution.view.finished()
             self.assertEqual(len(viewed), 1)
             viewed[-1][1]()
-            self.assertEqual(app.routes.screens[app.native_host.state.destination][-1][0], 'transfers')
+            self.assertEqual(app.routes.screens[app.native_host.state.destination][-1][0], 'transfer-detail')
 
             app.show_home()
             app.preferences.values[transfer_notifications.PREFERENCE] = 'true'
@@ -318,7 +318,7 @@ class TransferFeedbackTests(TestCase):
         app.transfer_busy = True
         app.transfer_epoch = 7
         app.transfer_endpoints = ('Local/Photos', 'Cloud:Photos')
-        app.show_transfers()
+        app.show_transfers(detail=True)
         app.publish_mirror_progress(7, dict(phase='Transferring', files=2, total_files=4,
             done=12500000, total=25000000, active=1, listed=12, checks=8))
         controller = app.transfer_controller()
@@ -328,7 +328,7 @@ class TransferFeedbackTests(TestCase):
         self.assertEqual(model['total_files'], 4)
         self.assertEqual(model['checks'], 8)
         first = app.transfer_view
-        app.show_transfers()
+        app.show_transfers(detail=True)
         self.assertIs(app.transfer_view, first)
         self.assertEqual(controller.transfer_files.text, 'Files\n2 / 4')
         app.publish_mirror_progress(7, dict(phase='Removing destination entries', files=0,
@@ -415,7 +415,7 @@ class TransferFeedbackTests(TestCase):
             self.assertFalse(app.routes.screens[destination])
         app._transfer_cancel.set.assert_not_called()
 
-    def test_same_progress_does_not_repaint_and_indeterminate_timer_stops_in_viewer(self):
+    def test_same_progress_and_indeterminate_progress_do_not_repaint(self):
         app = self.app
         app.show_locations()
         app.transfer_busy = True
@@ -431,10 +431,11 @@ class TransferFeedbackTests(TestCase):
         self.assertIn('73%', button.accessible_name)
         app.transfer_percentage = None
         app.refresh_transfer_status()
-        pending = app._sync_status_tick
-        self.assertIsNotNone(pending)
+        with patch.object(button.renderer, 'apply') as paint:
+            for _ in range(5):
+                app.refresh_transfer_status()
+            paint.assert_not_called()
         app.show_documents(destination='documents')
-        self.assertTrue(pending.cancelled())
         self.assertIsNone(getattr(app, '_sync_status_tick', None))
         app.transfer_busy = False
         app.transfer_notification = False
@@ -473,14 +474,14 @@ class TransferFeedbackTests(TestCase):
                 origin = app.body
                 app.transfer_busy = True
                 app._transfer_cancel = Mock()
-                app.show_transfers()
-                app.show_transfers()  # A progress/completion redraw keeps the same return path.
+                app.show_transfers(detail=True)
+                app.show_transfers(detail=True)  # A progress/completion redraw keeps the same return path.
                 self.assertEqual(app.native_host.state.destination, destination)
                 app.loop.run_until_complete(app.transfer_view.dispatch('background', {}))
                 self.assertIs(app.body, origin)
                 self.assertTrue(app.transfer_busy)
                 app._transfer_cancel.set.assert_not_called()
-                app.show_transfers()
+                app.show_transfers(detail=True)
                 self.assertTrue(app.routes.system_back())
                 self.assertIs(app.body, origin)
 

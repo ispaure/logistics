@@ -80,6 +80,14 @@ def verify_native_transfer_fallback(surface):
     else:
         raise AssertionError('Transfer fallback requires actual iOS or Android widgets')
     model = surface.model
+    if model.get('mode') == 'overview':
+        phase = model.get('phase')
+        active = model.get('busy') or phase in ('failed', 'conflict', 'cancelled')
+        assert (fallback.active_card is not None) == bool(active)
+        assert fallback.history in fallback.body.children
+        assert fallback.card not in fallback.body.children
+        return dict(renderer='native', mode='overview', revision=surface.revision,
+                    recoveries=surface.recovery_count)
     assert text(fallback.title), 'Native transfer title is missing'
     buttons = {getattr(button, '_settings_source_text', button.text): button
                for button in fallback.buttons.children}
@@ -154,7 +162,7 @@ async def wait_for_transfer_surface(surface, *, timeout=45):
     last = None
     while loop.time() < deadline:
         assert not surface.closed, 'Transfer surface closed before rendering'
-        assert surface.model.get('mode') == 'progress', 'Unexpected transfer surface mode'
+        assert surface.model.get('mode') in ('progress', 'overview'), 'Unexpected transfer surface mode'
         if surface.recovery_count:
             signal_transfer_stall(surface)
         if getattr(surface, 'native_fallback', None) is not None:

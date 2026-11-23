@@ -1180,7 +1180,7 @@ def main():
     parser.add_argument('--output', required=True, type=Path)
     parser.add_argument('--source-root', type=Path, default=REPO,
                         help='Validate a manager-owned source snapshot using this checkout’s native templates.')
-    parser.add_argument('--probe', choices=('comic-guidance', 'workspace-edges', 'mobile-feedback', 'documents-search', 'filename-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'download-recovery', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'notebook-geometry', 'editor-keyboard', 'hardware-input', 'storage', 'reader-space', 'reader-appearance', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'video-chapters', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'playlist-speech', 'native-suite', 'rotation-crash', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-rapid-ink', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
+    parser.add_argument('--probe', choices=('comic-guidance', 'workspace-edges', 'mobile-feedback', 'documents-search', 'filename-search', 'documents-hub', 'file-transfer', 'notes-dataview', 'notes-audit', 'notes-library', 'rclone-transfer', 'download-recovery', 'file-drag', 'markdown-typography', 'chat-laptop', 'chat-settings', 'notes-search', 'chat-notes-feedback', 'notebook-laptop', 'notebook-geometry', 'editor-keyboard', 'hardware-input', 'storage', 'reader-space', 'reader-appearance', 'viewer-layout', 'reader-title', 'unified-progress', 'unified-progress-video', 'video-chapters', 'recent-deletion', 'notebook', 'documents', 'localcrypt', 'workspace-move', 'notes-folders', 'folder-feedback', 'notes-markdown-feedback', 'links-images-voices', 'speech-playback', 'playlist-speech', 'native-suite', 'rotation-crash', 'first-tap', 'storage-selector', 'notes-fullscreen', 'notes-drawers', 'notes-header', 'documentation-header', 'android-header', 'sync-status', 'control-center', 'creation', 'features', 'pdf-annotation', 'notebook-input', 'notebook-rapid-ink', 'notebook-memory', 'notebook-soak', 'notebook-load', 'boox-raw-ink', 'boox-preview'), default='storage')
     parser.add_argument('--retain-build', action='store_true', help='Pin this managed QA build for reruns; caller must remove the pin and workspace afterward.')
     parser.add_argument('--device', help='Explicit connected Android serial; QA app is removed afterward')
     parser.add_argument('--android-gpu', choices=('host', 'swiftshader'), default='swiftshader',
@@ -1212,6 +1212,8 @@ def main():
         parser.error('--ios-runtime requires iOS.')
     if args.probe == 'download-recovery' and (args.platform != 'android' or args.device):
         parser.error('Download recovery requires an owned disposable Android emulator.')
+    if args.probe == 'file-drag' and (args.platform != 'android' or args.device):
+        parser.error('Use an owned Android emulator for file-drag, or mobile_build.validation.file_drag_ios on iOS.')
     if args.probe == 'android-header' and args.platform != 'android':
         parser.error('The android-header probe requires Android.')
     if args.android_tablet and (args.platform != 'android' or args.device):
@@ -1475,6 +1477,13 @@ def main():
             if args.probe == 'boox-preview':
                 profile = dict(bundle='io.github.ispaure.logisticsrawinkqa',
                     entry_point='tests.logisticsmobile.boox_preview_probe', result_name='boox-preview-result.json')
+            if args.probe == 'file-drag':
+                from .file_drag_android import BUNDLE as drag_bundle, observe_touch
+                run_android(workspace, payload, args.output, env, options, bundle=drag_bundle,
+                            entry_point='tests.logisticsmobile.file_drag_gesture_probe',
+                            result_name='file-drag-android-result.json', observe=observe_touch,
+                            gpu=args.android_gpu, probe_timeout=330)
+                return
             if args.probe == 'download-recovery':
                 from mobile_build.validation.android_download_recovery import android_fixture
                 with android_fixture(workspace, args.output) as observe:

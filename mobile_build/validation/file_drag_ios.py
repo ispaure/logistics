@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 import shutil
 import signal
+import subprocess
 import sys
 import time
 from uuid import uuid4
@@ -59,6 +60,14 @@ def exercise(app, output, env, *, project, bundle, runtime_id, result_name, **_o
             time.sleep(.1)
         if result.is_file():
             shutil.copyfile(result, output / result_name)
+        events = cache / 'file-drag-events.jsonl'
+        if events.is_file():
+            shutil.copyfile(events, output / events.name)
+        if code:
+            with (output / 'app-errors.log').open('w') as diagnostics:
+                subprocess.run(['xcrun', 'simctl', 'spawn', udid, 'log', 'show', '--last', '6m',
+                                '--predicate', 'process == "Logistics Mobile"'], env=env,
+                               stdout=diagnostics, stderr=subprocess.STDOUT, timeout=30, check=False)
         if code or not result.is_file():
             raise RuntimeError(f'File drag XCTest or byte verification failed (XCTest exit {code}).')
         if json.loads(result.read_text()) != dict(

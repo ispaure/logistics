@@ -15,7 +15,7 @@ import toga
 from toga.style import Pack
 from toga.style.pack import CENTER, COLUMN, ROW
 from commonUtils.ui.native.appearance import accessible_name
-from commonUtils.ui.native.forms import FittedLabel, fit_section, fit_text
+from commonUtils.ui.native.forms import FittedLabel, disclosure, fit_section, fit_text
 
 
 class NativeTransferFallback(toga.Box):
@@ -57,6 +57,7 @@ class NativeTransferFallback(toga.Box):
         self.review_navigation = toga.Box(style=Pack(direction=ROW, gap=8))
         self.review_filters = None
         self.history_signature = None
+        self.active_card = None
         self.history = toga.Box(style=Pack(direction=COLUMN, gap=8))
         self.body = toga.Box(children=[self.card, self.rows],
                              style=Pack(direction=COLUMN, gap=12, margin=12))
@@ -82,7 +83,7 @@ class NativeTransferFallback(toga.Box):
                 await self.surface.dispatch(action, dict(args, revision=str(revision)))
         control = toga.Button(title, enabled=enabled, on_press=press, style=Pack(height=48))
         if self.presentation:
-            if action in ('approve', 'resume-download', 'downloads', 'start-review', 'background'):
+            if action in ('approve', 'resume-download', 'downloads', 'start-review', 'background', 'open-transfer'):
                 self.presentation.action_button(control)
             else:
                 foreground = 'destructive' if action in ('stop', 'discard-download') else 'muted'
@@ -123,11 +124,16 @@ class NativeTransferFallback(toga.Box):
         fit_text(self.file_heading, content_width)
         fit_section(self.rows, content_width)
         fit_section(self.history, content_width, fit=fit_transfer_control)
+        if self.active_card is not None:
+            fit_section(self.active_card, content_width, fit=fit_transfer_control)
         if self.review_filters is not None:
             fit_text(self.review_page, content_width)
 
     def render(self, model):
         mode = model.get('mode')
+        if mode == 'overview':
+            self.render_overview(model)
+            return
         if mode != 'progress':
             self.title.text = model.get('workspace') or 'Transfers'
             self.paths.text = 'Source: ' + model.get('source', '—') + '\nDestination: ' + model.get('destination', '—')
@@ -158,7 +164,8 @@ class NativeTransferFallback(toga.Box):
                 self.body.insert(self.body.children.index(self.rows), self.buttons)
             elif not buttons and self.buttons.parent is not None:
                 self.buttons.parent.remove(self.buttons)
-            self.render_history(model)
+            if not model.get('detail'):
+                self.render_history(model)
         elif mode == 'review':
             operation = model.get('operation', 'Transfer')
             self.title.text = f'Review {operation.lower()} changes'
@@ -333,6 +340,59 @@ class NativeTransferFallback(toga.Box):
             if getattr(value, '_settings_source_text', value.text) != detail:
                 value.text = detail
 
+    def render_overview(self, model):
+        if self.card.parent is self.body:
+            self.body.remove(self.card)
+        if self.buttons.parent is self:
+            self.remove(self.buttons)
+        phase = model.get('phase', 'idle')
+        show_card = model.get('busy') or phase in ('failed', 'conflict', 'cancelled')
+        if show_card:
+            title = {
+                'scan': 'Preparing transfer', 'verify': 'Verifying transfer',
+                'stopping': 'Stopping transfer', 'failed': 'Transfer stopped',
+                'conflict': 'Files changed during sync', 'cancelled': 'Transfer cancelled',
+            }.get(phase, {'Pull': 'Pulling', 'Push': 'Pushing', 'Download': 'Downloading'}.get(
+                model.get('operation'), 'Transferring'))
+            percentage = model.get('percentage')
+            suffix = f' · {percentage:.0f}%' if percentage is not None else ''
+            caption = title + suffix
+            workspace = model.get('workspace')
+            if workspace and workspace != '—':
+                caption += ' · ' + workspace
+            if self.active_card is None:
+                control = self.button(caption, 'open-transfer')
+                disclosure(control)
+                control.style.height = 68
+                self.active_card = self.history_card(control, self.progress)
+                self.body.insert(0, self.active_card)
+            else:
+                control = self.active_card.children[0].children[0]
+                if getattr(control, '_settings_source_text', control.text) != caption:
+                    control.text = caption
+            display = 'pack' if percentage is not None else 'none'
+            if self.progress.style.display != display:
+                self.progress.style.display = display
+            if percentage is not None and self.progress.value != percentage:
+                self.progress.value = percentage
+        elif self.active_card is not None:
+            self.remove_active_card()
+        previous_history = self.history_signature
+        self.render_history(model)
+        if self._fitted_width is not None:
+            width = max(24, min(640, self._fitted_width - 32))
+            if self.active_card is not None:
+                fit_section(self.active_card, width, fit=fit_transfer_control)
+            if self.history_signature != previous_history:
+                fit_section(self.history, width, fit=fit_transfer_control)
+        if self.active_card is not None:
+            accessible_name(control, caption + '. View transfer details')
+
+    def remove_active_card(self):
+        self.active_card.children[0].remove(self.progress)
+        self.body.remove(self.active_card)
+        self.active_card = None
+
     def render_history(self, model):
         downloads, completed = model.get('downloads'), model.get('history')
         history_error = model.get('history_error')
@@ -344,8 +404,8 @@ class NativeTransferFallback(toga.Box):
         if self.history.parent is None:
             self.body.add(self.history)
         self.history.clear()
-        self.render_completed(completed, history_error, model)
-        if model.get('busy'):
+        if model.get('busy') and model.get('mode') != 'overview':
+            self.render_completed(completed, history_error, model)
             return
         self.history.add(self.label('Interrupted downloads', size=17, bold=True))
         if not downloads:
@@ -356,13 +416,15 @@ class NativeTransferFallback(toga.Box):
             status = ('Folder · ' if job.get('folder') else '') + job['path'] + '\n' + progress
             status = self.label(status, size=13, muted=True)
             actions = dict(id=job['id'])
-            resume = self.button('Resume', 'resume-download', **actions)
-            discard = self.button('Discard…', 'discard-download', **actions)
+            idle = not model.get('busy')
+            resume = self.button('Resume', 'resume-download', idle, **actions)
+            discard = self.button('Discard…', 'discard-download', idle, **actions)
             accessible_name(resume, 'Resume ' + job['name'])
             accessible_name(discard, 'Discard ' + job['name'])
             resume.style.flex = discard.style.flex = 1
             self.history.add(self.history_card(title, status,
                 toga.Box(children=[resume, discard], style=Pack(direction=ROW, gap=8))))
+        self.render_completed(completed, history_error, model)
 
     def render_completed(self, completed, history_error, model):
         heading = self.label('Completed transfers', size=17, bold=True)
@@ -411,6 +473,9 @@ class NativeTransferFallback(toga.Box):
                 for child in control.children:
                     clear_text(child)
 
+        if self.active_card is not None:
+            clear_text(self.active_card)
+            self.remove_active_card()
         for section in (self.rows, self.history, self.buttons):
             clear_text(section)
             section.clear()
