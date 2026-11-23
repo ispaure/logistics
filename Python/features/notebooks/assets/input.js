@@ -92,7 +92,7 @@ function coord(e, r = canvas.getBoundingClientRect()) {
   const pressure = e.pointerType === 'pen' && !constantPenPressure
     ? Math.max(0, Math.min(1, e.pressure)) : fallbackPressure;
   const point = [Math.max(0, Math.min(state.width, (e.clientX - r.left) / r.width * state.width)), Math.max(0, Math.min(state.height, (e.clientY - r.top) / r.height * state.height)), pressure];
-  if (mode === 'ink' && e.pointerType === 'pen' && brushFor(inkSettings.tool).tilt_gain) {
+  if (mode === 'ink' && e.pointerType === 'pen' && brushFor(inkSettings.tool).tilt_widths) {
     // Pointer events may expose either altitude above the page or axis angles
     // from vertical. Android sends the digitizer's normalized angle directly.
     const radians = Math.PI / 180, horizontal = Math.PI / 2;
@@ -157,6 +157,7 @@ canvas.onpointerdown = e => {
   e.preventDefault();
   active = e.pointerId;
   inputTrace('accepted-down',e);
+  if (e.nativePen) hideSwipePage();  // Android delivers pen packets directly to the canvas.
   if (!e.nativePen) canvas.setPointerCapture(active);
   inkSettings = chosenInk();
   start = last = coord(e);

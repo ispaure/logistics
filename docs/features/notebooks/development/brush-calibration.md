@@ -8,7 +8,7 @@ Open a disposable RMDOC through the [desktop chooser](development.md#follow-a-st
 
 ## Measured widths and colors
 
-Measurements come from the November 4, 2026 Paper Pro worksheet, OS **3.29.0.153**, with twelve pages, 1,585 strokes and a native color PDF. All twelve pages opened without preservation warnings and retained unmodified scene bytes. Tests use synthetic geometry and aggregate values. For renewed measurement run `Python/tests/notebooks/measure_calibration.py` with `--archive`, `--pdf` and `--output` on a completed version-2 worksheet. Keep source files, hashes and reports under ignored test results.
+Tests use synthetic geometry. The ranges below are in native page units.
 
 | Tool | Thin / Medium / Thick point width |
 | --- | --- |
@@ -22,7 +22,7 @@ Measurements come from the November 4, 2026 Paper Pro worksheet, OS **3.29.0.153
 | Calligraphy | 2.5 / 4.5 / 6.5 nominal nib spans |
 | Shader | 10.75 / 19.5 / 28 plateau near 0.3 pressure |
 
-Dynamics approximate measured profiles. Shader uses stylus tilt, when available, to widen newly drawn strokes as the pen slopes toward the page. The width is saved in the native points. Upright and pressure-only input use the measured pressure curve. Physical tilt calibration, speed and native texture fidelity remain open. Thickness scales are approximately 0.8705015 / 1.7410030 / 2.6115046. Highlighter always uses the first scale and maps legacy size choices to Fixed.
+Pencil broadens into side shading as a supported stylus slopes toward the page. The resulting width is saved in the native points. Upright and pressure-only input use the Pencil pressure curve. Shader uses pressure and composites overlapping color. Physical input testing and native texture fidelity remain open. Thickness scales are approximately 0.8705015 / 1.7410030 / 2.6115046. Highlighter always uses the first scale and maps legacy size choices to Fixed.
 
 PDF writing colors are blue `#304ae0`, red `#c23132`, green `#91da71`, yellow `#fae719`, cyan `#74d2e8` and magenta `#c07fd2`. Highlighter uses native IDs 3/4/5 for yellow/green/pink and 14/15/16 for blue/orange/gray. Preserve legacy color-9 RGBA and use preservation-only for unknown future colors. Shader uses color 9 and eight measured RGBA values. Supplementary sources include [Paper Pro field measurements](https://cable729.github.io/inkterop/docs/formats/remarkable/), [native RGBA examples](https://github.com/Scratchydisk/remarkable-rm#rgba-colour-discovery) and [Shader color definitions](https://github.com/ingatellent/xovi-qmd-extensions#changegreencolorqmd).
 

@@ -243,7 +243,7 @@ class InkPage:
         if not isinstance(points, list) or not 1 <= len(points) <= MAX_POINTS:
             raise ValueError('Invalid stroke length.')
         clean = []
-        sizes = (3, 4) if 'tilt_gain' in BRUSHES[tool] else (3,)
+        sizes = (3, 4) if 'tilt_widths' in BRUSHES[tool] else (3,)
         for point in points:
             if (not isinstance(point, (tuple, list)) or len(point) not in sizes
                     or any(type(v) not in (int, float) or not math.isfinite(v) for v in point)):

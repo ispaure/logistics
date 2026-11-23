@@ -109,9 +109,10 @@ line({tool,...nativeColor(tool,color),points:strokePoints(samples,tool,2)},targe
 signatures.push(surface.toDataURL());
 }
 check(new Set(signatures).size===9,'Brush renderings must be distinct');
-const tiltSamples=[[30,60,.5],[85,60,.5,.5],[140,60,.5,1]];
-check(strokePoints(tiltSamples,23,2).map(point=>point[3]).join(',')==='19.5,24.75,30.25','Shader tilt width differs from the saved model');
-const previousInk=inkSettings;inkSettings={tool:23};
+const tiltSamples=[[30,60,1],[85,60,1,.5],[140,60,1,.8]];
+check(strokePoints(tiltSamples,14,2).map(point=>point[3]).join(',')==='5.25,20,31.25','Pencil tilt width differs from the saved model');
+check(strokePoints(tiltSamples,23,2).every(point=>point[3]===19.5),'Tilt must not change Shader width');
+const previousInk=inkSettings;inkSettings={tool:14};
 const pen=event(100,100);
 check(Math.abs(coord({...pen,tiltX:45,tiltY:0})[3]-.5)<1e-8,'Pointer tilt was lost');
 check(coord({...pen,nativeTilt:.75})[3]===.75&&coord(pen)[3]===0,'Android tilt or no-tilt fallback was lost');
@@ -235,7 +236,7 @@ let y=70+row*180;g.fillStyle='#fff';g.fillRect(10,y,1080,170);g.fillStyle='#222'
 for(let width=1;width<=3;width++){g.save();g.translate(195+(width-1)*290,y+30);line({tool,...nativeColor(tool,tool===18?13:tool===23?1:0),points:strokePoints(samples,tool,width)},g);g.restore()}
 row++}
 choose(17);$('zoom').value='fit';resize();
-return JSON.stringify({success:true,controls,distinct:signatures.length,grayscale:true,native_rgba:true,width_parity:true,eraser_controls:true,eraser_pointer_path:true,shader_blending:true,shader_tilt:true,graphite_density:true,bounded_filter_raster:true,previewErrors,previewWork,committedBrushes,frame_batching:true,sheet:sheet.toDataURL()});
+return JSON.stringify({success:true,controls,distinct:signatures.length,grayscale:true,native_rgba:true,width_parity:true,eraser_controls:true,eraser_pointer_path:true,shader_blending:true,pencil_tilt:true,graphite_density:true,bounded_filter_raster:true,previewErrors,previewWork,committedBrushes,frame_batching:true,sheet:sheet.toDataURL()});
 }catch(error){return JSON.stringify({success:false,error:String(error),stack:error.stack})}})()
 '''
 

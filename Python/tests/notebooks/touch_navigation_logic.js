@@ -10,7 +10,7 @@ function checkTouchNavigation(sources) {
   class Node {
     constructor(id){this.id=id;this.value='2';this.checked=false;this.style={};this.hidden=false;this.children=[];this.clientWidth=400;this.clientHeight=600;this.scrollLeft=500;this.scrollTop=600;this.options=[{value:'2'}];const classes=new Set();this.classList={contains:name=>classes.has(name),add:name=>classes.add(name),remove:name=>classes.delete(name),toggle(name,force){if(force)classes.add(name);else classes.delete(name)}}}
     addEventListener(type,fn){const group=this.id==='viewport'?'viewport':this.id==='paper'?'canvas':null;if(group)(listeners[group][type]??=[]).push(fn)}
-    setAttribute(){}append(...rows){this.children.push(...rows)}contains(node){return node===canvas||node===this}closest(){return null}
+    setAttribute(){}append(...rows){this.children.push(...rows)}contains(node){return node===this||(this===viewport&&node===canvas)||this.children.some(child=>child.contains(node))}closest(){return null}
     getBoundingClientRect(){return this===canvas?{left:-viewport.scrollLeft,top:-viewport.scrollTop,width,height,right:width-viewport.scrollLeft,bottom:height-viewport.scrollTop}:{left:0,top:0,width:400,height:600,right:400,bottom:600}}
     setPointerCapture(){}showModal(){}close(){}getContext(){return {drawImage(){}}}
   }
@@ -58,6 +58,21 @@ function checkTouchNavigation(sources) {
   reset();$('finger').checked=true;context.state.links=[{rect:[0,0,1,1],index:2}];swipe(-100);check(commands[0]?.index===1&&viewport.scrollLeft===500,'link swipe never pans with finger drawing enabled');
   reset();context.state.links=[{rect:[0,0,1,1],index:2}];dispatch(event('pointerdown'));dispatch(event('pointermove',230));dispatch(event('pointermove'));dispatch(event('pointerup'));check(!commands.length,'out-and-back cannot follow link');
   reset();context.state.index=2;swipe(-100);check(!commands.length&&!run('swipeAddPage.hidden'),'last-page swipe offers creation without creating');run('swipeAddPage.onclick()');check(commands.length===1&&commands[0].op==='add-page','button explicitly creates page');run('swipeAddPage.onclick()');check(commands.length===1,'busy button cannot duplicate creation');context.window.notebookUpdate({...context.state,index:3,count:4});check(run('swipeAddPage.hidden'),'successful creation retires offer');
+  reset();context.state.index=2;swipe(-100);
+  const offerTimer=run('swipePageTimer'),offer=run('swipeAddPage'),child=new Node('offer-icon');offer.append(child);
+  dispatch(event('pointerdown',300,300,9,'touch',child));
+  check(!offer.hidden&&run('swipePageTimer')===offerTimer,'tapping within the offer leaves it actionable');
+  for(const resize of listeners.window.resize)resize();
+  check(timers.get(offerTimer).ms===3000&&run('swipePageTimer')===offerTimer,'offer expires after three seconds even after resize');
+  timers.get(offerTimer).fn();check(offer.hidden&&!commands.length,'idle offer disappears without creating a page');
+  swipe(-100);const tapTimer=run('swipePageTimer');dispatch(event('pointerdown',25,25,9,'touch',$('paperToolbar')));
+  check(offer.hidden&&!timers.has(tapTimer),'tap elsewhere dismisses the offer');
+  swipe(-100);dispatch(event('pointerdown',200,300,1,'pen'));dispatch(event('pointerup',210,310,1,'pen'));
+  check(offer.hidden&&commands[0]?.op==='stroke','the next pen stroke dismisses the offer and still draws');
+  reset();context.state.index=2;context.state.native_pen=true;swipe(-100);
+  context.window.logisticsNativePen('down',7,[[200,300,.5]],400,600);
+  context.window.logisticsNativePen('up',7,[[220,300,.5]],400,600);
+  check(offer.hidden&&commands[0]?.op==='stroke','native Android pen dismisses the offer and still draws');
   reset();context.state.index=2;swipe(-100);run('swipeAddPage.onclick()');context.window.notebookUpdate({...context.state},'failed');check(!run('swipeAddPage.hidden')&&!run('swipeAddPage.disabled'),'failed creation retains retry offer');
   reset();context.state.index=2;context.state.read_only=true;swipe(-100);check(run('swipeAddPage.hidden')&&!commands.length,'read-only page offers no creation');
   reset();swipe(100);check(!commands.length,'first-page back swipe stays bounded');

@@ -52,13 +52,13 @@ def profile(widths, pressure=0, exponent=1, *, colors=PEN_COLORS, **style):
                 colors=colors, **style)
 
 
-# November 4 Paper Pro / OS 3.29.0.153 sample: native page units, not mm.
-# Constant widths and Shader saturation are directly observed. Pressure curves,
-# texture, speed/tilt and calligraphy nib behavior remain approximations.
+# Widths use native page units. Pressure and tilt curves, texture, speed and
+# calligraphy nib behavior approximate the writing tools.
 BRUSHES = {
     17: profile((2, 3.5, 5.25), family='fineliner'),
     15: profile((2.5, 3.75, 5.75), .34, 3.875, family='ballpoint'),
-    14: profile((2.75, 5.25, 8), .34, family='pencil', texture=True),
+    14: profile((2.75, 5.25, 8), .34, family='pencil', texture=True,
+                tilt_widths=(15.75, 31.25, 47), tilt_full=2 / 3),
     13: profile((3.5, 5.25, 7.75), family='mechanical', texture=True),
     16: profile((5.5, 6.25, 9), .25, family='marker'),
     12: profile((4.5, 8.5, 12.75), family='paintbrush',
@@ -69,7 +69,6 @@ BRUSHES = {
     # Accept old three-width commands without inventing extra firmware sizes.
     18: profile((26, 26, 26), colors=tuple(HIGHLIGHTS), family='highlighter', fixed_width=True),
     23: profile((10.75, 19.5, 28), colors=tuple(SHADERS), family='shader',
-                tilt_gain=.55,
                 pressure_widths=((0, (3.5, 6.5, 9.25)), (.1, (3.5, 6.5, 9.25)),
                                  (.2, (7, 13, 18.5)), (.3, (10.75, 19.5, 28)),
                                  (1, (10.75, 19.5, 28)))),
@@ -86,6 +85,8 @@ def expanded_profile(brush):
         result['pressure_widths'] = tuple(
             (pressure, tuple(width * EXPANDED_INK_SCALE for width in widths))
             for pressure, widths in brush['pressure_widths'])
+    if 'tilt_widths' in brush:
+        result['tilt_widths'] = tuple(width * EXPANDED_INK_SCALE for width in brush['tilt_widths'])
     return result
 
 
@@ -123,13 +124,14 @@ def pressure_width(brush, width, pressure):
 
 def stroke_points(points, tool, width, *, expanded=False):
     brush = (EXPANDED_BRUSHES if expanded else BRUSHES)[tool]
-    tilt_gain = brush.get('tilt_gain', 0)
+    tilt_widths = brush.get('tilt_widths')
     result = []
     for index, point in enumerate(points):
         x, y, pressure = point[0], point[1], point[2]
         value = pressure_width(brush, width, pressure)
-        if tilt_gain and len(point) == 4:
-            value *= 1 + tilt_gain * point[3]
+        if tilt_widths and len(point) == 4:
+            tilt = min(1, point[3] / brush['tilt_full'])
+            value += (tilt_widths[width - 1] - value) * tilt * tilt
         if brush.get('directional'):
             before = points[index - 1] if index else points[min(1, len(points) - 1)]
             angle = math.atan2(y - before[1], x - before[0])

@@ -94,7 +94,11 @@ function pressureWidth(brush, width, pressure) {
 function strokePoint(samples, i, tool, width) {
   let brush = brushFor(tool),
     [x, y, p, tilt = 0] = samples[i];
-  let w = pressureWidth(brush, width, p) * (1 + (brush.tilt_gain || 0) * tilt);
+  let w = pressureWidth(brush, width, p);
+  if (brush.tilt_widths) {
+    const side = Math.min(1, tilt / brush.tilt_full);
+    w += (brush.tilt_widths[width - 1] - w) * side * side
+  }
   if (brush.directional) {
     let before = samples[i ? i - 1 : Math.min(1, samples.length - 1)],
       angle = Math.atan2(y - before[1], x - before[0]);

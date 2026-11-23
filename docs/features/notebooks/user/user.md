@@ -24,7 +24,7 @@ Local existing notebooks support recovery. Private drafts stay in memory until s
 
 ## Paper Pro / Move brush settings
 
-Pens, pencils and paintbrush offer nine opaque colors. Highlighter uses tints and one **Fixed** width. Shader builds translucent color with overlapping strokes and has its own palette. Tilting a supported stylus widens the Shader stroke. Other brushes use **Thin**, **Medium** or **Thick**. Fineliner and Mechanical Pencil keep an even width. Other writing tools respond to pressure, and Calligraphy responds to direction. Per-brush colors follow saved notebook positions.
+Pens, pencils and paintbrush offer nine opaque colors. Highlighter uses tints and one **Fixed** width. Shader uses pressure and builds translucent color with overlapping strokes. Other brushes use **Thin**, **Medium** or **Thick**. Tilt a supported stylus with Pencil for broader shading. Fineliner and Mechanical Pencil keep an even width. Other writing tools respond to pressure, and Calligraphy responds to direction. Per-brush colors follow saved notebook positions.
 
 Editor rendering approximates tablet brushes. **Grayscale Preview** affects display. Exports keep native geometry and colors.
 
