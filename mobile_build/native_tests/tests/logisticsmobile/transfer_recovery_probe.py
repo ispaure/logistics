@@ -95,7 +95,7 @@ async def exercise_recovery(app):
             counts=dict(add=1, delete=1), rows=(('delete', 'private-file.txt'),),
             page=0, page_size=30, total=31))
         fallback = review.native_fallback
-        approve = buttons_by_action(fallback)['Approve Push']
+        approve = buttons_by_action(fallback)['Start push']
         # The review-specific driver waits for actual attachment/layout and
         # checks the displayed native model before clicking its guarded action.
         from .review_checks import press_review
@@ -104,13 +104,14 @@ async def exercise_recovery(app):
         assert review_proof['renderer'] == 'native' and review_proof['mode'] == 'review'
         result['native_review_acceptance_helper'] = review_proof
         assert calls[-1][0] == 'approve'
-        await buttons_by_action(fallback)['Next changes'].on_press()
+        await fallback.review_next.on_press()
         assert calls[-1][0] == 'next'
         review.update(dict(review.model, can_confirm=False, notice='Files changed'))
         before = len(calls)
         await approve.on_press()
         assert len(calls) == before
-        retained = fallback.rows.children[0]
+        retained = fallback.rows.children[0].children[0].children[0]
+        assert retained.text == 'private-file.txt'
         review.revoke()
         assert retained.text == '' and fallback.paths.text == ''
         await approve.on_press()

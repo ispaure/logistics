@@ -31,6 +31,8 @@ def rendered_review(view):
 async def press_review(view, action, *, timeout=45):
     """Click the current rendered action through its normal revision guard."""
     selector = {'approve': '#approve', 'early': '#early'}[action]
+    buttons = {'approve': 'Start ' + view.model['operation'].lower(),
+               'early': 'Skip preview and start'}
     script = ('(() => { const button = document.querySelector(' + json.dumps(selector)
               + '); if (!button || button.disabled || !button.getClientRects().length) return false; '
               + 'button.click(); return true; })()')
@@ -57,8 +59,7 @@ async def press_review(view, action, *, timeout=45):
                         native_error = str(error)
                     else:
                         button = next((button for button in fallback.buttons.children
-                            if (button.text.startswith('Approve ') if action == 'approve'
-                                else button.text == 'Proceed without full review…')), None)
+                            if getattr(button, '_settings_source_text', button.text) == buttons[action]), None)
                         if button is not None and button.enabled:
                             clicks += 1
                             pressed = button.on_press()
