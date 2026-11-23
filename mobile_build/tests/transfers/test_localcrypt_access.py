@@ -500,6 +500,69 @@ class LocalCryptAccessTests(unittest.TestCase):
             self.addCleanup(current.close)
             self.assertEqual(current.cached_search_listing('', cancelled=lambda: False), ())
 
+    def test_encrypted_search_reopens_sealed_names_and_skips_unchanged_folder_inventory(self):
+        import json
+        from mobile_build.tests.transfers.test_credential_document_lists import ListBridge
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            client = Client()
+            client.directory_index_root = root / 'cache'
+            client.connection_identity = lambda remote: 'b' * 64
+            bridge = ListBridge()
+            bridge.unlock(remote='Secret')
+            bridge.package_records[0]['crypt_identities']['Secret'] = 'a' * 64
+            client.package_records = bridge.package_records
+            native = client.request
+
+            def request(action, **values):
+                if action.startswith('document_lists_'):
+                    return bridge.request(action, **values)
+                return native(action, **values)
+
+            with patch.object(client, 'request', side_effect=request):
+                writer = self.provider(root / 'copy', client)
+                path = writer.root / 'private-note.md'
+                path.touch()
+                self.assertEqual(writer.search_listing(names_only=True)[0]['name'], path.name)
+                writer.close()
+                record, = client.directory_index_root.glob('root-*.zip')
+                self.assertNotIn(path.name.encode(), record.read_bytes())
+                # Put the authenticated snapshot into the old slot layout.
+                saved = json.loads(bridge.payloads[record.read_bytes()])
+                del saved['folder_revision']
+                legacy = record.with_name(saved['binding'][1][:2] + '.zip')
+                token = bridge.request('document_lists_seal', id=bridge.package_records[0]['document_cache_id'],
+                                       data=base64.b64encode(json.dumps(saved).encode()).decode())
+                legacy.write_bytes(base64.b64decode(token))
+                record.unlink()
+                reader = self.provider(root / 'copy', client)
+                self.addCleanup(reader.close)
+                self.assertEqual(reader.cached_search_listing('', cancelled=lambda: False)[0]['name'], path.name)
+                self.assertEqual(reader.search_listing(names_only=True)[0]['name'], path.name)
+                self.assertTrue(record.is_file())
+                reader.close()
+                reader = self.provider(root / 'copy', client)
+                self.addCleanup(reader.close)
+                self.assertEqual(reader.cached_search_listing('', cancelled=lambda: False)[0]['name'], path.name)
+                with patch.object(reader._directory_index, '_fingerprint',
+                                  side_effect=AssertionError('Unchanged folders should skip inventory')):
+                    self.assertEqual(reader.search_listing(names_only=True)[0]['name'], path.name)
+                updated = path.with_name('new-private-note.md')
+                path.rename(updated)
+                self.assertEqual([row['name'] for row in reader.search_listing(names_only=True)], [updated.name])
+
+    def test_session_cache_keeps_tree_root_when_large_share_evicts_subfolders(self):
+        from features.rclone.localcrypt.directory_index import DirectoryNameMemory
+
+        memory = DirectoryNameMemory()
+        snapshot = ('revision', b'[]', ())
+        memory.put(0, ('share', ''), snapshot)
+        for index in range(4100):
+            memory.put(0, ('share', f'folder-{index}'), snapshot)
+        self.assertEqual(memory.get(0, ('share', '')), snapshot)
+        self.assertEqual(len(memory.rows), 4096)
+
     def test_native_write_progress_reports_bytes_and_cancels_without_reading_plaintext(self):
         from threading import Event
         from features.rclone.localcrypt.mobile.resources import write_progress

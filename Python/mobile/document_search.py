@@ -152,6 +152,9 @@ def _search_location(app, label, provider, cleanup):
         verified[path] = row
         return row
 
+    def reuse(path):
+        return verified[path] if path in verified else validate(path)
+
     if supports_device_name_cache(provider):
         listing = cleanup.enter_context(device_name_listing(provider, app.private_root / 'Cache'))
         def live(folder, *, cancelled, status):
@@ -159,9 +162,6 @@ def _search_location(app, label, provider, cleanup):
 
         def cached(folder, *, cancelled, status):
             return listing(folder, cancelled=cancelled, cached_only=True)
-
-        def reuse(path):
-            return verified[path] if path in verified else provider.entry(path)
 
         return SimpleNamespace(label=label, name=name, provider=provider, live=live,
                                cached=cached, validate=validate, reuse=reuse)
@@ -173,7 +173,7 @@ def _search_location(app, label, provider, cleanup):
 
     def live(folder, *, cancelled, status):
         if search_listing is not None:
-            return search_listing(folder, cancelled=cancelled, cache_status=status)
+            return search_listing(folder, cancelled=cancelled, cache_status=status, names_only=True)
         return listing(folder, cancelled=cancelled)
 
     def cached(folder, *, cancelled, status):
@@ -181,7 +181,7 @@ def _search_location(app, label, provider, cleanup):
 
     return SimpleNamespace(label=label, name=name, provider=provider, live=live,
                            cached=cached if cached_listing is not None else None,
-                           validate=validate, reuse=None)
+                           validate=validate, reuse=reuse if search_listing is not None else None)
 
 
 async def reveal_search_hit(app, hit):

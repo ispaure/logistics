@@ -57,9 +57,11 @@ class DirectoryNameMemory:
                 self.size -= len(previous[1])
             self.rows[key] = value
             self.size += size
-            while self.size > limit or len(self.rows) > 256:
-                _, (_, data) = self.rows.popitem(last=False)
-                self.size -= len(data)
+            while self.size > limit or len(self.rows) > 4096:
+                # A cached tree starts at its root. Keep that entry when
+                # scanning a share too large to fit its entire tree in RAM.
+                oldest = next((row for row in self.rows if row[-1]), next(iter(self.rows)))
+                self.size -= len(self.rows.pop(oldest)[1])
 
 
 class DirectoryIndex:
@@ -115,7 +117,7 @@ class DirectoryIndex:
         revision = sha256(json.dumps([inode, sorted(entries)], ensure_ascii=True).encode()).hexdigest()
         return inode, revision, parent_revision
 
-    def _record_path(self, inode):
+    def _record_path(self, inode, *, root=False):
         if self.folder is None:
             return None, None
         self.cipher.identity
@@ -123,7 +125,8 @@ class DirectoryIndex:
         # Fixed, shared cache slots bound disk use. The filename contains no
         # logical path, and the sealed record verifies the full binding.
         scope = sha256(json.dumps([authority, self.provider.storage_namespace, inode]).encode()).hexdigest()
-        file = self.folder / f'{int(scope[:2], 16):02x}.zip'
+        filename = f'root-{scope[0]}.zip' if root else f'{int(scope[:3], 16) % 1024:03x}.zip'
+        file = self.folder / filename
         if file.is_symlink() or self.folder.is_symlink() or self.folder.parent.is_symlink():
             raise ValueError('Linked encrypted directory index is not supported.')
         return file, scope
@@ -146,8 +149,40 @@ class DirectoryIndex:
                 and self.provider.relative(row['path']) == row['path']
                 and row['path'] == '/'.join(filter(None, (path, row['name'])))
                 and row['path'].rpartition('/')[0] == path for row in rows):
-            return binding[3], rows
+            stamp = record.get('folder_revision')
+            if not isinstance(stamp, list) or len(stamp) != 5 or any(type(value) is not int for value in stamp):
+                stamp = ()
+            return binding[3], rows, tuple(stamp)
         return None
+
+    def _read_record(self, file, scope, path, revision=None):
+        if file is not None:
+            try:
+                record = self._load_record(file, scope, path, revision)
+                if record is not None:
+                    return record
+            except FileNotFoundError:
+                pass  # Read snapshots written before the larger slot layout.
+            file = file.with_name(f'{scope[:2]}.zip')
+            if file.is_symlink():
+                return None
+            return self._load_record(file, scope, path, revision)
+        return None
+
+    def _store_record(self, path, revision, rows, folder_revision, cancelled, *, file, scope):
+        if file is None:
+            return
+        raw = json.dumps(dict(binding=[1, scope, path, revision], rows=rows,
+                              folder_revision=folder_revision)).encode()
+        if len(raw) > LIMIT:
+            return
+        try:
+            sealed = self.cipher.transform(raw)
+            self._check(cancelled)
+            self.folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+            atomic_write_bytes(file, sealed, validate=lambda: self._check(cancelled))
+        except (OSError, ValueError, RuntimeError):
+            pass  # A disposable cache can always be rebuilt from the provider.
 
     def cached_listing(self, path, *, cancelled, locate):
         """Read search hints without enumerating or fingerprinting the folder."""
@@ -162,22 +197,36 @@ class DirectoryIndex:
                 return ()
             try:
                 info = locate(path).stat(follow_symlinks=False)
-                record = self._load_record(*self._record_path((info.st_dev, info.st_ino)), path)
+                file, scope = self._record_path((info.st_dev, info.st_ino), root=not path)
+                record = self._read_record(file, scope, path)
             except (OSError, ValueError, TypeError, KeyError, RuntimeError):
                 record = None
             self._check(cancelled)
             if record is None:
                 return ()
-            revision, rows = record
-            self._remember(path, revision, rows, cancelled)
+            revision, rows, stamp = record
+            self._remember(path, revision, rows, cancelled, stamp)
             return rows
 
-    def listing(self, path, *, cancelled, from_inventory=None, locate=None, cache_status=lambda phase: None):
+    def listing(self, path, *, cancelled, from_inventory=None, locate=None, cache_status=lambda phase: None,
+                names_only=False):
         provider = self.provider
         with provider.operation(cancelled):
             self._check(cancelled)
             folder = (locate or provider._locate)(path)
             cache_status('checking')
+            if names_only:
+                with self.lock:
+                    cached = self._cached_rows(path)
+                if cached is not None and cached[2]:
+                    try:
+                        stamp = _directory_revision(folder.stat(follow_symlinks=False))
+                    except FileNotFoundError:
+                        stamp = ()
+                    if cached[2] == stamp:
+                        self._check(cancelled)
+                        cache_status('cached')
+                        return json.loads(cached[1])
             inventory = [] if from_inventory is not None else None
             try:
                 signature = (self._fingerprint(folder, cancelled, inventory)
@@ -190,17 +239,27 @@ class DirectoryIndex:
             inode, revision, parent_revision = signature
             with self.lock:
                 cached = self._cached_rows(path)
-                if cached is not None and cached[0] == revision:
-                    self._check(cancelled)
-                    cache_status('cached')
-                    return json.loads(cached[1])
+            if cached is not None and cached[0] == revision:
+                self._check(cancelled)
+                rows = json.loads(cached[1])
+                if not cached[2]:
+                    self._remember(path, revision, rows, cancelled, parent_revision)
+                    try:
+                        file, scope = self._record_path(inode, root=not path)
+                        self._store_record(path, revision, rows, parent_revision, cancelled, file=file, scope=scope)
+                    except (OSError, ValueError, RuntimeError):
+                        pass
+                cache_status('cached')
+                return rows
             file = scope = None
             try:
-                file, scope = self._record_path(inode)
-                record = self._load_record(file, scope, path, revision)
+                file, scope = self._record_path(inode, root=not path)
+                record = self._read_record(file, scope, path, revision)
                 if record is not None:
-                    _, rows = record
-                    self._remember(path, revision, rows, cancelled)
+                    _, rows, stamp = record
+                    self._remember(path, revision, rows, cancelled, parent_revision)
+                    if not stamp:
+                        self._store_record(path, revision, rows, parent_revision, cancelled, file=file, scope=scope)
                     cache_status('cached')
                     return rows
             except (OSError, ValueError, TypeError, KeyError, RuntimeError):
@@ -227,17 +286,8 @@ class DirectoryIndex:
                     for row in rows]
             self._check(cancelled)
             if unchanged:
-                self._remember(path, revision, rows, cancelled)
-                if file is not None:
-                    raw = json.dumps(dict(binding=[1, scope, path, revision], rows=rows)).encode()
-                    if len(raw) <= LIMIT:
-                        try:
-                            sealed = self.cipher.transform(raw)
-                            self._check(cancelled)
-                            self.folder.mkdir(mode=0o700, parents=True, exist_ok=True)
-                            atomic_write_bytes(file, sealed, validate=lambda: self._check(cancelled))
-                        except (OSError, ValueError, RuntimeError):
-                            pass
+                self._remember(path, revision, rows, cancelled, parent_revision)
+                self._store_record(path, revision, rows, parent_revision, cancelled, file=file, scope=scope)
             self._check(cancelled)
             return rows
 
@@ -252,15 +302,16 @@ class DirectoryIndex:
             return self.rows[path]
         return None
 
-    def _remember(self, path, revision, rows, cancelled):
+    def _remember(self, path, revision, rows, cancelled, folder_revision):
         data = json.dumps(rows).encode()
+        value = (revision, data, folder_revision)
         with self.lock:
             self._check(cancelled)
             if self.memory is not None:
                 generation, *key = self.scope
-                self.memory.put(generation, (*key, path), (revision, data))
+                self.memory.put(generation, (*key, path), value)
             if len(data) <= LIMIT:
                 self.rows.pop(path, None)
-                self.rows[path] = revision, data
+                self.rows[path] = value
                 while len(self.rows) > 64:
                     self.rows.popitem(last=False)

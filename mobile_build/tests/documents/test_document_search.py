@@ -290,7 +290,7 @@ class LocalDocumentSearchTests(TestCase):
                 self.assertTrue(await asyncio.to_thread(started.wait, 2))
                 await wait_until(lambda: '4,501 checked' in app.hub_controller()._documents_search_status.text,
                                  timeout=2, interval=.01, message='No progress in the Documents status row')
-                self.assertIn('cached LocalCrypt names', app.hub_controller()._documents_search_status.text)
+                self.assertIn('Using cached filenames', app.hub_controller()._documents_search_status.text)
                 hub = app.hub_controller()
                 self.assertEqual(hub._documents_search_location.text, 'Fixture')
                 self.assertEqual(list(hub._documents_search_header.children),

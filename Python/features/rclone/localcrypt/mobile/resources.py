@@ -275,11 +275,12 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
             return file
         return folder
 
-    def search_listing(self, path='', *, cancelled=lambda: False, cache_status=lambda phase: None):
+    def search_listing(self, path='', *, cancelled=lambda: False, cache_status=lambda phase: None,
+                       names_only=False):
         """Reuse the ciphertext inventory and batch the two path encodings."""
         return self._directory_index.listing(
             self.relative(path), cancelled=cancelled, from_inventory=self._list_inventory,
-            locate=self._locate_listing_folder, cache_status=cache_status)
+            locate=self._locate_listing_folder, cache_status=cache_status, names_only=names_only)
 
     def cached_search_listing(self, path, *, cancelled):
         return self._directory_index.cached_listing(

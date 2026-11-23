@@ -18,12 +18,12 @@ from commonUtils.search.providers import search_resources
 def filename_scan_label(cache_phase):
     return {
         'checking': 'Checking LocalCrypt cache…',
-        'cached': 'Using cached LocalCrypt names…',
+        'cached': 'Using cached filenames…',
         'refreshing': 'Refreshing LocalCrypt names…',
-        'device_cached': 'Searching cached filenames…',
+        'device_cached': 'Using cached filenames…',
         'device_refreshing': 'Refreshing filename cache…',
-        'cached_hints': 'Verifying cached matches…',
-        'crypt_cached_hints': 'Searching cached LocalCrypt names…',
+        'cached_hints': 'Searching cached filenames…',
+        'crypt_cached_hints': 'Searching cached filenames…',
         'checking_storage': 'Checking for new files…',
     }.get(cache_phase, 'Scanning filenames…')
 
