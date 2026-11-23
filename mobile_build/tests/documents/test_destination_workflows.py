@@ -98,11 +98,14 @@ class DestinationWorkflowTests(unittest.TestCase):
         self.assertEqual(self.app.file_select_bar.style.height, 48)
         browser.show_tiles()
         entry = next(entry for entry in browser.tree.entries.values() if not entry.container)
-        command = browser.entry_rows[entry.identity]._tile_command
-        self.assertIs(command._selection_display, False)
-        self.run_async(browser._tile_actions(entry, command))
-        self.assertIs(command._selection_display, True)
-        self.run_async(browser._tile_actions(entry, command))
+        card = browser.entry_rows[entry.identity]
+        circle = card._tile_selection
+        self.assertEqual(circle.style.visibility, 'visible')
+        self.assertEqual(card._tile_command.style.visibility, 'hidden')
+        self.assertEqual(circle.accessible_name, 'Select ' + entry.label)
+        self.run_async(browser._select_pressed(entry, circle))
+        self.assertEqual(circle.accessible_name, 'Deselect ' + entry.label)
+        self.run_async(browser._select_pressed(entry, circle))
         browser.show_list()
         for entry in list(browser.tree.entries.values()):
             if not entry.container:
