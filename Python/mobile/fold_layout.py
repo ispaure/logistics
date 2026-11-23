@@ -1,4 +1,4 @@
-"""Window-local fold geometry from UIKit reserved regions (iOS 27.1+)."""
+"""Window-local fold geometry from UIKit and Android WindowManager."""
 
 # AUTHORSHIP INFORMATION
 
@@ -32,9 +32,19 @@ class Division:
 
 
 def reserved_divisions(widget, *, include_inactive=False):
-    """Query in the view's own coordinates; older platforms return no regions."""
+    """Query in the view's own coordinates."""
     from commonUtils.ui.native.text_size import native_backend
-    if not native_backend(widget).startswith('toga_iOS.'):
+    backend = native_backend(widget)
+    if backend.startswith('toga_android.'):
+        from toga import App
+        geometry = getattr(App.app, '_android_fold_geometry', None)
+        view = getattr(widget._impl, 'native', None)
+        region = geometry.boundsIn(view) if geometry is not None and view is not None else None
+        if region is None:
+            return ()
+        scale = float(view.getResources().getDisplayMetrics().density)
+        return (Division(region.left / scale, region.top / scale, region.width() / scale, region.height() / scale),)
+    if not backend.startswith('toga_iOS.'):
         return ()
     native = getattr(widget._impl, 'native', None)
     if native is None or not hasattr(native, 'reservedRegionsOfKind'):
@@ -50,11 +60,19 @@ def reserved_divisions(widget, *, include_inactive=False):
                  for r in regions)
 
 
+def view_size(widget):
+    native = widget._impl.native
+    if hasattr(native, 'getWidth'):
+        scale = float(native.getResources().getDisplayMetrics().density)
+        return native.getWidth() / scale, native.getHeight() / scale
+    size = native.bounds.size
+    return float(size.width), float(size.height)
+
+
 def division(owner, widget, *, include_inactive=False):
     """The active fold dividing a container, independent of device orientation."""
     for region in reserved_divisions(widget, include_inactive=include_inactive):
-        bounds = widget._impl.native.bounds.size
-        width, height = float(bounds.width), float(bounds.height)
+        width, height = view_size(widget)
         start, end, extent = ((region.x, region.x + region.width, width) if region.vertical
                               else (region.y, region.y + region.height, height))
         if region.spans(width, height) and 0 < start <= end < extent:
@@ -77,6 +95,22 @@ def has_fold(owner, widget):
 
 
 def install(app):
+    if type(app._impl).__module__.startswith('toga_android.'):
+        from java import dynamic_proxy, jclass
+        from java.lang import Runnable
+
+        owner = weakref.ref(app)
+
+        class LayoutChange(dynamic_proxy(Runnable)):
+            def run(self):
+                host = owner()
+                if host is not None and getattr(host, 'active_host', False):
+                    host.loop.call_soon(host.resize_workspace)
+
+        activity = app._impl.native
+        app._android_fold_geometry = jclass('io.github.ispaure.logistics.video.FoldGeometry')(
+            activity, activity.getWindow().getDecorView(), LayoutChange())
+        return
     if not type(app.main_window._impl).__module__.startswith('toga_iOS.'):
         return
     from rubicon.objc import ObjCClass, ObjCInstance, Block, objc_id
@@ -127,7 +161,7 @@ def seam_fraction(owner, widget, *, include_open=False):
     region = division(owner, widget)
     if region is None or not region.vertical:
         return None
-    width = float(widget._impl.native.bounds.size.width)
+    width, _ = view_size(widget)
     fraction = (region.x + region.width / 2) / width if width > 0 else 0
     return fraction if 0 < fraction < 1 else None
 
@@ -151,9 +185,9 @@ def page_region(owner, widget):
     region = division(owner, widget)
     if region is None or region.vertical:
         return None
-    bounds = widget._impl.native.bounds.size
-    if 0 < region.y < float(bounds.height):
-        return (0, 0, float(bounds.width), region.y)
+    width, height = view_size(widget)
+    if 0 < region.y < height:
+        return (0, 0, width, region.y)
     return None
 
 
@@ -162,7 +196,7 @@ def epub_geometry(widget):
     region = division(None, widget)
     if region is None or not region.vertical:
         return None
-    width = float(widget._impl.native.bounds.size.width)
+    width, _ = view_size(widget)
     return dict(seam=(region.x + region.width / 2) / width, gap=region.width / width)
 
 

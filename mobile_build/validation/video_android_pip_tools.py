@@ -70,6 +70,7 @@ def project_files(project, fixture_name='VideoPipQAActivity', *, config_changes=
         implementation 'androidx.constraintlayout:constraintlayout:1.1.3'
         implementation 'androidx.swiperefreshlayout:swiperefreshlayout:1.1.0'
         implementation 'androidx.webkit:webkit:1.15.0'
+        implementation 'androidx.window:window-java:1.4.0'
     }
     """)
     (app / 'src/main/AndroidManifest.xml').write_text("""<manifest xmlns:android="http://schemas.android.com/apk/res/android">

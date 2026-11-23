@@ -6,11 +6,11 @@ Tap for controls. Use Play/Pause, ten-second skips and the timeline. **Chapters*
 
 When the player reports **Duration unknown**, the file can still play and show elapsed time. If the player cannot open the container or decode its tracks, close the video and try another copy or a version encoded with supported codecs.
 
-On iOS, the fullscreen deck fades after three seconds while playing. On Android, choose **Fullscreen** or **Exit fullscreen**. With an active horizontal Duo fold, the picture sits above the hinge and controls below it. Tap **Fill view** to crop or **Fit view** to restore the whole picture.
+Use **Fullscreen** or **Exit fullscreen** to switch layouts. With a supported horizontal fold and enough space, the picture sits above the hinge and controls sit below it. Android can also place them side by side across a vertical fold. Tap **Fill view** to crop or **Fit view** to restore the whole picture.
 
 During supported inline playback, a text subtitle lifts above the controls when they cover it and returns to its original position after the fade. Positioned ASS and bitmap subtitles keep their authored placement.
 
-**More playback options → Picture in picture** or **Cast…** is available for ordinary Local and saved-credential LocalCrypt when policy allows. Use [Native AirPlay video](controls.md#watching-on-a-tv-with-iphone-or-ipad) for compatible local files on iPhone or iPad. Session-only credentials block external playback and can conceal even ordinary video. Unlock with the credential password or an authorized trusted Wi-Fi resume, then press Play.
+**More playback options → Picture in picture** or **Video output** on Android is available for ordinary Local and saved-credential LocalCrypt when policy allows. Use [Native AirPlay video](controls.md#watching-on-a-tv-with-iphone-or-ipad) for compatible local files on iPhone or iPad. Session-only credentials block external playback and can conceal even ordinary video. Unlock with the credential password or an authorized trusted Wi-Fi resume, then press Play.
 
 On iPhone and iPad, an ordinary local video keeps its audio playing when you switch apps or lock the device. Returning restores the picture; a video you paused stays paused. Private, remote and session-only sources retain their stricter background and lock rules. Android inline playback pauses in the background. Audio interruptions and loss of an audio output pause playback; press Play to resume. Visible playback keeps the display awake, including while buffering. Pause or close to release it.
 

@@ -67,6 +67,13 @@ final class PlaybackIcon extends Drawable {
                     canvas.drawLine(8, y, 21, y, paint);
                 }
                 break;
+            case "chapter-back":
+            case "chapter-next":
+                if (name.equals("chapter-back")) canvas.scale(-1, 1, 12, 12);
+                paint.setStyle(Paint.Style.FILL);
+                path(canvas, 5, 5, 16, 12, 5, 19, 5, 5);
+                canvas.drawRoundRect(18, 5, 20, 19, 1, 1, paint);
+                break;
             case "fullscreen":
             case "exit":
                 for (int side = 0; side < 4; side++) {

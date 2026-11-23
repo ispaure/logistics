@@ -17,6 +17,8 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Insets;
 import android.graphics.Paint;
+import android.graphics.Rect;
+import android.hardware.display.DisplayManager;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.content.res.ColorStateList;
@@ -31,6 +33,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
 import android.view.Gravity;
+import android.view.Display;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
@@ -74,6 +77,7 @@ public final class VideoPlayer {
 
     final Activity activity;
     private final String sourceURL;
+    private final FoldGeometry folds;
     private String transportFailure;
     private final TreeMap<Long, String> chapterStarts = new TreeMap<>();
     private int chapterTitle = -1;
@@ -110,6 +114,9 @@ public final class VideoPlayer {
     final SeekBar seek;
     private final ImageButton play;
     private final ImageButton fullscreenButton;
+    private ImageButton previousChapterButton, nextChapterButton;
+    private boolean chapterButtonsShown;
+    private boolean dividedFullscreen, compactTransport;
     boolean fullscreen, controlsVisible = true, wasPip;
     private int previousSystemUi, previousBarBehavior, previousVisibleBars;
     private final Runnable hideControls = new Runnable() {
@@ -129,6 +136,15 @@ public final class VideoPlayer {
     private final JSONArray subtitles;
     private final ArrayList<RendererDiscoverer> discoverers = new ArrayList<>();
     private final ArrayList<RendererItem> renderers = new ArrayList<>();
+    private ExternalVideoDisplay externalDisplay;
+    private RendererItem activeRenderer;
+    private android.widget.ArrayAdapter<String> outputLabels;
+    private final ArrayList<Runnable> outputActions = new ArrayList<>();
+    private final DisplayManager.DisplayListener outputDisplays = new DisplayManager.DisplayListener() {
+        public void onDisplayAdded(int id) { updateOutputChoices(); }
+        public void onDisplayRemoved(int id) { updateOutputChoices(); }
+        public void onDisplayChanged(int id) { updateOutputChoices(); }
+    };
     private boolean done, ended, attached, casting, wasSecure;
     private long resume, lastPosition, progressSeek = -1;
     private long startupVideoSeek = -1;
@@ -195,7 +211,7 @@ public final class VideoPlayer {
         controls = new LinearLayout(activity);
         controlsScroll = addControlDeck();
         inlineSubtitles = new InlineSubtitles(this, handler, controlsScroll, () ->
-            attached && liveVideoOutput && !done && !lockHidden && !casting && !restricted &&
+            attached && liveVideoOutput && !done && !lockHidden && !casting && externalDisplay == null && !restricted &&
             root.getWindowVisibility() == View.VISIBLE &&
             !activity.isInPictureInPictureMode() &&
             (activity.getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) == 0);
@@ -211,6 +227,7 @@ public final class VideoPlayer {
         play = addTransportButtons();
         fullscreenButton = addUtilityButtons();
         arrangeControls(activity.getResources().getDisplayMetrics().widthPixels);
+        folds = new FoldGeometry(activity, root, root::requestApplyInsets);
 
         player.setEventListener(this::onPlayerEvent);
         pausePresentation = new PausePresentation(this);
@@ -369,12 +386,55 @@ public final class VideoPlayer {
             frame.setMargins((int)Math.ceil(fitted.getDouble(0)), (int)Math.ceil(fitted.getDouble(1)),
                 (int)Math.ceil(fitted.getDouble(2)), (int)Math.ceil(fitted.getDouble(3)));
         } catch (Exception ignored) { /* System safe insets remain the fallback. */ }
-        controlsScroll.setLayoutParams(frame);
         if (tools != null) tools.layoutUnlock(frame);
-        FrameLayout.LayoutParams header = (FrameLayout.LayoutParams) videoHeader.getLayoutParams();
-        header.setMargins(frame.leftMargin, frame.topMargin, frame.rightMargin, 0);
-        videoHeader.setLayoutParams(header);
+        layoutForWindow(frame);
         return insets;
+    }
+
+    private void layoutForWindow(FrameLayout.LayoutParams frame) {
+        int width = root.getWidth(), height = root.getHeight();
+        int safeLeft = frame.leftMargin, safeRight = frame.rightMargin;
+        int safeTop = frame.topMargin;
+        int pictureLeft = 0, pictureRight = width, pictureBottom = height;
+        Rect fold = fullscreen && !activity.isInPictureInPictureMode() ? folds.boundsIn(root) : null;
+        boolean split = false;
+        if (fold != null && fold.width() >= fold.height() && fold.left <= 1 && fold.right >= width - 1
+                && fold.top >= dp(120) && height - fold.bottom - frame.bottomMargin >= dp(156)) {
+            pictureBottom = fold.top;
+            frame.topMargin = Math.max(safeTop, fold.bottom + dp(8));
+            split = true;
+        } else if (fold != null && fold.height() > fold.width() && fold.top <= 1 && fold.bottom >= height - 1
+                && fold.left - safeLeft >= dp(240) && width - safeRight - fold.right >= dp(240)) {
+            if (fold.left >= width - fold.right) {
+                pictureRight = fold.left;
+                frame.leftMargin = fold.right + dp(8);
+            } else {
+                pictureLeft = fold.right;
+                frame.rightMargin = width - fold.left + dp(8);
+            }
+            split = true;
+        }
+        int excess = width - frame.leftMargin - frame.rightMargin - dp(760);
+        if (excess > 0) {
+            frame.leftMargin += excess / 2;
+            frame.rightMargin += excess - excess / 2;
+        }
+        controlsScroll.setLayoutParams(frame);
+        FrameLayout.LayoutParams picture = (FrameLayout.LayoutParams) video.getLayoutParams();
+        picture.setMargins(pictureLeft, 0, width - pictureRight, height - pictureBottom);
+        video.setLayoutParams(picture);
+        FrameLayout.LayoutParams loading = (FrameLayout.LayoutParams) bufferingOverlay.getLayoutParams();
+        loading.setMargins(picture.leftMargin, 0, picture.rightMargin, picture.bottomMargin);
+        bufferingOverlay.setLayoutParams(loading);
+        FrameLayout.LayoutParams header = (FrameLayout.LayoutParams) videoHeader.getLayoutParams();
+        header.setMargins(Math.max(safeLeft, pictureLeft + (pictureLeft > 0 ? dp(8) : 0)), safeTop,
+            Math.max(safeRight, width - pictureRight + (pictureRight < width ? dp(8) : 0)), 0);
+        videoHeader.setLayoutParams(header);
+        if (dividedFullscreen != split) {
+            dividedFullscreen = split;
+            if (split) setControlsVisible(true);
+            else scheduleControls();
+        }
     }
 
     private TextView addStatusMessage() {
@@ -445,9 +505,13 @@ public final class VideoPlayer {
     }
 
     private ImageButton addTransportButtons() {
+        previousChapterButton = button(transportButtons, "chapter-back", "Previous chapter", () -> skipChapter(false), 48);
+        previousChapterButton.setVisibility(View.GONE);
         button(transportButtons, "back", "Back 10 seconds", () -> seekTo(position() - 10000), 48);
         ImageButton play = button(transportButtons, "play", "Play", this::togglePlayback, 56);
         button(transportButtons, "forward", "Forward 10 seconds", () -> seekTo(position() + 10000), 48);
+        nextChapterButton = button(transportButtons, "chapter-next", "Next chapter", () -> skipChapter(true), 48);
+        nextChapterButton.setVisibility(View.GONE);
         return play;
     }
 
@@ -469,7 +533,7 @@ public final class VideoPlayer {
             menu.getMenu().add("Favourite file").setOnMenuItemClickListener(item -> { tools.emit("favourite", ""); return true; });
             menu.getMenu().add("Playback…").setOnMenuItemClickListener(item -> { tools.show(); return true; });
             if (!restricted) menu.getMenu().add("Picture in picture").setOnMenuItemClickListener(item -> { pip(); return true; });
-            if (!restricted) menu.getMenu().add("Cast…").setOnMenuItemClickListener(item -> { cast(); return true; });
+            if (!restricted) menu.getMenu().add("Video output…").setOnMenuItemClickListener(item -> { cast(); return true; });
             menu.setOnDismissListener(value -> { optionsMenu = null; scheduleControls(); });
             handler.removeCallbacks(hideControls);
             menu.show();
@@ -498,14 +562,27 @@ public final class VideoPlayer {
 
     private void arrangeControls(int width) {
         if (buttonGroups == null) return;
-        boolean wide = width >= dp(560);
-        if (controlsArranged && controlsWide == wide) return;
+        boolean wide = width >= dp(chapterButtonsShown ? 660 : 560);
+        boolean compact = width < dp(284);
+        if (controlsArranged && controlsWide == wide && compactTransport == compact) return;
         controlsArranged = true;
         controlsWide = wide;
+        compactTransport = compact;
         buttonGroups.setOrientation(wide ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
-        buttonGroups.setWeightSum(wide ? 4 + utilityButtons.getChildCount() : 0);
-        transportButtons.setLayoutParams(new LinearLayout.LayoutParams(wide ? 0 : -1, -2, wide ? 4 : 0));
+        int transportWeight = chapterButtonsShown ? 6 : 4;
+        buttonGroups.setWeightSum(wide ? transportWeight + utilityButtons.getChildCount() : 0);
+        transportButtons.setLayoutParams(new LinearLayout.LayoutParams(wide ? 0 : -1, -2,
+            wide ? transportWeight : 0));
         utilityButtons.setLayoutParams(new LinearLayout.LayoutParams(wide ? 0 : -1, -2, wide ? utilityButtons.getChildCount() : 0));
+        for (int i = 0; i < transportButtons.getChildCount(); i++) {
+            View button = transportButtons.getChildAt(i);
+            int size = button.getLayoutParams().height;
+            LinearLayout.LayoutParams target = new LinearLayout.LayoutParams(compact ? 0 : size, size,
+                compact ? 1 : 0);
+            target.setMarginStart(dp(2));
+            target.setMarginEnd(dp(2));
+            button.setLayoutParams(target);
+        }
     }
 
     private GradientDrawable rounded(int color, int radius) {
@@ -526,8 +603,10 @@ public final class VideoPlayer {
         buttonIcon(button, icon, label, primary);
         button.setOnClickListener(view -> { action.run(); scheduleControls(); });
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(dp(size), dp(size > 0 ? size : 48), size == 0 ? 1 : 0);
-        if (size > 0) params.setMarginStart(dp(6));
-        if (size > 0) params.setMarginEnd(dp(6));
+        if (size > 0) {
+            params.setMarginStart(dp(2));
+            params.setMarginEnd(dp(2));
+        }
         row.addView(button, params);
         return button;
     }
@@ -569,7 +648,7 @@ public final class VideoPlayer {
     private void scheduleControls() {
         handler.removeCallbacks(hideControls);
         boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
-        if (fullscreen && controlsVisible && attached && !buffering && audioTrackSwitch == null &&
+        if (fullscreen && !dividedFullscreen && controlsVisible && attached && !buffering && audioTrackSwitch == null &&
                 observedFrames > 0 && resume < 0 && player.isPlaying() && !pip)
             handler.postDelayed(hideControls, 3000);
     }
@@ -1292,6 +1371,7 @@ public final class VideoPlayer {
         chapterStarts.clear();
         if (chapterDialog != null) chapterDialog.dismiss();
         seek.invalidate();
+        updateChapterButtons();
     }
 
     private Long chapterTarget(boolean next) {
@@ -1315,6 +1395,22 @@ public final class VideoPlayer {
         refreshChapters();
         Long target = chapterTarget(next);
         if (target != null) seekChapter(target);
+    }
+
+    private void updateChapterButtons() {
+        boolean shown = !chaptersInvalidated && !chapterStarts.headMap(durationMilliseconds()).isEmpty();
+        if (shown != chapterButtonsShown) {
+            chapterButtonsShown = shown;
+            previousChapterButton.setVisibility(shown ? View.VISIBLE : View.GONE);
+            nextChapterButton.setVisibility(shown ? View.VISIBLE : View.GONE);
+            controlsArranged = false;
+            root.requestLayout();
+        }
+        boolean enabled = shown && (tools == null || !tools.locked) && allowed(false);
+        previousChapterButton.setEnabled(enabled && chapterTarget(false) != null);
+        nextChapterButton.setEnabled(enabled && chapterTarget(true) != null);
+        previousChapterButton.setAlpha(previousChapterButton.isEnabled() ? 1f : .4f);
+        nextChapterButton.setAlpha(nextChapterButton.isEnabled() ? 1f : .4f);
     }
 
     private void chapters() {
@@ -1534,7 +1630,7 @@ public final class VideoPlayer {
     private void updateScreenAwake() {
         boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
         root.setKeepScreenOn(attached && !done && !lockHidden && !manualResumeRequired
-                && playRequested && !pausePending && !ended && !casting && !pip);
+                && playRequested && !pausePending && !ended && !casting && externalDisplay == null && !pip);
     }
 
     private final Runnable tick = new Runnable() {
@@ -1550,6 +1646,7 @@ public final class VideoPlayer {
             }
             long time = position(), length = durationMilliseconds();
             refreshChapters();
+            updateChapterButtons();
             if (time >= 0 && !ended) lastPosition = time;
             if (!seek.isPressed() && length > 0) seek.setProgress((int)(time * 10000 / length));
             seek.setVisibility(View.VISIBLE);
@@ -1559,8 +1656,12 @@ public final class VideoPlayer {
             seek.setContentDescription("Video position: " + timeLabel.getText() +
                 (chapterStarts.headMap(length).isEmpty() ? "" : CHAPTER_HINT));
             boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
-            if (pip != wasPip) { wasPip = pip; setControlsVisible(true); }
+            if (pip != wasPip) { wasPip = pip; root.requestApplyInsets(); setControlsVisible(true); }
             if (pip) updatePipActions();
+            if (externalDisplay != null && !listener.allowed(true)) {
+                stopExternalDisplay(false);
+                hide();
+            }
             if (!allowed(false)) pause();
             handler.postDelayed(this, 500);
         }
@@ -1725,7 +1826,11 @@ public final class VideoPlayer {
         playback.setEnabled(!tools.locked);
         actions.add(playback);
         actions.add(forward);
-        return new PictureInPictureParams.Builder().setActions(actions).build();
+        PictureInPictureParams.Builder params = new PictureInPictureParams.Builder().setActions(actions);
+        Rect bounds = new Rect();
+        if (!activity.isInPictureInPictureMode() && video.getGlobalVisibleRect(bounds) && !bounds.isEmpty())
+            params.setSourceRectHint(bounds);
+        return params.build();
     }
 
     private void updatePipActions() {
@@ -1738,6 +1843,10 @@ public final class VideoPlayer {
 
     private void pip() {
         if (!allowed(true)) return;
+        if (casting || externalDisplay != null) {
+            status("Choose This device in Video output before opening Picture in picture.");
+            return;
+        }
         if (Build.VERSION.SDK_INT >= 26 && activity.getPackageManager().hasSystemFeature("android.software.picture_in_picture")) {
             inlineSubtitles.reset();
             if (!activity.enterPictureInPictureMode(pipParams())) inlineSubtitles.refresh();
@@ -1746,6 +1855,10 @@ public final class VideoPlayer {
 
     private void cast() {
         if (!allowed(true)) return;
+        if (activity.isInPictureInPictureMode()) {
+            status("Close Picture in picture before changing video output.");
+            return;
+        }
         if (discoverers.isEmpty()) {
             for (RendererDiscoverer.Description description : RendererDiscoverer.list(vlc)) {
                 RendererDiscoverer discoverer = new RendererDiscoverer(vlc, description.name);
@@ -1754,39 +1867,114 @@ public final class VideoPlayer {
                     if (event.type == RendererDiscoverer.Event.ItemAdded) {
                         event.getItem().retain(); renderers.add(event.getItem());
                     } else if (event.type == RendererDiscoverer.Event.ItemDeleted) {
-                        if (renderers.remove(event.getItem())) event.getItem().release();
+                        RendererItem removed = event.getItem();
+                        if (renderers.remove(removed)) {
+                            if (activeRenderer == removed) {
+                                pause();
+                                selectRenderer(null);
+                                status("Cast receiver disconnected. Press Play to continue on this device.");
+                            }
+                            removed.release();
+                        }
                     }
+                    updateOutputChoices();
                 });
                 discoverer.start(); discoverers.add(discoverer);
             }
         }
-        ArrayList<String> labels = new ArrayList<>();
-        ArrayList<RendererItem> choices = new ArrayList<>(renderers);
-        for (RendererItem item : choices) item.retain();
-        labels.add("This device");
-        for (RendererItem item : choices) labels.add(item.name);
-        if (renderers.isEmpty()) status("Looking for receivers. Open Cast again in a few seconds.");
-        AlertDialog dialog = new AlertDialog.Builder(activity).setTitle("Cast video")
-            .setItems(labels.toArray(new String[0]), (selectionDialog, index) -> {
-                if (!allowed(true)) return;
-                RendererItem selected = index == 0 ? null : choices.get(index - 1);
-                if (selected != null && !renderers.contains(selected)) {
-                    status("This receiver disconnected. Choose Cast again.");
-                    return;
-                }
-                resume = position();
-                cancelAudioTrackSwitch();
-                player.stop();
-                player.setRenderer(selected);
-                casting = index != 0;
-                inlineSubtitles.refresh();
-                startByUser();
+        outputLabels = new android.widget.ArrayAdapter<>(activity, android.R.layout.simple_list_item_1);
+        DisplayManager displays = (DisplayManager) activity.getSystemService(Context.DISPLAY_SERVICE);
+        updateOutputChoices();
+        AlertDialog dialog = new AlertDialog.Builder(activity).setTitle("Video output")
+            .setAdapter(outputLabels, (selectionDialog, index) -> {
+                if (allowed(true) && index < outputActions.size()) outputActions.get(index).run();
             }).setNegativeButton("Cancel", null).create();
         dialog.setOnDismissListener(value -> {
-            for (RendererItem item : choices) item.release();
+            displays.unregisterDisplayListener(outputDisplays);
+            outputLabels = null;
+            outputActions.clear();
+            if (openDialog == dialog) openDialog = null;
+            scheduleControls();
         });
         openDialog = dialog;
+        displays.registerDisplayListener(outputDisplays, handler);
         dialog.show();
+    }
+
+    private void updateOutputChoices() {
+        if (outputLabels == null) return;
+        outputLabels.setNotifyOnChange(false);
+        outputLabels.clear();
+        outputActions.clear();
+        outputLabels.add(!casting && externalDisplay == null ? "✓ This device" : "This device");
+        outputActions.add(() -> {
+            stopExternalDisplay(true);
+            if (casting) selectRenderer(null);
+        });
+        for (Display display : ExternalVideoDisplay.available(activity)) {
+            if (display.getDisplayId() == activity.getWindowManager().getDefaultDisplay().getDisplayId()) continue;
+            outputLabels.add(display.getName() + " · Connected display");
+            outputActions.add(() -> showExternalDisplay(display));
+        }
+        for (RendererItem renderer : renderers) {
+            outputLabels.add(renderer.name + " · Cast");
+            outputActions.add(() -> {
+                if (!renderers.contains(renderer)) return;
+                stopExternalDisplay(true);
+                selectRenderer(renderer);
+            });
+        }
+        outputLabels.notifyDataSetChanged();
+    }
+
+    private void selectRenderer(RendererItem renderer) {
+        if (activeRenderer == renderer) return;
+        boolean wasPlaying = playRequested;
+        resume = position();
+        cancelAudioTrackSwitch();
+        player.stop();
+        player.setRenderer(renderer);
+        activeRenderer = renderer;
+        casting = renderer != null;
+        inlineSubtitles.refresh();
+        if (wasPlaying) startByUser();
+    }
+
+    private void showExternalDisplay(Display display) {
+        if (externalDisplay != null && externalDisplay.getDisplay().getDisplayId() == display.getDisplayId()) return;
+        ExternalVideoDisplay presentation = new ExternalVideoDisplay(activity, display);
+        try {
+            presentation.showVideo();
+        } catch (WindowManager.InvalidDisplayException unavailable) {
+            presentation.dismiss();
+            status("The connected display is no longer available.");
+            return;
+        }
+        stopExternalDisplay(true);
+        if (casting) selectRenderer(null);
+        pausePresentation.clear();
+        player.detachViews();
+        externalDisplay = presentation;
+        presentation.setOnDismissListener(value -> {
+            if (externalDisplay == presentation) stopExternalDisplay(true);
+        });
+        attachVideoOutput();
+        inlineSubtitles.reset();
+        status("Video output: " + display.getName());
+    }
+
+    private void stopExternalDisplay(boolean restore) {
+        ExternalVideoDisplay presentation = externalDisplay;
+        if (presentation == null) return;
+        externalDisplay = null;
+        presentation.setOnDismissListener(null);
+        player.detachViews();
+        presentation.dismiss();
+        if (restore && attached && !lockHidden && !done) {
+            attachVideoOutput();
+            inlineSubtitles.refresh();
+            status("Video output returned to this device.");
+        }
     }
 
     public void show() {
@@ -1802,7 +1990,7 @@ public final class VideoPlayer {
         // MediaCodec must render directly to SurfaceView to preserve HDR buffers
         // and their color metadata. TextureView composites through an SDR path
         // on older Android versions and has limited HDR support on newer ones.
-        player.attachViews(video, null, true, false);
+        player.attachViews(externalDisplay == null ? video : externalDisplay.video, null, true, false);
     }
 
     private void attachRootToWindow() {
@@ -1829,6 +2017,7 @@ public final class VideoPlayer {
         lockHidden = true;
         if (optionsMenu != null) optionsMenu.dismiss();
         if (openDialog != null) { openDialog.dismiss(); openDialog = null; }
+        stopExternalDisplay(false);
         pause();
         cancelAudioTrackSwitch();
         resume = position();
@@ -1916,7 +2105,7 @@ public final class VideoPlayer {
             resume = Math.max(0, target);
         }
         android.util.Log.d("VideoPlayback", "pause target=" + resume + " waiting=" + networkWaiting);
-        pausePresentation.hold();
+        if (externalDisplay == null) pausePresentation.hold();
         root.setKeepScreenOn(false);
         setControlsVisible(true);
         manualResumeRequired = true;
@@ -1938,7 +2127,7 @@ public final class VideoPlayer {
         root.setKeepScreenOn(false);
         boolean pip = Build.VERSION.SDK_INT >= 26 && activity.isInPictureInPictureMode();
         if (restricted) hide();
-        else if (!pip && !casting) {
+        else if (!pip && !casting && externalDisplay == null) {
             pause();
             reloadVideoAfterBackground = attached && inputDisplayedVideo && tail != Tail.AUDIO;
         }
