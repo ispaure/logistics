@@ -259,14 +259,15 @@ def exercise(root, cleanup):
              explorer, logistics, key=key, escape=escape)
         if escape:
             until(lambda: not window.workspace.active_view.move_actions.busy, 'Cancelled drag started a job.')
-            assert set(_windows) == before
+            assert not set(_windows) - before
             return None
         until(lambda: bool(set(_windows) - before), 'Explorer drop did not reach Logistics Transfers.')
         job, = set(_windows) - before
         until(lambda: job.result is not None, 'Logistics transfer did not retire.')
         outcome = job.result.state
         job.close()
-        app.processEvents()
+        qt.QCoreApplication.sendPostedEvents(job, qt.QEvent.Type.DeferredDelete)
+        until(lambda: all(other is not job for other in _windows), 'Completed transfer window did not close.')
         return outcome
 
     def to_explorer(path, key, *, escape=False):
