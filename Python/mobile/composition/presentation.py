@@ -363,7 +363,7 @@ def file_operations(owner):
         if isinstance(request, FileOperationRequest) and request.kind in {'rename', 'move'}:
             from ..document_mutations import prepare_document_mutation
             return await prepare_document_mutation(owner, request)
-        if isinstance(request, FileOperationRequest) and request.kind == 'new':
+        if isinstance(request, FileOperationRequest) and request.kind in {'new', 'copy'}:
             return None
         if mutation and not owner.clear_private_reader():
             raise ValueError('Save or close open file edits before changing files.')

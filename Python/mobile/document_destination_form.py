@@ -62,6 +62,8 @@ class DestinationForm:
         operation = self.operation
         mode, name = operation.mode, operation.filename
         creation, destination_action = operation.creation, operation.destination_action
+        action = getattr(destination_action, 'kind', '')
+        self._folder_move = action in {'move', 'move-selection'}
         name_label = 'Library folder name' if mode == 'folder' else 'File name'
         self.save_as_storage = toga.Selection(items=roots, style=Pack(height=48))
         self.picker_folder = toga.TextInput(placeholder='Folder within storage', style=Pack(height=48))
@@ -77,8 +79,6 @@ class DestinationForm:
         from .filename_input import FilenameInput
         directory = mode in ('open', 'folder') or getattr(destination_action, 'kind', '') in (
             'archive-create', 'archive-extract', 'archive-add')
-        if getattr(destination_action, 'kind', '') in {'move', 'duplicate'}:
-            directory = destination_action.provider.entry(destination_action.path)['directory']
         self.save_as_name = FilenameInput(value=name, directory=directory,
                                            placeholder=name_label, style=Pack(height=48))
         self.creation_type = None
@@ -92,9 +92,7 @@ class DestinationForm:
         self.move_progress = toga.ProgressBar(max=None)
         self.move_notice = toga.Box(style=Pack(direction=COLUMN, margin_left=12, margin_right=12))
         title, primary = self._destination_labels()
-        action = getattr(destination_action, 'kind', '')
-        primary_icon = {'move': 'move_file', 'move-selection': 'move_file',
-                        'duplicate': 'duplicate_file'}.get(action)
+        primary_icon = 'move_file' if self._folder_move else None
         self.picker_parent = icon_button('up', 'Parent folder', on_press=self.parent_editor_folder)
         self.picker_header = self.editor_browser.attach_location_header(
             self.editor_browser.status_label(''), self.picker_parent)
@@ -111,8 +109,11 @@ class DestinationForm:
         self.picker_primary = action_button(toga.Button(primary, on_press=self.confirm_editor_file, style=Pack(height=48, flex=1)))
         if primary_icon:
             button_icons(self.picker_primary, [(primary_icon, '')])
-        self.picker_new_folder = button_icons(toga.Button(
-            'New folder', on_press=self.toggle_editor_new_folder, style=Pack(height=48)), [('folder_add', '')])
+        if self._folder_move:
+            self.picker_new_folder = icon_button('folder_add', 'New folder', on_press=self.toggle_editor_new_folder)
+        else:
+            self.picker_new_folder = button_icons(toga.Button(
+                'New folder', on_press=self.toggle_editor_new_folder, style=Pack(height=48)), [('folder_add', '')])
         self.new_folder_name = toga.TextInput(placeholder='New folder name', style=Pack(height=48, flex=0 if creation is not None else 1))
         from .keyboard import prepare_picker_input
         for control in (self.save_as_name, self.new_folder_name):
@@ -139,23 +140,30 @@ class DestinationForm:
             self.save_as_view = toga.Box(children=location_fields,
                                         style=Pack(direction=COLUMN, margin_left=12, margin_right=12))
         else:
-            fields = [] if action == 'move-selection' else [*name_fields, self.effective_name]
+            fields = [] if self._folder_move else [*name_fields, self.effective_name]
             self.save_as_view = toga.Box(children=[*fields, *location_fields],
-                                        style=Pack(direction=COLUMN, margin=12))
+                                        style=Pack(direction=COLUMN, margin_left=12, margin_right=12,
+                                                   margin_top=4 if self._folder_move else 12,
+                                                   margin_bottom=4 if self._folder_move else 12))
         self.picker_actions = toga.Box(children=[
                 toga.Button('Cancel', on_press=self.cancel_text_destination, style=Pack(height=48)),
                 self.picker_primary],
                 style=Pack(direction=ROW, margin_left=12, margin_right=12, margin_bottom=12))
         self.picker_form = toga.ScrollContainer(content=self.save_as_view, horizontal=False,
-                                                style=Pack(height=80 if creation is not None or action == 'move-selection' else 180))
+                                                style=Pack(height=44 if self._folder_move else 80 if creation is not None else 180))
         # Keep the named action outside the compact location header: that
         # header reserves icon-sized slots and truncates "New folder" on phones.
         storage_row = self.save_as_storage
-        if creation is not None and not type(self.save_as_storage._impl).__module__.startswith('toga_iOS.'):
+        if self._folder_move:
+            self.save_as_storage.style.flex = 1
+            storage_row = toga.Box(children=[self.save_as_storage, self.picker_new_folder],
+                                   style=Pack(direction=ROW, gap=8, margin_left=12, margin_right=12))
+        elif creation is not None and not type(self.save_as_storage._impl).__module__.startswith('toga_iOS.'):
             self.save_as_storage.style.flex = 1
             storage_row = toga.Box(children=[self.save_as_storage], style=Pack(direction=ROW))
-        self._browse_controls = (storage_row, self.picker_header,
-                                 self.picker_new_folder, self.editor_browser.scroll_container())
+        self.picker_storage_row = storage_row
+        folder_control = () if self._folder_move else (self.picker_new_folder,)
+        self._browse_controls = (storage_row, self.picker_header, *folder_control, self.editor_browser.scroll_container())
         if creation is not None:
             from .creation_layout import CreationLocation
             self.creation_location = CreationLocation(self)
@@ -186,8 +194,6 @@ class DestinationForm:
         action = self.operation.destination_action
         if self.operation.mode == 'folder':
             return 'New Notes Library', 'Create library here'
-        if getattr(action, 'kind', '') == 'duplicate':
-            return 'Duplicate', 'Duplicate here'
         if action is not None:
             return getattr(action, 'title', 'Move'), getattr(action, 'primary', 'Move here')
         if self.operation.creation is not None:
@@ -279,14 +285,18 @@ class DestinationForm:
             if apple and not compact:
                 reset_picker_keyboard(self)
             def focused(control):
-                return bool(getattr(getattr(control._impl, 'native', None), 'isFirstResponder', False))
-            if not compact or not apple or focused(self.save_as_storage):
+                native = getattr(control._impl, 'native', None)
+                if apple:
+                    return bool(getattr(native, 'isFirstResponder', False))
+                has_focus = getattr(native, 'hasFocus', None)
+                return has_focus is not None and has_focus()
+            if not compact or focused(self.save_as_storage):
                 self._naming_keyboard_active = False
                 self._search_keyboard_active = False
             elif focused(self.save_as_name) or focused(self.new_folder_name):
-                self._naming_keyboard_active = True
+                self._naming_keyboard_active = apple
                 self._search_keyboard_active = False
-            elif self.editor_browser.search_open and focused(self.editor_browser.search):
+            elif (apple or self._folder_move) and self.editor_browser.search_open and focused(self.editor_browser.search):
                 self._naming_keyboard_active = False
                 self._search_keyboard_active = True
             naming = self.panel is self.name_panel
@@ -307,9 +317,10 @@ class DestinationForm:
                 # A location read briefly disables the field and drops focus;
                 # preserve its input-view session until typing or keyboard hide.
                 preserve_selector = ((control is self.save_as_storage or
+                    (self._folder_move and control is self.picker_storage_row) or
                     (self.creation_type is not None and control is self.creation_location.storage)) and apple
                     and not self._naming_keyboard_active)
-                secondary = control is self.save_as_storage or control is self.picker_new_folder
+                secondary = control is self.picker_storage_row or control is self.picker_new_folder
                 _tuck_control(control, (searching and secondary)
                               or (hide_browser and (editing_folder or not preserve_selector)))
             # A landscape keyboard can leave only ~100 logical pixels.
@@ -347,8 +358,11 @@ class DestinationForm:
                 form.style.flex = flex
             # Travertino layout sizes already use logical units. Scaling them
             # out again clips the status area on high-density Android screens.
-            natural = self.save_as_view.layout.min_height or 180
-            minimum = 72 if self.location_panel is not None else 120
+            if self._folder_move:
+                minimum = 96 if self.new_folder_form in self.save_as_view.children else 44
+            else:
+                minimum = 72 if self.location_panel is not None else 120
+            natural = self.save_as_view.layout.min_height or (minimum if self._folder_move else 180)
             height = NONE if expand_form else min(max(minimum, natural), max(minimum, self.app.main_window.size.height / 2))
             if form.style.height != height:
                 form.style.height = height
@@ -489,6 +503,8 @@ class DestinationForm:
             self.save_as_view.insert(1, self.new_folder_form)
         if self.entering_creation_folder():
             self.update_picker_actions()
+        elif self._folder_move:
+            self.fit_keyboard(self._compact_keyboard)
         self.new_folder_name.focus()
 
     def hide_new_folder(self, widget=None, **kwargs):
@@ -504,6 +520,8 @@ class DestinationForm:
                 if self.save_as_status.value.startswith('Folder creation failed:'):
                     self.save_as_status.value = ''
                 self.update_picker_actions()
+            elif self._folder_move:
+                self.fit_keyboard(self._compact_keyboard)
 
     def toggle_editor_new_folder(self, widget=None, **kwargs):
         if self.new_folder_form in self.save_as_view.children:

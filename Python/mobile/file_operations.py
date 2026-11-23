@@ -76,7 +76,8 @@ class FileOperationRequest:
             return rename_resource(self.provider, self.path, target, cancelled=cancelled)
         if self.kind == 'copy':
             from services.documents.mutations import copy_document_sibling
-            return copy_document_sibling(self.provider, self.path, cancelled=cancelled)
+            return copy_document_sibling(self.provider, self.path, expected_revision=self.expected_revision,
+                                         cancelled=cancelled)
         if self.kind == 'delete':
             from commonUtils.persistence.publication import mutation_lock
             with mutation_lock:
@@ -153,11 +154,15 @@ class FileOperations:
             view = self.host.begin(cancel)
             # Capture inputs on the UI thread; execution never reads widgets.
             self.request = capture()
+            copying = isinstance(self.request, FileOperationRequest) and self.request.kind == 'copy'
+            if copying:
+                self.host.report(view, 'Duplicating and verifying…')
             result = await self._execute(self.request, mutation, view, cancel)
             if not self.host.current(view):
                 return False
-            self.host.report(view, getattr(result, 'notice', '') or
-                             'Finished. Destination verified before removing the source.')
+            notice = 'Duplicated as ' + result.rpartition('/')[2] + '.' if copying else (
+                getattr(result, 'notice', '') or 'Finished. Destination verified before removing the source.')
+            self.host.report(view, notice)
             return True
         except Exception as error:
             if view is None:

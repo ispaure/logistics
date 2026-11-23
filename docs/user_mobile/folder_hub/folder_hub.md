@@ -50,7 +50,7 @@ the file is open in an editor.
 
 Use the open folder’s **…** button beside its view controls to create a
 **New folder…** or enter **Select items**. An individual item's menu
-offers **Move…** and, where the storage supports it, **Duplicate…**.
+offers **Move…** and, where the storage supports it, **Duplicate**.
 
 Press and hold a file or folder in List or Tiles, then move your finger
 and drop it on a folder in the same writable location. In Tiles, a longer

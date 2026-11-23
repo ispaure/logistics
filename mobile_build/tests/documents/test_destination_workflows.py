@@ -133,6 +133,12 @@ class DestinationWorkflowTests(unittest.TestCase):
         self.assertEqual(self.app.file_status.value, 'Move finished.')
 
     def test_ios_move_search_keeps_browser_mounted_through_keyboard_resize(self):
+        self.check_move_search_keyboard_resize('toga_iOS.app')
+
+    def test_android_move_search_keeps_browser_mounted_through_keyboard_resize(self):
+        self.check_move_search_keyboard_resize('toga_android.app')
+
+    def check_move_search_keyboard_resize(self, platform):
         destination = self.root / 'Search destination'
         destination.mkdir()
         (self.root / 'original.txt').write_bytes(b'Original bytes')
@@ -142,11 +148,17 @@ class DestinationWorkflowTests(unittest.TestCase):
         self.run_async(dict(self.app.file_item_commands())['Move…']())
         picker = self.picker
         browser = picker.editor_browser
+        from mobile.routes import contains
+        self.assertFalse(contains(picker.panel, picker.save_as_name))
+        self.assertIs(picker.picker_new_folder.parent, picker.save_as_storage.parent)
+        self.assertLess(picker.picker_form.style.height, 100)
         original_layout = list(picker.panel.children)
         browser.open_search()
         backend = type(self.app._impl)
         search_field = SimpleNamespace(isFirstResponder=True)
-        with (patch.object(backend, '__module__', 'toga_iOS.app'),
+        search_field.hasFocus = lambda: search_field.isFirstResponder
+        with (patch.object(backend, '__module__', platform),
+              patch('mobile.external_display.sync'),
               patch.object(self.app.native_host, 'adapter', SimpleNamespace(keyboard_inset=300)),
               patch.object(browser.search._impl, 'native', search_field, create=True)):
             picker.fit_keyboard(True)
@@ -170,27 +182,6 @@ class DestinationWorkflowTests(unittest.TestCase):
         self.run_async(picker.confirm_editor_file())
         self.assertEqual((destination / 'original.txt').read_bytes(), b'Original bytes')
         self.assertFalse((self.root / 'original.txt').exists())
-
-    def test_duplicate_uses_chosen_folder_and_name_without_overwriting(self):
-        destination = self.root / 'Destination'
-        destination.mkdir()
-        (self.root / 'original.txt').write_bytes(b'Original bytes')
-        (destination / 'existing.txt').write_bytes(b'Keep destination')
-        self.run_async(self.app.show_files(location=('Local files', '')))
-        self.app.browser_file_selected(self.app.file_provider.entry('original.txt'))
-        actions = dict(self.app.file_item_commands())
-        self.assertTrue({'Move…', 'Duplicate…'} <= actions.keys())
-        self.assertTrue({'Pin this folder', 'New folder…', 'Cut', 'Copy regular file'}.isdisjoint(actions))
-        self.run_async(actions['Duplicate…']())
-        self.assertNotEqual(self.picker.save_as_name.value, 'original.txt')
-        self.run_async(self.picker.browser_editor_location((self.picker.save_as_storage.value, 'Destination')))
-        self.picker.save_as_name.value = 'existing.txt'
-        self.run_async(self.picker.confirm_editor_file())
-        self.assertEqual((destination / 'existing.txt').read_bytes(), b'Keep destination')
-        self.picker.save_as_name.value = 'renamed.txt'
-        self.run_async(self.picker.confirm_editor_file())
-        self.assertEqual((destination / 'renamed.txt').read_bytes(), b'Original bytes')
-        self.assertEqual((self.root / 'original.txt').read_bytes(), b'Original bytes')
 
     def test_failed_folder_creation_keeps_folder_filename_and_draft(self):
         (self.root / 'Exists').mkdir()
@@ -350,6 +341,7 @@ class DestinationWorkflowTests(unittest.TestCase):
 
     def test_browsed_move_uses_created_folder_and_preserves_default_name(self):
         source, destination = self.prepare_move()
+        self.picker.show_new_folder()
         self.picker.new_folder_name.value = 'Organized'
         self.run_async(self.picker.create_picker_folder())
         self.run_async(self.picker.confirm_editor_file())
@@ -489,8 +481,7 @@ class DestinationWorkflowTests(unittest.TestCase):
         self.picker.save_as_storage.value = 'Local'
         self.run_async(self.picker._storage_refresh)
         self.run_async(self.picker.browser_editor_location(('Local', 'Source')))
-        self.picker.save_as_name.value = 'Nested'
         self.run_async(self.picker.confirm_editor_file())
         self.assertTrue((source / 'child.txt').is_file())
-        self.assertFalse((source / 'Nested').exists())
+        self.assertFalse((source / source.name).exists())
         self.assertIn('Move failed:', self.picker.save_as_status.value)

@@ -356,7 +356,7 @@ class FilesUI:
     def show_file_actions(self, widget=None, *, operation=None, **kwargs):
         if self.cloud_busy:
             return
-        if operation in ('move', 'duplicate'):
+        if operation == 'move':
             try:
                 provider, path = self.selected_file()
             except ValueError as error:
@@ -366,13 +366,10 @@ class FilesUI:
                 return
             from .file_operations import FileOperationRequest
             row = self.file_rows.get(self.file_selection.value)
-            request = FileOperationRequest(operation, provider, path, expected_revision=row.get('revision'))
+            request = FileOperationRequest('move', provider, path, expected_revision=row.get('revision'))
             name = path.rpartition('/')[2]
-            if operation == 'duplicate':
-                from services.documents.mutations import copy_path
-                name = copy_path(name, directory=row['directory'])
             return self.loop.create_task(self.editor_picker().show_destination(
-                name, request, start_folder=self.file_path if operation == 'move' else None))
+                name, request, start_folder=self.file_path))
         box = self.file_operation_view.content
         for child in list(box.children):
             box.remove(child)
@@ -388,11 +385,6 @@ class FilesUI:
             self.file_name.placeholder = 'Folder name' if operation == 'new' else 'New name'
             box.add(self.file_name)
             box.add(self.file_commands[3 if operation == 'new' else 4])
-        elif operation == 'move':
-            box.add(toga.Label('Move to'))
-            box.add(self.file_destination)
-            box.add(self.file_target)
-            box.add(self.file_commands[6])
         elif operation == 'password':
             box.add(self.file_password,
                     toga.Button('Open with password', on_press=self.read_managed_file, style=Pack(height=48)))
@@ -445,7 +437,7 @@ class FilesUI:
         if writable and access.delete:
             commands.append(('Move…', lambda: self.show_file_actions(operation='move')))
         if self.can_copy_file(provider):
-            commands.append(('Duplicate…', lambda: self.show_file_actions(operation='duplicate')))
+            commands.append(('Duplicate', lambda: self.duplicate_file(provider, selected)))
         if context is None:
             commands.extend(self.app.file_item_actions(provider, selected))
         if not selected['directory'] and Path(selected['path']).suffix.lower() in {'.cbz', '.zip', '.epub'}:
@@ -882,6 +874,18 @@ class FilesUI:
     async def rename_file(self, widget=None, **kwargs):
         if await self.file_operations().run(lambda: self.capture_file_operation('rename')):
             await self.browse_files()
+
+    async def duplicate_file(self, provider, row):
+        from .file_operations import FileOperationRequest
+        request = FileOperationRequest('copy', provider, row['path'], expected_revision=row.get('revision'))
+        awake = self.app.acquire_awake_lease()
+        try:
+            if await self.file_operations().run(lambda: request):
+                message = self.file_status.value
+                if await self.browse_files():
+                    self.file_status.value = message
+        finally:
+            awake.close()
 
     async def delete_file(self, widget=None, **kwargs):
         from .file_operations import FileOperationRequest

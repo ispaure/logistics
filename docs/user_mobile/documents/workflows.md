@@ -56,9 +56,11 @@ Choose **••• → Move…**, pick a writable folder, and tap **Move here**.
 Moving a file out of an encrypted copy into ordinary storage requires
 confirmation because the destination will be readable as an ordinary file.
 
-In File Browser, choose an item's **Move…** to move one file or folder.
-Choose **Duplicate…** to keep the original and pick a folder and a name
-for the copy. An existing destination file is preserved.
+In File Browser, choose an item's **Move…** to pick a folder and keep the
+original name. Use **Search** to find a destination or the new-folder button
+beside the storage picker to create one. Choose **Duplicate** to copy a file or
+folder beside the original. A file such as `Report.pdf` becomes
+`Report - Copy.pdf`, then `Report - Copy (2).pdf` if that name is taken.
 
 To move several items, choose **Select items**, tap the desired rows or
 tiles, and check the selection count. Tap **Move…** and choose a

@@ -337,10 +337,6 @@ class EditorPicker(DestinationForm):
             source_label = 'Source location'
             self.editor_storage_roots[source_label] = item.provider
             source_folder = item.path.rpartition('/')[0]
-        elif action == 'duplicate':
-            source_label = 'Source location'
-            self.editor_storage_roots[source_label] = destination_action.provider
-            source_folder = destination_action.path.rpartition('/')[0]
         elif action in MOVE_ACTIONS:
             provider = destination_action.provider
             source_label = self.move_source_label(provider)
@@ -643,8 +639,7 @@ class EditorPicker(DestinationForm):
             return await self.complete_archive_action()
         if action == 'download':
             return await self.complete_download()
-        if action == 'duplicate':
-            return await self.complete_duplicate()
+        self.close_destination_search()
         if action == 'move-selection':
             return await self.complete_selected_move()
         work = self._begin_work()
@@ -658,8 +653,7 @@ class EditorPicker(DestinationForm):
             work.progress = CoalescedProgress(self.app.loop,
                 lambda values, unused: self.update_move_progress(values),
                 active=lambda: self._accepts(work), interval=.2)
-            # Keep progress above the browser rather than below the naming
-            # fields in its short scroll viewport (not visible on closed Duo).
+            # Keep progress visible above the list on the Duo cover screen.
             if self.save_as_status.parent is not self.move_notice:
                 self.save_as_status.parent.remove(self.save_as_status)
                 self.move_notice.add(self.save_as_status)
@@ -669,10 +663,10 @@ class EditorPicker(DestinationForm):
                 self.panel.insert(0, self.move_notice)
             self.move_progress.max = None
             self.move_progress.start()
-            name = resource_name(self.save_as_name.value)
+            action = self.operation.destination_action
+            name = action.path.rpartition('/')[2]
             provider = self.editor_provider(self.save_as_storage.value)
             target = '/'.join(p for p in (self.picker_folder.value, name) if p)
-            action = self.operation.destination_action
             source = action.provider
             if source.private and not provider.private:
                 confirmed = await self.app.main_window.dialog(toga.ConfirmDialog(
@@ -784,47 +778,6 @@ class EditorPicker(DestinationForm):
         except (OSError, ValueError) as error:
             if self._accepts(work):
                 self.save_as_status.value = str(error)[:250]
-        finally:
-            self._finish_work(work)
-
-    async def complete_duplicate(self):
-        from services.documents.mutations import copy_document_tree
-        from .file_operations import retiring_work
-
-        action = self.operation.destination_action
-        work = self._begin_work()
-        work.mutation = True
-        self.save_as_name.enabled = False
-        try:
-            destination = self.editor_provider(self.save_as_storage.value)
-            name = resource_name(self.save_as_name.value)
-            target = '/'.join(filter(None, (self.picker_folder.value, name)))
-            if action.provider.private and not destination.private:
-                confirmed = await self.app.main_window.dialog(toga.ConfirmDialog(
-                    'Duplicate to unencrypted storage?',
-                    'The duplicate will contain decrypted files. Continue?'))
-                if not confirmed or not self._accepts(work):
-                    return
-            self.save_as_status.value = 'Duplicating and verifying…'
-            work.awake = self.app.acquire_awake_lease()
-
-            def copy(cancelled):
-                return copy_document_tree(action.provider, action.path, target, destination=destination,
-                                          expected_revision=action.expected_revision, cancelled=cancelled)
-
-            def completed(result):
-                work.committed = True
-
-            await retiring_work(copy, work.cancel, completed=completed)
-            if self._accepts(work):
-                self._finish_work(work)
-                self.clear()
-                await self.app.show_files()
-                await self.app.browse_files()
-                self.app.file_status.value = 'Duplicated as ' + name + '.'
-        except (OSError, ValueError, OperationCancelled) as error:
-            if work.operation is self.operation and self.active_host:
-                self.save_as_status.value = 'Duplicate cancelled.' if work.cancel.is_set() else str(error)[:250]
         finally:
             self._finish_work(work)
 
@@ -976,13 +929,21 @@ class EditorPicker(DestinationForm):
     async def create_editor_folder(self, widget=None, **kwargs):
         return await self.create_picker_folder()
 
+    def close_destination_search(self):
+        browser = self.editor_browser
+        if browser.search_open:
+            if type(browser.search._impl).__module__.startswith('toga_android.'):
+                from .keyboard import dismiss_picker_keyboard
+                dismiss_picker_keyboard(self, browser.search)
+            browser.close_search()
+
     async def browser_editor_folder(self, row):
         if self.cloud_busy:
             return False
         browser = self.editor_browser
         loaded = await self.browser_editor_location((self.save_as_storage.value, row['path']))
-        if loaded and browser is self.editor_browser and browser.search_open:
-            browser.close_search()
+        if loaded and browser is self.editor_browser:
+            self.close_destination_search()
         return loaded
 
     async def browser_editor_location(self, location):

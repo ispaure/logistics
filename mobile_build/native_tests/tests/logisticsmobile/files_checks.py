@@ -117,7 +117,7 @@ async def exercise_files(app, passed):
     browser.show_tiles()
     browser.sort.value = 'Name Z–A'
     actions = dict(app.file_item_commands(row=app.file_provider.entry(app.file_path + '/fixture.txt')))
-    assert {'Move…', 'Duplicate…'} <= actions.keys()
+    assert {'Move…', 'Duplicate'} <= actions.keys()
     assert not any(title.startswith('Pin ') or title in ('New folder…', 'Cut') for title in actions)
     app.show_settings()
     await app.show_files()

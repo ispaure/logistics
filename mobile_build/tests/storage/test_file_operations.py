@@ -57,24 +57,33 @@ class FileOperationTests(unittest.TestCase):
         self.app.file_selection.value = next(key for key, row in self.app.file_rows.items() if row['name'] == name)
 
     def test_sibling_copy_verifies_files_and_dotted_folders_beside_source(self):
-        self.assertIn('Duplicate…', dict(self.app.file_item_commands()))
+        view = self.app.body
+        actions = dict(self.app.file_item_commands())
+        self.assertNotIn('Duplicate…', actions)
+        (self.source.root / 'first - Copy.txt').write_text('Existing copy')
         for _ in range(2):
-            FileOperationRequest('copy', self.source, 'first.txt').execute(lambda: False)
-        for name in ('first.txt', 'first - Copy.txt', 'first - Copy (2).txt'):
+            self.run_async(actions['Duplicate']())
+            self.assertIs(self.app.body, view)
+        self.assertEqual(self.app.file_status.value, 'Duplicated as first - Copy (3).txt.')
+        self.assertEqual((self.source.root / 'first - Copy.txt').read_text(), 'Existing copy')
+        for name in ('first.txt', 'first - Copy (2).txt', 'first - Copy (3).txt'):
             self.assertEqual((self.source.root / name).read_text(), 'First')
+        (self.source.root / 'first.txt').write_text('Edited since menu opened')
+        self.run_async(actions['Duplicate']())
+        self.assertFalse((self.source.root / 'first - Copy (4).txt').exists())
+        self.assertIn('selected item changed', self.app.file_status.value)
         folder = self.source.root / 'Folder.v1'
         folder.mkdir()
         (folder / 'child.txt').write_text('Child')
         self.run_async(self.app.browse_files())
         self.select('Folder.v1')
-        self.assertIn('Duplicate…', dict(self.app.file_item_commands()))
-        FileOperationRequest('copy', self.source, folder.name).execute(lambda: False)
+        self.run_async(dict(self.app.file_item_commands())['Duplicate']())
         self.assertEqual((self.source.root / 'Folder.v1 - Copy/child.txt').read_text(), 'Child')
         self.assertEqual((folder / 'child.txt').read_text(), 'Child')
         self.assertFalse(list(self.source.root.glob('.notes-copy-*')))
         with patch.object(self.app.file_provider, 'remote_storage', True, create=True):
             self.select('first.txt')
-            self.assertNotIn('Duplicate…', dict(self.app.file_item_commands()))
+            self.assertNotIn('Duplicate', dict(self.app.file_item_commands()))
             with self.assertRaises(PermissionError):
                 FileOperationRequest('copy', self.app.file_provider, 'first.txt').execute(lambda: False)
 
@@ -92,7 +101,7 @@ class FileOperationTests(unittest.TestCase):
             with self.subTest(name=name):
                 row = self.source.entry(name)
                 titles = dict(self.app.file_item_commands(row=row))
-                self.assertTrue({'Open', 'Details', 'Rename…', 'Move…', 'Duplicate…', 'Delete…'} <= titles.keys())
+                self.assertTrue({'Open', 'Details', 'Rename…', 'Move…', 'Duplicate', 'Delete…'} <= titles.keys())
                 self.assertEqual('Archive password…' in titles, name == 'chapter.CBZ')
                 self.assertFalse({'New folder…', 'Edit comics in this folder…', 'Add to Favourites',
                                   'Pin this folder', 'Cut', 'Copy'} & titles.keys())
@@ -101,7 +110,7 @@ class FileOperationTests(unittest.TestCase):
         with patch.object(provider, 'read_only', True, create=True):
             read_only_commands = dict(self.app.file_item_commands(row=provider.entry('first.txt')))
             self.assertTrue({'Open', 'Details'} <= read_only_commands.keys())
-            self.assertFalse({'Rename…', 'Move…', 'Duplicate…', 'Delete…'} & read_only_commands.keys())
+            self.assertFalse({'Rename…', 'Move…', 'Duplicate', 'Delete…'} & read_only_commands.keys())
             self.assertNotIn('New folder…', dict(self.app.current_folder_commands()))
             with (patch.object(self.app, 'feature_enabled', return_value=False),
                   patch.object(self.app, 'file_provider_for', return_value=provider)):

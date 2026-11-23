@@ -38,7 +38,7 @@ def copy_path(source, *, directory=False, number=1):
     return str(path.with_name(stem + label + suffix))
 
 
-def copy_document_sibling(provider, source, *, cancelled=lambda: False):
+def copy_document_sibling(provider, source, *, expected_revision=None, cancelled=lambda: False):
     """Choose a free sibling under the same lock used for verified publication."""
     if not document_writable(provider):
         raise PermissionError('This storage cannot copy documents.')
@@ -55,7 +55,8 @@ def copy_document_sibling(provider, source, *, cancelled=lambda: False):
                 provider.entry(target)
             except FileNotFoundError:
                 try:
-                    return copy_document_tree(provider, source, target, cancelled=cancelled)
+                    return copy_document_tree(provider, source, target, expected_revision=expected_revision,
+                                              cancelled=cancelled)
                 except FileExistsError:
                     pass  # Another process published this name; preserve it and retry.
             number += 1
