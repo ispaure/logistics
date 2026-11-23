@@ -79,9 +79,10 @@ class IconBuildTests(unittest.TestCase):
             self.assertEqual(len(entries), 2)
             self.assertNotIn('appearances', entries[0])
             self.assertEqual(entries[1]['appearances'], [{'appearance': 'luminosity', 'value': 'dark'}])
-            for entry, icon in zip(entries, ('icon-1024.png', 'icon-dark-1024.png')):
+            for entry, qualifier in zip(entries, ('', '-night')):
                 self.assertEqual((splash / entry['filename']).read_bytes(),
-                                 (icon_build.ROOT / 'ios' / icon).read_bytes())
+                                 (icon_build.ROOT / 'android' / f'mipmap{qualifier}-xxxhdpi' / 'splash.png').read_bytes())
+                self.assertEqual(png_header(splash / entry['filename'])[-1], 6)
             storyboard = ET.parse(project / 'LogisticsMobile/Launch Screen.storyboard')
             self.assertEqual(storyboard.find(".//view/color[@key='backgroundColor']").get('name'),
                              'LaunchBackground')
@@ -102,7 +103,7 @@ class IconBuildTests(unittest.TestCase):
         launcher = ET.parse(android / 'values-v31/launch_theme.xml').find('style')
         self.assertEqual(launcher.get('name'), 'AppTheme.Launcher')
         self.assertEqual(launcher.find("item[@name='android:windowSplashScreenAnimatedIcon']").text,
-                         '@mipmap/ic_launcher')
+                         '@mipmap/ic_launcher_foreground')
         self.assertEqual(launcher.find("item[@name='android:windowSplashScreenBackground']").text,
                          '@color/logisticsLaunchBackground')
 

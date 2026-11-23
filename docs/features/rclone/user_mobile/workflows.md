@@ -12,7 +12,7 @@ Tap the **Transfers** icon next to **Server** in Workspaces. The overview
 shows the active transfer above interrupted downloads and completed transfers.
 Tap the active card for its source, destination, MB/s, and individual
 file progress as the source reports it. Percentages use known bytes or file
-counts. Removal counters show attempts, and completion appears after verification.
+counts. Removal counters show attempts. Resumable downloads show **Verified on disk** after copying. A finished folder is published once it passes verification.
 
 **Back** and **Continue browsing** return to the screen that opened the details.
 If you started a transfer in the File Browser, they return to that folder.
@@ -74,7 +74,7 @@ keep browsing the folder without reopening it.
 Open **Workspaces → Transfers**. The panel shows the current transfer,
 up to 60 recent completed transfers recorded by the app, and interrupted
 downloads with a verified checkpoint. A stopped download can appear here after you relaunch.
-Choose **Resume** to check the saved bytes and fetch the remainder, or
+Choose **Resume** to check the saved bytes and fetch any remainder, or
 **Discard** to remove that job and its verified partial data. If the app
 can no longer verify the destination folder, you can remove the saved entry
 from Transfers and leave the partial data in place. The destination listing

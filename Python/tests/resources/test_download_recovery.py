@@ -119,7 +119,7 @@ class RecoveryTests(unittest.TestCase):
                 self.queue.save(job)
                 self.queue = recovery.DownloadQueue(self.root, 'fixture authority', self.check)
 
-                def hash_sparse_fixture(stream, length, algorithm, check):
+                def hash_sparse_fixture(stream, length, algorithm, check, progress=None):
                     # Stand in for the already hashed sparse prefix. This test verifies the
                     # logical and stored offsets without reading 100 GiB of synthetic zeros.
                     self.assertIn(length, (stored_offset, stored_offset + len(tail)))

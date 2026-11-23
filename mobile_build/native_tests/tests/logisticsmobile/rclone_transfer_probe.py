@@ -119,7 +119,8 @@ class RcloneTransferProbe(LogisticsMobile):
             state.result = 'idle'
             state.message = 'No transfer is running.'
             owner.render_transfer_summary()
-            self.show_transfers()
+            with patch.object(owner, 'refresh_transfer_history', new=AsyncMock()):
+                self.show_transfers()
             surface = self.transfer_view
             surface.update(dict(surface.model, downloads=[dict(id='sample', name='World tour.mp4',
                 path='Videos/World tour.mp4', offset=45_000_000_000, size=100_000_000_000)],
@@ -406,7 +407,7 @@ class RcloneTransferProbe(LogisticsMobile):
             assert self.routes.screens['files'][-1][0] == 'workspace-status'
             frame = self.body.children[0]._workspace_frame
             assert frame.folder_detail
-            assert any(getattr(child, 'text', '') == 'View transfer progress' for child in frame.main.children)
+            assert any(getattr(child, 'text', '') == 'View transfers' for child in frame.main.children)
             columns = getattr(self.adaptive, 'file_columns', None)
             if expect_wide and columns is None:
                 assert frame.folder_master in frame.row.children

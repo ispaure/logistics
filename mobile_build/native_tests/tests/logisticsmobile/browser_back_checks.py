@@ -92,7 +92,17 @@ async def exercise_folder_pop_preview(app, *, scroll_position=120):
     """The parent must already contain rows while its refresh is blocked."""
     if get_os() is not OS.IOS:
         return {}
+    from commonUtils.ui.native.keyboard import native_value
+    from mobile.appearance import apple_color
     from services.documents.locations import collection_path
+
+    def matches_canvas(view):
+        traits = view.traitCollection
+        actual = native_value(view.backgroundColor)
+        assert actual is not None
+        expected = apple_color('window').resolvedColorWithTraitCollection(traits)
+        assert actual.resolvedColorWithTraitCollection(traits).isEqual(expected)
+
     root = collection_path(app.private_root) / 'Back transition fixture'
     (root / 'Child').mkdir(parents=True, exist_ok=True)
     for index in range(60):
@@ -108,7 +118,9 @@ async def exercise_folder_pop_preview(app, *, scroll_position=120):
     original_offset = float(original.contentOffset.y)
     await app.browser_file_folder(next(row for row in app.file_rows.values() if row['name'] == 'Child'))
     await asyncio.sleep(.3)
-    parent_route, parent_panel, _ = app.routes.screens['files'][-2]
+    parent_route, parent_panel, parent_pane = app.routes.screens['files'][-2]
+    matches_canvas(parent_panel._impl.native)
+    matches_canvas(parent_pane.native)
     parent = app.routes.folders.screens['files', parent_route]
     preview = parent.preview
     assert preview is not None and preview.view in parent_panel.children
@@ -123,6 +135,9 @@ async def exercise_folder_pop_preview(app, *, scroll_position=120):
         navigation = app.native_host.adapter.navigation[app.native_host.destinations.index('files')]
         navigation.popViewControllerAnimated(True)
         await asyncio.sleep(.1)
+        coordinator = native_value(navigation.transitionCoordinator)
+        if coordinator is not None:
+            matches_canvas(native_value(coordinator.containerView))
         native = preview.browser.native_list._impl.native
         assert native.window is not None and len(native.visibleCells) > 0
         assert abs(float(native.adjustedContentInset.top)) < 1
@@ -141,7 +156,8 @@ async def exercise_folder_pop_preview(app, *, scroll_position=120):
             await app.routes.folders.task
         parent.navigate = navigate
     assert app.file_path == root.name
-    return {'parent_rows_ready_during_native_pop': True}
+    matches_canvas(app.routes.body()._impl.native)
+    return {'parent_rows_ready_during_native_pop': True, 'parent_pop_matches_canvas': True}
 
 
 async def exercise_browser_back(app):

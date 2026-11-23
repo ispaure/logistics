@@ -32,9 +32,11 @@ def configure_ios(project):
     splash = destination / 'Splash.imageset'
     splash.mkdir(exist_ok=True)
     images = []
-    for appearance, source in [('light', 'icon-1024.png'), ('dark', 'icon-dark-1024.png')]:
+    # Launch art has transparent corners. The AppIcon slots need an opaque
+    # image because the system applies its own launcher mask.
+    for appearance, qualifier in [('light', ''), ('dark', '-night')]:
         filename = f'launch-{appearance}.png'
-        shutil.copyfile(ROOT / 'ios' / source, splash / filename)
+        shutil.copyfile(ROOT / 'android' / f'mipmap{qualifier}-xxxhdpi' / 'splash.png', splash / filename)
         entry = dict(idiom='universal', scale='1x', filename=filename)
         if appearance == 'dark':
             entry['appearances'] = [dict(appearance='luminosity', value='dark')]

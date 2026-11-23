@@ -98,11 +98,18 @@ def progress_model(state):
     source, destination = state.endpoints or ('—', '—')
     operation = state.operation.capitalize() if state.operation in ('push', 'pull') else 'Download'
     percentage = state.percentage if phase == 'transfer' else 100 if phase == 'complete' else None
+    verified_bytes = values.get('verified_bytes')
+    verification_total = values.get('verification_total')
+    if phase == 'verify' and verification_total and verified_bytes is not None:
+        percentage = max(0, min(100, 100 * verified_bytes / verification_total))
     return dict(mode='progress', operation=operation, source=source, destination=destination,
         workspace=workspace_name(source, destination, operation), phase=phase, busy=state.busy,
-        message=state.message, status={'stopping': 'Stopping transfer…'}.get(phase,
+        message=state.message, status={'stopping': 'Stopping transfer…',
+            'verify': values.get('verification_status', 'Verifying the destination…')}.get(phase,
             'Removing destination entries…' if removing else 'Copying files…'),
         percentage=percentage, done=values.get('done', 0), total=values.get('total', 0),
+        verified_bytes=verified_bytes if phase == 'verify' else None,
+        verification_total=verification_total if phase == 'verify' else None,
         bytes_per_second=values.get('bytes_per_second') if phase == 'transfer' else None,
         files=values.get('files', 0), total_files=values.get('total_files', 0),
         file_delete_attempts=values.get('file_delete_attempts'),

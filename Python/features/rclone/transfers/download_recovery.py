@@ -279,9 +279,12 @@ def _open_stage(path, flags, expected=None):
         raise
 
 
-def _prefix(stream, length, algorithm, check):
+def _prefix(stream, length, algorithm, check, progress=None):
     running = sha256()
     content = new_hash(algorithm) if algorithm else None
+    total = length
+    if progress is not None:
+        progress(0, total)
     while length:
         check()
         block = stream.read(min(CHUNK, length))
@@ -291,6 +294,8 @@ def _prefix(stream, length, algorithm, check):
         if content:
             content.update(block)
         length -= len(block)
+        if progress is not None:
+            progress(total - length, total)
     return running, content
 
 
@@ -298,7 +303,7 @@ def _stored(size, encrypted):
     return size + 32 + 16 * ((size + 65535) // 65536) if encrypted and size else size
 
 
-def recover(queue, selection, target, source, *, check, progress, key=None):
+def recover(queue, selection, target, source, *, check, progress, key=None, verify_progress=None, verified=None):
     """Open the versioned range reader only when remote data is still required.
 
     The logical offset is distinct from the stored length of authenticated crypt blocks.
@@ -322,7 +327,7 @@ def recover(queue, selection, target, source, *, check, progress, key=None):
         if os.path.lexists(target):
             if not job or job['state'] != 'publishing' or os.path.lexists(stage_path(target, job)):
                 raise FileExistsError('An item with that name already exists. Choose another name.')
-            _retire_published(queue, job, target, check)
+            _retire_published(queue, job, target, check, verify_progress, verified)
             return target
         try:
             if job and job['state'] == 'publishing':
@@ -344,24 +349,25 @@ def recover(queue, selection, target, source, *, check, progress, key=None):
         stage = stage_path(target, job)
         if job['state'] == 'creating':
             _create_stage(queue, target, job, check)
-        _complete_stage(queue, job, stage, target, source, check, progress)
+        _complete_stage(queue, job, stage, target, source, check, progress, verify_progress, verified)
         return target
 
 
-def _retire_published(queue, job, target, check):
-    stream, _ = _open_stage(target, os.O_RDONLY, job['inode'])
-    with stream:
-        before = _stage_snapshot(target, stream)
-        length = _stored(job['offset'], job['source']['encoded'])
-        if (before.st_size != length or _prefix(stream, length, '', check)[0].hexdigest() != job['digest']
-                or not _unchanged(target, before)):
-            raise ValueError('The published file changed. Inspect it before clearing the job.')
+def _retire_published(queue, job, target, check, verify_progress, verified):
+    length = _stored(job['offset'], job['source']['encoded'])
+    snapshot, digest = _verify_bytes(target, length, check, expected=job['inode'], progress=verify_progress)
+    if digest != job['digest']:
+        raise ValueError('The published file checksum differs from the saved checkpoint.')
     check()
     _sync_directory(target.parent)
+    if not _unchanged(target, snapshot):
+        raise ValueError('The published file changed before the checkpoint could be cleared.')
+    if verified is not None:
+        verified(target, snapshot)
     queue.remove(job)
 
 
-def _complete_stage(queue, job, stage, target, source, check, progress):
+def _complete_stage(queue, job, stage, target, source, check, progress, verify_progress, verified):
     current = job['source']
     size, encoded = current['size'], current['encoded']
     offset = job['offset']
@@ -410,22 +416,41 @@ def _complete_stage(queue, job, stage, target, source, check, progress):
                     raise ValueError('The source changed during download. Discard the interrupted job.')
             except RestartRequired as error:
                 raise error.bind(job)
-    # Windows can update a file's timestamps when the write handle closes.
-    # Verify a settled file using path metadata on both sides of the read.
-    stream, _ = _open_stage(stage, os.O_RDONLY, job['inode'])
-    with stream:
-        before = _stage_snapshot(stage, stream)
-        if (before.st_size != _stored(size, encoded)
-                or _prefix(stream, before.st_size, '', check)[0].hexdigest() != job['digest']):
-            raise ValueError('Staged download verification failed.')
-        job['state'] = 'publishing'
-        queue.save(job)
+    before, digest = _verify_bytes(stage, _stored(size, encoded), check, expected=job['inode'],
+                                   progress=verify_progress)
+    if digest != job['digest']:
+        raise ValueError('Staged download verification failed. The on-disk checksum differs from the saved checkpoint.')
+    job['state'] = 'publishing'
+    queue.save(job)
     check()
     if not _unchanged(stage, before):
         raise ValueError('The staged download changed before publication.')
     rename_exclusive(stage, target)
     _sync_directory(target.parent)
+    if verified is not None:
+        after = target.lstat()
+        # A successful rename can change ctime. Keep the original inode,
+        # data size and modification time before admitting its new pathname.
+        if (_independent(after) != _independent(before) or after.st_size != before.st_size
+                or after.st_mtime_ns != before.st_mtime_ns):
+            raise ValueError('The staged download changed during publication.')
+        verified(target, after)
     queue.remove(job)
+
+
+def _verify_bytes(path, length, check, *, expected=None, progress=None):
+    """Hash one independently opened inode. Retry a concurrent metadata update once."""
+    for _ in range(2):
+        stream, identity = _open_stage(path, os.O_RDONLY, expected)
+        with stream:
+            before = _stage_snapshot(path, stream)
+            if before.st_size != length:
+                raise ValueError(f'On-disk size differs from the checkpoint. Expected {length:,} bytes, found {before.st_size:,}.')
+            digest = _prefix(stream, length, '', check, progress)[0].hexdigest()
+            if _unchanged(path, before):
+                return before, digest
+        expected = identity
+    raise ValueError('The file kept changing while its on-disk data was being verified.')
 
 
 def _stage_snapshot(path, stream):

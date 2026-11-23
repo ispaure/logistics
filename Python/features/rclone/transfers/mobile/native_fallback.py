@@ -525,7 +525,8 @@ def progress_status(model):
     if model.get('busy'):
         if model.get('retrying'):
             return f"Retrying · Attempt {model.get('attempt', 0)} of {model.get('max_attempts', 0)}"
-        return {'scan': 'Checking the source and destination…', 'verify': 'Verifying the destination…',
+        return {'scan': 'Checking the source and destination…',
+                'verify': model.get('status') or 'Verifying the destination…',
                 'stopping': 'Stopping transfer…'}.get(phase, model.get('status', 'Copying files…'))
     return model.get('message') or model.get('status') or 'No transfer is running.'
 
@@ -538,6 +539,10 @@ def progress_fields(model):
     amount = f'{done} / {transfer_size(total)}' if total else done
     count = f'{files:,} / {total_files:,}' if total_files else f'{files:,}'
     rows = [(('Files copied', count), ('Data copied', amount))]
+    verified = model.get('verified_bytes')
+    verification_total = model.get('verification_total')
+    if model.get('phase') == 'verify' and verified is not None and verification_total:
+        rows.append((('Verified on disk', f'{transfer_size(verified)} / {transfer_size(verification_total)}'),))
     if model.get('busy'):
         rate = model.get('bytes_per_second')
         minutes, seconds = divmod(model.get('elapsed', 0), 60)

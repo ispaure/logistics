@@ -657,6 +657,9 @@ def refresh_appearance(app):
                     navigation.view.backgroundColor = color
                     navigation.navigationBar.tintColor = apple_color('accent')
                 host.adapter.controller.tabBar.tintColor = apple_color('accent')
+            routes = getattr(app, 'routes', None)
+            if routes is not None:
+                routes.folders.paint_canvas(retire_snapshots=True)
         for impl, radius in list(_surfaces.items()):
             paint_surface(impl, radius)
         if hasattr(app, 'chat_view'):

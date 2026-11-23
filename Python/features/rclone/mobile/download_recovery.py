@@ -163,10 +163,19 @@ def run_download(root, source, path, destination, target, cancelled, progress, o
         if destination.transfer_location(target) != physical:
             raise ValueError('Download destination changed.')
 
+    source_size = None
+
     def report(done, total):
+        nonlocal source_size
+        source_size = total
         progress(phase='Verifying the local copy…' if done == total else 'Transferring',
                  files=0, total_files=1, done=done, total=total, active=int(done < total),
                  active_files=[dict(name=path, bytes=done, size=total)] if done < total else [])
+
+    def verify_progress(done, total):
+        copied = source_size if source_size is not None else total
+        progress(phase='Verifying the local copy…', files=0, total_files=1,
+                 done=copied, total=copied, verified_bytes=done, verification_total=total)
 
     from features.rclone.transfers.download_recovery import MINIMUM
     try:
@@ -192,7 +201,7 @@ def run_download(root, source, path, destination, target, cancelled, progress, o
     queue = queue or mobile_queue(root, source)
     recover(queue, selection, physical, lambda: work.enter_context(NativeRanges(
         source, path, destination, getattr(options, 'bw_limit', None), check)),
-        check=check, progress=report, key=key)
+        check=check, progress=report, key=key, verify_progress=verify_progress)
     return True
 
 

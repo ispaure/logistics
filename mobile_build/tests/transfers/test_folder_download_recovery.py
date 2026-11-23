@@ -163,6 +163,56 @@ class FolderDownloadRecoveryTests(unittest.TestCase):
         self.assertEqual(result.read_bytes(), self.source.files['fixture/large/data.bin'])
         self.assertFalse(self.queue.jobs())
 
+    def test_complete_folder_checkpoint_reuses_saved_bytes_after_failed_publish(self):
+        from features.rclone.transfers import download_recovery as file_recovery
+
+        with patch('features.rclone.mobile.folder_recovery.rename_exclusive',
+                   side_effect=OSError('Interrupted before directory publish')), patch.object(
+                       file_recovery, '_verify_bytes', wraps=file_recovery._verify_bytes) as verified:
+            with self.assertRaisesRegex(OSError, 'before directory publish'):
+                self.download()
+        self.assertEqual(verified.call_count, len(self.source.files))
+        job, = self.queue.jobs()
+        self.assertEqual(job['state'], 'publishing')
+        self.assertEqual(job['offset'], job['source']['size'])
+        checks = [event['verified_bytes'] for event in self.progress if 'verified_bytes' in event]
+        self.assertEqual(checks[-1], job['offset'])
+        self.source.reads.clear()
+        self.progress.clear()
+        self.assertTrue(self.download(job['id']))
+        self.assertFalse(self.source.reads)
+        self.assertFalse(self.queue.jobs())
+        final = self.destination.root / 'Saved Folder'
+        self.assertEqual((final / 'large/data.bin').read_bytes(), self.source.files['fixture/large/data.bin'])
+
+    def test_mismatched_saved_member_cannot_publish(self):
+        job = self.interrupt()
+        final = self.destination.root / 'Saved Folder'
+        stage = self.queue.staged(final, job)
+        (stage / 'early.txt').write_bytes(b'corrupt!')
+        self.source.reads.clear()
+        with self.assertRaisesRegex(ValueError, 'saved folder contents differ'):
+            self.download(job['id'])
+        self.assertFalse(final.exists())
+        self.assertFalse(self.source.reads)
+        self.assertEqual(self.queue.load(job['id'])['offset'], job['offset'])
+
+    def test_changes_after_file_verification_are_rejected_at_folder_publication(self):
+        from features.rclone.mobile import folder_recovery
+
+        def change_after_check(folder, entries, check):
+            result = tree(folder, entries, check)
+            (folder / 'early.txt').write_bytes(b'changed!')
+            return result
+
+        tree = folder_recovery._check_tree
+        with patch.object(folder_recovery, '_check_tree', side_effect=change_after_check):
+            with self.assertRaisesRegex(ValueError, 'staged folder changed before publication'):
+                self.download()
+        self.assertFalse((self.destination.root / 'Saved Folder').exists())
+        job, = self.queue.jobs()
+        self.assertEqual(job['offset'], job['source']['size'])
+
     def test_recovers_publication_after_the_folder_was_renamed(self):
         with patch.object(FolderQueue, 'remove', side_effect=OSError('Exit before checkpoint cleanup')):
             with self.assertRaisesRegex(OSError, 'checkpoint cleanup'):

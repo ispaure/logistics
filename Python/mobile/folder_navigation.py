@@ -245,6 +245,7 @@ class FolderNavigation:
         entry = self.screens.get((destination, screens[-1][0])) if screens else None
         if entry is not None:
             clear_snapshot(entry)
+            self.paint_canvas(destination)
             if not getattr(getattr(entry.browser, 'thumbnails', None), 'private', False):
                 entry.snapshot = native_snapshot(screens[-1][1])
             entry.query = entry.browser.search.value
@@ -255,6 +256,41 @@ class FolderNavigation:
                 if entry.preview is not None:
                     entry.preview.close()
                 entry.preview = FolderPreview(routes.app, entry, captured=True)
+
+    def paint_canvas(self, destination=None, *, retire_snapshots=False):
+        routes = self.routes
+        if not routes.apple or not type(routes.app._impl).__module__.startswith('toga_iOS.'):
+            return
+        from .appearance import apple_color
+
+        color = apple_color('window')
+        targets = (destination,) if destination is not None else ('home', 'files')
+        for target in targets:
+            for route, panel, pane in routes.screens[target]:
+                entry = self.screens.get((target, route))
+                if entry is None or pane is None:
+                    continue
+                panel._impl._default_background_color = color
+                panel._impl.native.backgroundColor = color
+                pane.native.backgroundColor = color
+                if retire_snapshots:
+                    clear_snapshot(entry)
+
+    def prepare_transition(self, navigation, animated):
+        routes = self.routes
+        if not animated or routes.changing or routes.host.changing:
+            return
+        destination = routes.host.adapter.destination_for_navigation(navigation)
+        if destination not in ('home', 'files'):
+            return
+        if not any((destination, route) in self.screens for route, _, _ in routes.screens[destination]):
+            return
+        self.paint_canvas(destination)
+        from commonUtils.ui.native.keyboard import native_value
+        coordinator = native_value(navigation.transitionCoordinator)
+        if coordinator is not None:
+            from .appearance import apple_color
+            native_value(coordinator.containerView).backgroundColor = apple_color('window')
 
     def forget(self, destination, route):
         entry = self.screens.pop((destination, route), None)
@@ -344,6 +380,7 @@ class FolderNavigation:
                 if previous.respondsToSelector(SEL('setBackButtonDisplayMode:')):
                     previous.backButtonDisplayMode = 2  # UINavigationItemBackButtonDisplayModeMinimal
             Routes.show(routes, view, destination=destination, route=entry.route, title=title)
+        self.paint_canvas(destination)
         for route, panel, _ in routes.screens[destination]:
             retained = self.screens.get((destination, route))
             if retained is not None and retained.snapshot is not None:

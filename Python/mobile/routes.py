@@ -37,6 +37,7 @@ def settings_route_delegate():
                 owner = self.owner
                 if owner is not None:
                     owner.prepare_settings_return(navigation, controller, animated)
+                    owner.folders.prepare_transition(navigation, animated)
 
         _settings_route_delegate = LogisticsRouteDelegate
     return _settings_route_delegate

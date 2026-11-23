@@ -24,7 +24,7 @@ from commonUtils.persistence.publication import rename_exclusive
 from commonUtils.runtime.operations import check_cancelled
 from commonUtils.runtime.resources.paths import resource_path
 from features.rclone.transfers.download_recovery import (
-    EMPTY, RestartRequired, _open_stage, _prefix, _sync_directory, _unchanged, _valid_job, recover, stage_path,
+    EMPTY, RestartRequired, _open_stage, _sync_directory, _unchanged, _valid_job, _verify_bytes, recover, stage_path,
 )
 from .download_recovery import NativeRanges, mobile_queue
 
@@ -225,26 +225,25 @@ def _manifest(source, path, destination, bandwidth, check, cancelled):
     return dict(sorted(entries.items()))
 
 
-def _verify(stage, files, job, check):
+def _verify(stage, files, job, check, progress):
     previous = EMPTY
     snapshots = {}
+    measured = 0
     for name, version in files[:job['done']]:
         check()
         path = stage / name
         if path.resolve(strict=True) != path:
             raise ValueError('The partial folder contains a linked file.')
-        stream, _ = _open_stage(path, os.O_RDONLY)
-        with stream:
-            before = path.lstat()
-            if before.st_size != version['size']:
-                raise ValueError('A completed file in the partial folder changed.')
-            digest = _prefix(stream, version['size'], '', check)[0].hexdigest()
-            if not _unchanged(path, before):
-                raise ValueError('A completed file in the partial folder changed.')
+        try:
+            before, digest = _verify_bytes(path, version['size'], check,
+                progress=lambda done, size: progress(measured + done, job['bytes']))
+        except (OSError, ValueError) as error:
+            raise ValueError(f'Could not verify the saved file {path.name}. {error}') from error
         snapshots[path] = before
         previous = _extend(previous, name, digest)
+        measured += version['size']
     if previous != job['digest']:
-        raise ValueError('A completed file in the partial folder changed.')
+        raise ValueError('The saved folder contents differ from their verified checksums. The partial data was kept.')
     return snapshots
 
 
@@ -336,12 +335,19 @@ def run_folder_download(root, source, path, destination, target, cancelled, prog
         if job['manifest'] != manifest or job['source']['size'] != total or job['done'] > len(files):
             raise ValueError('The remote folder changed. Discard the interrupted job before starting again.')
         stage = folders.staged(physical, job)
+
+        def verify_progress(done, size, *, copied=None, status='Verifying the saved bytes…'):
+            progress(phase='Verifying the local copy…', files=job['done'],
+                     total_files=len(files), done=job['offset'] if copied is None else copied,
+                     total=total, verified_bytes=done, verification_total=size,
+                     verification_status=status)
+
         if os.path.lexists(physical):
             if (_directory(physical) != job['inode'] or job['done'] != len(files)
                     or job['bytes'] != total or job['child'] is not None):
                 raise ValueError('The published folder could not be matched to the verified download.')
             directories = _check_tree(physical, entries, check)
-            snapshots = _verify(physical, files, job, check)
+            snapshots = _verify(physical, files, job, check, verify_progress)
             _check_publication(directories, snapshots, check)
             _sync_directory(physical.parent)
             folders.remove(job)
@@ -362,7 +368,9 @@ def run_folder_download(root, source, path, destination, target, cancelled, prog
             if _directory(stage) != job['inode']:
                 raise ValueError('The partial folder was replaced. Inspect the interrupted download.')
 
-        _verify(stage, files, job, check_stage)
+        # Rehash the sealed prefix once after a restart. Files completed in
+        # this run contribute the verified inode returned by the file writer.
+        snapshots = _verify(stage, files, job, check_stage, verify_progress)
         for name, row in entries.items():
             check_stage()
             if row is None:
@@ -387,15 +395,19 @@ def run_folder_download(root, source, path, destination, target, cancelled, prog
 
             try:
                 with _VersionedRanges(source, member, destination, bandwidth, check_stage, version) as ranges:
-                    recover(tracker, child_selection, target_file, ranges, check=check_stage, progress=report)
+                    recover(tracker, child_selection, target_file, ranges, check=check_stage, progress=report,
+                            verify_progress=lambda done, size: verify_progress(
+                                job['bytes'] + done, total, copied=job['bytes'] + version['size']),
+                            verified=snapshots.__setitem__)
             except RestartRequired as error:
                 raise ValueError('A file no longer supports verified resume. Discard this job before starting again.') from error
 
-        progress(phase='Sync complete; verifying local copy', files=len(files), total_files=len(files), done=total, total=total)
+        verify_progress(total, total, copied=total, status='Checking the source before publishing the folder…')
         if sha256(_encode(_manifest(source, path, destination, bandwidth, check_stage, cancelled))).hexdigest() != manifest:
             raise ValueError('The remote folder changed. Discard the interrupted job before starting again.')
         directories = _check_tree(stage, entries, check_stage)
-        snapshots = _verify(stage, files, job, check_stage)
+        if job['done'] != len(files) or job['bytes'] != total or len(snapshots) != len(files):
+            raise ValueError('The staged folder does not have a verified copy of every file.')
         for folder in reversed(directories):
             check_stage()
             _sync_directory(folder)
