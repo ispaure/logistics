@@ -122,6 +122,19 @@ func (c *comparison) snapshot() map[string]any {
 	return map[string]any{"changes": rows, "fingerprint": hex.EncodeToString(hash.Sum(nil))}
 }
 
+func (c *comparison) previewChanges() [][]string {
+	c.Lock()
+	rows := make([][]string, 0)
+	for name, kind := range c.changes {
+		if kind != "match" {
+			rows = append(rows, []string{kind, name})
+		}
+	}
+	c.Unlock()
+	sort.Slice(rows, func(i, j int) bool { return rows[i][1] < rows[j][1] })
+	return rows
+}
+
 func mirrorReview(ctx context.Context, name, p, identity, localPath, run string, push bool) (any, error) {
 	c := &comparison{run: run, changes: map[string]string{}, revisions: map[string]string{}}
 	opts, _ := ctx.Value(transferOptionsKey{}).(transferOptions)
@@ -162,7 +175,9 @@ func reviewProgress(input string, clear bool) string {
 		comparisonState.Unlock()
 		result = map[string]any{"changes": [][]string{}}
 		if !clear && c != nil && c.run == request.Run {
-			result = c.snapshot()
+			// Partial UI rows never authorize transfer. The final snapshot
+			// still fingerprints and retains the entire comparison.
+			result = map[string]any{"changes": c.previewChanges()}
 		}
 	}
 	reply := map[string]any{"ok": err == nil, "result": result}

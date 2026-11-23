@@ -105,6 +105,8 @@ def progress_model(state):
     return dict(mode='progress', operation=operation, source=source, destination=destination,
         workspace=workspace_name(source, destination, operation), phase=phase, busy=state.busy,
         message=state.message, status={'stopping': 'Stopping transfer…',
+            'scan': ('Checking local storage for links…' if values.get('phase') == 'Inspecting local transfer storage'
+                     else 'Finding and comparing files…' if values.get('phase') else 'Preparing transfer…'),
             'verify': values.get('verification_status', 'Verifying the destination…')}.get(phase,
             'Removing destination entries…' if removing else 'Copying files…'),
         percentage=percentage, done=values.get('done', 0), total=values.get('total', 0),

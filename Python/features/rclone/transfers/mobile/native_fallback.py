@@ -140,13 +140,17 @@ class NativeTransferFallback(toga.Box):
         buttons = []
         if mode == 'progress':
             phase = model.get('phase', 'idle')
-            self.title.text = {'idle': 'Transfers', 'complete': 'Transfer complete',
+            title = {'idle': 'Transfers', 'complete': 'Transfer complete',
                 'failed': 'Transfer stopped', 'cancelled': 'Transfer cancelled',
                 'conflict': 'Files changed during sync'}.get(phase, {
                     'Download': 'Downloading', 'Pull': 'Pulling', 'Push': 'Pushing',
                 }.get(model.get('operation'), 'Transferring'))
-            self.status.text = progress_status(model)
-            show_card = phase != 'idle' or self.status.text != 'No transfer is running.'
+            status = progress_status(model)
+            if getattr(self.title, '_settings_source_text', self.title.text) != title:
+                self.title.text = title
+            if getattr(self.status, '_settings_source_text', self.status.text) != status:
+                self.status.text = status
+            show_card = phase != 'idle' or status != 'No transfer is running.'
             if show_card and self.card.parent is None:
                 self.body.insert(0, self.card)
             elif not show_card and self.card.parent is self.body:
@@ -282,7 +286,9 @@ class NativeTransferFallback(toga.Box):
 
     def render_progress_summary(self, model, phase):
         percentage = model.get('percentage')
-        self.amount.text = f'{percentage:.0f}%' if percentage is not None else ''
+        amount = f'{percentage:.0f}%' if percentage is not None else ''
+        if self.amount.text != amount:
+            self.amount.text = amount
         stage = {'scan': 0, 'transfer': 1, 'verify': 2, 'complete': 3}.get(phase)
         if self.progress_stage != stage:
             self.progress_stage = stage
@@ -525,7 +531,7 @@ def progress_status(model):
     if model.get('busy'):
         if model.get('retrying'):
             return f"Retrying · Attempt {model.get('attempt', 0)} of {model.get('max_attempts', 0)}"
-        return {'scan': 'Checking the source and destination…',
+        return {'scan': model.get('status') or 'Finding and comparing files…',
                 'verify': model.get('status') or 'Verifying the destination…',
                 'stopping': 'Stopping transfer…'}.get(phase, model.get('status', 'Copying files…'))
     return model.get('message') or model.get('status') or 'No transfer is running.'

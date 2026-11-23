@@ -67,6 +67,9 @@ func mirrorRun(ctx context.Context, name, p, identity, localPath, run string, pu
 		return 0, errors.New("linked sync storage is not supported")
 	}
 	if !missing {
+		if review == nil {
+			mirrorPhase(run, "Inspecting local transfer storage", 0)
+		}
 		err = filepath.WalkDir(localPath, mirrorStorageCheck(ctx, localPath, cipher == nil, push))
 		if err != nil {
 			return 0, fmt.Errorf("checking local sync storage: %w", err)

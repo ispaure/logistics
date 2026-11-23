@@ -39,6 +39,21 @@ func TestLargeComparisonKeepsEveryRowAndRevision(t *testing.T) {
 	}
 }
 
+func TestReviewPreviewOmitsMatchesButFinalSnapshotKeepsThem(t *testing.T) {
+	c := &comparison{
+		changes:   map[string]string{"same.txt": "match", "copy.txt": "add"},
+		revisions: map[string]string{"same.txt": "revision-1", "copy.txt": "revision-2"},
+	}
+	preview := c.previewChanges()
+	if len(preview) != 1 || preview[0][0] != "add" || preview[0][1] != "copy.txt" {
+		t.Fatal("unexpected preview", preview)
+	}
+	full := c.snapshot()
+	if len(full["changes"].([][]string)) != 2 || full["fingerprint"] == "" {
+		t.Fatal("final comparison dropped unchanged entry or its fingerprint", full)
+	}
+}
+
 func TestMirrorReviewUsesSyncComparisonWithoutWriting(t *testing.T) {
 	clearSession()
 	t.Cleanup(clearSession)
