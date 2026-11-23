@@ -145,13 +145,19 @@ class LinksImagesVoicesProbe(LogisticsMobile):
         await self.screenshot('16-tiles')
         entry = next(entry for entry in browser.entries if entry.label == 'Texture.PNG')
         await browser.select(entry)
+        route = list(self.routes.screens['files'])
         self.show_file_details()
-        await self.until(lambda: any(isinstance(view, toga.ImageView) for view in browser.info.children),
-                         'File information thumbnail missing')
+        panel = browser.details_panel
+        assert panel is not None and panel.overlay is not None
+        await self.until(lambda: any(isinstance(view, toga.ImageView) for view in panel.preview.children),
+                         'File details panel thumbnail missing')
         await self.screenshot('16-information')
         await rotate(self, 'landscape-left')
         await self.screenshot('16-landscape-left')
         await rotate(self, 'portrait')
+        panel.hide()
+        assert browser.details_panel is None and self.routes.screens['files'] == route
+        assert browser.selected == entry.identity
         loader = browser.thumbnails.load
         await asyncio.gather(*tuple(browser.tasks), return_exceptions=True)
         image_row = provider.entry('Texture.PNG')
