@@ -62,7 +62,7 @@ def exercise(app, output, env, *, project, bundle, runtime_id, result_name, **_o
         if code or not result.is_file():
             raise RuntimeError(f'File drag XCTest or byte verification failed (XCTest exit {code}).')
         if json.loads(result.read_text()) != dict(
-                list_spring_opened=True, tiles_spring_opened=True, destination_bytes_match=True):
+                list_spring_opened=True, tiles_spring_opened=True, destination_bytes_match=True, batch_move_verified=True):
             raise RuntimeError('File drag fixture did not verify both layouts and moved bytes.')
     finally:
         devices.cleanup_ios_probe(client, udid, name, bundle, output, installed=installed)

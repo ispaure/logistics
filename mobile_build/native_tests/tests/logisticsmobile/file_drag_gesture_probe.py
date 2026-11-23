@@ -53,11 +53,26 @@ class FileDragGestureProbe(NotebookProbe):
                 assert self.file_path == 'Drop destination', 'Tile hover did not open the folder'
                 assert (root / 'Drop destination/Tile source.txt').read_text() == 'Tile drag'
                 (cache / 'file-drag-tiles-opened.txt').write_text(self.file_path)
-                (cache / 'file-drag-result.json').write_text(json.dumps(
-                    {'list_spring_opened': True, 'tiles_spring_opened': True, 'destination_bytes_match': True}))
+                break
+            await asyncio.sleep(.1)
+        else:
+            raise AssertionError('Tile move did not complete')
+
+        destination = root / 'Drop destination' / 'Group destination'
+        destination.mkdir()
+        self.file_browser._show_mode('List')
+        assert await self.browse_files()
+        for _ in range(450):
+            if (destination / 'Tile source.txt').exists():
+                assert (destination / 'Tile source.txt').read_text() == 'Tile drag'
+                assert (destination / 'List source/nested.txt').read_text() == 'List drag'
+                assert not (destination.parent / 'Tile source.txt').exists()
+                assert not (destination.parent / 'List source').exists()
+                (cache / 'file-drag-result.json').write_text(json.dumps({'list_spring_opened': True,
+                    'tiles_spring_opened': True, 'destination_bytes_match': True, 'batch_move_verified': True}))
                 return
             await asyncio.sleep(.1)
-        raise AssertionError('Tile move did not complete')
+        raise AssertionError('Group move did not complete')
 
 
 def main():

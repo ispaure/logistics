@@ -26,6 +26,8 @@ def file_list_icon(folder):
 
 class RecycledFileList(RecycledList):
     _checking_rows = False
+    checked_indices = frozenset()
+    selection_indicators = None
 
     def __init__(self, *, row_kind='File', icon_kind='documents', icon_size=28, title_lines=1,
                  row_height=None, body_text=BODY_TEXT, caption_text=CAPTION_TEXT, selection_role='hover', **kwargs):
@@ -54,23 +56,59 @@ class RecycledFileList(RecycledList):
         app._recycled_file_lists.add(self)
 
     def show_checked_rows(self, active, indices):
-        if self.factory.DetailedList.__module__.startswith('toga_android.'):
-            self._checking_rows = active
+        indices = frozenset(indices)
+        was_active = self._checking_rows
+        changed = indices ^ self.checked_indices
+        self._checking_rows, self.checked_indices = active, indices
+        backend = self.factory.DetailedList.__module__
+        if backend.startswith('toga_iOS.'):
+            if active != was_active:
+                self.selection_indicators = self._apple_indicators() if active else None
+            if active != was_active or changed:
+                self._impl.refresh_selection_indicators(None if active != was_active else changed)
+        elif backend.startswith('toga_android.'):
             from android.widget import AbsListView
             native = self._impl.native
             mode = AbsListView.CHOICE_MODE_MULTIPLE if active else AbsListView.CHOICE_MODE_SINGLE
             if native.getChoiceMode() != mode:
                 native.clearChoices()
                 native.setChoiceMode(mode)
+                icons = self._android_indicators(native) if active else (None, None)
+                native.setSelectionIndicators(active, *icons)
             if active:
                 native.clearChoices()
                 for index in indices:
                     native.setItemChecked(index, True)
                 native.invalidateViews()
 
+    @staticmethod
+    def _apple_indicators():
+        from rubicon.objc import ObjCClass
+        from commonUtils.ui.native.icons import apple_symbols
+        scale = float(ObjCClass('UIScreen').mainScreen.scale)
+        return tuple(apple_symbols((symbol,), scale).imageWithTintColor(apple_color(role), renderingMode=1)
+                     for symbol, role in (('circle', 'muted'), ('checkmark.circle.fill', 'accent')))
+
+    @staticmethod
+    def _android_indicators(native):
+        from android.graphics import Bitmap, Canvas
+        from .control_icons import menu_drawable
+        context = native.getContext()
+        extent = round(24 * context.getResources().getDisplayMetrics().density)
+        images = []
+        for name in ('select_item', 'selected_item'):
+            icon = menu_drawable(name, context)
+            icon.setTint(-1)
+            inset = max(1, round(extent / 12))
+            icon.setBounds(inset, inset, extent - inset, extent - inset)
+            image = Bitmap.createBitmap(extent, extent, Bitmap.Config.ARGB_8888)
+            icon.draw(Canvas(image))
+            images.append(image)
+        return tuple(images)
+
     @property
     def selection(self):
-        if self._checking_rows:
+        if self._checking_rows and self.factory.DetailedList.__module__.startswith('toga_android.'):
             # The native click selects exactly the activated row before
             # calling Toga. Android's single-selection getter is disabled in
             # multiple choice mode, so retrieve the clicked position directly.
@@ -80,15 +118,6 @@ class RecycledFileList(RecycledList):
             return None
         return super().selection
 
-    def update_checked_title(self, row, title):
-        row.title = title
-        if self.factory.DetailedList.__module__.startswith('toga_iOS.'):
-            from toga_iOS.libs import NSIndexPath
-            path = NSIndexPath.indexPathForRow(row.index, inSection=0)
-            cell = self._impl.native.cellForRowAtIndexPath(path)
-            if cell is not None:
-                cell.textLabel.text = title
-                cell.accessibilityLabel = title + ('. Folder' if row.folder else '. ' + self.row_kind)
 
 
 def summary_list(*, kind, icon_kind, on_select, **kwargs):

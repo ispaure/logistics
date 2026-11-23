@@ -281,13 +281,14 @@ class FilesUI:
         browser_command(self.file_actions_button)
         self.file_browser.location_bar.add(self.file_browser.view_switch, self.file_actions_button)
         self.file_checked = {}
-        from .appearance import action_button, surface
+        from .appearance import accessible_name, action_button, surface
         self.file_selection_count = toga.Label('0 selected', style=Pack(flex=1, font_size=14, margin_left=8))
         from .control_icons import button_icons
         self.file_move_button = button_icons(action_button(toga.Button(
             'Move…', on_press=self.move_checked_files, style=Pack(height=48))), [('move_file', '')])
-        self.file_archive_button = icon_button('archive', 'Archive selected items',
-            on_press=self.create_file_archive, enabled=False)
+        self.file_archive_button = action_button(toga.Button('Archive', on_press=self.create_file_archive,
+            enabled=False, style=Pack(height=48)))
+        accessible_name(self.file_archive_button, 'Archive selected items')
         self.file_select_done = icon_button('done', 'Done selecting items', on_press=self.end_file_selection)
         self.file_select_bar = surface(toga.Box(children=[self.file_selection_count, self.file_move_button,
             self.file_archive_button, self.file_select_done], style=Pack(direction=ROW, align_items=CENTER,

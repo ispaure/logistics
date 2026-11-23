@@ -16,7 +16,7 @@ from weakref import ref
 
 import toga
 from toga.style import Pack
-from toga.style.pack import ROW, START
+from toga.style.pack import CENTER, ROW, START
 
 from commonUtils.ui.native.presentation import allow_label_to_shrink
 
@@ -377,14 +377,21 @@ class LocalFileBrowser(FileBrowser):
             name = entry.payload.get('display_name') or PurePosixPath(entry.label).name
             backend = type(button._impl).__module__
             command = _tile_menu(name, partial(self._tile_actions, entry), backend)
-            command._selection_display = None
             card._tile_command = command
-            self._show_tile_selection(entry, command)
+            card._selection_display = object()
+            circle = card._tile_selection = icon_button('select_item', 'Select ' + name,
+                on_press=partial(self._select_pressed, entry))
+            surface(circle, background='transparent', foreground='accent', outlined=False)
+            button.style.flex = 1
+            card.remove(button)
+            card.add(toga.Box(children=[circle, button],
+                style=Pack(direction=ROW, height=72, align_items=CENTER)))
+            self._show_tile_selection(entry, card)
             card.remove(image_box)
             image_box.style.flex = 1
             card.insert(0, toga.Box(children=[image_box, command],
                                     style=Pack(direction=ROW, height=96, align_items=START)))
-            controls.append(command)
+            controls.extend((command, circle))
             if backend.startswith('toga_iOS.'):
                 if hasattr(self, '_item_commands'):
                     self._attach_tile_menu(command, entry)
@@ -408,25 +415,23 @@ class LocalFileBrowser(FileBrowser):
         if self.mode == 'Tiles':
             for entry, card, _, _, _ in self._tile_cards.values():
                 if hasattr(card, '_tile_command'):
-                    self._show_tile_selection(entry, card._tile_command)
+                    self._show_tile_selection(entry, card)
 
-    def _show_tile_selection(self, entry, command):
+    def _show_tile_selection(self, entry, card):
         state = entry.identity in self.checked_entries if self.on_check_entry is not None else None
-        if command._selection_display is state:
+        if card._selection_display is state:
             return
-        command._selection_display = state
-        name = entry.payload.get('display_name') or PurePosixPath(entry.label).name
-        symbol, label = (('overflow', 'Actions for ') if state is None else
-                         ('selected_item', 'Deselect ') if state else ('select_item', 'Select '))
-        if type(command._impl).__module__.startswith('toga_android.'):
-            command.text = {'overflow': '⋮', 'selected_item': '✓', 'select_item': '○'}[symbol]
-            accessible_name(command, label + name)
-        else:
-            apply_icon(command, symbol, label + name)
-            if hasattr(command, '_tile_native_menu'):
-                native = command._impl.native
-                native.menu = command._tile_native_menu if state is None else None
-                native.showsMenuAsPrimaryAction = state is None
+        card._selection_display = state
+        command, circle = card._tile_command, card._tile_selection
+        selected_mode = state is not None
+        command.style.update(display='none' if selected_mode else 'pack',
+                             visibility='hidden' if selected_mode else 'visible')
+        circle.style.update(display='pack' if selected_mode else 'none',
+                            visibility='visible' if selected_mode else 'hidden')
+        if selected_mode:
+            name = entry.payload.get('display_name') or PurePosixPath(entry.label).name
+            apply_icon(circle, 'selected_item' if state else 'select_item',
+                       ('Deselect ' if state else 'Select ') + name)
 
     def _attach_tile_menu(self, command, entry):
         from rubicon.objc import Block, ObjCBlock, ObjCClass, ObjCInstance, ns_from_py, objc_id

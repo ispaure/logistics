@@ -95,3 +95,10 @@ and switch. **Use these files** selects existing collection folders after
 checking their paths. To verify file contents during a move, use the copy
 and switch option. See [file storage](../settings/settings.md#file-storage)
 for permissions, deleting an inactive copy and returning to an old location.
+
+## Select several files
+
+Choose **Select items** from the folder or item menu. Tap the circles before
+the filenames or tap the rows. The selection bar shows the number selected and
+the available group actions, including **Move…** and **Archive**. Use **Done**
+to leave selection mode.

@@ -252,7 +252,6 @@ class FileBrowser(RecycledBrowser):
     def __init__(self, *, folder_visible=None, local_search=None, **kwargs):
         self.on_check_entry = None
         self.checked_entries = set()
-        self._displayed_checks = set()
         self._resource_provider = None
         self._release_resource = lambda: None
         from functools import partial
@@ -286,27 +285,9 @@ class FileBrowser(RecycledBrowser):
 
     def highlight_selection(self):
         super().highlight_selection()
-        changed = self.checked_entries | self._displayed_checks
-        self._displayed_checks = set(self.checked_entries)
         if self.mode == 'List':
-            active = self.on_check_entry is not None
-            self.native_list.show_checked_rows(active, (self._list_indices[identity]
-                for identity in self.checked_entries & self._list_indices.keys()))
-            for identity in changed & self._list_rows.keys():
-                row = self._list_rows[identity]
-                name = row.entry.payload.get('display_name') or PurePosixPath(row.entry.label).name
-                title = '✓ ' + name if identity in self.checked_entries else name
-                if row.title != title:
-                    self.native_list.update_checked_title(row, title)
-        else:
-            for identity in changed & self.buttons.keys():
-                button = self.buttons[identity]
-                entry = self.tree.entries[identity]
-                name = entry.payload.get('display_name') or PurePosixPath(entry.label).name
-                title = '✓ ' + name if identity in self.checked_entries else name
-                if button.text != title:
-                    button.text = title
-                self.presentation.middle_filename(button)
+            self.native_list.show_checked_rows(self.on_check_entry is not None,
+                (self._list_indices[identity] for identity in self.checked_entries & self._list_indices.keys()))
 
     def clear_selection(self):
         """Retire contextual selection without rebuilding the retained listing."""
