@@ -102,4 +102,4 @@ window.notebookInkUpdate = function(patch) {
 };
 
 // Hosts must drain native-bound ink before navigating away from an embedded canvas.
-window.notebookIdle = () => !busy && !queue.length && active === null;
+window.notebookIdle = () => !busy && !queue.length && active === null && !cutoutPending;

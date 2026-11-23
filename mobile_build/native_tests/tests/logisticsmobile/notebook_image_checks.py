@@ -237,7 +237,22 @@ class ImageWorkflow:
         await self.evaluate("$('pdfBackground').src=window.imageQAOriginalBackground;true")
         await self.wait("$('pdfBackground').complete && $('pdfBackground').naturalWidth!==100", 'PDF background restore did not decode')
         self.cases.append('capture preserves displayed background aspect ratio and letterboxing')
+        await self.evaluate(r'''(()=>{
+          const background=$('pdfBackground'), original=background.decode.bind(background);
+          window.imageQABackgroundDecoded=false;
+          background.decode=async()=>{
+            try {
+              await original();
+              await new Promise(resolve=>setTimeout(resolve,50));
+              window.imageQABackgroundDecoded=true;
+            } finally {
+              delete background.decode;
+            }
+          };
+          return true;
+        })()''')
         await self.action("imageQA.captureMode(true);$('newCutout').click();imageQA.gesture([[100,100],[500,100],[500,350],[350,420],[100,420],[100,100]])")
+        assert await self.js('return window.imageQABackgroundDecoded'), 'Capture did not await foreground PDF decode'
         clip = await self.decoded_clip('Clipboard PNG did not decode')
         # Pointer coordinates round through each WebView's viewport scale.
         assert abs(clip['width']-400)<=1 and abs(clip['height']-320)<=1, clip

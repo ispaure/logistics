@@ -5,6 +5,7 @@
 // and native image quads travel through the same durable command queue as ink.
 let imageClipboard = null, imageSelection = null, imageGesture = null, forceImageLasso = false;
 const imageCache = new Map();
+let cutoutPending = false;
 const captureTools = document.createElement('div');
 captureTools.className = 'capture-tools';
 captureTools.innerHTML = '<button id="newCutout" type="button">New cutout</button><button id="pasteImage" type="button">Paste</button><label class="image-import">Add image<input id="imageFile" type="file" accept="image/png,image/jpeg" hidden></label><span id="imageActions" hidden><button id="copyImage" type="button">Copy</button><button id="cutImage" type="button">Cut</button><button id="imageSmaller" type="button" aria-label="Scale image down">− Size</button><button id="imageLarger" type="button" aria-label="Scale image up">+ Size</button><button id="imageRotate" type="button">Rotate 15°</button><select id="imageArrange" aria-label="Arrange selected image"><option value="">Arrange…</option><option value="forward">Bring forward</option><option value="backward">Send backward</option><option value="front">Bring to front</option><option value="back">Send to back</option></select><button id="deleteImage" type="button">Delete image</button></span>';
@@ -66,7 +67,7 @@ function imageRender() {
   }
   $('capture').classList.toggle('active', mode === 'capture');
   $('capture').setAttribute('aria-pressed', String(mode === 'capture'));
-  $('pasteImage').disabled = !imageClipboard || busy || state.read_only || !!state.warning || state.password_required;
+  $('pasteImage').disabled = !imageClipboard || cutoutPending || busy || state.read_only || !!state.warning || state.password_required;
   $('imageActions').hidden = !selectedPicture() || mode !== 'capture';
 }
 function paintPicture(p, target = ctx, outline = true, img = imageCache.get(p.src)) {
@@ -125,9 +126,9 @@ $('capture').onclick = () => {
   if (typeof syncChrome === 'function') syncChrome(); imageRender(); draw();
   $('status').textContent = mode === 'capture' ? 'Lasso to copy a cutout. Tap an image to move it; drag its corner to scale or upper handle to rotate.' : state.save_status
 };
-$('newCutout').onclick = () => { if(active!==null || busy) return; forceImageLasso=true; imageSelection=null; draw(); $('status').textContent='Lasso any area, including inside an image, to copy a new cutout.' };
+$('newCutout').onclick = () => { if(active!==null || cutoutPending || busy) return; forceImageLasso=true; imageSelection=null; draw(); $('status').textContent='Lasso any area, including inside an image, to copy a new cutout.' };
 $('pasteImage').onclick = () => {
-  if (!imageClipboard || busy || state.read_only || state.warning || state.password_required) return;
+  if (!imageClipboard || cutoutPending || busy || state.read_only || state.warning || state.password_required) return;
   mode='capture'; imageSelection=null;
   const {src, width, height} = imageClipboard, x=(state.width-width)/2, y=Math.max(0,(Math.min(state.height,1872)-height)/2);
   const crossPage = imageClipboard.sourcePageId && imageClipboard.sourcePageId !== imagePageIdentity();
@@ -168,20 +169,35 @@ $('imageFile').onchange = async () => {
     imageClipboard={src:boundedPNG(surface),width:surface.width,height:surface.height}; $('pasteImage').onclick()
   } catch(error) { $('status').textContent=error.message || 'Unable to open image.' }
 };
-function captureCutout(path) {
-  if(path.length<3) return;
+async function captureCutout(path) {
+  if(path.length<3 || cutoutPending) return;
   const left=Math.max(0,Math.floor(Math.min(...path.map(p=>p[0])))),top=Math.max(0,Math.floor(Math.min(...path.map(p=>p[1]))));
   const width=Math.min(state.width,Math.ceil(Math.max(...path.map(p=>p[0]))))-left,height=Math.min(state.height,Math.ceil(Math.max(...path.map(p=>p[1]))))-top;
   if(width<2 || height<2) return;
   if((state.images||[]).some(p=>imageVisible(p) && !imageCache.get(p.src)?.complete)) { $('status').textContent='Wait for images to load before capturing.'; return }
+  const bg = $('pdfBackground');
+  if (state.background) {
+    const source = bg.src, page = state;
+    cutoutPending = true;
+    imageRender();
+    try {
+      // WebKit can retain complete and naturalWidth after the decoded pixels
+      // have been discarded. Wait for real decoded pixels before drawing.
+      await bg.decode();
+    } catch {
+      if (state === page && bg.src === source && mode === 'capture')
+        $('status').textContent = 'Unable to load the background for this cutout.';
+      return;
+    } finally {
+      cutoutPending = false;
+      imageRender();
+    }
+    if (state !== page || bg.src !== source || mode !== 'capture' || busy || active !== null ||
+        state.password_required || state.read_only || state.warning) return;
+  }
   const surface=document.createElement('canvas'),ratio=Math.min(1,Math.sqrt(4*1024*1024/(width*height)));
   surface.width=Math.max(1,Math.ceil(width*ratio)); surface.height=Math.max(1,Math.ceil(height*ratio));
   const g=surface.getContext('2d');g.scale(ratio,ratio);g.translate(-left,-top);g.beginPath();g.moveTo(...path[0].slice(0,2));for(const p of path.slice(1))g.lineTo(p[0],p[1]);g.closePath();g.clip();g.fillStyle='white';g.fillRect(left,top,width,height);
-  const bg = $('pdfBackground');
-  if (state.background && (!bg.complete || !bg.naturalWidth)) {
-    $('status').textContent = 'Wait for the background to load before capturing.';
-    return;
-  }
   paintBackground(g, bg);
   const selection=imageSelection; imageSelection=null;const previous=selected;selected=new Set();
   try { paintOrderedInk(sceneItems().filter(imageVisible), g, false) } finally { imageSelection=selection;selected=previous }
@@ -190,7 +206,7 @@ function captureCutout(path) {
 const imageDown=canvas.onpointerdown,imageMove=canvas.onpointermove,imageUp=canvas.onpointerup,imageCancel=canvas.onpointercancel;
 canvas.onpointerdown = e => {
   if(mode!=='capture') return imageDown(e);
-  e.preventDefault(); if(active!==null || busy || state.warning || state.read_only || state.password_required || (e.pointerType==='touch' && penTouchBlocked()) || (e.pointerType==='pen' && state.native_pen && e.isTrusted && !e.nativePen)) return;
+  e.preventDefault(); if(active!==null || cutoutPending || busy || state.warning || state.read_only || state.password_required || (e.pointerType==='touch' && penTouchBlocked()) || (e.pointerType==='pen' && state.native_pen && e.isTrusted && !e.nativePen)) return;
   const q=coord(e),current=selectedPicture(),radius=16*state.width/canvas.getBoundingClientRect().width;
   let kind='move',hit=null;
   if(current && !forceImageLasso) { const handles=imageHandles(current);const i=handles.findIndex(p=>Math.hypot(p[0]-q[0],p[1]-q[1])<radius);if(i>=0) { hit=current;kind=i===0?'scale':'rotate' } }
