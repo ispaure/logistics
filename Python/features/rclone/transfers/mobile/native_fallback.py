@@ -444,7 +444,7 @@ def review_fields(model):
     counts = model.get('counts', {})
     return [
         (('Add', f"{counts.get('add', 0):,}"), ('Replace', f"{counts.get('replace', 0):,}")),
-        (('Delete', f"{counts.get('delete', 0):,}"), ('Remove empty folders', f"{counts.get('cleanup', 0):,}")),
+        (('Delete', f"{counts.get('delete', 0):,}"), ('Local cleanup', f"{counts.get('cleanup', 0):,}")),
     ]
 
 
