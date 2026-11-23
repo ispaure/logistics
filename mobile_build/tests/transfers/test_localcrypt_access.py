@@ -589,6 +589,72 @@ class LocalCryptAccessTests(unittest.TestCase):
         self.assertEqual(memory.get(0, ('share', '')), snapshot)
         self.assertEqual(len(memory.rows), 4096)
 
+    def test_batched_cache_reuses_encrypted_names_and_keeps_copy_budgets_separate(self):
+        from contextlib import closing
+        from sqlite3 import connect
+        from features.rclone.mobile.credential_state import NativeCredentialState
+        from mobile_build.tests.transfers.test_credential_document_lists import ListBridge
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            client = Client()
+            client.credential_state = NativeCredentialState()
+            client.directory_index_root = root / 'cache'
+            client.connection_identity = lambda remote: 'b' * 64
+            bridge = ListBridge()
+            bridge.unlock(remote='Secret')
+            bridge.package_records[0]['crypt_identities']['Secret'] = 'a' * 64
+            client.package_records = bridge.package_records
+            native = client.request
+
+            def request(action, **values):
+                if action.startswith('document_lists_'):
+                    return bridge.request(action, **values)
+                return native(action, **values)
+
+            def scan(name, prefix):
+                provider = self.provider(root / name, client)
+                try:
+                    with provider.operation(lambda: False):
+                        for number in range(35):
+                            folder = f'{prefix}-{number}'
+                            (provider.root / folder).mkdir()
+                            (provider.root / folder / 'private-note.md').touch()
+                        provider.search_listing(names_only=True)
+                        for number in range(35):
+                            provider.search_listing(f'{prefix}-{number}', names_only=True)
+                finally:
+                    provider.close()
+
+            with patch.object(client, 'request', side_effect=request) as calls:
+                scan('copy-one', 'secret-folder')
+                first, = (client.directory_index_root / 'copies').glob('*.sqlite3')
+                original = first.read_bytes()
+                self.assertNotIn(b'secret-folder', original)
+                self.assertNotIn(b'private-note.md', original)
+                with closing(connect(first)) as database:
+                    self.assertEqual(database.execute('SELECT count(*) FROM folders').fetchone()[0], 36)
+                    self.assertEqual(database.execute('SELECT count(*) FROM batches').fetchone()[0], 2)
+
+                client.credential_state.publish('clear', {}, {})
+                reopened = self.provider(root / 'copy-one', client)
+                self.addCleanup(reopened.close)
+                calls.reset_mock()
+                with reopened.operation(lambda: False):
+                    for number in range(35):
+                        rows = reopened.cached_search_listing(f'secret-folder-{number}', cancelled=lambda: False)
+                        self.assertEqual(rows[0]['name'], 'private-note.md')
+                self.assertEqual(sum(call.args[0] == 'document_lists_open' for call in calls.call_args_list), 2)
+                reopened.close()
+                client.credential_state.publish('clear', {}, {})
+
+                with patch('features.rclone.localcrypt.cache_batches._MAX_BATCHES', 1):
+                    scan('copy-two', 'different-folder')
+                second, = set((client.directory_index_root / 'copies').glob('*.sqlite3')) - {first}
+                with closing(connect(second)) as database:
+                    self.assertEqual(database.execute('SELECT count(*) FROM batches').fetchone()[0], 1)
+                self.assertEqual(first.read_bytes(), original)
+
     def test_native_write_progress_reports_bytes_and_cancels_without_reading_plaintext(self):
         from threading import Event
         from features.rclone.localcrypt.mobile.resources import write_progress

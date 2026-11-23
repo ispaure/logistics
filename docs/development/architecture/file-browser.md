@@ -132,7 +132,10 @@ shared index worker.
 The desktop coordinator keeps `directory-index.jobs.sqlite3` and
 `directory-index.jobs.lock` next to its index. Mobile startup retires the former
 app-private coordinator database and its sidecars. LocalCrypt name records
-belong to the credential's `Cache/LocalCryptNames` store.
+belong to the credential's `Cache/LocalCryptNames` store. Mobile keeps a
+separate SQLite cache per copy and credential package. SQLite stores opaque
+keys and credential-sealed batches. Filename data is decrypted for search
+under the active credential, and retention stays within that copy's cache.
 
 ### Desktop process lifetime
 

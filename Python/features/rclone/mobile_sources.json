@@ -5,6 +5,7 @@
     "localcrypt/__init__.py",
     "localcrypt/note_lookup.py",
     "localcrypt/directory_index.py",
+    "localcrypt/cache_batches.py",
     "localcrypt/path_batches.py",
     "access.py",
     "credential_storage.py",

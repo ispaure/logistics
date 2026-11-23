@@ -176,8 +176,10 @@ class CryptFiles(CryptNoteLookup, CryptContentProvider, LocalFiles):
         if index is not None:
             index.close()
 
+    @contextmanager
     def operation(self, cancelled):
-        return self._access.operation(cancelled)
+        with self._access.operation(cancelled), self._directory_index.cache_operation(cancelled):
+            yield
 
     def _guard(self, path):
         self._access.check()

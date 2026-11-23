@@ -10,12 +10,13 @@ __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
 from collections import OrderedDict
+from contextlib import contextmanager
 from hashlib import sha256
 import json
 import os
 import re
 import stat
-from threading import RLock
+from threading import RLock, local
 
 from commonUtils.persistence import atomic_write_bytes
 from commonUtils.runtime.operations import check_cancelled
@@ -75,6 +76,7 @@ class DirectoryIndex:
         self.provider, self.folder, self.cipher = provider, folder, cipher
         self.memory, self.scope = memory, scope
         self.rows, self.lock = OrderedDict(), RLock()
+        self._batch_work = local()
         self.closed = False
 
     def close(self):
@@ -90,6 +92,44 @@ class DirectoryIndex:
         self.provider._note_check()
         if self.closed:
             raise ValueError('Encrypted directory index closed.')
+
+    @contextmanager
+    def cache_operation(self, cancelled):
+        """Use one batch session for a mobile traversal and its nested listings."""
+        if self.memory is None or self.folder is None or hasattr(self._batch_work, 'current'):
+            yield
+            return
+        work = self._batch_work.current = {'cancelled': cancelled}
+        try:
+            yield
+            if (store := work.get('store')) is not None:
+                store.flush()
+        finally:
+            if (store := work.get('store')) is not None:
+                store.close()
+            del self._batch_work.current
+
+    def _batch_store(self):
+        work = getattr(self._batch_work, 'current', None)
+        if work is None:
+            return None
+        if 'store' not in work:
+            work['store'] = None
+            try:
+                self._check(work['cancelled'])
+                root = self.provider.root.stat(follow_symlinks=False)
+                identity = [credential_authority(self.provider), self.provider.storage_namespace,
+                            self.cipher.identity, root.st_dev, root.st_ino]
+                key = sha256(json.dumps(identity).encode()).hexdigest()
+                copies = self.folder / 'copies'
+                if any(path.is_symlink() for path in (copies, self.folder, self.folder.parent)):
+                    return None
+                from .cache_batches import EncryptedNameBatches
+                work['store'] = EncryptedNameBatches(copies / f'{key}.sqlite3', self.cipher,
+                                                    lambda: self._check(work['cancelled']))
+            except (OSError, ValueError, RuntimeError):
+                pass
+        return work['store']
 
     def _fingerprint(self, folder, cancelled, inventory=None):
         self.provider._note_guard(folder)
@@ -147,6 +187,9 @@ class DirectoryIndex:
         if len(encrypted) > LIMIT + 2048:
             return None
         record = json.loads(self.cipher.transform(encrypted, decode=True))
+        return self._validated_record(record, scope, path, revision)
+
+    def _validated_record(self, record, scope, path, revision):
         binding = record.get('binding') if isinstance(record, dict) else None
         if (not isinstance(binding, list) or len(binding) != 4 or binding[:3] != [1, scope, path]
                 or (revision is not None and binding[3] != revision)):
@@ -166,6 +209,13 @@ class DirectoryIndex:
     def _read_record(self, file, scope, path, revision=None):
         if file is None:
             return None
+        if (store := self._batch_store()) is not None:
+            try:
+                record = self._validated_record(store.read(scope), scope, path, revision)
+                if record is not None:
+                    return (*record, True)
+            except (ValueError, KeyError, TypeError):
+                pass
         legacy_slot = f'root-{scope[0]}.zip' if not path else f'{int(scope[:3], 16) % 1024:03x}.zip'
         # Read old slots after checking the exact key, and migrate a verified
         # old record when the provider next validates its folder.
@@ -175,7 +225,7 @@ class DirectoryIndex:
             try:
                 record = self._load_record(candidate, scope, path, revision)
                 if record is not None:
-                    return (*record, candidate == file)
+                    return (*record, self.memory is None and candidate == file)
             except (OSError, TypeError, ValueError, KeyError, RuntimeError):
                 continue
         return None
@@ -203,8 +253,12 @@ class DirectoryIndex:
     def _store_record(self, path, revision, rows, folder_revision, cancelled, *, file, scope):
         if file is None:
             return
-        raw = json.dumps(dict(binding=[1, scope, path, revision], rows=rows,
-                              folder_revision=folder_revision)).encode()
+        record = dict(binding=[1, scope, path, revision], rows=rows, folder_revision=folder_revision)
+        if self.memory is not None:
+            if (store := self._batch_store()) is not None:
+                store.add(scope, record, root=not path)
+            return
+        raw = json.dumps(record).encode()
         if len(raw) > LIMIT:
             return
         try:
