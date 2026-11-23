@@ -15,6 +15,7 @@ from pathlib import Path
 
 from commonUtils.formats.iniType import INIFile
 from commonUtils.persistence import atomic_write_bytes
+from .magnifier import normalize_saved_zoom
 from .preference_schema import DEFAULTS, validate as validate_preferences
 
 
@@ -49,6 +50,7 @@ class Preferences:
                 for key in ('markdown_font_size', 'text_font_size', 'epub_font_size'):
                     if not parser.has_option('Mobile', key):
                         self.values[key] = self.values['font_size']
+                self.values['magnifier_zoom'] = normalize_saved_zoom(self.values['magnifier_zoom'])
                 self.validate(self.values)
                 if not parser.has_option('Mobile', 'notes_library_migrated'):
                     disabled = set(json.loads(self.values['disabled_features']))

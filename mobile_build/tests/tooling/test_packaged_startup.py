@@ -101,7 +101,9 @@ for saved_document in (False, True):
     assert app.native_host.state.destination == 'home'
     assert not app._home_status_row.children
     assert app._home_status_row.parent is None
-    assert app.home_actions.children[0].text == 'New Document'
+    creator, = app.home_sections._home_primary_buttons
+    assert creator.control_icon == 'compose' and creator.accessible_name == 'New document'
+    assert creator.parent is app.body.children[0]._destination_actions[0]
     print('PACKAGED_PHASE: locations', flush=True)
     app.show_locations()
     assert app.loop.run_until_complete(app.refresh_folder_hub())

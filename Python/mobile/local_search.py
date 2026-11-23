@@ -20,6 +20,8 @@ def filename_scan_label(cache_phase):
         'checking': 'Checking LocalCrypt filename cache…',
         'cached': 'Searching cached LocalCrypt names…',
         'refreshing': 'Refreshing LocalCrypt filenames…',
+        'device_cached': 'Searching cached filenames…',
+        'device_refreshing': 'Refreshing filename cache…',
     }.get(cache_phase, 'Scanning filenames…')
 
 
@@ -67,6 +69,19 @@ class LocalSearch(IndexedLocalSearch):
         from .local_sources import PhoneFiles
         if (type(provider) in (PhoneFiles, MobileLocalFiles) and not provider.private
                 and not getattr(provider, 'session_only', False) and not getattr(provider, 'remote_storage', False)):
+            if type(provider) is PhoneFiles:
+                from .device_name_cache import device_name_listing
+                cache_phase = ''
+
+                def report_cache(phase):
+                    nonlocal cache_phase
+                    cache_phase = phase
+
+                if (progress := kwargs.get('progress')) is not None:
+                    kwargs['progress'] = lambda result: progress(replace(result, cache_phase=cache_phase))
+                with device_name_listing(provider, self.cache.database.parent, status=report_cache) as children:
+                    return search_resources(provider, directory, query, list_children=children,
+                                            load_match=provider.entry, **kwargs)
             return self._search_names(provider, directory, query, **kwargs)
         if not self.supports(provider):
             return super().search(provider, directory, query, **kwargs)

@@ -11,12 +11,19 @@ __status__ = "Production"
 
 from weakref import WeakKeyDictionary, WeakSet, ref
 
-MIN_ZOOM, MAX_ZOOM, ZOOM_STEP = 150, 300, 10
+MIN_ZOOM, MAX_ZOOM, ZOOM_STEP = 150, 300, 25
+DEFAULT_ZOOM = 200
 LEVELS = tuple(range(MIN_ZOOM, MAX_ZOOM + 1, ZOOM_STEP))
-RANGE_ERROR = 'Choose magnifier zoom from 150–300%, in 10 percentage point steps.'
+RANGE_ERROR = 'Choose magnifier zoom from 150–300%, in 25 percentage point steps.'
+_LEGACY_LEVELS = {str(value): str(min(LEVELS, key=lambda level: abs(level - value)))
+                  for value in range(MIN_ZOOM, MAX_ZOOM + 1, 10)}
 _canvases = WeakKeyDictionary()
 _choices = WeakKeyDictionary()
 _preferences = WeakSet()
+
+
+def normalize_saved_zoom(value):
+    return _LEGACY_LEVELS.get(value, value)
 
 
 def refresh(preferences):
@@ -71,6 +78,9 @@ def bind(host, view):
             report(app(), error)
             return False
     for canvas in getattr(view, 'canvases', [view]):
+        if canvas.magnifier_zoom not in LEVELS:
+            # Both native canvases require the active zoom to fit the new grid.
+            canvas.magnifier_zoom = MIN_ZOOM
         canvas.configure_magnifier(MIN_ZOOM, MAX_ZOOM, ZOOM_STEP)
         canvas.magnifier_zoom = int(preferences.values['magnifier_zoom'])
         canvas.on_magnifier_zoom = changed

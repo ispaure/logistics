@@ -396,6 +396,8 @@ class TransferFeedbackTests(TestCase):
         app.show_locations()
         button = app.folder_transfers_button
         self.assertEqual(button.accessible_name, 'Transfers')
+        self.assertEqual(button._impl._surface_roles, ('transparent', 'text', False))
+        self.assertFalse(button._impl._surface_eink_outlined)
         app.transfer_busy = True
         app.transfer_percentage = 42
         app._transfer_cancel = Mock()
@@ -404,6 +406,7 @@ class TransferFeedbackTests(TestCase):
             app.refresh_transfer_status()
             self.assertEqual(list(app._files_status_row.children), [app.folder_source_tabs, button])
             self.assertIn('42%', button.accessible_name)
+            self.assertEqual(button._impl._surface_roles[0], 'transparent')
         button.on_press()
         self.assertEqual(app.routes.screens['files'][-1][0], 'transfers')
         app.routes.back()

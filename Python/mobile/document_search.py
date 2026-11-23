@@ -1,7 +1,8 @@
 """Cancellable filename-only search of the on-device document providers.
 
 Encrypted names and references exist only in this owner and its live widgets.
-No search index, file content reads or remote-storage providers are involved.
+Ordinary device names can use the persistent filename cache. Search reads no
+file contents and excludes remote-storage providers.
 """
 
 # AUTHORSHIP INFORMATION
@@ -14,13 +15,14 @@ __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
 import asyncio
-from contextlib import ExitStack
+from contextlib import ExitStack, nullcontext
 from pathlib import Path, PurePosixPath
 from time import monotonic
 from commonUtils.runtime.operations import OperationCancelled, check_cancelled
 from commonUtils.search.providers import search_resources
 from .folder_listing import FolderListing
 from .files_ui import local_read_available
+from .local_sources import PhoneFiles, device_files_label
 
 
 def scan_local_documents(app, query, *, cancelled=lambda: False, progress=None):
@@ -48,6 +50,7 @@ def _scan_locations(app, roots, query, *, cancelled, progress):
         location_checked = 0
         cache_phase = ''
         consumed = 0
+        location = label
 
         def report_cache(phase):
             nonlocal cache_phase
@@ -74,24 +77,38 @@ def _scan_locations(app, roots, query, *, cancelled, progress):
                                  source=source, private=private, directory=row['directory']))
             consumed = len(result.rows)
             if progress is not None:
-                progress(checked + location_checked, cache_phase, tuple(hits[:50]))
+                progress(checked + location_checked, cache_phase, tuple(hits[:50]), location)
 
         try:
             provider = app.storage_provider(label, roots)
             if getattr(provider, 'remote_storage', False):
                 continue
+            device = type(provider) is PhoneFiles and not provider.private and not getattr(provider, 'session_only', False)
+            if device:
+                location = device_files_label(app)
+                from .device_name_cache import device_name_listing
+                context = device_name_listing(provider, app.private_root / 'Cache', status=report_cache)
+            else:
+                context = nullcontext()
+            if progress is not None:
+                progress(checked, cache_phase, tuple(hits[:50]), location)
             # SharedFiles excludes collection roots here. Its recursive hook
             # otherwise includes them, so use the guarded ordinary list path.
             search_listing = getattr(provider, 'search_listing', None)
             listing = (search_listing or getattr(provider, 'indexed_list', None)
                        or getattr(provider, 'list_names', provider.list))
-            def children(folder, *, cancelled):
-                rows = (search_listing(folder, cancelled=cancelled, cache_status=report_cache)
-                        if search_listing is not None else listing(folder, cancelled=cancelled))
-                return [row for row in rows
-                        if app.folder_path_visible(row['path'], directory=row['directory'])]
-            result = search_resources(provider, '', query, cancelled=cancelled,
-                                      list_children=children, progress=report if progress is not None else None)
+            with context as device_listing:
+                def children(folder, *, cancelled):
+                    if search_listing is not None:
+                        rows = search_listing(folder, cancelled=cancelled, cache_status=report_cache)
+                    else:
+                        rows = (device_listing or listing)(folder, cancelled=cancelled)
+                    return (row for row in rows
+                            if app.folder_path_visible(row['path'], directory=row['directory']))
+
+                result = search_resources(provider, '', query, cancelled=cancelled, list_children=children,
+                                          load_match=provider.entry if device else None,
+                                          progress=report if progress is not None else None)
             report(result)
             failures.extend(result.errors)
         except (OSError, ValueError):
@@ -156,21 +173,23 @@ class DocumentSearch:
         self.stop_local_search()
         work = self.listing.begin()
         last_report = float('-inf')
+        last_location = ''
         first_match_shown = False
         finished = False
 
-        def display_progress(checked, cache_phase, hits):
+        def display_progress(checked, cache_phase, hits, location):
             if not finished and self.listing.accepts(work, private=True):
-                self.publish_progress(checked, cache_phase, hits)
+                self.publish_progress(checked, cache_phase, hits, location)
 
-        def report(checked, cache_phase, hits):
-            nonlocal last_report, first_match_shown
+        def report(checked, cache_phase, hits, location):
+            nonlocal last_report, first_match_shown, last_location
             now = monotonic()
             first_hit = bool(hits) and not first_match_shown
-            if checked and not work.cancel.is_set() and (first_hit or now - last_report >= .25):
+            if not work.cancel.is_set() and (location != last_location or first_hit or now - last_report >= .25):
                 last_report = now
+                last_location = location
                 first_match_shown = first_match_shown or first_hit
-                self.app.loop.call_soon_threadsafe(display_progress, checked, cache_phase, hits)
+                self.app.loop.call_soon_threadsafe(display_progress, checked, cache_phase, hits, location)
 
         async def search():
             nonlocal finished

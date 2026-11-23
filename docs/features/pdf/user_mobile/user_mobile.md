@@ -6,7 +6,7 @@ To add ink, choose **⋯ → Duplicate as .rmdoc to annotate**. This creates a s
 
 Opening requires a readable, unprotected PDF up to 32 MiB and 10,000 pages. Bytes and page images stay in memory until close or credential revocation. Reopening can restore position and zoom. Credential-backed checkpoints are encrypted, and passwordless private checkpoints stay in memory. See [reader state and history clearing](../../../development/architecture/reader-state.md).
 
-In fullscreen, hold the page for about 400 ms and drag to move the magnifier. While holding, tap **+** or **−** with another finger. Zoom ranges from 150% to 300%, shared with comics under **Settings → Books & Comics → Comic & PDF magnifier zoom**.
+In fullscreen, hold the page for about 400 ms and drag to move the magnifier. While holding, tap **+** or **−** with another finger to change zoom by 25 percentage points. Zoom ranges from 150% to 300%, shared with comics under **Settings → Books & Comics → Comic & PDF magnifier zoom**.
 
 ## Document contents
 

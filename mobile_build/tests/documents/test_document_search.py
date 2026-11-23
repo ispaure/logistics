@@ -131,14 +131,15 @@ class LocalDocumentSearchTests(TestCase):
               patch.object(app, 'storage_provider', side_effect=lambda label, roots: roots[label]),
               patch.object(LocalFiles, 'open', side_effect=AssertionError('Search read file content'))):
             hits, failures = scan_local_documents(
-                app, 'nEeDlE', progress=lambda count, phase, preview: progress.append((count, phase, preview)))
+                app, 'nEeDlE', progress=lambda *update: progress.append(update))
         self.assertFalse(failures)
-        checked = [count for count, _, _ in progress]
+        checked = [count for count, _, _, _ in progress]
         self.assertEqual(checked, sorted(checked))
         self.assertEqual(checked[-1], 20)
-        self.assertIn('refreshing', [phase for _, phase, _ in progress])
-        self.assertTrue(any(0 < len(preview) < len(hits) for _, _, preview in progress))
-        self.assertTrue(all(hits[:len(preview)] == list(preview) for _, _, preview in progress))
+        self.assertIn('refreshing', [phase for _, phase, _, _ in progress])
+        self.assertEqual(list(dict.fromkeys(location for _, _, _, location in progress)), list(providers))
+        self.assertTrue(any(0 < len(preview) < len(hits) for _, _, preview, _ in progress))
+        self.assertTrue(all(hits[:len(preview)] == list(preview) for _, _, preview, _ in progress))
         self.assertEqual({hit['location'] for hit in hits}, set(providers))
         self.assertTrue(all(hit['name'] == 'Needle.md' for hit in hits))
         self.assertEqual(next(hit['source'] for hit in hits if hit['private']), dict(
@@ -238,7 +239,7 @@ class LocalDocumentSearchTests(TestCase):
         app.show_documents_hub()
         started, release = Event(), Event()
         def slow(*args, **kwargs):
-            kwargs['progress'](4501, 'cached', ())
+            kwargs['progress'](4501, 'cached', (), 'Fixture - Encrypted Copy')
             started.set()
             release.wait(4)
             return [dict(name='Private stale.md')], []
@@ -253,6 +254,7 @@ class LocalDocumentSearchTests(TestCase):
                 await wait_until(lambda: '4,501 checked' in app.hub_controller()._documents_search_status.text,
                                  timeout=2, interval=.01, message='No progress in the Documents status row')
                 self.assertIn('cached LocalCrypt names', app.hub_controller()._documents_search_status.text)
+                self.assertIn('Fixture - Encrypted Copy', app.hub_controller()._documents_search_status.text)
                 with patch.object(app, 'cloud_client', SimpleNamespace(generation=2)):
                     release.set()
                     await owner.task
@@ -286,26 +288,44 @@ class LocalDocumentSearchTests(TestCase):
                          ['Zulu.txt', 'Alpha.txt'])
         self.assertEqual(hub._documents_search_status.text, '2 matches')
 
-    def test_libraries_are_two_direct_lists_with_bounded_notes_discovery(self):
+    def test_libraries_have_direct_lists_with_bounded_discovery(self):
         app = self.app
         from services.documents.locations import collection_path
-        root = collection_path(app.private_root) / 'One/Vault'
+        from services.documents.migrations.mobile_layout import prepare_android
+        from services.documents.mobile_locations import _enabled, phone_path
+        from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
+        self.addCleanup(_enabled.discard, app.private_root)
+        prepare_android(app.private_root)
+        copies = collection_path(app.private_root)
+        root = copies / 'One/Vault'
         (root / '.obsidian').mkdir(parents=True)
         # Library discovery is bounded; note paths inside a library are not.
         note = root / 'Two/Three/Note.md'
         note.parent.mkdir(parents=True)
         note.write_text('# Note')
         (root.parent / 'Two/Three/TooDeep/.obsidian').mkdir(parents=True)
+        device_library = phone_path(app.private_root) / 'Calibre'
+        for book_library in (device_library, copies / 'One/More Books', copies / 'One/Two/Too Deep'):
+            book_library.mkdir(parents=True)
+            (book_library / 'metadata.db').touch()
+        (root.parent / 'Fake Books/metadata.db').mkdir(parents=True)
+        book_folder = root.parent / 'More Books/Author/Book'
+        book_folder.mkdir(parents=True)
+        epub, _ = make_books(book_folder)
         app.show_documents_hub()
         app.document_view_buttons['Libraries'].on_press()
         async def wait():
             await app._notes_discovery_task
             await app.hub_controller()._document_comics_discovery
+            await app.hub_controller()._document_books_discovery
         app.loop.run_until_complete(wait())
         from mobile_build.tests.workspace.test_hub_documents import widgets, labels
         import toga
         self.assertEqual([w.text for w in app.document_notes_list.children if isinstance(w, toga.Label)][:1], ['Notes'])
         self.assertEqual(labels(app.document_comics_list)[0], 'Comics')
+        self.assertEqual(labels(app.document_books_list), ['Books'])
+        book_rows = [w for w in widgets(app.document_books_list) if isinstance(w, toga.Button)]
+        self.assertEqual([row.text for row in book_rows], ['Calibre', 'More Books'])
         libraries = [w.text for w in widgets(app.document_libraries_list) if isinstance(w, toga.Button)]
         self.assertIn('Vault', libraries)
         self.assertNotIn('TooDeep', libraries)
@@ -316,6 +336,20 @@ class LocalDocumentSearchTests(TestCase):
         self.assertEqual(library.read_text('One/Vault/Two/Three/Note.md'), '# Note')
         self.assertFalse(any(getattr(w, 'text', '') in ('Refresh libraries', 'Open Books & Comics library')
                              for w in widgets(app.document_libraries_list)))
+        app.loop.run_until_complete(book_rows[0].on_press())
+        self.assertEqual(app.file_storage.value, 'Shared files')
+        self.assertEqual(app.file_path, 'Calibre')
+        app.loop.run_until_complete(book_rows[-1].on_press())
+        self.assertEqual(app.native_host.state.destination, 'files')
+        self.assertEqual(app.file_storage.value, 'Local files')
+        self.assertEqual(app.file_path, 'One/More Books')
+        author = next(row for row in app.file_rows.values() if row['directory'])
+        app.loop.run_until_complete(app.browser_file_folder(author))
+        book = next(row for row in app.file_rows.values() if row['directory'])
+        app.loop.run_until_complete(app.browser_file_folder(book))
+        app.browser_file_selected(next(row for row in app.file_rows.values() if row['name'] == epub.name))
+        self.assertTrue(app.loop.run_until_complete(app.read_managed_file()))
+        self.assertEqual(app.private_sessions.active.crypt_reader.kind, '.epub')
 
     def test_encrypted_notes_library_displays_its_nested_name_once(self):
         app = self.app

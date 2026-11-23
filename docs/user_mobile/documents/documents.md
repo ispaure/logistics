@@ -15,7 +15,8 @@ up to three recently closed files, and **See all** opens the full collection
 in Documents. Filenames on both screens can wrap to two lines.
 
 In Documents, use **Recent** to reopen a closed session. **Libraries** shows
-available Notes and Comics libraries. Its **On this device** section lists
+available Notes, Comics and [Books](../../features/books/user_mobile/library.md) libraries.
+Its **On this device** section lists
 app-managed text files and notebooks outside **Open** and **Recent**.
 If a Recent entry fails, find the file in its current folder,
 reconnect its remote, or unlock its credential.
@@ -25,8 +26,9 @@ reconnect its remote, or unlock its credential.
 Browse to a file in [Workspaces](../folder_hub/folder_hub.md). In
 Documents, **Search documents** finds
 on-device filenames and folders, including files you have never opened and
-files in unlocked LocalCrypt copies. Search reports locations it could
-not access. Tap **×** to leave search.
+files in unlocked LocalCrypt copies. The status line shows the current
+location and how many names have been checked. Matches appear as they are
+found. Search reports locations it could not access. Tap **×** to leave search.
 
 From a document or search result with a browsable source, choose
 **••• → Show in folder** to select it in Workspaces. The document remains

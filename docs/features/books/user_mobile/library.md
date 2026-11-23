@@ -1,6 +1,15 @@
 # Books and comics on mobile
 
-## Books and comics
+## Browse a Calibre library
+
+Open **Documents → Libraries → Books** and tap a library to browse it in
+Workspaces. Logistics looks for a `metadata.db` file at each ordinary local
+storage root and up to two folder levels below it. This includes readable
+Rclone Copies. The database serves as a folder marker. Browse the author
+and title folders and tap an EPUB to open it in the reader. Tap the
+**Documents** tab again to rescan after adding a library.
+
+## Browse comics and import individual files
 
 Open **Books & Comics** and tap a configured Local or unlocked LocalCrypt library folder. In its root `remoteConfig.ini`, set `[LogisticsComics]` and `libraries = Comics,Mangas` on separate lines to list those immediate child folders. Existing ComicRack and YACReaderLibrary configurations are also detected. Use **Refresh** after changing configuration or pulling files.
 

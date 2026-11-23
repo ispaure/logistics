@@ -694,7 +694,6 @@ class HubDocumentTests(unittest.TestCase):
         app.show_home()
         content = app.body.children[0].content
         self.assertIsNone(app._home_status_row.parent)
-        self.assertIs(content.children[0], app.home_actions)
         self.assertIsNone(app.home_continue)
         self.assertIn('Focus.md', [getattr(widget, 'text', '') for widget in widgets(content)])
         self.assertFalse(any(getattr(widget, 'accessible_name', '') == 'See all open documents'
@@ -702,9 +701,12 @@ class HubDocumentTests(unittest.TestCase):
         self.assertNotIn('Markdown', labels(content))
         self.assertNotIn('Markdown', labels(app.recent_row(app.editor_view.session, app.session_summary(app.editor_view.session))))
         self.assertNotIn('Markdown', labels(app.session_panel(app.editor_view.session)))
-        actions = app.home_actions
-        self.assertTrue(all(isinstance(button, toga.Button) for button in actions.children))
-        self.assertEqual([button.text for button in actions.children], ['New Document'])
+        header, _ = app.body.children[0]._destination_actions
+        creator, = (button for button in header.children if isinstance(button, toga.Button))
+        self.assertEqual(creator.accessible_name, 'New document')
+        self.assertEqual(creator.control_icon, 'compose')
+        self.assertEqual((creator.style.width, creator.style.height), (48, 48))
+        self.assertNotIn(creator, list(widgets(content)))
         recent = next(widget for widget in widgets(content) if getattr(widget, 'text', '') == 'Focus.md')
         app.loop.run_until_complete(recent.on_press())
         self.assertIs(app.body.children[0], app.document_view)
@@ -713,10 +715,11 @@ class HubDocumentTests(unittest.TestCase):
     def test_home_launch_actions_share_the_unoutlined_accent_style(self):
         with patch('features.images.mobile.burst_camera.available', return_value=True):
             home = self.app.build_home()
-        buttons = {widget.text: widget for widget in widgets(home.content) if hasattr(widget, 'on_press')}
-        for title in ('New Document', 'Burst camera'):
-            with self.subTest(title=title):
-                self.assertEqual(buttons[title]._impl._surface_roles, ('surface', 'accent', False))
+        creator, = home._home_primary_buttons
+        camera = next(widget for widget in widgets(home.content) if getattr(widget, 'text', '') == 'Burst camera')
+        self.assertEqual(creator._impl._surface_roles, ('transparent', 'accent', False))
+        self.assertFalse(creator._impl._surface_eink_outlined)
+        self.assertEqual(camera._impl._surface_roles, ('surface', 'accent', False))
 
     def test_open_document_links_have_direct_close_controls_in_both_views(self):
         import toga
@@ -959,10 +962,12 @@ class HubDocumentTests(unittest.TestCase):
 
     def test_new_document_validation_cancel_and_plain_text(self):
         app = self.app
+        app.show_home()
+        creator, = app.home_sections._home_primary_buttons
         previous = app.current
         count = len(app.store.documents()[0])
         with patch.object(app.main_window, 'dialog', new=AsyncMock(return_value='txt')):
-            app.loop.run_until_complete(app.new_hub_document())
+            app.loop.run_until_complete(creator.on_press())
         form = app.editor_picker()
         for invalid in ('', '../bad'):
             form.save_as_name.value = invalid

@@ -21,7 +21,7 @@ class SyncButton(toga.Button):
         self.renderer = IconRenderer({'transfers': IconSpec(*ICONS['transfers'])}, tint_android=tint_android)
         self.snapshot = None
         from .appearance import surface
-        surface(self, background='hover', foreground='text', outlined=False)
+        surface(self, background='transparent', foreground='text', outlined=False, eink_outlined=False)
 
     def update(self, busy, percentage, complete, *, notified=False):
         progress = None if percentage is None else max(0, min(100, round(percentage)))

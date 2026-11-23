@@ -32,10 +32,12 @@ class MobileFeatureTests(unittest.TestCase):
         app = self.app
         self.assertNotIn('readers', app.__dict__)
         self.assertIsNone(getattr(app, '_notes_discovery_task', None))
+        self.assertIsNone(getattr(app.hub_controller(), '_document_books_discovery', None))
         app.show_documents_hub()
         self.assertEqual(app.documents_view, 'Libraries')
         self.assertIsNotNone(app._notes_discovery_task)
         self.run_async(app._notes_discovery_task)
+        self.run_async(app.hub_controller()._document_books_discovery)
         self.run_async(app.hub_controller()._document_comics_discovery)
 
     def setUp(self):
@@ -111,7 +113,7 @@ class MobileFeatureTests(unittest.TestCase):
 
     def test_disabling_selected_reader_keeps_only_enabled_settings_and_saved_values(self):
         app = self.app
-        app.preferences.save(epub_font_size='24', magnifier_zoom='230')
+        app.preferences.save(epub_font_size='24', magnifier_zoom='225')
         app.show_settings()
         app.settings_navigation.choose('EPUB')
         app.set_feature_enabled('books', False)
@@ -122,7 +124,7 @@ class MobileFeatureTests(unittest.TestCase):
         self.assertFalse(nav.detail_requested)
         self.assertFalse(app.routes.screens['settings'])
         nav.choose('Books & Comics')
-        self.assertEqual(app.magnifier_choice.value, 230)
+        self.assertEqual(app.magnifier_choice.value, 225)
         app.set_feature_enabled('pdf', False)
         self.run_async(asyncio.sleep(0))
         self.assertNotIn('Books & Comics', app.settings_navigation.buttons)
@@ -132,7 +134,7 @@ class MobileFeatureTests(unittest.TestCase):
         nav.choose('EPUB')
         self.assertEqual(app.epub_font_size_choice.value, '24')
         nav.choose('Books & Comics')
-        self.assertEqual(app.magnifier_choice.value, 230)
+        self.assertEqual(app.magnifier_choice.value, 225)
 
     def test_legacy_partial_book_selection_can_enable_the_entire_group(self):
         self.app.preferences.save(disabled_features='["comics"]')

@@ -42,6 +42,12 @@ For format changes, run `python3 dev.py test desktop --exact-file Python/tests/r
 
 ## Find the mobile Books & Comics panel
 
+**Documents → Libraries → Books** uses `mobile/library_ui.py:discover_book_libraries`
+to check ordinary local roots and their first two levels for `metadata.db`.
+The scan runs off the UI thread and stops descending once a folder matches.
+Rows open the existing Workspaces browser at that folder. `test_document_search.py`
+checks the depth limit, marker type and folder navigation.
+
 `Python/mobile/reader_sessions.py` and `reader_ui.py` route to `features/books/mobile/library/catalog_panel.py`. Refresh and Import live in the native toolbar on iOS and the header on Android. Folder rows open Workspaces. `library/index.py` indexes ordinary imports and excludes protected metadata. `test_library_catalog.py` checks discovery and activation.
 
 See [imported metadata publication](../../../development/architecture/document-storage.md#imported-metadata-publication)

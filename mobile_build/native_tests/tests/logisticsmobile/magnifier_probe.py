@@ -174,9 +174,9 @@ class MagnifierProbe(LogisticsMobile):
                 result[name] = dict(buttons=True,bounds=True,shared=True,persisted=True)
             self.show_settings()
             self.settings_navigation.choose('Books & Comics')
-            self.magnifier_choice.value = 230
-            assert comic.magnifier_zoom == pdf.magnifier_zoom == 230
-            assert Preferences(self.private_root).values['magnifier_zoom']=='230'
+            self.magnifier_choice.value = 225
+            assert comic.magnifier_zoom == pdf.magnifier_zoom == 225
+            assert Preferences(self.private_root).values['magnifier_zoom'] == '225'
             for canvas in canvases:
                 canvas.dispose()
                 assert canvas.image is None and canvas.on_magnifier_zoom is None

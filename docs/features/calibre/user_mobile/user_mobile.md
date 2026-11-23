@@ -1,6 +1,9 @@
 # Calibre libraries on mobile
 
-Export or copy an EPUB on desktop, then open or import it through **Books & Comics** on iOS or Android. Calibre library detection, export, format conversion and database synchronization are unavailable on mobile.
+Copy a Calibre library folder with its `metadata.db` to ordinary local storage
+on iOS or Android. Open **Documents → Libraries → Books** to browse its
+folders and read EPUBs. Use Calibre on desktop for export, format conversion
+and database management.
 
 - [Desktop opening and export](../user/user.md)
 - [Mobile book imports and library folders](../../books/user_mobile/library.md)

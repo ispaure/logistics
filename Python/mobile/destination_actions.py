@@ -23,7 +23,7 @@ def prepare(app, view, destination):
         original = view
         view = toga.Box(children=[original], style=Pack(direction=COLUMN, flex=1))
         view.content = getattr(original, 'content', original)
-        if destination == 'home' and hasattr(original, '_home_primary_actions'):
+        if destination == 'home' and hasattr(original, '_home_primary_buttons'):
             view._home_sections = original
             view._home_primary_actions = original._home_primary_actions
             view._home_primary_buttons = original._home_primary_buttons
@@ -48,8 +48,11 @@ def prepare(app, view, destination):
         new = action_button(icon_button('compose', 'New document', on_press=app.new_hub_document))
         new._toolbar_symbol = 'plus'
         buttons.extend([new, search])
-    view._destination_actions = (header, buttons)
-    if destination == 'home' and hasattr(view, '_home_primary_actions'):
+    header_buttons = buttons
+    if destination == 'home' and not app.routes.apple:
+        header_buttons = [*buttons, *getattr(view, '_home_primary_buttons', ())]
+    view._destination_actions = (header, header_buttons)
+    if destination == 'home' and getattr(view, '_home_primary_actions', None) is not None:
         from .fold_layout import is_iphone_duo
         view._home_toolbar_only = is_iphone_duo()
 

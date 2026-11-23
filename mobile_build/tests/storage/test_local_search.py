@@ -94,7 +94,24 @@ class LocalSearchTests(unittest.TestCase):
         self.assertEqual({row['path'] for row in all_files.rows}, {
             'Current/Nested/needle.txt', 'Sibling/needle.txt',
         })
-        self.assertFalse(self.database.exists())
+        from sqlite3 import connect
+        with connect(self.database.parent / 'device-filenames.sqlite3') as connection:
+            inventory = connection.execute('SELECT path, rows FROM folders').fetchall()
+        self.assertNotIn('LocalCrypt', str(inventory))
+        restarted = LocalSearch(self.database)
+        self.addCleanup(restarted.cache.close)
+        updates = []
+        with patch.object(provider, 'list_names', side_effect=AssertionError('Unchanged folder was relisted')):
+            warm = restarted.search(provider, '', 'needle', progress=updates.append)
+        self.assertEqual(warm.rows, all_files.rows)
+        self.assertEqual(updates[0].cache_phase, 'device_cached')
+
+        (provider.root / 'Sibling' / 'needle.txt').unlink()
+        self.assertEqual([row['path'] for row in restarted.search(provider, '', 'needle').rows],
+                         ['Current/Nested/needle.txt'])
+        with patch.object(provider, 'list_names', side_effect=AssertionError('Refreshed cache was discarded')):
+            self.assertEqual([row['path'] for row in LocalSearch(self.database).search(provider, '', 'needle').rows],
+                             ['Current/Nested/needle.txt'])
 
     def test_reopened_database_answers_without_directory_enumeration(self):
         self.prepare()

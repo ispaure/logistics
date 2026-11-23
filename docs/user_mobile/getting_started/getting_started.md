@@ -5,9 +5,9 @@ tablet before connecting an account or bringing in files from another app.
 
 ## Create and save a note
 
-1. Open **Home** and tap **New Document**. On iPhone Duo, look in
-   the **+** button in the toolbar. If plain text is missing, enable
-   **Text Editor** in **Settings → Features**.
+1. Open **Home**. On Android, tap the compose icon in the top-right corner.
+   On iOS, tap **New Document** or the toolbar **+**.
+   If plain text is missing, enable **Text Editor** in **Settings → Features**.
 2. Choose **Plain text (.txt)** and enter a name such as `Friday errands`.
    On a narrow screen, tap **Next**. On a wide screen, use the folder pane
    beside the name.

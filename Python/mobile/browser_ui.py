@@ -284,6 +284,7 @@ class FileBrowser(RecycledBrowser):
         self._index_error = None
         self._index_started = False
         self._submitted_search_epoch = -1
+        self._sorted_search_epoch = -1
         self._search_suspended = False
         self._index_hint = object()
         if local_search is not None:
@@ -366,10 +367,15 @@ class FileBrowser(RecycledBrowser):
 
     def search_progress_text(self, result, visible_count):
         from .local_search import filename_scan_label
+        from .local_sources import PhoneFiles, device_files_label
 
+        name = (device_files_label(toga.App.app) if type(self.search_provider) is PhoneFiles
+                else self.location[0] if isinstance(self.location, tuple) and self.location else '')
+        location = f'{name} · ' if name else ''
         if result.cached:
-            return f'{visible_count:,} cached matches · Checking against storage…'
-        return f'{filename_scan_label(result.cache_phase)} {visible_count:,} found · {result.scanned:,} checked'
+            return f'{location}{visible_count:,} cached matches · Checking against storage…'
+        return (f'{location}{filename_scan_label(result.cache_phase)} '
+                f'{visible_count:,} found · {result.scanned:,} checked')
 
     def _start_local_index(self):
         provider = self.search_provider
@@ -380,8 +386,17 @@ class FileBrowser(RecycledBrowser):
             self._spawn(self._prepare_local_search(provider, self.search_directory, self._index_cancel))
 
     def query_changed(self, widget=None, **kwargs):
+        if widget is self.sort:
+            self._sorted_search_epoch = self.search_epoch
         if not self._search_suspended or widget is self.sort:
             super().query_changed(widget, **kwargs)
+
+    @property
+    def entries(self):
+        if (self.search.value and self.tree is not None and self.tree is not self.folder_tree
+                and self._sorted_search_epoch != self.search_epoch):
+            return [self.tree.entries[key] for key in self.tree.children.get(self.tree.root, ())]
+        return super().entries
 
     async def _prepare_local_search(self, provider, directory, cancelled):
         from commonUtils.runtime.operations import OperationCancelled

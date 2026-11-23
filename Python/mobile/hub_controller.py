@@ -59,6 +59,7 @@ class HubController(HubUI):
         "document_libraries_list",
         "document_favourites_list",
         "document_comics_list",
+        "document_books_list",
         "home_actions",
         "home_content",
         "home_continue",
@@ -79,7 +80,7 @@ class HubController(HubUI):
         search = getattr(self, '_documents_file_search', None)
         if search is not None:
             search.stop_local_search()
-        for name in ('_document_comics_discovery', '_document_search_delay'):
+        for name in ('_document_books_discovery', '_document_comics_discovery', '_document_search_delay'):
             task = getattr(self, name, None)
             if task is not None:
                 task.cancel()
@@ -88,7 +89,8 @@ class HubController(HubUI):
         self.stop_local_search()
         from .notes_discovery import cancel
         cancel(self.app)
-        for name in ('document_notes_list', 'document_comics_list', 'document_search_results', 'document_favourites_list'):
+        for name in ('document_notes_list', 'document_comics_list', 'document_books_list',
+                     'document_search_results', 'document_favourites_list'):
             target = getattr(self, name, None)
             if target is not None:
                 if name == 'document_search_results':

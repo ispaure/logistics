@@ -36,16 +36,16 @@ class MagnifierTests(unittest.TestCase):
     def test_comic_and_pdf_share_changes_and_restore_after_restart(self):
         comic = magnifier.bind(self.host, ImageCanvas())
         pdf = magnifier.bind(self.host, PDFCanvas())
-        self.assertEqual((comic.magnifier_zoom, pdf.magnifier_zoom), (190,190))
+        self.assertEqual((comic.magnifier_zoom, pdf.magnifier_zoom), (200, 200))
         comic.change_magnifier_zoom(1)
-        self.assertEqual(pdf.magnifier_zoom,200)
+        self.assertEqual(pdf.magnifier_zoom, 225)
         reloaded = Preferences(Path(self.directory.name))
-        self.assertEqual(reloaded.values['magnifier_zoom'],'200')
+        self.assertEqual(reloaded.values['magnifier_zoom'], '225')
         next_reader = magnifier.bind(Host(reloaded), PDFCanvas())
         next_reader.change_magnifier_zoom(-1)
-        self.assertEqual(comic.magnifier_zoom,190)
-        self.assertEqual(pdf.magnifier_zoom,190)
-        self.assertEqual(self.preferences.values['magnifier_zoom'],'190')
+        self.assertEqual(comic.magnifier_zoom, 200)
+        self.assertEqual(pdf.magnifier_zoom, 200)
+        self.assertEqual(self.preferences.values['magnifier_zoom'], '200')
         for _ in range(20):pdf.change_magnifier_zoom(1)
         self.assertEqual(comic.magnifier_zoom,300)
         for _ in range(20):comic.change_magnifier_zoom(-1)
@@ -55,33 +55,36 @@ class MagnifierTests(unittest.TestCase):
         pdf = magnifier.bind(self.host, PDFCanvas())
         setting = magnifier.setting(self.host)
         label, slider = setting.children
-        self.assertEqual((slider.min, slider.max, slider.tick_count), (150, 300, 16))
-        self.assertTrue(label.text.endswith('190%'))
+        self.assertEqual((slider.min, slider.max, slider.tick_count), (150, 300, 7))
+        self.assertTrue(label.text.endswith('200%'))
         second = Preferences(Path(self.directory.name))
         comic = magnifier.bind(Host(second), ImageCanvas())
         second.save(reading_margin='24')
-        slider.value = 230
-        self.assertEqual((pdf.magnifier_zoom,comic.magnifier_zoom),(230,230))
+        slider.value = 250
+        self.assertEqual((pdf.magnifier_zoom, comic.magnifier_zoom), (250, 250))
         self.assertEqual(second.values['reading_margin'],'24')
-        self.assertEqual(second.values['magnifier_zoom'],'230')
+        self.assertEqual(second.values['magnifier_zoom'], '250')
         self.assertEqual(Preferences(Path(self.directory.name)).values['reading_margin'],'24')
         comic.change_magnifier_zoom(-1)
-        self.assertEqual(slider.value, 220)
-        self.assertTrue(label.text.endswith('220%'))
+        self.assertEqual(slider.value, 225)
+        self.assertTrue(label.text.endswith('225%'))
 
     def test_failed_save_preserves_zoom_and_preferences(self):
         from unittest.mock import patch
         pdf = magnifier.bind(self.host, PDFCanvas())
         with patch.object(self.preferences,'save',side_effect=OSError('synthetic save failure')):
             self.assertFalse(pdf.change_magnifier_zoom(1))
-        self.assertEqual(pdf.magnifier_zoom,190)
-        self.assertEqual(self.preferences.values['magnifier_zoom'],'190')
+        self.assertEqual(pdf.magnifier_zoom, 200)
+        self.assertEqual(self.preferences.values['magnifier_zoom'], '200')
 
-    def test_previously_valid_levels_load_without_normalization(self):
-        for value in range(150, 251, 20):
-            self.preferences.path.write_text(f'[Mobile]\nmagnifier_zoom = {value}\n')
-            self.assertEqual(self.preferences.reload()['magnifier_zoom'], str(value))
-            self.assertFalse(self.preferences.error)
+    def test_previously_valid_levels_load_at_nearest_new_level(self):
+        for old, current in ((150, 150), (160, 150), (170, 175), (190, 200), (230, 225), (290, 300)):
+            with self.subTest(old=old):
+                self.preferences.path.write_text(f'[Mobile]\nmagnifier_zoom = {old}\nreading_margin = 24\n')
+                values = self.preferences.reload()
+                self.assertEqual(values['magnifier_zoom'], str(current))
+                self.assertEqual(values['reading_margin'], '24')
+                self.assertFalse(self.preferences.error)
 
     def test_invalid_preference_levels_are_rejected(self):
         for value in ('100', '149', '151', '251', '301', '310'):

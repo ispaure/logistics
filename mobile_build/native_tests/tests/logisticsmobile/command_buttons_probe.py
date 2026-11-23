@@ -58,8 +58,12 @@ class Probe(LogisticsMobile):
                     show()
                     await asyncio.sleep(.4)
                     await capture_window(self, output / f'{name}-{mode}.png')
-                for button in (*self.home_sections._home_primary_buttons, self.chat_setup):
-                    self.assert_command(button, apple)
+                creator, = self.home_sections._home_primary_buttons
+                if apple:
+                    self.assert_command(creator, True)
+                else:
+                    self.assert_creator_icon(creator)
+                self.assert_command(self.chat_setup, apple)
                 # A long title can shrink inside the border, and disabling or
                 # recolouring must not lose either its boundary or callback.
                 command = toga.Button('Open a document with a long descriptive name',
@@ -77,8 +81,8 @@ class Probe(LogisticsMobile):
                 refresh_appearance(self)
                 self.show_home()
                 await asyncio.sleep(.4)
-                for button in self.home_sections._home_primary_buttons:
-                    self.assert_command(button, False)
+                creator, = self.home_sections._home_primary_buttons
+                self.assert_creator_icon(creator)
                 await capture_window(self, output / 'home-eink.png')
                 report['checks'].append('eink-commands')
                 set_eink_enabled(False)
@@ -87,6 +91,14 @@ class Probe(LogisticsMobile):
         except BaseException:
             report['error'] = traceback.format_exc()
         (output / 'result.json').write_text(json.dumps(report, indent=2))
+
+    @staticmethod
+    def assert_creator_icon(button):
+        impl = button._impl
+        assert button.accessible_name == 'New document' and button.control_icon == 'compose'
+        assert not button.text and impl.native.getCompoundDrawablesRelative()[0] is not None
+        assert impl._surface_roles == ('transparent', 'accent', False)
+        assert not impl._surface_eink_outlined
 
     @staticmethod
     def assert_command(button, apple):

@@ -42,6 +42,16 @@ async def open_review_folder_from_shared_files(app):
     await wait_for_file_entry(app, 'UI Review/Meeting notes.md')
 
 
+def assert_home_creator(app):
+    creator, = app.home_sections._home_primary_buttons
+    if app.routes.apple:
+        assert creator.text == 'New Document'
+    else:
+        header, _ = app.body.children[0]._destination_actions
+        assert creator.parent is header and not creator.text
+        assert creator.control_icon == 'compose' and creator.accessible_name == 'New document'
+
+
 async def exercise_ui_review(app):
     import base64
     import toga
@@ -203,7 +213,7 @@ async def exercise_ui_review(app):
         app.file_browser.search.value = 'Old filter with no matches'
         leave()
         app.show_home()
-        assert [button.text for button in app.home_sections._home_primary_buttons] == ['New Document']
+        assert_home_creator(app)
         app.show_locations()
         assert app.native_host.state.destination == 'files'
         assert await app.refresh_folder_hub()
@@ -406,7 +416,7 @@ async def exercise_ui_review(app):
         app.private_sessions.close(owner.session.id, discard=True)
         app.show_home()
         assert app.home_continue is None
-        assert [button.text for button in app.home_sections._home_primary_buttons] == ['New Document']
+        assert_home_creator(app)
         await capture('home-' + mode)
         app.show_locations()
         await capture('folder-picker-' + mode)

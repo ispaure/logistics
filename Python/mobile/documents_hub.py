@@ -9,6 +9,9 @@ __maintainer__ = "Marc-André Voyer"
 __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
+import asyncio
+from threading import Event
+
 import toga
 from toga.style import Pack
 from toga.style.pack import COLUMN, ROW, CENTER
@@ -32,6 +35,16 @@ FILENAME_FONT = 15
 
 def library_heading_style():
     return Pack(font_size=COLLECTION_FONT, font_weight='bold', margin_bottom=8)
+
+
+def library_folder_button(record, on_press):
+    from .browser_ui import middle_filename
+
+    button = list_button(toga.Button(record['name'], on_press=on_press,
+                                     style=Pack(height=TOUCH_TARGET, font_size=FILENAME_FONT)))
+    middle_filename(button)
+    button_icons(button, [('folder_hub', record['source'])])
+    return button
 
 
 class DocumentsHub:
@@ -127,9 +140,10 @@ class DocumentsHub:
             search.stop_local_search()
         from .notes_discovery import cancel
         cancel(self.app)
-        comics = getattr(self, '_document_comics_discovery', None)
-        if comics is not None:
-            comics.cancel()
+        for name in ('_document_books_discovery', '_document_comics_discovery'):
+            task = getattr(self, name, None)
+            if task is not None:
+                task.cancel()
         self._document_search_delay = DebouncedCallback(self.refresh_document_list)
         box = toga.Box(style=Pack(direction=COLUMN, margin=(8, 16, 0, 16), flex=1))
         box._documents_overview = True
@@ -151,9 +165,11 @@ class DocumentsHub:
         self.document_saved_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_notes_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_comics_list = toga.Box(style=Pack(direction=COLUMN))
+        self.document_books_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_favourites_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_libraries_list = toga.Box(
-            children=[self.document_notes_list, self.document_comics_list, self.document_saved_list],
+            children=[self.document_notes_list, self.document_comics_list, self.document_books_list,
+                      self.document_saved_list],
             style=Pack(direction=COLUMN))
         self._document_libraries_ready = False
         for menu in getattr(self, '_document_search_menus', ()):
@@ -246,6 +262,7 @@ class DocumentsHub:
         from .notes_discovery import populate
         populate(self.app, self.document_notes_list, title='Notes', refresh=False,
                  title_style=library_heading_style(), row_font=FILENAME_FONT)
+        self.populate_book_libraries()
         self.document_comics_list.clear()
         self.document_comics_list.add(toga.Label('Comics', style=library_heading_style()))
         if not self.app.feature_enabled('comics'):
@@ -267,12 +284,7 @@ class DocumentsHub:
                 async def open_library(widget=None, record=record, **kwargs):
                     if self.app.checkpoint():
                         await catalog.library_host.open_folder(record)
-                button = list_button(toga.Button(record['name'], on_press=open_library,
-                                                  style=Pack(height=TOUCH_TARGET, font_size=FILENAME_FONT)))
-                from .browser_ui import middle_filename
-                middle_filename(button)
-                button_icons(button, [('folder_hub', record['source'])])
-                rows.append(button)
+                rows.append(library_folder_button(record, open_library))
             target.add(document_list(rows, 'No Comics libraries found.'))
             if 'could not' in catalog.book_status.text:
                 target.add(empty_document_row(catalog.book_status.text))
@@ -282,6 +294,56 @@ class DocumentsHub:
             old.cancel()
         self._document_comics_discovery = self.app.loop.create_task(discover())
 
+    def populate_book_libraries(self):
+        from commonUtils.runtime.operations import OperationCancelled
+        from .library_ui import discover_book_libraries
+
+        app, target = self.app, self.document_books_list
+        old = getattr(self, '_document_books_discovery', None)
+        if old is not None:
+            old.cancel()
+        target.clear()
+        target.add(toga.Label('Books', style=library_heading_style()))
+        if not app.feature_enabled('books'):
+            target.add(empty_document_row('Books is disabled.'))
+            return
+        status = empty_document_row('Finding libraries…')
+        target.add(status)
+        cancel = Event()
+
+        async def discover():
+            try:
+                records, failures = await asyncio.to_thread(discover_book_libraries, app, cancelled=cancel.is_set)
+            except (asyncio.CancelledError, OperationCancelled):
+                cancel.set()
+                return
+            except (OSError, ValueError):
+                records, failures = [], 1
+            if target is not self.document_books_list or not app.active_host or not app.feature_enabled('books'):
+                return
+            rows = []
+            for record in records:
+                location = record['location']
+                if not app.folder_path_visible(location[1]):
+                    continue
+
+                async def open_library(widget=None, location=location, **kwargs):
+                    if (target is self.document_books_list and app.feature_enabled('books')
+                            and app.checkpoint()):
+                        return await app.show_files(location=location)
+
+                button = library_folder_button(record, open_library)
+                source = record['source']
+                accessible_name(button, f'{source} / {location[1]}' if location[1] else source)
+                rows.append(button)
+            target.remove(status)
+            target.add(document_list(rows, 'No Books libraries found.'))
+            if failures:
+                target.add(empty_document_row('Some local folders could not be checked.'))
+            self.reflow_documents_hub()
+
+        self._document_books_discovery = app.loop.create_task(discover())
+
     def clear_document_search_results(self):
         for menu in getattr(self, '_document_search_menus', ()):
             menu.dispose()
@@ -290,12 +352,12 @@ class DocumentsHub:
         self._document_search_group = None
         self.document_search_results.clear()
 
-    def show_document_search_progress(self, checked=0, cache_phase='', hits=()):
+    def show_document_search_progress(self, checked=0, cache_phase='', hits=(), location=''):
         from .local_search import filename_scan_label
 
         status = self._documents_search_status
-        message = (f'{filename_scan_label(cache_phase)} · {checked:,} checked'
-                   if checked else 'Searching local filenames…')
+        message = (f'{location} · {filename_scan_label(cache_phase)} · {checked:,} checked'
+                   if location else 'Searching local filenames…')
         if status.text != message:
             status.text = message
         if status.parent is None:

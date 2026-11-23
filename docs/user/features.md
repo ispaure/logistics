@@ -15,7 +15,7 @@ formats are available on mobile. See each guide for platform and validation limi
 | [Bulk Rename](../features/bulk_rename/user/user.md) | Desktop only |
 | [Blender installations and presets](../features/blender/user/user.md) | Desktop only |
 | [Books](../features/books/user/user.md) | [Mobile guide](../features/books/user_mobile/user_mobile.md) |
-| [Open and export Calibre libraries](../features/calibre/user/user.md) | Desktop only |
+| [Open and export Calibre libraries](../features/calibre/user/user.md) | [Browse a local Calibre library](../features/calibre/user_mobile/user_mobile.md) |
 | [Read and manage comics](../features/comics/user/user.md) | [Mobile guide](../features/comics/user_mobile/user_mobile.md) |
 | [Browse Dropbox folders and clean conflicts](../features/dropbox/user/user.md) | Desktop only |
 | [Inspect paths and remove Python bytecode](../features/file_tools/user/user.md) | Desktop only |

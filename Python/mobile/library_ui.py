@@ -13,6 +13,58 @@ from services.documents.locations import collection_path, CollectionFiles
 from configparser import ConfigParser, Error as ConfigError
 from pathlib import Path
 from features.comics.library_config import library_names
+from commonUtils.runtime.operations import check_cancelled
+
+
+def discover_book_libraries(app, *, cancelled):
+    """Find Calibre roots in ordinary local storage without opening the database."""
+    from services.folders.policy import visible_name
+    from .folder_hub import exclusions
+    from .local_sources import DeviceFiles
+    from services.documents.mobile_locations import COPIES, enabled
+
+    roots = app.ordinary_file_roots(include_collections=False)
+    sources = {'Local files': COPIES if enabled(app.private_root) else 'Local',
+               'Shared files': 'On this device'}
+    rules = exclusions()
+    records, failures = [], 0
+    for label, source in sources.items():
+        check_cancelled(cancelled)
+        try:
+            provider = app.storage_provider(label, roots)
+        except (OSError, ValueError):
+            failures += 1
+            continue
+        # The legacy device wrapper exposes only collections scanned separately.
+        if isinstance(provider, DeviceFiles):
+            continue
+        pending = [('', 0)]
+        while pending:
+            check_cancelled(cancelled)
+            folder, depth = pending.pop()
+            marker = f'{folder}/metadata.db' if folder else 'metadata.db'
+            try:
+                if not provider.entry(marker)['directory']:
+                    records.append(dict(name=Path(folder).name or source, source=source,
+                                        location=(label, folder)))
+                    continue
+            except FileNotFoundError:
+                pass
+            except (OSError, ValueError):
+                failures += 1
+                continue
+            if depth < 2:
+                try:
+                    rows = provider.list_names(folder, cancelled=cancelled)
+                except FileNotFoundError:
+                    continue
+                except (OSError, ValueError):
+                    failures += 1
+                    continue
+                pending.extend((row['path'], depth + 1) for row in rows
+                               if row['directory'] and not row['name'].startswith('.')
+                               and visible_name(row['name'], rules))
+    return sorted(records, key=lambda row: (row['name'].casefold(), row['location'])), failures
 
 
 def discover_libraries(root, jobs, client=None, crypt_remotes=()):

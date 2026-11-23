@@ -15,6 +15,7 @@ from toga.style.pack import COLUMN, ROW, CENTER, START
 
 from .ui_metrics import TOUCH_TARGET
 from .appearance import accessible_name, action_button, surface
+from .control_icons import icon_button
 from .hub_controls import HubSections, document_group, empty_document_row, heading, retire_document_actions
 
 
@@ -53,22 +54,31 @@ class HomeScreen:
             style=Pack(direction=ROW, align_items=CENTER, margin_bottom=12))
         self.app._home_status_row = status_row
         self.home_continue = None
-        self.home_actions = toga.Box(style=Pack(direction=ROW, align_items=CENTER))
+        self.home_actions = None
+        if self.app.routes.apple:
+            self.home_actions = toga.Box(style=Pack(direction=ROW, align_items=CENTER))
+            box.add(self.home_actions)
         self.home_content = box
         from .document_choices import available_choices
+        primary = ()
         if available_choices(self.app):
-            creator = action_button(toga.Button('New Document', on_press=self.new_hub_document,
-                                               style=Pack(height=TOUCH_TARGET, flex=1)))
-            creator._toolbar_symbol = 'plus'
-            creator._toolbar_group = 'home-documents'
-            self.home_actions.add(creator)
+            if self.home_actions is not None:
+                creator = action_button(toga.Button('New Document', on_press=self.new_hub_document,
+                                                   style=Pack(height=TOUCH_TARGET, flex=1)))
+                creator._toolbar_symbol = 'plus'
+                creator._toolbar_group = 'home-documents'
+                self.home_actions.add(creator)
+            else:
+                creator = surface(icon_button('compose', 'New document', on_press=self.new_hub_document),
+                                  background='transparent', foreground='accent', eink_outlined=False)
+            primary = (creator,)
         overview_box = toga.Box(style=Pack(direction=COLUMN))
         self._populate_home_overview(overview_box, overview)
         favourites = toga.Box(style=Pack(direction=COLUMN))
         from .favourites import populate
         favourites.add(heading('Favourites'))
         populate(self.app, favourites, heading=False)
-        box.add(self.home_actions, overview_box, favourites)
+        box.add(overview_box, favourites)
         notice = getattr(getattr(self.app, 'recovery_notice', None), 'text', '')
         if notice:
             box.add(toga.Label(notice, style=Pack(font_size=13, margin_top=12)))
@@ -82,7 +92,7 @@ class HomeScreen:
                                               style=Pack(height=TOUCH_TARGET))))
         self.home_sections = HubSections(box, overview_box, before=favourites)
         self.home_sections._home_primary_actions = self.home_actions
-        self.home_sections._home_primary_buttons = tuple(self.home_actions.children)
+        self.home_sections._home_primary_buttons = primary
         self.reflow_home()
         return self.home_sections
 
@@ -126,7 +136,7 @@ class HomeScreen:
         top = 16
         if sections.paired and sections.style.direction == ROW:
             top = sections.content.style.margin_top
-            if self.home_actions.parent is sections.content:
+            if self.home_actions is not None and self.home_actions.parent is sections.content:
                 top += max((button.style.height for button in self.home_actions.children), default=0)
                 top += self.home_actions.style.margin_top + self.home_actions.style.margin_bottom
         sections.trailing_content.style.margin_top = top

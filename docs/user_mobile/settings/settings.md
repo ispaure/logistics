@@ -30,7 +30,8 @@ the system appearance.
 ## Comic and PDF magnifier
 
 Use **Books & Comics → Comic & PDF magnifier zoom** or the magnifier's **−**
-and **+**. Both save the same setting, from 150% to 300%, with 190% as default.
+and **+**. Both save the same setting, from 150% to 300% in 25-percentage-point
+steps, with 200% as the default.
 The category and setting reflect which readers are enabled.
 
 ## Features

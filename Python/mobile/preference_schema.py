@@ -18,7 +18,7 @@ import json
 from services.appearance_palette import DEFAULT_ACCENT
 from .clipboard import KEY as CLIPBOARD_KEY
 
-from .magnifier import LEVELS, RANGE_ERROR
+from .magnifier import DEFAULT_ZOOM, LEVELS, RANGE_ERROR
 from features.books.mobile.typography import DEFAULTS as READING_DEFAULTS, FONT_SIZES, validate as validate_reading
 from features.images.mobile.burst_camera import DEFAULTS as CAMERA_DEFAULTS, validate_preferences as validate_camera
 from features.notebooks.mobile.brush_presets import PREFERENCE as NOTEBOOK_BRUSH_PRESETS, read_presets
@@ -53,7 +53,7 @@ DEFAULTS = {
     'trusted_wifi_networks': '[]',
     'approved_bluetooth_devices': '[]',
     'speech_voice': '',
-    'magnifier_zoom': '190',
+    'magnifier_zoom': str(DEFAULT_ZOOM),
     'epub_volume_pages': 'false',
     'comic_volume_pages': 'false',
     'epub_outer_cover': 'false',

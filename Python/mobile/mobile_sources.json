@@ -113,6 +113,7 @@
     "library_ui.py",
     "loading_progress.py",
     "local_search.py",
+    "device_name_cache.py",
     "local_sources.py",
     "locations.py",
     "magnifier.py",
