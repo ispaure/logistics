@@ -69,19 +69,21 @@ async def exercise_recovery(app):
             source='Local/private', destination='QA:', phase='transfer', busy=True,
             files=2, total_files=4, done=100, total=200, percentage=50,
             active_files=(dict(name='private-file.txt'),)))
-        from .web_checks import wait_for_transfer_surface
+        from .web_checks import verify_native_transfer_fallback, wait_for_transfer_surface
         proof = await wait_for_transfer_surface(surface, timeout=5)
         assert proof['renderer'] == 'native', proof
         result['native_acceptance_helper'] = proof
         fallback = surface.native_fallback
-        assert '50%' in fallback.metrics.text and 'Files: 2 / 4' in fallback.metrics.text
+        assert fallback.amount.text == '50%'
         await fallback.buttons.children[0].on_press()
         assert calls[-1][0] == 'stop'
         await fallback.buttons.children[1].on_press()
         assert calls[-1][0] == 'background'
-        surface.update(dict(surface.model, phase='complete', busy=False, files=4, percentage=100))
-        assert 'Files: 4 / 4' in fallback.metrics.text
-        assert [button.text for button in fallback.buttons.children] == ['Continue browsing']
+        surface.update(dict(surface.model, phase='complete', busy=False, files=4, done=200, percentage=100))
+        completed = verify_native_transfer_fallback(surface)
+        assert completed['revision'] > proof['revision'] and fallback.amount.text == '100%'
+        assert [getattr(button, '_settings_source_text', button.text)
+                for button in fallback.buttons.children] == ['Continue browsing']
         result['progress_controls'] = True
 
         review = await recover(dict(mode='review', workspace='Review fixture', operation='Push',
@@ -94,7 +96,6 @@ async def exercise_recovery(app):
         # The review-specific driver waits for actual attachment/layout and
         # checks the displayed native model before clicking its guarded action.
         from .review_checks import press_review
-        from .web_checks import verify_native_transfer_fallback
         await press_review(review, 'approve', timeout=5)
         review_proof = verify_native_transfer_fallback(review)
         assert review_proof['renderer'] == 'native' and review_proof['mode'] == 'review'
