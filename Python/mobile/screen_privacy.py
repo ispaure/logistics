@@ -191,11 +191,6 @@ class ScreenPrivacy:
         from .protection import for_app
         return for_app(self.app).process.protected()
 
-    def _set_directory_index_active(self, active):
-        lease = getattr(self.app, '_directory_index_host', None)
-        if lease is not None:
-            lease.set_active(active and self.app.active_host)
-
     def _pause_folder_work(self):
         if getattr(self, '_folder_work_paused', False):
             return
@@ -216,7 +211,6 @@ class ScreenPrivacy:
         from .transfer_notifications import sync as sync_transfer_notices
         sync_transfer_notices(self.app)
         self._pause_folder_work()
-        self._set_directory_index_active(False)
         self.wifi_revision = getattr(self, 'wifi_revision', 0) + 1
         from .comic_feedback import clear as clear_comic_feedback
         clear_comic_feedback(self.app)
@@ -234,7 +228,6 @@ class ScreenPrivacy:
         from .transfer_notifications import sync as sync_transfer_notices
         sync_transfer_notices(self.app)
         self._pause_folder_work()
-        self._set_directory_index_active(False)
         self.browser_refresh_pending = True
         # Native shielding and player callbacks can fail or reenter the loop.
         # Invalidate outstanding authentication before invoking any of them.
@@ -459,7 +452,6 @@ class ScreenPrivacy:
         ready = (not self.inactive and not getattr(self, 'interrupted', False) and not hidden
                  and not any(gate.locked for gate in gates)
                  and getattr(self.app, 'scene_active', True) is not False)
-        self._set_directory_index_active(ready)
         if ready and getattr(self, '_folder_work_paused', False):
             self._folder_work_paused = False
             from .browser_ui import sync_browser_population

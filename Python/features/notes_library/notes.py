@@ -126,11 +126,12 @@ def create_library(provider, parent, name, *, cancelled=lambda: False):
 
 
 class NotesLibrary:
-    def __init__(self, provider, root='', *, connection_index=None, index_database=None):
+    def __init__(self, provider, root='', *, connection_index=None, index_database=None, filename_listing=None):
         if not local_library(provider):
             raise ValueError('Notes Library requires a local copy. Download or sync this folder first.')
         self.provider, self.root = provider, provider.relative(root)
         self.index_database = index_database
+        self.filename_listing = filename_listing
         self._index_hint = object()
         self._link_folders = {}
         self._resolved_links = {}

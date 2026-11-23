@@ -201,11 +201,6 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         models, workspace_root = self._prepare_startup_preferences(root)
         if not self.active_host:
             raise asyncio.CancelledError
-        if not hasattr(self, '_directory_index_host'):
-            from services.directory_index import acquire
-            self._directory_index_host = acquire(root / 'Cache' / 'directory-index.sqlite3')
-            if getattr(self, 'scene_active', True) is False:
-                self._directory_index_host.set_active(False)
         yield STEPS[StartupPhase.DOCUMENTS]
         restored_document = self._prepare_startup_documents(root, models, workspace_root)
         yield STEPS[StartupPhase.EDITOR]
@@ -227,6 +222,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         """Capture native paths on the UI thread before handing off file I/O."""
         root = Path(self.storage_root or self.paths.data)
         backend = type(self._impl).__module__
+        from .device_name_cache import retire_legacy_mobile_index
         if backend.startswith('toga_iOS.') and self.storage_root is None:
             from .app_reset import finish_ios_reset
             from services.documents.migrations.ios_storage import prepare_ios
@@ -235,12 +231,15 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             def prepare(report):
                 from rubicon.objc.runtime import autoreleasepool
                 with autoreleasepool():
-                    return prepare_ios(root, private, report=report)
+                    prepared = prepare_ios(root, private, report=report)
+                    retire_legacy_mobile_index(prepared / 'Cache')
+                    return prepared
             return prepare
         if backend.startswith('toga_android.') and self.storage_root is None:
             from services.documents.migrations.mobile_layout import prepare_android
             def prepare(report):
                 prepare_android(root, report=report)
+                retire_legacy_mobile_index(root / 'Cache')
                 return root
             return prepare
         return lambda report: root

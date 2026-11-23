@@ -538,30 +538,27 @@ class ResumeLockTests(unittest.TestCase):
             self.assertEqual(browser.epoch, epoch)
             self.assertEqual([row.title for row in browser.native_list.data], ['Photos', 'Documents', 'Books'])
 
-    def test_directory_index_resumes_only_after_authentication_and_scene_activation(self):
-        lease = self.app._directory_index_host
-        self.addCleanup(lease.close)
-        with patch.object(lease, 'set_active', wraps=lease.set_active) as set_active:
+    def test_folder_search_resumes_only_after_authentication_and_scene_activation(self):
+        with patch('mobile.browser_ui.sync_browser_population') as resume:
             self.app.scene_active = False
             self.privacy.interrupt()
             self.privacy.reveal()
             self.unlock('wrong')
             self.unlock('session-password')
             self.assertFalse(self.gate.locked)
-            set_active.assert_called_with(False)
-            self.assertNotIn(call(True), set_active.call_args_list)
+            resume.assert_not_called()
 
             self.app.scene_active = True
             self.privacy.reveal()
-            set_active.assert_called_with(True)
-            set_active.reset_mock()
+            self.assertIn(call(self.app), resume.call_args_list)
+            resume.reset_mock()
 
             self.privacy.conceal()
             self.privacy.reveal()
             self.assertTrue(self.gate.locked)
-            self.assertNotIn(call(True), set_active.call_args_list)
+            resume.assert_not_called()
             self.unlock('session-password')
-            set_active.assert_called_with(True)
+            self.assertIn(call(self.app), resume.call_args_list)
 
     def test_queued_browser_search_result_is_fenced_across_lock_and_unlock(self):
         import asyncio

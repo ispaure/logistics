@@ -109,10 +109,10 @@ See `test_folder_navigation.py` and `test_ios_workspace_columns.py`.
 
 Capture location before first list. Restore List mode through the native table
 offset and Tiles through its ScrollContainer. Keep the search and route context
-on Back. `local_search.LocalSearch` prepares cancellable app-private SQLite
-filename snapshots for ordinary LocalFiles, CollectionFiles and SharedFiles.
-Refresh reruns the active desktop-style keyword/quoted-phrase query and validates
-result revisions. Remote, session-only and private providers search in memory.
+on Back. Workspaces, Documents and Notes use app-private SQLite snapshots for
+ordinary mobile locations, including On My Phone/Tablet. Refresh reruns the
+active keyword/quoted-phrase query and validates result revisions.
+Unlocked LocalCrypt uses its separate session and sealed filename caches.
 Navigation retires stale scans. On iOS, a missing historical app Documents path
 can resolve to an existing file at the same relative location in the current
 registered root. Check `test_local_search.py` for restart reuse and exclusions.

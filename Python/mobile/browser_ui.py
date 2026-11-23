@@ -278,8 +278,10 @@ class FileBrowser(RecycledBrowser):
         from .recycled_file_list import RecycledFileList
         self.folder_visible = folder_visible
         if local_search is None and getattr(toga.App.app, 'private_root', None) is not None:
+            from .device_name_cache import FILENAME_DATABASE
             from .local_search import LocalSearch
-            local_search = LocalSearch(toga.App.app.private_root / 'Cache' / 'directory-index.sqlite3')
+            local_search = LocalSearch(toga.App.app.private_root / 'Cache' / FILENAME_DATABASE,
+                                       shared_filenames=True)
         self.local_search = local_search
         self._index_cancel = Event()
         self._index_error = None

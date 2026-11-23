@@ -10,6 +10,7 @@ __email__ = "marcandre.voyer@gmail.com"
 __status__ = "Production"
 
 import asyncio
+from functools import partial
 from uuid import uuid4
 from .preview import markdown_preview
 from features.notes_library.notes import vault_root, local_library
@@ -19,8 +20,12 @@ from features.notes_library.mobile.notes_library import VaultBrowser as _VaultBr
 class VaultBrowser(_VaultBrowser):
     def __init__(self, app, provider, root, destination):
         from .composition.notes import notes_host
+        from .device_name_cache import device_name_listing, supports_device_name_cache
+        listing = None
+        if supports_device_name_cache(provider):
+            listing = partial(device_name_listing, provider, app.private_root / 'Cache')
         super().__init__(notes_host(app), provider, root, destination,
-                         index_database=app.private_root / 'Cache' / 'directory-index.sqlite3')
+                         filename_listing=listing)
         from .layout_participants import participants
         self._layout_subscription = participants(app).register('notes-library', self,
             lambda owner, frame: owner.reflow(frame.content_width(owner.destination, margin=0)), order=50)

@@ -100,23 +100,22 @@ and runs before feature shutdown. Check `test_sqlite_browser_host.py`.
 | Surface | Admission and freshness |
 | --- | --- |
 | Desktop Files | Open/navigation reconcile the visible folder. Refresh covers the subtree. Search/size views read snapshots. |
-| Mobile Files | Opening Search or moving its location prepares the ordinary-local scope. Settled typing can scan live names while the ordinary index builds. Repeated searches use saved results when a complete snapshot is available. |
-| Notes filename search | Settled nonempty queries validate the library root. Navigation supplies priority hints. |
+| Mobile Files | Settled typing searches the selected folder and descendants using guarded filename snapshots. |
+| Notes filename search | Queries validate the library root. Mobile Notes shares ordinary physical folder snapshots with Files and Documents. Desktop navigation supplies priority hints. |
 | Notes navigation, calendar, body search and links | Provider-owned listings, bounded inventories or specialized reads. |
 
-Desktop launch owns `IndexService`. Mobile scenes lease one app-private runner,
-which starts on first scan. The last close requests retirement. Files and
-ordinary Notes filename queries share the coordinator and adjacent durable
-SQLite queue. Private, virtual and remote providers stay outside the ordinary
-index. LocalCrypt may reuse credential-bound sealed name records. Mobile
-filename searches can reuse the guarded ciphertext inventory collected for
-validation when decoding a folder that has no current record.
+Desktop launch owns `IndexService`. Desktop Files and ordinary Notes filename
+queries share that coordinator and durable SQLite queue. Mobile Workspaces,
+Documents and Notes share `Cache/device-filenames.sqlite3`, which stores
+provider-guarded folder snapshots. Paths in the results follow each provider's
+root. Private, virtual and remote providers stay outside that database.
+Unlocked LocalCrypt views share their credential-bound sealed name records.
 
 Foreground hints settle after 150 ms. Unrelated work can yield after 500 ms and
 gets a fair turn after five seconds, with longer retry turns for atomic commits.
-Snapshot reads can proceed during writes. Mobile publishes validated batches,
-rejects stale route/privacy generations, marks partial results and falls back
-to live search after corrupt reads.
+Snapshot reads can proceed during writes. Mobile rejects stale route and privacy
+generations, validates hits, marks partial results, and can scan live when the
+disposable cache is unavailable.
 
 Use separate cancellation for mobile search preparation and query delivery.
 Navigation, close and privacy transitions retire their hints. Hidden or locked
@@ -130,10 +129,10 @@ The desktop list sorts using filenames from the live Qt model. It sizes the
 metadata columns using the visible rows, and fetches folder totals through the
 shared index worker.
 
-The ordinary coordinator keeps `directory-index.jobs.sqlite3` and
-`directory-index.jobs.lock` next to the index. Mobile's index lives under
-app-private `Cache/`. LocalCrypt name records belong to the credential's
-`Cache/LocalCryptNames` store.
+The desktop coordinator keeps `directory-index.jobs.sqlite3` and
+`directory-index.jobs.lock` next to its index. Mobile startup retires the former
+app-private coordinator database and its sidecars. LocalCrypt name records
+belong to the credential's `Cache/LocalCryptNames` store.
 
 ### Desktop process lifetime
 

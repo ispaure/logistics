@@ -104,8 +104,6 @@ class NotesFixtureCleanupTests(unittest.TestCase):
                 self.assertNotEqual(EventLog._log, outer_events)
                 self.assertIn('# Home', (case.vault / 'Home.md').read_text(encoding='utf-8'))
                 case.window = case.app.main_window
-                case.index = case.app._directory_index_host
-                case.index.runner.start()
                 case.worker_finished = Event()
 
                 async def exercise():
@@ -140,8 +138,6 @@ class NotesFixtureCleanupTests(unittest.TestCase):
         self.assertTrue(case.window.closed)
         self.assertFalse(case.app.windows)
         self.assertTrue(case.app.loop.is_closed())
-        self.assertTrue(case.index.closed)
-        self.assertFalse(case.index.runner.worker.is_alive())
         self.assertFalse(case.root.exists())
         self.assertIs(toga.App.app, outer.app)
         self.assertIs(asyncio.get_event_loop(), outer.app.loop)

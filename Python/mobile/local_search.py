@@ -38,8 +38,9 @@ def search_location_label(name, provider):
 
 
 class LocalSearch(IndexedLocalSearch):
-    def __init__(self, database):
-        super().__init__(database, eligible=self.eligible_provider)
+    def __init__(self, database, *, shared_filenames=False):
+        self.shared_filenames = shared_filenames
+        super().__init__(database, eligible=lambda provider: not shared_filenames and self.eligible_provider(provider))
         from services.directory_index import coordinator_for
         self.cache.coordinator = coordinator_for(self.cache.database)
 
@@ -78,22 +79,21 @@ class LocalSearch(IndexedLocalSearch):
         if indexed is not None:
             return search_resources(provider, directory, query, list_children=indexed, **kwargs)
         from services.documents.locations import MobileLocalFiles
+        from .device_name_cache import device_name_listing, supports_device_name_cache
         from .local_sources import PhoneFiles
-        if (type(provider) in (PhoneFiles, MobileLocalFiles) and not provider.private
-                and not getattr(provider, 'session_only', False) and not getattr(provider, 'remote_storage', False)):
-            if type(provider) is PhoneFiles:
-                from .device_name_cache import device_name_listing
-                cache_phase = ''
+        if ((self.shared_filenames or type(provider) is PhoneFiles) and supports_device_name_cache(provider)):
+            cache_phase = ''
 
-                def report_cache(phase):
-                    nonlocal cache_phase
-                    cache_phase = phase
+            def report_cache(phase):
+                nonlocal cache_phase
+                cache_phase = phase
 
-                if (progress := kwargs.get('progress')) is not None:
-                    kwargs['progress'] = lambda result: progress(replace(result, cache_phase=cache_phase))
-                with device_name_listing(provider, self.cache.database.parent, status=report_cache) as children:
-                    return search_resources(provider, directory, query, list_children=children,
-                                            load_match=provider.entry, **kwargs)
+            if (progress := kwargs.get('progress')) is not None:
+                kwargs['progress'] = lambda result: progress(replace(result, cache_phase=cache_phase))
+            with device_name_listing(provider, self.cache.database.parent, status=report_cache) as children:
+                return search_resources(provider, directory, query, list_children=children,
+                                        load_match=provider.entry, **kwargs)
+        if type(provider) is MobileLocalFiles and supports_device_name_cache(provider):
             return self._search_names(provider, directory, query, **kwargs)
         if not self.supports(provider):
             return super().search(provider, directory, query, **kwargs)

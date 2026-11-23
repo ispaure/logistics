@@ -22,13 +22,15 @@ def focus(library, path=None):
     from commonUtils.filesystem.index.store import directory_index_path
     from services.directory_index import focus as hint
     from services.documents.locations import ordinary_index_provider
-    if ordinary_index_provider(library.provider):
+    if library.filename_listing is None and ordinary_index_provider(library.provider):
         database = library.index_database or directory_index_path()
         path = library.root if path is None else library.contained(path)
         hint(database, library._index_hint, (library.provider.root / path,))
 
 
 def clear_focus(library):
+    if library.filename_listing is not None:
+        return
     from commonUtils.filesystem.index.store import directory_index_path
     from services.directory_index import focus as hint
     hint(library.index_database or directory_index_path(), library._index_hint)
@@ -140,10 +142,18 @@ def search(library, query, *, include_text, visible=None, cancelled=lambda: Fals
         notify = lambda result: progress(project(result))
     read_text = library.read_text if include_text else None
 
-    def run(report):
+    def run(report, *, load_match=None):
         folder_pages.clear()
         return search_resources(library.provider, library.root, query, cancelled=cancelled,
-            list_children=listing, read_text=read_text, progress=report)
+            list_children=listing, read_text=read_text, progress=report, load_match=load_match)
+
+    if library.filename_listing is not None:
+        with library.filename_listing() as cached:
+            def children(folder, *, cancelled):
+                return library.visible_rows(cached(library.contained(folder), cancelled=cancelled))
+
+            result = run(notify, load_match=library.entry)
+        return project(result) if collapse_folder_notes else result
 
     index = directory_index(library) if not include_text else None
     result = None
@@ -156,7 +166,6 @@ def search(library, query, *, include_text, visible=None, cancelled=lambda: Fals
         except (OSError, DatabaseError):
             pass  # Search remains available if the disposable index cannot be read or updated.
     if result is None:
-        children = library.search_children
         result = run(notify)
     return project(result) if collapse_folder_notes else result
 

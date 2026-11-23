@@ -94,12 +94,12 @@ from .library_tree import (
 
 
 class VaultBrowser(LibraryFileForms, LibraryPanels):
-    def __init__(self, host, provider, root, destination, *, index_database=None):
+    def __init__(self, host, provider, root, destination, *, index_database=None, filename_listing=None):
         self.host, self.provider, self.destination = host, provider, destination
         self.release_provider = lambda: None
         self._move_worker = None
         self._moving_entry = False
-        self.library = NotesLibrary(provider, root, index_database=index_database)
+        self.library = NotesLibrary(provider, root, index_database=index_database, filename_listing=filename_listing)
         self.root = self.library.root
         from features.notes_library.notes import library_name
         self.library_title = library_name(provider, self.root)

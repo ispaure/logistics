@@ -185,6 +185,56 @@ class LocalDocumentSearchTests(TestCase):
                 self.assertEqual(set(scan()), {'cached-needle.txt', 'new-needle.txt'})
                 validate.assert_called_once_with('new-needle.txt')
 
+    def test_notes_documents_and_browser_reuse_one_physical_folder_snapshot(self):
+        from contextlib import closing
+        from sqlite3 import connect
+        from features.notes_library import library_files
+        from mobile.browser_ui import FileBrowser
+        from mobile.document_search import _scan_locations
+        from mobile.local_sources import PhoneFiles
+        from mobile.obsidian import VaultBrowser
+
+        app = self.app
+        phone = PhoneFiles(app.private_root)
+        folder = phone.root / 'Vault'
+        folder.mkdir()
+        (folder / 'Needle.md').write_text('a separate body phrase')
+        (phone.root / 'Outside Needle.md').touch()
+        # Notes can open a provider rooted directly at the same physical
+        # folder that Workspaces sees as a child of On My Phone.
+        library_provider = LocalFiles(folder)
+        notes = VaultBrowser(app, library_provider, '', 'files')
+        browser = FileBrowser()
+        self.addCleanup(notes.dispose)
+        self.addCleanup(lambda: app.loop.run_until_complete(browser.close()))
+        warm = browser.local_search.search(phone, 'Vault', 'needle')
+        self.assertEqual([row['path'] for row in warm.rows], ['Vault/Needle.md'])
+
+        from services.documents import locations
+        listing = locations.local_folder_snapshot
+        def cold_only(provider, path, **kwargs):
+            if provider.root / path == folder:
+                self.fail('The already indexed physical folder was scanned again')
+            return listing(provider, path, **kwargs)
+
+        with (patch.object(locations, 'local_folder_snapshot', side_effect=cold_only),
+              patch('mobile.device_name_cache.local_folder_snapshot', side_effect=cold_only),
+              patch.object(app, 'storage_provider', side_effect=lambda label, roots: roots[label]),
+              patch.object(app, 'feature_enabled', return_value=False)):
+            note_hits = library_files.search(notes.library, 'needle', include_text=False)
+            body_hits = library_files.search(notes.library, 'separate body phrase', include_text=True)
+            global_hits, failures = _scan_locations(app, {'On My Phone': phone}, 'needle',
+                                                    cancelled=lambda: False, progress=None)
+        self.assertEqual([row['path'] for row in note_hits.rows], ['Needle.md'])
+        self.assertEqual([row['path'] for row in body_hits.rows], ['Needle.md'])
+        self.assertEqual({hit['path'] for hit in global_hits}, {'Vault/Needle.md', 'Outside Needle.md'})
+        self.assertEqual(failures, [])
+        cache = app.private_root / 'Cache'
+        self.assertFalse((cache / 'directory-index.sqlite3').exists())
+        with closing(connect(cache / 'device-filenames.sqlite3')) as database:
+            self.assertEqual(database.execute('SELECT count(*) FROM folders WHERE path = ?',
+                                              (str(folder),)).fetchone()[0], 1)
+
     def test_search_replaces_views_opens_disk_file_and_clear_restores_collection(self):
         app = self.app
         from services.documents.locations import collection_path

@@ -45,6 +45,20 @@ class LocalSearchTests(unittest.TestCase):
     def prepare(self):
         self.search.prepare(self.provider, '', cancelled=lambda: False)
 
+    def test_retiring_mobile_index_preserves_shared_and_encrypted_caches(self):
+        from mobile.device_name_cache import retire_legacy_mobile_index
+
+        cache = self.database.parent
+        cache.mkdir()
+        legacy = ['directory-index.sqlite3', 'directory-index.sqlite3-wal', 'directory-index.jobs.sqlite3',
+                  'directory-index.jobs.sqlite3-shm', 'directory-index.jobs.lock', 'directory-index.lock',
+                  'directory-index.pre-v3.sqlite3']
+        retained = ['device-filenames.sqlite3', 'LocalCryptNames']
+        for name in legacy + retained:
+            (cache / name).touch()
+        retire_legacy_mobile_index(cache)
+        self.assertEqual(sorted(path.name for path in cache.iterdir()), sorted(retained))
+
     def names(self, query, directory=''):
         result = self.search.search(self.provider, directory, query)
         self.assertTrue(result.complete, result.errors)
