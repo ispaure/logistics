@@ -13,12 +13,18 @@ from collections import OrderedDict
 from hashlib import sha256
 import json
 import os
+import re
 import stat
 from threading import RLock
 
 from commonUtils.persistence import atomic_write_bytes
 from commonUtils.runtime.operations import check_cancelled
 from services.documents.credential_state import LIMIT, credential_authority
+
+
+_CACHE_FILE = re.compile(r'(?:root-)?[0-9a-f]{64}\.zip\Z')
+_BUCKET_ENTRIES = 32
+_BUCKET_BYTES = 256 * 1024
 
 
 def _directory_revision(info):
@@ -122,12 +128,14 @@ class DirectoryIndex:
             return None, None
         self.cipher.identity
         authority = credential_authority(self.provider)
-        # Fixed, shared cache slots bound disk use. The filename contains no
-        # logical path, and the sealed record verifies the full binding.
+        # The full opaque key prevents unrelated folders from replacing each
+        # other. Each of the 256 buckets has its own retention budget.
         scope = sha256(json.dumps([authority, self.provider.storage_namespace, inode]).encode()).hexdigest()
-        filename = f'root-{scope[0]}.zip' if root else f'{int(scope[:3], 16) % 1024:03x}.zip'
-        file = self.folder / filename
-        if file.is_symlink() or self.folder.is_symlink() or self.folder.parent.is_symlink():
+        filename = f'root-{scope}.zip' if root else f'{scope}.zip'
+        records = self.folder / 'records'
+        bucket = records / scope[:2]
+        file = bucket / filename
+        if any(item.is_symlink() for item in (file, bucket, records, self.folder, self.folder.parent)):
             raise ValueError('Linked encrypted directory index is not supported.')
         return file, scope
 
@@ -156,18 +164,41 @@ class DirectoryIndex:
         return None
 
     def _read_record(self, file, scope, path, revision=None):
-        if file is not None:
+        if file is None:
+            return None
+        legacy_slot = f'root-{scope[0]}.zip' if not path else f'{int(scope[:3], 16) % 1024:03x}.zip'
+        # Read old slots after checking the exact key, and migrate a verified
+        # old record when the provider next validates its folder.
+        for candidate in (file, self.folder / legacy_slot, self.folder / f'{scope[:2]}.zip'):
+            if candidate.is_symlink():
+                continue
             try:
-                record = self._load_record(file, scope, path, revision)
+                record = self._load_record(candidate, scope, path, revision)
                 if record is not None:
-                    return record
-            except FileNotFoundError:
-                pass  # Read snapshots written before the larger slot layout.
-            file = file.with_name(f'{scope[:2]}.zip')
-            if file.is_symlink():
-                return None
-            return self._load_record(file, scope, path, revision)
+                    return (*record, candidate == file)
+            except (OSError, TypeError, ValueError, KeyError, RuntimeError):
+                continue
         return None
+
+    def _trim_bucket(self, file):
+        entries = []
+        for candidate in file.parent.iterdir():
+            if not _CACHE_FILE.fullmatch(candidate.name):
+                continue
+            try:
+                info = candidate.stat(follow_symlinks=False)
+            except FileNotFoundError:
+                continue
+            if stat.S_ISREG(info.st_mode):
+                entries.append((candidate.name.startswith('root-'), info.st_mtime_ns, candidate, info.st_size))
+        count, size = len(entries), sum(entry[3] for entry in entries)
+        for _, _, candidate, length in sorted(entries):
+            if count <= _BUCKET_ENTRIES and size <= _BUCKET_BYTES:
+                break
+            if candidate != file:
+                candidate.unlink(missing_ok=True)
+                count -= 1
+                size -= length
 
     def _store_record(self, path, revision, rows, folder_revision, cancelled, *, file, scope):
         if file is None:
@@ -179,8 +210,9 @@ class DirectoryIndex:
         try:
             sealed = self.cipher.transform(raw)
             self._check(cancelled)
-            self.folder.mkdir(mode=0o700, parents=True, exist_ok=True)
+            file.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             atomic_write_bytes(file, sealed, validate=lambda: self._check(cancelled))
+            self._trim_bucket(file)
         except (OSError, ValueError, RuntimeError):
             pass  # A disposable cache can always be rebuilt from the provider.
 
@@ -204,7 +236,9 @@ class DirectoryIndex:
             self._check(cancelled)
             if record is None:
                 return ()
-            revision, rows, stamp = record
+            revision, rows, stamp, exact = record
+            if not exact:
+                stamp = ()  # Validate the old slot before migrating its contents.
             self._remember(path, revision, rows, cancelled, stamp)
             return rows
 
@@ -256,9 +290,9 @@ class DirectoryIndex:
                 file, scope = self._record_path(inode, root=not path)
                 record = self._read_record(file, scope, path, revision)
                 if record is not None:
-                    _, rows, stamp = record
+                    _, rows, stamp, exact = record
                     self._remember(path, revision, rows, cancelled, parent_revision)
-                    if not stamp:
+                    if not (stamp and exact):
                         self._store_record(path, revision, rows, parent_revision, cancelled, file=file, scope=scope)
                     cache_status('cached')
                     return rows

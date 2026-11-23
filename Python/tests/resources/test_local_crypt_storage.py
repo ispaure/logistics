@@ -54,7 +54,7 @@ class LocalCryptStorageTests(LocalCryptCase):
             cipher = DesktopCredentialCipher(f.provider)
             index = f.provider._directory_index = DirectoryIndex(f.provider, cache, cipher)
             self.assertIn('note.md', {row['name'] for row in f.provider.indexed_list()})
-            file, = cache.glob('*.zip')
+            file, = cache.rglob('*.zip')
             self.assertNotIn(b'note.md', file.read_bytes())
             with pyzipper.AESZipFile(file) as archive:
                 archive.setpassword(b'incorrect')

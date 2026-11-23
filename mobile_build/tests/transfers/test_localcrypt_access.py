@@ -437,7 +437,7 @@ class LocalCryptAccessTests(unittest.TestCase):
                     self.assertEqual(writer.indexed_list()[0]['name'], 'private-note.md')
                 finally:
                     writer.close()
-                self.assertEqual(len(list(client.directory_index_root.glob('*.zip'))), 1)
+                self.assertEqual(len(list(client.directory_index_root.rglob('*.zip'))), 1)
                 reader = localcrypt.open(location)
                 try:
                     with self.assertRaisesRegex(ValueError, 'Collection location changed'):
@@ -526,12 +526,12 @@ class LocalCryptAccessTests(unittest.TestCase):
                 path.touch()
                 self.assertEqual(writer.search_listing(names_only=True)[0]['name'], path.name)
                 writer.close()
-                record, = client.directory_index_root.glob('root-*.zip')
+                record, = client.directory_index_root.rglob('root-*.zip')
                 self.assertNotIn(path.name.encode(), record.read_bytes())
                 # Put the authenticated snapshot into the old slot layout.
                 saved = json.loads(bridge.payloads[record.read_bytes()])
                 del saved['folder_revision']
-                legacy = record.with_name(saved['binding'][1][:2] + '.zip')
+                legacy = client.directory_index_root / (saved['binding'][1][:2] + '.zip')
                 token = bridge.request('document_lists_seal', id=bridge.package_records[0]['document_cache_id'],
                                        data=base64.b64encode(json.dumps(saved).encode()).decode())
                 legacy.write_bytes(base64.b64decode(token))
@@ -551,6 +551,32 @@ class LocalCryptAccessTests(unittest.TestCase):
                 updated = path.with_name('new-private-note.md')
                 path.rename(updated)
                 self.assertEqual([row['name'] for row in reader.search_listing(names_only=True)], [updated.name])
+
+    def test_sealed_folder_records_with_same_old_slot_keep_distinct_files(self):
+        from hashlib import sha256
+        import json
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            provider = self.provider(root / 'copy', Client())
+            self.addCleanup(provider.close)
+            index = provider._directory_index
+            index.folder = root / 'cache'
+            index.cipher = SimpleNamespace(identity='fixture-key')
+            seen = {}
+            with patch('features.rclone.localcrypt.directory_index.credential_authority', return_value='fixture'):
+                for number in range(1025):
+                    inode = (1, number)
+                    scope = sha256(json.dumps(['fixture', provider.storage_namespace, inode]).encode()).hexdigest()
+                    slot = int(scope[:3], 16) % 1024
+                    if slot in seen:
+                        first, _ = index._record_path(seen[slot])
+                        second, _ = index._record_path(inode)
+                        self.assertNotEqual(first, second)
+                        break
+                    seen[slot] = inode
+                else:
+                    self.fail('Fixture did not find a legacy collision')
 
     def test_session_cache_keeps_tree_root_when_large_share_evicts_subfolders(self):
         from features.rclone.localcrypt.directory_index import DirectoryNameMemory
