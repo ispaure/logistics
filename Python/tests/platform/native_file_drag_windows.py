@@ -138,21 +138,30 @@ class Desktop:
         self.user.SetCursorPos(*start)
         sleep(.25)
         self.user.mouse_event(2, 0, 0, 0, 0)
+        modifier_held = False
         try:
             sleep(.2)
             if key:
                 self.key(key)
+                modifier_held = True
             for step in range(1, 21):
                 point = tuple(round(a + (b - a) * step / 20) for a, b in zip(start, end))
                 self.user.SetCursorPos(*point)
                 sleep(.04)
             sleep(.3)
             if escape:
+                # Ctrl+Escape opens the Windows Start menu. Cancel the drag
+                # with Escape alone while the mouse button is still down.
+                if modifier_held:
+                    self.key(key, up=True)
+                    modifier_held = False
+                    sleep(.1)
                 self.key(27)
+                sleep(.15)
                 self.key(27, up=True)
         finally:
             self.user.mouse_event(4, 0, 0, 0, 0)
-            if key:
+            if modifier_held:
                 sleep(.25)
                 self.key(key, up=True)
 
@@ -288,9 +297,6 @@ def exercise(root, cleanup):
     assert to_qt(shell / 'Collision.txt', 17) == 'failed'
     assert (local / 'Collision.txt').read_bytes() == b'existing' and (shell / 'Collision.txt').read_bytes() == b'incoming'
     print('Explorer → Logistics: collision preserved both files and reported failure.', flush=True)
-    to_qt(cancelled, 17, escape=True)
-    assert not (local / cancelled.name).exists() and cancelled.exists()
-    print('Explorer → Logistics: Escape left source unchanged.', flush=True)
     to_explorer(outbound, 17)
     received = receive / outbound.name / 'nested/file.txt'
     until(received.is_file, 'Explorer did not copy the nested folder.')
@@ -318,6 +324,9 @@ def exercise(root, cleanup):
     until(lambda: not desktop.user.FindWindowW(None, 'Replace or Skip Files'), 'Explorer conflict remains open.')
     assert existing.read_bytes() == b'existing at native destination' and collision.read_bytes() == b'existing'
     print('Logistics → Explorer: native conflict dialog cancelled and preserved both files.', flush=True)
+    to_qt(cancelled, 17, escape=True)
+    assert not (local / cancelled.name).exists() and cancelled.exists()
+    print('Explorer → Logistics: Escape left source unchanged.', flush=True)
     assert not list(local.glob('.drag-*'))
 
 
