@@ -376,6 +376,7 @@ def adopt_notebook_document(app, panel, document):
         from features.notebooks.progress import notebook_progress_state
         panel.progress.save(notebook_progress_state(panel.editor))
     panel.editor.checkpoint = document.checkpoint
+    panel.editor.checkpoint_stroke = document.checkpoint_stroke
     panel.editor.checkpoint_unconfirmed = False
     session.resource, session.transient = document.key, not resource.policy.persistent
     session.history_source = None

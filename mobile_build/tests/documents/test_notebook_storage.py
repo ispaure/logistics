@@ -243,14 +243,13 @@ class NotebookStorageTests(unittest.TestCase):
         document = panel.document
         self.assertIsNone(document.resource)
         original_read = Path.read_bytes
-        manifest = document.recovery.root / document.key / 'state.json'
-        attempted = False
-        def reject_publication(*args, **kwargs):
+        attempted = None
+        def reject_publication(path, *args, **kwargs):
             nonlocal attempted
-            attempted = True
+            attempted = path
             raise OSError('Publication interrupted')
         def unreadable(path):
-            if attempted and path == manifest:
+            if path == attempted:
                 raise OSError('Recovery readback unavailable')
             return original_read(path)
         with patch('features.notebooks.recovery.atomic_write_json', side_effect=reject_publication), \

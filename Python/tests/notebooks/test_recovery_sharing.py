@@ -19,7 +19,7 @@ import unittest
 
 from features.notebooks.editor import Editor
 from features.notebooks.notebook import Notebook
-from features.notebooks.recovery import Repository
+from features.notebooks.recovery import Repository, STROKES_PER_CHECKPOINT
 from features.notebooks._vendor.rmscene import scene_stream as ss
 
 
@@ -433,6 +433,136 @@ class RecoverySharingTests(unittest.TestCase):
             self.assertIsNot(book.page(0).strokes[0], original)
             editor.apply(dict(op='undo'))
             self.assertEqual(book.page(0).strokes[0].payload(), original_payload)
+
+
+class StrokeJournalTests(unittest.TestCase):
+    def setUp(self):
+        from features.notebooks.storage import NotebookDocument
+        temp = TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.repository = Repository(temp.name)
+        self.book = Notebook.new()
+        self.book.add_page()
+        self.document = NotebookDocument(self.book, recovery=self.repository)
+        self.directory = self.repository.root / self.document.key
+        self.editor = Editor(self.book, self.document.checkpoint,
+                             checkpoint_stroke=self.document.checkpoint_stroke)
+
+    def add_stroke(self, x):
+        self.editor.apply(dict(op='stroke', points=[[x, 30, .5], [x + 8, 45, .8]],
+                               tool=14, color=0, width=2))
+
+    def recover(self):
+        return Repository(self.repository.root).open(self.document.key)
+
+    def test_journal_survives_reopen_and_compacts_without_reidentifying_live_ink(self):
+        manifest = self.directory / 'state.json'
+        before = manifest.read_bytes()
+        for i in range(STROKES_PER_CHECKPOINT - 1):
+            self.add_stroke(30 + 3 * i)
+        live_ids = [stroke.id for stroke in self.book.page(0).strokes]
+        self.assertEqual(manifest.read_bytes(), before)
+        self.assertEqual(len(list(self.directory.glob('stroke-*.json'))), STROKES_PER_CHECKPOINT - 1)
+        self.assertEqual([stroke.id for stroke in self.recover().page(0).strokes], live_ids)
+        self.add_stroke(100)
+        self.assertNotEqual(manifest.read_bytes(), before)
+        self.assertFalse(list(self.directory.glob('stroke-*.json')))
+        self.assertEqual([stroke.id for stroke in self.book.page(0).strokes[:-1]], live_ids)
+        self.add_stroke(110)
+        expected = [stroke.points for stroke in self.book.page(0).strokes]
+        self.assertEqual([stroke.points for stroke in self.recover().page(0).strokes], expected)
+        self.editor.apply(dict(op='undo'))
+        self.assertEqual([stroke.points for stroke in self.recover().page(0).strokes], expected[:-1])
+        self.editor.apply(dict(op='undo'))
+        self.assertEqual([stroke.points for stroke in self.recover().page(0).strokes], expected[:-2])
+        self.editor.apply(dict(op='redo'))
+        self.assertEqual([stroke.points for stroke in self.recover().page(0).strokes], expected[:-1])
+
+    def test_page_switch_replay_and_stale_window_rejection(self):
+        other = Repository(self.repository.root)
+        stale = other.open(self.document.key)
+        self.add_stroke(30)
+        with self.assertRaisesRegex(ValueError, 'changed in another window'):
+            other.save(self.document.key, stale)
+        self.editor.apply(dict(op='page', index=1))
+        self.add_stroke(60)
+        self.editor.apply(dict(op='page', index=0))
+        self.add_stroke(90)
+        result = self.recover()
+        self.assertEqual([stroke.points[0][0] for stroke in result.page(0).strokes], [30, 90])
+        self.assertEqual([stroke.points[0][0] for stroke in result.page(1).strokes], [60])
+        with self.assertRaisesRegex(ValueError, 'changed in another window'):
+            other.delete(self.document.key, expected=stale)
+
+    def test_failed_publication_rolls_back_and_uncertain_publication_can_be_recovered(self):
+        from unittest.mock import patch
+        from commonUtils.persistence import atomic_write_json
+        from features.notebooks.protocol import RecoveryIncomplete
+
+        with patch('features.notebooks.recovery.atomic_write_json', side_effect=OSError('write failed')):
+            with self.assertRaisesRegex(OSError, 'write failed'):
+                self.add_stroke(30)
+        self.assertFalse(self.editor.undo)
+        self.assertFalse(self.recover().page(0).strokes)
+
+        def publish_without_confirmation(*args, **kwargs):
+            atomic_write_json(*args, **kwargs)
+            raise OSError('directory fsync failed')
+
+        with patch('features.notebooks.recovery.atomic_write_json', side_effect=publish_without_confirmation):
+            with self.assertRaises(RecoveryIncomplete) as caught:
+                self.add_stroke(60)
+        self.assertTrue(caught.exception.published)
+        self.add_stroke(90)
+        result = self.recover()
+        self.assertEqual([stroke.points[0][0] for stroke in result.page(0).strokes], [60, 90])
+        latest = max(self.directory.glob('stroke-*.json'))
+        latest.write_text(latest.read_text().replace('90.0', '91.0'))
+        with self.assertRaisesRegex(ValueError, 'integrity'):
+            self.recover()
+
+    def test_interrupted_compaction_keeps_the_previous_stroke_journal(self):
+        from unittest.mock import patch
+
+        for i in range(STROKES_PER_CHECKPOINT - 1):
+            self.add_stroke(30 + i)
+        with patch('features.notebooks.recovery.atomic_write_json', side_effect=OSError('interrupted fold')):
+            with self.assertRaisesRegex(OSError, 'interrupted fold'):
+                self.add_stroke(130)
+        self.assertEqual(len(self.recover().page(0).strokes), STROKES_PER_CHECKPOINT - 1)
+        self.add_stroke(130)
+        self.assertEqual(len(self.recover().page(0).strokes), STROKES_PER_CHECKPOINT)
+        self.assertFalse(list(self.directory.glob('stroke-*.json')))
+
+    def test_retry_recognizes_previously_unreadable_published_stroke(self):
+        from unittest.mock import patch
+        from commonUtils.persistence import atomic_write_json
+        from features.notebooks.protocol import RecoveryIncomplete
+
+        read_bytes = Path.read_bytes
+        attempted = None
+
+        def unreadable_publication(path, *args, **kwargs):
+            nonlocal attempted
+            atomic_write_json(path, *args, **kwargs)
+            attempted = path
+            raise OSError('interrupted confirmation')
+
+        def read(path):
+            if path == attempted:
+                raise OSError('interrupted readback')
+            return read_bytes(path)
+
+        with patch('features.notebooks.recovery.atomic_write_json', side_effect=unreadable_publication), \
+                patch.object(Path, 'read_bytes', read):
+            with self.assertRaises(RecoveryIncomplete) as caught:
+                self.add_stroke(30)
+        self.assertIsNone(caught.exception.published)
+        self.assertTrue(self.editor.checkpoint_unconfirmed)
+        self.add_stroke(60)
+        self.assertFalse(self.editor.checkpoint_unconfirmed)
+        self.assertFalse(list(self.directory.glob('stroke-*.json')))
+        self.assertEqual([stroke.points[0][0] for stroke in self.recover().page(0).strokes], [30, 60])
 
 
 if __name__ == '__main__':

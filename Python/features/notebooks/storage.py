@@ -43,7 +43,7 @@ class NotebookDocument:
             raise ValueError('This notebook was deleted. Retry Delete to finish cleanup, or use Save As.')
 
     @serialize_mutation
-    def checkpoint(self, book):
+    def checkpoint(self, book, *, stroke_page=None):
         self._check_editable()
         if not self.writable:
             raise ValueError('This notebook is read-only. Make a local copy before editing.')
@@ -59,7 +59,10 @@ class NotebookDocument:
             # Recovery's receipt decides whether the edit may be rolled back.
             rollback = self.changed(self)
             if self.recovery is not None:
-                self.recovery.save(self.key, book)
+                if stroke_page is None:
+                    self.recovery.save(self.key, book)
+                else:
+                    self.recovery.append_stroke(self.key, book, stroke_page)
         except RecoveryIncomplete as error:
             if error.published is not True:
                 self.dirty = True
@@ -73,6 +76,9 @@ class NotebookDocument:
                                              'Keep this draft open and use Save As.', published=None) from error
             self.dirty = previous_dirty
             raise
+
+    def checkpoint_stroke(self, book, index):
+        self.checkpoint(book, stroke_page=index)
 
     def save(self, *, cancelled=lambda: False):
         self._check_editable()

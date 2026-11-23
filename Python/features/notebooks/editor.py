@@ -34,9 +34,10 @@ def _pdf_reader(data):
 
 
 class Editor:
-    def __init__(self, notebook, checkpoint=lambda book: None):
+    def __init__(self, notebook, checkpoint=lambda book: None, *, checkpoint_stroke=None):
         self.notebook = notebook
         self.checkpoint = checkpoint
+        self.checkpoint_stroke = checkpoint_stroke
         self.checkpoint_unconfirmed = False
         self.index = 0
         self.brush_colors = {}
@@ -307,12 +308,15 @@ class Editor:
             self._apply_edit(op, action)
 
     @contextmanager
-    def _checkpoint_transaction(self, retain):
+    def _checkpoint_transaction(self, retain, *, stroke_page=None):
         previous = self.snapshot()
         checkpoint_error = None
         try:
             yield
-            self.checkpoint(self.notebook)
+            if self.checkpoint_unconfirmed or stroke_page is None or self.checkpoint_stroke is None:
+                self.checkpoint(self.notebook)
+            else:
+                self.checkpoint_stroke(self.notebook, stroke_page)
         except RecoveryIncomplete as error:
             self.checkpoint_unconfirmed = error.published is not True
             checkpoint_error = error
@@ -355,7 +359,7 @@ class Editor:
             del self.undo[:-50]
             self.redo.clear()
 
-        with self._checkpoint_transaction(retain):
+        with self._checkpoint_transaction(retain, stroke_page=self.index if op == 'stroke' else None):
             left = self.canvas_left()
             right = WIDTH - left
             height = self.page_height()

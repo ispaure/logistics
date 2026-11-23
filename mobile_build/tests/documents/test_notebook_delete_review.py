@@ -70,6 +70,8 @@ class NotebookDeleteReviewTests(unittest.TestCase):
         target.write_bytes(document.book.to_bytes())
         resource = local_document_resource(target, max_bytes=MAX_ARCHIVE)
         self.assertTrue(self.app.loop.run_until_complete(retarget_notebook(self.app, panel, resource)))
+        panel.editor.apply(dict(op='stroke', points=[[30, 30, .5], [50, 50, .7]]))
+        self.assertEqual(len(panel.document.recovery.open(panel.document.key).page(0).strokes), 1)
         panel.editor.apply({'op': 'rename', 'name': 'New saved document'})
         panel.document.save()
         self.assertEqual(Notebook.read(target.read_bytes()).name, 'New saved document')

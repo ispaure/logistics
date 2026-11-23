@@ -199,6 +199,7 @@ async def timed_bursts(panel, result):
     editor = panel.editor
     apply = editor.apply
     checkpoint = editor.checkpoint
+    stroke_checkpoint = editor.checkpoint_stroke
     encode = InkPage.to_bytes
     costs = result['host_ms'] = {'apply':[], 'checkpoint':[], 'encode':[]}
 
@@ -219,6 +220,8 @@ async def timed_bursts(panel, result):
 
     with patch.object(editor, 'apply', measured('apply', apply)), \
             patch.object(editor, 'checkpoint', measured('checkpoint', checkpoint)), \
+            patch.object(editor, 'checkpoint_stroke', measured('checkpoint', stroke_checkpoint)
+                         if stroke_checkpoint is not None else None), \
             patch.object(InkPage, 'to_bytes', measured('encode', encode)):
         count = len(editor.notebook.page(editor.index).strokes)
         for burst in range(BURSTS_PER_PAGE):

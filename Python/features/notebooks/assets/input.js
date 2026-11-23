@@ -3,6 +3,7 @@
 
 const fallbackPressure = .5;
 let constantPenPressure = false;
+let firstFallbackMove = false;
 // Bounded content-free input diagnostics: no coordinates, labels or stroke data.
 const inputTraceCounts = Object.create(null), inputTraceRing = [];
 const inputTraceViewId = (()=>{
@@ -160,6 +161,7 @@ canvas.onpointerdown = e => {
   if (e.nativePen) hideSwipePage();  // Android delivers pen packets directly to the canvas.
   if (!e.nativePen) canvas.setPointerCapture(active);
   inkSettings = chosenInk();
+  firstFallbackMove = e.androidPen && ['pencil', 'mechanical', 'shader'].includes(brushFor(inkSettings.tool).family);
   start = last = coord(e);
   points = [start];
   previewCount = 0;
@@ -198,10 +200,13 @@ canvas.onpointermove = e => {
   const previousEraseHits = wholeErasePreview.size;
   for (let event of events) sample(event, bounds);
   sample(e, bounds);
-  // Retain every sample, but rasterize at most once per display frame.
-  // Pen-up flushes any samples that arrived after the last preview.
+  // Android has already frame-batched these samples. Paint the first
+  // graphite/shader packet on arrival; coalesce later packets as before.
   if (mode === 'ink') {
-    if (frameBatchedInk) schedulePreview();
+    if (e.androidPen && firstFallbackMove && points.length > previewCount) {
+      firstFallbackMove = false;
+      flushPreview()
+    } else if (frameBatchedInk) schedulePreview();
     else flushPreview()
   }
   else if (mode === 'erase' && eraserKind === 'partial') {
@@ -301,9 +306,9 @@ window.logisticsNativePenReset = () => {
   if (nativePenContact && active === nativePenContact.pointerId) finish(nativePenContact, true);
   nativePenContact = null
 };
-window.logisticsNativePen = (action, id, samples, width, height) => {
+window.logisticsNativePen = (action, id, samples, width, height, androidPen = false) => {
   if (!state.native_pen || !width || !height || !samples.length) return;
-  const event = sample => ({pointerId: id + 100000, pointerType: 'pen', nativePen: true,
+  const event = sample => ({pointerId: id + 100000, pointerType: 'pen', nativePen: true, androidPen,
     clientX: sample[0] * innerWidth / width, clientY: sample[1] * innerHeight / height,
     pressure: sample[2], nativeTilt: sample[3], preventDefault() {}});
   let lastEvent = event(samples[samples.length - 1]);

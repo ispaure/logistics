@@ -372,7 +372,16 @@ class NotebookPanel:
             progress = self.load_progress(book, key, resource)
         self.progress, saved = progress
         self.key = key
-        self.editor = Editor(book, self.document.checkpoint if self.document else lambda book: self.repository.save(key, book))
+        if self.document is not None:
+            checkpoint = self.document.checkpoint
+            checkpoint_stroke = self.document.checkpoint_stroke
+        else:
+            repository = self.repository
+            def checkpoint(book):
+                repository.save(key, book)
+            def checkpoint_stroke(book, index):
+                repository.append_stroke(key, book, index)
+        self.editor = Editor(book, checkpoint, checkpoint_stroke=checkpoint_stroke)
         restore_notebook_progress(self.editor, saved)
         if mount:
             self.mount_canvas()

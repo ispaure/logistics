@@ -186,7 +186,7 @@ public final class NotebookInput implements View.OnTouchListener, View.OnHoverLi
         // Only finite native numbers cross this boundary. No JS interface or
         // document content is exposed to other origins or to Android storage.
         view.evaluateJavascript("window.logisticsNativePen&&window.logisticsNativePen('" + action
-            + "'," + pointer + ",[" + samples + "]," + view.getWidth() + "," + view.getHeight() + ")", null);
+            + "'," + pointer + ",[" + samples + "]," + view.getWidth() + "," + view.getHeight() + ",true)", null);
     }
 
     private void cancel() {

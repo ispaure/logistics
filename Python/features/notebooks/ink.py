@@ -26,6 +26,7 @@ from .brushes import BRUSHES, TOOLS, COLORS, WIDTHS, native_color, native_scale,
 WIDTH, HEIGHT = 1404, 1872
 MAX_POINTS = 100_000
 MAX_PAGE_POINTS = 1_000_000
+MAX_SCENE_FRAMES = 100_000
 MAX_NOTEBOOK_HEIGHT = HEIGHT * 8
 
 
@@ -52,7 +53,7 @@ def frames(data):
         if len(data) - offset < 8:
             raise ValueError('Truncated ink frame.')
         size = struct.unpack_from('<I', data, offset)[0] + 8
-        if size > len(data) - offset or len(result) >= 100_000:
+        if size > len(data) - offset or len(result) >= MAX_SCENE_FRAMES:
             raise ValueError('Invalid or oversized ink scene.')
         result.append(data[offset:offset + size])
         offset += size
