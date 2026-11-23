@@ -47,16 +47,34 @@ def _scan_locations(app, roots, query, *, cancelled, progress):
         provider = None
         location_checked = 0
         cache_phase = ''
+        consumed = 0
 
         def report_cache(phase):
             nonlocal cache_phase
             cache_phase = phase
 
         def report(result):
-            nonlocal location_checked
+            nonlocal consumed, location_checked
             location_checked = result.scanned
+            for row in result.rows[consumed:]:
+                check_cancelled(cancelled)
+                key = provider.relative(row['path'])
+                private = bool(provider.private)
+                if private:
+                    source = dict(type='crypt', remote=provider.remote, identity=provider.identity,
+                                  namespace=provider.storage_namespace, key=key)
+                    identity = ('crypt', source['identity'], source['namespace'], key)
+                else:
+                    path = str(Path(provider.root) / key)
+                    source, identity = dict(type='local', path=path), ('local', path)
+                if identity in seen:
+                    continue
+                seen.add(identity)
+                hits.append(dict(name=PurePosixPath(key).name, path=key, location=label,
+                                 source=source, private=private, directory=row['directory']))
+            consumed = len(result.rows)
             if progress is not None:
-                progress(checked + location_checked, cache_phase)
+                progress(checked + location_checked, cache_phase, tuple(hits[:50]))
 
         try:
             provider = app.storage_provider(label, roots)
@@ -76,21 +94,6 @@ def _scan_locations(app, roots, query, *, cancelled, progress):
                                       list_children=children, progress=report if progress is not None else None)
             report(result)
             failures.extend(result.errors)
-            for row in result.rows:
-                key = provider.relative(row['path'])
-                private = bool(provider.private)
-                if private:
-                    source = dict(type='crypt', remote=provider.remote, identity=provider.identity,
-                                  namespace=provider.storage_namespace, key=key)
-                    identity = ('crypt', source['identity'], source['namespace'], key)
-                else:
-                    path = str(Path(provider.root) / key)
-                    source, identity = dict(type='local', path=path), ('local', path)
-                if identity in seen:
-                    continue
-                seen.add(identity)
-                hits.append(dict(name=PurePosixPath(key).name, path=key, location=label,
-                                 source=source, private=private, directory=row['directory']))
         except (OSError, ValueError):
             failures.append((label, 'Location could not be searched.'))
         finally:
@@ -113,7 +116,7 @@ def _scan_locations(app, roots, query, *, cancelled, progress):
             if matches_name(name, terms):
                 hits.append(dict(name=name, path=name, location='Saved documents',
                                  source=dict(type='notebook', resource=key), private=False))
-    return sorted(hits, key=lambda hit: (hit['name'].casefold(), hit['location'], hit['path'])), failures
+    return hits, failures
 
 
 async def reveal_search_hit(app, hit):
@@ -153,18 +156,21 @@ class DocumentSearch:
         self.stop_local_search()
         work = self.listing.begin()
         last_report = float('-inf')
+        first_match_shown = False
         finished = False
 
-        def display_progress(checked, cache_phase):
+        def display_progress(checked, cache_phase, hits):
             if not finished and self.listing.accepts(work, private=True):
-                self.publish_progress(checked, cache_phase)
+                self.publish_progress(checked, cache_phase, hits)
 
-        def report(checked, cache_phase):
-            nonlocal last_report
+        def report(checked, cache_phase, hits):
+            nonlocal last_report, first_match_shown
             now = monotonic()
-            if checked and not work.cancel.is_set() and now - last_report >= .25:
+            first_hit = bool(hits) and not first_match_shown
+            if checked and not work.cancel.is_set() and (first_hit or now - last_report >= .25):
                 last_report = now
-                self.app.loop.call_soon_threadsafe(display_progress, checked, cache_phase)
+                first_match_shown = first_match_shown or first_hit
+                self.app.loop.call_soon_threadsafe(display_progress, checked, cache_phase, hits)
 
         async def search():
             nonlocal finished

@@ -46,6 +46,16 @@ def document_group(rows):
     """One rounded surface for a document section, with quiet inset dividers."""
     group = surface(toga.Box(style=Pack(direction=COLUMN, margin_bottom=8)), radius=16)
     group._document_group = True
+    append_document_group_rows(group, rows)
+    backend = type(group._impl).__module__
+    if backend.startswith('toga_iOS.'):
+        group._impl.native.layer.masksToBounds = True
+    elif backend.startswith('toga_android.'):
+        group._impl.native.setClipToOutline(True)
+    return group
+
+def append_document_group_rows(group, rows, *, keep_spacing=False):
+    """Append search rows with fixed spacing so existing hit targets stay put."""
     def borderless(widget):
         if isinstance(widget, toga.Button):
             foreground = 'accent' if hasattr(widget, 'document_actions') else 'text'
@@ -56,20 +66,15 @@ def document_group(rows):
         for child in widget.children:
             borderless(child)
     for index, row in enumerate(rows):
-        if index:
+        first = not group.children
+        if not first:
             group.add(surface(toga.Box(style=Pack(height=1, margin_left=16, margin_right=16)),
                 radius=0, background='border', outlined=False, eink_outlined=False))
-        row.style.margin_bottom = 8 if index == len(rows) - 1 else 0
-        row.style.margin_top = 8 if index == 0 else 0
+        row.style.margin_bottom = 8 if keep_spacing or index == len(rows) - 1 else 0
+        row.style.margin_top = 8 if first else 0
         row.style.margin_left = row.style.margin_right = 8
         borderless(row)
         group.add(row)
-    backend = type(group._impl).__module__
-    if backend.startswith('toga_iOS.'):
-        group._impl.native.layer.masksToBounds = True
-    elif backend.startswith('toga_android.'):
-        group._impl.native.setClipToOutline(True)
-    return group
 
 def empty_document_row(text):
     """Informational copy sits directly on the page, outside action surfaces."""

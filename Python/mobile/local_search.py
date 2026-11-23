@@ -17,9 +17,9 @@ from commonUtils.search.providers import search_resources
 
 def filename_scan_label(cache_phase):
     return {
-        'checking': 'Checking LocalCrypt folder cache…',
+        'checking': 'Checking LocalCrypt filename cache…',
         'cached': 'Searching cached LocalCrypt names…',
-        'refreshing': 'Refreshing LocalCrypt folder names…',
+        'refreshing': 'Refreshing LocalCrypt filenames…',
     }.get(cache_phase, 'Scanning filenames…')
 
 

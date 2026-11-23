@@ -130,12 +130,15 @@ class LocalDocumentSearchTests(TestCase):
               patch.object(app, 'linked_crypt_locations', return_value={}),
               patch.object(app, 'storage_provider', side_effect=lambda label, roots: roots[label]),
               patch.object(LocalFiles, 'open', side_effect=AssertionError('Search read file content'))):
-            hits, failures = scan_local_documents(app, 'nEeDlE', progress=lambda count, phase: progress.append((count, phase)))
+            hits, failures = scan_local_documents(
+                app, 'nEeDlE', progress=lambda count, phase, preview: progress.append((count, phase, preview)))
         self.assertFalse(failures)
-        checked = [count for count, _ in progress]
+        checked = [count for count, _, _ in progress]
         self.assertEqual(checked, sorted(checked))
         self.assertEqual(checked[-1], 20)
-        self.assertIn('refreshing', [phase for _, phase in progress])
+        self.assertIn('refreshing', [phase for _, phase, _ in progress])
+        self.assertTrue(any(0 < len(preview) < len(hits) for _, _, preview in progress))
+        self.assertTrue(all(hits[:len(preview)] == list(preview) for _, _, preview in progress))
         self.assertEqual({hit['location'] for hit in hits}, set(providers))
         self.assertTrue(all(hit['name'] == 'Needle.md' for hit in hits))
         self.assertEqual(next(hit['source'] for hit in hits if hit['private']), dict(
@@ -235,7 +238,7 @@ class LocalDocumentSearchTests(TestCase):
         app.show_documents_hub()
         started, release = Event(), Event()
         def slow(*args, **kwargs):
-            kwargs['progress'](4501, 'cached')
+            kwargs['progress'](4501, 'cached', ())
             started.set()
             release.wait(4)
             return [dict(name='Private stale.md')], []
@@ -258,6 +261,30 @@ class LocalDocumentSearchTests(TestCase):
             app.loop.run_until_complete(run())
         finally:
             release.set()
+
+    def test_document_search_appends_hits_without_replacing_or_resorting_rows(self):
+        import toga
+        from mobile_build.tests.workspace.test_hub_documents import widgets
+
+        app = self.app
+        app.show_documents_hub()
+        hub = app.hub_controller()
+        hub.clear_document_search_results()
+
+        def hit(name):
+            return dict(name=name, path=name, location='Local files', private=False, directory=False,
+                        source=dict(type='local', path=str(app.private_root / name)))
+
+        first, second = hit('Zulu.txt'), hit('Alpha.txt')
+        hub.show_document_search_progress(5, '', (first,))
+        group = hub._document_search_group
+        original = group.children[0]
+        hub.show_document_search_progress(9, '', (first, second))
+        hub.publish_document_search([first, second], [])
+        self.assertIs(group.children[0], original)
+        self.assertEqual([w.text for w in widgets(group) if isinstance(w, toga.Button) and w.text.endswith('.txt')],
+                         ['Zulu.txt', 'Alpha.txt'])
+        self.assertEqual(hub._documents_search_status.text, '2 matches')
 
     def test_libraries_are_two_direct_lists_with_bounded_notes_discovery(self):
         app = self.app

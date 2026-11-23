@@ -16,7 +16,8 @@ from toga.style.pack import COLUMN, ROW, CENTER
 from .appearance import accessible_name, batch_surfaces, list_button, surface
 from .control_icons import icon_button, button_icons
 from .hub_controls import (
-    PanelGrid, document_group, document_list, empty_document_row, retire_document_actions, text_document_kind,
+    PanelGrid, append_document_group_rows, document_group, document_list, empty_document_row,
+    retire_document_actions, text_document_kind,
 )
 from .ui_metrics import TOUCH_TARGET
 
@@ -285,9 +286,11 @@ class DocumentsHub:
         for menu in getattr(self, '_document_search_menus', ()):
             menu.dispose()
         self._document_search_menus = []
+        self._document_search_published = 0
+        self._document_search_group = None
         self.document_search_results.clear()
 
-    def show_document_search_progress(self, checked=0, cache_phase=''):
+    def show_document_search_progress(self, checked=0, cache_phase='', hits=()):
         from .local_search import filename_scan_label
 
         status = self._documents_search_status
@@ -296,13 +299,15 @@ class DocumentsHub:
         if status.text != message:
             status.text = message
         if status.parent is None:
-            self.document_search_results.add(status)
+            self.document_search_results.insert(0, status)
+        if len(hits) > getattr(self, '_document_search_published', 0):
+            self.publish_document_search(hits, (), finished=False)
 
-    def publish_document_search(self, hits, failures):
+    def publish_document_search(self, hits, failures, *, finished=True):
         target = self.document_search_results
-        self.clear_document_search_results()
+        published = getattr(self, '_document_search_published', 0)
         rows = []
-        for hit in hits:
+        for hit in hits[published:]:
             async def open_result(widget=None, source=hit['source'], hit=hit, **kwargs):
                 if not self.app.checkpoint():
                     return
@@ -346,7 +351,19 @@ class DocumentsHub:
             row = toga.Box(children=[entry_icon(hit.get('directory', False)), button, more],
                            style=Pack(direction=ROW, align_items=CENTER))
             rows.append(row)
-        target.add(document_list(rows, 'No matching local documents.'))
+        if rows:
+            group = getattr(self, '_document_search_group', None)
+            if group is None:
+                group = self._document_search_group = document_group(())
+                target.add(group)
+            append_document_group_rows(group, rows, keep_spacing=True)
+            self._document_search_published = len(hits)
+        if finished:
+            count = max(published, len(hits))
+            if self._documents_search_status.parent is target:
+                self._documents_search_status.text = f'{count:,} matches'
+            if not count:
+                target.add(empty_document_row('No matching local documents.'))
         if failures:
             target.add(empty_document_row('Some local locations could not be searched.'))
         self.reflow_documents_hub()
