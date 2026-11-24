@@ -152,6 +152,24 @@ def uninstall(browser):
     browser._android_file_drag = None
 
 
+class _TileHold(dynamic_proxy(View.OnLongClickListener)):
+    def __init__(self, callback):
+        super().__init__()
+        self.callback = callback
+
+    def onLongClick(self, view):
+        return self.callback(view)
+
+
+class _TileTouch(dynamic_proxy(View.OnTouchListener)):
+    def __init__(self, callback):
+        super().__init__()
+        self.callback = callback
+
+    def onTouch(self, view, event):
+        return self.callback(view, event)
+
+
 def attach_tile_hold(browser, native, entry):
     browser_ref, epoch = ref(browser), browser.epoch
     drag = getattr(browser, 'file_drag', None)
@@ -177,46 +195,44 @@ def attach_tile_hold(browser, native, entry):
         if browser is not None and browser.can_show_tile_actions and browser.epoch == epoch:
             browser._loop.create_task(browser._tile_actions(entry))
 
-    class Hold(dynamic_proxy(View.OnLongClickListener)):
-        def onLongClick(self, view):
-            nonlocal token, timer
-            browser = browser_ref()
-            if browser is None or not browser.can_show_tile_actions or browser.epoch != epoch:
-                return False
-            if drag is not None and point is not None:
-                token = drag.begin(entry)
-            if token is None:
-                open_menu()
-            else:
-                parent = view.getParent()
-                if parent is not None:
-                    parent.requestDisallowInterceptTouchEvent(True)
-                timer = browser._loop.call_later(TILE_MENU_DELAY, open_menu)
-            return True
-
-    class Touch(dynamic_proxy(View.OnTouchListener)):
-        def onTouch(self, view, event):
-            nonlocal point, token
-            action = event.getActionMasked()
-            if action == MotionEvent.ACTION_DOWN:
-                point = float(event.getRawX()), float(event.getRawY())
-            elif token is not None and action == MotionEvent.ACTION_MOVE:
-                dx = float(event.getRawX()) - point[0]
-                dy = float(event.getRawY()) - point[1]
-                if dx * dx + dy * dy >= slop * slop:
-                    armed, token = token, None
-                    retire()
-                    return lift(drag, armed, view)
-            elif action == MotionEvent.ACTION_UP:
-                if token is not None:
-                    open_menu()
-                point = None
-            elif action == MotionEvent.ACTION_CANCEL:
-                retire()
-                point = None
+    def on_long_click(view):
+        nonlocal token, timer
+        browser = browser_ref()
+        if browser is None or not browser.can_show_tile_actions or browser.epoch != epoch:
             return False
+        if drag is not None and point is not None:
+            token = drag.begin(entry)
+        if token is None:
+            open_menu()
+        else:
+            parent = view.getParent()
+            if parent is not None:
+                parent.requestDisallowInterceptTouchEvent(True)
+            timer = browser._loop.call_later(TILE_MENU_DELAY, open_menu)
+        return True
 
-    hold, touch = Hold(), Touch()
+    def on_touch(view, event):
+        nonlocal point, token
+        action = event.getActionMasked()
+        if action == MotionEvent.ACTION_DOWN:
+            point = float(event.getRawX()), float(event.getRawY())
+        elif token is not None and action == MotionEvent.ACTION_MOVE:
+            dx = float(event.getRawX()) - point[0]
+            dy = float(event.getRawY()) - point[1]
+            if dx * dx + dy * dy >= slop * slop:
+                armed, token = token, None
+                retire()
+                return lift(drag, armed, view)
+        elif action == MotionEvent.ACTION_UP:
+            if token is not None:
+                open_menu()
+            point = None
+        elif action == MotionEvent.ACTION_CANCEL:
+            retire()
+            point = None
+        return False
+
+    hold, touch = _TileHold(on_long_click), _TileTouch(on_touch)
     native.setOnLongClickListener(hold)
     native.setOnTouchListener(touch)
     return hold, touch, retire

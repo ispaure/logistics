@@ -27,10 +27,12 @@ from .ui_metrics import CONTROL_TEXT, TOUCH_TARGET
 
 
 _TILE_TITLE_INSET = 8
+_TILE_PREVIEW_HEIGHT = 96
+_TILE_CAPTION_HEIGHT = 52
 
 
 def _style_tile_title(button):
-    button.style.update(height=72, font_size=CONTROL_TEXT)
+    button.style.update(height=_TILE_CAPTION_HEIGHT, font_size=CONTROL_TEXT)
     allow_label_to_shrink(button)
     impl = button._impl
     backend = type(impl).__module__
@@ -188,7 +190,7 @@ class FileDetailsPanel(toga.Box):
 
 class LocalFileBrowser(FileBrowser):
     # 96 for the preview, 72 for the title and 4-point card margins.
-    TILE_ROW_HEIGHT = 176
+    TILE_ROW_HEIGHT = _TILE_PREVIEW_HEIGHT + _TILE_CAPTION_HEIGHT + 8  # Card margins.
 
     def __init__(self, **kwargs):
         self.thumbnails = None
@@ -430,32 +432,36 @@ class LocalFileBrowser(FileBrowser):
         card = super()._tile_card(entry)
         image_box, button = card.children
         if type(image_box._impl).__module__.startswith('toga_android.'):
-            image_box.style.update(direction=ROW, width=96)
+            image_box.style.update(direction=ROW, width=_TILE_PREVIEW_HEIGHT)
             card.remove(image_box)
             card.insert(0, toga.Box(children=[
                 toga.Box(style=Pack(flex=1)), image_box, toga.Box(style=Pack(flex=1)),
-            ], style=Pack(direction=ROW, height=96, align_items=CENTER)))
+            ], style=Pack(direction=ROW, height=_TILE_PREVIEW_HEIGHT, align_items=CENTER)))
         if self.thumbnails is not None and self.thumbnails.supports(entry):
             self._tile_previews[entry.identity] = image_box, image_box.children[0]
         controls = [button]
         if self.on_item_actions is not None:
-            name = entry.payload.get('display_name') or PurePosixPath(entry.label).name
             backend = type(button._impl).__module__
-            card._selection_display = object()
-            circle = card._tile_selection = icon_button('select_item', 'Select ' + name,
-                on_press=partial(self._select_pressed, entry))
-            surface(circle, background='transparent', foreground='accent', outlined=False)
+            selecting = self.on_check_entry is not None
+            if selecting:
+                circle = card._tile_selection = icon_button('select_item', '',
+                    on_press=partial(self._select_pressed, entry))
+                surface(circle, background='transparent', foreground='accent', outlined=False)
+                card._selection_display = None
+                controls.append(circle)
             button.style.flex = 1
             card.remove(button)
-            caption_controls = [circle, button] if self.on_check_entry is not None else [button]
+            caption_controls = [circle, button] if selecting else [button]
             card._tile_caption = toga.Box(children=caption_controls,
-                style=Pack(direction=ROW, height=72, align_items=CENTER))
+                style=Pack(direction=ROW, height=_TILE_CAPTION_HEIGHT, align_items=CENTER))
             card.add(card._tile_caption)
-            self._show_tile_selection(entry, card)
-            controls.append(circle)
-            if self.on_check_entry is None:
+            if selecting:
+                self._show_tile_selection(entry, card)
+            else:
                 for control in (card.children[0], button):
                     self._attach_tile_hold(control, entry)
+            if backend.startswith('toga_iOS.'):
+                card._impl.native.accessibilityElements = [control._impl.native for control in controls]
         binding = getattr(self._tile_scroll, '_file_key_binding', None)
         if binding is not None and button.factory.Button.__module__.startswith('toga_android.'):
             # All tile controls dispatch to the same browser and transfer
@@ -488,22 +494,13 @@ class LocalFileBrowser(FileBrowser):
                     self._show_tile_selection(entry, card)
 
     def _show_tile_selection(self, entry, card):
-        state = entry.identity in self.checked_entries if self.on_check_entry is not None else None
+        state = entry.identity in self.checked_entries
         if card._selection_display is state:
             return
         card._selection_display = state
-        circle = card._tile_selection
-        selected_mode = state is not None
-        circle.style.update(display='pack' if selected_mode else 'none',
-                            visibility='visible' if selected_mode else 'hidden')
-        if selected_mode:
-            name = entry.payload.get('display_name') or PurePosixPath(entry.label).name
-            apply_icon(circle, 'selected_item' if state else 'select_item',
-                       ('Deselect ' if state else 'Select ') + name)
-        if type(card._impl).__module__.startswith('toga_iOS.'):
-            title = card._tile_caption.children[-1]
-            controls = (title, circle) if selected_mode else (title,)
-            card._impl.native.accessibilityElements = [control._impl.native for control in controls]
+        name = entry.payload.get('display_name') or PurePosixPath(entry.label).name
+        apply_icon(card._tile_selection, 'selected_item' if state else 'select_item',
+                   ('Deselect ' if state else 'Select ') + name)
 
     def _attach_tile_hold(self, control, entry):
         backend = type(control._impl).__module__

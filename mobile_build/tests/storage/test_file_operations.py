@@ -218,7 +218,7 @@ class FileOperationTests(unittest.TestCase):
                 ('Deselect ' if name == 'first.txt' else 'Select ') + name)
         app.end_file_selection()
         for _, card, *_ in browser._tile_cards.values():
-            self.assertEqual(card._tile_selection.style.visibility, 'hidden')
+            self.assertFalse(hasattr(card, '_tile_selection'))
 
     def test_drag_moves_a_folder_and_its_contents_into_a_sibling_folder(self):
         from mobile.file_drag import FileDrag

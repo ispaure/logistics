@@ -94,8 +94,9 @@ class FilenameDisplayTests(unittest.TestCase):
                     icon = media.children[0].layout
                     self.assertEqual(list(caption.children), [title])
                     self.assertEqual(title.layout.content_width, caption.layout.content_width)
-                    self.assertIsNone(card._tile_selection.parent)
-                    self.assertGreaterEqual(title.layout.content_height, 64)
+                    self.assertFalse(hasattr(card, '_tile_selection'))
+                    self.assertGreaterEqual(title.layout.content_height, 48)
+                    self.assertLessEqual(title.layout.content_height, 56)
                     self.assertEqual(icon.absolute_content_left + icon.content_width / 2,
                                      media.layout.absolute_content_left + media.layout.content_width / 2)
                     self.assertLessEqual(media.layout.absolute_content_top + media.layout.content_height,
