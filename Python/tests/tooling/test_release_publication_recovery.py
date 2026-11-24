@@ -157,10 +157,11 @@ class PublicationRecoveryTests(unittest.TestCase):
         self.receipt.write_text(json.dumps(value))
         return value
 
-    def run_owned(self, **kwargs):
+    def run_owned(self, *, timeout=5, **kwargs):
+        # A fake provider is fast, but the observer uses real Git and fsync.
         return owner._owned_release_source(self.root, self.client, self.tag, self.commit, Event(),
             receipt=self.receipt, owner=self.token, reuse_test_results=True,
-            published_commit=True, timeout=.2, poll=.001, **kwargs)
+            published_commit=True, timeout=timeout, poll=.001, **kwargs)
 
     def test_release_plan_hosted_policy_defaults_on_and_off_is_explicit(self):
         from logistics_build.manager_journeys import run_values
@@ -557,7 +558,7 @@ class PublicationRecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(TimeoutError, 'resume this exact receipt/tag'):
                 owner._owned_release_source(self.root, self.client, self.tag, self.commit, cancelled,
                     receipt=self.receipt, owner=self.token, reuse_test_results=True,
-                    published_commit=True, timeout=.2, poll=.001)
+                    published_commit=True, timeout=5, poll=.001)
         record = json.loads(self.receipt.read_text())
         self.assertEqual(record['status'], 'observation-stopped')
         self.assertEqual(record['tag_object'], self.tag_object)
@@ -580,7 +581,7 @@ class PublicationRecoveryTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, 'cancelled before external effect or completion'):
                 owner._owned_release_source(self.root, self.client, self.tag, self.commit, cancelled,
                     receipt=self.receipt, owner=self.token, reuse_test_results=True,
-                    published_commit=True, timeout=.2, poll=.001)
+                    published_commit=True, timeout=5, poll=.001)
         self.assertNotIn('proof', json.loads(self.receipt.read_text()))
         self.assertFalse(self.client.posts)
 
@@ -613,7 +614,7 @@ class PublicationRecoveryTests(unittest.TestCase):
     def test_early_visible_success_jobs_are_not_terminal_proof(self):
         self.client.jobs = self.client.jobs[:1]
         with self.assertRaises(TimeoutError):
-            self.run_owned()
+            self.run_owned(timeout=.2)
         self.assertFalse(self.client.posts)
 
     def test_release_state_and_duplicate_asset_are_strict(self):
