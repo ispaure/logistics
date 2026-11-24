@@ -378,15 +378,18 @@ class LocalDocumentSearchTests(TestCase):
             return dict(name=name, path=name, location='Local files', private=False, directory=False,
                         source=dict(type='local', path=str(app.private_root / name)))
 
-        first, second = hit('Zulu.txt'), hit('Alpha.txt')
+        first = hit('Zulu - A long filename that needs to wrap in a narrow viewport.txt')
+        second = hit('Alpha.txt')
         hub.show_document_search_progress(5, '', (first,))
         group = hub._document_search_group
         original = group.children[0]
         hub.show_document_search_progress(9, '', (first, second))
         hub.publish_document_search([first, second], [], checked_localcrypt_cache=True)
         self.assertIs(group.children[0], original)
-        self.assertEqual([w.text for w in widgets(group) if isinstance(w, toga.Button) and w.text.endswith('.txt')],
-                         ['Zulu.txt', 'Alpha.txt'])
+        buttons = [w for w in widgets(group) if isinstance(w, toga.Button) and w.text.endswith('.txt')]
+        self.assertEqual([button.text for button in buttons], [first['name'], second['name']])
+        self.assertEqual(buttons[0].accessible_name, first['name'])
+        self.assertEqual(buttons[0].style.height, 64)
         self.assertEqual(hub._documents_search_status.text, '2 matches · LocalCrypt cache checked')
 
     def test_libraries_have_direct_lists_with_bounded_discovery(self):

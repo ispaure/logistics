@@ -378,6 +378,9 @@ class DocumentsHub:
             self.publish_document_search(hits, (), finished=False)
 
     def publish_document_search(self, hits, failures, *, finished=True, checked_localcrypt_cache=False):
+        from .browser_ui import entry_icon, wrapped_filename
+        from .file_items import native_menu, reference_actions
+
         target = self.document_search_results
         published = getattr(self, '_document_search_published', 0)
         rows = []
@@ -399,13 +402,10 @@ class DocumentsHub:
                 except (OSError, ValueError) as error:
                     await self.main_window.dialog(toga.InfoDialog('Could not open file', str(error)))
             button = list_button(toga.Button(hit['name'], on_press=open_result,
-                                             style=Pack(height=TOUCH_TARGET, flex=1, font_size=FILENAME_FONT)))
-            from .browser_ui import middle_filename
-            middle_filename(button)
+                                             style=Pack(height=64, flex=1, font_size=FILENAME_FONT)))
+            wrapped_filename(button)
             button_icons(button, [('storage_local', 'Local document'), *(
                 [('storage_unlocked', 'Unlocked LocalCrypt')] if hit['private'] else [])])
-            from .browser_ui import entry_icon
-            from .file_items import native_menu, reference_actions
             more = icon_button('more', 'File actions for ' + hit['name'])
             actions = [('Open folder' if hit.get('directory') else 'Open', open_result)]
             if hit['source']['type'] in {'local', 'crypt'}:
