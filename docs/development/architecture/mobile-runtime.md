@@ -317,6 +317,10 @@ Revalidate visibility, privacy and workspace identity before recovery. Archive
 password prompts still apply. A late Android trim can arrive after resume;
 request the same recovery after trimming and defer it while locked or inactive.
 `test_reader_sessions.py` covers duplicate wake, stale tasks and late trim.
+Foreground EPUB recovery also probes the retained chapter's JavaScript reader.
+A healthy chapter resumes its layout. A missing or disconnected reader, failed
+evaluation or timeout reloads the same chapter at the retained passage, after
+rechecking visibility and access. This applies to local and provider EPUBs.
 The disposable `reader_resume_probe.py` exercises Android Activity and memory
 callbacks; physical Boox behavior requires its own evidence.
 

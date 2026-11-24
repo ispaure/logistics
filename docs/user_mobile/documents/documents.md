@@ -8,16 +8,19 @@ lives, whether its source is locked and whether it is read-only.
 
 ## Return to something you opened
 
-**Open** in Documents lists your current readers and editors. Tap an entry
-to continue with any unsaved edits still in that editor. On Home,
-**Open now** is a shortcut to a current session. **Recent** on Home previews
-up to three recently closed files, and **See all** opens the full collection
-in Documents. Filenames on both screens can wrap to two lines.
+**Recent** in Documents lists open files alongside files you can reopen. Open
+entries keep their current reader or editor, including unsaved edits, and show
+an **Open** badge. Use their close control to close a view. Home previews up to
+three recent items, and **See all** opens Recent in Documents. Filenames on both
+screens can wrap to two lines.
 
-In Documents, use **Recent** to reopen a closed session. **Libraries** shows
-available Notes, Comics and [Books](../../features/books/user_mobile/library.md) libraries.
-Its **On this device** section lists
-app-managed text files and notebooks outside **Open** and **Recent**.
+**Libraries** shows available Notes, Comics and
+[Books](../../features/books/user_mobile/library.md) libraries. Use the shortcuts
+under **Your libraries** on Home to go straight to Notes, Books or Comics.
+Select **Libraries** again to see every library. **Saved files** lists
+app-managed text files and notebooks outside Recent. A storage icon and
+caption identify the source beneath the file name. Home, Favourites and Recent
+show thumbnails for supported local files.
 If a Recent entry fails, find the file in its current folder,
 reconnect its remote, or unlock its credential.
 
@@ -70,9 +73,10 @@ which locations you can save to and where a copy goes.
 ## Favourite files
 
 Open the document and use its menu to add it to Favourites. The shortcut
-appears in Home and in **Documents → Favourites** and restores the context
+appears in **Documents → Favourites** and restores the context
 the document was opened in. A note favourited from Notes Library reopens
-there. To remove a shortcut from the list, use the row’s **… → Remove from
+there. Home previews two favourites. Tap **See all** for the full list.
+To remove a shortcut from the list, use the row’s **… → Remove from
 Favourites** in **Documents → Favourites**. Session-only favourites appear
 after you unlock the matching credential.
 

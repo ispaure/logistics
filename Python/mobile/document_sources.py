@@ -67,6 +67,12 @@ def session_source(app, session):
     return dict(type='local')
 
 
+def document_preview_source(session):
+    if session.private_access:
+        return None
+    return getattr(session, 'source', None) or getattr(session, 'history_source', None)
+
+
 def source_icons(app, session):
     source = session_source(app, session) or dict(type='local')
     kind = source['type']

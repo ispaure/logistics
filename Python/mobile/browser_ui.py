@@ -293,7 +293,8 @@ class FileBrowser(RecycledBrowser):
         if local_search is not None:
             kwargs['resource_search'] = local_search.search
         super().__init__(presentation=LogisticsBrowserPresentation(),
-                         list_factory=partial(RecycledFileList, title_lines=2), inline_details=False, **kwargs)
+                         list_factory=partial(RecycledFileList, title_lines=2, icon_size=48),
+                         inline_details=False, **kwargs)
         from commonUtils.ui.native.presentation import allow_label_to_shrink
         self._search_location_caption = toga.Label('', style=Pack(font_size=12, margin_bottom=2, display='none'))
         allow_label_to_shrink(self._search_location_caption)

@@ -32,6 +32,7 @@ class SyncButton(toga.Button):
         self.snapshot = state
         if not (busy or notified):
             self.renderer.apply(self, 'transfers', 'Transfers', preserve_layout=not initial)
+            self.refresh_native_item()
             return
         sweep = max(3, 360 * progress / 100) if busy and progress is not None else 100 if busy else 360
         lines = (((8, 8), (15, 8), (13, 6)), ((15, 8), (13, 10)),
@@ -41,6 +42,12 @@ class SyncButton(toga.Button):
         self.renderer.icons['sync-progress'] = IconSpec('', '↻', lines,
             arcs=((2, 2, 22, 22, -90, sweep),), stroke_width=1.6, apple_vector=True)
         self.renderer.apply(self, 'sync-progress', label, preserve_layout=not initial)
+        self.refresh_native_item()
+
+    def refresh_native_item(self):
+        if hasattr(self, '_ios_action_item'):
+            from .ios_toolbar import bar_item
+            bar_item(self)
 
 
 def refresh(app, destination=None):
@@ -50,7 +57,7 @@ def refresh(app, destination=None):
     if destination != 'files' or app.routes.screens['files']:
         return
     button = getattr(app, 'folder_transfers_button', None)
-    if button is None or button.parent is None:
+    if button is None or (button.parent is None and not hasattr(button, '_ios_action_item')):
         return
     busy = bool(getattr(app, 'transfer_busy', False))
     percentage = getattr(app, 'transfer_percentage', None)

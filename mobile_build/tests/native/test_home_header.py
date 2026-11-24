@@ -22,6 +22,21 @@ TEST_STAGE = TestStage.REGRESSION
 
 
 class HomeHeaderTests(TestCase):
+    def test_duo_header_uses_the_free_column_with_a_taller_island(self):
+        from mobile.destination_actions import duo_heading_geometry
+        from mobile.fold_layout import Division
+
+        for height in (120, 260, 430):
+            regions = ((867, 0, 84, height),)
+            self.assertEqual(duo_heading_geometry(regions, 24, 0, 867, 304, vertical=True),
+                             (0, 867, 8, 60))
+        regions = ((867, 0, 84, 120), (610, 4, 257, 60))
+        fold = Division(468, 0, 12, 669)
+        self.assertEqual(duo_heading_geometry(regions, 24, 0, 867, 304, vertical=True, fold=fold),
+                         (0, 464, 8, 72))
+        self.assertIsNone(duo_heading_geometry(((250, 0, 300, 62),), 24, 0, 867, 320,
+                                               vertical=True))
+
     def test_overview_actions_use_the_selected_tab_navigation_owner(self):
         from mobile.destination_actions import project_header, sync_native_host
         child, outer = Mock(), Mock()
@@ -34,7 +49,7 @@ class HomeHeaderTests(TestCase):
         with (patch('mobile.destination_actions.project_header', wraps=project_header) as project,
               patch('mobile.ios_system_occlusions.reserve_bar_clearance') as configure):
             sync_native_host(app, view, 'documents')
-        project.assert_called_once_with(app, view, 'documents')
+        project.assert_called_once_with(app, view, 'documents', controller=None)
         outer.setNavigationBarHidden.assert_called_once_with(True, animated=False)
         child.setNavigationBarHidden.assert_called_once_with(False, animated=False)
         adapter.navigation_for.assert_called_once_with('documents')
@@ -145,6 +160,17 @@ class HomeHeaderTests(TestCase):
         self.assertIs(row.parent, header)
         self.assertEqual(list(row.children), [tabs, unlock, transfer])
         self.assertEqual(row.style.margin_top, 22)
+
+        from mobile.destination_actions import sync_native_host
+        nested = toga.Box()
+        navigation = Mock()
+        app.routes = NS(apple=True, screens={'files': [('folder', None, None)]},
+                        roots={'files': toga.Box(children=[view])})
+        app.native_host = NS(adapter=NS(outer_navigation=navigation, navigation_for=lambda _: navigation))
+        with patch('mobile.ios_system_occlusions.reserve_bar_clearance'):
+            sync_native_host(app, nested, 'files')
+        self.assertIs(row.parent, header)
+        self.assertEqual(list(row.children), [tabs, unlock, transfer])
 
         self.assertFalse(project_workspace_header(app, view, controller, row, [unlock], frame.origin, divided=True))
         self.assertIs(row.parent, body)

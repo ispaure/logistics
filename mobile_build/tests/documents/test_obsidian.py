@@ -429,7 +429,11 @@ class ObsidianTests(unittest.TestCase):
             (owner.back_button, owner.forward_button, owner.reader_actions_button)))
         self.assertIsNone(owner.up_button.parent)
         self.assertIsNone(owner.speech.button.parent)
-        self.assertIn('Read aloud…', [label for label, _ in owner.reader_actions.actions])
+        read_aloud = next(action for label, action in owner.reader_actions.actions if label == 'Read aloud…')
+        from unittest.mock import patch
+        with patch.object(owner.speech, 'show') as show:
+            read_aloud()
+        show.assert_called_once()
         owner.reflow(390)
         self.assertEqual(list(owner.sidebar.view.children), [owner.article])
         self.assertIs(owner.toolbar.parent, owner.view)

@@ -18,6 +18,110 @@ from .hub_icons import icon
 
 
 DOCUMENT_TYPES = {'text': 'Text', 'markdown': 'Markdown', 'epub': 'EPUB books', 'comic': 'Comics', 'pdf': 'PDF documents', 'video': 'Videos'}
+SHOW_SOURCE_TEXT = True
+
+
+def source_caption(kinds, *, row=None, text=None):
+    """Use the reader's colored storage symbols beside a short subtitle."""
+    from toga.style.pack import CENTER
+    from .appearance import accessible_name
+
+    if row is None:
+        row = toga.Box(style=Pack(direction=ROW, align_items=CENTER, margin=(0, 4, 6, 8)))
+    elif getattr(row, '_source_caption_state', None) == (tuple(kinds), text, SHOW_SOURCE_TEXT):
+        return row
+    row._source_caption_state = (tuple(kinds), text, SHOW_SOURCE_TEXT)
+    row.clear()
+    glyphs = {'storage_crypt': 'folder_locked', 'storage_unlocked': 'folder_unlocked'}
+    for glyph, label in kinds:
+        name = glyphs.get(glyph, glyph)
+        symbol = template_icon(toga.ImageView(icon(name), style=Pack(width=12, height=12, margin_right=4)))
+        accessible_name(symbol, label)
+        row.add(surface(symbol, radius=0, background='transparent',
+            foreground=name if name.startswith('folder_') else 'accent', eink_outlined=False))
+    if SHOW_SOURCE_TEXT and (text or kinds):
+        if text is None:
+            names = {name for name, _ in kinds}
+            text = ('Cloud file' if 'storage_remote' in names else
+                    'Encrypted copy' if names & {'storage_crypt', 'storage_unlocked'} else 'Local file')
+            if 'storage_crypt' in names:
+                text += ' · Locked'
+        label = toga.Label(text,
+            style=Pack(font_size=12, font_style='italic', flex=1))
+        row.add(surface(label, radius=0, background='transparent', foreground='muted', eink_outlined=False))
+    return row
+
+
+def source_title(button, kinds, *, text=None):
+    caption = button._source_caption = source_caption(kinds, text=text)
+    return toga.Box(children=[button, caption], style=Pack(direction=COLUMN, flex=1))
+
+
+class DocumentThumbnails:
+    """Load local artwork in order, scoped to the lifetime of one retained list."""
+
+    def __init__(self, app):
+        from threading import Event
+
+        self.app = app
+        self.pending = []
+        self.cancelled = Event()
+
+    def artwork(self, reference, kind, *, width=72, height=72):
+        from .browser_preview import PREVIEW_SUFFIXES
+        from pathlib import Path
+        from toga.style.pack import CENTER
+
+        glyph = {'notebook': 'nav_notebooks', 'notes': 'markdown', 'archive': 'archives'}.get(kind, kind)
+        placeholder = template_icon(toga.ImageView(icon(glyph), style=Pack(width=24, height=24)))
+        artwork = toga.Box(children=[toga.Box(style=Pack(flex=1)), placeholder, toga.Box(style=Pack(flex=1))],
+            style=Pack(direction=ROW, align_items=CENTER, width=width, height=height,
+                       margin_left=4, margin_right=8))
+        artwork._document_artwork = True
+        native = type(self.app._impl).__module__.startswith(('toga_iOS.', 'toga_android.'))
+        if (native and reference and reference.get('type') == 'local'
+                and Path(reference.get('path', '')).suffix.lower() in PREVIEW_SUFFIXES):
+            self.pending.append((reference['path'], artwork, placeholder, width, height))
+        return surface(artwork, radius=8, background='hover', eink_outlined=False)
+
+    def start(self):
+        if not self.pending:
+            return
+        pending, self.pending = self.pending, []
+        self.app.loop.create_task(self._load(pending))
+
+    def cancel(self):
+        self.cancelled.set()
+        self.pending.clear()
+
+    async def _load(self, pending):
+        import asyncio
+        from commonUtils.runtime.operations import OperationCancelled
+        from commonUtils.runtime.resources.local import LocalFiles
+        from .browser_preview import LocalThumbnails, local_image_bridge
+        from .document_sources import local_document_path
+
+        def load(path, width, height):
+            physical = local_document_path(self.app, path)
+            provider = LocalFiles(physical.parent)
+            return LocalThumbnails(provider, local_image_bridge(), '').load(
+                provider.entry(physical.name), (width * 2, height * 2), self.cancelled.is_set)
+
+        for path, artwork, placeholder, width, height in pending:
+            if self.cancelled.is_set() or not self.app.active_host:
+                return
+            try:
+                data = await asyncio.to_thread(load, path, width, height)
+                if data and not self.cancelled.is_set() and self.app.active_host:
+                    cover = toga.Image(src=data)
+                    scale = min(width / cover.width, height / cover.height)
+                    image = toga.ImageView(cover, style=Pack(width=max(1, round(cover.width * scale)),
+                                                           height=max(1, round(cover.height * scale))))
+                    artwork.remove(placeholder)
+                    artwork.insert(1, image)
+                    artwork._document_cover = image
+            except (OSError, ValueError, RuntimeError, OperationCancelled):
+                continue
 
 def text_document_kind(name):
     return 'markdown' if name.lower().endswith(('.md', '.markdown')) else 'text'
@@ -42,9 +146,10 @@ def status_badges(details, *, currently_open=False, icon_count=0):
         radius=0, background='transparent', foreground='muted',
         outlined=False, eink_outlined=False)
 
-def document_group(rows):
+def document_group(rows, *, outlined=False):
     """One rounded surface for a document section, with quiet inset dividers."""
-    group = surface(toga.Box(style=Pack(direction=COLUMN, margin_bottom=8)), radius=16)
+    group = surface(toga.Box(style=Pack(direction=COLUMN, margin_bottom=8)), radius=16,
+                    outlined=outlined)
     group._document_group = True
     append_document_group_rows(group, rows)
     backend = type(group._impl).__module__
@@ -62,7 +167,8 @@ def append_document_group_rows(group, rows, *, compact=False):
             surface(widget, radius=0, background='transparent', foreground=foreground,
                     outlined=False, eink_outlined=False)
         elif isinstance(widget, toga.Box):
-            surface(widget, radius=0, background='transparent', outlined=False, eink_outlined=False)
+            if not getattr(widget, '_document_artwork', False):
+                surface(widget, radius=0, background='transparent', outlined=False, eink_outlined=False)
         for child in widget.children:
             borderless(child)
     for index, row in enumerate(rows):
@@ -82,14 +188,17 @@ def empty_document_row(text):
                    radius=0, background='transparent', foreground='muted',
                    outlined=False, eink_outlined=False)
 
-def document_list(rows, empty_text):
-    return document_group(rows) if rows else empty_document_row(empty_text)
+def document_list(rows, empty_text, *, outlined=False):
+    return document_group(rows, outlined=outlined) if rows else empty_document_row(empty_text)
 
 def retire_document_actions(widget):
     """Release each row's menu before removing its containing section."""
     menu = getattr(widget, 'document_actions', None)
     if menu is not None:
         menu.dispose()
+    previews = getattr(widget, '_document_thumbnails', None)
+    if previews is not None:
+        previews.cancel()
     for child in widget.children:
         retire_document_actions(child)
 
@@ -140,12 +249,11 @@ class PanelGrid(toga.Box):
 
 class HubSections(toga.Box):
     """Retain hub controls while moving whole sections across a physical fold."""
-    def __init__(self, content, trailing, *, before=None):
+    def __init__(self, content, trailing):
         super().__init__(style=Pack(direction=ROW, flex=1))
         self._hub_sections = True
         self.content = content  # Compact content compatibility for hub callers.
         self.trailing = trailing
-        self.before = before
         self.leading_scroll = toga.ScrollContainer(horizontal=False, content=content, style=Pack(flex=1))
         self.trailing_content = toga.Box(style=Pack(direction=COLUMN, margin=16))
         self.trailing_scroll = toga.ScrollContainer(horizontal=False, content=self.trailing_content,
@@ -164,7 +272,7 @@ class HubSections(toga.Box):
                 # A retained landscape hub can still report its old width
                 # after its destination returns to a portrait viewport.
                 width = min(width, measured)
-        paired = fold is not None or width >= 700
+        paired = fold is not None or width >= 580
         if paired != self.paired:
             if self.trailing.parent is not None:
                 self.trailing.parent.remove(self.trailing)
@@ -173,8 +281,7 @@ class HubSections(toga.Box):
                 self.add(self.trailing_scroll)
             else:
                 self.remove(self.trailing_scroll)
-                index = self.content.children.index(self.before) if self.before is not None else len(self.content.children)
-                self.content.insert(index, self.trailing)
+                self.content.add(self.trailing)
             self.paired = paired
         allocation = panes(width, self.layout.content_height or 1, fold=fold, gutter=0)
         vertical = paired and allocation.axis == 'column'

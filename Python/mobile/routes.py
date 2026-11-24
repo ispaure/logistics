@@ -38,6 +38,7 @@ def settings_route_delegate():
                 if owner is not None:
                     owner.prepare_settings_return(navigation, controller, animated)
                     owner.folders.prepare_transition(navigation, controller, animated)
+                    owner.prepare_workspace_return(navigation, controller, animated)
 
         _settings_route_delegate = LogisticsRouteDelegate
     return _settings_route_delegate
@@ -62,6 +63,7 @@ class MobileRoutes(Routes):
         self.origins = {}
         self._selection_returns = {}
         self.settings_return_navigation = None
+        self.workspace_return = None
         from .folder_navigation import FolderNavigation
         self.folders = FolderNavigation(self)
         super().__init__(*args, **kwargs)
@@ -70,6 +72,7 @@ class MobileRoutes(Routes):
         if not self._retired:
             self._retired = True
             self.settings_return_navigation = None
+            self.workspace_return = None
             self.retire_credential_import()
             task, self.back_task = self.back_task, None
             if (task is not None and not task.done()
@@ -358,6 +361,16 @@ class MobileRoutes(Routes):
                 navigation.setNavigationBarHidden(False, animated=False)
         if self._retired or self.changing or self.host.changing:
             return
+        returning = self.workspace_return
+        if returning is not None and navigation == returning[0]:
+            _, root, bar_hidden = returning
+            self.workspace_return = None
+            if navigation.topViewController != root:
+                if bool(navigation.isNavigationBarHidden()) != bar_hidden:
+                    navigation.setNavigationBarHidden(bar_hidden, animated=False)
+                from .reader_chrome import sync_document_tabs
+                sync_document_tabs(self.app, self.body('files'), destination='files',
+                                   fullscreen=getattr(self.app, '_reader_chrome_hidden', False))
         destination = self.host.adapter.destination_for_navigation(navigation)
         if destination is None:
             return
@@ -400,6 +413,32 @@ class MobileRoutes(Routes):
                 # offset during the final layout without changing its bounds.
                 self.folders.restore_viewport(destination, expected)
         self.app.loop.call_soon(reflow)
+
+    def prepare_workspace_return(self, navigation, controller, animated):
+        if (not animated or self._retired or self.changing or self.host.changing
+                or self.host.state.destination != 'files' or not self.screens['files']
+                or getattr(self.app.adaptive, 'file_columns', None) is not None):
+            return
+        adapter = self.host.adapter
+        container, root = adapter.containers[self.host.destinations.index('files')]
+        if (controller != root or navigation != adapter.navigation_for('files')
+                or not self.roots['files'].children):
+            return
+        view = self.roots['files'].children[0]
+        if not hasattr(view, '_workspaces_source_row'):
+            return
+        self.workspace_return = navigation, root, bool(navigation.isNavigationBarHidden())
+        # UIKit exposes the root during an interactive pop, before didShow
+        # updates the route stack. Lay out the retained controls in that frame.
+        from .reader_chrome import set_document_tabs_hidden
+        from .destination_actions import sync_native_host
+        from .ios_toolbar import sync_screen
+        set_document_tabs_hidden(self.app, False)
+        sync_native_host(self.app, view, 'files', preparing_return=True)
+        sync_screen(self.app, view, 'files', returning_to=root)
+        adapter.controller.tabBar.setNeedsLayout()
+        adapter.layout_content(container)
+        root.view.layoutIfNeeded()
 
     def sync_back(self, destination=None):
         if not self._retired and self.back_callback is not None:

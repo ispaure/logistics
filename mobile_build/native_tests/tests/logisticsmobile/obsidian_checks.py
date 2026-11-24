@@ -63,7 +63,8 @@ async def exercise_obsidian(app, encrypted):
             # retains the full source so the native test can select the right row.
             title = 'Native Obsidian Vault'
             source = 'Local files' if label == 'local' else 'LocalCrypt: Native check'
-            rows = app.document_notes_list.children[1].children
+            from .documents_hub_probe import walk
+            rows = [row for row in walk(app.document_notes_list) if hasattr(row, '_source_caption')]
             buttons = [row for row in rows if row.text == title
                        and row.accessible_name == f'{title} · {source}']
             assert len(buttons) == 1, dict(location=label,

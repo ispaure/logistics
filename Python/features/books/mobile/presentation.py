@@ -323,7 +323,10 @@ SCRIPT = r'''
    seekPage: value => {place(value);anchor=visible(true);notify('position',anchor);},
    seek: (offset,end=null) => {seek(offset,end);notify('position',anchor);},
    suspend: () => {suspended=true;cancelTouch();resetWheel();stopMotion();},
-   resume: () => {suspended=false;resized();return true;},
+   resume: () => {
+     if(disposed || !viewport.isConnected || !pages.isConnected)return false;
+     suspended=false;resized();return true;
+   },
    turn: (direction, wheelTime=null) => {
      if(suspended || !usableViewport())return;
      selectedCache=null;getSelection().removeAllRanges();

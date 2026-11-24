@@ -55,21 +55,21 @@ class HubDocumentTests(unittest.TestCase):
         with patch.object(hub, 'document_row_menu', side_effect=row_menu):
             home = hub.build_home()
             hub.build_documents_hub()
-            old_home, old_documents = menus(home.trailing), menus(hub.document_open_list)
+            old_home, old_documents = menus(hub._home_recents), menus(hub.document_recent_list)
             self.assertTrue(old_home and old_documents)
 
             hub.refresh_home_documents()
             hub.refresh_document_list()
             for menu in old_home + old_documents:
                 menu.dispose.assert_called_once()
-            old_home, old_documents = menus(home.trailing), menus(hub.document_open_list)
+            old_home, old_documents = menus(hub._home_recents), menus(hub.document_recent_list)
             self.assertTrue(old_home and old_documents)
 
             new_home = hub.build_home()
             hub.build_documents_hub()
             for menu in old_home + old_documents:
                 menu.dispose.assert_called_once()
-            for menu in menus(new_home.trailing) + menus(hub.document_open_list):
+            for menu in menus(new_home) + menus(hub.document_recent_list):
                 menu.dispose.assert_not_called()
 
     def test_document_sections_have_one_outline_and_borderless_row_actions(self):
@@ -80,21 +80,23 @@ class HubDocumentTests(unittest.TestCase):
         for contrast in (False, True):
             palette.set_eink_enabled(contrast)
             self.app.build_documents_hub()
-            for section in (self.app.document_open_list, self.app.document_recent_list, self.app.document_saved_list):
+            for section in (self.app.document_recent_list, self.app.document_saved_list):
                 groups = [widget for widget in widgets(section) if getattr(widget, '_document_group', False)]
-                self.assertEqual(len(groups), 1 if section is self.app.document_open_list else 0)
+                self.assertEqual(len(groups), 1 if section is self.app.document_recent_list else 0)
                 if not groups:
                     continue
                 self.assertTrue(groups[0]._impl._surface_eink_outlined)
                 for child in widgets(groups[0]):
                     if child is not groups[0]:
                         self.assertFalse(getattr(child._impl, '_surface_eink_outlined', False))
-                        if isinstance(child, toga.Box) and child.style.height != 1:
+                        if (isinstance(child, toga.Box) and child.style.height != 1
+                                and not getattr(child, '_document_artwork', False)):
                             self.assertEqual(child._impl._surface_roles[0], 'transparent')
             home = self.app.build_home()
-            # Only the live document is present. Its action group can move
-            # with the rest of the overview to the trailing pane on tablets.
-            groups = [widget for widget in widgets(home.trailing) if getattr(widget, '_document_group', False)]
+            # The featured recent item stays in the leading pane.
+            overview = self.app.hub_controller()._home_recents
+            self.assertIs(overview.parent, home.content)
+            groups = [widget for widget in widgets(overview) if getattr(widget, '_document_group', False)]
             self.assertEqual(len(groups), 1)
             self.assertTrue(any(text.partition(' · ')[0] == 'Open' for text in labels(groups[0])))
 
@@ -115,7 +117,7 @@ class HubDocumentTests(unittest.TestCase):
                     hub = app.build_documents_hub()
                     app.document_search.value = query
                     app.loop.run_until_complete(asyncio.sleep(.35))
-                    for section in (app.document_open_list, app.document_recent_list):
+                    for section in (app.document_recent_list,):
                         self.assertFalse(any(getattr(widget, '_document_group', False) for widget in widgets(section)))
                         message = section.children[-1]
                         self.assertIsInstance(message, toga.Label)
@@ -127,18 +129,19 @@ class HubDocumentTests(unittest.TestCase):
                                          for widget in widgets(hub)))
             show_library.assert_not_called()
             home = app.build_home()
-            message = next(widget for widget in widgets(home.trailing) if isinstance(widget, toga.Label)
-                           and widget.text == 'No closed recent documents.')
-            self.assertIs(message.parent, home.trailing)
-            groups = [widget for widget in widgets(home.trailing) if getattr(widget, '_document_group', False)]
+            overview = app.hub_controller()._home_recents
+            message = next(widget for widget in widgets(overview) if isinstance(widget, toga.Label)
+                           and widget.text == 'No recent items.')
+            self.assertIs(message.parent, overview)
+            groups = [widget for widget in widgets(overview) if getattr(widget, '_document_group', False)]
             self.assertEqual(groups, [])
-            self.assertIn('No open documents.', labels(home.trailing))
+            self.assertNotIn('Open now', labels(home))
 
     def setUp(self):
         self.directory = TemporaryDirectory()
         LogisticsMobile.storage_root = Path(self.directory.name)
         self.app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
-        self.app.documents_view = 'Open'
+        self.app.documents_view = 'Recent'
         self.app.show_documents(destination='documents')
 
     def tearDown(self):
@@ -158,7 +161,7 @@ class HubDocumentTests(unittest.TestCase):
         self.assertNotIn(owner.session.id, app.workspace.sessions)
         self.assertFalse(any(text.partition(' · ')[0] == 'Open' for text in labels(app.routes.roots['home'])))
         self.assertFalse(any(getattr(widget, 'session_id', None) == owner.session.id
-                             for widget in widgets(app.document_open_list)))
+                             for widget in widgets(app.document_recent_list)))
         self.assertEqual(app.store.open(owner.document.id).text, owner.document.text)
 
     def test_close_reader_returning_home_removes_open_badge_immediately(self):
@@ -188,7 +191,7 @@ class HubDocumentTests(unittest.TestCase):
         self.assertEqual(app.recent_documents.sessions(), [])
         self.assertEqual(app.workspace.sessions, sessions)
         self.assertEqual(app.store.open(saved.id).text, 'Saved content')
-        self.assertIn('No closed recent documents.', labels(app.document_recent_list))
+        self.assertIn('Open', labels(app.document_recent_list))
         from mobile.recent_documents import RecentDocuments
         self.assertEqual(RecentDocuments(app.recent_documents.path.parent).sessions(), [])
 
@@ -199,7 +202,7 @@ class HubDocumentTests(unittest.TestCase):
         self.assertEqual(app.documents_view, 'Libraries')
         self.assertNotIn('Saved', app.document_view_buttons)
         self.assertIs(app.document_saved_list.parent, app.document_libraries_list)
-        self.assertIn('On this device', labels(app.document_saved_list))
+        self.assertIn('Saved files', labels(app.document_saved_list))
         buttons = {widget.text: widget for widget in widgets(app.document_saved_list)
                    if isinstance(widget, toga.Button)}
         self.assertIn('Saved notebook', buttons)
@@ -410,15 +413,15 @@ class HubDocumentTests(unittest.TestCase):
         from unittest.mock import patch
         app = self.app
         for build, destination in ((app.build_home, 'home'),):
-            with self.subTest(destination=destination), patch.object(app.adaptive, 'content_width', return_value=620):
+            with self.subTest(destination=destination), patch.object(app.adaptive, 'content_width', return_value=560):
                 hub = build()
                 from mobile.fold_layout import Division
-                with patch('mobile.fold_layout.division', return_value=Division(620 * .46, 0, 0, 700)) as seam:
+                with patch('mobile.fold_layout.division', return_value=Division(560 * .46, 0, 0, 700)) as seam:
                     hub.reflow(app, destination)
                     seam.assert_called_once_with(app, hub)
                     self.assertTrue(hub.paired)
-                    self.assertAlmostEqual(hub.leading_scroll.style.width, 620 * .46, delta=1)
-                    self.assertAlmostEqual(hub.trailing_scroll.style.width, 620 * .54, delta=1)
+                    self.assertAlmostEqual(hub.leading_scroll.style.width, 560 * .46, delta=1)
+                    self.assertAlmostEqual(hub.trailing_scroll.style.width, 560 * .54, delta=1)
                     self.assertIs(hub.trailing.parent, hub.trailing_content)
                 hub.reflow(app, destination)
                 self.assertFalse(hub.paired)
@@ -430,69 +433,82 @@ class HubDocumentTests(unittest.TestCase):
         app.show_documents_hub()
         home, documents = app.home_sections, app.documents_sections
         self.assertFalse(hasattr(documents, '_workspace_frame'))
-        self.assertIs(app.document_open_list.parent, app.document_results)
+        self.assertIs(app.document_recent_list.parent, app.document_results)
         self.assertFalse(hasattr(app.routes.roots['documents'].children[0], '_workspace_frame'))
         with patch.object(app.adaptive, 'content_width', return_value=900):
             app.adaptive.render()
         self.assertTrue(home.paired)
-        self.assertIs(app.document_open_list.parent, app.document_results)
+        self.assertIs(app.document_recent_list.parent, app.document_results)
         with patch.object(app.adaptive, 'content_width', return_value=390):
             app.adaptive.render()
         self.assertFalse(home.paired)
-        self.assertIs(app.document_open_list.parent, app.document_results)
+        self.assertIs(app.document_recent_list.parent, app.document_results)
 
-    def test_home_omits_repeated_heading_and_keeps_navigation_label(self):
+    def test_home_keeps_page_heading_and_navigation_label(self):
         import toga
         app = self.app
         app.workspace.active = None
         view = app.build_home()
         labels = [child.text for child in view.content.children if isinstance(child, toga.Label)]
-        self.assertNotIn('Home', labels)
+        self.assertEqual(labels.count('Home'), 1)
         self.assertEqual(view.content.style.margin_top, 8)
         self.assertEqual(view.content.children[0].style.margin_top, 0)
         self.assertNotIn('Read. Write. Organize.', labels)
         self.assertEqual(app.native_host.labels[0], 'Home')
 
-    def test_home_previews_three_closed_items_and_opens_matching_collections(self):
+    def test_home_recent_includes_live_items_and_opens_the_full_collection(self):
         from mobile.workspace import Session
-
         app = self.app
         active = app.store.create('Active draft.txt')
         app.workspace.open('managed-text', active.id, 'text', active.name)
-        closed = [app.store.create(f'Long filename for a recently closed item {index}.txt') for index in range(4)]
+        closed = [app.store.create(f'Recent item {index}.txt') for index in range(4)]
         for doc in closed:
             app.recent_documents.remember(Session(doc.id, 'managed-text', doc.id, 'text', doc.name))
         app.recent_documents.remember(app.workspace.sessions[app.workspace.active])
-        app.show_documents_hub()
-        app.document_search.value = 'No matching name'
-        app.loop.run_until_complete(asyncio.sleep(.35))
-        for collection, expected in (('Open', 'document_open_list'), ('Recent', 'document_recent_list')):
-            app.show_home()
-            overview = app.home_sections.trailing
-            self.assertEqual([button.text for button in app.hub_controller()._home_open_buttons],
-                             [active.name])
-            recent_buttons = app.hub_controller()._home_recent_buttons
-            self.assertEqual([button.text for button in recent_buttons],
-                             [doc.name for doc in reversed(closed[-3:])])
-            self.assertTrue(all(button.style.height == 64 for button in recent_buttons))
-            self.assertNotIn('Text', labels(overview))
-            self.assertIn('Favourites', labels(app.home_content))
-            self.assertLess(app.home_content.children.index(overview),
-                            app.home_content.children.index(app.home_sections.before))
-            button = next(widget for widget in widgets(overview)
-                          if getattr(widget, 'accessible_name', '') == f'See all {collection.lower()} documents')
-            button.on_press()
-            self.assertEqual(app.native_host.state.destination, 'documents')
-            self.assertEqual(app.documents_view, collection)
-            self.assertFalse(app.documents_search_open)
-            self.assertEqual(app.document_search.value, '')
-            self.assertEqual(list(app.document_results.children), [getattr(app, expected)])
-        recent_group = next(child for child in app.document_recent_list.children
-                            if getattr(child, '_document_group', False))
-        recent_rows = [row for row in recent_group.children if hasattr(row, 'document_button')]
-        self.assertEqual([row.document_button.text for row in recent_rows],
-                         [doc.name for doc in reversed(closed)])
-        self.assertTrue(all(row.document_button.style.height == 64 for row in recent_rows))
+        app.show_home()
+        overview = app.hub_controller()._home_recents
+        self.assertEqual([widget.style.height for widget in widgets(overview)
+                          if getattr(widget, '_document_artwork', False)], [96, 72, 72])
+        recent = app.hub_controller()._home_recent_buttons
+        self.assertEqual([button.text for button in recent], [active.name, closed[-1].name, closed[-2].name])
+        self.assertNotIn('Open now', labels(overview))
+        button = next(widget for widget in widgets(overview)
+                      if getattr(widget, 'accessible_name', '') == 'See all recent documents')
+        button.on_press()
+        self.assertEqual(app.documents_view, 'Recent')
+        self.assertEqual(list(app.document_view_buttons), ['Libraries', 'Favourites', 'Recent'])
+        self.assertEqual(list(app.document_results.children), [app.document_recent_list])
+        rows = [widget for widget in widgets(app.document_recent_list) if hasattr(widget, 'document_button')]
+        self.assertEqual(sum(row.document_button.text == active.name for row in rows), 1)
+        live = next(row for row in rows if row.document_button.text == active.name)
+        self.assertEqual(live.children[0].style.height, 96)
+        self.assertTrue(hasattr(live, 'close_button'))
+        live.close_button.on_press()
+        self.assertNotIn(active.id, app.workspace.sessions)
+
+    def test_home_library_shortcut_and_source_icons(self):
+        app = self.app
+        app.show_home()
+        hub = app.hub_controller()
+        recent, = hub._home_recent_buttons
+        self.assertFalse(getattr(recent, 'leading_icons', None))
+        self.assertEqual(recent._source_caption.children[-1].text, 'Local file')
+        self.assertEqual(recent._source_caption.children[-1].style.font_style, 'italic')
+        with patch('mobile.hub_controls.SHOW_SOURCE_TEXT', False):
+            hub.refresh_home_documents()
+            self.assertEqual(len(hub._home_recent_buttons[0]._source_caption.children), 1)
+        notes = next(widget for widget in widgets(hub.home_sections.trailing)
+                     if getattr(widget, 'text', '') == 'Notes')
+        self.assertEqual(notes._impl._surface_roles[1], 'text')
+        notes.on_press()
+        self.assertEqual(app.native_host.state.destination, 'documents')
+        self.assertEqual(app.documents_view, 'Libraries')
+        self.assertEqual(app.document_notes_list.style.display, 'pack')
+        self.assertEqual(app.document_books_list.style.display, 'none')
+        self.assertEqual(app.document_books_list.style.visibility, 'hidden')
+        app.document_view_buttons['Libraries'].on_press()
+        self.assertEqual(app.document_books_list.style.display, 'pack')
+        self.assertEqual(app.document_books_list.style.visibility, 'visible')
 
     def test_documents_search_retains_input_and_finds_local_files_beyond_recent(self):
         import toga
@@ -519,8 +535,7 @@ class HubDocumentTests(unittest.TestCase):
         self.assertEqual(app.current.id, hidden.id)
         self.assertEqual(app.editor.value, '# Old content')
 
-    def test_documents_lists_active_first_and_does_not_repeat_open_files_in_history(self):
-        import toga
+    def test_recent_keeps_each_live_session_once_and_marks_it_open(self):
         app = self.app
         first = app.editor_view.session
         app.new_document()
@@ -528,16 +543,10 @@ class HubDocumentTests(unittest.TestCase):
         app.recent_documents.remember(first)
         app.recent_documents.remember(active)
         app.show_documents_hub()
-        rows = [widget for widget in widgets(app.document_open_list) if hasattr(widget, 'session_id')]
-        self.assertEqual(rows[0].session_id, active.id)
-        self.assertEqual([widget.text for widget in widgets(app.document_recent_list)
-                          if isinstance(widget, toga.Button)], ['Clear'])
-        app.document_search.value = 'No such filename'
-        app.loop.run_until_complete(asyncio.sleep(.35))
-        app.document_search.value = ''
-        app.loop.run_until_complete(asyncio.sleep(.35))
-        rows = [widget for widget in widgets(app.document_open_list) if hasattr(widget, 'session_id')]
-        self.assertEqual({row.session_id for row in rows}, {first.id, active.id})
+        rows = [widget for widget in widgets(app.document_recent_list) if hasattr(widget, 'session_id')]
+        self.assertEqual([row.session_id for row in rows], [active.id, first.id])
+        self.assertTrue(all(hasattr(row, 'close_button') for row in rows))
+        self.assertIn('Open', labels(app.document_recent_list))
 
     def test_folder_hub_sync_shortcut_precedes_credential_without_transfer_headers(self):
         app = self.app
@@ -716,10 +725,10 @@ class HubDocumentTests(unittest.TestCase):
         with patch('features.images.mobile.burst_camera.available', return_value=True):
             home = self.app.build_home()
         creator, = home._home_primary_buttons
-        camera = next(widget for widget in widgets(home.content) if getattr(widget, 'text', '') == 'Burst camera')
+        camera = next(widget for widget in widgets(home.trailing) if getattr(widget, 'text', '') == 'Burst camera')
         self.assertEqual(creator._impl._surface_roles, ('transparent', 'accent', False))
         self.assertFalse(creator._impl._surface_eink_outlined)
-        self.assertEqual(camera._impl._surface_roles, ('surface', 'accent', False))
+        self.assertEqual(camera._impl._surface_roles, ('transparent', 'accent', False))
 
     def test_open_document_links_have_direct_close_controls_in_both_views(self):
         import toga
@@ -751,7 +760,7 @@ class HubDocumentTests(unittest.TestCase):
         section = open_documents(content)
         rows = [widget for widget in widgets(section) if hasattr(widget, 'session_id')]
         self.assertEqual(len(rows), len(app.workspace.sessions))
-        names = [row.children[-1].children[-2].text for row in rows]
+        names = [row.document_button.text for row in rows]
         self.assertEqual(names.count('Plan.MD'), 2)  # Identity, not name, defines a document.
         rebuilt = open_documents(app.build_documents_hub())
         self.assertEqual(sum(hasattr(widget, 'session_id') for widget in widgets(rebuilt)), len(rows))
@@ -759,15 +768,15 @@ class HubDocumentTests(unittest.TestCase):
         self.assertTrue({doc.id for doc in documents} <= {item.resource for item, _ in recent})
         self.assertEqual(len(recent), len({item.identity for item, _ in recent}))
 
-    def test_old_open_items_do_not_displace_bounded_recent_history(self):
+    def test_recent_keeps_older_live_sessions_beyond_the_history_limit(self):
         app = self.app
         for index in range(12):
             doc = app.store.create(f'File-{index}.txt')
             session = app.workspace.open('managed-text', doc.id, 'text', doc.name)
             app.recent_documents.remember(session)
         recent = app.recent_items()
-        self.assertEqual(len(recent), 10)
-        self.assertEqual([summary[0] for _, summary in recent],
+        self.assertEqual(len(recent), len(app.workspace.sessions))
+        self.assertEqual([summary[0] for _, summary in recent[:10]],
                          [f'File-{index}.txt' for index in range(11, 1, -1)])
         content = app.build_documents_hub()
         section = open_documents(content)

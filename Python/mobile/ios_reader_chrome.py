@@ -15,13 +15,13 @@ _hosts = weakref.WeakValueDictionary()
 _installed = False
 
 
-def content_control(button):
+def content_control(button, *, glass=False):
     """Restore inline UIKit glass when a reader leaves the navigation bar."""
     if not type(button._impl).__module__.startswith('toga_iOS.'):
         return
     from .appearance import paint_surface
     button._impl._native_bar_control = False
-    if getattr(button, 'control_icon', None) in {'close', 'more', 'overflow'}:
+    if glass or getattr(button, 'control_icon', None) in {'close', 'more', 'overflow'}:
         button._impl._native_glass_control = True
     paint_surface(button._impl, 0)
 
@@ -178,7 +178,7 @@ def install():
         reserve_bar_clearance(adapter.outer_navigation)
         reserve_bar_clearance(adapter.navigation_for(adapter.host.state.destination))
         window = adapter.window._impl.native
-        observe_window_occlusions(_hosts.get(window.ptr.value), container.native)
+        observe_window_occlusions(_hosts.get(window.ptr.value), window, fallback=container.native)
 
     AppleNavigation.layout_window = layout_window
 

@@ -16,7 +16,22 @@ from .appearance import action_button, surface
 from .control_icons import icon_button
 
 
+DUO_HEADINGS = dict(home='Home', files='Workspaces', documents='Documents', settings='Settings')
+
+
 def prepare(app, view, destination):
+    from .fold_layout import is_iphone_duo
+    duo = app.routes.apple and is_iphone_duo()
+    if destination == 'settings' and duo:
+        from weakref import ref
+        previous = getattr(view, '_duo_settings_root', lambda: None)()
+        if previous is not None:
+            return previous
+        original = view
+        view = toga.Box(children=[original], style=Pack(direction=COLUMN, flex=1))
+        original._duo_settings_root = ref(view)
+        prepare_duo_heading(view, destination)
+        return view
     if destination not in ('home', 'files', 'documents'):
         return view
     if not isinstance(view, toga.Box) or getattr(view, '_hub_sections', False):
@@ -27,6 +42,8 @@ def prepare(app, view, destination):
             view._home_sections = original
             view._home_primary_actions = original._home_primary_actions
             view._home_primary_buttons = original._home_primary_buttons
+            view._home_prefer_native = getattr(original, '_home_prefer_native', False)
+            view._destination_body_heading = getattr(original, '_destination_body_heading', None)
     if hasattr(view, '_destination_actions'):
         return view
     # Existing root pages already own different content margins. Cancel that
@@ -53,8 +70,7 @@ def prepare(app, view, destination):
         header_buttons = [*buttons, *getattr(view, '_home_primary_buttons', ())]
     view._destination_actions = (header, header_buttons)
     if destination == 'home' and getattr(view, '_home_primary_actions', None) is not None:
-        from .fold_layout import is_iphone_duo
-        view._home_toolbar_only = is_iphone_duo()
+        view._home_toolbar_only = duo or getattr(view, '_home_prefer_native', False)
 
     def apple_actions():
         actions = selected(app, buttons)
@@ -79,6 +95,8 @@ def prepare(app, view, destination):
     view._ios_toolbar_title = ''
     view._ios_toolbar_hidden = [header]
     view.insert(0, header)
+    if duo:
+        prepare_duo_heading(view, destination)
     refresh(app, view)
     return view
 
@@ -108,7 +126,7 @@ def refresh(app, view):
         header.add(*leading, toga.Box(style=Pack(flex=1)), *actions)
 
 
-def sync_native_host(app, view, destination):
+def sync_native_host(app, view, destination, *, preparing_return=False):
     """Keep tab actions inside that tab's native navigation container.
 
     Putting actions above the tab controller gives UIKit separate bar owners;
@@ -117,32 +135,161 @@ def sync_native_host(app, view, destination):
     if not app.routes.apple or app.native_host.adapter is None:
         return
     adapter = app.native_host.adapter
-    overview = (not app.routes.screens[destination]
-                and hasattr(view, '_destination_actions'))
-    if destination == 'files' and not overview:
-        root = app.routes.roots['files']
-        if root.children:
-            restore_workspace_header(root.children[0])
-    if overview and destination == 'home':
+    root = preparing_return or not app.routes.screens[destination]
+    overview = root and hasattr(view, '_destination_actions')
+    # During willShow the root is still detached. The live navigation view
+    # spans the same compact pane and can supply its window reservations.
+    projection_host = adapter.navigation_for(destination) if preparing_return else None
+    projected = (root and hasattr(view, '_duo_root_header') and
+                 project_duo_heading(app, view, destination, controller=projection_host))
+    if projected:
+        overview = False
+    elif overview and destination == 'home':
         from .home_header import sync
         overview = not sync(app, view) and bool(view._ios_toolbar_buttons())
     elif overview:
         overview = bool(selected(app, view._destination_actions[1]))
-        if project_header(app, view, destination):
+        if not hasattr(view, '_duo_root_header') and project_header(app, view, destination, controller=projection_host):
             overview = False
     outer = adapter.outer_navigation
     if not outer.isNavigationBarHidden():
         outer.setNavigationBarHidden(True, animated=False)
     from .ios_system_occlusions import reserve_bar_clearance
     reserve_bar_clearance(outer)
-    if not app.routes.screens[destination] and hasattr(view, '_destination_actions'):
+    if root and hasattr(view, '_destination_actions'):
         navigation = adapter.navigation_for(destination)
         if bool(navigation.isNavigationBarHidden()) == overview:
-            navigation.setNavigationBarHidden(not overview, animated=False)
+            navigation.setNavigationBarHidden(not overview, animated=preparing_return)
         reserve_bar_clearance(navigation)
 
 
-def project_header(app, view, destination):
+def prepare_duo_heading(view, destination):
+    title = toga.Label(DUO_HEADINGS[destination],
+                       style=Pack(flex=1, text_align=CENTER, font_size=30, font_weight='bold'))
+    view._duo_root_header = toga.Box(children=[title],
+        style=Pack(direction=ROW, align_items=CENTER, height=48))
+    body_title = getattr(view, '_destination_body_heading', None)
+    if body_title is not None and body_title.parent is not None:
+        view._duo_body_heading_slot = (body_title.parent, list(body_title.parent.children).index(body_title))
+
+
+def duo_heading_geometry(regions, safe_top, left, right, required, *, vertical, fold=None):
+    """Find a complete touch row beside the Island, within the content column."""
+    from .ios_system_occlusions import control_top_clearance
+    from .reader_top_band import NATIVE_TOOLBAR_CENTER_OFFSET, available_intervals
+    if not regions or (not vertical and safe_top < 56):
+        return None
+    top = max(8, (safe_top - 48) / 2 + NATIVE_TOOLBAR_CENTER_OFFSET)
+    bottom = top + 48
+    obstructions = [*regions]
+    if fold is not None and fold.vertical:
+        # Reserve an actual crease, including when the OS reports zero width.
+        obstructions.append((fold.x - 4, top, fold.width + 8, 48))
+    for start, end in available_intervals(obstructions, left, right, top, bottom):
+        if end - start >= required:
+            reserve = control_top_clearance(regions, left, right, bottom + 4, target=48)
+            return (start, end, top, reserve)
+    return None
+
+
+def project_duo_heading(app, view, destination, *, controller=None):
+    from .fold_layout import division
+    from .ios_reader_chrome import content_control, occlusion_geometry
+    from .ios_toolbar import vertical_edge
+
+    adapter = app.native_host.adapter
+    if controller is None:
+        controller = adapter.content_controller(destination)
+    columns = getattr(app.adaptive, 'file_columns', None) if destination == 'files' else None
+    host = columns.sidebar_box if columns is not None else view
+    native = columns.sidebar.native if columns is not None else controller.view
+    window = app.main_window._impl.native
+    origin = native.convertRect(native.bounds, toView=window).origin
+    safe = native.safeAreaInsets
+    width = float(native.bounds.size.width)
+    left, right = float(safe.left), width - float(safe.right)
+    controls = getattr(view, '_ios_toolbar_buttons', None)
+    actions = controls() if controls is not None else []
+    buttons = [*getattr(view, '_ios_toolbar_leading', ()), *actions]
+    source_row = getattr(view, '_workspaces_source_row', None)
+    transfer = getattr(app, 'folder_transfers_button', None) if source_row is not None else None
+    if transfer is not None and app.feature_enabled('rclone'):
+        buttons.insert(0, transfer)
+    regions = occlusion_geometry(window)
+    regions = tuple((x - float(origin.x), y - float(origin.y), w, h) for x, y, w, h in regions
+                    ) if regions else occlusion_geometry(native)
+    required = 192 + sum(button.style.width + button.style.margin_left + button.style.margin_right
+                         for button in buttons)
+    geometry = None
+    # The vertical rail has a usable top rectangle in open landscape. In
+    # portrait a content header can paint above UIKit's interactive viewport.
+    if abs(float(origin.y)) <= .5 and vertical_edge(controller):
+        geometry = duo_heading_geometry(regions, float(window.safeAreaInsets.top), left, right,
+                                        required, vertical=True, fold=division(app, view))
+    fits = geometry is not None or right - left >= required
+
+    state = getattr(view, '_duo_heading_state', None)
+    signature = (geometry, tuple(map(id, buttons)), left, right, id(host)) if fits else None
+    if state is not None and signature == state['signature']:
+        return True
+    header = view._duo_root_header
+    body_title = getattr(view, '_destination_body_heading', None)
+    if header.parent is not None and header.parent is not host:
+        header.parent.remove(header)
+    if state is not None:
+        view._duo_heading_state = None
+        view._duo_top_band = None
+        header._duo_top_band = False
+        if state['group'] is not None:
+            state['group'].clear()
+            header.remove(state['group'])
+    if not fits:
+        if transfer is not None and transfer.parent is None and app.feature_enabled('rclone'):
+            source_row.add(transfer)
+        if body_title is not None:
+            if body_title.parent is None:
+                original, index = view._duo_body_heading_slot
+                original.insert(index, body_title)
+            if header.parent is host:
+                host.remove(header)
+        else:
+            # Keep the page heading below the normal system clearance when
+            # the upper strip cannot fit the whole group.
+            header.style.margin = (8, 16 - host.style.margin_right, 4, 16 - host.style.margin_left)
+            if header.parent is None:
+                host.insert(0, header)
+    else:
+        if body_title is not None and body_title.parent is not None:
+            body_title.parent.remove(body_title)
+        for button in buttons:
+            if button.parent is not None:
+                button.parent.remove(button)
+            button.app, button.window = app, app.main_window
+            content_control(button, glass=True)
+        group = toga.Box(children=buttons, style=Pack(direction=ROW, align_items=CENTER)) if buttons else None
+        if group is not None:
+            header.add(group)
+        state = view._duo_heading_state = dict(signature=signature, geometry=geometry, header=header,
+                                              buttons=buttons, group=group)
+        if geometry is not None:
+            view._duo_top_band = state
+            header._duo_top_band = True
+            start, end, top, reserve = geometry
+            header.style.margin = (top - host.style.margin_top, right - end + 16 - host.style.margin_right,
+                                   reserve - top - 48, start - left + 16 - host.style.margin_left)
+        else:
+            header.style.margin = (0, 16 - host.style.margin_right, 4, 16 - host.style.margin_left)
+        if header.parent is None:
+            host.insert(0, header)
+    container = getattr(host._impl, 'container', None)
+    if columns is not None:
+        columns.layout_sidebar(columns.sidebar)
+    elif container is not None and (state is not None or fits):
+        adapter.layout_content(container)
+    return fits
+
+
+def project_header(app, view, destination, *, controller=None):
     """Use a measured free top column for overview actions after every pose.
 
     The original buttons and menus move intact. If any target cannot fit, all
@@ -153,7 +300,8 @@ def project_header(app, view, destination):
         return False
     from .ios_toolbar import vertical_edge, system_occlusions
     from .reader_top_band import free_top_band
-    controller = app.native_host.adapter.content_controller(destination)
+    if controller is None:
+        controller = app.native_host.adapter.content_controller(destination)
     native, window = controller.view, app.main_window._impl.native
     origin = native.convertRect(native.bounds, toView=window).origin
     buttons = list(view._ios_toolbar_buttons())

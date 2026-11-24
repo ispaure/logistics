@@ -25,6 +25,9 @@ from .fixtures import capture_window
 def control_frame(app, widget):
     native = widget._impl.native
     if type(app._impl).__module__.startswith('toga_iOS.'):
+        item = getattr(widget, '_ios_action_item', None)
+        if native.window is None and item is not None:
+            native = item.valueForKey('view') or native
         rect = native.convertRect(native.bounds, toView=app.main_window._impl.native)
         return dict(x=float(rect.origin.x), y=float(rect.origin.y),
                     width=float(rect.size.width), height=float(rect.size.height))
@@ -46,8 +49,13 @@ def tap(app, widget):
         root = app.main_window._impl.native
         point = CGPoint(frame['x'] + frame['width'] / 2, frame['y'] + frame['height'] / 2)
         target = root.hitTest(point, withEvent=None)
-        assert target is not None and target.isDescendantOfView(native), frame
-        native.sendActionsForControlEvents(1 << 6)
+        item = getattr(widget, '_ios_action_item', None)
+        if native.window is None and item is not None:
+            assert target is not None and target.isDescendantOfView(item.valueForKey('view')), frame
+            item.target.performSelector(item.action, withObject=item)
+        else:
+            assert target is not None and target.isDescendantOfView(native), frame
+            native.sendActionsForControlEvents(1 << 6)
     else:
         assert native.isShown() and native.performClick()
 
@@ -77,19 +85,25 @@ class SyncStatusProbe(LogisticsMobile):
                 self.refresh_transfer_status()
                 await asyncio.sleep(.3)
                 button = self.folder_transfers_button
-                assert list(self._files_status_row.children) == [self.folder_source_tabs, button]
+                view = self.routes.roots['files'].children[0]
+                state = getattr(view, '_duo_heading_state', None)
+                placement = [self.folder_source_tabs] if state is not None else [self.folder_source_tabs, button]
+                assert list(self._files_status_row.children) == placement
                 assert '42%' in button.accessible_name
                 frame = control_frame(self, button)
-                row_frame = control_frame(self, button.parent)
+                row_frame = control_frame(self, state['header'] if state is not None else button.parent)
                 server = control_frame(self, self.folder_source_buttons['Network shares'])
-                assert 47 <= frame['width'] <= 49 and 47 <= frame['height'] <= 49, frame
-                assert 0 <= frame['x'] - (server['x'] + server['width']) <= 12, (frame, server)
+                if state is not None:
+                    assert button in state['buttons'] and frame['y'] < server['y'], (frame, server)
+                else:
+                    assert 47 <= frame['width'] <= 49 and 47 <= frame['height'] <= 49, frame
+                    assert 0 <= frame['x'] - (server['x'] + server['width']) <= 12, (frame, server)
                 assert frame['x'] + frame['width'] <= row_frame['x'] + row_frame['width'] + 1, (frame, row_frame)
                 for source in ('rclone', 'Network shares', 'Local'):
                     tap(self, self.folder_source_buttons[source])
                     await asyncio.sleep(.2)
                     assert self.folder_source == source
-                    assert list(self._files_status_row.children) == [self.folder_source_tabs, button]
+                    assert list(self._files_status_row.children) == placement
                     await capture_window(self, Path(self.paths.cache) /
                         f'sync-{orientation}-files-{source.replace(" ", "-")}.png')
                 for group in ('Rclone', 'Others'):

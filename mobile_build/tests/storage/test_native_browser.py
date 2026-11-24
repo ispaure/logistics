@@ -128,6 +128,7 @@ class NativeBrowserTests(unittest.TestCase):
             index = 151  # The second card in its tile row must survive the round trip.
             entry = browser._list_entries[index]
             browser.selected = entry.identity
+            tile_extent = browser.TILE_ROW_HEIGHT * ((len(browser._list_entries) + 1) // 2)
             built = []
             build = browser._tile_card
 
@@ -138,7 +139,8 @@ class NativeBrowserTests(unittest.TestCase):
 
             with patch.object(browser, '_visible_rows', return_value=range(index, 165)), \
                     patch.object(type(browser._tile_scroll._impl), '__module__', 'toga_android.widgets.scrollcontainer'), \
-                    patch.object(browser._tile_scroll._impl, 'get_max_vertical_position', return_value=14000), \
+                    patch.object(browser._tile_scroll._impl, 'get_max_vertical_position',
+                                 return_value=tile_extent - 640), \
                     patch.object(browser, '_tile_card', side_effect=detached_card):
                 browser.show_tiles()
                 self.assertEqual(built, list(browser._tile_cards))

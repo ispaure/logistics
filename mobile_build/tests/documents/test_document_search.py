@@ -27,6 +27,21 @@ class LocalDocumentSearchTests(TestCase):
     def setUp(self):
         self.app = create_app(self)
 
+    def test_local_epub_thumbnail_uses_the_provider_content_revision(self):
+        from base64 import b64decode, b64encode
+        from unittest.mock import Mock
+        from mobile.browser_preview import LocalThumbnails
+        from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books, png_page
+
+        path, _ = make_books(self.app.private_root, embed_cover=True)
+        provider = LocalFiles(path.parent)
+        bridge = Mock(supports_streaming=True)
+        bridge.request.return_value = {'data': b64encode(png_page()).decode()}
+        result = LocalThumbnails(provider, bridge, '').load(provider.entry(path.name), (80, 80), lambda: False)
+        self.assertEqual(result, png_page())
+        self.assertEqual(bridge.request.call_args.args, ('image_thumbnail',))
+        self.assertEqual(b64decode(bridge.request.call_args.kwargs['data']), png_page())
+
     def test_libraries_default_and_favourites_opens_and_removes_existing_entries(self):
         import toga
         from mobile.favourites import catalog
@@ -40,7 +55,7 @@ class LocalDocumentSearchTests(TestCase):
         catalog(app).remember(dict(type='local', path=str(path)), path.name,
                               dict(kind='markdown'), favourite=True)
         app.show_documents_hub()
-        self.assertEqual(list(app.document_view_buttons), ['Libraries', 'Favourites', 'Open', 'Recent'])
+        self.assertEqual(list(app.document_view_buttons), ['Libraries', 'Favourites', 'Recent'])
         self.assertEqual(list(app.document_results.children), [app.document_libraries_list])
         favourites = app.document_view_buttons['Favourites']
         self.assertEqual(favourites.accessible_name, 'Favourites')
@@ -299,19 +314,19 @@ class LocalDocumentSearchTests(TestCase):
               patch('mobile.fold_layout.division', return_value=None) as fold):
             app.reflow_documents_hub()
             self.assertEqual(body.style.direction, COLUMN)
-            self.assertEqual([len(row.children) for row in app.document_views.children], [2, 2])
+            self.assertEqual([len(row.children) for row in app.document_views.children], [2, 1])
             width.return_value = 350
             app.reflow_documents_hub()
             self.assertEqual(len(app.document_views.children), 1)
             self.assertEqual(app.document_view_buttons['Recent']._impl._surface_roles[:2],
-                             ('transparent', 'accent'))
+                             ('hover', 'text'))
 
             width.return_value = 600
             app.reflow_documents_hub()
-            self.assertEqual(body.style.direction, ROW)
-            self.assertEqual(nav.style.width, 160)
+            self.assertEqual(body.style.direction, COLUMN)
+            self.assertEqual(app.document_views.children[0].style.direction, ROW)
             self.assertEqual(app.document_view_buttons['Recent']._impl._surface_roles[:2],
-                             ('hover', 'accent'))
+                             ('hover', 'text'))
 
             fold.return_value = Division(x=278, y=0, width=27, height=400)
             app.reflow_documents_hub()
@@ -432,7 +447,7 @@ class LocalDocumentSearchTests(TestCase):
         import toga
         self.assertEqual([w.text for w in app.document_notes_list.children if isinstance(w, toga.Label)][:1], ['Notes'])
         self.assertEqual(labels(app.document_comics_list)[0], 'Comics')
-        self.assertEqual(labels(app.document_books_list), ['Books'])
+        self.assertEqual(labels(app.document_books_list), ['Books', 'Local library', 'Local library'])
         book_rows = [w for w in widgets(app.document_books_list) if isinstance(w, toga.Button)]
         self.assertEqual([row.text for row in book_rows], ['Calibre', 'More Books'])
         libraries = [w.text for w in widgets(app.document_libraries_list) if isinstance(w, toga.Button)]
@@ -507,11 +522,13 @@ class LocalDocumentSearchTests(TestCase):
             app.show_documents_hub()
             app.document_view_buttons['Libraries'].on_press()
             app.loop.run_until_complete(app._notes_discovery_task)
-        rows = app.document_notes_list.children[1]
-        button, = rows.children
+        from mobile_build.tests.workspace.test_hub_documents import widgets
+        button, = (widget for widget in widgets(app.document_notes_list)
+                   if getattr(widget, 'text', '') == 'Vault')
         self.assertEqual(button.text, 'Vault')
         self.assertIn('Vault - Encrypted Copy / Projects', button.accessible_name)
-        self.assertIn(('storage_unlocked', 'Encrypted library, unlocked'), button.leading_icons)
+        self.assertFalse(getattr(button, 'leading_icons', None))
+        self.assertEqual(button._source_caption.children[-1].text, 'Encrypted library')
 
     def test_unlock_is_last_header_action_and_returns_to_each_origin(self):
         app = self.app

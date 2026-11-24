@@ -24,6 +24,57 @@ from mobile_build.native_tests.tests.logisticsmobile.fixtures import make_books
 
 
 class ReaderSessionTests(unittest.TestCase):
+    def test_foreground_checks_local_epub_dom_and_recovers_only_a_missing_reader(self):
+        for healthy in (True, False, RuntimeError('Web content process unavailable')):
+            with self.subTest(healthy=healthy), TemporaryDirectory() as directory:
+                root = Path(directory)
+                LogisticsMobile.storage_root = root
+                app = LogisticsMobile('Logistics', 'io.github.ispaure.logisticsmobile')
+                try:
+                    fixtures = root / 'fixtures'
+                    fixtures.mkdir()
+                    epub, _ = make_books(fixtures)
+                    record = app.reader_manager().catalog.library_store.import_book(LocalDocuments(), epub)
+
+                    async def exercise():
+                        self.assertTrue(await app.open_book(record['id']))
+                        owner = app.readers.active
+                        offset = min(5, owner.epub_text.length)
+                        owner.epub_event(owner.book_reader, owner.book_epoch, 0, 'position', offset)
+                        bridge = owner.epub_view._chapter_bridge
+                        bridge.native_pagination = True
+                        evaluate = owner.epub_view.evaluate_javascript
+                        checks = []
+
+                        def inspect(script, *args, **kwargs):
+                            if not script.startswith('!!(window.reader'):
+                                return evaluate(script, *args, **kwargs)
+                            checks.append(script)
+                            future = app.loop.create_future()
+                            if isinstance(healthy, Exception):
+                                future.set_exception(healthy)
+                            else:
+                                future.set_result(healthy)
+                            return future
+
+                        with patch.object(owner.epub_view, 'evaluate_javascript', side_effect=inspect), \
+                                patch.object(owner.epub_view, 'set_content', wraps=owner.epub_view.set_content) as reload:
+                            app.screen_privacy.resume_reader()
+                            await owner._epub_resume_task
+                        self.assertEqual(len(checks), 1)
+                        self.assertEqual(reload.call_count, int(healthy is not True))
+                        self.assertEqual(owner.epub_offset, offset)
+                        self.assertEqual(owner.book_record['position'], 0)
+                        self.assertFalse(owner._epub_return_pending)
+                        self.assertEqual(len(app.workspace.sessions), 1)
+                        self.assertEqual(owner.epub_view._chapter_bridge is bridge, healthy is True)
+
+                    app.loop.run_until_complete(exercise())
+                finally:
+                    app.main_window.close()
+                    close_loop(app.loop)
+                    LogisticsMobile.storage_root = None
+
     def test_reopening_loaded_epub_reloads_content_and_preserves_passage(self):
         with TemporaryDirectory() as directory:
             root = Path(directory)

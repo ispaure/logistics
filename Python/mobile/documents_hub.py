@@ -19,32 +19,35 @@ from toga.style.pack import COLUMN, ROW, CENTER
 from .appearance import accessible_name, batch_surfaces, list_button, surface
 from .control_icons import icon_button, button_icons
 from .hub_controls import (
-    PanelGrid, append_document_group_rows, document_group, document_list, empty_document_row,
-    retire_document_actions, text_document_kind,
+    DocumentThumbnails, PanelGrid, append_document_group_rows, document_group, document_list,
+    empty_document_row, retire_document_actions, source_title, text_document_kind,
 )
 from .ui_metrics import TOUCH_TARGET, WRAPPED_FILENAME_ROW_HEIGHT
 
 
-COLLECTIONS = ('Libraries', 'Favourites', 'Open', 'Recent')
-SIDEBAR_WIDTH = 160
-SIDEBAR_BREAKPOINT = 480
+COLLECTIONS = ('Libraries', 'Favourites', 'Recent')
 TABS_BREAKPOINT = 300
 COLLECTION_FONT = 13
 FILENAME_FONT = 15
 
 
 def library_heading_style():
-    return Pack(font_size=COLLECTION_FONT, font_weight='bold', margin_bottom=8)
+    return Pack(font_size=COLLECTION_FONT, font_weight='bold', margin_top=8, margin_bottom=8)
 
 
 def library_folder_button(record, on_press):
     from .browser_ui import middle_filename
 
     button = list_button(toga.Button(record['name'], on_press=on_press,
-                                     style=Pack(height=TOUCH_TARGET, font_size=FILENAME_FONT)))
+        style=Pack(height=TOUCH_TARGET, font_size=FILENAME_FONT, font_weight='bold')))
     middle_filename(button)
-    button_icons(button, [('folder_hub', record['source'])])
     return button
+
+
+def library_folder_row(button, record):
+    source = record['source']
+    glyph = 'storage_unlocked' if source.endswith(' - Encrypted Copy') else 'storage_local'
+    return source_title(button, [(glyph, source)], text='Encrypted library' if glyph == 'storage_unlocked' else 'Local library')
 
 
 class DocumentsHub:
@@ -57,22 +60,23 @@ class DocumentsHub:
         width = self.adaptive.content_width('documents', margin=32)
         fold = division(self.app, body)
         searching = self.document_search.parent is not None
-        sidebar = fold.vertical if fold is not None else width >= SIDEBAR_BREAKPOINT and not searching
-        selector_width = (fold.x if fold is not None else SIDEBAR_WIDTH) if sidebar else None
+        split = fold is not None and fold.vertical
+        selector_width = fold.x if split else width
         if fold is not None:
-            gap = fold.width if sidebar else fold.height
+            gap = fold.width if split else fold.height
         else:
-            gap = 16 if sidebar else 0
-        result_width = width - selector_width - gap if sidebar else width
-        wrapped = not sidebar and width < TABS_BREAKPOINT
+            gap = 0
+        result_width = width - selector_width - gap if split else width
+        wrapped = selector_width < TABS_BREAKPOINT
 
-        geometry = (sidebar, wrapped, searching, selector_width, fold, gap)
+        title_visible = self.documents_sections._destination_body_heading.parent is not None
+        geometry = (split, wrapped, searching, selector_width, fold, gap, title_visible)
         if geometry != self._document_collection_geometry:
             self._document_collection_geometry = geometry
-            body.style.direction = ROW if sidebar else COLUMN
+            body.style.direction = ROW if split else COLUMN
             nav = self._document_collection_navigation
             detail = self._document_collection_detail
-            if sidebar:
+            if split:
                 del nav.style.height
                 nav.style.width = selector_width
             else:
@@ -80,10 +84,10 @@ class DocumentsHub:
                 # Both panes scroll independently when a horizontal fold fixes
                 # the space above the crease, including in a short window.
                 nav.style.height = (fold.y if fold is not None else
-                    44 + (0 if searching else (TOUCH_TARGET + 2) * (2 if wrapped else 1)))
-            detail.style.margin_left = gap if sidebar else 0
-            detail.style.margin_top = gap if not sidebar else 0
-            self._layout_document_tabs(sidebar, wrapped)
+                    (52 if title_visible else 0) + (0 if searching else (TOUCH_TARGET + 4) * (2 if wrapped else 1)))
+            detail.style.margin_left = gap if split else 0
+            detail.style.margin_top = gap if not split else 0
+            self._layout_document_tabs(wrapped)
 
         # Fit status and source text to the allocated pane, including after a
         # fold or search transition, without letting it expand the viewport.
@@ -94,41 +98,29 @@ class DocumentsHub:
                 fit(child)
         fit(self.document_results)
 
-    def _layout_document_tabs(self, sidebar, wrapped):
-        mode = 'sidebar' if sidebar else 'wrapped' if wrapped else 'tabs'
+    def _layout_document_tabs(self, wrapped):
+        mode = 'wrapped' if wrapped else 'tabs'
         if mode == self._document_tabs_mode:
             return
         self._document_tabs_mode = mode
-        for cell in self._document_tab_cells.values():
-            if cell.parent is not None:
-                cell.parent.remove(cell)
+        for button in self.document_view_buttons.values():
+            if button.parent is not None:
+                button.parent.remove(button)
         self.document_views.clear()
         names = (COLLECTIONS[:2], COLLECTIONS[2:]) if wrapped else (COLLECTIONS,)
         for group in names:
-            row = toga.Box(style=Pack(direction=COLUMN if sidebar else ROW))
+            row = toga.Box(style=Pack(direction=ROW))
             for name in group:
-                cell = self._document_tab_cells[name]
-                weight = 1.35 if name in ('Libraries', 'Favourites') else 1
-                cell.style.flex = 0 if sidebar else weight
-                row.add(cell)
+                row.add(self.document_view_buttons[name])
             self.document_views.add(row)
         self._style_document_tabs()
 
     def _style_document_tabs(self):
         from .folder_hub_style import source_tab
-        sidebar = self._document_tabs_mode == 'sidebar'
         with batch_surfaces():
             for name, button in self.document_view_buttons.items():
                 selected = self.documents_view == name
-                source_tab(button, selected)
-                surface(button, radius=8 if sidebar else 0,
-                        background='hover' if sidebar and selected else 'transparent',
-                        foreground='accent' if selected else 'muted', outlined=False,
-                        eink_outlined=False, eink_selected=selected)
-                indicator = self._document_tab_cells[name].children[-1]
-                surface(indicator, radius=0,
-                        background='accent' if selected and not sidebar else 'transparent',
-                        outlined=False, eink_outlined=False)
+                source_tab(button, selected, quiet=True)
 
     def build_documents_hub(self):
         from commonUtils.ui.native.event_loop import DebouncedCallback
@@ -155,20 +147,19 @@ class DocumentsHub:
         self.document_grids = []
         self.document_categories = {}
         self.document_launchers = PanelGrid([], self.main_window.size.width)
-        if hasattr(self, 'document_open_list'):
-            for section in (self.document_open_list, self.document_recent_list, self.document_saved_list,
+        if hasattr(self, 'document_recent_list'):
+            for section in (self.document_recent_list, self.document_saved_list,
                             self.document_favourites_list):
                 retire_document_actions(section)
-        self.document_open_list = toga.Box(style=Pack(direction=COLUMN))
-        self.document_open_list._open_documents = True
         self.document_recent_list = toga.Box(style=Pack(direction=COLUMN))
+        self.document_recent_list._open_documents = True
         self.document_saved_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_notes_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_comics_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_books_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_favourites_list = toga.Box(style=Pack(direction=COLUMN))
         self.document_libraries_list = toga.Box(
-            children=[self.document_notes_list, self.document_comics_list, self.document_books_list,
+            children=[self.document_notes_list, self.document_books_list, self.document_comics_list,
                       self.document_saved_list],
             style=Pack(direction=COLUMN))
         self._document_libraries_ready = False
@@ -179,24 +170,24 @@ class DocumentsHub:
         self.document_results = toga.Box(style=Pack(direction=COLUMN))
         self.document_views = toga.Box(style=Pack(direction=COLUMN))
         self.document_view_buttons = {}
-        self._document_tab_cells = {}
         self._document_tabs_mode = None
         self._document_collection_geometry = None
+        if getattr(self, 'documents_view', None) == 'Open':
+            self.documents_view = 'Recent'
         if getattr(self, 'documents_view', None) not in COLLECTIONS:
             self.documents_view = 'Libraries'
         for name in COLLECTIONS:
             def choose(widget=None, name=name, **kwargs):
                 self.documents_view = name
+                self.document_library = None
                 self.show_document_collection()
             button = toga.Button(name, on_press=choose,
-                style=Pack(height=TOUCH_TARGET, font_size=COLLECTION_FONT))
+                style=Pack(height=TOUCH_TARGET, flex=1, margin=2, font_size=COLLECTION_FONT))
             accessible_name(button, name)
             self.document_view_buttons[name] = button
-            indicator = toga.Box(style=Pack(height=2, margin_left=4, margin_right=4))
-            self._document_tab_cells[name] = toga.Box(children=[button, indicator],
-                                                     style=Pack(direction=COLUMN))
 
-        title = toga.Label('Documents', style=Pack(font_size=26, font_weight='bold'))
+        title = toga.Label('Documents', style=Pack(font_size=30, font_weight='bold', margin_bottom=8))
+        box._destination_body_heading = title
         self._document_collection_header = toga.Box(children=[title, self.document_views],
                                                     style=Pack(direction=COLUMN))
         self._document_collection_navigation = toga.ScrollContainer(horizontal=False,
@@ -247,9 +238,21 @@ class DocumentsHub:
         elif not searching and parent is None:
             self._document_collection_header.add(self.document_views)
         self._document_collection_title.text = 'Search results' if searching else self.documents_view
+        result_box = self.document_results.parent
+        title = self._document_collection_title
+        if searching and title.parent is None:
+            result_box.insert(0, title)
+        elif not searching and title.parent is result_box:
+            result_box.remove(title)
+        library = getattr(self, 'document_library', None)
+        for name, section in (('Notes', self.document_notes_list), ('Books', self.document_books_list),
+                              ('Comics', self.document_comics_list), (None, self.document_saved_list)):
+            visible = library is None or library == name
+            section.style.update(display='pack' if visible else 'none',
+                                 visibility='visible' if visible else 'hidden')
         self._style_document_tabs()
         selected = self.document_search_results if searching else {
-            'Open': self.document_open_list, 'Recent': self.document_recent_list,
+            'Recent': self.document_recent_list,
             'Libraries': self.document_libraries_list,
             'Favourites': self.document_favourites_list}[self.documents_view]
         if list(self.document_results.children) != [selected]:
@@ -263,6 +266,9 @@ class DocumentsHub:
             retire_document_actions(self.document_favourites_list)
             self.document_favourites_list.clear()
             populate(self.app, self.document_favourites_list, heading=False, row_font=FILENAME_FONT, allow_remove=True)
+        previews = getattr(selected, '_document_thumbnails', None)
+        if previews is not None:
+            previews.start()
         self.reflow_documents_hub()
 
     def populate_document_libraries(self):
@@ -292,8 +298,8 @@ class DocumentsHub:
                 async def open_library(widget=None, record=record, **kwargs):
                     if self.app.checkpoint():
                         await catalog.library_host.open_folder(record, destination='documents')
-                rows.append(library_folder_button(record, open_library))
-            target.add(document_list(rows, 'No Comics libraries found.'))
+                rows.append(library_folder_row(library_folder_button(record, open_library), record))
+            target.add(document_list(rows, 'No Comics libraries found.', outlined=True))
             if 'could not' in catalog.book_status.text:
                 target.add(empty_document_row(catalog.book_status.text))
             self.reflow_documents_hub()
@@ -350,9 +356,9 @@ class DocumentsHub:
                 button = library_folder_button(record, open_library)
                 source = record['source']
                 accessible_name(button, f'{source} / {location[1]}' if location[1] else source)
-                rows.append(button)
+                rows.append(library_folder_row(button, record))
             target.remove(status)
-            target.add(document_list(rows, 'No Books libraries found.'))
+            target.add(document_list(rows, 'No Books libraries found.', outlined=True))
             if failures:
                 target.add(empty_document_row('Some local folders could not be checked.'))
             self.reflow_documents_hub()
@@ -411,8 +417,7 @@ class DocumentsHub:
             button = list_button(toga.Button(hit['name'], on_press=open_result,
                 style=Pack(height=WRAPPED_FILENAME_ROW_HEIGHT, flex=1, font_size=FILENAME_FONT)))
             wrapped_filename(button)
-            button_icons(button, [('storage_local', 'Local document'), *(
-                [('storage_unlocked', 'Unlocked LocalCrypt')] if hit['private'] else [])])
+            kinds = [('storage_unlocked', 'Unlocked LocalCrypt')] if hit['private'] else [('storage_local', 'Local file')]
             more = icon_button('more', 'File actions for ' + hit['name'])
             actions = [('Open folder' if hit.get('directory') else 'Open', open_result)]
             if hit['source']['type'] in {'local', 'crypt'}:
@@ -429,7 +434,7 @@ class DocumentsHub:
                 return [*actions, *direct]
             native_menu(self.app, more, load_actions)
             self._document_search_menus.append(more.document_actions)
-            row = toga.Box(children=[entry_icon(hit.get('directory', False)), button, more],
+            row = toga.Box(children=[entry_icon(hit.get('directory', False)), source_title(button, kinds), more],
                            style=Pack(direction=ROW, align_items=CENTER))
             rows.append(row)
         if rows:
@@ -494,7 +499,7 @@ class DocumentsHub:
         self.refresh_hub('home')
 
     def refresh_document_list(self):
-        if not hasattr(self, 'document_open_list'):
+        if not hasattr(self, 'document_recent_list'):
             return
         from .workspace import Session
         query = getattr(self, 'documents_query', '').strip().casefold()
@@ -505,40 +510,31 @@ class DocumentsHub:
             self.show_document_collection()
             return
         self._documents_file_search.stop_local_search()
-        for section in (self.document_open_list, self.document_recent_list, self.document_saved_list):
+        for section in (self.document_recent_list, self.document_saved_list):
             retire_document_actions(section)
             for child in list(section.children):
                 section.remove(child)
         sessions = self.open_document_sessions()
-        entries = self.document_open_list
-        rows = []
-        for session in sessions:
-            summary = self.session_summary(session)
-            row = self.session_panel(session, close=True, summary=summary)
-            row.document_button.style.font_size = FILENAME_FONT
-            rows.append(row)
         owner = getattr(self.app, '_archives', None)
-        if owner is not None and owner.enabled() and owner.item is not None:
-            rows.append(toga.Box(children=[
-                toga.Button(owner.name, on_press=lambda widget: owner.present(), style=Pack(height=48, flex=1)),
-                toga.Button('×', on_press=owner.close, style=Pack(height=48)),
-            ], style=Pack(direction=ROW)))
-        entries.add(document_list(rows, 'No open documents.'))
-        if rows:
-            entries.add(empty_document_row('Close a view with ×. Your saved file stays.'))
-        recent = self.recent_items(excluding=[session.identity for session in sessions])
+        recent = self.recent_items()
         clear = surface(toga.Button('Clear', on_press=self.clear_recent_documents,
             style=Pack(height=44, margin_top=8)), radius=0, background='transparent',
             foreground='accent', outlined=False, eink_outlined=False)
         self.document_recent_list.add(toga.Box(children=[toga.Box(style=Pack(flex=1)), clear],
             style=Pack(direction=ROW, align_items=CENTER)))
         rows = []
+        previews = self.document_recent_list._document_thumbnails = DocumentThumbnails(self.app)
         for session, summary in recent:
             if (owner is not None and owner.item is not None and session.kind == 'archive'
                     and owner.matches_reference(session.source)):
                 continue
-            rows.append(self.recent_row(session, summary, wrap_name=True))
-        self.document_recent_list.add(document_list(rows, 'No closed recent documents.'))
+            rows.append(self.recent_row(session, summary, wrap_name=True, show_source=True, previews=previews))
+        if owner is not None and owner.enabled() and owner.item is not None:
+            rows.append(toga.Box(children=[
+                toga.Button(owner.name, on_press=lambda widget: owner.present(), style=Pack(height=48, flex=1)),
+                toga.Button('×', on_press=owner.close, style=Pack(height=48)),
+            ], style=Pack(direction=ROW)))
+        self.document_recent_list.add(document_list(rows, 'No recent items.'))
         represented = {session.identity for session in sessions}
         represented.update(session.identity for session, _ in recent)
         rows = []
@@ -560,7 +556,7 @@ class DocumentsHub:
             row.document_button.style.font_size = FILENAME_FONT
         if rows:
             self.document_saved_list.add(
-                toga.Label('On this device', style=library_heading_style()), document_group(rows))
+                toga.Label('Saved files', style=library_heading_style()), document_group(rows))
         self.show_document_collection()
 
     async def open_document_category(self, category):

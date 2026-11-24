@@ -346,6 +346,9 @@ class ScreenPrivacy:
             session = getattr(owner, 'session', None)
             if session is not None and self.app.visible_reader() == session.id:
                 owner.resume_suspended_page()
+                if session.kind == 'epub':
+                    from .reading.epub_resume import resume_visible_reader
+                    resume_visible_reader(self.app, wake=True)
 
     def prepare_native_protection(self, *, transitioning=False):
         """Apply native concealment before callbacks can mutate presentation."""

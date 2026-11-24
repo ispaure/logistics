@@ -28,7 +28,7 @@ def bridge_for(owner, provider):
     return getattr(view, '_chapter_bridge', None)
 
 
-def resume_visible_reader(app):
+def resume_visible_reader(app, *, wake=False):
     privacy = getattr(app, 'screen_privacy', None)
     if privacy is None or not app.active_host or privacy.inactive or any(gate.locked for gate in privacy.gates()):
         return
@@ -61,6 +61,8 @@ def resume_visible_reader(app):
             return
 
     bridge = bridge_for(owner, provider)
+    if wake:
+        owner._epub_return_pending = True
     changed = owner._epub_appearance != appearance(app.preferences.values)
     pending = getattr(owner, '_epub_return_pending', False)
     task = getattr(owner, '_epub_resume_task', None)

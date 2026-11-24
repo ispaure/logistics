@@ -18,7 +18,7 @@ buttons. See [comic gestures](../../features/comics/user_mobile/gestures.md)
 for page navigation and magnification.
 
 If opening another document fails because the workspace is full, close
-a file in **Documents → Open** and retry. You can keep up to 32 documents
+a file in **Documents → Recent** and retry. You can keep up to 32 documents
 open. Local, LocalCrypt and remote documents that use provider readers
 share four slots and a 32 MiB file content budget. If one document alone
 exceeds that budget, the reader cannot open it.

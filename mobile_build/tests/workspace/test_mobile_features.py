@@ -194,9 +194,11 @@ class MobileFeatureTests(unittest.TestCase):
         app = self.app
         app.show_settings()
         app.settings_navigation.choose('Features')
+        app.settings_navigation.options['Features'].vertical_position = 640
         control = app.settings_navigation.sections['Features'].feature_switches['lm']
         control.value = False
         self.run_async(asyncio.sleep(0))
+        self.assertEqual(app.settings_navigation.options['Features'].vertical_position, 640)
         self.assertFalse(app.navigation.content[3].enabled)
         self.assertEqual(app.native_host.state.destination, 'settings')
         self.assertFalse(app.select_destination('chat'))
@@ -204,9 +206,27 @@ class MobileFeatureTests(unittest.TestCase):
         self.assertEqual(app.navigation.content[4].text, 'Settings')
         app.settings_navigation.sections['Features'].feature_switches['lm'].value = True
         self.run_async(asyncio.sleep(0))
+        self.assertEqual(app.settings_navigation.options['Features'].vertical_position, 640)
         self.assertTrue(app.navigation.content[3].enabled)
         app.show_chat()
         self.assertIsNone(app.chat_controller().state.client)
+
+    def test_feature_refresh_keeps_wide_sidebar_and_feature_scroll_independent(self):
+        app = self.app
+        with patch.object(app.adaptive, 'content_width', return_value=900):
+            app.show_settings()
+            nav = app.settings_navigation
+            nav.choose('Features')
+            self.assertTrue(nav.wide)
+            nav.sidebar.vertical_position = 48
+            nav.options['Features'].vertical_position = 640
+            nav.sections['Features'].feature_switches['lm'].value = False
+            self.run_async(asyncio.sleep(0))
+            nav = app.settings_navigation
+            features = nav.options['Features']
+            self.assertIs(features.parent, nav.detail)
+            self.assertEqual(features.vertical_position, 640)
+            self.assertEqual(nav.sidebar.vertical_position, 48)
 
     def test_disabling_selected_chat_returns_home_and_preserves_conversation(self):
         app = self.app

@@ -240,16 +240,22 @@ def clear_actions(nav):
         nav.additionalOverflowItems = None
 
 
-def sync_screen(app, view, destination):
+def sync_screen(app, view, destination, *, returning_to=None):
     """Apply explicit screen actions and refresh retained folder bars on resize."""
     if not app.routes.apple or app.native_host.adapter is None:
         return
-    controller = app.native_host.adapter.content_controller(destination)
-    screens = app.routes.screens[destination]
+    if returning_to is None:
+        if destination == 'files' and getattr(app.routes, 'workspace_return', None) is not None:
+            return
+        controller = app.native_host.adapter.content_controller(destination)
+        screens = app.routes.screens[destination]
+    else:
+        controller, screens = returning_to, ()
     if not screens and hasattr(view, '_destination_actions'):
         if (getattr(view, '_home_inline_unlock', False)
                 or getattr(view, '_home_top_band', None) is not None
-                or getattr(view, '_destination_top_band', None) is not None):
+                or getattr(view, '_destination_top_band', None) is not None
+                or getattr(view, '_duo_heading_state', None) is not None):
             clear_actions(controller.navigationItem)
             mount_leading(controller, [])
             return

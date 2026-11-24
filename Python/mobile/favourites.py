@@ -288,7 +288,10 @@ async def reopen(app, row, *, error_title='Open favourite'):
     return False
 
 
-def populate(app, container, *, heading=True, row_font=None, allow_remove=False):
+def populate(app, container, *, heading=True, row_font=None, allow_remove=False, limit=None):
+    from .hub_controls import DocumentThumbnails, source_title
+    previews = container._document_thumbnails = DocumentThumbnails(app) if row_font is not None else None
+
     if heading:
         container.add(toga.Label('Favourites', style=Pack(font_size=20, font_weight='bold', margin_top=12)))
     try:
@@ -313,12 +316,19 @@ def populate(app, container, *, heading=True, row_font=None, allow_remove=False)
             except (OSError, ValueError, PermissionError) as error:
                 await app.main_window.dialog(toga.InfoDialog('Remove favourite', str(error)))
         opener = toga.Button(row['title'], on_press=open_row, style=Pack(height=48, flex=1))
+        controls = [opener]
         if row_font is not None:
             from .appearance import list_button
             from .browser_ui import middle_filename
             opener.style.font_size = row_font
             middle_filename(list_button(opener))
-        controls = [opener]
+            glyph, label = {'local': ('storage_local', 'Local file'),
+                            'remote': ('storage_remote', 'Cloud file'),
+                            'crypt': ('storage_crypt', 'Encrypted file'),
+                            'download': ('storage_crypt', 'Encrypted file')}.get(
+                                row['source']['type'], ('storage_local', 'Saved document'))
+            controls = [previews.artwork(row['source'], row['opener'].get('kind')),
+                        source_title(opener, [(glyph, label)], text=label)]
         from . import outbound_share
         if allow_remove or (outbound_share.supported() and
                             row['source']['type'] in {'local', 'remote', 'crypt', 'download'}):
@@ -332,7 +342,9 @@ def populate(app, container, *, heading=True, row_font=None, allow_remove=False)
 
             controls.append(native_menu(app, more, actions))
         buttons.append(toga.Box(children=controls,
-            style=Pack(direction=ROW)))
+            style=Pack(direction=ROW, align_items='center')))
+        if len(buttons) == limit:
+            break
     if row_font is not None:
         from .hub_controls import document_list
         container.add(document_list(buttons, 'No favourite files.'))
@@ -340,3 +352,5 @@ def populate(app, container, *, heading=True, row_font=None, allow_remove=False)
         container.add(*buttons)
     else:
         container.add(toga.Label('No favourite files.', style=Pack(margin_bottom=8)))
+    if previews is not None:
+        previews.start()

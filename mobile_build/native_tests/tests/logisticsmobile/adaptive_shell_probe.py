@@ -38,7 +38,8 @@ class ShellProbe(ToolbarProbe):
         view = self.routes.body().children[0]
         sample['home_header'] = bool(getattr(view, '_home_top_band', None))
         sample['reader_header'] = bool(getattr(view, '_reader_top_band_state', None))
-        sample['destination_header'] = bool(getattr(view, '_destination_top_band', None))
+        sample['destination_header'] = bool(getattr(view, '_duo_top_band', None) or
+                                            getattr(view, '_destination_top_band', None))
         (self.output / 'progress.json').write_text(json.dumps(self.report, indent=2))
         return sample
 
@@ -85,7 +86,7 @@ class ShellProbe(ToolbarProbe):
         for locked in (False, True):
             with patch.object(self, 'home_unlock_candidates', return_value=[('shell-qa', {'zip': 'QA.zip'})] if locked else []):
                 self.show_documents_hub()
-                for section in ('Libraries', 'Open', 'Recent', 'Saved'):
+                for section in ('Libraries', 'Favourites', 'Recent'):
                     self.document_view_buttons[section]._impl.native.sendActionsForControlEvents(1 << 6)
                     assert self.documents_view == section
                     for step, pose in enumerate(('portrait', 'landscape-right', 'portrait')):
@@ -95,7 +96,7 @@ class ShellProbe(ToolbarProbe):
                 await self.record(f'{phase}-home-unlock-{locked}')
         self.show_documents_hub()
         view = self.routes.body().children[0]
-        if getattr(view, '_destination_top_band', None):
+        if getattr(view, '_duo_top_band', None) or getattr(view, '_destination_top_band', None):
             view._document_search_button._impl.native.sendActionsForControlEvents(1 << 6)
             await asyncio.sleep(.5)
             assert self.documents_search_open

@@ -1252,12 +1252,13 @@ class NotesLibraryTests(unittest.TestCase):
                 self.app.show_documents_hub()
                 self.app.document_view_buttons['Libraries'].on_press()
                 await wait_for_discovery()
-                buttons = self.app.document_notes_list.children[1].children
+                from mobile_build.tests.workspace.test_hub_documents import widgets
+                buttons = [button for button in widgets(self.app.document_notes_list)
+                           if hasattr(button, '_source_caption')]
                 self.assertIn('Secret', [button.text for button in buttons],
                               self.app.document_notes_list.children[2].text)
                 detected = next(button for button in buttons if button.text == 'Secret')
-                self.assertEqual([name for name, _ in detected.leading_icons],
-                                 ['storage_local', 'storage_unlocked'])
+                self.assertEqual(detected._source_caption.children[-1].text, 'Encrypted library')
                 await detected.on_press()
                 self.assertIsNotNone(getattr(self.app, 'vault_browser', None),
                                      self.app.document_notes_list.children[2].text)
@@ -1350,9 +1351,10 @@ class NotesLibraryTests(unittest.TestCase):
             self.app.show_documents_hub()
             self.app.document_view_buttons['Libraries'].on_press()
             await self.app._notes_discovery_task
-            button = next(child for child in self.app.document_notes_list.children[1].children
-                          if getattr(child, 'text', '') == 'Notes')
-            self.assertEqual([name for name, _ in button.leading_icons], ['storage_local'])
+            from mobile_build.tests.workspace.test_hub_documents import widgets
+            button = next(child for child in widgets(self.app.document_notes_list)
+                          if getattr(child, 'text', '') == 'Notes' and hasattr(child, '_source_caption'))
+            self.assertEqual(button._source_caption.children[-1].text, 'Local library')
             self.assertIsNotNone(button.parent)
             await button.on_press()
             owner = self.app.vault_browser

@@ -45,7 +45,6 @@ class HubController(HubUI):
         "document_grids",
         "document_launchers",
         "document_search",
-        "document_open_list",
         "document_recent_list",
         "document_saved_list",
         "document_notes_list",

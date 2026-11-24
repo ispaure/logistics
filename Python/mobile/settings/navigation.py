@@ -57,6 +57,7 @@ class SettingsNavigation(toga.Box):
         self.wide = None
         self._reflowing = False
         self._sidebar_position = 0
+        self._detail_position = None
         self.options = SettingsPages({title: lambda title=title: toga.ScrollContainer(horizontal=False,
             content=self.sections[title], style=Pack(flex=1)) for title in sections})
         self.buttons = {}
@@ -137,12 +138,18 @@ class SettingsNavigation(toga.Box):
     def restore_selection(self, previous):
         screens = self.owner.routes.screens['settings']
         position = previous.sidebar.vertical_position
+        previous_view = previous.options.built.get(previous.selected)
+        offset = previous_view.vertical_position if previous_view is not None else 0
         previous.detach(previous.sidebar)
         if previous.selected not in self.sections:
             self.owner.routes.trim('settings', 0)
         elif previous.detail_requested:
             self.selected = previous.selected
             self.detail_requested = True
+            if offset > 0:
+                self._detail_position = (self.selected, offset)
+            elif previous._detail_position is not None and previous._detail_position[0] == self.selected:
+                self._detail_position = previous._detail_position
             for route, panel, _ in screens:
                 if route == 'settings-category':
                     panel.clear()
@@ -150,6 +157,38 @@ class SettingsNavigation(toga.Box):
                     self._category_on_stack = True
                     break
         self._sidebar_position = position
+
+    def restore_detail_scroll(self):
+        pending = self._detail_position
+        if pending is None:
+            return
+        title, offset = pending
+        view = self.options[title]
+        native = type(view._impl).__module__.startswith(('toga_iOS.', 'toga_android.'))
+
+        def restore():
+            if self._detail_position != pending:
+                return
+            self._detail_position = None
+            if (not self.owner.active_host or self.owner.settings_navigation is not self or self.selected != title
+                    or view.parent is None or view.vertical_position > 0):
+                return
+            target = min(offset, view.max_vertical_position)
+            if native:
+                from ..reader_lifecycle import restore_scroll
+                restore_scroll(view, (0, target))
+            else:
+                view.vertical_position = target
+
+        if native:
+            # Native scroll bounds may still be empty on the first tree update.
+            async def after_draw():
+                from commonUtils.ui.native.draw_ready import wait_for_draw
+                await wait_for_draw(view)
+                restore()
+            self.owner.loop.create_task(after_draw())
+        else:
+            restore()
 
     def update_selection(self, *, show_detail=False):
         from ..appearance import surface

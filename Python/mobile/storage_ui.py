@@ -368,7 +368,7 @@ class StorageUI:
             self.collection_storage_status.text = 'Open Android settings, enable permission for All files access, then return and choose Check access.'
             return
         if any(session.provider != 'managed-text' for session in self.workspace.sessions.values()):
-            self.collection_storage_status.text = 'Close open readers and local/remote documents in Open documents, then retry.'
+            self.collection_storage_status.text = 'Close open readers and editors in Documents → Recent, then retry.'
             return
         if not self.checkpoint():
             self.collection_storage_status.text = 'Save your current document before changing storage.'

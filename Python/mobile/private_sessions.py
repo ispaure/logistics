@@ -512,7 +512,7 @@ class PrivateSessions:
         if len(self.controllers) >= MAX_PRIVATE_SESSIONS:
             return await self.opening_rejected(
                 f'All {MAX_PRIVATE_SESSIONS} file document slots are in use. Local, LocalCrypt and remote files share this limit. '
-                'Go to Documents → Open documents and close one, then try again. Existing documents and unsaved edits were kept.')
+                'Go to Documents → Recent and close one, then try again. Existing documents and unsaved edits were kept.')
         if prepared is None and not self.app.checkpoint():
             return False
         previous = self.active
@@ -539,7 +539,7 @@ class PrivateSessions:
             session = self.app.workspace.open('provider-session', identity, 'text', transient=True,
                                               protected=protected, shared_read=shared_read)
         except ValueError as error:
-            return await self.opening_rejected(str(error) + '\n\nGo to Documents → Open documents to manage open items.')
+            return await self.opening_rejected(str(error) + '\n\nGo to Documents → Recent to manage open items.')
         self.app.workspace.active = selection
         try:
             owner = self._register_opening_owner(session, copies, key=key, destination=destination,
@@ -578,7 +578,7 @@ class PrivateSessions:
                 retire_open()
                 return await self.opening_rejected(
                     'This document would exceed the shared 32 MiB file content memory budget. '
-                    'Go to Documents → Open documents and close an item, then try again. '
+                    'Go to Documents → Recent and close an item, then try again. '
                     'A document that exceeds the budget by itself cannot be opened. Existing documents and unsaved edits were kept.')
             return await self._publish_opened_session(owner, session, reader, copies, key,
                                                       privacy_gate=privacy_gate)

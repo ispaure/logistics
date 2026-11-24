@@ -114,20 +114,44 @@ def native_geometry(app, *, verify=True):
     home_header = getattr(view, '_home_top_band', None)
     home_row = (home_header['row'] if home_header else
                 view._home_primary_actions if getattr(view, '_home_inline_unlock', False) else None)
-    destination_header = getattr(view, '_destination_top_band', None)
+    destination_header = getattr(view, '_duo_heading_state', None) or getattr(view, '_destination_top_band', None)
+    group = destination_header.get('group') if destination_header else None
     controls = (reader_header['buttons'] if reader_header else home_row.children if home_row is not None
                 else destination_header['buttons'] if destination_header else ())
     for button in controls:
-        native = button._impl.native
+        action = None
+        if group is not None and hasattr(group, '_reader_native_toolbar'):
+            action = button._ios_action_item
+            native = action.valueForKey('view')
+        else:
+            native = button._impl.native
+        if native is None:
+            collisions.append(('Header action is missing from its toolbar', button.accessible_name))
+            continue
         if native.window is not None and not native.isHidden():
             bounds = rect(native)
             from rubicon.objc import CGPoint
-            hit = window.hitTest(CGPoint(bounds[0] + bounds[2] / 2, bounds[1] + bounds[3] / 2), withEvent=None)
-            item = dict(label=str(native.accessibilityLabel or getattr(button, 'text', '')),
-                        frame=bounds, hit_target=bool(hit is not None and hit.isDescendantOfView(native)))
+            point = CGPoint(bounds[0] + bounds[2] / 2, bounds[1] + bounds[3] / 2)
+            hit = window.hitTest(point, withEvent=None)
+            label = action.accessibilityLabel if action is not None else native.accessibilityLabel
+            item = dict(label=str(label or getattr(button, 'accessible_name', None) or button.text),
+                        frame=bounds, hit_target=bool(hit is not None and hit.isDescendantOfView(native)),
+                        hit_class=str(hit.objc_class.name) if hit is not None else None)
             header_items.append(item)
-            if min(bounds[2:]) < 44 or not item['hit_target']:
-                collisions.append(('Header action is not a reachable 44pt target', item))
+            if min(bounds[2:]) < (32 if action is not None else 44) or not item['hit_target']:
+                def ancestry(node):
+                    result = []
+                    while node is not None:
+                        result.append((str(node.objc_class.name), rect(node), bool(node.isUserInteractionEnabled()),
+                                       bool(node.isHidden()), round(float(node.alpha), 2)))
+                        node = children(node, 'superview')
+                    return result
+                item['ancestry'] = ancestry(native)
+                item['hit_ancestry'] = ancestry(hit)
+                local = native.convertPoint(point, fromView=window)
+                item['point_inside'] = bool(native.pointInside(local, withEvent=None))
+                item['direct_parent_hit'] = hit == children(native, 'superview')
+                collisions.append(('Header action is not reachable', item))
     bars = [button for button in buttons if button['kind'] == '_UIButtonBarButton' and button['visible_frame']]
     for item in [*items, *bars, *header_items]:
         frame = item.get('visible_frame', item['frame'])
@@ -143,6 +167,10 @@ def native_geometry(app, *, verify=True):
     # Include their control frames when checking the shared vertical bar against
     # destination tabs; checking only the Island misses action/tab collisions.
     tabs = [button for button in buttons if button['kind'] == '_UITabButton' and button['visible_frame']]
+    for tab in tabs:
+        if tab['hit_target'] and any(abs(actual - visible) > 1
+                                     for actual, visible in zip(tab['frame'], tab['visible_frame'])):
+            collisions.append(('Destination tab is clipped', tab))
     for button in bars:
         x, y, width, height = button['visible_frame']
         for tab in tabs:

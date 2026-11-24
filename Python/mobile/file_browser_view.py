@@ -27,7 +27,7 @@ from .ui_metrics import CONTROL_TEXT, TOUCH_TARGET
 
 
 _TILE_TITLE_INSET = 8
-_TILE_PREVIEW_HEIGHT = 96
+_TILE_PREVIEW_HEIGHT = 192
 _TILE_CAPTION_HEIGHT = 52
 
 
@@ -431,12 +431,10 @@ class LocalFileBrowser(FileBrowser):
     def _tile_card(self, entry):
         card = super()._tile_card(entry)
         image_box, button = card.children
-        if type(image_box._impl).__module__.startswith('toga_android.'):
-            image_box.style.update(direction=ROW, width=_TILE_PREVIEW_HEIGHT)
-            card.remove(image_box)
-            card.insert(0, toga.Box(children=[
-                toga.Box(style=Pack(flex=1)), image_box, toga.Box(style=Pack(flex=1)),
-            ], style=Pack(direction=ROW, height=_TILE_PREVIEW_HEIGHT, align_items=CENTER)))
+        # Reserve the same caption position for a row of different aspect ratios.
+        # The media view can use the full width inside this shared height cap.
+        image_box.style.update(direction=ROW, height=_TILE_PREVIEW_HEIGHT,
+                               margin_left=4, margin_right=4)
         if self.thumbnails is not None and self.thumbnails.supports(entry):
             self._tile_previews[entry.identity] = image_box, image_box.children[0]
         controls = [button]
@@ -655,7 +653,7 @@ class LocalFileBrowser(FileBrowser):
             if box.children[0] is placeholder:
                 # The window needs a fallback glyph immediately. Allocate a
                 # second native image view only for a successful decode.
-                preview = toga.ImageView(image, style=Pack(flex=1, height=96))
+                preview = toga.ImageView(image, style=Pack(flex=1, height=_TILE_PREVIEW_HEIGHT))
                 box.clear()
                 box.add(preview)
             else:

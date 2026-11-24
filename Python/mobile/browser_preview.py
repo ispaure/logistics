@@ -129,9 +129,11 @@ def callbacks(provider, client, password=''):
                             member_data = archive.read(pages[0])
             elif suffix == '.epub':
                 from features.books.epub import EPUBBook
-                book = EPUBBook(provider.root / row['path'], source=provider)
-                if book.cover_path():
-                    member_data = book.read(book.cover_path())
+                with closing(source(row, cancelled)) as content:
+                    book = EPUBBook(row['path'], source=content)
+                    cover = book.cover_path()
+                    if cover is not None:
+                        member_data = book.read(cover)
             if not member_data:
                 return b''
             if len(member_data) > 8 * 1024 * 1024:
@@ -158,8 +160,9 @@ def callbacks(provider, client, password=''):
                         fields += [(field, reader.comic.info.get_field(field)) for field in ('Title', 'Series', 'Writer', 'Publisher', 'Summary') if reader.comic.info.get_field(field)]
             elif suffix == '.epub':
                 from features.books.epub import EPUBBook
-                book = EPUBBook(provider.root / row['path'], source=provider)
-                fields = [('Title', book.title), ('Author', ', '.join(book.values('creator')))]
+                with closing(source(row, cancelled)) as content:
+                    book = EPUBBook(row['path'], source=content)
+                    fields = [('Title', book.title), ('Author', ', '.join(book.values('creator')))]
             else:
                 from features.comics.library import ComicDocument
                 document = ComicDocument(provider.root / row['path'], source=provider, password=password or None)

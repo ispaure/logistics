@@ -128,10 +128,44 @@ class FilenameDisplayTests(unittest.TestCase):
         title = browser.buttons[file_entry.identity]
         self.assertEqual(title.accessible_name, names[0])
 
-        browser._update_tile_window(browser.TILE_ROW_HEIGHT * 80)
+        browser._update_tile_window(browser.TILE_ROW_HEIGHT * ((len(browser._tile_entries) + 1) // 2))
         self.assertLessEqual(len(browser._tile_cards), 80)
         self.assertIn(browser._tile_entries[-1].identity, browser._tile_cards)
         self.assertEqual(title.text, '')
+
+    def test_explorer_artwork_fills_available_width_with_aligned_tile_captions(self):
+        from io import BytesIO
+        from PIL import Image
+        import toga
+        from mobile.file_browser_view import LocalFileBrowser
+        from mobile_build.tests.support.app import create_app
+
+        app = create_app(self)
+        browser = LocalFileBrowser()
+        self.addCleanup(lambda: app.loop.run_until_complete(browser.close()))
+        self.assertEqual(browser.native_list.icon_size, 48)
+        browser.thumbnails = SimpleNamespace(enabled=False, supports=lambda entry: True)
+        provider = SimpleNamespace(root=Path('/virtual'), relative=lambda path: path)
+        browser.set_entries(provider, '', [dict(path=name, name=name, directory=False)
+                                           for name in ('Landscape.jpg', 'Portrait.jpg')])
+        browser.show_tiles()
+        for entry, size in zip(browser._tile_entries, ((132, 76), (71, 136))):
+            with BytesIO() as data:
+                Image.new('RGB', size).save(data, format='PNG')
+                browser._publish_preview(browser._tile_previews[entry.identity], toga.Image(src=data.getvalue()))
+        row = browser._tile_row_views[0]
+        for width in (224, 540, 1024):
+            with self.subTest(width=width):
+                browser.items.style.layout(SimpleNamespace(width=width, height=600))
+                captions = []
+                for card in row.children:
+                    media, caption = card.children
+                    preview, = media.children
+                    self.assertEqual(preview.layout.content_width, card.layout.content_width - 8)
+                    self.assertEqual(preview.layout.content_height, 192)
+                    self.assertEqual(preview.layout.content_width, media.layout.content_width)
+                    captions.append(caption.layout.absolute_content_top)
+                self.assertEqual(*captions)
 
     def test_android_tile_fits_second_line_with_longest_suffix(self):
         from mobile.file_browser_view import _android_tile_title

@@ -320,7 +320,7 @@ class ManagedDocumentWorkflows:
                     install_document_location(view.document_view, copies=imported)
                     self.text_views[session.id] = view
                     self.workspace.active = active
-                    origin.status.text = 'Imported document is available in Open documents.'
+                    origin.status.text = 'Imported document is available in Documents → Recent.'
                     self.refresh_documents()
                     self.save_workspace()
                     return

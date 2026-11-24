@@ -261,12 +261,28 @@ const {chromium} = require('playwright');
   await assertVisible(28000);
   assert.equal(await page.evaluate(()=>String(getSelection())),spoken);
   await page.evaluate(()=>reader.highlight(-1,-1));
+  const recovered=await page.evaluate(()=>{
+   const anchor=reader.pagination().anchor;
+   reader.suspend();
+   const resumed=reader.resume();
+   const viewport=document.body.firstElementChild;
+   viewport.remove();
+   const detached=reader.resume();
+   document.body.appendChild(viewport);
+   const attached=reader.resume();
+   return {resumed,detached,attached,anchor,restored:reader.pagination().anchor};
+  });
+  assert.equal(recovered.resumed,true);
+  assert.equal(recovered.detached,false);
+  assert.equal(recovered.attached,true);
+  assert.equal(recovered.restored,recovered.anchor);
   const result=await page.evaluate(()=>{
    const expected=document.querySelector('p').textContent;
    for(let i=0;i<100;i++) {reader.seek(0,expected.length);if(getSelection().toString()!==expected)throw Error('UTF-16 selection mismatch');reader.speechSource();}
    const count=walks;reader.dispose();return {count,empty:!document.querySelector('body>div')};
   });
   assert.equal(result.count,1);assert(result.empty);
+  assert.equal(await page.evaluate(()=>reader.resume()),false);
   // A slow chapter image may finish after the reader has moved or begun TTS.
   // Its load/error callback must restore the current word, not options.offset.
   await page.unroute('**/*');

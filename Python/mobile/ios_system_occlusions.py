@@ -43,11 +43,20 @@ def content_column_top(container, window):
     if responds is None:
         return top
     from rubicon.objc import SEL
-    if not responds(SEL('reservedRegionsOfKind:options:')):
+    selector = SEL('reservedRegionsOfKind:options:')
+    if not responds(selector):
         return top
     from .ios_reader_chrome import occlusion_geometry
     left, right = container.left_inset, float(native.bounds.size.width) - container.right_inset
-    regions = occlusion_geometry(native)
+    # UIKit may omit a trailing rail's regions from a leading child view.
+    # Read the whole window, then compare its regions in the column's space.
+    window_supports_regions = getattr(window, 'respondsToSelector', None)
+    regions = occlusion_geometry(window) if window_supports_regions and window_supports_regions(selector) else ()
+    if regions:
+        regions = tuple((x - float(origin.x), y - float(origin.y), width, height)
+                        for x, y, width, height in regions)
+    else:
+        regions = occlusion_geometry(native)
     # A window-wide rectangular inset can describe a status/activity cluster
     # entirely inside the excluded side rail. When UIKit reports that top
     # cluster wholly outside the content column, reclaim its rectangular row.
@@ -90,7 +99,7 @@ def compact_content_top(container):
     return True
 
 
-def observe_window_occlusions(app, native):
+def observe_window_occlusions(app, native, *, fallback=None):
     """Read inside root layout, independently of toolkit size notifications.
 
     The toolkit's window callback suppresses equal-size notifications. An
@@ -100,6 +109,8 @@ def observe_window_occlusions(app, native):
     """
     from .ios_reader_chrome import occlusion_geometry
     regions = occlusion_geometry(native)
+    if not regions and fallback is not None and fallback != native:
+        regions = occlusion_geometry(fallback)
     if app is None or not getattr(app, 'active_host', False):
         return
     adapter = app.native_host.adapter
@@ -152,6 +163,10 @@ def observe_window_occlusions(app, native):
             controller.navigationBar.setNeedsLayout()
             # UIKit may already be rotating this hierarchy. Invalidate the
             # bars without forcing a nested native layout pass.
+        tabs = getattr(adapter, 'controller', None)
+        if tabs is not None:
+            tabs.view.setNeedsLayout()
+            tabs.tabBar.setNeedsLayout()
         app.resize_workspace()
 
     app.loop.call_soon(refresh)

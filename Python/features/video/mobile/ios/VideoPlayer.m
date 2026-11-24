@@ -127,6 +127,9 @@ static NSString *LGVideoAudioLabel(NSUInteger number, NSArray<NSString *> *names
 @property(nonatomic) BOOL resumeSeekSubmitted, inputNeedsRestart, audioOnlyInput, openingSeekPending;
 @property(nonatomic) NSTimeInterval seekSubmittedAt, seekDeadline;
 @property(nonatomic) uint64_t seekAudioBaseline, seekFrameBaseline;
+@property(nonatomic) NSTimeInterval resumeVideoWatchStarted;
+@property(nonatomic) int64_t resumeVideoPosition;
+@property(nonatomic) uint64_t resumeVideoFrames, resumeVideoAudio;
 @property(nonatomic) BOOL restricted;
 @property(nonatomic) BOOL airPlayAvailable, airPlayWasExternal, airPlaySeekPending;
 @property(nonatomic) BOOL airPlayPickerOpen, airPlayPreparing, airPlayResumeLocal;
@@ -741,6 +744,7 @@ typedef struct {
     if (self.playRequested) [self pause]; else [self startByUser];
 }
 - (void)seekToMilliseconds:(int64_t)target {
+    self.resumeVideoWatchStarted = 0;
     if ([self hasAirPlay]) { [self seekAirPlay:target]; return; }
     if (self.controlsLocked || ![self canPlay:NO]) return;
     int64_t duration = [self durationMilliseconds];
@@ -804,6 +808,7 @@ typedef struct {
 }
 - (void)done:(id)sender { if (self.closed) self.closed(); }
 - (void)pause {
+    self.resumeVideoWatchStarted = 0;
     self.openDeadline = 0;
     if (self.audioSwitchTrack.length && self.startMilliseconds < 0)
         self.startMilliseconds = self.audioSwitchPosition;
@@ -887,6 +892,7 @@ typedef struct {
     return videoEnd > 0 && target >= videoEnd && target < audioEnd;
 }
 - (VLCMedia *)playbackMedia {
+    self.resumeVideoWatchStarted = 0;
     self.aviFromBeginning = self.startMilliseconds <= 0 &&
         [[NSURL URLWithString:self.videoURL].pathExtension.lowercaseString isEqualToString:@"avi"];
     if ([self isDeclaredAudioTail:self.startMilliseconds]) {
@@ -1008,11 +1014,20 @@ typedef struct {
     self.transportFailure = nil;
     self.message.text = @"";
     self.message.hidden = YES;
+    BOOL resumingPause = self.manualResumeRequired && !freshInput && self.startMilliseconds >= 0;
     self.manualResumeRequired = NO;
     self.pausePending = NO;
     if (self.audioSuppressed) { self.player.audio.muted = self.resumeMuted; self.audioSuppressed = NO; }
     self.playRequested = YES;
     VLCMediaStats stats = [self playbackStats];
+    if (resumingPause && stats.displayedPictures > 0 && self.player.isSeekable &&
+        [NSURL URLWithString:self.videoURL].isFileURL && !self.audioOnlyInput &&
+        !self.casting && !self.pipActive && !self.externalVideoHost) {
+        self.resumeVideoPosition = self.startMilliseconds;
+        self.resumeVideoFrames = stats.displayedPictures;
+        self.resumeVideoAudio = stats.playedAudioBuffers;
+        self.resumeVideoWatchStarted = NSProcessInfo.processInfo.systemUptime;
+    }
     self.openDeadline = stats.displayedPictures > 0 || stats.playedAudioBuffers > 0
         ? 0 : NSProcessInfo.processInfo.systemUptime + 20;
     if (self.startMilliseconds >= 0) self.seekDeadline = NSProcessInfo.processInfo.systemUptime + 20;
@@ -1221,7 +1236,7 @@ typedef struct {
     if (self.ended) return 0;
     if ([self hasAirPlay]) return self.airPlayAdvanced && self.airPlaySeekTarget < 0 ?
         self.airPlayConfirmedPosition : -1;
-    if (self.audioSwitchTrack.length || self.progressSeek >= 0 || self.networkResumePending ||
+    if (self.resumeVideoWatchStarted > 0 || self.audioSwitchTrack.length || self.progressSeek >= 0 || self.networkResumePending ||
         self.resumeSeekSubmitted || self.startMilliseconds >= 0)
         return -1;
     return [self nativeTimeMilliseconds];
@@ -1306,8 +1321,31 @@ typedef struct {
     self.message.hidden = message.length == 0;
     [self setControlsShown:YES];
 }
+- (void)recoverStalledResume:(VLCMediaStats)stats clock:(int64_t)clock now:(NSTimeInterval)now {
+    if (self.resumeVideoWatchStarted == 0) return;
+    NSTimeInterval elapsed = now - self.resumeVideoWatchStarted;
+    int64_t duration = [self durationMilliseconds];
+    if (!self.playRequested || self.manualResumeRequired || self.ended || self.casting ||
+        self.pipActive || self.externalVideoHost || self.lockHidden || self.movie.hidden ||
+        self.controlsLocked || self.audioOnlyInput || self.audioSwitchTrack.length ||
+        self.networkWaiting || self.networkResumePending || ![self canPlay:NO] ||
+        stats.displayedPictures != self.resumeVideoFrames || elapsed >= 7 ||
+        [self isDeclaredAudioTail:clock + 100] || (duration > 0 && clock >= duration - 1500)) {
+        self.resumeVideoWatchStarted = 0;
+        return;
+    }
+    // Audio and the clock can move even though VLC's video output stays on
+    // the paused frame. Use the normal seek path once at the resume point.
+    if (elapsed >= 1.5 && self.player.isPlaying && self.player.isSeekable &&
+        stats.playedAudioBuffers > self.resumeVideoAudio && clock >= self.resumeVideoPosition + 300) {
+        NSLog(@"[VideoPlayback] recovering frozen resume at %lld", self.resumeVideoPosition);
+        [self seekToMilliseconds:self.resumeVideoPosition];
+    }
+}
+
 - (void)tick:(NSTimer *)timer {
     if ([self hasAirPlay]) {
+        self.resumeVideoWatchStarted = 0;
         [self updateAirPlay];
         [self updateTimeline];
         return;
@@ -1396,6 +1434,7 @@ typedef struct {
     // with recent real audio and a stalled picture, never at a mid-file stall.
     int64_t nativeClock = [self nativeTimeMilliseconds];
     NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
+    [self recoverStalledResume:seekStats clock:nativeClock now:now];
     if (!self.audioOnlyInput && self.startMilliseconds < 0 && self.playRequested &&
         !self.manualResumeRequired && !self.networkWaiting && !self.networkResumePending &&
         !self.transportFailure && !self.audioSwitchTrack.length && [self canPlay:NO] &&

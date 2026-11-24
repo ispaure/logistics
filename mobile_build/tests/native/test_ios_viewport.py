@@ -460,20 +460,22 @@ class ContentBandTests(unittest.TestCase):
         from mobile.ios_system_occlusions import compact_content_top
         from types import SimpleNamespace as NS
         frame = NS(origin=NS(x=0, y=0), size=NS(width=951, height=669))
-        window = NS(safeAreaInsets=NS(top=82))
+        window = NS(safeAreaInsets=NS(top=82), respondsToSelector=lambda selector: True)
         native = NS(window=window, bounds=frame, convertRect=lambda *a, **kw: frame,
                     respondsToSelector=lambda selector: True)
         controller = NS(navigationController=None)
         container = NS(controller=controller, native=native, top_inset=82, left_inset=0, right_inset=84)
         with patch('mobile.ios_toolbar.vertical_edge', return_value=2) as edge, patch.dict(
                 'sys.modules', {'rubicon.objc': NS(SEL=lambda name: name)}), patch(
-                'mobile.ios_reader_chrome.occlusion_geometry', return_value=((867, 0, 84, 212),)) as regions:
+                'mobile.ios_reader_chrome.occlusion_geometry') as regions:
+            window_regions = ((867, 0, 84, 212),)
+            regions.side_effect = lambda view: window_regions if view is window else ()
             self.assertTrue(compact_content_top(container))
             self.assertEqual(container.top_inset, 0)
-            regions.return_value = ((800, 0, 151, 212),)
+            window_regions = ((800, 0, 151, 212),)
             self.assertTrue(compact_content_top(container))
             self.assertEqual(container.top_inset, 220)
-            regions.return_value = ()
+            window_regions = ()
             compact_content_top(container)
             self.assertEqual(container.top_inset, 82)
             edge.return_value = 0

@@ -24,6 +24,31 @@ def rect(width=669, height=951, x=0, y=0):
 
 
 class BandGeometryTests(unittest.TestCase):
+    def test_inline_tools_use_native_bar_items_and_one_transparent_toolbar(self):
+        import toga
+        import sys
+        implementation = type('InlineGroup', (), {'__module__': 'toga_iOS.widgets.box'})()
+        implementation.native = Mock()
+        group = NS(_impl=implementation)
+        buttons = [NS(style=NS(width=48, height=48), _impl=NS(native=NS(hidden=False)))
+                   for _ in range(2)]
+        toolbar, appearance = Mock(), Mock()
+        toolbar_class, appearance_class = Mock(), Mock()
+        toolbar_class.alloc.return_value.initWithFrame.return_value = toolbar
+        appearance_class.alloc.return_value.init.return_value = appearance
+        classes = {'UIToolbar': toolbar_class, 'UIToolbarAppearance': appearance_class}
+        objc = NS(ObjCClass=classes.__getitem__)
+        items = [object(), object()]
+        with patch.object(toga, 'Box', return_value=group) as box, patch.dict(sys.modules, {'rubicon.objc': objc}), \
+                patch('mobile.ios_toolbar.bar_item', side_effect=items) as item:
+            self.assertIs(band.native_tool_group(buttons), group)
+        self.assertEqual([call.args[0] for call in item.call_args_list], buttons)
+        toolbar.setItems.assert_called_once_with(items, animated=False)
+        toolbar_class.alloc.return_value.initWithFrame.assert_called_once_with(implementation.native.bounds)
+        appearance.configureWithTransparentBackground.assert_called_once_with()
+        implementation.native.addSubview.assert_called_once_with(toolbar)
+        self.assertNotIn('children', box.call_args.kwargs)
+
     def test_canvas_header_cannot_be_replaced_by_native_top_band(self):
         view = NS(_canvas_document_title=True)
         with patch.object(band, 'restore') as restore:
@@ -122,7 +147,7 @@ class NativeBandOwnershipTests(unittest.TestCase):
         self.assertEqual([child for child in row.children if child in self.buttons], self.buttons)
         self.assertEqual(state['header'].style.height,90)
         self.assertEqual(row.style.margin_right,142)
-        self.assertEqual(row.style.margin_top,17)
+        self.assertEqual(row.style.margin_top, 17 if getattr(self.view, '_notebook_dom_toolbar_contract', None) else 24)
         self.assertTrue(self.navigation.hidden)
         self.assertIsNone(self.view._native_reader_toolbar.parent)
         self.place.assert_called_once_with(row,self.view._document_title_view,'On-device')
@@ -139,6 +164,21 @@ class NativeBandOwnershipTests(unittest.TestCase):
         self.assertTrue(band.project(self.app, self.view, 'documents', self.controller))
         row = self.view._reader_top_band_state['header'].children[0]
         self.assertEqual(list(row.children), [self.buttons[0], menu, row._title_content, *self.buttons[1:]])
+
+    def test_epub_speech_and_menu_share_a_native_toolbar_and_restore_on_rotation(self):
+        self.buttons[1].control_icon = 'speaker'
+        self.buttons[2].control_icon = 'more'
+        self.view._native_reader_buttons = lambda: self.buttons[1:3]
+        self.assertTrue(band.project(self.app, self.view, 'documents', self.controller))
+        row = self.view._reader_top_band_state['header'].children[0]
+        group = row.children[-1]
+        self.assertEqual(list(group.children), self.buttons[1:3])
+        geometry = self.view._reader_top_band_state['geometry']
+        self.assertEqual(geometry['row_top'] + geometry['row_height'] / 2, 48)
+        self.buttons[1].on_press()
+        self.edge.return_value = 2
+        self.assertFalse(band.project(self.app, self.view, 'documents', self.controller))
+        self.assertTrue(all(button.parent is None for button in self.buttons[1:3]))
 
     def test_notes_returns_title_controls_to_the_article_before_native_fallback(self):
         import toga

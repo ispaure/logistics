@@ -179,25 +179,30 @@ def _library_button(request, library, status, row_font):
     caption = path.name or location
     button = toga.Button(caption, on_press=open_library, style=Pack(height=48))
     if row_font is not None:
-        button.style.font_size = row_font
+        button.style.update(font_size=row_font, font_weight='bold')
     list_button(button)
     surface(button, radius=0, background='transparent', outlined=False, eink_outlined=False)
     kinds = [('storage_local', 'On-device library')]
     if encrypted:
         kinds.append(('storage_unlocked', 'Encrypted library, unlocked'))
-    button_icons(button, kinds)
     middle_filename(button)
     # Keep the full source and logical path for same-named libraries.
     source_label = label if encrypted else location
     source = f'{source_label} / {path.parent}' if path.parent.parts else source_label
     accessible_name(button, f'{caption} · {source}' if root else source)
-    return button
+    if row_font is not None:
+        from .hub_controls import source_title
+        return source_title(button, kinds[-1:], text='Encrypted library' if encrypted else 'Local library')
+    return button_icons(button, kinds)
 
 
 def _show_libraries(request, rows, status, row_font, libraries, had_errors):
-    for library in libraries:
-        rows.add(_library_button(request, library, status, row_font))
-    if rows.children:
+    buttons = [_library_button(request, library, status, row_font) for library in libraries]
+    if row_font is not None:
+        from .hub_controls import document_list
+        rows.add(document_list(buttons, 'No Notes libraries found.', outlined=True))
+    elif buttons:
+        rows.add(*buttons)
         surface(rows, radius=16)
     else:
         from .hub_controls import empty_document_row

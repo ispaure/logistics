@@ -116,7 +116,7 @@ def compact_content_top(container):
         changed = abs(container.top_inset - top) > .5
         container.top_inset = top
         return changed
-    if not projected(root, '_home_top_band', '_destination_top_band'):
+    if not projected(root, '_home_top_band', '_destination_top_band', '_duo_top_band'):
         return False
     native = container.native
     window = native.window

@@ -100,6 +100,10 @@ def sync_document_tabs(app, view, *, fullscreen=False, destination=None):
     if app._focus_navigation_active:
         size = app.main_window.size
         hidden = hidden or size.width < 600 or size.height < 500
+    set_document_tabs_hidden(app, hidden)
+
+
+def set_document_tabs_hidden(app, hidden):
     app._document_tabs_hidden = hidden
     adapter = app.native_host.adapter
     if adapter is None:

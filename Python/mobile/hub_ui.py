@@ -29,6 +29,7 @@ from .hub_controls import (
     empty_document_row as empty_document_row,
     heading as heading,
     panel as panel,
+    source_caption, source_title,
     status_badges as status_badges,
     text_document_kind as text_document_kind,
 )
@@ -109,7 +110,8 @@ class HubUI(HomeScreen, DocumentsHub):
             summary = self.session_summary(session)
             if session.id in self.workspace.sessions or 'Unavailable; retry to reopen' not in summary[2]:
                 items.append((session, summary))
-        return items[:MAX_RECENT]
+        return items[:MAX_RECENT] + [item for item in items[MAX_RECENT:]
+                                     if item[0].id in self.workspace.sessions]
 
     def recent_opener(self, session):
         async def reopen(widget=None, **kwargs):
@@ -217,7 +219,7 @@ class HubUI(HomeScreen, DocumentsHub):
             return [*actions, *direct]
         return [native_menu(app, button, load_actions)]
 
-    def recent_row(self, session, summary, *, wrap_name=False):
+    def recent_row(self, session, summary, *, wrap_name=False, show_source=False, previews=None, featured=False):
         from .browser_ui import middle_filename, wrapped_filename
 
         title, _, details = summary
@@ -230,20 +232,41 @@ class HubUI(HomeScreen, DocumentsHub):
             wrapped_filename(name)
         else:
             middle_filename(name)
-        self.document_button_icons(name, session)
         row.document_button = name
-        row.add(toga.Box(children=[name, *self.document_row_menu(session)],
-            style=Pack(direction=ROW, align_items=CENTER)))
+        from .document_sources import document_preview_source, source_icons
+        if show_source:
+            name.style.height = TOUCH_TARGET
+            title_controls = source_title(name, source_icons(self.app, session))
+        else:
+            self.document_button_icons(name, session)
+            title_controls = name
+        controls = [title_controls, *self.document_row_menu(session)]
         currently_open = session.id in self.workspace.sessions
+        if currently_open:
+            row.session_id = session.id
+            row.close_button = icon_button('close', 'Close ' + title, on_press=self.session_closer(session.id))
+            controls.append(row.close_button)
+        content = row
+        if previews is not None:
+            height = 96 if featured or currently_open or details else 72
+            artwork = previews.artwork(document_preview_source(session), summary[1], height=height)
+            content = toga.Box(style=Pack(direction=COLUMN, flex=1))
+            row.style.update(direction=ROW, align_items=CENTER)
+            row.add(artwork, content)
+        content.add(toga.Box(children=controls,
+            style=Pack(direction=ROW, align_items=CENTER)))
         if currently_open or details:
-            row.add(status_badges(details, currently_open=currently_open,
-                                  icon_count=len(getattr(name, 'leading_icons', ()))))
+            content.add(status_badges(details, currently_open=currently_open,
+                                      icon_count=len(getattr(name, 'leading_icons', ()))))
         return row
 
     def document_button_icons(self, button, session):
         from .document_sources import source_icons
         icons = source_icons(self.app, session)
-        if getattr(button, 'leading_icons', None) != tuple(icons):
+        caption = getattr(button, '_source_caption', None)
+        if caption is not None:
+            source_caption(icons, row=caption)
+        elif getattr(button, 'leading_icons', None) != tuple(icons):
             button_icons(button, icons)
         return button
 
@@ -349,9 +372,8 @@ class HubUI(HomeScreen, DocumentsHub):
         if destination == 'home' and hasattr(self, 'home_sections'):
             overview = self._home_overview()
             if _home_state(self, overview) == getattr(self, '_home_content_state', None):
-                _, opened, recent = overview
                 for button, (session, _) in zip(
-                        [*self._home_open_buttons, *self._home_recent_buttons], [*opened, *recent]):
+                        self._home_recent_buttons, overview):
                     self.document_button_icons(button, session)
                 return
         root = self.routes.roots[destination]

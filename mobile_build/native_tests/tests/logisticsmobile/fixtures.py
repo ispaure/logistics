@@ -24,7 +24,7 @@ def png_page():
             + chunk(b'IDAT', zlib.compress(b'\x00\xff\x00\x00\xff')) + chunk(b'IEND', b''))
 
 
-def make_books(root, *, chapter_text=""):
+def make_books(root, *, chapter_text="", embed_cover=False):
     epub, comic = root / 'Fixture.epub', root / 'Fixture.cbz'
     with ZipFile(epub, 'w') as archive:
         archive.writestr('mimetype', 'application/epub+zip')
@@ -33,10 +33,14 @@ def make_books(root, *, chapter_text=""):
         archive.writestr('book.opf', '<package xmlns="http://www.idpf.org/2007/opf" '
                         'xmlns:dc="http://purl.org/dc/elements/1.1/"><metadata><dc:title>Native Fixture</dc:title>'
                         '</metadata><manifest><item id="one" href="one.xhtml" media-type="application/xhtml+xml"/>'
-                        '<item id="two" href="two.xhtml" media-type="application/xhtml+xml"/></manifest>'
+                        '<item id="two" href="two.xhtml" media-type="application/xhtml+xml"/>'
+                        + ('<item id="cover" href="cover.png" media-type="image/png" properties="cover-image"/>'
+                           if embed_cover else '') + '</manifest>'
                         '<spine><itemref idref="one"/><itemref idref="two"/></spine></package>')
         archive.writestr('one.xhtml', f'<html><body><h1>Native EPUB first</h1>{chapter_text}<script>bad()</script></body></html>')
         archive.writestr('two.xhtml', '<html><body><h1>Native EPUB second</h1></body></html>')
+        if embed_cover:
+            archive.writestr('cover.png', png_page())
     with ZipFile(comic, 'w') as archive:
         archive.writestr('page10.png', png_page())
         archive.writestr('page2.png', png_page())

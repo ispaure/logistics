@@ -124,9 +124,9 @@ def diagnostics(entry_point):
         return NATIVE_DIAGNOSTICS + tuple(f'documents-search-{pose}.png'
             for pose in ('portrait', 'landscape-left'))
     if entry_point.endswith('.documents_hub_probe'):
-        return NATIVE_DIAGNOSTICS + tuple(f'documents-hub-{orientation}-{panel}.png'
+        return NATIVE_DIAGNOSTICS + ('documents-hub-header-collision.png',) + tuple(f'documents-hub-{orientation}-{panel}.png'
             for orientation in ('portrait', 'landscape-left')
-            for panel in ('home', 'files', 'documents', 'libraries', 'search'))
+            for panel in ('home', 'files', 'documents', 'libraries', 'search', 'settings'))
     if entry_point.endswith('.file_transfer_probe'):
         return NATIVE_DIAGNOSTICS + ('file-transfer-progress.png',)
     if entry_point.endswith('.document_creation_probe'):

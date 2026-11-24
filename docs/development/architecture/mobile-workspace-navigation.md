@@ -91,6 +91,12 @@ Child folders keep intermediate parents. Reveal selects the owning Workspaces
 source and builds ancestry, using a scoped provider when needed. It selects the
 file without moving the reader or adding a cross-tab return edge.
 
+On compact iOS, the overview keeps its source controls mounted while a folder
+is open. The native Back transition prepares the overview header and
+destination tabs in `willShow`, before the route stack commits in `didShow`.
+A canceled gesture restores the folder's bar policy. When Workspaces moves into
+columns, the source controls move back into the sidebar body.
+
 iOS ordinary files and Rclone Copies use the shared guarded rename when both
 roots are on one volume. Different-volume moves use verified streaming. Picker
 selection stays on its captured provider even when the visible label changes.
@@ -119,11 +125,13 @@ registered root. Check `test_local_search.py` for restart reuse and exclusions.
 
 ## Home and Documents hub sections
 
-`HomeScreen` and `DocumentsHub` use `HubSections` and shared list controls.
-Home shows the first visible open session and latest eligible Recent entry,
-excluding identities currently open. Wide layout moves the retained overview
-into a second scroll container and keeps Favourites in the main pane.
-Documents mounts one collection at a time, with Libraries as the default.
+`HomeScreen` uses `HubSections` to keep its recent cards in the leading pane
+and move Favourites and library shortcuts into a separately scrolling pane on
+wide windows or across a physical fold. `DocumentsHub` mounts one collection
+at a time, with Libraries as the default and search above the results. Its
+collection tabs stay horizontal and stay within one pane across a physical
+division. The host owns the
+Duo's right-side navigation and each root's conditional Unlock action.
 Library scans start on entry. Keep the main browser separate from the menu and
 revalidate credentials for retained library shortcuts. Close/Delete refreshes
 the visible rows after commit. The [Notes Library guide](../../features/notes_library/development/development.md#mobile-browsing-and-document-lifecycle)
@@ -131,7 +139,9 @@ owns note navigation, scoped browsing and Search return. The
 [Books & Comics guide](../../features/books/development/development.md#find-the-mobile-books--comics-panel)
 owns library discovery.
 
-`RecentDocuments` caps each window's list at ten. Ordinary and saved-credential
+`RecentDocuments` caps each window's stored history at ten. Home previews the
+first three results. The full Recent collection keeps additional live sessions
+reachable, including their close controls. Ordinary and saved-credential
 references can persist with an optional opened timestamp. Session-only entries
 are RAM-only in ordinary history. Password-protected retained credential ZIPs
 may restore encrypted Open/Recent metadata through
@@ -318,10 +328,11 @@ Custom content uses the [UIKit reserved-region API](https://developer.apple.com/
 in local coordinates. `control_top_clearance` considers every intersecting
 region. Reclaim inset only for a measured free column. Track window position and
 bar edge as well as dimensions. Native prompts and titles retain their space.
-Home measures whether New Document and conditional Unlock fit. Unlock falls back
-to the native bar when required. On Duo, Home projects New Document and any
-available Unlock to the native bar in both poses. Documents orders its native
-actions as New Document, Search and conditional Unlock.
+On Duo, Home, Documents, Workspaces and Settings use the measured top column
+for their page heading and native toolbar. Home and Documents keep New and
+conditional Unlock in that header. Documents also keeps Search, and Workspaces
+keeps Transfers and Unlock above its source tabs. The native bar handles
+actions when the content column cannot fit them.
 
 `reader_top_band` can project the existing storage title and all native actions
 beside a tall edge reservation if measured space and touch targets fit. Keep
@@ -334,10 +345,9 @@ from interactive page, footer and header geometry.
 
 On unfolded Duo portrait, Notes Library places Close, Files, the title and
 Links in the measured strip above the article and drawers. Comics aligns its
-Close and actions to the notebook toolbar's centerline. Workspaces uses that
-line for the retained Local, Cloud and Home Server selectors, Unlock when
-available, and the transfer shortcut when active. The source row returns to
-the Workspaces body when the strip no longer fits. Check optical alignment
+Close and actions to the notebook toolbar's centerline. In Workspaces, the
+source selectors and transfer shortcut sit below the heading, including in
+the leading pane when the browser has two columns. Check optical alignment
 against the notebook separately from native hit testing and accessibility labels.
 
 ## Offline documentation wiki

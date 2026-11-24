@@ -93,7 +93,7 @@ class ManagedDocumentTests(TestCase):
                         if view.document.name == 'import.txt']
             self.assertEqual(len(imported), 1)
             self.assertEqual(imported[0].document.text, 'Imported copy')
-            self.assertIn('Open documents', origin.status.text)
+            self.assertIn('Documents → Recent', origin.status.text)
             self.assertTrue(origin.import_button.enabled)
 
         app.loop.run_until_complete(exercise())

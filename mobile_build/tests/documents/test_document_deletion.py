@@ -119,7 +119,7 @@ class DocumentDeletionTests(unittest.TestCase):
                 # reader over that retained root, as a Recent row would do.
                 app.show_home() if destination == 'home' else app.show_documents_hub()
                 if destination == 'documents':
-                    app.document_view_buttons['Open'].on_press()
+                    app.document_view_buttons['Recent'].on_press()
                 self.assertIn(name, texts(app.routes.roots[destination]))
                 app.show_documents(resume=True)
                 observed = []

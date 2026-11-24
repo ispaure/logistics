@@ -101,8 +101,10 @@ class WorkspaceColumnsTests(TestCase):
         columns.closed = False
         columns.app, columns.sidebar_box = Mock(), Mock()
         with patch('mobile.appearance.reserve_navigation') as reserve, \
+                patch('mobile.home_header.compact_content_top') as project_header, \
                 patch('mobile.folder_hub_ui.reflow_folder_notice') as notice:
             columns.layout_sidebar(container)
+        project_header.assert_called_once_with(container)
         notice.assert_called_once_with(columns.app, 306)
         reserve.assert_called_once_with(columns.app, view=columns.sidebar_box)
         self.assertIs(container.native.frame, frame)
@@ -172,12 +174,13 @@ class WorkspaceColumnsTests(TestCase):
         columns.master = NS(mount_native_folder_prompt=Mock())
         columns.sidebar_box = object()
         safe = NS(top=84, bottom=20, left=0, right=0)
-        window = NS(safeAreaInsets=safe)
-        root = NS(superview=None, bounds=rect((0, 0), (951, 669)),
-                  safeAreaInsets=safe, window=window, convertRect=lambda bounds, **kwargs: bounds)
+        window = NS(superview=None, bounds=rect((0, 0), (951, 669)), safeAreaInsets=safe,
+                    respondsToSelector=lambda selector: True)
+        root = NS(superview=None, bounds=window.bounds, safeAreaInsets=safe, window=window,
+                  convertRect=lambda bounds, **kwargs: bounds)
         columns.controller = NS(view=root)
         native = NS(bounds=rect((0, 0), (374, 669)), safeAreaInsets=safe, window=window,
-                    convertRect=lambda bounds, **kwargs: bounds,
+                    convertRect=lambda bounds, **kwargs: rect((24, 0), (374, 669)),
                     respondsToSelector=lambda selector: True, layoutIfNeeded=Mock())
         refresh = Mock()
         columns.sidebar = NS(native=native, controller=NS(view=native),
@@ -192,7 +195,9 @@ class WorkspaceColumnsTests(TestCase):
                 patch('mobile.appearance.reserve_navigation'), \
                 patch('mobile.folder_hub_ui.reflow_folder_notice'), \
                 patch('mobile.ios_system_occlusions.reserve_bar_clearance'), \
-                patch('mobile.ios_reader_chrome.occlusion_geometry', return_value=()) as regions:
+                patch('mobile.ios_reader_chrome.occlusion_geometry') as regions:
+            window_regions = ()
+            regions.side_effect = lambda view: window_regions if view is window else ()
             library.return_value.UIAccessibilityIsReduceMotionEnabled.return_value = True
             # The first layout is already landscape. UIKit has supplied the safe
             # area and bar edge, but has yet to report the trailing system cluster.
@@ -200,14 +205,14 @@ class WorkspaceColumnsTests(TestCase):
             initial_frame = native.frame
             self.assertEqual(columns.sidebar.top_inset, 84)
             refresh.assert_called_once_with()
-            observe_window_occlusions(columns.app, root)
+            observe_window_occlusions(columns.app, window)
             callbacks.pop()()
             refresh.assert_called_once_with()
 
             # Only the root is notified. Neither Toga's sidebar callback nor
             # a rotation runs before the observer replays workspace layout.
-            regions.return_value = ((867, 0, 84, 84),)
-            observe_window_occlusions(columns.app, root)
+            window_regions = ((867, 0, 84, 84),)
+            observe_window_occlusions(columns.app, window)
             callbacks.pop()()
             self.assertEqual(columns.sidebar.top_inset, 0)
             self.assertEqual(columns.sidebar.bottom_inset, 20)
@@ -216,12 +221,16 @@ class WorkspaceColumnsTests(TestCase):
 
             # A later cluster that overlaps the sidebar must restore clearance,
             # still with the same frame and UIKit safe-area rectangle.
-            regions.return_value = ((300, 0, 52, 96),)
-            observe_window_occlusions(columns.app, root)
+            window_regions = ((398, 0, 52, 96),)
+            observe_window_occlusions(columns.app, window)
+            callbacks.pop()()
+            self.assertEqual(columns.sidebar.top_inset, 0)
+            window_regions = ((390, 0, 52, 96),)
+            observe_window_occlusions(columns.app, window)
             callbacks.pop()()
             self.assertEqual(columns.sidebar.top_inset, 104)
-            regions.return_value = ()
-            observe_window_occlusions(columns.app, root)
+            window_regions = ()
+            observe_window_occlusions(columns.app, window)
             callbacks.pop()()
             self.assertEqual(columns.sidebar.top_inset, 84)
             self.assertEqual(refresh.call_count, 4)
@@ -231,7 +240,7 @@ class WorkspaceColumnsTests(TestCase):
             # A warm rotation uses the changed-frame path. Horizontal bars
             # keep their native inset, even with a side-only reserved region.
             edge.return_value = 0
-            regions.return_value = ((867, 0, 84, 84),)
+            window_regions = ((867, 0, 84, 84),)
             root.bounds = rect((0, 0), (669, 951))
             safe.top = 116
             columns.layout()

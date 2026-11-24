@@ -83,7 +83,8 @@ def run(framework, output, model, orientation='portrait', hdr=False, resume=0, f
         if movie is not None:
             shutil.copyfile(movie, fixture_movie)
         else:
-            audio = ['-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-c:a', 'aac'] if airplay_controls or background_audio else []
+            audio = (['-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000', '-c:a', 'aac']
+                     if airplay_controls or background_audio or seek_recovery else [])
             if subtitle_tail:
                 audio = ['-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=48000:duration=3', '-c:a', 'aac']
             if video_tail:

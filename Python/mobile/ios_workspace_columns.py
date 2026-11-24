@@ -51,6 +51,8 @@ class WorkspaceColumns:
         self.controller.tabBarItem.accessibilityLabel = item.accessibilityLabel
         self.sidebar = ControlledContainer(on_refresh=lambda value: None,
                                           on_native_layout=self.layout_sidebar)
+        from .destination_actions import restore_workspace_header
+        restore_workspace_header(master.view())
         from .file_drawer import detach
         detach(master.main)
         if (prompt := getattr(master, 'folder_placeholder', None)) is not None:
@@ -104,6 +106,8 @@ class WorkspaceColumns:
         container.left_inset, container.right_inset = safe.left, safe.right
         from .ios_system_occlusions import compact_content_top
         compact_content_top(container)
+        from .home_header import compact_content_top as compact_header
+        compact_header(container)
         if previous_insets == (container.top_inset, container.bottom_inset,
                                container.left_inset, container.right_inset):
             return

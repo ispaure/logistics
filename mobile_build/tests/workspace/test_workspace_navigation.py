@@ -597,6 +597,55 @@ class WorkspaceNavigationTests(unittest.TestCase):
         finally:
             self.app.native_host.adapter = original
 
+    def test_apple_workspace_return_prepares_header_and_tabs_before_pop_commits(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock, call
+        import toga
+
+        app, routes = self.app, self.app.routes
+        app.show_locations()
+        overview = routes.roots['files'].children[0]
+        routes.show(toga.Box(), destination='files', route='folder:fixture')
+        root = SimpleNamespace(view=Mock())
+        folder = object()
+        navigation = Mock(topViewController=folder)
+        navigation.isNavigationBarHidden.return_value = False
+        calls = Mock()
+        container = object()
+        adapter = SimpleNamespace(navigation=[navigation],
+            containers=[(container, root) for _ in app.native_host.destinations],
+            navigation_for=lambda _: navigation, content_controller=Mock(),
+            destination_for_navigation=lambda _: 'files', route_depth=lambda _: 1,
+            controller=SimpleNamespace(tabBar=SimpleNamespace(setNeedsLayout=calls.invalidate_tabs)),
+            layout_content=calls.layout_content)
+        root.view.layoutIfNeeded = calls.layout
+        with (patch.object(app.native_host, 'adapter', adapter),
+              patch('mobile.reader_chrome.set_document_tabs_hidden', calls.show_tabs),
+              patch('mobile.reader_chrome.sync_document_tabs', calls.restore_tabs),
+              patch('mobile.destination_actions.sync_native_host', calls.prepare_chrome),
+              patch('mobile.ios_toolbar.sync_screen', calls.prepare_actions)):
+            routes.prepare_workspace_return(navigation, folder, True)
+            routes.prepare_workspace_return(navigation, root, False)
+            self.assertEqual(calls.mock_calls, [])
+
+            routes.prepare_workspace_return(navigation, root, True)
+            self.assertEqual(calls.mock_calls, [
+                call.show_tabs(app, False),
+                call.prepare_chrome(app, overview, 'files', preparing_return=True),
+                call.prepare_actions(app, overview, 'files', returning_to=root),
+                call.invalidate_tabs(), call.layout_content(container), call.layout(),
+            ])
+            self.assertEqual(routes.screens['files'][-1][0], 'folder:fixture')
+            app.adaptive.sync_destination_bar('files')
+            adapter.content_controller.assert_not_called()
+
+            navigation.isNavigationBarHidden.return_value = True
+            routes.native_popped(navigation)
+            navigation.setNavigationBarHidden.assert_called_once_with(False, animated=False)
+            calls.restore_tabs.assert_called_once()
+            self.assertIsNone(routes.workspace_return)
+            self.assertEqual(routes.screens['files'][-1][0], 'folder:fixture')
+
     def test_first_apple_tap_waits_for_committed_selection_on_phone_and_ipad(self):
         import asyncio
         from types import SimpleNamespace

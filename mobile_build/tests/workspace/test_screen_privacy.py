@@ -78,7 +78,7 @@ class ScreenPrivacyTests(unittest.TestCase):
         app, owner = Host(), Host()
         app.loop = asyncio.new_event_loop()
         app._impl, app.active_host = SimpleNamespace(), True
-        owner.app, owner.session = app, SimpleNamespace(id='ordinary-comic')
+        owner.app, owner.session = app, SimpleNamespace(id='ordinary-comic', kind='comic')
         owner.resume_suspended_page = Mock()
         app.readers = SimpleNamespace(active=owner)
         app.visible_reader = lambda: owner.session.id

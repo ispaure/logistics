@@ -677,7 +677,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
         # remote/private location and its search filter.
         self.show_locations()
 
-    def show_documents_hub(self, widget=None, *, collection=None, **kwargs):
+    def show_documents_hub(self, widget=None, *, collection=None, library=None, **kwargs):
         if collection is not None and not self.checkpoint():
             return False
         hub = self.hub_controller()
@@ -685,6 +685,7 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             hub.documents_query = ''
             hub.documents_search_open = False
             hub.documents_view = collection
+            hub.document_library = library
         return self.show_view(hub.build_documents_hub(), checkpoint=collection is None,
                               destination='documents', root=True)
 
@@ -865,6 +866,8 @@ class LogisticsMobile(ManagedDocumentWorkflows, ReaderLifecycle, ReaderWorkspace
             for child in list(root.children):
                 root.remove(child)
             root.add(view)
+        if preserve_category:
+            self.settings_navigation.restore_detail_scroll()
 
     def refresh_document_overview(self):
         # Replace only the retained root, including when a detail is open.

@@ -189,7 +189,7 @@ class PrivateSessionTests(unittest.TestCase):
                 owner = self.open('close-me.md')
                 key = owner.session.id
                 self.app.show_documents_hub()
-                self.app.document_view_buttons['Open'].on_press()
+                self.app.document_view_buttons['Recent'].on_press()
                 root = self.app.routes.roots['documents']
                 close = next(widget for widget in widgets(root)
                              if getattr(widget, 'accessible_name', '') == 'Close close-me.md')
@@ -401,7 +401,7 @@ class PrivateSessionTests(unittest.TestCase):
             self.assertFalse(self.run_async(self.app.open_crypt(copies=self.copies, key='B.txt')))
         message = EventLog.performed_actions(dialog.call_args.args[0], 'create InfoDialog')[0]['message']
         self.assertIn('32 MiB', message)
-        self.assertIn('Documents → Open documents', message)
+        self.assertIn('Documents → Recent', message)
         self.assertIn(a.session.id, self.app.private_sessions.controllers)
         self.assertEqual(a.crypt_text.value, 'retained draft')
         self.assertEqual(len(self.app.private_sessions.controllers), 1)
@@ -420,7 +420,7 @@ class PrivateSessionTests(unittest.TestCase):
             message = EventLog.performed_actions(dialog.call_args.args[0], 'create InfoDialog')[0]['message']
             self.assertIn('All 4', message)
             self.assertIn('Local, LocalCrypt and remote', message)
-            self.assertIn('Documents → Open documents', message)
+            self.assertIn('Documents → Recent', message)
             self.assertIs(self.app.body, origin)
             self.assertIsNone(self.app._file_loading)
             # Resuming an existing document consumes no additional slot.

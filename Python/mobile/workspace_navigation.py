@@ -273,6 +273,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
         if (destination == 'settings'
                 and getattr(self.app.routes, 'settings_return_navigation', None) == navigation):
             return
+        if destination == 'files' and getattr(self.app.routes, 'workspace_return', None) is not None:
+            return
         controller = adapter.content_controller(destination)
         item = controller.navigationItem
         body = self.app.routes.body(destination)
@@ -289,7 +291,8 @@ class WorkspaceNavigation(AdaptiveWorkspace):
             return
         if not self.app.routes.screens[destination] and hasattr(view, '_destination_actions'):
             projected = (getattr(view, '_home_top_band', None) is not None
-                         or getattr(view, '_destination_top_band', None) is not None)
+                         or getattr(view, '_destination_top_band', None) is not None
+                         or getattr(view, '_duo_heading_state', None) is not None)
             hidden = projected or not bool(view._ios_toolbar_buttons())
             if bool(navigation.isNavigationBarHidden()) != hidden:
                 navigation.setNavigationBarHidden(hidden, animated=False)
