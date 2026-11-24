@@ -65,6 +65,14 @@ class NativeSpeechOverlayTests(TestCase):
         overlay.edge_panel = True
         overlay.full_height = True
         overlay.owner = SimpleNamespace(_impl=SimpleNamespace(native=MagicMock()))
+        from toga.style import Pack
+        def insets(top, left, bottom, right):
+            return SimpleNamespace(top=top, left=left, bottom=bottom, right=right)
+        overlay.panel._impl = type('ApplePanel', (), {'__module__': 'toga_iOS.widgets.box'})()
+        overlay.panel.style = Pack(margin_bottom=12)
+        scroll = SimpleNamespace(contentInset=insets(0, 0, 0, 0),
+                                 verticalScrollIndicatorInsets=insets(0, 0, 0, 0))
+        overlay.panel._bottom_scrolls = (SimpleNamespace(_impl=SimpleNamespace(native=scroll)),)
 
         class NSObject:
             def __init_subclass__(cls, **kwargs):
@@ -91,7 +99,7 @@ class NativeSpeechOverlayTests(TestCase):
             'rubicon.objc': SimpleNamespace(
                 ObjCClass=lambda name: NSObject if name == 'NSObject' else gesture_type if name == 'UITapGestureRecognizer' else MagicMock(),
                 ObjCProtocol=lambda name: name, objc_method=lambda method: method,
-                SEL=lambda name: name, CGRect=lambda origin, size: (origin, size)),
+                SEL=lambda name: name, CGRect=lambda origin, size: (origin, size), UIEdgeInsets=insets),
             'toga_iOS.container': SimpleNamespace(Container=lambda **kwargs: container),
         }
         with patch.dict('sys.modules', modules), patch('mobile.speech_overlay._apple_dismissal', None), \
@@ -99,7 +107,9 @@ class NativeSpeechOverlayTests(TestCase):
             overlay.apple(app)
             self.assertEqual(native.layer.cornerRadius, 16)
             self.assertTrue(native.clipsToBounds)
-            self.assertEqual(native.frame, ((80.0, 0.0), (320, 780.0)))
+            self.assertEqual(native.frame, ((80.0, 0.0), (320, 800.0)))
+            self.assertEqual(overlay.panel.style.margin_bottom, 0)
+            self.assertEqual(scroll.contentInset.bottom, 32)
             delegate = overlay.dismissal
             backdrop = overlay.backdrop
             self.assertIsNotNone(backdrop)
@@ -121,6 +131,7 @@ class NativeSpeechOverlayTests(TestCase):
             self.assertIsNone(overlay.backdrop)
             self.assertIsNone(delegate.overlay)
             self.assertIsNone(overlay.container)
+            self.assertEqual(scroll.contentInset.bottom, 12)
             delegate.outsideTap_(gesture)  # No stale callback after teardown.
             overlay.panel.hide.assert_called_once()
 
