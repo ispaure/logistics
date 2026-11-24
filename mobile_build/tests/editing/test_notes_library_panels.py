@@ -947,6 +947,47 @@ class NotesLibraryPanelTests(unittest.TestCase):
 
         self.run_async(exercise())
 
+    def test_search_keeps_discovery_order_when_cached_matches_are_reconciled(self):
+        from commonUtils.search.providers import SearchResult
+        from commonUtils.testing.waiting import wait_until
+
+        def snapshot(names, *, cached=True):
+            return SearchResult([dict(path=f'Vault/{name}.md', directory=False, cached=cached)
+                                 for name in names], len(names), not cached, [], cached=cached)
+
+        async def exercise():
+            owner = await open_vault(self.app, self.provider, 'Vault', 'files')
+            stage_two, finish = Event(), Event()
+
+            def scan(*args, progress, **kwargs):
+                progress(snapshot(('Zulu', 'Stale', 'Bravo')))
+                if not stage_two.wait(5):
+                    raise AssertionError('First search batch did not publish')
+                progress(snapshot(('Alpha', 'Bravo', 'Stale', 'Zulu')))
+                if not finish.wait(5):
+                    raise AssertionError('Second search batch did not publish')
+                return snapshot(('Alpha', 'Again', 'Bravo', 'Zulu'), cached=False)
+
+            def paths():
+                return [row['path'] for row in owner.search_rows]
+
+            owner.select_panel_tab('Search')
+            with patch.object(library_files, 'search', side_effect=scan):
+                owner.search.value = 'fixture'
+                try:
+                    await wait_until(lambda: len(paths()) == 3)
+                    self.assertEqual(paths(), ['Vault/Zulu.md', 'Vault/Stale.md', 'Vault/Bravo.md'])
+                    stage_two.set()
+                    await wait_until(lambda: len(paths()) == 4)
+                    self.assertEqual(paths(), ['Vault/Zulu.md', 'Vault/Stale.md', 'Vault/Bravo.md', 'Vault/Alpha.md'])
+                finally:
+                    stage_two.set()
+                    finish.set()
+                    await owner.search_task
+            self.assertEqual(paths(), ['Vault/Zulu.md', 'Vault/Bravo.md', 'Vault/Alpha.md', 'Vault/Again.md'])
+
+        self.run_async(exercise())
+
     def test_background_fences_notes_search_and_calendar_until_visible(self):
         from commonUtils.search.providers import SearchResult
 

@@ -200,6 +200,7 @@ class VaultBrowser(LibraryFileForms, LibraryPanels):
         self.search_paused = False
         self.search_generation = 0
         self.search_rows = []
+        self._dismissed_cached_paths = set()
         self.search_status = ""
         self.search = toga.TextInput(
             placeholder="Search Notes Library",
@@ -768,17 +769,28 @@ class VaultBrowser(LibraryFileForms, LibraryPanels):
         def cancelled():
             return generation != self.search_generation or not self.valid()
 
-        last_progress_size = -1
+        discovered = {row['path']: row for row in self.search_rows} if preserve_viewport else {}
+        published = False
+
         def publish(result, finished=False):
-            nonlocal last_progress_size
+            nonlocal discovered, published
             if cancelled():
                 return
-            rows = [row for row in result.rows if not result.cached
-                    or row['path'] not in getattr(self, '_dismissed_cached_paths', ())]
-            if not finished and (preserve_viewport or len(rows) == last_progress_size):
+            if not finished and preserve_viewport:
                 return
-            keep_position = preserve_viewport or last_progress_size >= 0
-            last_progress_size = len(rows)
+            dismissed = self._dismissed_cached_paths
+            incoming = {row['path']: row for row in result.rows
+                        if not result.cached or row['path'] not in dismissed}
+            for path in dismissed - incoming.keys():
+                discovered.pop(path, None)
+            if finished and result.complete:
+                discovered = {path: incoming[path] for path in discovered if path in incoming}
+            discovered.update(incoming)
+            rows = list(discovered.values())
+            if not finished and published and rows == self.search_rows:
+                return
+            keep_position = preserve_viewport or published
+            published = True
             self.search_rows = rows
             if finished:
                 self.search_status = "" if result.complete else "Some items could not be searched."
@@ -791,8 +803,7 @@ class VaultBrowser(LibraryFileForms, LibraryPanels):
                 self.render_tree()
 
         def project(result):
-            rows = [dict(row, name=posixpath.basename(row['path']))
-                    for row in library_files.ranked_search_rows(result.rows)]
+            rows = [dict(row, name=posixpath.basename(row['path'])) for row in result.rows]
             return SearchResult(rows, result.scanned, result.complete, result.errors, cached=result.cached)
 
         await asyncio.sleep(SEARCH_DEBOUNCE_SECONDS)

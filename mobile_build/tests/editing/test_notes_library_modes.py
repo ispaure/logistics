@@ -49,18 +49,18 @@ class NotesLibraryModeTests(unittest.TestCase):
             self.assertEqual([button.text for button in buttons],
                              ['Orange.md · Projects', 'Orange.md · Projects/Wildlife'])
             buttons = await search('turtle red')
-            self.assertEqual([button.text for button in buttons],
-                             ['Red sea TURTLE.md', 'Turtle red folder', 'Field guide.md'])
+            self.assertCountEqual([button.text for button in buttons],
+                                  ['Red sea TURTLE.md', 'Turtle red folder', 'Field guide.md'])
             with patch.object(owner.library, 'read', side_effect=AssertionError('read note body')):
                 owner.search_mode.value = 'Search in File Names'
                 self.assertEqual(owner.search.value, '')
                 owner.search.value = 'turtle red'
                 await owner.search_task
                 buttons = [next(child for child in row.children if hasattr(child, 'vault_path')) for row in owner.rows.children]
-            self.assertEqual([button.text for button in buttons], ['Red sea TURTLE.md', 'Turtle red folder'])
+            self.assertCountEqual([button.text for button in buttons], ['Red sea TURTLE.md', 'Turtle red folder'])
             self.assertEqual([row.children[0].style.width for row in owner.rows.children], [0, 0])
             self.assertNotIn('Vault/Projects', owner.folders)
-            buttons[1].on_press()
+            next(button for button in buttons if button.vault_path == 'Vault/Projects/Turtle red folder').on_press()
             for _ in range(100):
                 await asyncio.sleep(.01)
                 if owner.selected_path == 'Vault/Projects/Turtle red folder':
