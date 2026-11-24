@@ -127,6 +127,13 @@ async def exercise_obsidian(app, encrypted):
             assert owner.sidebar.side == 'files'
             assert list(owner.sidebar.view.children) == [owner.article]
         await capture_window(app, output / (label + '-tree.png'))
+        if get_os() is OS.IOS:
+            if owner.sidebar.side == 'files':
+                scroll = getattr(owner.rows, 'native_list', owner.rows_scroll)
+                assert_drawer_bottom(app, owner.sidebar.overlay, scroll)
+            owner.sidebar.show_links()
+            await asyncio.sleep(.35)
+            assert_drawer_bottom(app, owner.sidebar.overlay, owner.links_scroll)
         owner.sidebar.show_detail()
         await asyncio.sleep(.3)
         await capture_window(app, output / (label + '-note.png'))
@@ -167,3 +174,14 @@ async def exercise_obsidian(app, encrypted):
     for path in encrypted.root.rglob('*'):
         if path.is_file():
             assert b'Nested Markdown note' not in path.read_bytes()
+
+
+def assert_drawer_bottom(app, overlay, scroll):
+    window = app.main_window._impl.native
+    height = float(window.bounds.size.height)
+    for native in (overlay.container.native, scroll._impl.native):
+        frame = native.convertRect(native.bounds, toView=window)
+        bottom = float(frame.origin.y + frame.size.height)
+        assert abs(bottom - height) <= 2, (bottom, height)
+    padding = float(scroll._impl.native.contentInset.bottom)
+    assert padding >= float(window.safeAreaInsets.bottom) + 12, padding

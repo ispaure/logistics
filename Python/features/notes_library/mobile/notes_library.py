@@ -160,6 +160,7 @@ class VaultBrowser(LibraryFileForms, LibraryPanels):
             toga.Label('Links', style=Pack(font_size=20, font_weight='bold', text_align=CENTER)),
             tabs, self.links_scroll,
         ], style=Pack(direction=COLUMN, flex=1, margin=12))
+        self.links._bottom_scrolls = (self.links_scroll,)
         self.links_generation = 0
         self.links_refresh_task = None
         self.sidebar = NotesDrawers(self.tree, self.article, self.links, host=host.drawer_host)

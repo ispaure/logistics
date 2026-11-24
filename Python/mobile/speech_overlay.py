@@ -109,7 +109,10 @@ class SpeechOverlay:
             left, top = float(insets.left), float(insets.top + 52)
             right, bottom = float(bounds.width - insets.right), float(bounds.height - insets.bottom - 12)
             if self.edge_panel:
-                top, bottom = float(insets.top), float(bounds.height - insets.bottom)
+                # Let the drawer surface and its viewport reach the window
+                # edge. Keep the home-indicator clearance inside the scroll.
+                top, bottom = float(insets.top), float(bounds.height)
+                container.bottom_inset = 0
             if self.full_height:
                 # Window safe areas do not include a child navigation bar. Use
                 # the actual document allocation so drawers avoid Duo's shared
@@ -145,9 +148,12 @@ class SpeechOverlay:
             frame = CGRect((x, top), (width, height))
             if native.frame != frame:
                 native.frame = frame
-            size = (width, height)
+            size = (width, height, float(insets.bottom) if self.edge_panel else 0)
             if self.last_size != size:
                 self.last_size = size
+                if self.edge_panel:
+                    from .scroll_edges import sync_bottom
+                    sync_bottom(self.panel, overlap=float(insets.bottom))
                 self.panel.refresh()
 
         self.reposition = lambda: layout(self.container)
@@ -240,6 +246,9 @@ class SpeechOverlay:
             params.flags |= WindowManager.LayoutParams.FLAG_DIM_BEHIND
             params.dimAmount = .35
             context.getSystemService('window').updateViewLayout(decor, params)
+        if self.edge_panel:
+            from .scroll_edges import sync_bottom
+            sync_bottom(self.panel)
         self.panel.refresh()
 
         def reposition():
@@ -283,3 +292,6 @@ class SpeechOverlay:
                 self.container.content = None
                 self.container.native.removeFromSuperview()
             self.container = None
+        if self.edge_panel:
+            from .scroll_edges import sync_bottom
+            sync_bottom(self.panel)
