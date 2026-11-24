@@ -529,8 +529,17 @@ def collect_owned_ios_evidence(device, started_ns, logs):
 def collect_leased_ios_evidence(client, lease, owner, device, started_ns, logs):
     """The caller supplies its exact created lease and owning simulator client."""
     if (owner.get('device') != device or owner.get('removed')
-            or json.loads(Path(lease).read_text()) != owner
-            or client.matching(device, owner['name']) is None):
+            or json.loads(Path(lease).read_text()) != owner):
+        raise ValueError('Native evidence simulator does not match its live lease.')
+    try:
+        live = client.matching(device, owner['name'])
+    except subprocess.TimeoutExpired:
+        # CoreSimulator can stall a read after the app suite completes.
+        # Retry the same ownership lookup before collecting any data.
+        if json.loads(Path(lease).read_text()) != owner:
+            raise ValueError('Native evidence simulator does not match its live lease.') from None
+        live = client.matching(device, owner['name'])
+    if live is None:
         raise ValueError('Native evidence simulator does not match its live lease.')
     cache = subprocess.check_output(['xcrun', 'simctl', 'get_app_container', device,
         'io.github.ispaure.logisticsmobile', 'data'], text=True, timeout=30).strip()
