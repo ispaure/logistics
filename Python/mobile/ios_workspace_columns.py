@@ -262,10 +262,10 @@ def sync(workspace):
     wide = browser_columns(workspace.content_width('files', margin=0),
         workspace.app.main_window.size.height,
         fold=division(workspace.app, workspace.app.main_window))
+    if active is not None and (not wide or active.master is not master):
+        active.close()
+        workspace.file_columns = active = None
     if not wide or master is None:
-        if active is not None:
-            active.close()
-            workspace.file_columns = None
         return
     if active is None:
         workspace.file_columns = WorkspaceColumns(workspace, master)

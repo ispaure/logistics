@@ -58,6 +58,7 @@ class WorkspaceColumnsTests(TestCase):
         workspace = NS(app=app, content_width=Mock(return_value=900))
         with patch('mobile.fold_layout.division', return_value=None), \
                 patch('mobile.ios_workspace_columns.WorkspaceColumns') as create:
+            create.return_value.master = master
             sync(workspace)
             columns = workspace.file_columns
             create.assert_called_once_with(workspace, master)
@@ -72,6 +73,24 @@ class WorkspaceColumnsTests(TestCase):
             self.assertIsNone(workspace.file_columns)
             sync(workspace)
             columns.close.assert_called_once()
+
+    def test_rebuilt_workspaces_root_mounts_its_own_native_columns(self):
+        previous, master = NS(), NS()
+        view = toga.Box()
+        view._workspace_frame = master
+        native_impl = type('AppleApp', (), {'__module__': 'toga_iOS.app'})()
+        app = NS(_impl=native_impl, native_host=NS(adapter=NS(navigation=[])),
+                 routes=NS(roots={'files': toga.Box(children=[view])}),
+                 main_window=NS(size=NS(width=900, height=600)))
+        retired = Mock(master=previous)
+        workspace = NS(app=app, content_width=lambda *_args, **_kwargs: 900, file_columns=retired)
+        with patch('mobile.fold_layout.division', return_value=None), \
+                patch('mobile.ios_workspace_columns.WorkspaceColumns') as create:
+            sync(workspace)
+        retired.close.assert_called_once()
+        retired.layout.assert_not_called()
+        create.assert_called_once_with(workspace, master)
+        self.assertIs(workspace.file_columns, create.return_value)
 
     def test_sidebar_layout_keeps_its_assigned_column_frame(self):
         frame = object()

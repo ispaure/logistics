@@ -40,6 +40,40 @@ async def browse_local_during_transfer(app, folder):
     assert app.transfer_controller()._transfer_cancel is cancel and not cancel.is_set()
 
 
+async def verify_workspaces_during_pull(app):
+    from commonUtils.runtime.platform import OS, get_os
+    from commonUtils.ui.native.draw_ready import wait_for_draw
+
+    cancel = app.transfer_controller()._transfer_cancel
+    app.show_locations()
+    app.show_transfers()
+    app.show_transfers(detail=True)
+    assert app.routes.back()
+    assert app.routes.screens['files'][-1][0] == 'transfers'
+    for destination in ('home', 'files'):
+        assert app.select_destination(destination)
+        app.native_host.activate(destination)
+    assert not app.routes.screens['files']
+
+    folder = app.folder_controller()
+    previous = getattr(app.adaptive, 'file_columns', None)
+    root = folder.build_folder_picker(choices=folder.folder_all_choices)
+    app.show_locations()
+    button = folder.folder_source_buttons['Local']
+    await wait_for_draw(button)
+    assert root in app.routes.roots['files'].children
+    if get_os() is OS.IOS:
+        native = button._impl.native
+        assert native.window is not None and native.bounds.size.width > 0
+        if previous is not None:
+            columns = app.adaptive.file_columns
+            assert previous.closed and columns.master is root._workspace_frame
+    else:
+        native = button._impl.native
+        assert native.isShown() and native.getWidth() > 0
+    assert app.transfer_busy and app.transfer_controller()._transfer_cancel is cancel and not cancel.is_set()
+
+
 async def exercise_mirrors(app, comic_key):
     started, release = Event(), Event()
     client = app.cloud_client
@@ -84,7 +118,7 @@ async def exercise_mirrors(app, comic_key):
             assert 'Fixture' in app.folder_picker_choices
             assert not await app.browse_hub_folder('Fixture')
             assert app.routes.screens['files'][-1][0] == 'workspace-status'
-            app.show_locations()
+            await verify_workspaces_during_pull(app)
             await browse_local_during_transfer(app, 'Browse during pull')
             # Direct folder entry retains its root-to-Workspaces Back behavior.
             await app.browse_hub_folder('Browse during pull')
