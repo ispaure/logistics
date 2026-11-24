@@ -323,9 +323,8 @@ class SavedSearchPublicationTests(unittest.TestCase):
                 browser.open_search()
                 browser.search.value = 'Match'
                 try:
-                    await wait_until(lambda: blocked.is_set() and bool(self.visible_paths()),
+                    await wait_until(lambda: blocked.is_set() and self.visible_paths() == self.matches,
                                      message='Saved results did not publish before later validation')
-                    self.assertEqual(self.visible_paths(), self.matches)
                     self.assertEqual(browser._search_location_caption.text, 'Local')
                     self.assertEqual(list(browser._search_status.children),
                                      [browser._search_location_caption, browser.page_label])
@@ -363,9 +362,8 @@ class SavedSearchPublicationTests(unittest.TestCase):
         async def check():
             browser.search.value = 'Match'
             try:
-                await wait_until(lambda: blocked.is_set() and bool(self.visible_paths()),
+                await wait_until(lambda: blocked.is_set() and self.visible_paths() == self.matches,
                                  message='Slow cached hits waited for a full page')
-                self.assertEqual(self.visible_paths(), self.matches)
                 self.assertTrue(browser.searching)
                 await browser.activate_entry(browser.tree.entries[provider.root / self.matches[0]])
                 self.assertEqual(opened, [])
